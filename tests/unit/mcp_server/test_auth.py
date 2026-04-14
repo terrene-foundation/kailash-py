@@ -11,7 +11,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
-
 from kailash_mcp.auth.providers import (
     APIKeyAuth,
     AuthenticationError,
@@ -326,15 +325,18 @@ class TestBearerTokenAuth:
 class TestJWTAuth:
     """Test JWT authentication provider."""
 
+    # 32-byte key satisfies RFC 7518 §3.2 minimum for HMAC-SHA256
+    JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"
+
     def test_init(self):
         """Test JWT auth initialization."""
-        auth = JWTAuth("secret_key", algorithm="HS256")
-        assert auth.jwt_secret == "secret_key"
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        assert auth.jwt_secret == self.JWT_TEST_SECRET
         assert auth.jwt_algorithm == "HS256"
 
     def test_create_token(self):
         """Test JWT token creation."""
-        auth = JWTAuth("secret_key", algorithm="HS256")
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
 
         payload = {"user": "testuser", "permissions": ["read", "write"]}
         token = auth.create_token(payload, expiration=3600)
@@ -344,7 +346,7 @@ class TestJWTAuth:
 
     def test_authenticate_valid_jwt(self):
         """Test authentication with valid JWT token."""
-        auth = JWTAuth("secret_key", algorithm="HS256")
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
 
         payload = {"user": "testuser", "permissions": ["read"]}
         token = auth.create_token(payload, expiration=3600)
@@ -356,14 +358,14 @@ class TestJWTAuth:
 
     def test_authenticate_invalid_jwt(self):
         """Test authentication with invalid JWT token."""
-        auth = JWTAuth("secret_key", algorithm="HS256")
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
 
         with pytest.raises(AuthenticationError):
             auth.authenticate("invalid.jwt.token")
 
     def test_authenticate_expired_jwt(self):
         """Test authentication with expired JWT token."""
-        auth = JWTAuth("secret_key", algorithm="HS256")
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
 
         # Create token that expires in the past
         payload = {"user": "testuser", "exp": int(time.time()) - 3600}  # 1 hour ago

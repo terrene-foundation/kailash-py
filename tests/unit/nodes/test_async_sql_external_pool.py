@@ -295,7 +295,11 @@ class TestWrapExternalPool:
         # Drop all references to the adapter
         del adapter
         node._adapter = None
-        gc.collect()
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore", RuntimeWarning)
+            gc.collect()
 
         # Calling disconnect after adapter is GC'd should not raise
         await disconnect_fn()
@@ -390,11 +394,14 @@ class TestGetAdapterWithExternalPool:
 
         adapter = await node._get_adapter()
 
-        assert adapter._pool is mock_pool
-        assert node._connected is True
-        assert node._pool_key is None
-        # _shared_pools unchanged
-        assert AsyncSQLDatabaseNode._shared_pools == initial_pools
+        try:
+            assert adapter._pool is mock_pool
+            assert node._connected is True
+            assert node._pool_key is None
+            # _shared_pools unchanged
+            assert AsyncSQLDatabaseNode._shared_pools == initial_pools
+        finally:
+            await node.cleanup()
 
     @pytest.mark.asyncio
     async def test_get_adapter_idempotent(self):
@@ -406,9 +413,12 @@ class TestGetAdapterWithExternalPool:
             query="SELECT 1",
             external_pool=mock_pool,
         )
-        adapter1 = await node._get_adapter()
-        adapter2 = await node._get_adapter()
-        assert adapter1 is adapter2
+        try:
+            adapter1 = await node._get_adapter()
+            adapter2 = await node._get_adapter()
+            assert adapter1 is adapter2
+        finally:
+            await node.cleanup()
 
     @pytest.mark.asyncio
     async def test_no_external_pool_preserves_defaults(self):
@@ -539,6 +549,10 @@ class TestCleanupWithExternalPool:
             ]
             assert len(resource_warnings) == 1
 
+        # Reset so Python's automatic __del__ doesn't emit a second warning
+        node._connected = False
+        node._adapter = None
+
 
 class TestRetryWithExternalPool:
     """Test retry behavior when external pool is closed/unavailable."""
@@ -565,8 +579,12 @@ class TestRetryWithExternalPool:
             side_effect=Exception("pool is closed")
         )
 
-        with pytest.raises(NodeExecutionError, match="External connection pool"):
-            await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        try:
+            with pytest.raises(NodeExecutionError, match="External connection pool"):
+                await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        finally:
+            node._connected = False
+            node._adapter = None
 
     @pytest.mark.asyncio
     async def test_closed_pool_error_includes_original_message(self):
@@ -589,8 +607,12 @@ class TestRetryWithExternalPool:
             side_effect=Exception("connection refused: pool is closed by user")
         )
 
-        with pytest.raises(NodeExecutionError, match="pool is closed by user"):
-            await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        try:
+            with pytest.raises(NodeExecutionError, match="pool is closed by user"):
+                await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        finally:
+            node._connected = False
+            node._adapter = None
 
     @pytest.mark.asyncio
     async def test_execute_many_closed_pool_raises_immediately(self):
@@ -613,10 +635,14 @@ class TestRetryWithExternalPool:
             side_effect=Exception("pool is closed")
         )
 
-        with pytest.raises(NodeExecutionError, match="External connection pool"):
-            await node._execute_many_with_retry(
-                adapter, "INSERT INTO t VALUES ($1)", [(1,), (2,)]
-            )
+        try:
+            with pytest.raises(NodeExecutionError, match="External connection pool"):
+                await node._execute_many_with_retry(
+                    adapter, "INSERT INTO t VALUES ($1)", [(1,), (2,)]
+                )
+        finally:
+            node._connected = False
+            node._adapter = None
 
     @pytest.mark.asyncio
     async def test_pool_closed_attribute_triggers_failfast(self):
@@ -640,8 +666,12 @@ class TestRetryWithExternalPool:
             side_effect=Exception("pool has been terminated")
         )
 
-        with pytest.raises(NodeExecutionError, match="External connection pool"):
-            await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        try:
+            with pytest.raises(NodeExecutionError, match="External connection pool"):
+                await node._execute_with_retry(adapter, "SELECT 1", None, "all", None)
+        finally:
+            node._connected = False
+            node._adapter = None
 
     def test_del_does_not_sync_close_external_pool_sqlite(self):
         """__del__ must NOT call raw.close() on external SQLite connections."""
@@ -665,6 +695,10 @@ class TestRetryWithExternalPool:
 
         # raw.close() must NOT be called — caller owns the connection
         mock_raw_conn.close.assert_not_called()
+
+        # Reset so Python's automatic __del__ doesn't emit a second warning
+        node._connected = False
+        node._adapter = None
 
 
 class TestSerialization:
@@ -725,9 +759,12 @@ class TestMixedPoolUsage:
 
         # Get adapter for injected node
         adapter = await injected_node._get_adapter()
-        assert adapter._pool is mock_pool
-        assert injected_node._pool_key is None
+        try:
+            assert adapter._pool is mock_pool
+            assert injected_node._pool_key is None
 
-        # Internal node should still use normal pool path
-        assert internal_node._pool_key is None  # Not yet initialized
-        assert internal_node._share_pool is True
+            # Internal node should still use normal pool path
+            assert internal_node._pool_key is None  # Not yet initialized
+            assert internal_node._share_pool is True
+        finally:
+            await injected_node.cleanup()

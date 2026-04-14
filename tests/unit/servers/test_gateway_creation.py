@@ -31,13 +31,15 @@ class TestGatewayCreation:
     def test_create_gateway_default_enterprise(self):
         """Test that create_gateway defaults to enterprise server."""
         gateway = create_gateway(title="Default Test Gateway")
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.app.title == "Default Test Gateway"
-        assert gateway.enable_durability is True
-        assert gateway.enable_resource_management is True
-        assert gateway.enable_async_execution is True
-        assert gateway.enable_health_checks is True
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.app.title == "Default Test Gateway"
+            assert gateway.enable_durability is True
+            assert gateway.enable_resource_management is True
+            assert gateway.enable_async_execution is True
+            assert gateway.enable_health_checks is True
+        finally:
+            gateway.close()
 
     def test_create_gateway_enterprise_explicit(self):
         """Test create_gateway with explicit enterprise server type."""
@@ -47,11 +49,13 @@ class TestGatewayCreation:
             max_workers=30,
             enable_durability=False,  # Test disabling features
         )
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.app.title == "Enterprise Test Gateway"
-        assert gateway.executor._max_workers == 30
-        assert gateway.enable_durability is False  # Should respect override
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.app.title == "Enterprise Test Gateway"
+            assert gateway.executor._max_workers == 30
+            assert gateway.enable_durability is False  # Should respect override
+        finally:
+            gateway.close()
 
     def test_create_gateway_durable(self):
         """Test create_gateway with durable server type."""
@@ -89,11 +93,13 @@ class TestGatewayCreation:
         """Test create_gateway with CORS configuration."""
         cors_origins = ["http://localhost:3000", "https://app.example.com"]
         gateway = create_gateway(title="CORS Test Gateway", cors_origins=cors_origins)
-
-        # Check that CORS was passed through to the server
-        # The gateway should have been configured with CORS origins
-        assert cors_origins is not None
-        assert len(cors_origins) == 2
+        try:
+            # Check that CORS was passed through to the server
+            # The gateway should have been configured with CORS origins
+            assert cors_origins is not None
+            assert len(cors_origins) == 2
+        finally:
+            gateway.close()
 
     def test_create_gateway_feature_flags(self):
         """Test create_gateway with various feature flags."""
@@ -104,12 +110,14 @@ class TestGatewayCreation:
             enable_async_execution=False,
             enable_health_checks=False,
         )
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.enable_durability is False
-        assert gateway.enable_resource_management is False
-        assert gateway.enable_async_execution is False
-        assert gateway.enable_health_checks is False
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.enable_durability is False
+            assert gateway.enable_resource_management is False
+            assert gateway.enable_async_execution is False
+            assert gateway.enable_health_checks is False
+        finally:
+            gateway.close()
 
     @patch("src.kailash.servers.gateway.ResourceRegistry")
     @patch("src.kailash.servers.gateway.SecretManager")
@@ -125,10 +133,12 @@ class TestGatewayCreation:
             resource_registry=custom_registry,
             secret_manager=custom_secret_manager,
         )
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.resource_registry == custom_registry
-        assert gateway.secret_manager == custom_secret_manager
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.resource_registry == custom_registry
+            assert gateway.secret_manager == custom_secret_manager
+        finally:
+            gateway.close()
 
     def test_create_enterprise_gateway_alias(self):
         """Test create_enterprise_gateway convenience function."""
@@ -136,10 +146,12 @@ class TestGatewayCreation:
             title="Alias Test Gateway",
             max_workers=25,
         )
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.app.title == "Alias Test Gateway"
-        assert gateway.executor._max_workers == 25
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.app.title == "Alias Test Gateway"
+            assert gateway.executor._max_workers == 25
+        finally:
+            gateway.close()
 
     def test_create_durable_gateway_alias(self):
         """Test create_durable_gateway convenience function."""
@@ -166,30 +178,34 @@ class TestGatewayCreation:
     def test_create_gateway_defaults(self):
         """Test create_gateway with all default values."""
         gateway = create_gateway()
-
-        assert isinstance(gateway, EnterpriseWorkflowServer)
-        assert gateway.app.title == "Kailash Enterprise Gateway"
-        assert (
-            gateway.app.description
-            == "Production-ready workflow server with enterprise features"
-        )
-        assert gateway.app.version == "1.0.0"
-        assert gateway.executor._max_workers == 20  # Enterprise default
+        try:
+            assert isinstance(gateway, EnterpriseWorkflowServer)
+            assert gateway.app.title == "Kailash Enterprise Gateway"
+            assert (
+                gateway.app.description
+                == "Production-ready workflow server with enterprise features"
+            )
+            assert gateway.app.version == "1.0.0"
+            assert gateway.executor._max_workers == 20  # Enterprise default
+        finally:
+            gateway.close()
 
     def test_create_gateway_logging(self):
         """Test that create_gateway logs server creation."""
         with patch("src.kailash.servers.gateway.logger") as mock_logger:
             gateway = create_gateway(title="Logging Test Gateway")
-
-            # Should log server creation
-            mock_logger.info.assert_any_call(
-                "Creating enterprise workflow server: Logging Test Gateway"
-            )
-            # Should log features
-            assert any(
-                "Created EnterpriseWorkflowServer with features" in str(call)
-                for call in mock_logger.info.call_args_list
-            )
+            try:
+                # Should log server creation
+                mock_logger.info.assert_any_call(
+                    "Creating enterprise workflow server: Logging Test Gateway"
+                )
+                # Should log features
+                assert any(
+                    "Created EnterpriseWorkflowServer with features" in str(call)
+                    for call in mock_logger.info.call_args_list
+                )
+            finally:
+                gateway.close()
 
     def test_create_gateway_kwargs_passthrough(self):
         """Test that additional kwargs are passed through to server constructor."""
@@ -199,17 +215,22 @@ class TestGatewayCreation:
             version="2.1.0",
             some_custom_param="custom_value",  # This should be passed through
         )
-
-        assert gateway.app.title == "Kwargs Test"
-        assert gateway.app.description == "Custom description"
-        assert gateway.app.version == "2.1.0"
-        # Custom param should be passed through (though may not be used)
+        try:
+            assert gateway.app.title == "Kwargs Test"
+            assert gateway.app.description == "Custom description"
+            assert gateway.app.version == "2.1.0"
+            # Custom param should be passed through (though may not be used)
+        finally:
+            gateway.close()
 
     def test_create_gateway_server_type_case_insensitive(self):
         """Test that server_type parameter is case sensitive (as expected)."""
         # Should work with exact case
         gateway1 = create_gateway(server_type="enterprise")
-        assert isinstance(gateway1, EnterpriseWorkflowServer)
+        try:
+            assert isinstance(gateway1, EnterpriseWorkflowServer)
+        finally:
+            gateway1.close()
 
         gateway2 = create_gateway(server_type="durable")
         assert isinstance(gateway2, DurableWorkflowServer)
@@ -226,12 +247,16 @@ class TestGatewayCreation:
         enterprise_gateway = create_gateway(server_type="enterprise")
         durable_gateway = create_gateway(server_type="durable")
         basic_gateway = create_gateway(server_type="basic")
-
-        # Enterprise should default to 20
-        assert enterprise_gateway.executor._max_workers == 20
-        # Others should still default to their configured values
-        assert durable_gateway.executor._max_workers == 20  # Uses same as enterprise
-        assert basic_gateway.executor._max_workers == 20  # Uses same as enterprise
+        try:
+            # Enterprise should default to 20
+            assert enterprise_gateway.executor._max_workers == 20
+            # Others should still default to their configured values
+            assert (
+                durable_gateway.executor._max_workers == 20
+            )  # Uses same as enterprise
+            assert basic_gateway.executor._max_workers == 20  # Uses same as enterprise
+        finally:
+            enterprise_gateway.close()
 
     def test_create_gateway_feature_combinations(self):
         """Test various combinations of feature flags."""
@@ -242,8 +267,11 @@ class TestGatewayCreation:
             enable_async_execution=False,
             enable_health_checks=False,
         )
-        assert not gateway1.enable_durability
-        assert not gateway1.enable_resource_management
+        try:
+            assert not gateway1.enable_durability
+            assert not gateway1.enable_resource_management
+        finally:
+            gateway1.close()
 
         # Mixed configuration
         gateway2 = create_gateway(
@@ -252,7 +280,10 @@ class TestGatewayCreation:
             enable_async_execution=True,
             enable_health_checks=True,
         )
-        assert gateway2.enable_durability
-        assert not gateway2.enable_resource_management
-        assert gateway2.enable_async_execution
-        assert gateway2.enable_health_checks
+        try:
+            assert gateway2.enable_durability
+            assert not gateway2.enable_resource_management
+            assert gateway2.enable_async_execution
+            assert gateway2.enable_health_checks
+        finally:
+            gateway2.close()

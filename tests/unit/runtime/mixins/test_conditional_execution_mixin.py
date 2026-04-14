@@ -35,11 +35,13 @@ from tests.unit.runtime.helpers_runtime import (
 # ============================================================================
 
 
-class TestConditionalRuntime(BaseRuntime, ConditionalExecutionMixin):
-    """Test runtime with ConditionalExecutionMixin for unit testing.
+class ConditionalRuntimeStub(BaseRuntime, ConditionalExecutionMixin):
+    """Stub runtime with ConditionalExecutionMixin for unit testing.
 
     This minimal runtime implements abstract methods to test mixin functionality
     in isolation, following Phase 1 testing patterns.
+
+    Named without 'Test' prefix to avoid pytest collection (has __init__).
     """
 
     def __init__(self, **kwargs):
@@ -167,7 +169,7 @@ class TestConditionalExecutionMixinInitialization:
 
     def test_mixin_initialization(self):
         """Test ConditionalExecutionMixin initializes correctly via super()."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
 
         # Should have both BaseRuntime and ConditionalExecutionMixin methods
         assert hasattr(runtime, "_has_conditional_patterns")
@@ -184,7 +186,7 @@ class TestConditionalExecutionMixinInitialization:
 
     def test_mixin_with_configuration(self):
         """Test mixin respects configuration parameters."""
-        runtime = TestConditionalRuntime(
+        runtime = ConditionalRuntimeStub(
             debug=True,
             conditional_execution="skip_branches",
             enable_cycles=True,
@@ -196,7 +198,7 @@ class TestConditionalExecutionMixinInitialization:
 
     def test_mixin_is_stateless(self):
         """Test ConditionalExecutionMixin follows STATE_OWNERSHIP_CONVENTION.md (stateless)."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
 
         # Verify mixin creates NO state attributes
         # (All state should be in BaseRuntime, not in mixin)
@@ -221,7 +223,7 @@ class TestConditionalPatternDetection:
 
     def test_has_conditional_patterns_with_switch_node(self):
         """Test workflow with SwitchNode is detected."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
 
         result = runtime._has_conditional_patterns(workflow)
@@ -229,7 +231,7 @@ class TestConditionalPatternDetection:
 
     def test_has_conditional_patterns_without_switch(self):
         """Test workflow without SwitchNode returns False."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
 
         result = runtime._has_conditional_patterns(workflow)
@@ -237,7 +239,7 @@ class TestConditionalPatternDetection:
 
     def test_has_conditional_patterns_with_cycles_returns_false(self):
         """Test workflow with cycles returns False (cycles incompatible with conditional execution)."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_cycles()
 
         result = runtime._has_conditional_patterns(workflow)
@@ -245,7 +247,7 @@ class TestConditionalPatternDetection:
 
     def test_has_conditional_patterns_with_empty_workflow(self):
         """Test empty workflow returns False."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_empty_workflow()
 
         result = runtime._has_conditional_patterns(workflow)
@@ -253,7 +255,7 @@ class TestConditionalPatternDetection:
 
     def test_has_conditional_patterns_with_broken_graph(self):
         """Test workflow with broken graph returns False."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
         workflow.graph = None  # Break graph
 
@@ -262,7 +264,7 @@ class TestConditionalPatternDetection:
 
     def test_workflow_has_cycles_with_cyclic_workflow(self):
         """Test cyclic workflow is detected correctly."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_cycles()
 
         result = runtime._workflow_has_cycles(workflow)
@@ -270,7 +272,7 @@ class TestConditionalPatternDetection:
 
     def test_workflow_has_cycles_with_acyclic_workflow(self):
         """Test acyclic workflow returns False."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
 
         result = runtime._workflow_has_cycles(workflow)
@@ -278,7 +280,7 @@ class TestConditionalPatternDetection:
 
     def test_workflow_has_cycles_with_explicit_cycle_flag(self):
         """Test workflow with explicit cycle flag in connections."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_cycles()
 
         # Workflow already has cycles - verify detection
@@ -287,7 +289,7 @@ class TestConditionalPatternDetection:
 
     def test_workflow_has_cycles_error_handling(self):
         """Test cycle detection handles errors gracefully."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
         workflow.graph = None  # Break graph
 
@@ -296,7 +298,7 @@ class TestConditionalPatternDetection:
 
     def test_workflow_has_cycles_with_networkx_detection(self):
         """Test cycle detection using NetworkX is_directed_acyclic_graph."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()  # DAG workflow
 
         result = runtime._workflow_has_cycles(workflow)
@@ -308,7 +310,7 @@ class TestHierarchicalExecutionDetection:
 
     def test_should_use_hierarchical_execution_with_multiple_switches(self):
         """Test hierarchical execution enabled for multiple SwitchNodes."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         switch_node_ids = ["switch1", "switch2", "switch3"]
 
@@ -319,7 +321,7 @@ class TestHierarchicalExecutionDetection:
 
     def test_should_use_hierarchical_execution_with_single_switch(self):
         """Test hierarchical execution disabled for single SwitchNode."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         switch_node_ids = ["switch1"]
 
@@ -328,7 +330,7 @@ class TestHierarchicalExecutionDetection:
 
     def test_should_use_hierarchical_execution_with_no_switches(self):
         """Test hierarchical execution disabled with no SwitchNodes."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
         switch_node_ids = []
 
@@ -337,7 +339,7 @@ class TestHierarchicalExecutionDetection:
 
     def test_should_use_hierarchical_execution_respects_config(self):
         """Test hierarchical execution respects configuration."""
-        runtime = TestConditionalRuntime(conditional_execution="route_data")
+        runtime = ConditionalRuntimeStub(conditional_execution="route_data")
         workflow = create_workflow_with_switch()
         switch_node_ids = ["switch1", "switch2"]
 
@@ -351,7 +353,7 @@ class TestConditionalNodeSkipping:
 
     def test_should_skip_conditional_node_unreachable(self):
         """Test node is skipped when unreachable based on switch results."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         results = {
             "switch": {"true_output": {"data": "test"}, "false_output": None},
@@ -368,7 +370,7 @@ class TestConditionalNodeSkipping:
 
     def test_should_skip_conditional_node_reachable(self):
         """Test node is not skipped when reachable."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         results = {
             "switch": {"true_output": {"data": "test"}, "false_output": None},
@@ -384,7 +386,7 @@ class TestConditionalNodeSkipping:
 
     def test_should_skip_conditional_node_no_switch_results(self):
         """Test node is not skipped when no switch results available."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         results = {}
         # No results yet, so inputs would be empty or default
@@ -407,7 +409,7 @@ class TestConditionalNodeSkipping:
 
         # Test with valid modes only (None is invalid for conditional_execution)
         for mode in ["route_data", "skip_branches"]:
-            runtime = TestConditionalRuntime(conditional_execution=mode)
+            runtime = ConditionalRuntimeStub(conditional_execution=mode)
             inputs = {
                 "data": None
             }  # Would receive None from switch on "data" parameter
@@ -424,7 +426,7 @@ class TestPerformanceTracking:
 
     def test_track_conditional_execution_performance_basic(self):
         """Test performance tracking records metrics correctly."""
-        runtime = TestConditionalRuntime(enable_monitoring=True)
+        runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         results = {
             "switch": {"true_output": {"data": "test"}},
@@ -438,7 +440,7 @@ class TestPerformanceTracking:
 
     def test_track_conditional_execution_performance_disabled(self):
         """Test performance tracking is skipped when monitoring disabled."""
-        runtime = TestConditionalRuntime(enable_monitoring=False)
+        runtime = ConditionalRuntimeStub(enable_monitoring=False)
         workflow = create_workflow_with_switch()
         results = {"switch": {"result": "test"}}
         duration = 1.0
@@ -449,7 +451,7 @@ class TestPerformanceTracking:
 
     def test_track_conditional_execution_performance_empty_results(self):
         """Test performance tracking handles empty results."""
-        runtime = TestConditionalRuntime(enable_monitoring=True)
+        runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         results = {}
         duration = 0.1
@@ -460,7 +462,7 @@ class TestPerformanceTracking:
 
     def test_track_conditional_execution_performance_records_metrics(self):
         """Test performance tracking calls _record_execution_metrics."""
-        runtime = TestConditionalRuntime(enable_monitoring=True)
+        runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         results = {"switch": {"result": "test"}}
         duration = 2.5
@@ -474,7 +476,7 @@ class TestFailureLogging:
 
     def test_log_conditional_execution_failure_basic(self):
         """Test failure logging records error details."""
-        runtime = TestConditionalRuntime(debug=True)
+        runtime = ConditionalRuntimeStub(debug=True)
         workflow = create_workflow_with_switch()
         error = RuntimeExecutionError("Execution failed")
         context = {"nodes_completed": 2, "total_nodes": 4}
@@ -484,7 +486,7 @@ class TestFailureLogging:
 
     def test_log_conditional_execution_failure_includes_context(self):
         """Test failure logging includes execution context."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         error = WorkflowExecutionError("Node failed")
         context = {
@@ -498,7 +500,7 @@ class TestFailureLogging:
 
     def test_log_conditional_execution_failure_different_error_types(self):
         """Test failure logging handles different error types."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         context = {"nodes_completed": 1}
 
@@ -520,7 +522,7 @@ class TestFallbackTracking:
 
     def test_track_fallback_usage_basic(self):
         """Test fallback tracking records reason."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         reason = "Prerequisites validation failed"
 
@@ -529,7 +531,7 @@ class TestFallbackTracking:
 
     def test_track_fallback_usage_multiple_reasons(self):
         """Test fallback tracking with multiple reasons."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
 
         reasons = [
@@ -545,7 +547,7 @@ class TestFallbackTracking:
 
     def test_track_fallback_usage_with_monitoring(self):
         """Test fallback tracking records metrics when monitoring enabled."""
-        runtime = TestConditionalRuntime(enable_monitoring=True)
+        runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         reason = "Switch execution failed"
 
@@ -559,7 +561,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_basic(self):
         """Test basic conditional approach execution."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {"initial_data": "test"}
 
@@ -570,7 +572,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_with_switch_nodes(self):
         """Test conditional execution with SwitchNodes."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {"condition": True}
 
@@ -580,7 +582,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_validates_prerequisites(self):
         """Test conditional execution validates prerequisites first."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_empty_workflow()  # Invalid for conditional execution
         inputs = {}
 
@@ -596,7 +598,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_two_phase_execution(self):
         """Test conditional execution follows two-phase pattern."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -608,7 +610,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_tracks_performance(self):
         """Test conditional execution tracks performance metrics."""
-        runtime = TestConditionalRuntime(enable_monitoring=True)
+        runtime = ConditionalRuntimeStub(enable_monitoring=True)
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -619,7 +621,7 @@ class TestExecuteConditionalApproachTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_handles_errors(self):
         """Test conditional execution handles errors gracefully."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -634,7 +636,7 @@ class TestExecuteSwitchNodesTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_single_switch(self):
         """Test executing single SwitchNode."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {"condition": True}
 
@@ -644,7 +646,7 @@ class TestExecuteSwitchNodesTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_multiple_switches(self):
         """Test executing multiple SwitchNodes."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         # Add second switch (in real implementation)
         inputs = {}
@@ -655,7 +657,7 @@ class TestExecuteSwitchNodesTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_with_dependencies(self):
         """Test executing SwitchNodes with dependencies."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -666,7 +668,7 @@ class TestExecuteSwitchNodesTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_hierarchical_mode(self):
         """Test executing SwitchNodes in hierarchical mode."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -677,7 +679,7 @@ class TestExecuteSwitchNodesTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_validates_results(self):
         """Test switch execution validates results."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -692,7 +694,7 @@ class TestExecutePrunedPlanTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_pruned_plan_basic(self):
         """Test executing pruned execution plan."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         execution_plan = ["input", "switch", "true_branch"]  # Pruned plan
         inputs = {}
@@ -706,7 +708,7 @@ class TestExecutePrunedPlanTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_pruned_plan_skips_unreachable_nodes(self):
         """Test pruned plan execution skips unreachable nodes."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         # Pruned plan excludes false_branch
         execution_plan = ["input", "switch", "true_branch"]
@@ -720,7 +722,7 @@ class TestExecutePrunedPlanTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_pruned_plan_respects_execution_order(self):
         """Test pruned plan execution respects node order."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         execution_plan = ["input", "switch", "true_branch"]  # Specific order
         inputs = {}
@@ -732,7 +734,7 @@ class TestExecutePrunedPlanTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_pruned_plan_empty_plan(self):
         """Test executing empty pruned plan."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         execution_plan = []
         inputs = {}
@@ -743,7 +745,7 @@ class TestExecutePrunedPlanTemplateMethod:
     @pytest.mark.asyncio
     async def test_execute_pruned_plan_with_node_failures(self):
         """Test pruned plan execution handles node failures."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         execution_plan = ["input", "switch", "true_branch"]
         inputs = {}
@@ -759,7 +761,7 @@ class TestConditionalExecutionIntegration:
     @pytest.mark.asyncio
     async def test_full_conditional_execution_workflow(self):
         """Test complete conditional execution workflow."""
-        runtime = TestConditionalRuntime(
+        runtime = ConditionalRuntimeStub(
             conditional_execution="skip_branches", enable_monitoring=True
         )
         workflow = create_workflow_with_switch()
@@ -777,7 +779,7 @@ class TestConditionalExecutionIntegration:
 
     def test_conditional_execution_with_cycles_falls_back(self):
         """Test conditional execution falls back for cyclic workflows."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_cycles()
 
         has_patterns = runtime._has_conditional_patterns(workflow)
@@ -785,7 +787,7 @@ class TestConditionalExecutionIntegration:
 
     def test_conditional_execution_mode_route_data(self):
         """Test conditional execution in route_data mode."""
-        runtime = TestConditionalRuntime(conditional_execution="route_data")
+        runtime = ConditionalRuntimeStub(conditional_execution="route_data")
         workflow = create_workflow_with_switch()
 
         has_patterns = runtime._has_conditional_patterns(workflow)
@@ -794,7 +796,7 @@ class TestConditionalExecutionIntegration:
 
     def test_conditional_execution_mode_skip_branches(self):
         """Test conditional execution in skip_branches mode."""
-        runtime = TestConditionalRuntime(conditional_execution="skip_branches")
+        runtime = ConditionalRuntimeStub(conditional_execution="skip_branches")
         workflow = create_workflow_with_switch()
         results = {"switch": {"true_output": {"data": "test"}, "false_output": None}}
         # Prepare inputs for false_branch (would receive None from switch on "data" parameter)
@@ -808,7 +810,7 @@ class TestConditionalExecutionIntegration:
 
     def test_conditional_execution_with_large_workflow_falls_back(self):
         """Test conditional execution falls back for large workflows."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_large_workflow(node_count=150)
 
         has_patterns = runtime._has_conditional_patterns(workflow)
@@ -821,14 +823,14 @@ class TestConditionalExecutionEdgeCases:
 
     def test_conditional_execution_with_none_workflow(self):
         """Test conditional methods handle None workflow."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
 
         result = runtime._has_conditional_patterns(None)
         assert result is False  # None workflow has no patterns
 
     def test_conditional_execution_with_broken_workflow(self):
         """Test conditional methods handle broken workflow."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()
         workflow.graph = None  # Break workflow
 
@@ -837,7 +839,7 @@ class TestConditionalExecutionEdgeCases:
 
     def test_track_performance_with_none_results(self):
         """Test performance tracking handles None results."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
 
         # Should handle gracefully without crashing
@@ -845,7 +847,7 @@ class TestConditionalExecutionEdgeCases:
 
     def test_log_failure_with_none_error(self):
         """Test failure logging handles None error."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         context = {"nodes_completed": 1}
 
@@ -855,7 +857,7 @@ class TestConditionalExecutionEdgeCases:
     @pytest.mark.asyncio
     async def test_execute_conditional_approach_with_empty_inputs(self):
         """Test conditional execution with empty inputs."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_workflow_with_switch()
         inputs = {}
 
@@ -866,7 +868,7 @@ class TestConditionalExecutionEdgeCases:
     @pytest.mark.asyncio
     async def test_execute_switch_nodes_with_no_switches(self):
         """Test switch execution with workflow containing no switches."""
-        runtime = TestConditionalRuntime()
+        runtime = ConditionalRuntimeStub()
         workflow = create_valid_workflow()  # No switches
         inputs = {}
 

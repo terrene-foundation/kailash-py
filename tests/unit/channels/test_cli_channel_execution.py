@@ -19,22 +19,20 @@ def _make_config(name: str = "test-cli") -> ChannelConfig:
 class TestWorkflowRegistration:
     """Tests for CLIChannel.register_workflow."""
 
-    def test_register_workflow_stores_definition(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    @pytest.fixture
+    def channel(self):
+        ch = CLIChannel(config=_make_config(), output_stream=StringIO())
+        yield ch
+        ch.close()
+
+    def test_register_workflow_stores_definition(self, channel):
         mock_workflow = MagicMock()
         channel.register_workflow("my_wf", mock_workflow)
 
         assert "my_wf" in channel._registered_workflows
         assert channel._registered_workflows["my_wf"] is mock_workflow
 
-    def test_register_multiple_workflows(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    def test_register_multiple_workflows(self, channel):
         wf1 = MagicMock()
         wf2 = MagicMock()
         channel.register_workflow("wf1", wf1)
@@ -44,11 +42,7 @@ class TestWorkflowRegistration:
         assert channel._registered_workflows["wf1"] is wf1
         assert channel._registered_workflows["wf2"] is wf2
 
-    def test_register_workflow_overwrites_existing(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    def test_register_workflow_overwrites_existing(self, channel):
         old_wf = MagicMock()
         new_wf = MagicMock()
         channel.register_workflow("wf", old_wf)
@@ -60,13 +54,14 @@ class TestWorkflowRegistration:
 class TestExecuteWorkflowCommand:
     """Tests for CLIChannel._execute_workflow_command."""
 
-    @pytest.mark.asyncio
-    async def test_execute_registered_workflow(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    @pytest.fixture
+    def channel(self):
+        ch = CLIChannel(config=_make_config(), output_stream=StringIO())
+        yield ch
+        ch.close()
 
+    @pytest.mark.asyncio
+    async def test_execute_registered_workflow(self, channel):
         # Create a mock workflow with .build()
         mock_built = MagicMock()
         mock_builder = MagicMock()
@@ -96,12 +91,7 @@ class TestExecuteWorkflowCommand:
         )
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_with_json_input(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
+    async def test_execute_workflow_with_json_input(self, channel):
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         channel.register_workflow("process", mock_workflow)
@@ -125,11 +115,7 @@ class TestExecuteWorkflowCommand:
         assert call_kwargs.kwargs["inputs"] == {"key": "value"}
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_invalid_json_input(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    async def test_execute_workflow_invalid_json_input(self, channel):
         mock_workflow = MagicMock()
         channel.register_workflow("wf", mock_workflow)
 
@@ -141,12 +127,7 @@ class TestExecuteWorkflowCommand:
         assert "Invalid JSON input" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_not_found(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
+    async def test_execute_workflow_not_found(self, channel):
         result = await channel._execute_workflow_command(
             {"command_arguments": {"workflow": "nonexistent"}}
         )
@@ -156,24 +137,14 @@ class TestExecuteWorkflowCommand:
         assert "nonexistent" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_no_name_provided(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
+    async def test_execute_workflow_no_name_provided(self, channel):
         result = await channel._execute_workflow_command({"command_arguments": {}})
 
         assert result["success"] is False
         assert "No workflow name provided" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_runtime_error(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
+    async def test_execute_workflow_runtime_error(self, channel):
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         channel.register_workflow("failing", mock_workflow)
@@ -191,13 +162,8 @@ class TestExecuteWorkflowCommand:
         assert result["workflow_name"] == "failing"
 
     @pytest.mark.asyncio
-    async def test_execute_workflow_without_build_method(self):
+    async def test_execute_workflow_without_build_method(self, channel):
         """Workflow objects that are already built (no .build() method)."""
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
         # A pre-built workflow object with no .build() method
         pre_built = {"nodes": [], "connections": []}
         channel.register_workflow("prebuilt", pre_built)
@@ -241,6 +207,8 @@ class TestExecuteWorkflowCommand:
         assert result["workflow_name"] == "server_wf"
         assert result["results"] == {"from": "server"}
 
+        channel.close()
+
     @pytest.mark.asyncio
     async def test_execute_workflow_not_found_shows_available(self):
         """Error message for missing workflow includes available workflow names."""
@@ -262,17 +230,20 @@ class TestExecuteWorkflowCommand:
         assert "local_wf" in result["error"]
         assert "server_wf" in result["error"]
 
+        channel.close()
+
 
 class TestHandleListWorkflows:
     """Tests for CLIChannel._handle_list_workflows."""
 
-    @pytest.mark.asyncio
-    async def test_list_no_workflows(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
+    @pytest.fixture
+    def channel(self):
+        ch = CLIChannel(config=_make_config(), output_stream=StringIO())
+        yield ch
+        ch.close()
 
+    @pytest.mark.asyncio
+    async def test_list_no_workflows(self, channel):
         result = await channel._handle_list_workflows({})
 
         assert result["success"] is True
@@ -280,12 +251,7 @@ class TestHandleListWorkflows:
         assert result["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_list_registered_workflows(self):
-        channel = CLIChannel(
-            config=_make_config(),
-            output_stream=StringIO(),
-        )
-
+    async def test_list_registered_workflows(self, channel):
         wf = MagicMock()
         wf.description = "Test workflow"
         channel.register_workflow("test_wf", wf)
@@ -318,6 +284,8 @@ class TestHandleListWorkflows:
         assert result["workflows"][0]["name"] == "srv_wf"
         assert result["workflows"][0]["source"] == "server"
 
+        channel.close()
+
     @pytest.mark.asyncio
     async def test_list_combined_workflows_no_duplicates(self):
         """When same name exists in both sources, registered takes precedence."""
@@ -347,6 +315,8 @@ class TestHandleListWorkflows:
         assert shared["source"] == "registered"
         assert shared["description"] == "Local version"
 
+        channel.close()
+
 
 class TestCLIChannelInit:
     """Tests for CLIChannel initialization with new parameters."""
@@ -358,6 +328,7 @@ class TestCLIChannelInit:
         )
         assert channel.workflow_server is None
         assert channel._registered_workflows == {}
+        channel.close()
 
     def test_init_with_workflow_server(self):
         mock_server = MagicMock()
@@ -367,6 +338,7 @@ class TestCLIChannelInit:
             workflow_server=mock_server,
         )
         assert channel.workflow_server is mock_server
+        channel.close()
 
     def test_runtime_is_async(self):
         from kailash.runtime.async_local import AsyncLocalRuntime
@@ -376,3 +348,4 @@ class TestCLIChannelInit:
             output_stream=StringIO(),
         )
         assert isinstance(channel.runtime, AsyncLocalRuntime)
+        channel.close()

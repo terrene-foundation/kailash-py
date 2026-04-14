@@ -76,18 +76,20 @@ class TestCLIChannel:
 
     @pytest.fixture
     def cli_channel(self, channel_config, mock_input_stream, mock_output_stream):
-        """Create CLIChannel instance."""
+        """Create CLIChannel instance with proper cleanup."""
         with (
             patch("kailash.channels.cli_channel.CommandParserNode"),
             patch("kailash.channels.cli_channel.InteractiveShellNode"),
             patch("kailash.channels.cli_channel.CommandRouterNode"),
             patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
-            return CLIChannel(
+            channel = CLIChannel(
                 config=channel_config,
                 input_stream=mock_input_stream,
                 output_stream=mock_output_stream,
             )
+            yield channel
+            channel.close()
 
     def test_init_with_streams(
         self, channel_config, mock_input_stream, mock_output_stream
@@ -108,6 +110,7 @@ class TestCLIChannel:
             assert channel.input_stream is mock_input_stream
             assert channel.output_stream is mock_output_stream
             assert channel.name == "test_cli"
+            channel.close()
 
     def test_init_without_streams(self, channel_config):
         """Test initialization without provided streams."""
@@ -123,6 +126,7 @@ class TestCLIChannel:
 
             assert channel.input_stream is sys.stdin
             assert channel.output_stream is sys.stdout
+            channel.close()
 
     def test_setup_default_commands(self, cli_channel):
         """Test default command setup."""
@@ -611,6 +615,7 @@ class TestCLIChannel:
 
             # Should not raise an exception
             channel._write_output("Test output")
+            channel.close()
 
     @pytest.mark.asyncio
     async def test_health_check(self, cli_channel):

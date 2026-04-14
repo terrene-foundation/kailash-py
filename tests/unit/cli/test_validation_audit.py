@@ -138,10 +138,20 @@ class TestWorkflowValidationAuditor:
 
         auditor = WorkflowValidationAuditor("strict")
 
-        # Mock runtime execution to succeed
-        with patch("kailash.runtime.local.LocalRuntime.execute") as mock_execute:
-            mock_execute.return_value = ({"target": {"result": "test"}}, "run123")
-
+        # Mock the entire LocalRuntime to avoid creating a real instance (ResourceWarning)
+        mock_runtime_instance = MagicMock()
+        mock_runtime_instance.execute.return_value = (
+            {"target": {"result": "test"}},
+            "run123",
+        )
+        mock_runtime_instance.get_validation_metrics.return_value = {
+            "performance_summary": {},
+            "security_report": {"most_recent_violations": []},
+        }
+        with patch(
+            "kailash.cli.validation_audit.LocalRuntime",
+            return_value=mock_runtime_instance,
+        ):
             report = auditor.audit_workflow(workflow)
 
         assert report.total_connections == 1
@@ -159,23 +169,21 @@ class TestWorkflowValidationAuditor:
 
         auditor = WorkflowValidationAuditor("strict")
 
-        # Mock runtime execution to fail
-        with patch("kailash.runtime.local.LocalRuntime.execute") as mock_execute:
-            error = WorkflowExecutionError(
-                "Validation failed for node 'reader': Type mismatch"
-            )
-            mock_execute.side_effect = error
-
-            # Mock metrics
-            with patch(
-                "kailash.runtime.local.LocalRuntime.get_validation_metrics"
-            ) as mock_metrics:
-                mock_metrics.return_value = {
-                    "performance_summary": {},
-                    "security_report": {"most_recent_violations": []},
-                }
-
-                report = auditor.audit_workflow(workflow)
+        # Mock the entire LocalRuntime to avoid creating a real instance (ResourceWarning)
+        error = WorkflowExecutionError(
+            "Validation failed for node 'reader': Type mismatch"
+        )
+        mock_runtime_instance = MagicMock()
+        mock_runtime_instance.execute.side_effect = error
+        mock_runtime_instance.get_validation_metrics.return_value = {
+            "performance_summary": {},
+            "security_report": {"most_recent_violations": []},
+        }
+        with patch(
+            "kailash.cli.validation_audit.LocalRuntime",
+            return_value=mock_runtime_instance,
+        ):
+            report = auditor.audit_workflow(workflow)
 
         assert report.total_connections == 1
         assert len(report.failed_connections) >= 1
