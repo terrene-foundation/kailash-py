@@ -81,6 +81,27 @@ class RouterInfo:
         return [route.path for route in self.router.routes]
 
 
+@dataclass
+class MountInfo:
+    """Information about a mounted sub-application.
+
+    Records a sub-application mounted at a path prefix. The subapp may be
+    another ``Nexus`` instance (composition) or any ASGI-compatible app
+    (e.g., FastAPI, Starlette).
+
+    Attributes:
+        path: URL prefix where the subapp is mounted (e.g. ``/api/v2``).
+        subapp: The mounted application (``Nexus`` or ASGI app).
+        name: Optional name (forwarded to Starlette's mount).
+        added_at: Timestamp when the mount was registered.
+    """
+
+    path: str
+    subapp: Any
+    name: Optional[str]
+    added_at: datetime
+
+
 @runtime_checkable
 class NexusPluginProtocol(Protocol):
     """Protocol for Nexus plugins.
@@ -270,6 +291,10 @@ class Nexus:
         # Router management (introspection-only — actual apply delegates to HTTPTransport)
         self._router_queue: List[Tuple[Any, Dict[str, Any]]] = []
         self._routers: List[RouterInfo] = []
+
+        # Sub-app mount management (introspection + queue for pre-gateway mounts)
+        self._mount_queue: List[Tuple[str, Any, Optional[str]]] = []
+        self._mounts: List[MountInfo] = []
 
         # Plugin management
         self._plugins: Dict[str, Any] = {}
@@ -526,6 +551,16 @@ class Nexus:
                 prefix = router_kwargs.get("prefix", "/")
                 logger.info(f"Applied queued router: {prefix}")
             self._router_queue.clear()
+
+            # Apply any sub-app mounts that were queued before gateway was ready.
+            # Guarded via hasattr because Nexus.__new__() without __init__() is
+            # used in some test setups that don't initialize the mount queue.
+            if hasattr(self, "_mount_queue"):
+                for mount_path, subapp, mount_name in self._mount_queue:
+                    asgi_app = self._resolve_mount_subapp(subapp)
+                    self._http_transport.mount(mount_path, asgi_app, name=mount_name)
+                    logger.info(f"Applied queued mount: {mount_path}")
+                self._mount_queue.clear()
 
         except Exception as e:
             logger.error(f"Failed to initialize enterprise gateway: {e}")
@@ -1385,6 +1420,143 @@ Check the documentation or explore available resources.
             logger.debug(f"Queued router: {prefix or '/'} (transport not ready)")
 
         return self  # Enable chaining
+
+    def mount(
+        self,
+        path: str,
+        subapp: Any,
+        name: Optional[str] = None,
+    ) -> "Nexus":
+        """Mount a sub-application at a URL path prefix.
+
+        Composes another application (another ``Nexus`` instance or any
+        ASGI app) under the parent at the given path. Requests whose URL
+        starts with ``path`` are routed into the sub-application with the
+        ``path`` prefix stripped before dispatch. The sub-application
+        retains its own middleware, authentication, and routing stack —
+        all of which apply to mounted requests.
+
+        Composition is recursive: a mounted ``Nexus`` may itself ``mount``
+        additional sub-applications at any depth.
+
+        The mount is applied to the live FastAPI app if the gateway is
+        ready, otherwise queued and applied during gateway initialization.
+
+        Args:
+            path: URL prefix where the sub-application is exposed
+                (e.g., ``"/api/v2"``). MUST be non-empty and MUST start
+                with ``"/"``. A trailing slash is stripped for
+                consistency with Starlette's mount semantics.
+            subapp: The sub-application to mount. Either a ``Nexus``
+                instance (composition) or any ASGI-compatible app
+                (FastAPI, Starlette, or bare ASGI callable).
+            name: Optional name for the mount (forwarded to Starlette
+                for URL reversal / introspection).
+
+        Returns:
+            self (for chaining).
+
+        Raises:
+            TypeError: If ``path`` is not a string or ``subapp`` is
+                ``None``.
+            ValueError: If ``path`` is empty, does not start with ``"/"``,
+                or is already mounted.
+
+        Example:
+            >>> parent = Nexus(api_port=8000)
+            >>> child = Nexus(api_port=8001)
+            >>>
+            >>> @child.handler("ping")
+            ... async def ping() -> dict:
+            ...     return {"pong": True}
+            ...
+            >>> parent.mount("/api/v2", child)
+            >>> # Requests to /api/v2/workflows/ping/execute dispatch into
+            >>> # the child Nexus, with "/api/v2" stripped before routing.
+        """
+        # Type / value validation
+        if not isinstance(path, str):
+            raise TypeError(f"path must be str, got {type(path).__name__}")
+        if subapp is None:
+            raise TypeError("subapp must not be None")
+        if not path:
+            raise ValueError("path must be non-empty (e.g. '/api/v2')")
+        if not path.startswith("/"):
+            raise ValueError(f"path must start with '/', got {path!r}")
+
+        # Normalize: strip a single trailing slash so "/api/" -> "/api"
+        # (Starlette's Mount treats "/api/" and "/api" equivalently for
+        # dispatch but introspection becomes confusing if both coexist).
+        if len(path) > 1 and path.endswith("/"):
+            path = path.rstrip("/")
+
+        # Initialize tracking state if caller used Nexus.__new__() without
+        # running __init__ (test shim pattern).
+        if not hasattr(self, "_mounts"):
+            self._mounts = []
+        if not hasattr(self, "_mount_queue"):
+            self._mount_queue = []
+
+        # Reject duplicate mount paths (same rationale as duplicate handlers)
+        for existing in self._mounts:
+            if existing.path == path:
+                raise ValueError(
+                    f"path {path!r} is already mounted; unmount first or "
+                    f"choose a different prefix"
+                )
+
+        # Record for introspection
+        info = MountInfo(
+            path=path,
+            subapp=subapp,
+            name=name,
+            added_at=datetime.now(UTC),
+        )
+        self._mounts.append(info)
+
+        # Apply or queue
+        if (
+            hasattr(self, "_http_transport")
+            and self._http_transport.gateway is not None
+        ):
+            asgi_app = self._resolve_mount_subapp(subapp)
+            self._http_transport.mount(path, asgi_app, name=name)
+            logger.info(f"Mounted sub-application at {path}")
+        else:
+            self._mount_queue.append((path, subapp, name))
+            logger.debug(f"Queued mount at {path} (gateway not ready)")
+
+        return self
+
+    def _resolve_mount_subapp(self, subapp: Any) -> Any:
+        """Resolve a mount target to a concrete ASGI app.
+
+        - If ``subapp`` is a ``Nexus`` instance, return its underlying
+          FastAPI app (``fastapi_app``). The child Nexus's own
+          middleware / routers / handlers are attached to that FastAPI
+          app, so mounting it gives the caller the child's full stack.
+        - Otherwise, return ``subapp`` as-is (assumed ASGI-compatible).
+
+        Args:
+            subapp: The mount target.
+
+        Returns:
+            An ASGI application callable.
+
+        Raises:
+            RuntimeError: If ``subapp`` is a Nexus whose FastAPI app is
+                not yet initialized.
+        """
+        if isinstance(subapp, Nexus):
+            child_app = subapp.fastapi_app
+            if child_app is None:
+                raise RuntimeError(
+                    "Cannot mount child Nexus: its FastAPI app is not "
+                    "yet initialized. Ensure the child was fully "
+                    "constructed before calling mount()."
+                )
+            return child_app
+        return subapp
 
     def _has_route_conflict(self, prefix: str) -> bool:
         """Check if router prefix may conflict with existing routes.

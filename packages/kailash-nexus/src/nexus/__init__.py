@@ -25,15 +25,22 @@ Usage:
     app.start()
 """
 
-from .core import MiddlewareInfo, Nexus, NexusPluginProtocol, RouterInfo, create_nexus
-from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
-from .openapi import OpenApiGenerator, OpenApiInfo
-from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
 from .background import BackgroundService
-from .probes import ProbeManager, ProbeResponse, ProbeState
+from .core import (
+    MiddlewareInfo,
+    MountInfo,
+    Nexus,
+    NexusPluginProtocol,
+    RouterInfo,
+    create_nexus,
+)
+from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
 from .events import EventBus, NexusEvent, NexusEventType
 from .files import NexusFile
 from .metrics import register_metrics_endpoint
+from .openapi import OpenApiGenerator, OpenApiInfo
+from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
+from .probes import ProbeManager, ProbeResponse, ProbeState
 from .registry import HandlerDef, HandlerParam, HandlerRegistry
 from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport

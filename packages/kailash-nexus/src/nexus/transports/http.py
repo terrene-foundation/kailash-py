@@ -217,6 +217,32 @@ class HTTPTransport(Transport):
         else:
             self._router_queue.append(_RouterEntry(router, kwargs))
 
+    def mount(self, path: str, app: Any, name: Optional[str] = None) -> None:
+        """Mount an ASGI sub-application at a URL path prefix.
+
+        Delegates to FastAPI's ``app.mount()`` which uses Starlette's
+        Mount route. Starlette handles path prefix stripping and lets
+        the sub-app dispatch its own full middleware/routing stack.
+
+        If the gateway is not yet created, the caller is expected to
+        queue the mount (see ``Nexus.mount``) — this method only applies
+        immediately.
+
+        Args:
+            path: URL prefix for the sub-application.
+            app: An ASGI-compatible application.
+            name: Optional name (forwarded to Starlette).
+
+        Raises:
+            RuntimeError: If the gateway has not been created.
+        """
+        if self._gateway is None:
+            raise RuntimeError(
+                "HTTPTransport.mount called before gateway creation; "
+                "mounts must be queued via Nexus.mount() pre-start."
+            )
+        self._gateway.app.mount(path, app, name=name)
+
     def register_endpoint(
         self, path: str, methods: List[str], func: Callable, **kwargs
     ) -> None:
