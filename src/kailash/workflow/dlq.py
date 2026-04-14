@@ -84,6 +84,21 @@ class PersistentDLQ:
         db_path: str = "./kailash_dlq.db",
         base_delay: float = DEFAULT_BASE_DELAY,
     ) -> None:
+        # Defense-in-depth per dataflow-identifier-safety.md Rule 5:
+        # validate every hardcoded identifier interpolated into DDL at
+        # construction time, BEFORE any subclass override of
+        # `_initialize_schema` could bypass the validator. This is the
+        # single enforcement point for every DDL/DML interpolation site.
+        from kailash.db.dialect import _validate_identifier
+
+        for ident in (
+            "dlq",
+            "idx_dlq_status",
+            "idx_dlq_next_retry",
+            "idx_dlq_created",
+        ):
+            _validate_identifier(ident)
+
         self._db_path = db_path
         self._base_delay = base_delay
         self._lock = threading.Lock()
@@ -112,20 +127,8 @@ class PersistentDLQ:
         self._conn.commit()
 
     def _initialize_schema(self) -> None:
-        # Defense-in-depth per dataflow-identifier-safety.md Rule 5: every
-        # hardcoded identifier interpolated into DDL MUST route through the
-        # validator at the call site. Hardcoded today; a future refactor that
-        # makes the table name configurable must not silently bypass the gate.
-        from kailash.db.dialect import _validate_identifier
-
-        for ident in (
-            "dlq",
-            "idx_dlq_status",
-            "idx_dlq_next_retry",
-            "idx_dlq_created",
-        ):
-            _validate_identifier(ident)
-
+        # Identifiers are validated in __init__ before this method is
+        # called; see the comment there for the rationale.
         cursor = self._conn.cursor()
         cursor.execute(
             """

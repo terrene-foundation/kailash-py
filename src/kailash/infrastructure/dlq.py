@@ -68,6 +68,18 @@ class DBDeadLetterQueue:
         conn_manager: ConnectionManager,
         base_delay: float = DEFAULT_BASE_DELAY,
     ) -> None:
+        # Defense-in-depth per dataflow-identifier-safety.md Rule 5:
+        # `TABLE_NAME` is interpolated into 12+ DML strings on every
+        # operation. Validate at construction time so a subclass that
+        # overrides `TABLE_NAME` is rejected immediately, not when the
+        # first INSERT happens to fire. Validating once in `__init__`
+        # is the single enforcement point for every interpolation site.
+        from kailash.db.dialect import _validate_identifier
+
+        _validate_identifier(self.TABLE_NAME)
+        for suffix in ("status", "next_retry", "created"):
+            _validate_identifier(f"idx_{self.TABLE_NAME}_{suffix}")
+
         self._conn = conn_manager
         self._base_delay = base_delay
 
@@ -76,16 +88,6 @@ class DBDeadLetterQueue:
     # ------------------------------------------------------------------
     async def initialize(self) -> None:
         """Create the DLQ table and indices if they do not exist."""
-        # Defense-in-depth per dataflow-identifier-safety.md Rule 5: validate
-        # every identifier interpolated into DDL, even hardcoded ones, so a
-        # future refactor that makes TABLE_NAME configurable cannot bypass
-        # the gate by accident.
-        from kailash.db.dialect import _validate_identifier
-
-        _validate_identifier(self.TABLE_NAME)
-        for suffix in ("status", "next_retry", "created"):
-            _validate_identifier(f"idx_{self.TABLE_NAME}_{suffix}")
-
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
