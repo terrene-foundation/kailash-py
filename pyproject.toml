@@ -76,14 +76,16 @@ dependencies = [
 
 [project.optional-dependencies]
 # Sub-packages (separate PyPI packages)
+# Pins are MINIMUM compatible versions, not "latest" — bumping to unreleased
+# versions breaks CI which installs from PyPI before the release is published.
 dataflow = [
-    "kailash-dataflow>=2.0.8",
+    "kailash-dataflow>=2.0.3",
 ]
 nexus = [
-    "kailash-nexus>=2.0.2",
+    "kailash-nexus>=2.0.0",
 ]
 kaizen = [
-    "kailash-kaizen>=2.7.4",
+    "kailash-kaizen>=2.7.1",
     "kaizen-agents>=0.9.0",
 ]
 pact = [
@@ -131,7 +133,7 @@ dev = [
     "websockets>=12.0",
     # Sub-packages required for test collection (pact/mcp tests import these)
     "kailash-pact>=0.8.1",
-    "kailash-mcp>=0.2.4",
+    "kailash-mcp>=0.1.0",
 ]
 # Documentation
 docs = [
@@ -146,9 +148,9 @@ docs = [
 ]
 # Everything (core + all sub-packages with their optional deps)
 all = [
-    "kailash-dataflow>=2.0.8",
-    "kailash-nexus>=2.0.2",
-    "kailash-kaizen>=2.7.4",
+    "kailash-dataflow>=2.0.3",
+    "kailash-nexus>=2.0.0",
+    "kailash-kaizen>=2.7.1",
     "kaizen-agents>=0.9.0",
     "kailash-pact>=0.8.1",
     "kailash-ml[all]>=0.8.1",
