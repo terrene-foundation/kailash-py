@@ -44,6 +44,7 @@ from .probes import ProbeManager, ProbeResponse, ProbeState
 from .registry import HandlerDef, HandlerParam, HandlerRegistry
 from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport
+from .websocket_handlers import Connection, MessageHandler, MessageHandlerRegistry
 
 __version__ = "2.0.1"
 __all__ = [
@@ -90,4 +91,8 @@ __all__ = [
     # Metrics & SSE
     "register_metrics_endpoint",
     "register_sse_endpoint",
+    # Class-based WebSocket message handlers (issue #448)
+    "Connection",
+    "MessageHandler",
+    "MessageHandlerRegistry",
 ]
