@@ -1,6 +1,6 @@
 source_repo: kailash-py
 codify_date: "2026-04-14"
-codify_session: "fix(test): resolve all 63 unit test warnings + chore(release): coordinated patch release"
+codify_session: "fix(test): resolve all 63 unit test warnings + chore(release): coordinated patch release + security M1 follow-ups"
 sdk_version: 2.8.6
 coc_version: 1.0.3
 status: pending_review
@@ -26,7 +26,7 @@ changes:
     action: modified
     suggested_tier: variant-py
     reason: |
-      Added 2 new MUST rules to the SDK release rules:
+      Added 3 new MUST rules to the SDK release rules:
       (1) Optional dependencies pin to PyPI-resolvable versions — extras MUST
           NOT bump to the version being released, because CI installs from
           PyPI before the release is published. Framework SDK pins inside
@@ -38,10 +38,18 @@ changes:
           includes git-tracked files. PR #459/#460 merged with nexus/__init__.py
           importing untracked files; would have published a broken wheel.
           Caught by /release audit and bundled in PR #467.
-      Both rules are Python/pyproject.toml-specific. Classify as variant-py.
-      The Rust SDK has its own equivalent failure modes (Cargo workspace
-      pinning, mod declarations) — separate rule needed for variants/rs.
-    diff_lines: "+74"
+      (3) Multi-package release tags MUST be pushed individually with ≥1s
+          pause between pushes. Batch pushes of 3+ tags trigger GitHub's
+          undocumented push.tags webhook rate-limiting — ZERO of 5 tags
+          triggered publish-pypi.yml on 2026-04-14. Recovery requires manual
+          workflow_dispatch per package. Validated empirically when the
+          single-tag push of nexus-v2.0.3 auto-triggered correctly. Source:
+          PR #469.
+      All three rules are Python/pyproject.toml/git-tag-specific. Classify
+      as variant-py. The Rust SDK has its own equivalent failure modes
+      (Cargo workspace pinning, mod declarations, crates.io release)
+      — separate rules needed for variants/rs.
+    diff_lines: "+93"
   - file: .github/workflows/publish-pypi.yml
     action: modified
     suggested_tier: variant-py
@@ -54,6 +62,17 @@ changes:
       had to be manually triggered. Variant-py because the workflow is
       Python-specific.
     diff_lines: "+5"
+  - file: deploy/deployment-config.md
+    action: modified
+    suggested_tier: variant-py
+    reason: |
+      Added "Multi-Tag Release — Push Individually" section documenting the
+      batch-tag-push failure mode observed on 2026-04-14 (ZERO of 5 tags
+      triggered publish-pypi.yml from a single batch push). Includes DO/DO
+      NOT examples and recovery procedure (workflow_dispatch per package).
+      Also bumped kailash-nexus from 2.0.2 → 2.0.3 in the versions table.
+      Variant-py because deployment-config is Python/PyPI-specific.
+    diff_lines: "+27"
 production_changes:
   - file: packages/kailash-mcp/src/kailash_mcp/advanced/subscriptions.py
     change: "Replaced datetime.utcnow() with datetime.now(UTC) — Python 3.12+ deprecation fix"
@@ -64,26 +83,42 @@ production_changes:
   - file: packages/kailash-nexus/src/nexus/errors.py
     change: "Added 276 LOC — was imported by nexus/__init__.py but never committed (PR #459/#460 oversight)"
     pr: "#467"
+  - file: packages/kailash-nexus/src/nexus/errors.py
+    change: |
+      Renamed PermissionError → ForbiddenError (canonical HTTP-status name).
+      Kept PermissionError = ForbiddenError as deprecated module-level alias
+      for backwards compatibility. Resolves security-review M1 finding
+      (shadowing stdlib PermissionError). Internal core.py guard-failure
+      raisers migrated to ForbiddenError. Public NexusPermissionError alias
+      retained.
+    pr: "#469"
+  - file: packages/kailash-nexus/src/nexus/__init__.py
+    change: "Added ForbiddenError to imports and __all__; kept NexusPermissionError deprecated alias"
+    pr: "#469"
+  - file: packages/kailash-nexus/src/nexus/core.py
+    change: "Migrated guard-failure raisers (both sync+async) from PermissionError to ForbiddenError"
+    pr: "#469"
 release_packages:
   - { name: kailash, from: 2.8.5, to: 2.8.6 }
   - { name: kailash-dataflow, from: 2.0.7, to: 2.0.8 }
   - { name: kailash-kaizen, from: 2.7.3, to: 2.7.4 }
-  - { name: kailash-nexus, from: 2.0.1, to: 2.0.2 }
+  - { name: kailash-nexus, from: 2.0.1, to: 2.0.3 } # 2.0.2 released, then 2.0.3 for M1 fix
   - { name: kailash-mcp, from: 0.2.3, to: 0.2.4 }
 notes: |
-  All changes validated and shipped:
+  All changes validated and shipped to PyPI:
   - 3309 unit tests pass with 0 warnings (was 63)
-  - security-reviewer APPROVED (1 MEDIUM finding non-blocking — PermissionError
-    shadowing; mitigated by NexusPermissionError alias in __init__.py)
+  - security-reviewer APPROVED PR #467 with 1 MEDIUM finding (M1: PermissionError
+    shadowing) — resolved in PR #469 by renaming to ForbiddenError
   - reviewer APPROVED (version consistency, SDK pin symmetry, CHANGELOG accuracy)
   - PR #466 merged (warning fixes)
-  - PR #467 merged (release commit on main)
-  - 5 release tags pushed: v2.8.6, dataflow-v2.0.8, kaizen-v2.7.4, nexus-v2.0.2, mcp-v0.2.4
-  - 4/5 packages publishing via workflow_dispatch (tag-triggered failed due to
-    GitHub batch-push behavior — not the lightweight/annotated issue, but
-    multi-tag push at once)
-  - kailash-mcp publish workflow added in this PR (separate concern)
+  - PR #467 merged (coordinated release on main)
+  - PR #468 merged (initial codify)
+  - PR #469 merged (security M1 fix + batch-tag-push rule)
+  - 6 release tags pushed: v2.8.6, dataflow-v2.0.8, kaizen-v2.7.4, nexus-v2.0.2,
+    nexus-v2.0.3, mcp-v0.2.4
+  - 5/5 packages verified live on PyPI with new versions
 
-  Outstanding follow-ups (post-distribute):
-  - PermissionError → ForbiddenError rename in nexus/errors.py (M1 from security review)
-  - Investigate why batch tag push didn't trigger workflows individually
+  Batch-tag-push rule validated empirically:
+  - 5-tag batch push (2026-04-14): triggered 0 workflow runs
+  - Single tag push of nexus-v2.0.3 (2026-04-14): auto-triggered correctly
+  - Rule in rules/deployment.md § "Multi-Package Release Tags Pushed Individually"
