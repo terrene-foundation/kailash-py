@@ -85,6 +85,7 @@ const EXCLUDED_DIRS = [
   ".coverage",
   ".git",
   ".claude", // hook logs, learning observations
+  "benchmarks", // perf measurement output
 ];
 
 function triageLogs(cwd) {
