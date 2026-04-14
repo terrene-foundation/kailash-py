@@ -43,7 +43,7 @@ Quick Example
 
 .. code-block:: python
 
-   from kailash.mcp_server import MCPServer
+   from kailash_mcp import MCPServer
 
    # Create server
    server = MCPServer("my-server")

@@ -2,7 +2,7 @@
 
 ## ✅ Migration Complete (2025-10-04)
 
-This example has been **fully migrated** from deprecated `kaizen.mcp` to Kailash SDK's production-ready `kailash.mcp_server` implementation using BaseAgent helpers.
+This example has been **fully migrated** from deprecated `kaizen.mcp` to Kailash SDK's production-ready `kailash_mcp` implementation using BaseAgent helpers.
 
 ## Overview
 Demonstrates agents consuming external MCP (Model Context Protocol) tools using Kailash SDK's production-ready MCP implementation. This pattern uses BaseAgent helpers for simplified MCP integration with real JSON-RPC 2.0 protocol.
@@ -18,7 +18,7 @@ from kaizen.mcp import MCPConnection, MCPRegistry, AutoDiscovery
 
 # ✅ NEW (via BaseAgent helpers)
 from kaizen.core.base_agent import BaseAgent
-# kailash.mcp_server imported internally by BaseAgent
+# kailash_mcp imported internally by BaseAgent
 ```
 
 #### 2. **Connection Setup** - Manual → Helper-based
@@ -316,7 +316,7 @@ class MCPClientConfig:
 
 ### Dependencies
 ```bash
-pip install kailash  # Includes kailash.mcp_server
+pip install kailash  # Includes kailash_mcp
 ```
 
 ### Python Imports
@@ -477,7 +477,7 @@ npx @modelcontextprotocol/server-filesystem ./data
 
 ### Common Issues
 
-#### 1. Import Error: `kailash.mcp_server not available`
+#### 1. Import Error: `kailash_mcp not available`
 ```bash
 # Solution: Install full Kailash SDK
 pip install kailash --upgrade

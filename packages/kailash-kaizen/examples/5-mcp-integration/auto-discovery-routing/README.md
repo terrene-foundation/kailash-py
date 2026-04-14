@@ -100,7 +100,7 @@ result = await agent.route_request(
 ### 1. Installation
 
 ```bash
-pip install kailash  # Includes kailash.mcp_server
+pip install kailash  # Includes kailash_mcp
 ```
 
 ### 2. Run the Example
@@ -374,7 +374,7 @@ config = AutoDiscoveryAgentConfig(
 ### 2. Service Mesh with Authentication
 
 ```python
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 # Configure agent with auth
 config = AutoDiscoveryAgentConfig(
@@ -490,7 +490,7 @@ async def test_real_service_discovery():
 
 ## Comparison with Previous Implementation
 
-| Feature | Deprecated kaizen.mcp | Production kailash.mcp_server |
+| Feature | Deprecated kaizen.mcp | Production kailash_mcp |
 |---------|----------------------|-------------------------------|
 | Service Discovery | String matching | Real network discovery + registry |
 | Load Balancing | Manual | ServiceMesh with strategies |

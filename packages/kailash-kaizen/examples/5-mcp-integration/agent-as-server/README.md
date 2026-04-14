@@ -7,7 +7,7 @@
 This example demonstrates exposing Kaizen agent capabilities as MCP (Model Context Protocol) servers using Kailash SDK's production-ready MCP implementation via BaseAgent helpers.
 
 **Key Features**:
-- Real kailash.mcp_server.MCPServer (100% MCP spec compliant)
+- Real kailash_mcp.MCPServer (100% MCP spec compliant)
 - BaseAgent.expose_as_mcp_server() helper for automatic server creation
 - Real JSON-RPC 2.0 protocol (no mocking)
 - Multi-transport support (STDIO, HTTP, WebSocket, SSE)
@@ -45,10 +45,10 @@ def handle_mcp_request(self, tool_name, arguments):
     ...
 ```
 
-### After (Production kailash.mcp_server via BaseAgent)
+### After (Production kailash_mcp via BaseAgent)
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kailash.mcp_server.auth import APIKeyAuth  # Only if auth needed
+from kailash_mcp.auth import APIKeyAuth  # Only if auth needed
 
 # Create auth provider (optional)
 auth = APIKeyAuth({"client1": {"permissions": ["tools.*"]}})
@@ -79,7 +79,7 @@ from kaizen.mcp import MCPServerConfig, MCPRegistry, EnterpriseFeatures
 
 # NEW (via BaseAgent)
 from kaizen.core.base_agent import BaseAgent
-# kailash.mcp_server imported internally by BaseAgent
+# kailash_mcp imported internally by BaseAgent
 ```
 
 ### 2. Server Setup
@@ -259,9 +259,9 @@ from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.signatures import Signature, InputField, OutputField
 
 # Authentication (optional)
-from kailash.mcp_server.auth import APIKeyAuth, JWTAuth, BearerTokenAuth
+from kailash_mcp.auth import APIKeyAuth, JWTAuth, BearerTokenAuth
 
-# NOTE: kailash.mcp_server imported internally by BaseAgent
+# NOTE: kailash_mcp imported internally by BaseAgent
 # No direct imports needed in agent code!
 ```
 
@@ -319,7 +319,7 @@ Agent Methods → BaseAgent.expose_as_mcp_server() → Production MCPServer
 
 ### API Key Authentication
 ```python
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 auth = APIKeyAuth({
     "demo-key": {
@@ -333,7 +333,7 @@ auth = APIKeyAuth({
 
 ### JWT Authentication
 ```python
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp.auth import JWTAuth
 
 auth = JWTAuth(
     secret=os.getenv("JWT_SECRET", "your-secret"),
@@ -343,7 +343,7 @@ auth = JWTAuth(
 
 ### Bearer Token Authentication
 ```python
-from kailash.mcp_server.auth import BearerTokenAuth
+from kailash_mcp.auth import BearerTokenAuth
 
 auth = BearerTokenAuth(
     valid_tokens=["token1", "token2"]
