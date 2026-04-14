@@ -11,6 +11,7 @@ on:
       - "kaizen-agents-v*" # Kaizen Agents: kaizen-agents-v0.3.0
       - "ml-v*" # ML: ml-v0.1.0
       - "align-v*" # Align: align-v0.1.0
+      - "mcp-v*" # MCP: mcp-v0.2.4
   workflow_dispatch:
     inputs:
       package:
@@ -26,6 +27,7 @@ on:
           - kaizen-agents
           - kailash-ml
           - kailash-align
+          - kailash-mcp
       publish_to:
         description: "Target registry"
         required: true
@@ -59,6 +61,7 @@ jobs:
               kaizen-agents)    echo "package_dir=packages/kaizen-agents" >> $GITHUB_OUTPUT ;;
               kailash-ml)       echo "package_dir=packages/kailash-ml" >> $GITHUB_OUTPUT ;;
               kailash-align)    echo "package_dir=packages/kailash-align" >> $GITHUB_OUTPUT ;;
+              kailash-mcp)      echo "package_dir=packages/kailash-mcp" >> $GITHUB_OUTPUT ;;
             esac
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=manual" >> $GITHUB_OUTPUT
@@ -91,6 +94,10 @@ jobs:
             elif [[ "$TAG" =~ ^align-v(.+)$ ]]; then
               echo "package=kailash-align" >> $GITHUB_OUTPUT
               echo "package_dir=packages/kailash-align" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^mcp-v(.+)$ ]]; then
+              echo "package=kailash-mcp" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-mcp" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^v(.+)$ ]]; then
               echo "package=kailash" >> $GITHUB_OUTPUT
