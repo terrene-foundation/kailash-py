@@ -3,21 +3,28 @@
 """Tests for package skeleton: version, lazy imports, module structure."""
 from __future__ import annotations
 
+import re
 import sys
 
 import pytest
 
 
 class TestVersion:
+    # Contract: both surfaces expose a PEP 440 release version and agree.
+    # Asserting a literal here goes stale on every release bump (was "0.2.1"
+    # after kailash-align 0.3.1 shipped in commit ce5d4b78).
+    _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+")
+
     def test_version_accessible(self):
         from kailash_align._version import __version__
 
-        assert __version__ == "0.2.1"
+        assert self._SEMVER_RE.match(__version__), __version__
 
     def test_version_from_package(self):
         import kailash_align
+        from kailash_align._version import __version__ as canonical
 
-        assert kailash_align.__version__ == "0.2.1"
+        assert kailash_align.__version__ == canonical
 
 
 class TestLazyImports:
