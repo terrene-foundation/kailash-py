@@ -170,8 +170,12 @@ class DataFlowProductionEngine:
         """Extract field information from model class."""
         fields = {}
 
-        # Get type annotations if available
-        annotations = getattr(model_class, "__annotations__", {})
+        # Get type annotations if available.  Routes through the shared
+        # helper so PEP 649/749 lazy annotations on Python 3.14+ resolve
+        # safely without bare ``NameError`` on forward references.
+        from kailash.utils.annotations import get_resolved_type_hints
+
+        annotations = get_resolved_type_hints(model_class)
         for field_name, field_type in annotations.items():
             fields[field_name] = {
                 "type": field_type,

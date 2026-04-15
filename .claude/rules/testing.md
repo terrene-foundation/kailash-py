@@ -306,6 +306,64 @@ def test_workflow_execution():
     assert results is not None
 ```
 
+## Delegating Primitives Need Direct Coverage
+
+When a module exposes paired variants that delegate to a shared core (e.g. `get` / `get_raw`, `post` / `post_raw`, `insert` / `insert_batch`, `read` / `read_typed`), each variant MUST have at least one test that calls it directly — not a test that calls only one variant and reaches the other by delegation.
+
+This is a narrow rule about delegating primitive pairs. It is NOT a universal "every public function has a direct test" mandate.
+
+### MUST: One Direct Test Per Variant In Every Delegating Pair
+
+```python
+# DO — one test per variant, each asserting the externally observable behaviour
+# of THAT specific variant
+def test_get_typed_success(client):
+    """Direct exercise of the typed get() variant."""
+    user = client.get("/users/42")
+    assert user["name"] == "Alice"
+
+def test_get_raw_success(client):
+    """Direct exercise of the raw get_raw() variant."""
+    resp = client.get_raw("/users/42")
+    assert resp["status"] == 200
+    assert "Alice" in resp["body"]
+
+# DO NOT — exercise only the typed variant and trust delegation
+def test_get_works(client):
+    """Only calls client.get(); never touches client.get_raw()."""
+    user = client.get("/users/42")
+    assert user["name"] == "Alice"
+# A refactor that touches get_raw's error mapping ships a silent regression
+# because no test exercises that path directly.
+```
+
+**Why:** A refactor that changes the typed variant while leaving the raw variant in place ships a silent regression — the raw variant has no guard. Convergent delegation paths look like one path until they diverge under refactor pressure, and the divergent moment is exactly when the test you didn't write would have failed.
+
+**BLOCKED rationalizations:**
+
+- "The typed variant calls the raw variant internally, so testing typed covers raw"
+- "Both variants share the same execute() core, so one test is enough"
+- "We can rely on integration tests to catch this"
+- "The raw variant is just a less-useful version of the typed one"
+
+### MUST: Mechanical Enforcement Via Grep
+
+`/redteam` MUST run a grep for paired variants and report any pair where one side has no direct call site in `tests/`. The check is mechanical — no judgment required.
+
+```bash
+# DO — grep each known variant pair for direct test coverage
+for variant in get_raw post_raw put_raw delete_raw; do
+  count=$(grep -rln "client.$variant\(" tests/ | wc -l)
+  if [ "$count" -eq 0 ]; then
+    echo "MISSING: no test calls client.$variant() directly"
+  fi
+done
+```
+
+**Why:** Mechanical grep catches the regression at the audit gate, not at the next production incident. Manual "I'm pretty sure I covered both variants" is not auditable.
+
+Origin: BP-046 (kailash-rs ServiceClient, 2026-04-14, commit `d3a14a73`). The `put_raw` and `delete_raw` variants were transitively exercised through delegation only — no direct call sites in the test suite. Fixed by adding four direct wiremock tests, one per raw variant. The pattern generalises to any module with paired typed/raw, single/batch, or sync/async variants that delegate to a shared core.
+
 ## Rules
 
 - Test-first development for new features

@@ -105,7 +105,11 @@ class DataFlowGateway:
                     "DataFlowGateway: Detected async context, using AsyncLocalRuntime"
                 )
             except RuntimeError:
-                self.runtime = LocalRuntime()
+                # Issue #478 — gateway-owned long-lived runtime.  Use the
+                # public opt-out so Core SDK suppresses the ad-hoc-usage
+                # deprecation warning AND skips atexit cleanup; the gateway
+                # calls close() at its own shutdown.
+                self.runtime = LocalRuntime().mark_externally_managed()
                 self._is_async = False
                 logger.debug(
                     "DataFlowGateway: Detected sync context, using LocalRuntime"

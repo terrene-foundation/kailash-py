@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
@@ -1964,21 +1963,34 @@ class LLMAgentNode(Node):
                 }
             )
             tool_calls = []
-        elif any(
-            keyword in combined_content
-            for keyword in [
-                "travels",
-                "speed",
-                "distance",
-                "time",
-                "calculate",
-                "math",
-                "problem",
-                "solve",
-                "km",
-                "hours",
-                "minutes",
-            ]
+        elif (
+            any(
+                keyword in combined_content
+                for keyword in [
+                    "travels",
+                    "speed",
+                    "distance",
+                    "calculate",
+                    "math",
+                    "km",
+                ]
+            )
+            # Only route to the math-word-problem mock when the message
+            # is NOT obviously a debate / argument / rebuttal prompt — the
+            # system-prompt of those signatures contains generic tokens
+            # (e.g. "problem") that used to trigger this branch.
+            and not any(
+                pattern in combined_content
+                for pattern in [
+                    "argument",
+                    "debate",
+                    "rebuttal",
+                    "topic to argue",
+                    "for or against",
+                    "key_points",
+                    "counterpoint",
+                ]
+            )
         ):
             # Handle mathematical word problems
             if "train" in combined_content and "travels" in combined_content:

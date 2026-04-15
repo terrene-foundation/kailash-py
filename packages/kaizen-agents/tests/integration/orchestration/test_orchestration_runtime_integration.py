@@ -16,19 +16,19 @@ Test Scenarios:
 """
 
 import asyncio
-from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen.orchestration import (
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns import (
     AgentStatus,
     OrchestrationRuntime,
     OrchestrationRuntimeConfig,
     RoutingStrategy,
 )
-from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
 # Fixtures
@@ -196,9 +196,9 @@ async def test_round_robin_routing_with_real_agents(
 ):
     """Test round-robin routing with real agent execution."""
     # Register agents
-    agent_id_1 = await runtime.register_agent(code_agent)
-    agent_id_2 = await runtime.register_agent(data_agent)
-    agent_id_3 = await runtime.register_agent(qa_agent)
+    await runtime.register_agent(code_agent)
+    await runtime.register_agent(data_agent)
+    await runtime.register_agent(qa_agent)
 
     # Route 3 tasks using round-robin (returns BaseAgent instances)
     result_1 = await runtime.route_task("Task 1", strategy=RoutingStrategy.ROUND_ROBIN)
@@ -218,9 +218,9 @@ async def test_random_routing_with_real_agents(
 ):
     """Test random routing with real agent execution."""
     # Register agents
-    agent_id_1 = await runtime.register_agent(code_agent)
-    agent_id_2 = await runtime.register_agent(data_agent)
-    agent_id_3 = await runtime.register_agent(qa_agent)
+    await runtime.register_agent(code_agent)
+    await runtime.register_agent(data_agent)
+    await runtime.register_agent(qa_agent)
 
     valid_agents = {code_agent, data_agent, qa_agent}
 
@@ -347,13 +347,13 @@ async def test_agent_deregistration_integration(runtime, code_agent, data_agent)
 async def test_budget_tracking_integration(runtime, code_agent):
     """Test budget tracking with real Ollama inference ($0 cost)."""
     # Register agent
-    agent_id = await runtime.register_agent(code_agent)
+    await runtime.register_agent(code_agent)
 
     # Execute task (Ollama is free)
     initial_budget = runtime._total_budget_spent  # Fixed: correct attribute name
 
     # Route task (just routing, not executing)
-    result = await runtime.route_task(
+    await runtime.route_task(
         "Generate hello world", strategy=RoutingStrategy.ROUND_ROBIN
     )
 

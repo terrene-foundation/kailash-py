@@ -11,7 +11,6 @@ Tests the async capabilities of BaseAgent including:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -41,7 +40,13 @@ class TestBaseAgentConfigAsync:
         assert config.use_async_llm is False
 
     def test_use_async_llm_validation(self):
-        """Test use_async_llm parameter validation."""
+        """Test use_async_llm parameter validation.
+
+        Async execution now supports every provider (not just OpenAI), so
+        the historical "only OpenAI" restriction is gone.  This test
+        documents the post-Decision-007 behaviour: async is permitted with
+        any provider and with a deferred (``None``) provider.
+        """
         # Valid: async with OpenAI
         config = BaseAgentConfig(
             llm_provider="openai", model="gpt-4", use_async_llm=True
@@ -52,11 +57,11 @@ class TestBaseAgentConfigAsync:
         config = BaseAgentConfig(llm_provider=None, model="gpt-4", use_async_llm=True)
         assert config.use_async_llm is True
 
-        # Invalid: async with non-OpenAI provider
-        with pytest.raises(
-            ValueError, match="Async mode only supported for OpenAI provider"
-        ):
-            BaseAgentConfig(llm_provider="ollama", model="llama2", use_async_llm=True)
+        # Valid: async with Ollama (previously rejected; now supported)
+        config = BaseAgentConfig(
+            llm_provider="ollama", model="llama2", use_async_llm=True
+        )
+        assert config.use_async_llm is True
 
     def test_use_async_llm_type_validation(self):
         """Test use_async_llm must be boolean."""
@@ -123,54 +128,31 @@ class TestBaseAgentRunAsync:
 
     @pytest.mark.asyncio
     async def test_run_async_with_async_config(self):
-        """Test run_async() works with use_async_llm=True."""
+        """Test run_async() works with use_async_llm=True.
+
+        Injects a fake async strategy so the test exercises the full
+        `AgentLoop.run_async` lifecycle (validation, hooks, memory) without
+        needing a real LLM — run_async now routes through `agent.strategy.execute`
+        (AsyncSingleShotStrategy), not the removed `kaizen.providers.get_provider`
+        factory.
+        """
+
+        class FakeAsyncStrategy:
+            async def execute(self, agent, inputs, **kwargs):
+                return {"answer": "2+2 equals 4"}
+
         config = BaseAgentConfig(
             llm_provider="openai", model="gpt-4", use_async_llm=True
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
+        agent.strategy = FakeAsyncStrategy()
 
-        # Mock at the provider factory level - where LLMAgentNode gets providers
-        with patch("kaizen.providers.get_provider") as mock_get_provider:
-            mock_provider = AsyncMock()
-            mock_get_provider.return_value = mock_provider
+        # Execute
+        result = await agent.run_async(question="What is 2+2?")
 
-            # Mock chat_async response with JSON-formatted content matching signature
-            mock_provider.chat_async = AsyncMock(
-                return_value={
-                    "content": '{"answer": "2+2 equals 4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
-
-            # Also mock sync chat method (might be called in some paths)
-            mock_provider.chat = MagicMock(
-                return_value={
-                    "content": '{"answer": "2+2 equals 4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
-
-            # Execute
-            result = await agent.run_async(question="What is 2+2?")
-
-            # Verify provider was requested
-            assert mock_get_provider.called, "Provider factory should be called"
-
-            # Verify result
-            assert "answer" in result
-            assert result["answer"] is not None
+        # Verify result matches signature
+        assert "answer" in result
+        assert result["answer"] == "2+2 equals 4"
 
     @pytest.mark.asyncio
     async def test_run_async_signature_input_validation(self):
@@ -218,6 +200,11 @@ class TestBaseAgentRunAsync:
     @pytest.mark.asyncio
     async def test_run_async_calls_pre_post_hooks(self):
         """Test run_async() calls pre/post execution hooks."""
+
+        class FakeAsyncStrategy:
+            async def execute(self, agent, inputs, **kwargs):
+                return {"answer": "4"}
+
         config = BaseAgentConfig(
             llm_provider="openai", model="gpt-4", use_async_llm=True
         )
@@ -237,44 +224,22 @@ class TestBaseAgentRunAsync:
                 return super()._post_execution_hook(result)
 
         agent = HookedAgent(config=config, signature=SimpleQASignature())
+        agent.strategy = FakeAsyncStrategy()
 
-        with patch("kaizen.providers.get_provider") as mock_get_provider:
-            mock_provider = AsyncMock()
-            mock_get_provider.return_value = mock_provider
-            mock_provider.chat_async = AsyncMock(
-                return_value={
-                    "content": '{"answer": "4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
-            mock_provider.chat = MagicMock(
-                return_value={
-                    "content": '{"answer": "4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
+        await agent.run_async(question="What is 2+2?")
 
-            await agent.run_async(question="What is 2+2?")
-
-            # Verify hooks were called
-            assert agent.pre_called is True
-            assert agent.post_called is True
+        # Verify hooks were called
+        assert agent.pre_called is True
+        assert agent.post_called is True
 
     @pytest.mark.asyncio
     async def test_run_async_with_memory(self):
         """Test run_async() supports memory integration."""
+
+        class FakeAsyncStrategy:
+            async def execute(self, agent, inputs, **kwargs):
+                return {"answer": "4"}
+
         config = BaseAgentConfig(
             llm_provider="openai", model="gpt-4", use_async_llm=True
         )
@@ -287,41 +252,14 @@ class TestBaseAgentRunAsync:
         agent = BaseAgent(
             config=config, signature=SimpleQASignature(), memory=mock_memory
         )
+        agent.strategy = FakeAsyncStrategy()
 
-        with patch("kaizen.providers.get_provider") as mock_get_provider:
-            mock_provider = AsyncMock()
-            mock_get_provider.return_value = mock_provider
-            mock_provider.chat_async = AsyncMock(
-                return_value={
-                    "content": '{"answer": "4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
-            mock_provider.chat = MagicMock(
-                return_value={
-                    "content": '{"answer": "4"}',  # JSON string matching signature
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-            )
+        # Execute with session_id
+        await agent.run_async(question="What is 2+2?", session_id="session123")
 
-            # Execute with session_id
-            await agent.run_async(question="What is 2+2?", session_id="session123")
-
-            # Verify memory methods were called
-            mock_memory.load_context.assert_called_once_with("session123")
-            mock_memory.save_turn.assert_called_once()
+        # Verify memory methods were called
+        mock_memory.load_context.assert_called_once_with("session123")
+        mock_memory.save_turn.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_async_error_handling(self):
@@ -393,54 +331,26 @@ class TestConcurrentAsyncExecution:
         """Test multiple agents can execute concurrently."""
         import asyncio
 
+        call_count = 0
+
+        class CountingAsyncStrategy:
+            async def execute(self, agent, inputs, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                await asyncio.sleep(0.01)  # Simulate network delay
+                return {"answer": f"Answer {call_count}"}
+
         config = BaseAgentConfig(
             llm_provider="openai", model="gpt-4", use_async_llm=True
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
+        agent.strategy = CountingAsyncStrategy()
 
-        with patch("kaizen.providers.get_provider") as mock_get_provider:
-            mock_provider = AsyncMock()
-            mock_get_provider.return_value = mock_provider
+        # Execute 10 requests concurrently
+        tasks = [agent.run_async(question=f"Question {i}") for i in range(10)]
+        results = await asyncio.gather(*tasks)
 
-            call_count = 0
-
-            async def mock_chat_async(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                await asyncio.sleep(0.01)  # Simulate network delay
-                return {
-                    "content": f"Answer {call_count}",
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-
-            def mock_chat_sync(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                return {
-                    "content": f"Answer {call_count}",
-                    "role": "assistant",
-                    "model": "gpt-4",
-                    "usage": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                    },
-                }
-
-            mock_provider.chat_async = mock_chat_async
-            mock_provider.chat = mock_chat_sync
-
-            # Execute 10 requests concurrently
-            tasks = [agent.run_async(question=f"Question {i}") for i in range(10)]
-
-            results = await asyncio.gather(*tasks)
-
-            # Verify all completed
-            assert len(results) == 10
-            assert call_count == 10
+        # Verify all completed
+        assert len(results) == 10
+        assert call_count == 10
+        assert all("answer" in r for r in results)

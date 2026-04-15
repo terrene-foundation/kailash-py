@@ -325,8 +325,14 @@ class FKAwareModelTracker:
         """Analyze fields in a model class."""
         fields = {}
 
-        # Get type hints for the model
-        type_hints = getattr(model_class, "__annotations__", {})
+        # Get type hints for the model.  ``get_resolved_type_hints`` evaluates
+        # PEP 649/749 lazy annotations on Python 3.14+ and surfaces a clear
+        # per-field error if any forward reference is unresolvable, instead
+        # of the bare ``NameError`` raw ``__annotations__`` access would
+        # produce.
+        from kailash.utils.annotations import get_resolved_type_hints
+
+        type_hints = get_resolved_type_hints(model_class)
 
         for field_name, field_type in type_hints.items():
             # Skip private fields

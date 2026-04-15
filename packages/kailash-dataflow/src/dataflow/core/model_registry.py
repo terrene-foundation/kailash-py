@@ -95,16 +95,14 @@ class ModelRegistry:
                     "ModelRegistry: Detected async context, using AsyncLocalRuntime"
                 )
             except RuntimeError:
-                self.runtime = LocalRuntime()
-                self._is_async = False
                 # The registry manages the runtime's lifecycle via
-                # close() → runtime.release() (ref-count cleanup). Tell
-                # the runtime not to emit the "use context manager"
-                # deprecation warning on first execute() — it's aimed
-                # at transient callers, not long-lived owners. Without
-                # this flag the registry path would produce a warning
-                # per instance. See rules/zero-tolerance.md Rule 1.
-                self.runtime._cleanup_registered = True
+                # close() → runtime.release() (ref-count cleanup). Use
+                # the public opt-out so Core SDK suppresses the ad-hoc
+                # usage deprecation warning AND skips atexit cleanup —
+                # the registry calls close() at its own shutdown.
+                # See issue #478.
+                self.runtime = LocalRuntime().mark_externally_managed()
+                self._is_async = False
                 logger.debug("ModelRegistry: Detected sync context, using LocalRuntime")
             self._owns_runtime = True
 
@@ -1201,9 +1199,13 @@ class ModelRegistry:
             "options": {},
         }
 
-        # Extract field annotations
-        if hasattr(model_class, "__annotations__"):
-            for field_name, field_type in model_class.__annotations__.items():
+        # Extract field annotations.  Routes through the shared helper so
+        # PEP 649/749 lazy annotations on Python 3.14+ resolve safely.
+        from kailash.utils.annotations import get_resolved_type_hints
+
+        model_annotations = get_resolved_type_hints(model_class)
+        if model_annotations:
+            for field_name, field_type in model_annotations.items():
                 metadata["fields"][field_name] = {
                     "type": self._normalize_field_type(field_type),
                     "required": not hasattr(

@@ -69,8 +69,10 @@ class AgentState:
         Returns:
             Dictionary representation of agent state
         """
+        from kailash.utils.annotations import get_class_annotations
+
         result = {}
-        for field_name, field_type in self.__annotations__.items():
+        for field_name, field_type in get_class_annotations(type(self)).items():
             value = getattr(self, field_name)
 
             # Convert datetime to ISO format

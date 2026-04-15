@@ -28,7 +28,6 @@ from typing import Any, Dict, List
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.core.deprecation import deprecated
 
 logger = logging.getLogger(__name__)
@@ -643,8 +642,11 @@ class SingleShotStrategy:
                     result[field_name] = f"Placeholder result for {field_name}"
         else:
             # Try to extract from signature class attributes
-            if hasattr(agent.signature, "__annotations__"):
-                for attr_name, attr_type in agent.signature.__annotations__.items():
+            from kailash.utils.annotations import get_class_annotations
+
+            sig_annotations = get_class_annotations(type(agent.signature))
+            if sig_annotations:
+                for attr_name, attr_type in sig_annotations.items():
                     # Check if it's an OutputField
                     attr_value = getattr(agent.signature, attr_name, None)
                     if attr_value is not None and hasattr(attr_value, "__class__"):

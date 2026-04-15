@@ -17,19 +17,18 @@ from typing import Any
 
 import pytest
 
-from kaizen.core.base_agent import BaseAgent
-from kaizen.core.config import BaseAgentConfig
 from kailash.trust.envelope import (
     AgentPosture,
     ConstraintEnvelope,
     OperationalConstraint,
 )
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
 from kaizen_agents.events import StreamBufferOverflow
 from kaizen_agents.governed_agent import GovernanceRejectedError, L3GovernedAgent
 from kaizen_agents.monitored_agent import MonitoredAgent
 from kaizen_agents.streaming_agent import StreamingAgent
-from kaizen_agents.wrapper_base import DuplicateWrapperError, WrapperBase
-
+from kaizen_agents.wrapper_base import DuplicateWrapperError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -134,12 +133,12 @@ class TestPosturePoisoning:
     def test_posture_clamped_to_ceiling(self) -> None:
         """Posture is clamped to the envelope ceiling at construction time."""
         agent = _make_agent()
-        # Ceiling is SUPERVISED, requested posture is DELEGATED
+        # Ceiling is SUPERVISED, requested posture is AUTONOMOUS (above)
         envelope = _make_envelope(posture_ceiling="supervised")
         governed = L3GovernedAgent(
             agent,
             envelope,
-            posture=AgentPosture.DELEGATED,
+            posture=AgentPosture.AUTONOMOUS,
             mcp_servers=[],
         )
 
@@ -162,15 +161,15 @@ class TestPosturePoisoning:
     def test_posture_at_ceiling_preserved(self) -> None:
         """Posture exactly at the ceiling is preserved."""
         agent = _make_agent()
-        envelope = _make_envelope(posture_ceiling="shared_planning")
+        envelope = _make_envelope(posture_ceiling="tool")
         governed = L3GovernedAgent(
             agent,
             envelope,
-            posture=AgentPosture.SHARED_PLANNING,
+            posture=AgentPosture.TOOL,
             mcp_servers=[],
         )
 
-        assert governed.posture == AgentPosture.SHARED_PLANNING
+        assert governed.posture == AgentPosture.TOOL
 
     def test_envelope_is_frozen_after_construction(self) -> None:
         """The constraint envelope is frozen (immutable) after construction."""

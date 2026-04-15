@@ -12,7 +12,7 @@ Architecture:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar
 
 try:
     from dataflow import DataFlow
@@ -56,7 +56,7 @@ class DataFlowConnection:
     _initialized: bool = field(default=False, init=False, repr=False)
 
     # Class-level connection pool (shared across instances)
-    _connection_pool: ClassVar[Dict[int, Dict[str, Any]]] = {}
+    _connection_pool: ClassVar[dict[int, dict[str, Any]]] = {}
 
     def __post_init__(self):
         """Initialize connection if lazy_init is False."""
@@ -105,7 +105,7 @@ class DataFlowConnection:
                 "cache_hits": 0,
             }
 
-    def get_pool_stats(self) -> Dict[str, Any]:
+    def get_pool_stats(self) -> dict[str, Any]:
         """
         Get connection pool statistics.
 
@@ -163,7 +163,7 @@ class DataFlowConnection:
         if not self._initialized:
             self._initialize_connection()
 
-    def get_table_schema(self, table_name: str) -> Dict[str, Any]:
+    def get_table_schema(self, table_name: str) -> dict[str, Any]:
         """
         Get schema information for a DataFlow table.
 
@@ -195,7 +195,7 @@ class DataFlowConnection:
 
         raise ValueError(f"Table '{table_name}' not found")
 
-    def _extract_schema_from_model(self, model) -> Dict[str, Any]:
+    def _extract_schema_from_model(self, model) -> dict[str, Any]:
         """Extract schema information from a DataFlow model."""
         # This is a placeholder - actual implementation depends on DataFlow internals
         schema = {
@@ -203,17 +203,20 @@ class DataFlowConnection:
             "table_name": getattr(model, "__tablename__", model.__name__.lower()),
         }
 
-        # Extract field information
-        if hasattr(model, "__annotations__"):
-            for field_name, field_type in model.__annotations__.items():
-                schema["columns"][field_name] = {
-                    "type": str(field_type),
-                    "nullable": True,  # Default assumption
-                }
+        # Extract field information.  Routes through the shared helper so
+        # PEP 649/749 lazy annotations on Python 3.14+ resolve safely with
+        # a clear per-field error if a forward reference is unresolvable.
+        from kailash.utils.annotations import get_resolved_type_hints
+
+        for field_name, field_type in get_resolved_type_hints(model).items():
+            schema["columns"][field_name] = {
+                "type": str(field_type),
+                "nullable": True,  # Default assumption
+            }
 
         return schema
 
-    def list_tables(self) -> List[str]:
+    def list_tables(self) -> list[str]:
         """
         List all available DataFlow tables.
 
@@ -238,7 +241,7 @@ class DataFlowConnection:
 
         return []
 
-    def get_nodes_for_table(self, table_name: str) -> Dict[str, str]:
+    def get_nodes_for_table(self, table_name: str) -> dict[str, str]:
         """
         Get all DataFlow-generated node names for a table.
 

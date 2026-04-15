@@ -23,7 +23,26 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
+
+from kailash.utils.annotations import get_namespace_annotations
+
+if TYPE_CHECKING:
+    # ``SignatureComposition`` lives in ``signatures.enterprise`` which itself
+    # imports from this module — guard the import to avoid a cycle while
+    # still giving type checkers the resolved name for the forward refs in
+    # method signatures below.
+    from kaizen.signatures.enterprise import SignatureComposition
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +66,7 @@ class InputField:
     def __init__(
         self,
         desc: str = "",
-        description: str = None,  # Alias for desc (matches documentation)
+        description: Optional[str] = None,  # Alias for desc (matches docs)
         default: Any = None,
         required: bool = True,
         **kwargs,
@@ -85,7 +104,7 @@ class OutputField:
             confidence: float = OutputField(desc="Confidence score 0-1")
     """
 
-    def __init__(self, desc: str = "", description: str = None, **kwargs):
+    def __init__(self, desc: str = "", description: Optional[str] = None, **kwargs):
         """
         Initialize output field.
 
@@ -134,8 +153,11 @@ class SignatureMeta(type):
             if hasattr(base, "_signature_outputs"):
                 output_fields.update(base._signature_outputs)
 
-        # Now process current class's fields (overrides parent fields)
-        annotations = namespace.get("__annotations__", {})
+        # Now process current class's fields (overrides parent fields).
+        # PEP 649 (Python 3.14+) makes annotations lazy via __annotate__;
+        # the shared helper reads both eager (<=3.13) and lazy (>=3.14)
+        # forms so signatures keep working under both annotation models.
+        annotations = get_namespace_annotations(namespace)
         for field_name, field_type in annotations.items():
             field_value = namespace.get(field_name)
 
@@ -274,13 +296,20 @@ class Signature(metaclass=SignatureMeta):
     """
 
     # Class variables for class-based signatures (set by SignatureMeta)
-    _signature_inputs: ClassVar[Dict[str, Any]] = {}
-    _signature_outputs: ClassVar[Dict[str, Any]] = {}
-    _signature_description: ClassVar[str] = ""
+    _signature_inputs: Dict[str, Any] = {}
+    _signature_outputs: Dict[str, Any] = {}
+    _signature_description: str = ""
+
+    # Instance attribute type declarations (set in __init__).  Multi-output
+    # signatures store nested lists, hence ``List[str | List[str]]``.
+    _inputs_list: List[str]
+    _outputs_list: List[Union[str, List[str]]]
+    _input_fields_dict: Dict[str, Any]
+    _output_fields_dict: Dict[str, Any]
 
     # Layer 2 Enhancement class variables (set by SignatureMeta)
-    _signature_intent: ClassVar[str] = ""
-    _signature_guidelines: ClassVar[List[str]] = []
+    _signature_intent: str = ""
+    _signature_guidelines: List[str] = []
 
     def __init__(
         self,
@@ -323,9 +352,14 @@ class Signature(metaclass=SignatureMeta):
         is_class_based = bool(self._signature_inputs or self._signature_outputs)
 
         if is_class_based:
-            # Class-based signature: extract from field definitions
+            # Class-based signature: extract from field definitions.  Cast
+            # the narrow ``List[str]`` literal to the wider declared
+            # ``List[str | List[str]]`` type that ``_outputs_list`` carries.
             self._inputs_list = list(self._signature_inputs.keys())
-            self._outputs_list = list(self._signature_outputs.keys())
+            self._outputs_list = cast(
+                List[Union[str, List[str]]],
+                list(self._signature_outputs.keys()),
+            )
             self._input_fields_dict = self._signature_inputs
             self._output_fields_dict = self._signature_outputs
             self.description = description or self._signature_description
@@ -862,11 +896,10 @@ class SignatureValidator:
             ValidationResult with validation status and details
         """
         if hasattr(signature, "signatures"):  # SignatureComposition
-            return self._validate_composition(signature)
-        else:
-            return self._validate_single_signature(signature)
+            return self._validate_composition(cast("SignatureComposition", signature))
+        return self._validate_single_signature(cast("Signature", signature))
 
-    def _validate_single_signature(self, signature: Signature) -> ValidationResult:
+    def _validate_single_signature(self, signature: "Signature") -> ValidationResult:
         """Validate a single signature."""
         result = ValidationResult()
 
@@ -900,9 +933,10 @@ class SignatureValidator:
         """Validate a signature composition."""
         result = ValidationResult()
 
-        # Validate individual signatures
+        # Validate individual signatures.  Composition members are always
+        # plain ``Signature`` instances by construction.
         for signature in composition.signatures:
-            sig_result = self._validate_single_signature(signature)
+            sig_result = self._validate_single_signature(cast("Signature", signature))
             if not sig_result.is_valid:
                 result.errors.extend(sig_result.errors)
 
@@ -1028,9 +1062,8 @@ class SignatureCompiler:
             Dictionary with node_type and parameters for WorkflowBuilder
         """
         if hasattr(signature, "signatures"):  # SignatureComposition
-            return self._compile_composition(signature)
-        else:
-            return self._compile_single_signature(signature)
+            return self._compile_composition(cast("SignatureComposition", signature))
+        return self._compile_single_signature(cast("Signature", signature))
 
     def _compile_single_signature(self, signature: Signature) -> Dict[str, Any]:
         """Compile a single signature to workflow parameters."""
@@ -1155,19 +1188,20 @@ class SignatureCompiler:
                 description=None,  # Default for parsed signatures
             )
         elif hasattr(signature, "is_valid"):
-            # Handle ParseResult object
-            if not signature.is_valid:
+            # Handle ParseResult object — cast so attribute access type-checks.
+            parsed = cast("ParseResult", signature)
+            if not parsed.is_valid:
                 raise ValueError(
-                    f"Invalid signature: {getattr(signature, 'error_message', 'Unknown error')}"
+                    f"Invalid signature: {getattr(parsed, 'error_message', 'Unknown error')}"
                 )
             signature_obj = Signature(
-                inputs=signature.inputs,
-                outputs=signature.outputs,
-                signature_type=signature.signature_type,
-                requires_privacy_check=signature.requires_privacy_check,
-                requires_audit_trail=signature.requires_audit_trail,
-                supports_multi_modal=signature.supports_multi_modal,
-                input_types=getattr(signature, "input_types", {}),
+                inputs=parsed.inputs,
+                outputs=parsed.outputs,
+                signature_type=parsed.signature_type,
+                requires_privacy_check=parsed.requires_privacy_check,
+                requires_audit_trail=parsed.requires_audit_trail,
+                supports_multi_modal=parsed.supports_multi_modal,
+                input_types=getattr(parsed, "input_types", {}),
                 execution_pattern=None,  # Default for parsed signatures
                 parameters=None,  # Default for parsed signatures
                 name=None,  # Default for parsed signatures
@@ -1179,7 +1213,7 @@ class SignatureCompiler:
                 raise ValueError(
                     "Invalid signature object: missing required attributes"
                 )
-            signature_obj = signature
+            signature_obj = cast("Signature", signature)
 
         # Validate required configuration
         if not config or "model" not in config:
@@ -1316,9 +1350,9 @@ class SignatureCompiler:
 
         # Generate mock results for each output
         for output in outputs:
-            signature_result["result"][output] = (
-                f"Generated {output} from signature processing of {inputs_str}"
-            )
+            signature_result["result"][
+                output
+            ] = f"Generated {output} from signature processing of {inputs_str}"
 
         # Create a temporary file with the signature result
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)

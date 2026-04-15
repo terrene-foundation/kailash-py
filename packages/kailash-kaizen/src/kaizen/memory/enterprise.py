@@ -48,7 +48,10 @@ class MemorySystemConfig:
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> "MemorySystemConfig":
         """Create config from dictionary"""
-        return cls(**{k: v for k, v in config.items() if k in cls.__annotations__})
+        from kailash.utils.annotations import get_class_annotations
+
+        valid_keys = get_class_annotations(cls)
+        return cls(**{k: v for k, v in config.items() if k in valid_keys})
 
 
 class MemoryMonitor:

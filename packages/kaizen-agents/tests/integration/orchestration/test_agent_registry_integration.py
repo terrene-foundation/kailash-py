@@ -19,16 +19,17 @@ import asyncio
 
 import pytest
 import pytest_asyncio
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen.orchestration import (
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns import (
     AgentRegistry,
     AgentRegistryConfig,
     AgentStatus,
     RegistryEvent,
     RegistryEventType,
 )
-from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
 # Fixtures
@@ -459,9 +460,9 @@ async def test_capability_indexing_integration(
 ):
     """Test capability index is properly maintained."""
     # Register agents with different capabilities
-    agent_id_1 = await registry.register_agent(code_agent, runtime_id="runtime_1")
-    agent_id_2 = await registry.register_agent(data_agent, runtime_id="runtime_1")
-    agent_id_3 = await registry.register_agent(qa_agent, runtime_id="runtime_2")
+    await registry.register_agent(code_agent, runtime_id="runtime_1")
+    await registry.register_agent(data_agent, runtime_id="runtime_1")
+    await registry.register_agent(qa_agent, runtime_id="runtime_2")
 
     # Verify capability index contains expected capabilities
     # Each agent should have at least one capability keyword indexed

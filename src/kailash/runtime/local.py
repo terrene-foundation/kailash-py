@@ -39,8 +39,8 @@ import hashlib
 import json
 import logging
 import threading
-import warnings
 import time
+import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
@@ -50,7 +50,9 @@ if TYPE_CHECKING:
 
 from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
+from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
+from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.mixins import (
     ConditionalExecutionMixin,
     CycleExecutionMixin,
@@ -67,6 +69,7 @@ from kailash.runtime.resource_manager import (
 )
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.runtime.signals import QueryRegistry, SignalChannel
+from kailash.runtime.tracing import get_workflow_tracer
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
 from kailash.runtime.validation.error_categorizer import ErrorCategorizer
@@ -75,9 +78,6 @@ from kailash.runtime.validation.metrics import (
     get_metrics_collector,
 )
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
-from kailash.runtime.cancellation import CancellationToken
-from kailash.runtime.execution_tracker import ExecutionTracker
-from kailash.runtime.tracing import get_workflow_tracer
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowCancelledError,
@@ -759,6 +759,13 @@ class LocalRuntime(
         self._ref_count = 1  # Creator holds first reference
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
+        # Track whether an owning framework manages this runtime's lifecycle.
+        # Set via ``mark_externally_managed()`` by frameworks (e.g. DataFlow)
+        # that hold a long-lived runtime across many ``execute()`` calls.
+        # When True, the runtime suppresses the ad-hoc-usage deprecation
+        # warning AND skips atexit cleanup registration — the owner MUST
+        # call ``close()`` at its own shutdown. See issue #478.
+        self._externally_managed = False
 
         # === Coordinated Shutdown (v0.12.0, TODO-015) ===
         self._shutdown_coordinator: Optional["ShutdownCoordinator"] = None  # noqa: F821
@@ -874,8 +881,14 @@ class LocalRuntime(
             - __enter__, __exit__: Context manager support
             - execute_async(): Async variant
         """
-        # Emit deprecation warning for non-context-managed usage
-        if not self._is_context_managed and not self._cleanup_registered:
+        # Emit deprecation warning for non-context-managed usage.
+        # Externally-managed runtimes (frameworks that call close() at
+        # their own shutdown) opt out via mark_externally_managed().
+        if (
+            not self._is_context_managed
+            and not self._cleanup_registered
+            and not self._externally_managed
+        ):
             import warnings
 
             warnings.warn(
@@ -1169,9 +1182,14 @@ class LocalRuntime(
                     f"Failed to create persistent event loop for runtime {self._runtime_id}: {e}"
                 ) from e
 
-            # Register atexit cleanup if not using context manager
-            # This is a fallback - context manager or explicit close() is preferred
-            if not self._cleanup_registered and not self._is_context_managed:
+            # Register atexit cleanup if not using context manager.
+            # Externally-managed runtimes opt out — the owning framework
+            # calls ``close()`` directly at its own shutdown.
+            if (
+                not self._cleanup_registered
+                and not self._is_context_managed
+                and not self._externally_managed
+            ):
                 import atexit
 
                 atexit.register(self._cleanup_event_loop)
@@ -1370,6 +1388,37 @@ class LocalRuntime(
                 "runtime", self._cleanup_event_loop, priority=1
             )
         return self._shutdown_coordinator
+
+    def mark_externally_managed(self) -> "LocalRuntime":
+        """Declare that an owning framework manages this runtime's lifecycle.
+
+        Frameworks that hold a long-lived ``LocalRuntime`` across many
+        ``execute()`` calls (e.g. DataFlow's ``ModelRegistry``, ``DataFlow``
+        instance, migration inspectors) should call this method immediately
+        after construction. The runtime will then:
+
+        - **NOT** emit the "use context manager" ``DeprecationWarning`` on
+          ``execute()`` — that warning targets transient ad-hoc callers,
+          not frameworks with their own shutdown protocol.
+        - **NOT** register an ``atexit`` cleanup handler for the persistent
+          event loop — the owner is responsible for calling :meth:`close`
+          at its own shutdown.
+
+        The caller MUST invoke :meth:`close` (or route cleanup through
+        ``ShutdownCoordinator``) when the owning framework tears down.
+
+        Returns:
+            ``self`` to support fluent construction::
+
+                self.runtime = LocalRuntime().mark_externally_managed()
+
+        See Also:
+            - Issue #478 — the original DataFlow internal-warning leak that
+              motivated this public opt-out.
+            - :meth:`close` — the cleanup call the owner is now responsible for.
+        """
+        self._externally_managed = True
+        return self
 
     def close(self) -> None:
         """

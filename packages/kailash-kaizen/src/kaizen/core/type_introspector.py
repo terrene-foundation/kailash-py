@@ -310,7 +310,9 @@ class TypeIntrospector:
             if not isinstance(value, dict):
                 return False, f"Expected dict for TypedDict, got {type(value).__name__}"
 
-            annotations = type_annotation.__annotations__
+            from kailash.utils.annotations import get_class_annotations
+
+            annotations = get_class_annotations(type_annotation)
             required_keys = getattr(type_annotation, "__required_keys__", set())
             optional_keys = getattr(type_annotation, "__optional_keys__", set())
 
@@ -462,7 +464,9 @@ class TypeIntrospector:
             properties = {}
             required = []
 
-            annotations = type_annotation.__annotations__
+            from kailash.utils.annotations import get_class_annotations
+
+            annotations = get_class_annotations(type_annotation)
             required_keys = getattr(type_annotation, "__required_keys__", set())
 
             for key, key_type in annotations.items():
@@ -560,7 +564,9 @@ class TypeIntrospector:
 
         # TypedDict is compatible if all field types are
         if cls.is_typeddict(type_annotation):
-            annotations = type_annotation.__annotations__
+            from kailash.utils.annotations import get_class_annotations
+
+            annotations = get_class_annotations(type_annotation)
             for key, key_type in annotations.items():
                 compatible, reason = cls.is_strict_mode_compatible(key_type)
                 if not compatible:

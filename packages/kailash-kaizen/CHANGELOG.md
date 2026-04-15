@@ -5,6 +5,18 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.5] - 2026-04-15 — Python 3.14 compatibility
+
+### Fixed
+
+- **Python 3.14 (PEP 649 / PEP 749) silently broke every class-based `Signature`.** `SignatureMeta.__new__` read `namespace.get("__annotations__", {})` to discover `InputField` / `OutputField` declarations. On 3.14 the compiler emits `namespace["__annotate__"]` (a lazy callable) instead of populating `__annotations__` directly, so the metaclass saw `{}`, produced signatures with zero fields, and every dependent `BaseAgent` refused to construct. The fix routes the read through the new shared helper `kailash.utils.annotations.get_namespace_annotations`, which evaluates `__annotate__` (preferring `Format.VALUE`, falling back to `Format.FORWARDREF` on unresolved names) on 3.14 and reads the eager dict on 3.13 and earlier.
+- **`kaizen.deploy.introspect.build_card_for`** previously called `getattr(signature_cls, "__annotations__", {})`, which can raise `NameError` instead of returning a default on 3.14 if the signature has any string forward reference. Replaced with `kailash.utils.annotations.get_class_annotations(signature_cls)` so every annotation read in the SDK flows through the one-place handler for 3.13/3.14 differences.
+- **`type_introspector`, `core/autonomy/state/types`, `memory/enterprise`, `strategies/single_shot`, `strategies/multi_cycle`** all updated to read class annotations through `kailash.utils.annotations.get_class_annotations`, so PEP 649 forward references are surfaced safely instead of crashing the introspection path.
+
+### Pyright
+
+- `signatures/core.py` cleanup (touched while applying the 3.14 fix): `description: str = None` → `Optional[str] = None`; dropped `ClassVar[…]` on the `_signature_*` attributes that get per-instance overrides; declared `_outputs_list: List[Union[str, List[str]]]` at class scope so the multi-output return type holds; added a `TYPE_CHECKING` import for `SignatureComposition` (defined in `signatures.enterprise`); added narrowing casts at dispatchers where `hasattr` already proves the discriminator.
+
 ## [2.7.3] - 2026-04-12 — Post-Convergence Security Hardening
 
 ### Security

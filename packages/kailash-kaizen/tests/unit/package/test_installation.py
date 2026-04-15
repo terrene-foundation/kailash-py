@@ -145,8 +145,19 @@ class TestPackageInstallation:
 
     @pytest.fixture
     def isolated_venv(self):
-        """Create isolated virtual environment for testing installation."""
+        """Create isolated virtual environment for testing installation.
+
+        Pre-installs local ``kailash`` and ``kailash-mcp`` from the monorepo
+        source tree so that tests which install kaizen from a freshly-built
+        wheel / sdist resolve against the local (in-development) versions of
+        its framework dependencies, not the older PyPI copies. This matters
+        when kaizen depends on symbols added to kailash in the same release
+        cycle (e.g. ``kailash.utils.annotations`` added in 2.8.7).
+        """
         uv_path = shutil.which("uv")
+        monorepo_root = Path(__file__).parent.parent.parent.parent.parent.parent
+        kailash_src = monorepo_root
+        kailash_mcp_src = monorepo_root / "packages" / "kailash-mcp"
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_path = Path(temp_dir) / "test_venv"
 
@@ -173,6 +184,19 @@ class TestPackageInstallation:
             else:
                 python_path = venv_path / "bin" / "python"
                 pip_path = venv_path / "bin" / "pip"
+
+            # Preinstall local kailash and kailash-mcp so kaizen's
+            # framework-dep pins resolve against the monorepo source.
+            subprocess.run(
+                [str(pip_path), "install", "-e", str(kailash_src)],
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                [str(pip_path), "install", "-e", str(kailash_mcp_src)],
+                capture_output=True,
+                check=True,
+            )
 
             yield {
                 "venv_path": venv_path,
@@ -342,9 +366,17 @@ class TestInstallationValidation:
 
     @pytest.fixture
     def isolated_venv(self):
-        """Create isolated virtual environment with package pre-installed."""
+        """Create isolated virtual environment with package pre-installed.
+
+        Also preinstalls local ``kailash`` and ``kailash-mcp`` from the
+        monorepo so kaizen's framework pins resolve against the in-tree
+        versions (which may include symbols not yet on PyPI).
+        """
         uv_path = shutil.which("uv")
         pkg_root = Path(__file__).parent.parent.parent.parent
+        monorepo_root = pkg_root.parent.parent
+        kailash_src = monorepo_root
+        kailash_mcp_src = monorepo_root / "packages" / "kailash-mcp"
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_path = Path(temp_dir) / "test_venv"
 
@@ -354,10 +386,23 @@ class TestInstallationValidation:
                     capture_output=True,
                     check=True,
                 )
-                # Install pip + package via uv with VIRTUAL_ENV
+                # Install pip + local kailash + local kailash-mcp + kaizen
+                # via uv with VIRTUAL_ENV. Local packages come first so
+                # kaizen's framework pins resolve against them.
                 env = {**os.environ, "VIRTUAL_ENV": str(venv_path)}
                 subprocess.run(
-                    [uv_path, "pip", "install", "pip", "-e", str(pkg_root)],
+                    [
+                        uv_path,
+                        "pip",
+                        "install",
+                        "pip",
+                        "-e",
+                        str(kailash_src),
+                        "-e",
+                        str(kailash_mcp_src),
+                        "-e",
+                        str(pkg_root),
+                    ],
                     capture_output=True,
                     check=True,
                     env=env,
@@ -370,7 +415,16 @@ class TestInstallationValidation:
                     else venv_path / "bin" / "pip"
                 )
                 subprocess.run(
-                    [str(pip_path), "install", "-e", str(pkg_root)],
+                    [
+                        str(pip_path),
+                        "install",
+                        "-e",
+                        str(kailash_src),
+                        "-e",
+                        str(kailash_mcp_src),
+                        "-e",
+                        str(pkg_root),
+                    ],
                     capture_output=True,
                     check=True,
                 )

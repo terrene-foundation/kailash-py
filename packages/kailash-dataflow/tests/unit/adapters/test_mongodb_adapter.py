@@ -8,6 +8,7 @@ a real MongoDB instance (Tier 1 - Unit Tests).
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from dataflow.adapters.mongodb import MongoDBAdapter
 
 
@@ -123,7 +124,7 @@ class TestMongoDBAdapterConnection:
         """Test successful connection."""
         adapter = MongoDBAdapter("mongodb://localhost:27017/testdb")
 
-        with patch("dataflow.adapters.mongodb.AsyncIOMotorClient") as mock_client_class:
+        with patch("motor.motor_asyncio.AsyncIOMotorClient") as mock_client_class:
             # Setup mock
             mock_client = MagicMock()
             mock_client.admin.command = AsyncMock(return_value={"ok": 1})
@@ -143,7 +144,7 @@ class TestMongoDBAdapterConnection:
         """Test connection with explicit database name."""
         adapter = MongoDBAdapter("mongodb://localhost:27017", database_name="mydb")
 
-        with patch("dataflow.adapters.mongodb.AsyncIOMotorClient") as mock_client_class:
+        with patch("motor.motor_asyncio.AsyncIOMotorClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.admin.command = AsyncMock(return_value={"ok": 1})
             mock_client_class.return_value = mock_client
@@ -157,7 +158,7 @@ class TestMongoDBAdapterConnection:
         """Test connection failure handling."""
         adapter = MongoDBAdapter("mongodb://localhost:27017/testdb")
 
-        with patch("dataflow.adapters.mongodb.AsyncIOMotorClient") as mock_client_class:
+        with patch("motor.motor_asyncio.AsyncIOMotorClient") as mock_client_class:
             # Setup mock to fail
             mock_client = MagicMock()
             mock_client.admin.command = AsyncMock(

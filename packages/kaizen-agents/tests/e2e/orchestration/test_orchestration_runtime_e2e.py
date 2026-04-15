@@ -16,15 +16,16 @@ import asyncio
 
 import pytest
 import pytest_asyncio
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen.orchestration import (
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns import (
     AgentStatus,
     OrchestrationRuntime,
     OrchestrationRuntimeConfig,
     RoutingStrategy,
 )
-from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
 # Fixtures
@@ -143,9 +144,9 @@ async def test_multi_agent_workflow_execution_e2e(
 ):
     """Test complete multi-agent workflow with real OpenAI inference."""
     # Register all agents
-    code_id = await runtime.register_agent(code_agent_e2e)
-    data_id = await runtime.register_agent(data_agent_e2e)
-    writing_id = await runtime.register_agent(writing_agent_e2e)
+    await runtime.register_agent(code_agent_e2e)
+    await runtime.register_agent(data_agent_e2e)
+    await runtime.register_agent(writing_agent_e2e)
 
     assert len(runtime.agents) == 3
 

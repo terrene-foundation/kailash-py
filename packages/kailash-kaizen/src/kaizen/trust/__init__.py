@@ -103,6 +103,29 @@ from kailash.trust.a2a import (
     create_a2a_app,
     extract_token_from_header,
 )
+
+# CARE-029: Posture-Aware Agent
+from kailash.trust.agents.posture_agent import (
+    ApprovalHandler,
+    AuditEntry,
+    CircuitBreaker,
+    NotificationHandler,
+    PostureAwareAgent,
+)
+from kailash.trust.agents.pseudo_agent import (
+    AuthProvider,
+    PseudoAgent,
+    PseudoAgentConfig,
+    PseudoAgentFactory,
+    create_pseudo_agent_for_testing,
+)
+from kailash.trust.agents.trusted_agent import (
+    TrustContext,
+    TrustContextManager,
+    TrustedAgent,
+    TrustedAgentConfig,
+    TrustedSupervisorAgent,
+)
 from kailash.trust.audit_service import (
     ActionSummary,
     AgentAuditSummary,
@@ -140,22 +163,6 @@ from kailash.trust.constraint_validator import (
     ConstraintViolation,
     DelegationConstraintValidator,
     ValidationResult,
-)
-
-# CARE-013: Certificate Revocation List (CRL)
-from kailash.trust.crl import (
-    CertificateRevocationList,
-    CRLEntry,
-    CRLMetadata,
-    CRLVerificationResult,
-    verify_delegation_with_crl,
-)
-from kailash.trust.crypto import (
-    generate_keypair,
-    hash_chain,
-    serialize_for_signing,
-    sign,
-    verify_signature,
 )
 
 # Phase 3 Week 10: Enterprise System Agent (ESA)
@@ -229,16 +236,6 @@ from kailash.trust.knowledge import (
     TrustKnowledgeBridge,
 )
 
-# CARE-012: Merkle Tree Audit Verification
-from kailash.trust.merkle import (
-    MerkleNode,
-    MerkleProof,
-    MerkleTree,
-    compute_merkle_root,
-    get_proof_length,
-    verify_merkle_proof,
-)
-
 # Week 6: Secure Communication
 from kailash.trust.messaging import (  # Envelope; Signer; Verifier; Replay Protection; Channel; Exceptions
     ChannelError,
@@ -267,21 +264,6 @@ from kailash.trust.metrics import (
     TrustMetricsCollector,
 )
 
-# CARE-011: Multi-Signature Genesis Records
-from kailash.trust.multi_sig import (
-    DuplicateSignatureError,
-    InsufficientSignaturesError,
-    MultiSigError,
-    MultiSigManager,
-    MultiSigPolicy,
-    OperationNotFoundError,
-    PendingMultiSig,
-    SigningOperationExpiredError,
-    UnauthorizedSignerError,
-    create_genesis_payload,
-    verify_multi_sig,
-)
-
 # Week 7: Orchestration Integration
 from kailash.trust.orchestration import (  # Execution Context; Policy; Runtime; Exceptions
     ConstraintLooseningError,
@@ -299,22 +281,6 @@ from kailash.trust.orchestration import (  # Execution Context; Policy; Runtime;
     TrustPolicy,
     TrustPolicyEngine,
     TrustVerificationFailedError,
-)
-
-# CARE-029: Posture-Aware Agent
-from kailash.trust.posture_agent import (
-    ApprovalHandler,
-    AuditEntry,
-    CircuitBreaker,
-    NotificationHandler,
-    PostureAwareAgent,
-)
-from kailash.trust.pseudo_agent import (
-    AuthProvider,
-    PseudoAgent,
-    PseudoAgentConfig,
-    PseudoAgentFactory,
-    create_pseudo_agent_for_testing,
 )
 
 # EATP Reasoning Trace Extension
@@ -353,16 +319,6 @@ from kailash.trust.revocation import (
     TrustRevocationList,
 )
 
-# Phase 3 Week 11: Credential Rotation
-from kailash.trust.rotation import (
-    CredentialRotationManager,
-    RotationError,
-    RotationResult,
-    RotationStatus,
-    RotationStatusInfo,
-    ScheduledRotation,
-)
-
 # Phase 3 Week 11: Security Hardening
 from kailash.trust.security import (  # Validators; Key Storage; Rate Limiting; Audit Logging; Security Exceptions
     EncryptionError,
@@ -378,8 +334,59 @@ from kailash.trust.security import (  # Validators; Key Storage; Rate Limiting; 
     ValidationError,
 )
 
+# CARE-013: Certificate Revocation List (CRL)
+from kailash.trust.signing.crl import (
+    CertificateRevocationList,
+    CRLEntry,
+    CRLMetadata,
+    CRLVerificationResult,
+    verify_delegation_with_crl,
+)
+from kailash.trust.signing.crypto import (
+    generate_keypair,
+    hash_chain,
+    serialize_for_signing,
+    sign,
+    verify_signature,
+)
+
+# CARE-012: Merkle Tree Audit Verification
+from kailash.trust.signing.merkle import (
+    MerkleNode,
+    MerkleProof,
+    MerkleTree,
+    compute_merkle_root,
+    get_proof_length,
+    verify_merkle_proof,
+)
+
+# CARE-011: Multi-Signature Genesis Records
+from kailash.trust.signing.multi_sig import (
+    DuplicateSignatureError,
+    InsufficientSignaturesError,
+    MultiSigError,
+    MultiSigManager,
+    MultiSigPolicy,
+    OperationNotFoundError,
+    PendingMultiSig,
+    SigningOperationExpiredError,
+    UnauthorizedSignerError,
+    create_genesis_payload,
+    verify_multi_sig,
+)
+
+# Phase 3 Week 11: Credential Rotation
+from kailash.trust.signing.rotation import (
+    CredentialRotationManager,
+    RotationError,
+    RotationResult,
+    RotationStatus,
+    RotationStatusInfo,
+    ScheduledRotation,
+)
+
 # CARE-014: External Timestamp Anchoring
-from kailash.trust.timestamping import (
+from kailash.trust.signing.timestamping import (
     LocalTimestampAuthority,
     RFC3161TimestampAuthority,
     TimestampAnchorManager,
@@ -390,14 +397,6 @@ from kailash.trust.timestamping import (
     TimestampToken,
     verify_timestamp_token,
 )
-from kailash.trust.trusted_agent import (
-    TrustContext,
-    TrustContextManager,
-    TrustedAgent,
-    TrustedAgentConfig,
-    TrustedSupervisorAgent,
-)
-
 from kaizen.trust.audit_store import (
     AppendOnlyAuditStore,
     AuditAnchorNotFoundError,

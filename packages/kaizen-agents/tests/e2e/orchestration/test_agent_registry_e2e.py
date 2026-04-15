@@ -17,9 +17,11 @@ import asyncio
 
 import pytest
 import pytest_asyncio
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen.orchestration import (
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns import (
     AgentRegistry,
     AgentRegistryConfig,
     AgentStatus,
@@ -28,7 +30,6 @@ from kaizen.orchestration import (
     RegistryEvent,
     RegistryEventType,
 )
-from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
 # Fixtures

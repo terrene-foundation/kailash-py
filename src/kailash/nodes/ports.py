@@ -52,7 +52,6 @@ from typing import (
     Union,
     get_args,
     get_origin,
-    get_type_hints,
 )
 
 logger = logging.getLogger(__name__)
@@ -141,9 +140,14 @@ class Port(Generic[T], ABC):
             self.name = name
             self.metadata.name = name
 
-        # Extract type hint from class annotations
-        if hasattr(owner, "__annotations__") and name in owner.__annotations__:
-            annotation = owner.__annotations__[name]
+        # Extract type hint from class annotations.  Use the shared helper
+        # so PEP 649/749 lazy annotations on Python 3.14+ are evaluated
+        # safely without raising on string forward references.
+        from kailash.utils.annotations import get_class_annotations
+
+        owner_annotations = get_class_annotations(owner)
+        if name in owner_annotations:
+            annotation = owner_annotations[name]
             # Extract the type argument from Port[T]
             if hasattr(annotation, "__args__") and annotation.__args__:
                 self._type_hint = annotation.__args__[0]

@@ -700,7 +700,11 @@ class MigrationHistoryManager:
             except RuntimeError:
                 from kailash.runtime.local import LocalRuntime
 
-                self.runtime = LocalRuntime()
+                # Issue #478 — registry-style long-lived runtime.  Use the
+                # public opt-out so Core SDK suppresses the ad-hoc-usage
+                # deprecation warning AND skips atexit cleanup; the manager
+                # calls close() at its own shutdown.
+                self.runtime = LocalRuntime().mark_externally_managed()
                 self._is_async = False
                 logger.debug(
                     "MigrationHistoryManager: Detected sync context, using LocalRuntime"

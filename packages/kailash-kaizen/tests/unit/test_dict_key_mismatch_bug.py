@@ -151,17 +151,22 @@ class TestReasoningModelTemperature:
     Fix: OpenAI provider now detects reasoning models and filters params.
     """
 
-    def test_is_reasoning_model_gpt5(self):
-        """GPT-5 models should be detected as reasoning models."""
+    def test_is_reasoning_model_gpt5_is_temperature1_not_reasoning(self):
+        """GPT-5 is classified as a ``temperature=1`` model (NOT a reasoning
+        model like o1/o3). Reasoning models reject temperature entirely;
+        gpt-5 accepts temperature but forces it to 1.0."""
         from kaizen.providers import OpenAIProvider
 
         provider = OpenAIProvider()
 
-        reasoning_models = ["gpt-5", "GPT-5", "gpt-5-turbo", "gpt5"]
-        for model in reasoning_models:
-            assert provider._is_reasoning_model(
+        gpt5_variants = ["gpt-5", "GPT-5", "gpt-5-turbo", "gpt5"]
+        for model in gpt5_variants:
+            assert not provider._is_reasoning_model(
                 model
-            ), f"{model} should be detected as reasoning model"
+            ), f"{model} must NOT be classified as reasoning (o1/o3 only)"
+            assert provider._requires_temperature_1(
+                model
+            ), f"{model} must be classified as temperature=1 model"
 
     def test_is_reasoning_model_o1(self):
         """o1 models should be detected as reasoning models."""
@@ -199,8 +204,9 @@ class TestReasoningModelTemperature:
                 model
             ), f"{model} should NOT be detected as reasoning model"
 
-    def test_filter_removes_temperature_for_reasoning_models(self):
-        """Temperature should be removed for reasoning models."""
+    def test_filter_forces_temperature_1_and_strips_other_params_for_gpt5(self):
+        """GPT-5 accepts temperature but forces it to 1.0; top_p,
+        frequency_penalty, and presence_penalty are stripped entirely."""
         from kaizen.providers import OpenAIProvider
 
         provider = OpenAIProvider()
@@ -215,8 +221,9 @@ class TestReasoningModelTemperature:
 
         filtered = provider._filter_reasoning_model_params("gpt-5", generation_config)
 
-        # Temperature and related params should be removed
-        assert "temperature" not in filtered
+        # Temperature is FORCED to 1.0 (not removed)
+        assert filtered.get("temperature") == 1.0
+        # Unsupported sampling params are stripped
         assert "top_p" not in filtered
         assert "frequency_penalty" not in filtered
         assert "presence_penalty" not in filtered

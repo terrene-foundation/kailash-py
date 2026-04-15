@@ -76,11 +76,13 @@ def introspect_agent(module: str, class_name: str) -> Dict[str, Any]:
         # Extract input/output schema from signature annotations.
         # Convention: fields with a default value on the signature class
         # are considered *inputs*; fields without a default are *outputs*.
-        hints: Dict[str, Any] = {}
-        try:
-            hints = getattr(signature_cls, "__annotations__", {})
-        except Exception:  # pragma: no cover
-            pass
+        # Route through the shared helper so PEP 649/749 lazy annotations
+        # on Python 3.14+ resolve the same way they do everywhere else in
+        # the SDK — the helper docstring promises a single-point handler
+        # for 3.13/3.14 differences, and this call site honours that.
+        from kailash.utils.annotations import get_class_annotations
+
+        hints: Dict[str, Any] = get_class_annotations(signature_cls)
 
         input_schema: Dict[str, str] = {}
         output_schema: Dict[str, str] = {}

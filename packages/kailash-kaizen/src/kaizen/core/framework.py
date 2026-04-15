@@ -552,7 +552,7 @@ class Kaizen:
         logger.info("Initializing enterprise multi-agent features")
 
         # Initialize coordination pattern registry
-        from ..coordination.patterns import get_global_pattern_registry
+        from kaizen_agents.coordination.patterns import get_global_pattern_registry
 
         self._pattern_registry = get_global_pattern_registry(self)
 
@@ -649,7 +649,7 @@ class Kaizen:
         Returns:
             Enterprise debate workflow
         """
-        from ..workflows.debate import EnterpriseDebateWorkflow
+        from kaizen_agents.workflows.debate import EnterpriseDebateWorkflow
 
         return EnterpriseDebateWorkflow(
             agents=agents,
@@ -680,7 +680,7 @@ class Kaizen:
         Returns:
             DebateWorkflow: Debate workflow template
         """
-        from ..workflows.debate import DebateWorkflow
+        from kaizen_agents.workflows.debate import DebateWorkflow
 
         return DebateWorkflow(
             agents=agents,
@@ -709,7 +709,7 @@ class Kaizen:
         Returns:
             ConsensusWorkflow: Consensus workflow template
         """
-        from ..workflows.consensus import ConsensusWorkflow
+        from kaizen_agents.workflows.consensus import ConsensusWorkflow
 
         return ConsensusWorkflow(
             agents=agents,
@@ -738,7 +738,7 @@ class Kaizen:
         Returns:
             SupervisorWorkerWorkflow: Supervisor-worker workflow template
         """
-        from ..workflows.supervisor_worker import SupervisorWorkerWorkflow
+        from kaizen_agents.workflows.supervisor_worker import SupervisorWorkerWorkflow
 
         return SupervisorWorkerWorkflow(
             supervisor=supervisor,
@@ -775,7 +775,7 @@ class Kaizen:
         Returns:
             AgentTeam: Created agent team
         """
-        from ..coordination.teams import AgentTeam
+        from kaizen_agents.coordination.teams import AgentTeam
 
         # Create agents for each role
         team_agents = []
@@ -865,7 +865,7 @@ class Kaizen:
         if hasattr(self, "_pattern_registry"):
             pattern_registry = self._pattern_registry
         else:
-            from ..coordination.patterns import get_global_pattern_registry
+            from kaizen_agents.coordination.patterns import get_global_pattern_registry
 
             pattern_registry = get_global_pattern_registry(self)
 
@@ -938,7 +938,7 @@ class Kaizen:
         if hasattr(self, "_pattern_registry"):
             pattern_registry = self._pattern_registry
         else:
-            from ..coordination.patterns import get_global_pattern_registry
+            from kaizen_agents.coordination.patterns import get_global_pattern_registry
 
             pattern_registry = get_global_pattern_registry(self)
 
@@ -1582,7 +1582,12 @@ class Kaizen:
             ...     "audit_requirements": "full_lineage"
             ... })
         """
-        from ..workflows.enterprise_templates import create_enterprise_workflow_template
+        # Enterprise workflow templates live in the kaizen_agents package
+        # (higher-level composition layer).  Lazy-imported so kaizen itself
+        # does not have a hard dependency on kaizen_agents.
+        from kaizen_agents.workflows.enterprise_templates import (
+            create_enterprise_workflow_template,
+        )
 
         # Enhance config with framework-level settings
         enhanced_config = config.copy()

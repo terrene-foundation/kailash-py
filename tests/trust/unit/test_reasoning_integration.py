@@ -22,7 +22,6 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import pytest
-
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import (
     ActionResult,
@@ -39,6 +38,12 @@ from kailash.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
+from kailash.trust.chain_store.memory import InMemoryTrustStore
+from kailash.trust.enforce.shadow import ShadowEnforcer
+from kailash.trust.enforce.strict import StrictEnforcer, Verdict
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.scoring import compute_trust_score, generate_trust_report
 from kailash.trust.signing.crypto import (
     generate_keypair,
     hash_reasoning_trace,
@@ -48,12 +53,6 @@ from kailash.trust.signing.crypto import (
     verify_reasoning_signature,
     verify_signature,
 )
-from kailash.trust.enforce.shadow import ShadowEnforcer
-from kailash.trust.enforce.strict import StrictEnforcer, Verdict
-from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
-from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
-from kailash.trust.scoring import compute_trust_score, generate_trust_report
-from kailash.trust.chain_store.memory import InMemoryTrustStore
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +241,9 @@ def _make_delegation_with_reasoning(
         signature="placeholder",
         reasoning_trace=reasoning_trace,
         reasoning_trace_hash=hash_reasoning_trace(reasoning_trace),
-        reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key, context_id=deleg_id),
+        reasoning_signature=sign_reasoning_trace(
+            reasoning_trace, private_key, context_id=deleg_id
+        ),
     )
     del_payload = serialize_for_signing(delegation.to_signing_payload())
     delegation.signature = sign(del_payload, private_key)
@@ -267,7 +268,9 @@ def _make_audit_anchor_with_reasoning(
         signature=sign("audit-payload", private_key),
         reasoning_trace=reasoning_trace,
         reasoning_trace_hash=hash_reasoning_trace(reasoning_trace),
-        reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key, context_id=anchor_id),
+        reasoning_signature=sign_reasoning_trace(
+            reasoning_trace, private_key, context_id=anchor_id
+        ),
     )
 
 
@@ -281,7 +284,9 @@ class TestReasoningEndToEndFlow:
     with reasoning -> verify -> score."""
 
     @pytest.mark.asyncio
-    async def test_delegate_with_reasoning_then_verify_full(self, ops, reasoning_trace, keypair):
+    async def test_delegate_with_reasoning_then_verify_full(
+        self, ops, reasoning_trace, keypair
+    ):
         """End-to-end: establish agent, delegate with reasoning, verify at FULL
         level. Reasoning should be present and verified."""
         private_key, _ = keypair
@@ -289,11 +294,15 @@ class TestReasoningEndToEndFlow:
 
         # Establish delegator and delegatee agents
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(ops, "agent-e2e-1", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-e2e-1", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         # Add delegation with reasoning trace to the chain
         chain = await ops.trust_store.get_chain("agent-e2e-1")
-        delegation = _make_delegation_with_reasoning("agent-e2e-1", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-e2e-1", reasoning_trace, private_key
+        )
         chain.delegations.append(delegation)
         await ops.trust_store.store_chain(chain)
 
@@ -308,18 +317,24 @@ class TestReasoningEndToEndFlow:
         assert result.reasoning_verified is True
 
     @pytest.mark.asyncio
-    async def test_delegate_then_audit_with_reasoning_then_verify(self, ops, reasoning_trace, keypair):
+    async def test_delegate_then_audit_with_reasoning_then_verify(
+        self, ops, reasoning_trace, keypair
+    ):
         """Full flow with both delegation reasoning and audit reasoning."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(ops, "agent-e2e-2", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-e2e-2", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-e2e-2")
 
         # Add delegation with reasoning
-        delegation = _make_delegation_with_reasoning("agent-e2e-2", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-e2e-2", reasoning_trace, private_key
+        )
         chain.delegations.append(delegation)
 
         # Add audit anchor with reasoning
@@ -330,7 +345,9 @@ class TestReasoningEndToEndFlow:
             timestamp=FIXED_TIMESTAMP,
             confidence=0.88,
         )
-        anchor = _make_audit_anchor_with_reasoning("agent-e2e-2", audit_trace, private_key)
+        anchor = _make_audit_anchor_with_reasoning(
+            "agent-e2e-2", audit_trace, private_key
+        )
         chain.audit_anchors.append(anchor)
         await ops.trust_store.store_chain(chain)
 
@@ -345,18 +362,24 @@ class TestReasoningEndToEndFlow:
         assert result.reasoning_verified is True
 
     @pytest.mark.asyncio
-    async def test_chain_with_mixed_reasoning_verification(self, ops, reasoning_trace, keypair):
+    async def test_chain_with_mixed_reasoning_verification(
+        self, ops, reasoning_trace, keypair
+    ):
         """Some delegations with reasoning, some without. STANDARD verify should
         report reasoning_present=False when any record is missing a trace."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
-        await _establish_agent_with_capability(ops, "agent-e2e-3", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-e2e-3", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-e2e-3")
 
         # Delegation WITH reasoning
-        del_with = _make_delegation_with_reasoning("agent-e2e-3", reasoning_trace, private_key, deleg_id="del-with")
+        del_with = _make_delegation_with_reasoning(
+            "agent-e2e-3", reasoning_trace, private_key, deleg_id="del-with"
+        )
         chain.delegations.append(del_with)
 
         # Delegation WITHOUT reasoning
@@ -383,13 +406,17 @@ class TestReasoningEndToEndFlow:
         assert result.reasoning_present is False
 
     @pytest.mark.asyncio
-    async def test_scoring_reflects_reasoning_coverage(self, ops, reasoning_trace, keypair):
+    async def test_scoring_reflects_reasoning_coverage(
+        self, ops, reasoning_trace, keypair
+    ):
         """Chain with REASONING_REQUIRED constraint: score includes
         reasoning_coverage factor proportional to coverage."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
-        await _establish_agent_with_capability(ops, "agent-e2e-4", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-e2e-4", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-e2e-4")
 
@@ -436,21 +463,30 @@ class TestReasoningEndToEndFlow:
         await ops.trust_store.store_chain(chain_full)
 
         score_full = await compute_trust_score("agent-e2e-4-full", ops.trust_store)
-        assert score_full.breakdown["reasoning_coverage"] > score.breakdown["reasoning_coverage"]
+        assert (
+            score_full.breakdown["reasoning_coverage"]
+            > score.breakdown["reasoning_coverage"]
+        )
 
     @pytest.mark.asyncio
-    async def test_full_lifecycle_establish_delegate_audit_verify_score_report(self, ops, reasoning_trace, keypair):
+    async def test_full_lifecycle_establish_delegate_audit_verify_score_report(
+        self, ops, reasoning_trace, keypair
+    ):
         """Complete lifecycle: establish -> delegate -> audit -> verify -> score -> report."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
         # Step 1: Establish
         await _establish_agent_with_capability(ops, "agent-root", ["analyze"])
-        await _establish_agent_with_capability(ops, "agent-lifecycle", ["analyze"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-lifecycle", ["analyze"], constraints=[reasoning_constraint]
+        )
 
         # Step 2: Delegate with reasoning
         chain = await ops.trust_store.get_chain("agent-lifecycle")
-        delegation = _make_delegation_with_reasoning("agent-lifecycle", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-lifecycle", reasoning_trace, private_key
+        )
         delegation.capabilities_delegated = ["analyze"]
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
@@ -465,7 +501,9 @@ class TestReasoningEndToEndFlow:
             methodology="cost_benefit",
             confidence=0.92,
         )
-        anchor = _make_audit_anchor_with_reasoning("agent-lifecycle", audit_trace, private_key)
+        anchor = _make_audit_anchor_with_reasoning(
+            "agent-lifecycle", audit_trace, private_key
+        )
         anchor.action = "analyze"
         chain.audit_anchors.append(anchor)
         await ops.trust_store.store_chain(chain)
@@ -489,7 +527,9 @@ class TestReasoningEndToEndFlow:
         # Step 6: Report
         report = await generate_trust_report("agent-lifecycle", ops.trust_store)
         # With full reasoning coverage, no reasoning risk indicators should appear
-        reasoning_risks = [ri for ri in report.risk_indicators if "reasoning" in ri.lower()]
+        reasoning_risks = [
+            ri for ri in report.risk_indicators if "reasoning" in ri.lower()
+        ]
         assert len(reasoning_risks) == 0
 
 
@@ -502,18 +542,24 @@ class TestReasoningAdversarial:
     """Adversarial scenarios: tampered data, wrong keys, edge cases."""
 
     @pytest.mark.asyncio
-    async def test_tampered_reasoning_hash_detected(self, ops, reasoning_trace, keypair):
+    async def test_tampered_reasoning_hash_detected(
+        self, ops, reasoning_trace, keypair
+    ):
         """Modify reasoning_trace after signing: verify should catch hash mismatch."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(ops, "agent-adv-1", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-adv-1", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-adv-1")
 
         # Create delegation with valid reasoning
-        delegation = _make_delegation_with_reasoning("agent-adv-1", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-adv-1", reasoning_trace, private_key
+        )
 
         # Tamper: change the stored hash to a wrong value
         delegation.reasoning_trace_hash = "tampered_hash_0000000000000000"
@@ -531,7 +577,9 @@ class TestReasoningAdversarial:
         assert "reasoning" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_wrong_key_reasoning_signature_detected(self, ops, reasoning_trace, keypair, keypair_alt):
+    async def test_wrong_key_reasoning_signature_detected(
+        self, ops, reasoning_trace, keypair, keypair_alt
+    ):
         """Sign reasoning with one key, verify with authority's key:
         should detect signature mismatch."""
         private_key, _ = keypair
@@ -539,7 +587,9 @@ class TestReasoningAdversarial:
         reasoning_constraint = _make_reasoning_constraint()
 
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(ops, "agent-adv-2", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-adv-2", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-adv-2")
 
@@ -736,7 +786,9 @@ class TestReasoningAdversarial:
         )
 
         chain = await ops.trust_store.get_chain("agent-concurrent")
-        delegation = _make_delegation_with_reasoning("agent-concurrent", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-concurrent", reasoning_trace, private_key
+        )
         chain.delegations.append(delegation)
         await ops.trust_store.store_chain(chain)
 
@@ -778,16 +830,22 @@ class TestReasoningAdversarial:
             )
 
     @pytest.mark.asyncio
-    async def test_enforcer_propagates_reasoning_metadata(self, ops, reasoning_trace, keypair):
+    async def test_enforcer_propagates_reasoning_metadata(
+        self, ops, reasoning_trace, keypair
+    ):
         """StrictEnforcer should propagate reasoning fields into enforcement record."""
         private_key, _ = keypair
         reasoning_constraint = _make_reasoning_constraint()
 
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(ops, "agent-enforce", ["read_data"], constraints=[reasoning_constraint])
+        await _establish_agent_with_capability(
+            ops, "agent-enforce", ["read_data"], constraints=[reasoning_constraint]
+        )
 
         chain = await ops.trust_store.get_chain("agent-enforce")
-        delegation = _make_delegation_with_reasoning("agent-enforce", reasoning_trace, private_key)
+        delegation = _make_delegation_with_reasoning(
+            "agent-enforce", reasoning_trace, private_key
+        )
         chain.delegations.append(delegation)
         await ops.trust_store.store_chain(chain)
 
@@ -811,7 +869,9 @@ class TestReasoningAdversarial:
         assert records[0].metadata.get("reasoning_verified") is True
 
     @pytest.mark.asyncio
-    async def test_shadow_enforcer_tracks_reasoning_metrics(self, ops, reasoning_trace, keypair):
+    async def test_shadow_enforcer_tracks_reasoning_metrics(
+        self, ops, reasoning_trace, keypair
+    ):
         """ShadowEnforcer should track reasoning presence/absence in metrics."""
         private_key, _ = keypair
 
@@ -952,7 +1012,9 @@ class TestReasoningBackwardCompat:
         )
         await _establish_agent_with_capability(ops, "agent-compat-2", ["read_data"])
         chain2 = await ops.trust_store.get_chain("agent-compat-2")
-        del2 = _make_delegation_with_reasoning("agent-compat-2", reasoning_trace, private_key, deleg_id="del-compat-2")
+        del2 = _make_delegation_with_reasoning(
+            "agent-compat-2", reasoning_trace, private_key, deleg_id="del-compat-2"
+        )
         chain2.delegations.append(del2)
         await ops.trust_store.store_chain(chain2)
         score2 = await compute_trust_score("agent-compat-2", ops.trust_store)
@@ -999,7 +1061,10 @@ class TestReasoningBackwardCompat:
         assert restored.reasoning_trace is not None
         assert restored.reasoning_trace.decision == trace.decision
         assert restored.reasoning_trace.rationale == trace.rationale
-        assert restored.reasoning_trace.confidentiality == ConfidentialityLevel.CONFIDENTIAL
+        assert (
+            restored.reasoning_trace.confidentiality
+            == ConfidentialityLevel.CONFIDENTIAL
+        )
         assert restored.reasoning_trace.confidence == 0.85
         assert restored.reasoning_trace_hash == delegation.reasoning_trace_hash
         assert restored.reasoning_signature == delegation.reasoning_signature
@@ -1017,7 +1082,34 @@ try:
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
 
-pytestmark_hypothesis = pytest.mark.skipif(not HYPOTHESIS_AVAILABLE, reason="hypothesis not installed")
+    # Provide no-op stubs so class-body decorator calls (@given, @settings)
+    # don't raise NameError when hypothesis isn't installed.  The enclosing
+    # @pytest.mark.skipif(not HYPOTHESIS_AVAILABLE, ...) ensures the tests
+    # themselves never actually run in that case.
+    def given(*_args, **_kwargs):  # type: ignore[no-redef]
+        def _decorator(fn):
+            return fn
+
+        return _decorator
+
+    def settings(*_args, **_kwargs):  # type: ignore[no-redef]
+        def _decorator(fn):
+            return fn
+
+        return _decorator
+
+    class _NoOpStrategies:
+        def __getattr__(self, _name):
+            def _noop(*_a, **_kw):
+                return None
+
+            return _noop
+
+    st = _NoOpStrategies()  # type: ignore[assignment]
+
+pytestmark_hypothesis = pytest.mark.skipif(
+    not HYPOTHESIS_AVAILABLE, reason="hypothesis not installed"
+)
 
 
 @pytest.mark.skipif(not HYPOTHESIS_AVAILABLE, reason="hypothesis not installed")
@@ -1035,7 +1127,9 @@ class TestReasoningPropertyBased:
         level=st.sampled_from(list(ConfidentialityLevel)),
     )
     @settings(max_examples=50)
-    def test_any_reasoning_trace_roundtrips(self, decision, rationale, confidence, methodology, level):
+    def test_any_reasoning_trace_roundtrips(
+        self, decision, rationale, confidence, methodology, level
+    ):
         """Property: for any valid trace, to_dict() -> from_dict() roundtrips."""
         trace = ReasoningTrace(
             decision=decision,

@@ -3,7 +3,10 @@ codify_date: "2026-04-15"
 codify_session: "feat(ci): declare Python 3.14 support across all packages (PR #474)"
 sdk_version: 2.8.6
 coc_version: 1.0.3
-status: pending_review
+status: distributed
+reviewed_date: "2026-04-15T05:30:00Z"
+distributed_date: "2026-04-15T05:30:00Z"
+review_notes: "Both entries classified GLOBAL at loom Gate 1 (python-version-bump.md skill + SKILL.md index update). Placed at loom/.claude/skills/10-deployment-git/. Loom bumped 2.8.7 → 2.8.8. Gate 2 distributed to kailash-coc-claude-py USE template. Cross-SDK follow-up: kailash-rs should author a rust-version-bump.md variant when the next kailash-rs codify runs."
 changes:
   - file: skills/10-deployment-git/python-version-bump.md
     action: created

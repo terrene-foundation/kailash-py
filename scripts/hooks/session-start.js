@@ -230,6 +230,13 @@ function initializeSession(data) {
     console.error(`[FRESHNESS] Check failed: ${e.message}`);
   }
 
+  // ── Release drift check (unreleased packages) ────────────────────────
+  try {
+    checkReleaseDrift(cwd);
+  } catch (e) {
+    console.error(`[RELEASE-DRIFT] Check failed: ${e.message}`);
+  }
+
   // ── Output model/key summary ──────────────────────────────────────────
   if (envExists) {
     const summary = buildCompactSummary(env, discovery);
@@ -400,6 +407,9 @@ function checkSdkPinFreshness(cwd) {
 
     if (pins.length === 0) return; // Not a kailash downstream repo
 
+    // Check pins against BUILD repo's actual versions
+    checkPinsAgainstBuild(cwd, pins);
+
     // Check if .venv exists
     const venvPython = path.join(cwd, ".venv", "bin", "python");
     if (!fs.existsSync(venvPython)) {
@@ -460,6 +470,63 @@ function checkSdkPinFreshness(cwd) {
 }
 
 /**
+ * Compare pyproject.toml pins against sdk_packages from the repo's own .claude/VERSION.
+ *
+ * /sync writes sdk_packages into the target repo's VERSION (Gate 2 step 8).
+ * This function reads it locally — no cross-repo dependency, works on any machine.
+ * A mismatch means /sync updated VERSION but skipped the pyproject.toml pin bump.
+ */
+function checkPinsAgainstBuild(cwd, pins) {
+  const versionPath = path.join(cwd, ".claude", "VERSION");
+  if (!fs.existsSync(versionPath)) return;
+
+  let sdkPackages;
+  try {
+    const version = JSON.parse(fs.readFileSync(versionPath, "utf8"));
+    sdkPackages = (version.upstream || {}).sdk_packages;
+  } catch {
+    return;
+  }
+
+  if (!sdkPackages || Object.keys(sdkPackages).length === 0) return;
+
+  const sdkVersions = {};
+  for (const [name, ver] of Object.entries(sdkPackages)) {
+    sdkVersions[name.toLowerCase().replace(/-/g, "_")] = ver;
+  }
+
+  let staleCount = 0;
+  const staleList = [];
+
+  for (const pin of pins) {
+    const baseName = pin.name.replace(/\[.*\]/, "");
+    const normalized = baseName.toLowerCase().replace(/-/g, "_");
+    const sdkVer = sdkVersions[normalized];
+
+    if (!sdkVer) continue;
+
+    if (isOlderThan(pin.version, sdkVer)) {
+      staleList.push(
+        `${baseName}: pinned >=${pin.version}, current SDK is ${sdkVer}`,
+      );
+      staleCount++;
+    }
+  }
+
+  if (staleCount > 0) {
+    console.error(
+      `[SDK-PINS] ⚠ ${staleCount} STALE pin(s) — pyproject.toml is behind the SDK version in .claude/VERSION:`,
+    );
+    for (const msg of staleList) {
+      console.error(`[SDK-PINS]   ${msg}`);
+    }
+    console.error(
+      `[SDK-PINS]   Fix: update pyproject.toml pins to match current SDK, then run \`uv sync\``,
+    );
+  }
+}
+
+/**
  * Simple version comparison: is a older than b?
  */
 function isOlderThan(a, b) {
@@ -470,6 +537,29 @@ function isOlderThan(a, b) {
     if ((pa[i] || 0) > (pb[i] || 0)) return false;
   }
   return false;
+}
+
+/**
+ * Check for packages with commits since their last release tag.
+ * Silent when no packages / no matching tags / all released.
+ * See scripts/hooks/lib/release-drift.js for detection logic.
+ */
+function checkReleaseDrift(cwd) {
+  const { detectUnreleasedPackages } = require("./lib/release-drift");
+  const unreleased = detectUnreleasedPackages(cwd);
+  if (unreleased.length === 0) return;
+
+  console.error(
+    `[RELEASE-DRIFT] ⚠ ${unreleased.length} package(s) have commits since last release:`,
+  );
+  for (const pkg of unreleased) {
+    console.error(
+      `[RELEASE-DRIFT]   ${pkg.name} (${pkg.path}): ${pkg.commits_since_tag} commit(s) since ${pkg.last_tag} — pyproject at v${pkg.current_version}`,
+    );
+  }
+  console.error(
+    `[RELEASE-DRIFT]   Run /release when ready to publish.`,
+  );
 }
 
 function detectFramework(cwd) {

@@ -16,9 +16,16 @@ from __future__ import annotations
 
 import math
 
-from hypothesis import given, settings, strategies as st
+import pytest
 
-from kailash.trust.pact.config import (
+pytest.importorskip(
+    "hypothesis",
+    reason="hypothesis is declared by kailash-pact/kailash-ml only — root runs skip",
+)
+
+from hypothesis import given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
+from kailash.trust.pact.config import (  # noqa: E402
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -28,7 +35,7 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
-from kailash.trust.pact.envelopes import (
+from kailash.trust.pact.envelopes import (  # noqa: E402
     MonotonicTighteningError,
     RoleEnvelope,
     intersect_envelopes,

@@ -1,5 +1,13 @@
 # DataFlow Changelog
 
+## [2.0.9] - 2026-04-15 — Python 3.14 compatibility & internal `LocalRuntime` warning suppression (#478)
+
+### Fixed
+
+- **`@db.model` registration on Python 3.14.** Multiple call sites read `cls.__annotations__` (or `getattr(cls, "__annotations__", {})`) directly to extract field types for SQL generation. Under PEP 649 / PEP 749, `cls.__annotations__` access can raise `NameError` instead of returning a string when a model uses a forward reference — and `getattr`'s default does NOT catch that, since it only triggers on `AttributeError`. The result on 3.14 is a bare `NameError` mid-`@db.model` registration with no actionable message about which field caused it. Sites fixed: `core/engine.py` (MRO walk + multi-tenant `tenant_id` injection), `core/model_registry.py` (metadata extraction), `core/engine_production.py` (`_extract_fields`), `migrations/fk_aware_model_integration.py` (`_analyze_model_fields`).
+- **All read paths now route through `kailash.utils.annotations.get_resolved_type_hints`** — the same handler shape the kailash-rs SDK uses. On 3.14 it falls back to `annotationlib.get_annotations(cls, format=FORWARDREF)` and raises a per-field `RuntimeError` naming the model, the field, and the unresolvable forward reference, with a clear suggestion to import the type at runtime instead of under `TYPE_CHECKING`.
+- **`LocalRuntime.execute()` deprecation warning leaked from internal DataFlow code (#478).** Long-lived `LocalRuntime` instances owned by DataFlow internals (`DataFlow.__init__`, `ModelRegistry`, `PostgreSQLSchemaInspector`, `SQLiteSchemaInspector`, `AutoMigrationSystem`, `MigrationHistoryManager`, `DataFlowGateway`, `ConnectionManagerAdapter` — eight construction sites) were triggering Core SDK's "use context manager" deprecation warning on every call. Each owner now invokes the new public `LocalRuntime.mark_externally_managed()` method (added in `kailash 2.8.7`) immediately after construction — Core SDK responds by suppressing the ad-hoc-usage warning AND skipping the fallback `atexit` cleanup, with the owning framework calling `runtime.close()` at its own shutdown. The initial iteration of this fix mutated the private `_cleanup_registered` flag directly; that has been replaced with the documented public opt-out so the contract survives Core SDK refactors. The warning was aimed at transient ad-hoc callers, not framework-owned long-lived runtimes; without this fix the warning would become a hard error in Core SDK v0.12.0 and break every fresh `pip install kailash-dataflow`.
+
 ## [2.0.6] - 2026-04-12 — Post-Convergence Security Hardening
 
 ### Security

@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
 
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+from kailash.utils.url_credentials import (  # Round 2 RT fix: credential-safe URL logging
+    mask_url,
+)
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..features.bulk import BulkOperations
@@ -51,10 +54,6 @@ from .config import (
     SecurityConfig,
 )
 from .events import DataFlowEventMixin
-from kailash.utils.url_credentials import (
-    mask_url,
-)  # Round 2 RT fix: credential-safe URL logging
-
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -472,7 +471,12 @@ class DataFlow(DataFlowEventMixin):
             self._is_async = True
             logger.debug("DataFlow: Detected async context, using AsyncLocalRuntime")
         except RuntimeError:
-            self.runtime = LocalRuntime()
+            # The DataFlow instance owns the runtime for its full lifetime
+            # and tears it down via ``close()``.  Mark the runtime as
+            # externally-managed via the public opt-out (issue #478) so
+            # the SDK suppresses its ad-hoc-usage deprecation warning and
+            # skips atexit cleanup — DataFlow's own shutdown drives close().
+            self.runtime = LocalRuntime().mark_externally_managed()
             self._is_async = False
             logger.debug("DataFlow: Detected sync context, using LocalRuntime")
 
@@ -1385,10 +1389,17 @@ class DataFlow(DataFlowEventMixin):
         # Extract model fields from annotations (including inherited)
         fields = {}
 
-        # Collect fields from all parent classes (in method resolution order)
+        # Collect fields from all parent classes (in method resolution order).
+        # ``get_resolved_type_hints`` evaluates PEP 649/749 lazy annotations
+        # on Python 3.14+ and raises a clear per-field error if a forward
+        # reference is unresolvable, replacing the bare ``NameError`` that
+        # raw ``cls.__annotations__`` access produces.
+        from kailash.utils.annotations import get_resolved_type_hints
+
         for base_cls in reversed(cls.__mro__):
-            if hasattr(base_cls, "__annotations__"):
-                for field_name, field_type in base_cls.__annotations__.items():
+            base_annotations = get_resolved_type_hints(base_cls)
+            if base_annotations:
+                for field_name, field_type in base_annotations.items():
                     # Skip private fields (starting with underscore)
                     if field_name.startswith("_"):
                         continue
@@ -1503,11 +1514,16 @@ class DataFlow(DataFlowEventMixin):
             )
             self._retention_engine.register(policy)
 
-        # Add multi-tenant support if enabled
+        # Add multi-tenant support if enabled.  Materialise the annotations
+        # dict via the helper (3.14-safe), mutate, then write back.
         if self.config.security.multi_tenant:
             if "tenant_id" not in fields:
                 fields["tenant_id"] = {"type": str, "required": False}
-                cls.__annotations__["tenant_id"] = str
+                from kailash.utils.annotations import get_class_annotations
+
+                tenant_annotations = get_class_annotations(cls)
+                tenant_annotations["tenant_id"] = str
+                cls.__annotations__ = tenant_annotations
 
         # Add query_builder class method
         def query_builder(cls):
@@ -2918,7 +2934,9 @@ class DataFlow(DataFlowEventMixin):
         """
         # Import from test fixtures
         try:
-            from tests.fixtures.mock_helpers import MockConnectionPool  # type: ignore[assignment]
+            from tests.fixtures.mock_helpers import (
+                MockConnectionPool,  # type: ignore[assignment]
+            )
         except ImportError:
             # Fallback for cases where tests module is not available
             import warnings

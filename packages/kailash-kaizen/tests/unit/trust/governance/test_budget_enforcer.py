@@ -10,7 +10,7 @@ from datetime import datetime
 
 import pytest
 from kailash.runtime import AsyncLocalRuntime
-from kailash.trust.governance import (
+from kaizen.trust.governance import (
     BudgetCheckResult,
     ExternalAgentBudget,
     ExternalAgentBudgetEnforcer,

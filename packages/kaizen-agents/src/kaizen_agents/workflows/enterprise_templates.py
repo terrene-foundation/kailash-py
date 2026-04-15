@@ -11,8 +11,14 @@ compliance validation, security controls, and multi-tenant support.
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+# Import enterprise + security node packages so their @register_node()
+# decorators fire and they become discoverable by string-name lookup in
+# WorkflowBuilder. The templates below reference these nodes by name only
+# (EnterpriseAuditLoggerNode, ABACPermissionEvaluatorNode, etc.).
+import kailash.nodes.enterprise  # noqa: F401  -- side-effect: node registration
+import kailash.nodes.security  # noqa: F401  -- side-effect: node registration
 from kailash.workflow.builder import WorkflowBuilder
 
 
@@ -24,7 +30,7 @@ class EnterpriseWorkflowTemplate(ABC):
     security controls, and enterprise integration patterns.
     """
 
-    def __init__(self, template_type: str, config: Dict[str, Any]):
+    def __init__(self, template_type: str, config: dict[str, Any]):
         """
         Initialize enterprise workflow template.
 
@@ -285,7 +291,7 @@ result = {
                     initial_node, "result", current_node, "input_data"
                 )
 
-    def execute(self, inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute the enterprise workflow with proper audit trails and compliance.
 
@@ -326,10 +332,9 @@ result = {
 
             # Prepare execution parameters
             execution_params = {}
-            if inputs:
+            if inputs and self._workflow_nodes:
                 # Use the first workflow node as the target for inputs
-                if self._workflow_nodes:
-                    execution_params[self._workflow_nodes[0]] = inputs
+                execution_params[self._workflow_nodes[0]] = inputs
 
             # Execute the workflow with context manager for proper resource cleanup
             with LocalRuntime() as runtime:
@@ -401,8 +406,8 @@ result = {
             }
 
     async def execute_async(
-        self, inputs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, inputs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Execute the enterprise workflow asynchronously with proper audit trails and compliance.
 
@@ -450,10 +455,9 @@ result = {
             try:
                 # Prepare execution parameters
                 execution_params = {}
-                if inputs:
+                if inputs and self._workflow_nodes:
                     # Use the first workflow node as the target for inputs
-                    if self._workflow_nodes:
-                        execution_params[self._workflow_nodes[0]] = inputs
+                    execution_params[self._workflow_nodes[0]] = inputs
 
                 # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
                 results, run_id = await runtime.execute_workflow_async(
@@ -528,8 +532,8 @@ result = {
             }
 
     def _structure_execution_results(
-        self, raw_results: Dict[str, Any], inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, raw_results: dict[str, Any], inputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Structure raw workflow execution results based on template type.
 
@@ -604,32 +608,38 @@ result = {
 
         return structured
 
-    def _extract_approval_status(self, results: Dict[str, Any]) -> str:
+    def _extract_approval_status(self, results: dict[str, Any]) -> str:
         """Extract approval status from workflow results."""
         # Look for approval-related results
         for node_id, node_result in results.items():
-            if "approval" in node_id.lower() and isinstance(node_result, dict):
-                if "approval_decision" in node_result:
-                    return node_result["approval_decision"]
+            if (
+                "approval" in node_id.lower()
+                and isinstance(node_result, dict)
+                and "approval_decision" in node_result
+            ):
+                return node_result["approval_decision"]
         return "pending"
 
-    def _extract_routing_decision(self, results: Dict[str, Any]) -> str:
+    def _extract_routing_decision(self, results: dict[str, Any]) -> str:
         """Extract routing decision from workflow results."""
         for node_id, node_result in results.items():
-            if "routing" in node_id.lower() and isinstance(node_result, dict):
-                if "routing_decision" in node_result:
-                    return node_result["routing_decision"]
+            if (
+                "routing" in node_id.lower()
+                and isinstance(node_result, dict)
+                and "routing_decision" in node_result
+            ):
+                return node_result["routing_decision"]
         return "tier1"
 
-    def _count_documents_processed(self, results: Dict[str, Any]) -> int:
+    def _count_documents_processed(self, results: dict[str, Any]) -> int:
         """Count documents processed from workflow results."""
         count = 0
-        for node_id, node_result in results.items():
+        for _node_id, node_result in results.items():
             if isinstance(node_result, dict) and "documents_processed" in node_result:
                 count += node_result.get("documents_processed", 0)
         return max(count, 1)  # At least 1 if workflow executed
 
-    def _extract_compliance_status(self, results: Dict[str, Any]) -> bool:
+    def _extract_compliance_status(self, results: dict[str, Any]) -> bool:
         """Extract compliance status from workflow results."""
         for node_id, node_result in results.items():
             if "compliance" in node_id.lower() and isinstance(node_result, dict):
@@ -639,20 +649,21 @@ result = {
                     return False
         return True
 
-    def _extract_compliance_checks(self, results: Dict[str, Any]) -> List[str]:
+    def _extract_compliance_checks(self, results: dict[str, Any]) -> list[str]:
         """Extract completed compliance checks from workflow results."""
         checks = []
         for node_id, node_result in results.items():
-            if "compliance" in node_id.lower() or "check" in node_id.lower():
-                if isinstance(node_result, dict):
-                    check_type = node_result.get("check_type") or node_result.get(
-                        "compliance_type"
-                    )
-                    if check_type:
-                        checks.append(check_type)
+            if (
+                "compliance" in node_id.lower() or "check" in node_id.lower()
+            ) and isinstance(node_result, dict):
+                check_type = node_result.get("check_type") or node_result.get(
+                    "compliance_type"
+                )
+                if check_type:
+                    checks.append(check_type)
         return checks
 
-    def _extract_resource_allocation(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_resource_allocation(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract resource allocation details from workflow results."""
         allocation = {}
         for node_id, node_result in results.items():
@@ -663,7 +674,7 @@ result = {
                     allocation[resource_type] = resources_allocated
         return allocation
 
-    def get_audit_trail(self) -> List[Dict[str, Any]]:
+    def get_audit_trail(self) -> list[dict[str, Any]]:
         """Get the audit trail for this workflow template."""
         return self._audit_trail.copy()
 
@@ -742,7 +753,6 @@ class ApprovalWorkflowTemplate(EnterpriseWorkflowTemplate):
 
     def _build_workflow_nodes(self):
         """Build approval workflow nodes."""
-        previous_nodes = []
 
         # Create approval level nodes
         for i, level in enumerate(self.approval_levels):
@@ -1617,7 +1627,7 @@ result = {
 
 
 def create_enterprise_workflow_template(
-    template_type: str, config: Dict[str, Any]
+    template_type: str, config: dict[str, Any]
 ) -> EnterpriseWorkflowTemplate:
     """
     Factory function to create enterprise workflow templates.

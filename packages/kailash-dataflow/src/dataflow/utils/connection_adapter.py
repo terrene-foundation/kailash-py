@@ -75,7 +75,11 @@ class ConnectionManagerAdapter:
                     "ConnectionManagerAdapter: Detected async context, using AsyncLocalRuntime"
                 )
             except RuntimeError:
-                self._runtime = LocalRuntime()
+                # Issue #478 — adapter-owned long-lived runtime.  Use the
+                # public opt-out so Core SDK suppresses the ad-hoc-usage
+                # deprecation warning AND skips atexit cleanup; the adapter
+                # calls close() at its own shutdown.
+                self._runtime = LocalRuntime().mark_externally_managed()
                 self._is_async = False
                 logger.debug(
                     "ConnectionManagerAdapter: Detected sync context, using LocalRuntime"

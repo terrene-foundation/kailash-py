@@ -6,43 +6,55 @@
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.8.1",
-    "build_version": "2.8.1",
-    "synced_at": "2026-04-12T00:00:00Z"
+    "version": "2.8.7",
+    "build_version": "2.8.7",
+    "synced_at": "2026-04-15T04:00:00Z",
+    "sdk_packages": {
+      "kailash": "2.8.6",
+      "kailash-dataflow": "2.0.8",
+      "kailash-nexus": "2.0.3",
+      "kailash-kaizen": "2.7.4",
+      "kailash-pact": "0.8.1",
+      "kailash-mcp": "0.2.4",
+      "kailash-ml": "0.9.0",
+      "kailash-align": "0.3.1",
+      "kailash-trust": "0.1.0",
+      "kaizen-agents": "0.9.2"
+    }
   },
   "changelog": [
     {
       "version": "1.0.4",
       "date": "2026-04-12",
-      "summary": "Sync loom 2.8.1 — trinity→quartet terminology fix, FastAPI→Nexus in kaizen skill.",
+      "summary": "Sync loom 2.8.1 \u2014 trinity\u2192quartet terminology fix, FastAPI\u2192Nexus in kaizen skill.",
       "changes": [
-        "FIX: rules/terrene-naming.md — 'trinity' updated to 'quartet' (CARE + EATP + CO + PACT).",
-        "FIX: skills/co-reference/behavioral-guidelines.md — same trinity→quartet update.",
-        "FIX: skills/04-kaizen/kaizen-baseagent-quick.md — 3 FastAPI references updated to Nexus."
+        "FIX: rules/terrene-naming.md \u2014 'trinity' updated to 'quartet' (CARE + EATP + CO + PACT).",
+        "FIX: skills/co-reference/behavioral-guidelines.md \u2014 same trinity\u2192quartet update.",
+        "FIX: skills/04-kaizen/kaizen-baseagent-quick.md \u2014 3 FastAPI references updated to Nexus."
       ]
     },
     {
       "version": "1.0.3",
       "date": "2026-04-09",
-      "summary": "Sync loom 2.8.0 — deterministic quality guide + rule-authoring meta-rule + Phase 9.4 rule extensions. Institutionalizes 0052-DISCOVERY session productivity patterns. Gate reviews upgraded from RECOMMENDED to MUST at /implement and /release with background agent pattern.",
+      "summary": "Sync loom 2.8.0 \u2014 deterministic quality guide + rule-authoring meta-rule + Phase 9.4 rule extensions. Institutionalizes 0052-DISCOVERY session productivity patterns. Gate reviews upgraded from RECOMMENDED to MUST at /implement and /release with background agent pattern.",
       "changes": [
-        "NEW GUIDE: guides/deterministic-quality/ — 9 files. Part I (CO insights): rule-authoring principles, session architecture, enforcement ladder. Part II (code primitives): type system enforcement, runtime safety defaults, observability primitives, destructive operation gates, cross-SDK parity.",
-        "NEW RULE: rules/rule-authoring.md — meta-rule for authoring COC rules. 6 MUST clauses + Loud/Linguistic/Layered test. Subprocess-tested: rule quality 2/6 → 6/6.",
+        "NEW GUIDE: guides/deterministic-quality/ \u2014 9 files. Part I (CO insights): rule-authoring principles, session architecture, enforcement ladder. Part II (code primitives): type system enforcement, runtime safety defaults, observability primitives, destructive operation gates, cross-SDK parity.",
+        "NEW RULE: rules/rule-authoring.md \u2014 meta-rule for authoring COC rules. 6 MUST clauses + Loud/Linguistic/Layered test. Subprocess-tested: rule quality 2/6 \u2192 6/6.",
         "NEW RULES (Phase 9.4 DataFlow audit): dataflow-identifier-safety.md, facade-manager-detection.md, orphan-detection.md, tenant-isolation.md.",
-        "UPDATE: rules/agents.md — gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern + BLOCKED phrases for skip rationalizations.",
-        "UPDATE: rules/git.md — commit bodies MUST answer 'why' not 'what', with DO/DON'T example.",
-        "UPDATE: rules/observability.md — bulk ops MUST log at WARN on partial failure.",
-        "UPDATE: rules/zero-tolerance.md — extended examples from Phase 5 audit (fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics).",
-        "UPDATE: rules/cc-artifacts.md — Clause #10 requires new rules to follow rule-authoring.md meta-rule.",
-        "UPDATE: rules/dataflow-pool.md — Phase 9.4 extensions.",
-        "UPDATE: commands/analyze, codify, implement, redteam, todos, wrapup — phase-gate journal automation + lean wrapup.",
-        "UPDATE: scripts/hooks/ — session-end.js, log-triage-gate.js, lib/workspace-utils.js."
+        "UPDATE: rules/agents.md \u2014 gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern + BLOCKED phrases for skip rationalizations.",
+        "UPDATE: rules/git.md \u2014 commit bodies MUST answer 'why' not 'what', with DO/DON'T example.",
+        "UPDATE: rules/observability.md \u2014 bulk ops MUST log at WARN on partial failure.",
+        "UPDATE: rules/zero-tolerance.md \u2014 extended examples from Phase 5 audit (fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics).",
+        "UPDATE: rules/cc-artifacts.md \u2014 Clause #10 requires new rules to follow rule-authoring.md meta-rule.",
+        "UPDATE: rules/dataflow-pool.md \u2014 Phase 9.4 extensions.",
+        "UPDATE: commands/analyze, codify, implement, redteam, todos, wrapup \u2014 phase-gate journal automation + lean wrapup.",
+        "UPDATE: scripts/hooks/ \u2014 session-end.js, log-triage-gate.js, lib/workspace-utils.js."
       ]
     },
     {
       "version": "1.0.2",
       "date": "2026-04-08",
-      "summary": "Sync loom 2.7.0 — framework mandate enforcement wave. Observability + schema-migration rules, integration-hygiene + log-triage-gate hooks, 16-agent description updates, work-domain binding in framework-first.md, warnings-as-errors in zero-tolerance.md.",
+      "summary": "Sync loom 2.7.0 \u2014 framework mandate enforcement wave. Observability + schema-migration rules, integration-hygiene + log-triage-gate hooks, 16-agent description updates, work-domain binding in framework-first.md, warnings-as-errors in zero-tolerance.md.",
       "changes": [
         "NEW: rules/observability.md (mandatory log points, correlation IDs, log triage gate)",
         "NEW: rules/schema-migration.md (numbered migrations, reversibility, data fixes)",
@@ -64,21 +76,21 @@
         "UPDATE: scripts/hooks/validate-prod-deploy.js (execFileSync hardening over execSync)",
         "UPDATE: .claude/settings.json registers integration-hygiene + log-triage-gate hooks",
         "UPDATE: Why: rationale added to ~15 additional rules per cc-artifacts Rule 4",
-        "ABSENT (build_exclude): commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md — BUILD repo uses /release for SDK publishing",
+        "ABSENT (build_exclude): commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md \u2014 BUILD repo uses /release for SDK publishing",
         "PRESERVED: agents/frameworks/infrastructure-specialist.md (BUILD-local adaptations with src/kailash/db/ paths)"
       ]
     },
     {
       "version": "1.0.1",
       "date": "2026-04-08",
-      "summary": "Sync loom 2.6.2 — spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
+      "summary": "Sync loom 2.6.2 \u2014 spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
       "changes": [
         "NEW: skills/spec-compliance/SKILL.md (Python-only)",
         "REWRITE: commands/redteam.md (semantic verification, language-agnostic phrasing)",
-        "UPDATE: rules/testing.md (Audit Mode Rules — pytest --collect-only, no cargo)",
+        "UPDATE: rules/testing.md (Audit Mode Rules \u2014 pytest --collect-only, no cargo)",
         "UPDATE: agents/analysis/analyst.md, agents/testing/testing-specialist.md (/redteam ownership)",
-        "UPDATE: commands/wrapup.md (4-state deploy classification — Python BUILD falls under State C/D as expected)",
-        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude — BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
+        "UPDATE: commands/wrapup.md (4-state deploy classification \u2014 Python BUILD falls under State C/D as expected)",
+        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude \u2014 BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
       ]
     }
   ]

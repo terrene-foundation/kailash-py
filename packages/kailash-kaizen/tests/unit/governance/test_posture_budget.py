@@ -22,7 +22,6 @@ import logging
 from typing import Any, Dict, List
 
 import pytest
-
 from kailash.trust.constraints.budget_tracker import (
     BudgetEvent,
     BudgetTracker,
@@ -31,11 +30,10 @@ from kailash.trust.constraints.budget_tracker import (
 from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransition,
-    TrustPosture,
     TransitionResult,
+    TrustPosture,
 )
 from kaizen.governance.posture_budget import PostureBudgetIntegration
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,7 +50,7 @@ def budget_tracker() -> BudgetTracker:
 def state_machine() -> PostureStateMachine:
     """Create a PostureStateMachine with DELEGATED default and no upgrade guards."""
     return PostureStateMachine(
-        default_posture=TrustPosture.DELEGATED,
+        default_posture=TrustPosture.AUTONOMOUS,
         require_upgrade_approval=False,
     )
 
@@ -82,7 +80,7 @@ class TestThreshold80Warning:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Spend exactly 80% of budget ($80 out of $100)
         amount = usd_to_microdollars(80.0)
@@ -90,7 +88,7 @@ class TestThreshold80Warning:
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
         # Posture should remain DELEGATED
-        assert state_machine.get_posture("agent-001") == TrustPosture.DELEGATED
+        assert state_machine.get_posture("agent-001") == TrustPosture.AUTONOMOUS
 
     def test_80_percent_warning_logged(
         self,
@@ -99,7 +97,7 @@ class TestThreshold80Warning:
         integration: PostureBudgetIntegration,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         amount = usd_to_microdollars(80.0)
         budget_tracker.reserve(amount)
@@ -123,54 +121,54 @@ class TestThreshold80Warning:
 # 2. 95% threshold triggers downgrade to SUPERVISED
 # ---------------------------------------------------------------------------
 class TestThreshold95Downgrade:
-    """At 95% budget usage, posture is downgraded to SUPERVISED."""
+    """At 95% budget usage, posture is downgraded to TOOL."""
 
-    def test_95_percent_downgrades_to_supervised(
+    def test_95_percent_downgrades_to_tool(
         self,
         budget_tracker: BudgetTracker,
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Spend 95% of budget
         amount = usd_to_microdollars(95.0)
         budget_tracker.reserve(amount)
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        # Posture should be downgraded to SUPERVISED
-        assert state_machine.get_posture("agent-001") == TrustPosture.SUPERVISED
+        # Posture should be downgraded to TOOL (Decision-007 canonical name)
+        assert state_machine.get_posture("agent-001") == TrustPosture.TOOL
 
-    def test_95_percent_from_shared_planning_downgrades(
+    def test_95_percent_from_supervised_downgrades_to_tool(
         self,
         budget_tracker: BudgetTracker,
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        """Even from SHARED_PLANNING, 95% threshold should downgrade to SUPERVISED."""
-        state_machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
-
-        amount = usd_to_microdollars(95.0)
-        budget_tracker.reserve(amount)
-        budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
-
-        assert state_machine.get_posture("agent-001") == TrustPosture.SUPERVISED
-
-    def test_95_already_at_supervised_no_change(
-        self,
-        budget_tracker: BudgetTracker,
-        state_machine: PostureStateMachine,
-        integration: PostureBudgetIntegration,
-    ) -> None:
-        """If already at SUPERVISED, 95% threshold does not further downgrade."""
+        """From SUPERVISED (above TOOL), 95% threshold downgrades to TOOL."""
         state_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
         amount = usd_to_microdollars(95.0)
         budget_tracker.reserve(amount)
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        # Should remain at SUPERVISED (not PSEUDO_AGENT)
-        assert state_machine.get_posture("agent-001") == TrustPosture.SUPERVISED
+        assert state_machine.get_posture("agent-001") == TrustPosture.TOOL
+
+    def test_95_already_at_tool_no_change(
+        self,
+        budget_tracker: BudgetTracker,
+        state_machine: PostureStateMachine,
+        integration: PostureBudgetIntegration,
+    ) -> None:
+        """If already at TOOL, 95% threshold does not further downgrade."""
+        state_machine.set_posture("agent-001", TrustPosture.TOOL)
+
+        amount = usd_to_microdollars(95.0)
+        budget_tracker.reserve(amount)
+        budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
+
+        # Should remain at TOOL (no-op; below-or-equal to TOOL does not downgrade)
+        assert state_machine.get_posture("agent-001") == TrustPosture.TOOL
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +183,7 @@ class TestExhaustedEmergencyDowngrade:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Spend 100% of budget
         amount = usd_to_microdollars(100.0)
@@ -193,7 +191,7 @@ class TestExhaustedEmergencyDowngrade:
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
         # Should be emergency downgraded to PSEUDO_AGENT
-        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO_AGENT
+        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
     def test_exhaustion_from_supervised_goes_to_pseudo(
         self,
@@ -208,7 +206,7 @@ class TestExhaustedEmergencyDowngrade:
         budget_tracker.reserve(amount)
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO_AGENT
+        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +221,7 @@ class TestAuditTrail:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         amount = usd_to_microdollars(100.0)
         budget_tracker.reserve(amount)
@@ -241,7 +239,7 @@ class TestAuditTrail:
         assert len(emergency_transitions) >= 1
 
         last = emergency_transitions[-1]
-        assert last.to_posture == TrustPosture.PSEUDO_AGENT
+        assert last.to_posture == TrustPosture.PSEUDO
         assert last.success is True
         assert "budget" in last.reason.lower()
 
@@ -251,7 +249,7 @@ class TestAuditTrail:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         amount = usd_to_microdollars(95.0)
         budget_tracker.reserve(amount)
@@ -291,14 +289,14 @@ class TestConfigurableThresholds:
             agent_id="agent-002",
             thresholds={"warning": 0.50, "downgrade": 0.90, "emergency": 1.0},
         )
-        state_machine.set_posture("agent-002", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-002", TrustPosture.AUTONOMOUS)
 
         # At 50%, no posture change
         amount = usd_to_microdollars(50.0)
         budget_tracker.reserve(amount)
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        assert state_machine.get_posture("agent-002") == TrustPosture.DELEGATED
+        assert state_machine.get_posture("agent-002") == TrustPosture.AUTONOMOUS
 
     def test_custom_downgrade_threshold(
         self,
@@ -312,14 +310,14 @@ class TestConfigurableThresholds:
             agent_id="agent-003",
             thresholds={"warning": 0.50, "downgrade": 0.70, "emergency": 1.0},
         )
-        state_machine.set_posture("agent-003", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-003", TrustPosture.AUTONOMOUS)
 
         # Spend exactly 70% — should trigger downgrade with custom threshold
         amount = usd_to_microdollars(70.0)
         budget_tracker.reserve(amount)
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        assert state_machine.get_posture("agent-003") == TrustPosture.SUPERVISED
+        assert state_machine.get_posture("agent-003") == TrustPosture.TOOL
 
     def test_custom_emergency_threshold(
         self,
@@ -335,14 +333,14 @@ class TestConfigurableThresholds:
             agent_id="agent-004",
             thresholds={"warning": 0.50, "downgrade": 0.70, "emergency": 0.90},
         )
-        state_machine.set_posture("agent-004", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-004", TrustPosture.AUTONOMOUS)
 
         # Spend 90% — should trigger emergency with custom threshold
         amount = usd_to_microdollars(90.0)
         fresh_tracker.reserve(amount)
         fresh_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        assert state_machine.get_posture("agent-004") == TrustPosture.PSEUDO_AGENT
+        assert state_machine.get_posture("agent-004") == TrustPosture.PSEUDO
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +356,7 @@ class TestNoDuplicateProcessing:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        state_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Record in increments past 80%
         for i in range(10):
@@ -368,7 +366,7 @@ class TestNoDuplicateProcessing:
 
         # At this point, 100% used. Multiple thresholds should have fired
         # but each only once. Emergency downgrade should have happened.
-        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO_AGENT
+        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
         # Check that emergency downgrade happened only once
         history = state_machine.get_transition_history(agent_id="agent-001")
@@ -518,11 +516,11 @@ class TestAlreadyAtLowest:
         state_machine: PostureStateMachine,
         integration: PostureBudgetIntegration,
     ) -> None:
-        state_machine.set_posture("agent-001", TrustPosture.PSEUDO_AGENT)
+        state_machine.set_posture("agent-001", TrustPosture.PSEUDO)
 
         amount = usd_to_microdollars(100.0)
         budget_tracker.reserve(amount)
         # Should not raise, even if agent is already at lowest posture
         budget_tracker.record(reserved_microdollars=amount, actual_microdollars=amount)
 
-        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO_AGENT
+        assert state_machine.get_posture("agent-001") == TrustPosture.PSEUDO
