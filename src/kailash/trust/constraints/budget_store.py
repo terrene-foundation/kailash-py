@@ -232,7 +232,21 @@ class SQLiteBudgetStore(BudgetStore):
         conn = getattr(self._local, "conn", None)
         if conn is None:
             conn = sqlite3.connect(self._db_path)
+            # WAL + busy_timeout + synchronous=NORMAL is the canonical SDK
+            # pattern (see event_store_sqlite.py, dlq.py, tracking/storage/
+            # database.py). The full triple is required for concurrent-writer
+            # safety on Windows:
+            #   - WAL: readers + 1 writer can proceed without blocking
+            #   - busy_timeout=5000: a contending writer waits up to 5 s
+            #     instead of returning SQLITE_BUSY immediately
+            #   - synchronous=NORMAL: skip per-statement fsync (only fsync
+            #     at WAL checkpoint). Without this, every commit fsyncs and
+            #     N concurrent commits serialize behind disk, exceeding the
+            #     busy_timeout window — exactly the failure observed on the
+            #     post-merge Trust Plane CI run for #474.
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
             with self._conn_lock:
