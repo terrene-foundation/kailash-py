@@ -233,6 +233,12 @@ class SQLiteBudgetStore(BudgetStore):
         if conn is None:
             conn = sqlite3.connect(self._db_path)
             conn.execute("PRAGMA journal_mode=WAL")
+            # busy_timeout: when a concurrent writer holds the lock, wait up
+            # to 5000 ms instead of returning "database is locked" immediately.
+            # Without this, Windows surfaces lock contention as a hard failure
+            # under any concurrent write — observed on the Trust Plane CI
+            # main-branch run after merge of #474.
+            conn.execute("PRAGMA busy_timeout=5000")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
             with self._conn_lock:
