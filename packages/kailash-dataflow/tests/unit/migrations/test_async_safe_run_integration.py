@@ -346,11 +346,23 @@ class TestAsyncSafeRunIntegration:
 
     @pytest.mark.asyncio
     async def test_execution_context_detection_async(self):
-        """Test context detection in async."""
+        """Test context detection in async.
+
+        The contract of ``get_execution_context()`` (see its docstring) is
+        that any running event loop classifies as one of
+        ``{"fastapi", "jupyter", "docker_async", "async"}``. Which one is
+        returned depends on what is imported into ``sys.modules`` at call
+        time — e.g. a prior test that imported ``starlette`` (indirectly
+        via Nexus or FastAPI) flips the classification to ``"fastapi"``
+        for the remainder of the pytest session. All four strings mean
+        "async context detected", which is what this test is asserting.
+        """
+        ASYNC_CONTEXTS = {"fastapi", "jupyter", "docker_async", "async"}
         context = get_execution_context()
-        # Should detect we're in an async context
-        # (production returns "async" for any running asyncio loop)
-        assert context in ["async", "unknown"]
+        assert context in ASYNC_CONTEXTS, (
+            f"Expected an async-context classification but got {context!r}; "
+            f"valid async contexts are {sorted(ASYNC_CONTEXTS)}."
+        )
 
 
 class TestNestedCalls:
