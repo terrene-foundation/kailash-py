@@ -92,7 +92,7 @@ def role_app():
 
 @pytest.fixture
 def role_client(role_app):
-    return TestClient(role_app._gateway.app)
+    return TestClient(role_app.fastapi_app)
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ def permission_app():
 
 @pytest.fixture
 def permission_client(permission_app):
-    return TestClient(permission_app._gateway.app)
+    return TestClient(permission_app.fastapi_app)
 
 
 # =============================================================================
@@ -361,7 +361,7 @@ class TestRBACMiddlewareContext:
             return {"ok": True}
 
         app.include_router(router, prefix="/api")
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         token = _make_token(roles=["editor"])
         response = client.get(

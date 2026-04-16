@@ -110,7 +110,7 @@ class TestAddMiddlewareQueueing:
 
         assert len(app._middleware_stack) == 1
         # Verify actually added to FastAPI
-        assert any(m.cls == DummyMiddleware for m in app._gateway.app.user_middleware)
+        assert any(m.cls == DummyMiddleware for m in app.fastapi_app.user_middleware)
 
 
 # =============================================================================
@@ -251,7 +251,7 @@ class TestMiddlewareGatewayInit:
         assert len(app._middleware_queue) == 0
 
         # Middleware should be applied to FastAPI
-        assert any(m.cls == DummyMiddleware for m in app._gateway.app.user_middleware)
+        assert any(m.cls == DummyMiddleware for m in app.fastapi_app.user_middleware)
 
     def test_multiple_queued_middleware_applied_in_order(self):
         """Multiple queued middleware applied in user-specified order."""
@@ -284,7 +284,7 @@ class TestMiddlewareGatewayInit:
 
         # Both should be applied
         assert len(app._middleware_queue) == 0
-        middleware_classes = [m.cls for m in app._gateway.app.user_middleware]
+        middleware_classes = [m.cls for m in app.fastapi_app.user_middleware]
         assert DummyMiddleware in middleware_classes
         assert AnotherMiddleware in middleware_classes
 

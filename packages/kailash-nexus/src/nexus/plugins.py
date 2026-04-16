@@ -88,7 +88,9 @@ class AuthPlugin(NexusPlugin):
         logger.info("Applying authentication plugin with SDK components")
 
         # Use SDK's enterprise authentication
-        if hasattr(nexus_instance, "_gateway") and nexus_instance._gateway:
+        http_transport = getattr(nexus_instance, "_http_transport", None)
+        gateway = getattr(http_transport, "gateway", None) if http_transport else None
+        if gateway is not None:
             try:
                 from kailash.middleware.auth.auth_manager import MiddlewareAuthManager
 
@@ -98,8 +100,8 @@ class AuthPlugin(NexusPlugin):
                 )
 
                 # Integrate with gateway (if supported)
-                if hasattr(nexus_instance._gateway, "set_auth_manager"):
-                    nexus_instance._gateway.set_auth_manager(auth_manager)
+                if hasattr(gateway, "set_auth_manager"):
+                    gateway.set_auth_manager(auth_manager)
 
                 nexus_instance._auth_enabled = True
                 nexus_instance._auth_manager = auth_manager

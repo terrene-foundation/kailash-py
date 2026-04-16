@@ -116,7 +116,7 @@ class TestChannelConfiguration:
         app = Nexus(enable_durability=False, enable_http_transport=True)
 
         # Verify gateway was created
-        assert app._gateway is not None
+        assert app.fastapi_app is not None
 
         # Verify MCP server was created (requires enable_http_transport=True)
         assert app._mcp_server is not None
@@ -144,7 +144,7 @@ class TestChannelConfiguration:
         assert "test-workflow" in app._workflows
 
         # Verify gateway has the workflow
-        assert "test-workflow" in app._gateway.workflows
+        assert "test-workflow" in app._http_transport.gateway.workflows
 
     def test_cross_channel_session_sync(self):
         """Test session synchronization across channels."""

@@ -23,7 +23,7 @@ def _clean_nexus_env(monkeypatch):
 
 def _make_client(app: Nexus) -> TestClient:
     """Create a TestClient from a Nexus instance."""
-    return TestClient(app._gateway.app)
+    return TestClient(app.fastapi_app)
 
 
 # =============================================================================

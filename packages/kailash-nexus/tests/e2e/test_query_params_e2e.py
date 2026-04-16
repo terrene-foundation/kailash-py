@@ -70,7 +70,7 @@ class TestQueryParametersE2E:
                 "filters": {"status": status, "sort_by": sort_by, "order": order},
             }
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Test 1: Default parameters
         response = client.get("/api/conversations")
@@ -147,7 +147,7 @@ result = {
                 "workflow": "process_data",
             }
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Test workflow-backed endpoint with query params
         response = client.get("/api/process?batch_size=50&priority=high")
@@ -182,7 +182,7 @@ result = {
         async def custom_endpoint(name: str = "World"):
             return {"greeting": f"Hello {name} from REST API"}
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Test traditional workflow endpoint (POST)
         response = client.post("/workflows/greet_workflow/execute", json={})
@@ -243,7 +243,7 @@ result = {
                 },
             }
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Test with all parameters
         response = client.get(
@@ -303,7 +303,7 @@ result = {
                 "pagination": {"limit": limit, "offset": offset},
             }
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Test with path and query params
         response = client.get("/api/users/u123/items?category=books&limit=5")
@@ -342,7 +342,7 @@ result = {
             """Endpoint with strict validation."""
             return {"email": email, "age": age, "country": country}
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Valid request
         response = client.get("/api/validate?email=test@example.com&age=25&country=US")
@@ -379,7 +379,7 @@ result = {
             """Well-documented endpoint with query parameters."""
             return {"search": search, "limit": limit}
 
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Get OpenAPI schema
         response = client.get("/openapi.json")

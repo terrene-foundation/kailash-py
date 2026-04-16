@@ -421,7 +421,7 @@ class TestErrorHandling:
         try:
             app = Nexus(enable_durability=False)
             # If we get here, gateway initialized successfully
-            assert app._gateway is not None
+            assert app.fastapi_app is not None
         except RuntimeError as e:
             # Expected if gateway fails to initialize
             assert "gateway" in str(e).lower()

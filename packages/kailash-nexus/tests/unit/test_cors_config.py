@@ -487,7 +487,7 @@ class TestCorsGatewayIntegration:
         )
 
         # Gateway should exist and have CORS middleware applied
-        assert app._gateway is not None
+        assert app.fastapi_app is not None
         assert app._cors_middleware_applied is True
 
     def test_cors_middleware_not_applied_when_no_origins(self, monkeypatch):

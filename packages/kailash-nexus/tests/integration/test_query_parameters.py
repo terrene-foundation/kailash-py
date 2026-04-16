@@ -60,7 +60,7 @@ class TestQueryParameters:
             return {"limit": limit, "offset": offset}
 
         # Get TestClient
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Test with query parameters
         response = client.get("/api/test?limit=50&offset=10")
@@ -90,7 +90,7 @@ class TestQueryParameters:
         ):
             return {"page": page, "page_size": page_size, "sort": sort}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # No parameters - all defaults
         response = client.get("/api/items")
@@ -116,7 +116,7 @@ class TestQueryParameters:
         ):
             return {"query": query, "filter": filter, "category": category}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # With all parameters
         response = client.get("/api/search?query=test&filter=active&category=books")
@@ -150,7 +150,7 @@ class TestQueryParameters:
         async def paginated_endpoint(limit: int, offset: int, active: bool = True):
             return {"limit": limit, "offset": offset, "active": active}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Valid types
         response = client.get("/api/paginated?limit=10&offset=0")
@@ -180,7 +180,7 @@ class TestQueryParameters:
         async def filter_items(tags: List[str] = Query([])):
             return {"tags": tags, "count": len(tags)}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Multiple values
         response = client.get("/api/filter?tags=python&tags=api&tags=workflow")
@@ -210,7 +210,7 @@ class TestQueryParameters:
         ):
             return {"status": status}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Valid values
         for valid_status in ["active", "archived", "deleted"]:
@@ -239,7 +239,7 @@ class TestQueryParameters:
         ):
             return {"limit": limit, "page": page}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Valid range
         response = client.get("/api/range?limit=50&page=1")
@@ -271,7 +271,7 @@ class TestQueryParameters:
         ):
             return {"count": count, "name": name}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Missing required parameters
         response = client.get("/api/validated")
@@ -303,7 +303,7 @@ class TestQueryParameters:
         ):
             return {"required": required_param, "optional": optional_param}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Valid request with required parameter
         response = client.get("/api/required?required_param=value")
@@ -337,7 +337,7 @@ class TestQueryParameters:
                 "filter": filter,
             }
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Path param + query params
         response = client.get("/api/users/u123/items?limit=5&offset=10")
@@ -394,7 +394,7 @@ class TestQueryParameters:
                 "count": len(items),
             }
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Test with query params
         response = client.get("/api/items?limit=5&offset=10&filter=active")
@@ -430,7 +430,7 @@ class TestQueryParameters:
                 "include_deleted": include_deleted,
             }
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Valid enum value
         response = client.get("/api/sorted?order=desc")
@@ -464,7 +464,7 @@ class TestQueryParameters:
         async def post_data(request: DataRequest):
             return {"method": "POST", "id": request.id, "format": request.format}
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # GET with query params
         response = client.get("/api/data?id=123&format=xml")

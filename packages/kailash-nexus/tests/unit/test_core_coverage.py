@@ -326,7 +326,7 @@ class TestNexusStateManagement:
         # Check internal state
         assert isinstance(nexus._workflows, dict)
         assert nexus._workflows == {}
-        assert nexus._gateway is mock_gateway
+        assert nexus._http_transport.gateway is mock_gateway
         assert nexus._running is False
 
     @patch("nexus.core.create_gateway")
@@ -408,8 +408,8 @@ class TestNexusMultipleInstances:
         assert hasattr(nexus2, "_monitoring_enabled")
 
         # Verify separate gateway instances
-        assert nexus1._gateway == mock_gateway1
-        assert nexus2._gateway == mock_gateway2
+        assert nexus1._http_transport.gateway == mock_gateway1
+        assert nexus2._http_transport.gateway == mock_gateway2
 
         # Verify separate workflow storage
         mock_workflow1 = Mock()
@@ -444,7 +444,7 @@ class TestNexusAdvancedFeatures:
         nexus = Nexus()
 
         # Should be able to access gateway
-        assert nexus._gateway == mock_gateway
+        assert nexus._http_transport.gateway == mock_gateway
 
     @patch("nexus.core.create_gateway")
     @patch("kailash_mcp.auth.providers.APIKeyAuth")

@@ -58,7 +58,7 @@ class TestSecurityFeatures:
             return result
 
         # Get TestClient (no need to call start() for testing)
-        self.client = TestClient(self.app._gateway.app)
+        self.client = TestClient(self.app.fastapi_app)
 
     def teardown_method(self):
         """Cleanup after each test."""
@@ -333,7 +333,7 @@ class TestSecurityEdgeCases:
             return result
 
         # Get TestClient (no need to call start() for testing)
-        self.client = TestClient(self.app._gateway.app)
+        self.client = TestClient(self.app.fastapi_app)
 
     def teardown_method(self):
         """Cleanup."""

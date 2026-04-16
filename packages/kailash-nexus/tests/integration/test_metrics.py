@@ -74,20 +74,20 @@ class TestMetricsEndpoint:
 
     def test_metrics_returns_200(self):
         """GET /metrics returns 200."""
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
         response = client.get("/metrics")
         assert response.status_code == 200
 
     def test_metrics_content_type(self):
         """Content-Type is text/plain with OpenMetrics version."""
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
         response = client.get("/metrics")
         ct = response.headers.get("content-type", "")
         assert "text/plain" in ct
 
     def test_metrics_contains_expected_names(self):
         """Response body includes all six nexus_* metric families."""
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
         response = client.get("/metrics")
         body = response.text
 
@@ -106,7 +106,7 @@ class TestMetricsEndpoint:
 
     def test_registered_workflows_gauge_reflects_count(self):
         """nexus_registered_workflows gauge matches number of registered workflows."""
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Register a second workflow
         wf2 = WorkflowBuilder()
@@ -130,7 +130,7 @@ class TestMetricsEndpoint:
         # Seed the performance deque with a known value
         self.app._performance_metrics["workflow_registration_time"].append(0.042)
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
         response = client.get("/metrics")
         body = response.text
 
@@ -147,7 +147,7 @@ class TestMetricsEndpoint:
         """Scraping /metrics twice does not double-count deque values."""
         self.app._performance_metrics["cross_channel_sync_time"].append(0.005)
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # First scrape
         client.get("/metrics")

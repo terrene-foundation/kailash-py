@@ -55,7 +55,10 @@ class TestPluginSystem:
 
         plugin = AuthPlugin()
         mock_nexus = Mock()
-        mock_nexus._gateway = Mock()
+        mock_gateway = Mock()
+        mock_http_transport = Mock()
+        mock_http_transport.gateway = mock_gateway
+        mock_nexus._http_transport = mock_http_transport
 
         plugin.apply(mock_nexus)
 
@@ -167,7 +170,10 @@ class TestPluginSystem:
 
         registry = PluginRegistry()
         mock_nexus = Mock()
-        mock_nexus._gateway = Mock()
+        mock_gateway = Mock()
+        mock_http_transport = Mock()
+        mock_http_transport.gateway = mock_gateway
+        mock_nexus._http_transport = mock_http_transport
 
         # Apply auth plugin
         registry.apply("auth", mock_nexus)

@@ -67,7 +67,7 @@ class TestSSEStreamingFormat:
         - Data contains valid JSON
         - Data line is followed by double newline
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Execute workflow in stream mode
         with client.stream(
@@ -105,7 +105,7 @@ class TestSSEStreamingFormat:
 
         SSE specification requires each event to be terminated with \\n\\n.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/test_sse/execute", json={"mode": "stream"}
@@ -141,7 +141,7 @@ class TestSSEStreamingFormat:
         - complete: Workflow completed successfully
         - error: Workflow failed
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/test_sse/execute", json={"mode": "stream"}
@@ -183,7 +183,7 @@ class TestSSEStreamingFormat:
 
         Event IDs enable client reconnection with Last-Event-ID header.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/test_sse/execute", json={"mode": "stream"}
@@ -223,7 +223,7 @@ class TestSSEStreamingFormat:
         - All events properly formatted
         - Events contain expected data
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/test_sse/execute", json={"mode": "stream"}
@@ -271,7 +271,7 @@ class TestSSEStreamingFormat:
         )
         self.app.register("slow_workflow", long_workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/slow_workflow/execute", json={"mode": "stream"}
@@ -365,7 +365,7 @@ class TestSSEHeaders:
         - When I connect
         - Then response includes Content-Type: text/event-stream
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         response = client.post(
             "/workflows/test_headers/execute", json={"mode": "stream"}
@@ -382,7 +382,7 @@ class TestSSEHeaders:
 
         Prevents proxies from caching the streaming response.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         response = client.post(
             "/workflows/test_headers/execute", json={"mode": "stream"}
@@ -398,7 +398,7 @@ class TestSSEHeaders:
 
         Keeps the connection open for streaming.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         response = client.post(
             "/workflows/test_headers/execute", json={"mode": "stream"}
@@ -414,7 +414,7 @@ class TestSSEHeaders:
 
         Disables nginx buffering for immediate event delivery.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         response = client.post(
             "/workflows/test_headers/execute", json={"mode": "stream"}
@@ -457,7 +457,7 @@ class TestSSEWorkflowEvents:
         )
         self.app.register("start_test", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/start_test/execute", json={"mode": "stream"}
@@ -494,7 +494,7 @@ class TestSSEWorkflowEvents:
         )
         self.app.register("complete_test", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/complete_test/execute", json={"mode": "stream"}
@@ -529,7 +529,7 @@ class TestSSEWorkflowEvents:
         )
         self.app.register("error_test", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/error_test/execute", json={"mode": "stream"}
@@ -565,7 +565,7 @@ class TestSSEWorkflowEvents:
 
         self.app.register("multi_node", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/multi_node/execute", json={"mode": "stream"}
@@ -636,7 +636,7 @@ class TestSSEPerformance:
         workflow.add_node("PythonCodeNode", "fast", {"code": "result = {'fast': True}"})
         self.app.register("fast_workflow", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         start_time = time.time()
 
@@ -667,7 +667,7 @@ class TestSSEPerformance:
         )
         self.app.register("throughput_test", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         start_time = time.time()
 
@@ -695,7 +695,7 @@ class TestSSEPerformance:
         )
         self.app.register("memory_test", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Execute multiple times
         for _ in range(10):
@@ -740,7 +740,7 @@ class TestSSEClientCompatibility:
         - Then EventSource successfully receives events
         - And can parse event types and data
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/compat_test/execute", json={"mode": "stream"}
@@ -763,7 +763,7 @@ class TestSSEClientCompatibility:
 
     def test_sse_json_data_parsing(self):
         """Test that event data is valid JSON parseable by clients."""
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/compat_test/execute", json={"mode": "stream"}
@@ -790,7 +790,7 @@ class TestSSEClientCompatibility:
 
         Current: Verify IDs are present for future reconnection support.
         """
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/compat_test/execute", json={"mode": "stream"}
@@ -879,7 +879,7 @@ class TestSSEErrorHandling:
         )
         self.app.register("error_workflow", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         with client.stream(
             "POST", "/workflows/error_workflow/execute", json={"mode": "stream"}
@@ -898,7 +898,7 @@ class TestSSEErrorHandling:
         workflow.add_node("PythonCodeNode", "normal", {"code": "result = {'ok': True}"})
         self.app.register("normal_workflow", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Request with invalid mode should still work (uses default)
         # Or return error if mode validation is strict
@@ -925,7 +925,7 @@ class TestSSEErrorHandling:
         )
         self.app.register("long_workflow", workflow.build())
 
-        client = TestClient(self.app._gateway.app)
+        client = TestClient(self.app.fastapi_app)
 
         # Simulate early disconnect by not consuming full stream
         with client.stream(

@@ -200,7 +200,7 @@ def register_metrics_endpoint(nexus: Nexus) -> None:
     if fastapi_app is None:
         http = getattr(nexus, "_http_transport", None)
         if http is not None:
-            gw = getattr(http, "_gateway", None)
+            gw = getattr(http, "gateway", None)
             if gw is not None:
                 fastapi_app = getattr(gw, "app", None)
 

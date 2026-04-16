@@ -32,7 +32,7 @@ def jwt_app():
 @pytest.fixture
 def jwt_client(jwt_app):
     """Create a TestClient from a JWT-protected Nexus app."""
-    return TestClient(jwt_app._gateway.app)
+    return TestClient(jwt_app.fastapi_app)
 
 
 def _make_token(
@@ -295,7 +295,7 @@ class TestCookieAuthentication:
             JWTMiddleware,
             config=JWTConfig(secret=SECRET, token_cookie="access_token"),
         )
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         token = _make_token()
         # Set cookie on the client
@@ -329,7 +329,7 @@ class TestFastAPIDependencies:
             return {"user_id": user.user_id, "email": user.email}
 
         app.include_router(router, prefix="/api")
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         token = _make_token(sub="user-456", email="test@example.com")
         response = client.get(
@@ -355,7 +355,7 @@ class TestFastAPIDependencies:
             return {"user_id": user.user_id}
 
         app.include_router(router, prefix="/api")
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         response = client.get("/api/profile")
         assert response.status_code == 401
@@ -375,7 +375,7 @@ class TestFastAPIDependencies:
             return {"admin": True}
 
         app.include_router(router, prefix="/api")
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # Admin user - should succeed
         admin_token = _make_token(roles=["admin"])
@@ -409,7 +409,7 @@ class TestFastAPIDependencies:
             return {"created": True}
 
         app.include_router(router, prefix="/api")
-        client = TestClient(app._gateway.app)
+        client = TestClient(app.fastapi_app)
 
         # User with correct permission
         writer_token = _make_token(permissions=["write:articles"])

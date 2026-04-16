@@ -99,7 +99,7 @@ class TestIncludeRouterQueueing:
 
         assert len(app._routers) == 1
         # Verify routes actually exist in FastAPI app
-        route_paths = [getattr(r, "path", "") for r in app._gateway.app.routes]
+        route_paths = [getattr(r, "path", "") for r in app.fastapi_app.routes]
         assert any("/api/test" in p for p in route_paths)
 
 
@@ -276,7 +276,7 @@ class TestRouterGatewayInit:
         assert len(app._router_queue) == 0
 
         # Router should be included in gateway
-        route_paths = [getattr(r, "path", "") for r in app._gateway.app.routes]
+        route_paths = [getattr(r, "path", "") for r in app.fastapi_app.routes]
         assert any("/api/test" in p for p in route_paths)
 
     def test_multiple_queued_routers_applied(self):
@@ -313,7 +313,7 @@ class TestRouterGatewayInit:
         assert len(app._router_queue) == 0
 
         # Both routers should be included
-        route_paths = [getattr(r, "path", "") for r in app._gateway.app.routes]
+        route_paths = [getattr(r, "path", "") for r in app.fastapi_app.routes]
         assert any("/api/v1/users" in p for p in route_paths)
         assert any("/api/v2/orders" in p for p in route_paths)
 
