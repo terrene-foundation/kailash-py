@@ -2910,19 +2910,39 @@ class DataFlow(DataFlowEventMixin):
         # Return False to propagate any exceptions that occurred in the with block
         return False
 
-    def __del__(self):
-        """Emit ResourceWarning if DataFlow was not properly closed."""
-        if not getattr(self, "_closed", True):
-            warnings.warn(
-                f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
-                "Use 'with DataFlow(...) as db:' or call db.close().",
-                ResourceWarning,
-                source=self,
-            )
-            try:
-                self.close()
-            except Exception:
-                pass
+    def __del__(self, _warnings=warnings):
+        """Emit ResourceWarning if DataFlow was not properly closed.
+
+        MUST NOT call self.close() here: close() calls async_safe_run()
+        which, when a pytest-asyncio (or FastAPI/Jupyter) event loop is
+        already running, dispatches to a worker thread that creates a new
+        asyncio loop. asyncio.new_event_loop() emits logger.debug(...) as
+        part of its selector-events init. If __del__ itself was triggered
+        from inside Python's logging machinery (e.g. isEnabledFor → GC),
+        the root logging lock is held by the calling thread, and the
+        worker thread blocks on it forever: classic lock-order deadlock
+        that hangs the test runner with no signal. See rules/patterns.md
+        § "Async Resource Cleanup — MUST NOT use asyncio in __del__".
+
+        The ResourceWarning is the user-facing contract of __del__:
+        "you forgot to close this, here is the reference". Actual cleanup
+        is the caller's responsibility via `with DataFlow(...) as db:` or
+        an explicit `db.close()` / `await db.close_async()`. Use the
+        _warnings default arg so this still works if `warnings` has been
+        shimmed out during interpreter shutdown.
+        """
+        try:
+            if not getattr(self, "_closed", True):
+                _warnings.warn(
+                    f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
+                    "Use 'with DataFlow(...) as db:' or call db.close() "
+                    "(or `await db.close_async()` in async contexts).",
+                    ResourceWarning,
+                    source=self,
+                )
+        except Exception:
+            # Finalizers must never raise.
+            pass
 
     def get_connection_pool(self):
         """Get the connection pool for testing.

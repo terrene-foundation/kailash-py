@@ -73,23 +73,39 @@ async def sqlite_file_connection(file_test_suite):
 
 @pytest.fixture
 async def memory_dataflow(memory_test_suite):
-    """Create DataFlow instance with memory database for unit tests."""
+    """Create DataFlow instance with memory database for unit tests.
+
+    Yields+closes per rules/testing.md § "Fixtures Yield + Cleanup, Never
+    Return". Without explicit close() the DataFlow is released to GC,
+    whose finalizer would previously run async_safe_run() inside __del__
+    and interleave with subsequent fixture setup — the deadlock that
+    hung the unit suite (see engine.py __del__ commit).
+    """
     dataflow = memory_test_suite.dataflow_harness.create_dataflow()
-    yield dataflow
+    try:
+        yield dataflow
+    finally:
+        await dataflow.close_async()
 
 
 @pytest.fixture
 async def file_dataflow(file_test_suite):
     """Create DataFlow instance with file database for unit tests."""
     dataflow = file_test_suite.dataflow_harness.create_dataflow()
-    yield dataflow
+    try:
+        yield dataflow
+    finally:
+        await dataflow.close_async()
 
 
 @pytest.fixture
 async def auto_migrate_dataflow(memory_test_suite):
     """Create DataFlow instance with auto-migration enabled."""
     dataflow = memory_test_suite.dataflow_harness.create_dataflow(auto_migrate=True)
-    yield dataflow
+    try:
+        yield dataflow
+    finally:
+        await dataflow.close_async()
 
 
 # Table factory fixtures
@@ -107,7 +123,9 @@ async def basic_test_table(memory_test_suite):
 @pytest.fixture
 async def constrained_test_tables(memory_test_suite):
     """Create test tables with constraints and foreign keys."""
-    tables = await memory_test_suite.dataflow_harness.table_factory.create_constrained_table()
+    tables = (
+        await memory_test_suite.dataflow_harness.table_factory.create_constrained_table()
+    )
     yield tables
 
 
