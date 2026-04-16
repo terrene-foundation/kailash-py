@@ -35,12 +35,17 @@ class TestNexusMCPIntegration:
         self.api_port = find_free_port(9300)
         self.mcp_port = find_free_port(self.api_port + 100)
 
-        # Create Nexus instance
+        # Create Nexus instance.
+        # MCP server/channel wiring in core.py:760-767 bails early when
+        # enable_http_transport=False — _mcp_server stays None and the
+        # assertions below (and any WebSocket client) fail. The channel is
+        # only wired when HTTP transport is enabled.
         self.app = Nexus(
             api_port=self.api_port,
             mcp_port=self.mcp_port,
             enable_auth=False,
             enable_monitoring=True,
+            enable_http_transport=True,
         )
 
         # Register test workflows
@@ -174,8 +179,19 @@ class TestNexusResourceManager:
     """Test Nexus resource management functionality."""
 
     def setup_method(self):
-        """Set up test environment."""
-        self.app = Nexus(api_port=8890, mcp_port=3890)
+        """Set up test environment.
+
+        Use dynamic ports to avoid collisions across test runs / sibling
+        tests in the same file. Enable HTTP transport so _mcp_server is
+        populated (see core.py:760-767).
+        """
+        self.api_port = find_free_port(9400)
+        self.mcp_port = find_free_port(self.api_port + 100)
+        self.app = Nexus(
+            api_port=self.api_port,
+            mcp_port=self.mcp_port,
+            enable_http_transport=True,
+        )
 
         # Create mock workflow for testing
         workflow_builder = WorkflowBuilder()
