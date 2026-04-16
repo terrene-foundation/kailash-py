@@ -8,11 +8,10 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import pytest
-from dataflow.nodes.bulk_create import BulkCreateNode
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from pytest import approx
 
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from dataflow.nodes.bulk_upsert import BulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
