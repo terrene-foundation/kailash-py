@@ -147,14 +147,20 @@ class TestMaskSensitiveValues:
     """Test the mask_sensitive_values function for string masking."""
 
     def test_mask_postgresql_url(self):
-        """Should mask password in PostgreSQL URL."""
+        """Should mask the full userinfo in a PostgreSQL URL.
+
+        Per rules/observability.md § 6.2 (Mask Form Uniform Across Helpers),
+        the canonical mask form is scheme://***MASKED***@host[:port]/path —
+        the username is masked together with the password, not leaked through.
+        """
         from dataflow.core.logging_config import mask_sensitive_values
 
         url = "postgresql://user:secretpassword@localhost:5432/db"
         masked = mask_sensitive_values(url)
         assert "secretpassword" not in masked
-        assert "***MASKED***" in masked
-        assert "user:" in masked
+        assert "user:" not in masked  # username masked with password
+        assert "***MASKED***@" in masked  # canonical `***@` form
+        assert "localhost:5432/db" in masked  # host/port/path preserved
 
     def test_mask_mysql_url(self):
         """Should mask password in MySQL URL."""
