@@ -107,6 +107,6 @@ class TestSafeIdentifierIsInvalidIdentifierError:
 
         assert issubclass(InvalidIdentifierError, AdapterError)
 
-    def test_error_message_contains_name(self):
-        with pytest.raises(InvalidIdentifierError, match="bad;name"):
+    def test_error_message_contains_fingerprint_not_raw_input(self):
+        with pytest.raises(InvalidIdentifierError, match=r"fingerprint=[0-9a-f]{4}"):
             _safe_identifier("bad;name")

@@ -70,7 +70,7 @@ def http_transport_url() -> str:
 
 
 @pytest.fixture
-def base_url(http_transport_url: str) -> str:
+def transport_base_url(http_transport_url: str) -> str:
     """Alias for http_transport_url used by instantiation tests."""
     return http_transport_url
 
@@ -183,29 +183,29 @@ def create_mock_post_response(status: int = 200, text: str = ""):
 class TestHTTPTransportInstantiation:
     """Test HTTPTransport creation and initialization."""
 
-    def test_http_transport_instantiation(self, base_url):
+    def test_http_transport_instantiation(self, transport_base_url):
         """Test 1: HTTPTransport can be instantiated with base_url."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
         assert transport is not None
         assert hasattr(transport, "_base_url")
 
-    def test_http_transport_inherits_from_transport_abc(self, base_url):
+    def test_http_transport_inherits_from_transport_abc(self, transport_base_url):
         """Test 2: HTTPTransport inherits from Transport ABC."""
         if HTTPTransport is None or Transport is None:
             pytest.skip("HTTPTransport or Transport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
         assert isinstance(transport, Transport)
 
-    def test_http_transport_starts_in_not_ready_state(self, base_url):
+    def test_http_transport_starts_in_not_ready_state(self, transport_base_url):
         """Test 3: HTTPTransport starts in not-ready state before connect()."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
         assert not transport.is_ready()
 
 
@@ -218,12 +218,12 @@ class TestHTTPTransportConnection:
     """Test HTTPTransport connection lifecycle."""
 
     @pytest.mark.anyio
-    async def test_connect_creates_aiohttp_session(self, base_url):
+    async def test_connect_creates_aiohttp_session(self, transport_base_url):
         """Test 4: connect() creates aiohttp.ClientSession."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -238,12 +238,12 @@ class TestHTTPTransportConnection:
             assert hasattr(transport, "_session")
 
     @pytest.mark.anyio
-    async def test_connect_makes_transport_ready(self, base_url):
+    async def test_connect_makes_transport_ready(self, transport_base_url):
         """Test 5: connect() makes transport ready."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -255,12 +255,12 @@ class TestHTTPTransportConnection:
             assert transport.is_ready()
 
     @pytest.mark.anyio
-    async def test_connect_is_idempotent(self, base_url):
+    async def test_connect_is_idempotent(self, transport_base_url):
         """Test 6: connect() can be called multiple times safely."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -288,13 +288,13 @@ class TestHTTPTransportWrite:
 
     @pytest.mark.anyio
     async def test_write_sends_post_request_to_control_endpoint(
-        self, base_url, sample_json_messages
+        self, transport_base_url, sample_json_messages
     ):
         """Test 7: write() sends POST request to /control endpoint."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -317,30 +317,30 @@ class TestHTTPTransportWrite:
             call_args = mock_session.post.call_args
 
             # Check URL
-            assert call_args[0][0] == f"{base_url}/control"
+            assert call_args[0][0] == f"{transport_base_url}/control"
 
             # Check data (should be JSON with 'data' key)
             assert "json" in call_args[1] or "data" in call_args[1]
 
     @pytest.mark.anyio
-    async def test_write_before_connect_raises_error(self, base_url):
+    async def test_write_before_connect_raises_error(self, transport_base_url):
         """Test 8: write() before connect() raises RuntimeError."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         # Try to write without connecting
         with pytest.raises(RuntimeError, match="not connected"):
             await transport.write("test message")
 
     @pytest.mark.anyio
-    async def test_write_with_connection_error_handling(self, base_url):
+    async def test_write_with_connection_error_handling(self, transport_base_url):
         """Test 9: write() handles connection errors gracefully."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -370,12 +370,14 @@ class TestHTTPTransportReadMessages:
     """Test HTTPTransport read_messages() with SSE parsing."""
 
     @pytest.mark.anyio
-    async def test_read_messages_connects_to_stream_sse_endpoint(self, base_url):
+    async def test_read_messages_connects_to_stream_sse_endpoint(
+        self, transport_base_url
+    ):
         """Test 10: read_messages() connects to /stream SSE endpoint."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -402,17 +404,17 @@ class TestHTTPTransportReadMessages:
             # Verify GET was called with /stream endpoint
             mock_session.get.assert_called_once()
             call_args = mock_session.get.call_args
-            assert call_args[0][0] == f"{base_url}/stream"
+            assert call_args[0][0] == f"{transport_base_url}/stream"
 
     @pytest.mark.anyio
     async def test_read_messages_parses_sse_format(
-        self, base_url, sample_json_messages
+        self, transport_base_url, sample_json_messages
     ):
         """Test 11: read_messages() parses SSE format with 'data: ' prefix."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -445,12 +447,14 @@ class TestHTTPTransportReadMessages:
             assert messages_read[1] == '{"request_id": "req_2", "type": "approval"}'
 
     @pytest.mark.anyio
-    async def test_read_messages_skips_empty_lines_and_comments(self, base_url):
+    async def test_read_messages_skips_empty_lines_and_comments(
+        self, transport_base_url
+    ):
         """Test 12: read_messages() skips empty lines and SSE comments."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -488,12 +492,12 @@ class TestHTTPTransportReadMessages:
             assert messages_read[1] == '{"request_id": "req_2"}'
 
     @pytest.mark.anyio
-    async def test_read_messages_before_connect_raises_error(self, base_url):
+    async def test_read_messages_before_connect_raises_error(self, transport_base_url):
         """Test 13: read_messages() before connect() raises RuntimeError."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         # Try to read without connecting
         with pytest.raises(RuntimeError, match="not connected"):
@@ -510,12 +514,12 @@ class TestHTTPTransportClose:
     """Test HTTPTransport close() and cleanup."""
 
     @pytest.mark.anyio
-    async def test_close_closes_aiohttp_session(self, base_url):
+    async def test_close_closes_aiohttp_session(self, transport_base_url):
         """Test 14: close() closes aiohttp session."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -534,12 +538,12 @@ class TestHTTPTransportClose:
             assert not transport.is_ready()
 
     @pytest.mark.anyio
-    async def test_close_is_idempotent(self, base_url):
+    async def test_close_is_idempotent(self, transport_base_url):
         """Test 15: close() can be called multiple times safely."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -572,12 +576,12 @@ class TestHTTPTransportEdgeCases:
     """Test edge cases and error scenarios."""
 
     @pytest.mark.anyio
-    async def test_write_after_close_raises_error(self, base_url):
+    async def test_write_after_close_raises_error(self, transport_base_url):
         """Test that write() after close() raises error."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -590,12 +594,12 @@ class TestHTTPTransportEdgeCases:
                 await transport.write("test message")
 
     @pytest.mark.anyio
-    async def test_write_with_invalid_url(self, base_url):
+    async def test_write_with_invalid_url(self, transport_base_url):
         """Test write() with server error response."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -617,12 +621,12 @@ class TestHTTPTransportEdgeCases:
                 pass
 
     @pytest.mark.anyio
-    async def test_read_messages_with_malformed_sse(self, base_url):
+    async def test_read_messages_with_malformed_sse(self, transport_base_url):
         """Test read_messages() with malformed SSE data."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -656,13 +660,13 @@ class TestHTTPTransportEdgeCases:
 
     @pytest.mark.anyio
     async def test_full_lifecycle_with_http_transport(
-        self, base_url, sample_json_messages
+        self, transport_base_url, sample_json_messages
     ):
         """Test complete lifecycle: connect -> write -> read -> close."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -717,12 +721,12 @@ class TestHTTPTransportPerformance:
     """Test performance characteristics."""
 
     @pytest.mark.anyio
-    async def test_concurrent_writes(self, base_url):
+    async def test_concurrent_writes(self, transport_base_url):
         """Test concurrent write operations."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
@@ -747,12 +751,12 @@ class TestHTTPTransportPerformance:
             assert mock_session.post.call_count == 10
 
     @pytest.mark.anyio
-    async def test_write_large_message(self, base_url):
+    async def test_write_large_message(self, transport_base_url):
         """Test writing large JSON message."""
         if HTTPTransport is None:
             pytest.skip("HTTPTransport not yet implemented")
 
-        transport = HTTPTransport(base_url=base_url, allow_insecure=True)
+        transport = HTTPTransport(base_url=transport_base_url, allow_insecure=True)
 
         with patch(
             "kaizen.core.autonomy.control.transports.http.aiohttp.ClientSession"
