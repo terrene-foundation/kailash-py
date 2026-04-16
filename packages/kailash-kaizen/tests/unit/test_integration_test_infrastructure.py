@@ -7,6 +7,7 @@ and error handling patterns that integration tests rely on.
 """
 
 import subprocess
+import sys
 import time
 from unittest.mock import Mock, patch
 
@@ -24,9 +25,12 @@ class TestIntegrationTestCollection:
         test_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(test_dir))
 
-        # Test collection without errors
+        # Test collection without errors. MUST use sys.executable — bare
+        # "python" routes through pyenv/asdf shims that resolve to a
+        # different interpreter than the active venv, breaking imports
+        # deep in the subprocess (rules/python-environment.md Rule 1).
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/integration/", "--collect-only"],
+            [sys.executable, "-m", "pytest", "tests/integration/", "--collect-only"],
             capture_output=True,
             text=True,
             cwd=project_root,
@@ -44,9 +48,9 @@ class TestIntegrationTestCollection:
         has_critical_errors = any(
             indicator in result.stdout for indicator in error_indicators
         )
-        assert not has_critical_errors, (
-            f"Collection critical errors found: {result.stdout[-1000:]}"
-        )  # Last 1000 chars
+        assert (
+            not has_critical_errors
+        ), f"Collection critical errors found: {result.stdout[-1000:]}"  # Last 1000 chars
 
         # Ensure minimum number of tests collected
         lines = result.stdout.split("\n")
@@ -58,9 +62,9 @@ class TestIntegrationTestCollection:
             match = re.search(r"(\d+) tests collected", collected_line[0])
             if match:
                 test_count = int(match.group(1))
-                assert test_count >= 100, (
-                    f"Expected at least 100 integration tests, found {test_count}"
-                )
+                assert (
+                    test_count >= 100
+                ), f"Expected at least 100 integration tests, found {test_count}"
 
     def test_integration_test_infrastructure_validation(self):
         """Integration test infrastructure components must be available."""
@@ -280,9 +284,9 @@ class TestPerformanceInfrastructure:
         execution_time = end_time - start_time
 
         # Should complete in reasonable time for unit test
-        assert execution_time < 1.0, (
-            f"Performance test infrastructure too slow: {execution_time:.3f}s"
-        )
+        assert (
+            execution_time < 1.0
+        ), f"Performance test infrastructure too slow: {execution_time:.3f}s"
 
     def test_memory_measurement_infrastructure(self):
         """Memory measurement infrastructure must work."""
