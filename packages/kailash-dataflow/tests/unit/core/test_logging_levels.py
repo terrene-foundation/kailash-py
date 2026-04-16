@@ -499,86 +499,15 @@ class TestLoggingConfigIntegration:
             assert config.level == logging.ERROR
 
 
-@pytest.mark.unit
-class TestSourceCodeLogLevels:
-    """Test that the source code has correct log levels by inspecting actual files."""
-
-    def test_nodes_py_no_info_level_for_debug_messages(self):
-        """Verify nodes.py doesn't use logger.info for debug messages."""
-        import inspect
-
-        from dataflow.core import nodes
-
-        source = inspect.getsource(nodes)
-
-        # Count occurrences of logger.info in the source
-        info_count = source.count("logger.info(")
-
-        # After the fix, there should be no logger.info calls in nodes.py
-        # All operational/debug logs should be logger.debug
-        assert info_count == 0, (
-            f"Found {info_count} logger.info() calls in nodes.py - should be 0"
-        )
-
-    def test_engine_py_no_info_level_for_debug_messages(self):
-        """Verify engine.py doesn't use logger.info for debug messages."""
-        import inspect
-
-        from dataflow.core import engine
-
-        source = inspect.getsource(engine)
-
-        # Count occurrences of logger.info in the source
-        info_count = source.count("logger.info(")
-
-        # After the fix, there should be no logger.info calls in engine.py
-        # All operational/debug logs should be logger.debug
-        assert info_count == 0, (
-            f"Found {info_count} logger.info() calls in engine.py - should be 0"
-        )
-
-    def test_nodes_py_still_has_warnings_for_real_issues(self):
-        """Verify nodes.py still uses logger.warning for real issues."""
-        import inspect
-
-        from dataflow.core import nodes
-
-        source = inspect.getsource(nodes)
-
-        # Count occurrences of logger.warning in the source
-        warning_count = source.count("logger.warning(")
-
-        # Should still have warnings for:
-        # - SQL injection detection
-        # - Auto-managed field stripping
-        # - Suspiciously long input
-        # - Failed to parse datetime
-        # - Failed to parse conflict_on JSON
-        # - Failed to ensure table exists
-        assert warning_count >= 5, (
-            f"Found only {warning_count} logger.warning() calls in nodes.py - expected at least 5"
-        )
-
-    def test_engine_py_still_has_warnings_for_real_issues(self):
-        """Verify engine.py still uses logger.warning for real issues."""
-        import inspect
-
-        from dataflow.core import engine
-
-        source = inspect.getsource(engine)
-
-        # Count occurrences of logger.warning in the source
-        warning_count = source.count("logger.warning(")
-
-        # Should still have warnings for:
-        # - Configuration issues
-        # - Unsupported database dialects
-        # - Migration failures
-        # - Schema discovery fallbacks
-        # - etc.
-        assert warning_count >= 10, (
-            f"Found only {warning_count} logger.warning() calls in engine.py - expected at least 10"
-        )
+# NOTE: `TestSourceCodeLogLevels` removed (2026-04-16). Its tests used
+# `inspect.getsource(...)` + `source.count("logger.info(")` to lint the
+# implementation files. `rules/testing.md` § "Behavioral Regression Tests Over
+# Source-Grep" BLOCKS source-grep tests as sole assertions — they pin the
+# implementation rather than the contract and break on refactors. Log-level
+# linting belongs in a pre-commit hook or a static analyzer, not pytest.
+# The behavioral log-level coverage in this file (TestLoggingLevelCorrectness,
+# TestRealWarningsStillLogged, TestNoExcessiveWarningsInNormalOperation)
+# already asserts the actual logger behavior via captured records.
 
 
 @pytest.mark.unit
