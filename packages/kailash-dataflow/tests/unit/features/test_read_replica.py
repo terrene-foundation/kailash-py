@@ -119,7 +119,7 @@ def test_connection_manager_pool_size_override():
     db = DataFlow(database_url="sqlite:///:memory:", auto_migrate=False)
     cm = ConnectionManager(db, pool_size_override=42)
     assert cm._pool_size_override == 42
-    assert cm._connection_stats["pool_size"] == 42
+    assert cm.get_connection_stats()["pool_size"] == 42
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def test_read_pool_size_passed_to_read_connection_manager():
     )
     assert db._read_connection_manager is not None
     assert db._read_connection_manager._pool_size_override == 7
-    assert db._read_connection_manager._connection_stats["pool_size"] == 7
+    assert db._read_connection_manager.get_connection_stats()["pool_size"] == 7
 
 
 # ---------------------------------------------------------------------------

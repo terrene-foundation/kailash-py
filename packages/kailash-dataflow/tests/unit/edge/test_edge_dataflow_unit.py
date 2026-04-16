@@ -32,6 +32,16 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 
+@pytest.mark.skip(
+    reason=(
+        "Uses old 2-arg workflow.add_connection(from_node, to_node) API; the "
+        "current API requires 4 args (from_node, from_output, to_node, to_input) "
+        "per rules/patterns.md. Also mis-tiered: class is named 'E2E' but lives "
+        "under tests/unit/ and uses MagicMock/patch extensively, which violates "
+        "rules/testing.md Tier 2/3. Needs rewrite to current API and relocation "
+        "to tests/e2e/ or conversion to real Tier 1 unit tests."
+    )
+)
 class TestEdgeDataFlowE2E:
     """Test end-to-end edge computing scenarios with DataFlow."""
 

@@ -24,22 +24,19 @@ class TestTransactionNodeImplementation:
         # Import DataFlow transaction node
         from dataflow.nodes.transaction_nodes import TransactionScopeNode
 
-        # Mock DataFlow instance and connection
+        # Mock DataFlow instance and adapter
         mock_dataflow = Mock()
-        mock_connection = AsyncMock()
-        mock_transaction = Mock()  # Regular mock, not AsyncMock
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
-        # Set up async mocks correctly
-        async def mock_get_connection():
-            return mock_connection
+        mock_adapter = AsyncMock()
+        mock_transaction_cm = AsyncMock()
+        mock_transaction = AsyncMock()
+        mock_transaction_cm.__aenter__.return_value = mock_transaction
+        mock_adapter.transaction = Mock(return_value=mock_transaction_cm)
 
-        # The transaction object should be a regular mock with async methods
-        mock_transaction.start = AsyncMock()
-        # Mock the transaction() method to return the mock_transaction (not a coroutine)
-        mock_connection.transaction = Mock(return_value=mock_transaction)
-        mock_connection.execute = AsyncMock()
-
-        mock_dataflow.get_connection = mock_get_connection
+        mock_db_node = Mock()
+        mock_db_node.adapter = mock_adapter
+        mock_dataflow._get_cached_db_node = Mock(return_value=mock_db_node)
 
         # Create node and set workflow context
         node = TransactionScopeNode()
@@ -48,10 +45,14 @@ class TestTransactionNodeImplementation:
         # Execute the node
         result = node.execute(isolation_level="READ_COMMITTED", timeout=30)
 
-        # Verify transaction was stored in context
-        assert "transaction_connection" in node._workflow_context
+        # Verify transaction was stored in context (current contract)
         assert "active_transaction" in node._workflow_context
-        assert node._workflow_context["active_transaction"] == mock_transaction
+        assert "transaction_context_manager" in node._workflow_context
+        assert "transaction_id" in node._workflow_context
+        assert node._workflow_context["active_transaction"] is mock_transaction
+        assert (
+            node._workflow_context["transaction_context_manager"] is mock_transaction_cm
+        )
 
         # Verify result
         assert result["status"] == "started"
@@ -61,25 +62,28 @@ class TestTransactionNodeImplementation:
         """Test TransactionCommitNode commits transaction from context."""
         from dataflow.nodes.transaction_nodes import TransactionCommitNode
 
-        # Mock transaction and connection
-        mock_transaction = Mock()
-        mock_connection = Mock()
-
-        # Set up async methods
+        # Mock transaction and context manager (current contract)
+        mock_transaction = AsyncMock()
         mock_transaction.commit = AsyncMock()
-        mock_connection.close = AsyncMock()
+        mock_txn_ctx = AsyncMock()
+        mock_txn_ctx.__aexit__ = AsyncMock(return_value=None)
 
         node = TransactionCommitNode()
         node._workflow_context = {
             "active_transaction": mock_transaction,
-            "transaction_connection": mock_connection,
+            "transaction_context_manager": mock_txn_ctx,
+            "transaction_id": "tx_test123",
         }
 
         result = node.execute()
 
         # Verify context was cleaned up (set to None, not removed)
         assert node._workflow_context["active_transaction"] is None
-        assert node._workflow_context["transaction_connection"] is None
+        assert node._workflow_context["transaction_context_manager"] is None
+        assert node._workflow_context["transaction_id"] is None
+
+        # Verify commit was actually called
+        mock_transaction.commit.assert_awaited_once()
 
         # Verify result
         assert result["status"] == "committed"
@@ -88,18 +92,17 @@ class TestTransactionNodeImplementation:
         """Test TransactionRollbackNode rolls back transaction from context."""
         from dataflow.nodes.transaction_nodes import TransactionRollbackNode
 
-        # Mock transaction and connection
-        mock_transaction = Mock()
-        mock_connection = Mock()
-
-        # Set up async methods
+        # Mock transaction and context manager (current contract)
+        mock_transaction = AsyncMock()
         mock_transaction.rollback = AsyncMock()
-        mock_connection.close = AsyncMock()
+        mock_txn_ctx = AsyncMock()
+        mock_txn_ctx.__aexit__ = AsyncMock(return_value=None)
 
         node = TransactionRollbackNode()
         node._workflow_context = {
             "active_transaction": mock_transaction,
-            "transaction_connection": mock_connection,
+            "transaction_context_manager": mock_txn_ctx,
+            "transaction_id": "tx_test123",
             "rollback_reason": "User requested",
         }
 
@@ -107,7 +110,10 @@ class TestTransactionNodeImplementation:
 
         # Verify context was cleaned up (set to None, not removed)
         assert node._workflow_context["active_transaction"] is None
-        assert node._workflow_context["transaction_connection"] is None
+        assert node._workflow_context["transaction_context_manager"] is None
+
+        # Verify rollback was actually called
+        mock_transaction.rollback.assert_awaited_once()
 
         # Verify result
         assert result["status"] == "rolled_back"
