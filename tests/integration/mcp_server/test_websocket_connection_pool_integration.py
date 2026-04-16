@@ -39,7 +39,7 @@ class TestWebSocketConnectionPoolIntegration:
         connection_count = 0
         active_connections = set()
 
-        async def mcp_handler(websocket, path):
+        async def mcp_handler(websocket):
             nonlocal connection_count
             connection_count += 1
             connection_id = id(websocket)
@@ -119,7 +119,7 @@ class TestWebSocketConnectionPoolIntegration:
         server_connections = {}
 
         async def tracking_handler(server_id):
-            async def handler(websocket, path):
+            async def handler(websocket):
                 if server_id not in server_connections:
                     server_connections[server_id] = 0
                 server_connections[server_id] += 1
@@ -179,7 +179,7 @@ class TestWebSocketConnectionPoolIntegration:
         connection_counts = {}
 
         async def counting_handler(server_id):
-            async def handler(websocket, path):
+            async def handler(websocket):
                 if server_id not in connection_counts:
                     connection_counts[server_id] = 0
                 connection_counts[server_id] += 1
@@ -235,7 +235,7 @@ class TestWebSocketConnectionPoolIntegration:
         connection_count = 0
         should_fail_health = False
 
-        async def health_check_handler(websocket, path):
+        async def health_check_handler(websocket):
             nonlocal connection_count
             connection_count += 1
 
@@ -282,7 +282,7 @@ class TestWebSocketConnectionPoolIntegration:
         concurrent_requests = set()
         max_concurrent = 0
 
-        async def concurrent_handler(websocket, path):
+        async def concurrent_handler(websocket):
             nonlocal request_count, max_concurrent
 
             async for message in websocket:
@@ -343,7 +343,7 @@ class TestWebSocketConnectionPoolIntegration:
         """Test that idle connections are cleaned up."""
         cleanup_happened = False
 
-        async def cleanup_handler(websocket, path):
+        async def cleanup_handler(websocket):
             nonlocal cleanup_happened
             try:
                 async for message in websocket:
@@ -381,7 +381,7 @@ class TestWebSocketConnectionPoolIntegration:
         # Create a server that tracks timing
         timing_results = {"with_pooling": [], "without_pooling": []}
 
-        async def timing_handler(websocket, path):
+        async def timing_handler(websocket):
             async for message in websocket:
                 data = json.loads(message)
                 response = {
@@ -427,7 +427,7 @@ class TestWebSocketConnectionPoolIntegration:
         error_count = 0
         should_error = True
 
-        async def error_handler(websocket, path):
+        async def error_handler(websocket):
             nonlocal error_count, should_error
 
             if should_error:

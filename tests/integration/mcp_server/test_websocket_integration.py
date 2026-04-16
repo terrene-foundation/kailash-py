@@ -73,7 +73,7 @@ class TestWebSocketTransportWithRealServers:
         """
 
         # Create a simple WebSocket MCP server
-        async def mcp_handler(websocket, path):
+        async def mcp_handler(websocket):
             async for message in websocket:
                 data = json.loads(message)
 
@@ -134,7 +134,7 @@ class TestWebSocketTransportWithRealServers:
         """Test complete WebSocket workflow: discovery and multiple tool calls."""
 
         # Create a WebSocket server that handles the full MCP protocol
-        async def full_mcp_handler(websocket, path):
+        async def full_mcp_handler(websocket):
             async for message in websocket:
                 data = json.loads(message)
 
@@ -233,7 +233,7 @@ class TestWebSocketTransportWithRealServers:
         """Test WebSocket timeout handling with real slow server."""
 
         # Create a slow WebSocket server
-        async def slow_handler(websocket, path):
+        async def slow_handler(websocket):
             async for message in websocket:
                 # Deliberately slow - wait longer than client timeout
                 await asyncio.sleep(2.0)
@@ -311,7 +311,7 @@ class TestWebSocketTransportFeatures:
         """Test that WebSocket operations update metrics with real server."""
 
         # Create a minimal WebSocket server for metrics testing
-        async def metrics_handler(websocket, path):
+        async def metrics_handler(websocket):
             async for message in websocket:
                 data = json.loads(message)
                 response = {"jsonrpc": "2.0", "id": data["id"], "result": {"tools": []}}
