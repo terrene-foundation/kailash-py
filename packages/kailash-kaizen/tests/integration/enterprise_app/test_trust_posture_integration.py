@@ -54,7 +54,7 @@ class TestTrustPostureMapperIntegration:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
         assert result.verification_details["agent_id"] == "trusted-agent-001"
 
     def test_supervised_flow_for_sensitive_capability(self):
@@ -107,7 +107,9 @@ class TestTrustPostureMapperIntegration:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        # approval_required → TOOL (autonomy_level=2): human and agent co-plan,
+        # agent executes approved plans. See TrustPostureMapper.map_verification_result.
+        assert result.posture == TrustPosture.TOOL
         assert result.constraints.approval_required is True
 
     def test_blocked_flow(self):
@@ -121,7 +123,7 @@ class TestTrustPostureMapperIntegration:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.BLOCKED
+        assert result.posture == TrustPosture.PSEUDO
         assert result.reason == "Access denied by policy"
 
     def test_posture_with_complex_constraints(self):
@@ -141,9 +143,9 @@ class TestTrustPostureMapperIntegration:
 
         result = mapper.map_verification_result(verification)
 
-        # With trust_level="normal" and audit_required=True,
-        # posture is ASSISTED (audit logging but no blocking)
-        assert result.posture == TrustPosture.ASSISTED
+        # With trust_level="normal" and audit_required=True (no approval),
+        # mapper returns DELEGATING (audit logging, real-time monitoring, no blocking).
+        assert result.posture == TrustPosture.DELEGATING
         assert result.constraints.audit_required is True
         assert "max_actions" in result.constraints.metadata
 
@@ -154,7 +156,7 @@ class TestTrustPostureMapperIntegration:
         # Start with no trust
         no_trust = VerificationResult(valid=False)
         result1 = mapper.map_verification_result(no_trust)
-        assert result1.posture == TrustPosture.BLOCKED
+        assert result1.posture == TrustPosture.PSEUDO
 
         # Low trust
         low_trust = VerificationResult(
@@ -178,7 +180,7 @@ class TestTrustPostureMapperIntegration:
             constraints={"trust_level": "high"},
         )
         result4 = mapper.map_verification_result(high_trust)
-        assert result4.posture == TrustPosture.FULL_AUTONOMY
+        assert result4.posture == TrustPosture.AUTONOMOUS
 
 
 class TestPostureConstraintsIntegration:
@@ -215,8 +217,10 @@ class TestPostureConstraintsIntegration:
             require_human_approval_for=["sensitive_action"],
         )
 
+        # "Sensitive action requires approval" maps to TOOL posture —
+        # human and agent co-plan, human approves each execution.
         result = PostureResult(
-            posture=TrustPosture.HUMAN_DECIDES,
+            posture=TrustPosture.TOOL,
             constraints=constraints,
             reason="Sensitive action requires approval",
             verification_details={
@@ -228,7 +232,7 @@ class TestPostureConstraintsIntegration:
 
         data = result.to_dict()
 
-        assert data["posture"] == "human_decides"
+        assert data["posture"] == "tool"
         assert data["constraints"]["audit_required"] is True
         assert data["reason"] == "Sensitive action requires approval"
         assert data["verification_details"]["agent_id"] == "agent-001"
@@ -248,7 +252,7 @@ class TestConvenienceFunctionsIntegration:
 
         result = map_verification_to_posture(verification)
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
 
     def test_map_verification_with_capability(self):
         """Test with capability filter."""
@@ -282,35 +286,35 @@ class TestConvenienceFunctionsIntegration:
 
     def test_get_posture_for_action_all_cases(self):
         """Test get_posture_for_action for all cases."""
-        # Blocked
-        assert get_posture_for_action(is_allowed=False) == TrustPosture.BLOCKED
+        # Blocked: is_allowed=False → PSEUDO (lowest autonomy)
+        assert get_posture_for_action(is_allowed=False) == TrustPosture.PSEUDO
 
-        # Human decides
+        # Human decides: approval required → TOOL (agent proposes, human approves)
         assert (
             get_posture_for_action(
                 is_allowed=True,
                 requires_approval=True,
             )
-            == TrustPosture.HUMAN_DECIDES
+            == TrustPosture.TOOL
         )
 
-        # Assisted (audit required but no approval needed)
+        # Audit required: → DELEGATING (agent executes, human monitors real-time)
         assert (
             get_posture_for_action(
                 is_allowed=True,
                 requires_audit=True,
             )
-            == TrustPosture.ASSISTED
+            == TrustPosture.DELEGATING
         )
 
-        # Full autonomy
+        # Full autonomy: no audit, no approval → AUTONOMOUS
         assert (
             get_posture_for_action(
                 is_allowed=True,
                 requires_audit=False,
                 requires_approval=False,
             )
-            == TrustPosture.FULL_AUTONOMY
+            == TrustPosture.AUTONOMOUS
         )
 
 
@@ -347,14 +351,14 @@ class TestMapToPostureIntegration:
             is_valid=True,
             trust_level="high",
         )
-        assert result_high.posture == TrustPosture.FULL_AUTONOMY
+        assert result_high.posture == TrustPosture.AUTONOMOUS
 
         # Full trust
         result_full = mapper.map_to_posture(
             is_valid=True,
             trust_level="full",
         )
-        assert result_full.posture == TrustPosture.FULL_AUTONOMY
+        assert result_full.posture == TrustPosture.AUTONOMOUS
 
     def test_map_to_posture_with_reason(self):
         """Test custom reason propagation."""
@@ -366,7 +370,7 @@ class TestMapToPostureIntegration:
             reason="Custom reason for high trust",
         )
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
         assert result.reason == "Custom reason for high trust"
 
 
@@ -436,7 +440,8 @@ class TestPostureIntegrationScenarios:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        # human_in_loop=True takes the approval_required branch → TOOL.
+        assert result.posture == TrustPosture.TOOL
         assert "approval_workflow" in result.constraints.metadata
 
     def test_audit_compliance_scenario(self):
@@ -456,7 +461,7 @@ class TestPostureIntegrationScenarios:
         result = mapper.map_verification_result(verification)
 
         # With audit_required=True and default trust_level (normal),
-        # posture is ASSISTED (audit logging without blocking)
-        assert result.posture == TrustPosture.ASSISTED
+        # mapper returns DELEGATING (real-time monitoring, no blocking).
+        assert result.posture == TrustPosture.DELEGATING
         assert result.constraints.audit_required is True
         assert "compliance_policy" in result.constraints.metadata
