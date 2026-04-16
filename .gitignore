@@ -90,6 +90,11 @@ test-env
 *.db-wal
 *.db-shm
 default.db
+# Stray SQLite files from tests that pass `:memory:<suffix>` as a non-URI
+# database name. The literal string lands on disk as a real file. Real fix
+# tracked separately (convert to URI shared-cache form per rules/patterns.md
+# § SQLite Connection Management); this ignore prevents accidental commits.
+:memory:*
 
 # Kaizen checkpoints (local agent state)
 .kaizen/
