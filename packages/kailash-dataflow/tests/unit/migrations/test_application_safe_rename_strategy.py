@@ -417,6 +417,7 @@ class TestRenameDeploymentCoordinator:
                     DeploymentPhase.POST_RENAME_VALIDATION,
                 ],
                 health_check_endpoints=["http://app1/health", "http://app2/health"],
+                check_interval=0.01,  # skip the 2s default sleep between phases
             )
         )
 
