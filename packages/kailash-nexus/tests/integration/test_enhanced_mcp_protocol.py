@@ -12,6 +12,8 @@ import time
 from contextlib import closing
 from typing import Any, Dict
 
+import importlib.util
+
 import pytest
 import pytest_asyncio
 import websockets
@@ -20,18 +22,20 @@ from nexus import Nexus
 
 # Test Component 2: Integration Tests for MCP Protocol Features
 #
-# These tests exercise the MCP protocol over WebSocket. The production
-# WebSocket-capable MCP server is only available when fastmcp is installed
-# (see kailash_mcp/server.py:577 — fastmcp is the preferred transport
-# backend; without it, the MCPChannel run_in_executor path defaults to
-# STDIO and cannot serve WebSocket, producing a TaskGroup error at
-# startup). Skip the whole module when fastmcp is missing rather than
-# run 12 tests that will all fail with the same root cause.
-pytest.importorskip(
-    "fastmcp",
-    reason="fastmcp is required for MCP-over-WebSocket integration tests; "
-    "the official mcp.server.FastMCP fallback does not expose a WebSocket "
-    "transport (kailash_mcp/server.py:1636 + MCPChannel.start path).",
+# TestMCPProtocolIntegration opens real WebSocket connections to the
+# Nexus MCP port and speaks full JSON-RPC MCP. The production WebSocket
+# transport for MCP is only wired when fastmcp is installed
+# (kailash_mcp/server.py:577 prefers fastmcp; the mcp.server.FastMCP
+# fallback routes MCPServer.run() to STDIO and produces a TaskGroup
+# error when MCPChannel tries to dispatch it). TestMCPAuthentication
+# and TestMCPHealthAndMetrics only exercise the construction path
+# (attributes on the Nexus instance, health_check() dict) — they do
+# NOT require fastmcp and keep running.
+_FASTMCP_AVAILABLE = importlib.util.find_spec("fastmcp") is not None
+_REQUIRES_FASTMCP_REASON = (
+    "fastmcp is required for MCP-over-WebSocket protocol tests; "
+    "the official mcp.server.FastMCP fallback (kailash_mcp/server.py:583-588) "
+    "does not serve WebSocket — MCPChannel.start routes run() to STDIO."
 )
 
 
@@ -48,6 +52,7 @@ def find_free_port(start_port: int = 8000) -> int:
     raise RuntimeError(f"Could not find free port starting from {start_port}")
 
 
+@pytest.mark.skipif(not _FASTMCP_AVAILABLE, reason=_REQUIRES_FASTMCP_REASON)
 class TestMCPProtocolIntegration:
     """Test full MCP protocol integration with real components."""
 
