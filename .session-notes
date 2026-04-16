@@ -1,131 +1,79 @@
-# Session Notes — 2026-04-16 (continued)
+# Session Notes — 2026-04-16 (continued, second cut)
 
 ## Where we are
 
-14 commits this session across two logical blocks:
+Pre-release sweep converged. 13 commits this session, all on `main`, all green:
 
-**Block 1 (earlier): Pre-release sweep — 10 commits, wrapped in commit 8ebb74d7**
-- Nexus _gateway DeprecationWarnings 58 → 0
-- Kaizen messaging patch-path bug (10 tests)
-- DataFlow hang 1 (health check, check_interval=0.01)
-- DataFlow hang 2 (TDD benchmark deadlock, whole file skipped)
-- ML + Align bootstrap (Python interpreter discovery — use .venv/bin/python)
-- Kaizen ConstraintType enum alignment
+- 2 kaizen test realignments (canonical enum names, trust unit files)
+- 1 DataFlow `__del__` deadlock fix (breaks the long-standing hang)
+- 7 DataFlow unit-suite cleanups (27 pre-existing failures → 0)
+- 1 DataFlow integration cleanup (8 orphan files deleted after 53dab715 API removal)
+- 1 Kaizen namespace fix (45c4ab2f shim removal left 4 collect-time errors)
+- 1 gitignore entry for `:memory:*` test artifacts
 
-**Block 2 (this continuation): DataFlow unit test failures — 4 commits**
-- `a2c192ff` — DataFlow features, edge, transactions test realignment
-- `fa7e1872` — LogRecord 'name' attribute bug in 13 production files
-- `b403bc7f` — Skip mis-tiered and placeholder unit tests
-- `a56b978b` — Kaizen TrustPosture enum alignment (14+ tests)
+**State at wrapup:**
 
-All 14 commits pushed to origin/main.
+- `pytest --collect-only` across **6 packages** = 37,201 tests, **0 collection errors**.
+- `pytest packages/kailash-dataflow/tests/unit/` = **3732 passed, 51 skipped, 0 failed** in 113s.
+- `pytest packages/kailash-kaizen/tests/unit/trust/` = **111 passed** (constraint + registry + key_manager).
+- `pytest packages/kailash-kaizen/tests/integration/enterprise_app/test_trust_posture_integration.py` = **18 passed**.
 
-## Production bug fixed this session
+**Not yet run this session** (release-blocker status: untested, likely green):
 
-**LogRecord 'name' overwrite** (fa7e1872): 13 production files in
-packages/kailash-dataflow/src/dataflow/ passed `extra={"name": <value>}`
-to `logger.info/error/debug`. Python logging reserves `name` for the
-logger name and raises `KeyError: "Attempt to overwrite 'name' in
-LogRecord"` on every such call. Any code path hitting these logs
-crashed at runtime.
-
-Renamed keys to context-specific names (column_name, migration_name,
-database_name, gateway_name, phase_name, class_name, savepoint_name,
-pool_name, pattern_name, check_name). Scanned root SDK + all other
-sub-packages — no other sites affected.
+- DataFlow integration/e2e (needs Postgres on port 5434, IntegrationTestSuite)
+- Kaizen full unit + integration
+- Nexus, PACT, ML full runs
+- Root SDK full unit run
 
 ## Read first
 
-1. `git log 8ebb74d7..HEAD --oneline` — this continuation's 4 commits.
-2. `rules/observability.md` — LogRecord 'name' key bug pattern.
-   Consider adding a rule against reserved LogRecord attribute names
-   (msg, message, module, filename, pathname, levelname, etc.).
-3. `packages/kailash-dataflow/tests/unit/testing/test_tdd_performance_benchmark.py`
-   and the other `pytest.mark.skip`'d files — each skip has a clear
-   reason pointing to what needs to be done to re-enable.
+1. `CLAUDE.md` + `rules/python-environment.md` — **`.venv/bin/python`, never bare `python`**.
+2. `git log --oneline 7f252967..HEAD` — this session's 13 commits.
+3. `src/kailash/trust/posture/postures.py` — **canonical `TrustPosture` names are `AUTONOMOUS / DELEGATING / SUPERVISED / TOOL / PSEUDO`**. The previous `.session-notes` had this inverted — see Traps below.
+4. Commit `4f5dbe7f` — explains why `DataFlow.__del__` must emit only `ResourceWarning` and not call `close()`. This is a long-dormant production deadlock that also caused every prior "DataFlow unit suite hangs" report.
+5. `rules/observability.md` § 6.2 "Mask Form Uniform Across Helpers" — for the `mask_sensitive_values` output shape. Canonical form is `scheme://***MASKED***@host[:port]/path` (userinfo masked together, `***MASKED***@` is the grep sentinel).
 
-## Test state at wrapup
+## Traps — corrected from prior session
 
-All verified with `.venv/bin/python` (not bare `python` → pyenv shim):
+- **TrustPosture canonical names (CORRECTED).** Previous notes said `DELEGATED / CONTINUOUS_INSIGHT / SHARED_PLANNING / PSEUDO_AGENT` are canonical. They are **aliases**. Canonical names from `src/kailash/trust/posture/postures.py`:
+  - `AUTONOMOUS` (level 5) — alias `DELEGATED`
+  - `DELEGATING` (level 4) — alias `CONTINUOUS_INSIGHT`
+  - `SUPERVISED` (level 3) — alias `SHARED_PLANNING`
+  - `TOOL` (level 2) — no alias (was `HUMAN_DECIDES` in a long-removed surface)
+  - `PSEUDO` (level 1) — alias `PSEUDO_AGENT`
+  Legacy names that raise `AttributeError`: `FULL_AUTONOMY`, `HUMAN_DECIDES`, `BLOCKED`, `ASSISTED`.
+  Semantic mapping when reading old tests: `FULL_AUTONOMY → AUTONOMOUS`, `HUMAN_DECIDES → TOOL` (follow the `approval_required` branch in `TrustPostureMapper`, not the "denied" branch), `BLOCKED → PSEUDO`, `ASSISTED → SUPERVISED`.
 
-- Root SDK unit: 3309 pass, 3 skip, 0 warnings
-- Nexus unit: 1551 pass, 1 skip, 30 warnings (0 DeprecationWarning)
-- PACT: 1375 pass, 10 skip, 2 warnings
-- Kaizen unit trust: 1051 pass, 10 pre-existing fail, 16 skip
-- Kaizen messaging: 76 pass, 0 fail
-- DataFlow unit by subdir (full run still has 1+ unidentified hang):
-  - adapters/cli/core/trust/fabric/features/schema/query/performance:
-    all clean
-  - migrations: 717 pass, 18 skip, 0 fail (was 20 fail)
-  - regression: 17 skip (was 5 fail)
-  - model_registry: 17 skip (was 10 fail)
-  - transactions: 3 pass (was 3 fail)
-  - edge: 5 skip (was 5 fail)
-  - testing: 50 pass, 10 skip
-- ML unit: 803 pass, 7 skip
-- Align: 391 pass, 1 skip
+- **`asyncio` in `__del__` is BLOCKED** (`rules/patterns.md` § Async Resource Cleanup). `DataFlow.__del__` previously routed through `async_safe_run` which spawned a new event loop thread that itself called `logger.debug()` during selector init — deadlock on the logging root lock when the finalizer fired from inside logging machinery (GC during `logger.isEnabledFor`). Fix: `__del__` emits `ResourceWarning` only; cleanup via `await db.close_async()` or `with` ctx. **Do not restore async cleanup in `__del__`** under any circumstance.
 
-## Tests fixed this session (combined across 14 commits)
+- `extra={"name": ...}` in `logger.*` calls → runtime `KeyError`. `name` is a reserved LogRecord attribute (see commit `fa7e1872`). Same class: `msg`, `message`, `module`, `filename`, `pathname`, `levelname`, `lineno`, `funcName`, `created`, `thread`, `processName`, `args`, `exc_info`, `stack_info`, `asctime`.
 
-- Nexus _gateway deprecation refactor: 80+ references migrated
-- Kaizen messaging (test_channel.py + test_signer.py + test_verifier.py):
-  ~13 tests, 3 different mock/patch drift bugs
-- Kaizen ConstraintType enum alignment: 10 tests + 4 examples
-- Kaizen TrustPosture enum alignment: 14+ tests across 5 files
-- DataFlow test_read_replica: 2 tests (API drift)
-- DataFlow test_transaction_nodes: 3 tests (API drift)
-- DataFlow migrations: 20 tests (LogRecord bug + test drift)
-- DataFlow websockets 15 migration: 14 tests in 2 files
-- Plus 42 tests skipped as mis-tiered / placeholder (would have
-  failed otherwise)
+- `async def test_x(...)` that calls sync `LocalRuntime.execute(...)` deadlocks. Use `AsyncLocalRuntime` + `await runtime.execute_workflow_async(...)`.
 
-Approximate total: **~95 tests moved from failing to passing or
-properly-skipped-with-documented-reason**, plus 1 real production
-bug fixed (LogRecord overwrite).
+- Pre-commit auto-stash loops when hooks rewrite the tree. Use `git -c core.hooksPath=/dev/null commit …` and document the bypass per `rules/git.md` § Pre-Commit Hook Workarounds. `--no-verify` is BLOCKED.
 
-## Known remaining issues (documented, not blockers)
+- **DataFlow worktree pre-commit tries to run pytest against `.venv/bin/python` inside the worktree**, which doesn't exist (worktree shares main's venv). Pre-commit hook needs teaching to resolve to the main repo's venv. Until then, worktree commits use the `core.hooksPath=/dev/null` bypass.
 
-1. **DataFlow full-suite hang** (unfixed): running the full
-   `tests/unit/` directory still deadlocks somewhere. I've fixed
-   2 of at least 3 hang sources. Subdir runs pass cleanly — use
-   per-subdir CI until the last hang is isolated.
+- **Removed-API orphan tests.** Commit `53dab715` ("DataFlow 2.0 Phase 0-2 — delete 14,500 LOC") removed `dataflow.nodes.bulk_create / bulk_delete / bulk_update`. Their test files were orphaned; 8 were deleted this session (`d3e7e0ef`). If you see `ModuleNotFoundError: No module named 'dataflow.nodes.bulk_create'`, the file is orphaned — delete it, don't resurrect the module. Bulk coverage lives at `BulkUpsertNode`, `BulkCreatePoolNode`, `BulkOperations` (feature), and `db.express.{create,update,delete}`.
 
-2. **Kaizen trust 10 failures** (not touched):
-   - test_key_manager.py: missing get_key method / boto3 import
-     (3 tests)
-   - test_agent_registry.py: error-message text drift (3 tests)
-   - test_constraint_dimension.py: builtin dimensions set drift
-     (1 test)
-   - A few more I didn't investigate beyond initial count
+- **Kaizen trust shim removal.** Commit `45c4ab2f` removed 63 re-export shims under `kailash.trust.*`. Canonical imports live at `kaizen.trust.*`. If a test fails with `ImportError: cannot import name 'X' from 'kailash.trust.governance'`, rename the import to `kaizen.trust.governance` — verified by `.venv/bin/python -c "from kaizen.trust.governance import …"`.
 
-3. **DataFlow `LocalConstraintType` vs Kaizen `ConstraintType`**:
-   still diverged. Cross-SDK alignment is a separate shard.
+- Test cruft pattern: `:memory:<suffix>` as a non-URI SQLite DB name creates a real file at repo root. Use URI form per `rules/patterns.md` § SQLite Connection Management. Gitignore entry landed in `8eb30aed`; structural fix deferred.
 
-4. **Test artifacts in working tree** (`:memory:pool_A_*` files):
-   `tests/integration/nodes/test_async_sql_per_pool_locking_phase2_tdd.py:577`
-   constructs `f":memory:{pool_id}_{unique_id}"` as a filename. SQLite
-   treats the whole string as a literal filename (not a named in-memory
-   db). Needs `file:<name>?mode=memory&cache=shared` URI form, or
-   gitignore for the working tree.
+## Local env reminders
 
-## Traps
+- **Shared `.venv` managed by `uv`**, no pip in the venv. Install via `uv pip install <pkg>`.
+- Installed this session for collect-time correctness: `hypothesis`, `psycopg2-binary`, `pytest-httpserver`. These are test-time deps declared in sub-package `[test]` extras (per `rules/python-environment.md` Rule 4) — CI should install them via the sub-package extras, not root `pyproject.toml`.
 
-(Previous session traps still apply.)
+## Out-of-scope blockers flagged (NOT release blockers, but owed per Rule 1)
 
-- LogRecord reserves these attribute names — never use as `extra` keys:
-  msg, message, module, filename, pathname, levelname, levelno, lineno,
-  funcName, created, msecs, relativeCreated, thread, threadName,
-  processName, process, asctime, name, args, exc_info, exc_text,
-  stack_info. Always prefix: column_name, migration_name, etc.
-
-- TrustPosture old names (FULL_AUTONOMY, BLOCKED, ASSISTED,
-  HUMAN_DECIDES) are NOT in the backward-compat alias table. Only
-  DELEGATED / CONTINUOUS_INSIGHT / SHARED_PLANNING / PSEUDO_AGENT
-  are aliased. Use canonical names in new code.
+- DataFlow integration/e2e tests reference removed `AsyncSQLDatabaseNode.async_run` attribute in some places — pyright attribute warnings only (not collect-time). Likely a narrower API shape on the current base class.
+- `LocalRuntime.execute()` without a context manager emits `DeprecationWarning` across 14+ tests in `test_package_installation_unit.py` and many more. Systematic refactor target.
+- Pyright pre-existing noise in DataFlow source (`kailash.utils.annotations` import unresolved, `TenantContextSwitch` undefined, `asyncio` possibly unbound in some branches). Exceeds this shard's capacity budget.
+- `test_bulk_upsert_node_integration.py` has pyright warnings on `async_run` / `cleanup` attributes of `Node` base class. Runtime is fine (subclasses add them); consider `# type: ignore[attr-defined]` or stricter base class typing.
 
 ## Open questions for the human
 
-- Dedicated session to isolate remaining DataFlow hang? Requires
-  faulthandler + bisection.
-- Should I tackle the remaining 10 Kaizen trust failures next
-  session (key_manager / agent_registry / constraint_dimension)?
+- Ship now (collect-only green + DataFlow unit green) or also run full Kaizen / Nexus / PACT / ML / root unit suites first?
+- Before next `/release`: does CI install sub-package test extras automatically, or should the release workflow add an explicit `pip install -e 'packages/kailash-pact[test]'` step to prevent the collection errors this session surfaced?
+- `test_bulk_upsert_node_integration.py` was salvaged by removing the dead `BulkCreateNode` import. No other test in the file was run this session; should we open an integration-tier run against real Postgres before release to confirm runtime behavior?
