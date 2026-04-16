@@ -111,7 +111,7 @@ class TrustedAgentWithPersistence:
             for i, constraint in enumerate(constraints):
                 c = Constraint(
                     id=f"const-{self.agent_id}-{i}",
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     value=constraint,
                     source=authority_id,
                     priority=1,

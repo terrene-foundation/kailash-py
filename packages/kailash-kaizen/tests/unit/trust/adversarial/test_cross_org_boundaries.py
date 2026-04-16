@@ -113,7 +113,7 @@ def create_trust_chain(
         active_constraints=[
             Constraint(
                 id=f"con-{uuid4()}",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.OPERATIONAL,
                 value=f"org_scope:{org_id}" if org_id else "global",
                 source="genesis",
             )
@@ -184,7 +184,7 @@ class TestCrossOrgDelegationWithoutExplicitGrant:
         org_a_chain.constraint_envelope.active_constraints.append(
             Constraint(
                 id=f"con-{uuid4()}",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="org_scope:org-a",
                 source="genesis",
             )
@@ -366,13 +366,13 @@ class TestCrossOrgConstraintIsolation:
             [
                 Constraint(
                     id=f"con-{uuid4()}",
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     value="cost_limit=1000",
                     source="org-a-policy",
                 ),
                 Constraint(
                     id=f"con-{uuid4()}",
-                    constraint_type=ConstraintType.TIME_WINDOW,
+                    constraint_type=ConstraintType.TEMPORAL,
                     value="business_hours_only",
                     source="org-a-policy",
                 ),
@@ -390,7 +390,7 @@ class TestCrossOrgConstraintIsolation:
         org_b_chain.constraint_envelope.active_constraints.append(
             Constraint(
                 id=f"con-{uuid4()}",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.OPERATIONAL,
                 value="cost_limit=5000",  # Different limit
                 source="org-b-policy",
             )
@@ -791,7 +791,7 @@ class TestDelegationInheritsOrgFromParent:
         parent_chain.constraint_envelope.active_constraints.append(
             Constraint(
                 id=f"con-{uuid4()}",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="org_scope:org-a",
                 source="genesis",
             )

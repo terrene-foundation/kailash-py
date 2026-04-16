@@ -260,7 +260,7 @@ class TestConstraintEvaluation:
         """Business hours constraint passes during business hours."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.TIME_WINDOW,
+            constraint_type=ConstraintType.TEMPORAL,
             value="business_hours_only",
             source="genesis",
         )
@@ -278,7 +278,7 @@ class TestConstraintEvaluation:
         """Business hours constraint fails outside business hours."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.TIME_WINDOW,
+            constraint_type=ConstraintType.TEMPORAL,
             value="business_hours_only",
             source="genesis",
         )
@@ -297,7 +297,7 @@ class TestConstraintEvaluation:
         """Read only constraint passes for read actions."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             value="read_only",
             source="genesis",
         )
@@ -312,7 +312,7 @@ class TestConstraintEvaluation:
         """Read only constraint fails for write actions."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             value="read_only",
             source="genesis",
         )
@@ -328,7 +328,7 @@ class TestConstraintEvaluation:
         """No PII export constraint passes when no PII present."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             value="no_pii_export",
             source="genesis",
         )
@@ -343,7 +343,7 @@ class TestConstraintEvaluation:
         """No PII export constraint fails when PII present."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             value="no_pii_export",
             source="genesis",
         )
@@ -385,7 +385,7 @@ class TestConstraintEvaluation:
             active_constraints=[
                 Constraint(
                     id="con-001",
-                    constraint_type=ConstraintType.ACTION_RESTRICTION,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     value="read_only",
                     source="genesis",
                 ),

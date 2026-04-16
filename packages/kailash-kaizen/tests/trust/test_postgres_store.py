@@ -124,7 +124,7 @@ def sample_trust_chain(
         active_constraints=[
             Constraint(
                 id="const-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.OPERATIONAL,
                 value={"max_api_calls": 1000},
                 source="org-acme",
                 priority=1,

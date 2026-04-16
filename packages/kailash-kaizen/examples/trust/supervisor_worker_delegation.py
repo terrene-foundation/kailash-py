@@ -110,12 +110,12 @@ async def main():
             ],
             constraints=[
                 Constraint(
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     name="max_concurrent_workers",
                     value=5,
                 ),
                 Constraint(
-                    constraint_type=ConstraintType.TIME_WINDOW,
+                    constraint_type=ConstraintType.TEMPORAL,
                     name="business_hours",
                     value={"start": "09:00", "end": "18:00"},
                 ),
@@ -162,13 +162,13 @@ async def main():
             constraints=[
                 # Tighter batch size limit
                 Constraint(
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     name="max_batch_size",
                     value=2000,  # Reduced from 10000
                 ),
                 # Tighter time window
                 Constraint(
-                    constraint_type=ConstraintType.TIME_WINDOW,
+                    constraint_type=ConstraintType.TEMPORAL,
                     name="business_hours",
                     value={"start": "10:00", "end": "16:00"},  # Stricter hours
                 ),
@@ -210,7 +210,7 @@ async def main():
             capabilities=["process_data"],
             constraints=[
                 Constraint(
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     name="max_batch_size",
                     value=20000,  # LOOSER than supervisor's 10000 - NOT ALLOWED!
                 ),

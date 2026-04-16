@@ -51,12 +51,14 @@ class TestEnums:
         assert ActionResult.PARTIAL.value == "partial"
 
     def test_constraint_type_values(self):
-        """ConstraintType enum has correct values."""
-        assert ConstraintType.RESOURCE_LIMIT.value == "resource_limit"
-        assert ConstraintType.TIME_WINDOW.value == "time_window"
-        assert ConstraintType.DATA_SCOPE.value == "data_scope"
-        assert ConstraintType.ACTION_RESTRICTION.value == "action_restriction"
+        """ConstraintType enum has correct values (EATP canonical dimensions)."""
+        assert ConstraintType.FINANCIAL.value == "financial"
+        assert ConstraintType.OPERATIONAL.value == "operational"
+        assert ConstraintType.TEMPORAL.value == "temporal"
+        assert ConstraintType.DATA_ACCESS.value == "data_access"
+        assert ConstraintType.COMMUNICATION.value == "communication"
         assert ConstraintType.AUDIT_REQUIREMENT.value == "audit_requirement"
+        assert ConstraintType.REASONING_REQUIRED.value == "reasoning_required"
 
     def test_verification_level_values(self):
         """VerificationLevel enum has correct values."""
@@ -237,13 +239,13 @@ class TestConstraint:
         """Constraint can be created with all fields."""
         constraint = Constraint(
             id="con-001",
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             value="read_only",
             source="cap-001",
             priority=100,
         )
         assert constraint.id == "con-001"
-        assert constraint.constraint_type == ConstraintType.ACTION_RESTRICTION
+        assert constraint.constraint_type == ConstraintType.OPERATIONAL
         assert constraint.value == "read_only"
         assert constraint.priority == 100
 
@@ -257,14 +259,14 @@ class TestConstraintEnvelope:
         constraints = [
             Constraint(
                 id="con-001",
-                constraint_type=ConstraintType.ACTION_RESTRICTION,
+                constraint_type=ConstraintType.OPERATIONAL,
                 value="read_only",
                 source="cap-001",
                 priority=100,
             ),
             Constraint(
                 id="con-002",
-                constraint_type=ConstraintType.TIME_WINDOW,
+                constraint_type=ConstraintType.TEMPORAL,
                 value={"start": "09:00", "end": "17:00"},
                 source="gen-001",
                 priority=80,
@@ -296,7 +298,7 @@ class TestConstraintEnvelope:
     def test_envelope_get_constraints_by_type(self, envelope):
         """get_constraints_by_type filters correctly."""
         action_constraints = envelope.get_constraints_by_type(
-            ConstraintType.ACTION_RESTRICTION
+            ConstraintType.OPERATIONAL
         )
         assert len(action_constraints) == 1
         assert action_constraints[0].value == "read_only"

@@ -125,19 +125,19 @@ async def main():
     constraints = [
         # Resource limits
         Constraint(
-            constraint_type=ConstraintType.RESOURCE_LIMIT,
+            constraint_type=ConstraintType.OPERATIONAL,
             name="max_api_calls",
             value=1000,
             metadata={"period": "hourly", "reset_policy": "rolling"},
         ),
         Constraint(
-            constraint_type=ConstraintType.RESOURCE_LIMIT,
+            constraint_type=ConstraintType.OPERATIONAL,
             name="max_records_per_query",
             value=10000,
         ),
         # Time window
         Constraint(
-            constraint_type=ConstraintType.TIME_WINDOW,
+            constraint_type=ConstraintType.TEMPORAL,
             name="business_hours",
             value={
                 "start": "09:00",
@@ -148,14 +148,14 @@ async def main():
         ),
         # Data scope
         Constraint(
-            constraint_type=ConstraintType.DATA_SCOPE,
+            constraint_type=ConstraintType.DATA_ACCESS,
             name="allowed_databases",
             value=["sales_db", "analytics_db"],
             metadata={"deny_list": ["hr_db", "finance_db"]},
         ),
         # Action restriction
         Constraint(
-            constraint_type=ConstraintType.ACTION_RESTRICTION,
+            constraint_type=ConstraintType.OPERATIONAL,
             name="read_only",
             value=True,
             metadata={"allowed_actions": ["SELECT", "READ", "GET"]},
@@ -304,13 +304,13 @@ async def main():
         constraints=[
             # Tighter resource limit
             Constraint(
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.OPERATIONAL,
                 name="max_records_per_query",
                 value=1000,  # Tightened from 10000
             ),
             # Tighter data scope
             Constraint(
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 name="allowed_databases",
                 value=["sales_db"],  # Subset of original ["sales_db", "analytics_db"]
             ),
@@ -331,7 +331,7 @@ async def main():
             capabilities=["query_data"],
             constraints=[
                 Constraint(
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.OPERATIONAL,
                     name="max_records_per_query",
                     value=50000,  # LOOSENING from 10000!
                 ),
