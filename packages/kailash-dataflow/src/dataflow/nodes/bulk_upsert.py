@@ -129,8 +129,10 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute bulk upsert operation asynchronously with connection pool support."""
-        # Use the mixin to execute with proper connection management
-        return await self._execute_with_connection(self._perform_bulk_upsert, **kwargs)
+        # _execute_with_connection is synchronous: when operation_func is a
+        # coroutine function it internally resolves via async_safe_run() and
+        # returns the already-resolved dict result. The value is NOT awaitable.
+        return self._execute_with_connection(self._perform_bulk_upsert, **kwargs)
 
     async def _perform_bulk_upsert(self, **kwargs) -> dict[str, Any]:
         """Perform the actual bulk upsert operation."""

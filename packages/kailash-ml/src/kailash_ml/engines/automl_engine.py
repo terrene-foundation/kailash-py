@@ -253,10 +253,139 @@ class LLMCostTracker:
 
 
 # ---------------------------------------------------------------------------
+# GPU / accelerator detection
+# ---------------------------------------------------------------------------
+
+
+def _cuda_available() -> bool:
+    """Probe for an available CUDA device without requiring torch.
+
+    Preference order:
+        1. ``torch.cuda.is_available()`` if torch is importable (already in
+           ``[dl]``/``[rl]`` extras; common in production installs).
+        2. ``nvidia-smi`` subprocess returning 0 as a lightweight fallback.
+        3. Assume CPU otherwise.
+    """
+    # 1. torch probe
+    try:
+        import torch  # type: ignore[import-not-found]
+
+        return bool(torch.cuda.is_available())
+    except Exception:  # noqa: BLE001 -- torch optional, any failure => no GPU
+        pass
+
+    # 2. nvidia-smi probe
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            timeout=2.0,
+            check=False,
+        )
+        return result.returncode == 0 and bool(result.stdout.strip())
+    except Exception:  # noqa: BLE001 -- any failure (missing binary, timeout, OS) => no GPU
+        return False
+
+
+def _select_xgboost_device() -> str:
+    """Select an XGBoost device string ("cuda" if available, else "cpu").
+
+    XGBoost>=2.0 wheels ship with CUDA built-in; ``device="cuda"`` works on any
+    machine with a visible NVIDIA GPU and falls back to CPU otherwise (the
+    XGBoost runtime raises a clear error if CUDA is requested but unavailable,
+    which is why we probe first rather than always passing "cuda").
+    """
+    device = "cuda" if _cuda_available() else "cpu"
+    # Observability Rule § "State Transitions, Config Loads" — log which
+    # accelerator AutoML picked so operators can confirm expected backend.
+    logger.info(
+        "automl.xgboost_backend_selected",
+        extra={"device": device, "source": "kailash_ml.automl"},
+    )
+    return device
+
+
+# ---------------------------------------------------------------------------
 # Default candidate families
 # ---------------------------------------------------------------------------
 
 
+def _classification_candidates() -> list[tuple[str, str, dict[str, Any]]]:
+    """Default classification candidates (XGBoost device resolved lazily)."""
+    xgb_device = _select_xgboost_device()
+    return [
+        (
+            "sklearn.ensemble.RandomForestClassifier",
+            "sklearn",
+            {"n_estimators": 50, "random_state": 42},
+        ),
+        (
+            "sklearn.ensemble.GradientBoostingClassifier",
+            "sklearn",
+            {"n_estimators": 50, "random_state": 42},
+        ),
+        (
+            "sklearn.linear_model.LogisticRegression",
+            "sklearn",
+            {"max_iter": 200, "random_state": 42},
+        ),
+        (
+            "xgboost.XGBClassifier",
+            "xgboost",
+            {
+                "n_estimators": 100,
+                "random_state": 42,
+                "device": xgb_device,
+                "tree_method": "hist",
+            },
+        ),
+        (
+            "lightgbm.LGBMClassifier",
+            "lightgbm",
+            {"n_estimators": 100, "random_state": 42, "verbose": -1},
+        ),
+    ]
+
+
+def _regression_candidates() -> list[tuple[str, str, dict[str, Any]]]:
+    """Default regression candidates (XGBoost device resolved lazily)."""
+    xgb_device = _select_xgboost_device()
+    return [
+        (
+            "sklearn.ensemble.RandomForestRegressor",
+            "sklearn",
+            {"n_estimators": 50, "random_state": 42},
+        ),
+        (
+            "sklearn.ensemble.GradientBoostingRegressor",
+            "sklearn",
+            {"n_estimators": 50, "random_state": 42},
+        ),
+        ("sklearn.linear_model.Ridge", "sklearn", {"alpha": 1.0}),
+        (
+            "xgboost.XGBRegressor",
+            "xgboost",
+            {
+                "n_estimators": 100,
+                "random_state": 42,
+                "device": xgb_device,
+                "tree_method": "hist",
+            },
+        ),
+        (
+            "lightgbm.LGBMRegressor",
+            "lightgbm",
+            {"n_estimators": 100, "random_state": 42, "verbose": -1},
+        ),
+    ]
+
+
+# Back-compat constants (frozen snapshots without xgboost device resolution
+# side effects) — tests import these directly. Both call sites in ``run()``
+# use the factory functions so the device is logged on every run, not just
+# on first import.
 _CLASSIFICATION_CANDIDATES: list[tuple[str, str, dict[str, Any]]] = [
     (
         "sklearn.ensemble.RandomForestClassifier",

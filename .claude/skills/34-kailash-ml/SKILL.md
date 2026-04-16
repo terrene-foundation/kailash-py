@@ -10,12 +10,13 @@ Production ML lifecycle framework built on Kailash Core SDK — polars-native en
 ## Install Matrix
 
 ```
-pip install kailash-ml            # Core: polars, numpy, scipy, sklearn, lightgbm, plotly, onnx
+pip install kailash-ml            # Core: polars, numpy, scipy, sklearn, lightgbm, xgboost, plotly, onnx
 pip install kailash-ml[dl]        # + PyTorch, Lightning, transformers, timm
 pip install kailash-ml[dl-gpu]    # + onnxruntime-gpu
 pip install kailash-ml[rl]        # + Stable-Baselines3, Gymnasium
 pip install kailash-ml[agents]    # + kailash-kaizen (agent integration)
-pip install kailash-ml[xgb]       # + XGBoost
+# NOTE: [xgb] is a no-op alias — xgboost is now a base dep (xgboost>=2.0 ships
+# with CUDA built in and auto-detects GPU at runtime, CPU fallback otherwise).
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[explain]   # + SHAP (model explainability)
 pip install kailash-ml[imbalance] # + imbalanced-learn (SMOTE, ADASYN)

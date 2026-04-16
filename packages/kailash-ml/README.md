@@ -25,7 +25,9 @@ Part of the [Kailash Python SDK](https://github.com/terrene-foundation/kailash-p
 ## Installation
 
 ```bash
-# Base install (~195MB): polars, sklearn, LightGBM, scipy, plotly, ONNX
+# Base install (~195MB): polars, sklearn, LightGBM, XGBoost, scipy, plotly, ONNX
+#   XGBoost>=2.0 ships with CUDA built in and auto-detects GPU at runtime
+#   (CPU fallback otherwise) — no separate GPU wheel is required.
 pip install kailash-ml
 
 # Optional extras
@@ -33,7 +35,7 @@ pip install kailash-ml[dl]        # + PyTorch, Lightning, transformers
 pip install kailash-ml[dl-gpu]    # + onnxruntime-gpu (CUDA inference)
 pip install kailash-ml[rl]        # + Stable-Baselines3, Gymnasium
 pip install kailash-ml[agents]    # + Kaizen (LLM-augmented ML)
-pip install kailash-ml[xgb]       # + XGBoost
+# [xgb] is a no-op alias retained for backward-compat; XGBoost is now a base dep.
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[stats]     # + statsmodels
 pip install kailash-ml[hpo]       # + Optuna (Bayesian HPO, successive halving)

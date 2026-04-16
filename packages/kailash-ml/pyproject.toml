@@ -37,6 +37,7 @@ dependencies = [
     "scipy>=1.11",
     "scikit-learn>=1.5",
     "lightgbm>=4.0",
+    "xgboost>=2.0",
     "plotly>=5.18",
     "skl2onnx>=1.16",
     "onnxmltools>=1.12",
@@ -71,6 +72,10 @@ agents = [
 ]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
+# xgboost is a base dependency as of 0.9.1 -- it ships with CUDA built in
+# (xgboost>=2.0) and falls back to CPU automatically. The [xgb] alias remains
+# for backward-compat with any pre-existing `pip install kailash-ml[xgb]`
+# invocation; it resolves to the (already-installed) base dep.
 xgb = ["xgboost>=2.0"]
 catboost = ["catboost>=1.2"]
 stats = ["statsmodels>=0.14"]
