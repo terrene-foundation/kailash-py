@@ -54,7 +54,7 @@ class TestSignMessage:
         return chain
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_creates_envelope(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -79,7 +79,7 @@ class TestSignMessage:
         assert envelope.payload == {"action": "test"}
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_generates_unique_id(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -105,7 +105,7 @@ class TestSignMessage:
         assert envelope1.message_id != envelope2.message_id
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_generates_unique_nonce(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -131,7 +131,7 @@ class TestSignMessage:
         assert envelope1.nonce != envelope2.nonce
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_includes_trust_chain_hash(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -153,7 +153,7 @@ class TestSignMessage:
         assert envelope.trust_chain_hash == "chain-hash-123"
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_sets_signature(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -178,7 +178,7 @@ class TestSignMessage:
         assert len(envelope.signature) == 88
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_message_preserves_metadata(
         self, mock_sign, mock_trust_ops, mock_chain
     ):
@@ -248,7 +248,7 @@ class TestSignReply:
         )
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_reply_sets_correlation_id(
         self, mock_sign, mock_trust_ops, original_message
     ):
@@ -269,7 +269,7 @@ class TestSignReply:
         assert reply.metadata.correlation_id == original_message.message_id
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_reply_sends_to_original_sender(
         self, mock_sign, mock_trust_ops, original_message
     ):
@@ -290,7 +290,7 @@ class TestSignReply:
         assert reply.recipient_agent_id == original_message.sender_agent_id
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_reply_respects_reply_to(self, mock_sign, mock_trust_ops):
         """Reply is sent to reply_to if specified."""
         mock_sign.return_value = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ=="
@@ -317,7 +317,7 @@ class TestSignReply:
         assert reply.recipient_agent_id == "agent-003"
 
     @pytest.mark.asyncio
-    @patch("kaizen.trust.messaging.signer.sign")
+    @patch("kailash.trust.messaging.signer.sign")
     async def test_sign_reply_preserves_custom_metadata(
         self, mock_sign, mock_trust_ops, original_message
     ):

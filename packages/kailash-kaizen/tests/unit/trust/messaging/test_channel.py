@@ -22,7 +22,7 @@ from kailash.trust.messaging.replay_protection import InMemoryReplayProtection
 from kailash.trust.messaging.verifier import MessageVerificationResult
 
 # Module-level patch for sign function in unit tests
-SIGN_MOCK_PATCH = "kaizen.trust.messaging.signer.sign"
+SIGN_MOCK_PATCH = "kailash.trust.messaging.signer.sign"
 
 
 class TestChannelStatistics:
