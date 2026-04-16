@@ -442,7 +442,7 @@ class PostgreSQLTestManager:
                 if not result.success:
                     logger.error(
                         "postgresql_test_manager.migration_failed",
-                        extra={"name": migration.name, "error": result.error},
+                        extra={"migration_name": migration.name, "error": result.error},
                     )
 
             # Run concurrent access tests if enabled

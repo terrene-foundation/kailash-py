@@ -180,14 +180,15 @@ class RenameTransactionManager:
             self.savepoint_manager.add_savepoint(name)
 
             self.logger.debug(
-                "rename_transaction_manager.savepoint_created", extra={"name": name}
+                "rename_transaction_manager.savepoint_created",
+                extra={"savepoint_name": name},
             )
             return name
 
         except Exception as e:
             self.logger.error(
                 "rename_transaction_manager.failed_to_create_savepoint",
-                extra={"name": name, "error": str(e)},
+                extra={"savepoint_name": name, "error": str(e)},
             )
             raise TransactionError(f"Failed to create savepoint: {str(e)}")
 

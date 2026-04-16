@@ -983,7 +983,8 @@ async def demonstrate_all_patterns():
         description = pattern.get_pattern_description()
 
         logger.info(
-            "fk_aware_e2e_workflows.pattern", extra={"name": description["name"]}
+            "fk_aware_e2e_workflows.pattern",
+            extra={"pattern_name": description["name"]},
         )
         logger.info(
             "fk_aware_e2e_workflows.description",

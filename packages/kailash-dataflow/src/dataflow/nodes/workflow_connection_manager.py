@@ -220,7 +220,7 @@ class DataFlowConnectionManager(Node):
 
             logger.info(
                 "workflow_connection_manager.dataflow_connection_pool_initialized",
-                extra={"name": pool_config["name"]},
+                extra={"pool_name": pool_config["name"]},
             )
 
             return {

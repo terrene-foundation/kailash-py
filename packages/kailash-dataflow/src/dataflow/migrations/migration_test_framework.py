@@ -356,7 +356,7 @@ class MigrationTestFramework:
         """
         logger.info(
             "migration_test_framework.executing_test_migration",
-            extra={"name": migration.name},
+            extra={"migration_name": migration.name},
         )
         start_time = time.perf_counter()
 
@@ -795,7 +795,7 @@ class MigrationTestFramework:
         """
         logger.info(
             "migration_test_framework.running_comprehensive_test_for",
-            extra={"name": migration.name},
+            extra={"migration_name": migration.name},
         )
 
         # Setup test database

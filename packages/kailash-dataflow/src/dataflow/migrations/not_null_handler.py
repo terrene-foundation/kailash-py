@@ -425,7 +425,7 @@ class NotNullColumnHandler:
         """
         self.logger.info(
             "not_null_handler.planning_not_null_addition",
-            extra={"table_name": table_name, "name": column.name},
+            extra={"table_name": table_name, "column_name": column.name},
         )
 
         if connection is None:
@@ -484,7 +484,11 @@ class NotNullColumnHandler:
         except Exception as e:
             self.logger.error(
                 "not_null_handler.planning_failed_for",
-                extra={"table_name": table_name, "name": column.name, "error": str(e)},
+                extra={
+                    "table_name": table_name,
+                    "column_name": column.name,
+                    "error": str(e),
+                },
             )
             raise
 

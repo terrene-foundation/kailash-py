@@ -189,7 +189,8 @@ class DirectDeploymentStrategy(AbstractDeploymentStrategy):
         try:
             for phase in phases:
                 self.logger.info(
-                    "deployment_strategies.executing_phase", extra={"name": phase.name}
+                    "deployment_strategies.executing_phase",
+                    extra={"phase_name": phase.name},
                 )
                 execution_context.current_phase = phase.name
 

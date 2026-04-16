@@ -303,7 +303,7 @@ class MigrationPerformanceTracker:
         """
         logger.info(
             "migration_performance_tracker.benchmarking_migration_v",
-            extra={"name": migration.name, "version": migration.version},
+            extra={"migration_name": migration.name, "version": migration.version},
         )
 
         # Start performance monitoring

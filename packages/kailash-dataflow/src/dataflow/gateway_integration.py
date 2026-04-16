@@ -687,7 +687,8 @@ class DataFlowGateway:
             await self.create_nexus_gateway(**kwargs)
 
         logger.info(
-            "gateway_integration.starting_dataflow_gateway", extra={"name": self.name}
+            "gateway_integration.starting_dataflow_gateway",
+            extra={"gateway_name": self.name},
         )
         await self.nexus.start()
 
@@ -696,7 +697,7 @@ class DataFlowGateway:
         if self.nexus:
             logger.info(
                 "gateway_integration.stopping_dataflow_gateway",
-                extra={"name": self.name},
+                extra={"gateway_name": self.name},
             )
             await self.nexus.stop()
 

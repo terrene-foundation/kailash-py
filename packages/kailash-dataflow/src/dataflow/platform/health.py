@@ -138,7 +138,7 @@ class HealthMonitor:
             except Exception as e:
                 logger.error(
                     "health.health_check_failed_with_exception",
-                    extra={"name": name, "error": str(e)},
+                    extra={"check_name": name, "error": str(e)},
                 )
                 results[name] = {"status": HealthStatus.UNHEALTHY, "error": str(e)}
                 overall_status = HealthStatus.UNHEALTHY

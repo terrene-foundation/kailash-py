@@ -165,7 +165,7 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
             """Override run to add protection checks."""
             logger.debug(
                 "protection_middleware.protectednode_run_called_for",
-                extra={"name": self.__class__.__name__},
+                extra={"class_name": self.__class__.__name__},
             )
             logger.debug(
                 "protection_middleware.has_dataflow_instance",

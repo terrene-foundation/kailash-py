@@ -349,7 +349,8 @@ class TestAsyncSafeRunIntegration:
         """Test context detection in async."""
         context = get_execution_context()
         # Should detect we're in an async context
-        assert context in ["asyncio", "fastapi", "jupyter", "unknown"]
+        # (production returns "async" for any running asyncio loop)
+        assert context in ["async", "unknown"]
 
 
 class TestNestedCalls:
@@ -638,13 +639,13 @@ class TestRegressionScenarios:
             error_str = str(e).lower()
             # The OLD bug would show "Future attached to a different loop"
             # We should NOT see that error anymore
-            assert "future attached to a different loop" not in error_str, (
-                "Old bug not fixed: still getting event loop error"
-            )
+            assert (
+                "future attached to a different loop" not in error_str
+            ), "Old bug not fixed: still getting event loop error"
             # SQLite threading error is expected (not the old bug)
-            assert "thread" in error_str, (
-                f"Unexpected error (not SQLite threading): {e}"
-            )
+            assert (
+                "thread" in error_str
+            ), f"Unexpected error (not SQLite threading): {e}"
 
     @pytest.mark.asyncio
     async def test_simulated_fastapi_lifespan(self):

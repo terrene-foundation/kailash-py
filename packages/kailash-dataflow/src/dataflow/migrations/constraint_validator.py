@@ -130,7 +130,7 @@ class ConstraintValidator:
         """
         self.logger.info(
             "constraint_validator.validating_all_constraints_for",
-            extra={"table_name": table_name, "name": column.name},
+            extra={"table_name": table_name, "column_name": column.name},
         )
 
         if connection is None:
