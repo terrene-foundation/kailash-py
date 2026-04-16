@@ -10,6 +10,7 @@ import jwt as pyjwt
 import pytest
 from nexus import Nexus
 from nexus.auth.exceptions import ExpiredTokenError, InvalidTokenError
+from kailash.trust.auth.jwt import JWTValidator
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
 from starlette.testclient import TestClient
 
@@ -203,6 +204,9 @@ class TestTokenRoundtrip:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # jwt.py:291-308 _require_validator() rejects bypassed __init__ —
+        # assign the validator directly as the guard's docstring instructs.
+        mw._validator = JWTValidator(config)
 
         # Create token
         token = mw.create_access_token(
@@ -228,6 +232,7 @@ class TestTokenRoundtrip:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        mw._validator = JWTValidator(config)
 
         # Create refresh token
         token = mw.create_refresh_token(user_id="user-123", tenant_id="tenant-456")
@@ -246,6 +251,7 @@ class TestTokenRoundtrip:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        mw._validator = JWTValidator(config)
 
         # Create token
         token = mw.create_refresh_token(user_id="user-123", tenant_id="tenant-456")
@@ -263,6 +269,7 @@ class TestTokenRoundtrip:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        mw._validator = JWTValidator(config)
 
         token = mw.create_access_token(
             user_id="user-123",
