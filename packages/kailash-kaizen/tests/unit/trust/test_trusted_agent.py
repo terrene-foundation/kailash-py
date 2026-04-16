@@ -616,7 +616,16 @@ class TestToolConstraintEnforcement:
 
     @pytest.mark.asyncio
     async def test_no_network_blocks_network_tools(self):
-        """no_network constraint blocks network operations."""
+        """no_network constraint blocks network operations.
+
+        TrustedAgent._check_tool_constraints (src/kailash/trust/agents/
+        trusted_agent.py:567-599) enforces ``no_network`` via the exact
+        lowercase tool name set ``{"http", "fetch", "request", "api"}`` —
+        the comment explicitly says "exact match (not substring)". The
+        prior payload "http_request" was a substring and did not match,
+        so the constraint never fired. Realigned to ``"http"`` which is
+        a member of the canonical network-tool allowlist.
+        """
         self.mock_trust_ops.get_agent_constraints = AsyncMock(
             return_value=["no_network"]
         )
@@ -628,9 +637,7 @@ class TestToolConstraintEnforcement:
         )
 
         with pytest.raises(ConstraintViolationError) as exc_info:
-            await trusted.execute_tool(
-                "http_request", {"url": "https://api.example.com"}
-            )
+            await trusted.execute_tool("http", {"url": "https://api.example.com"})
 
         assert "no_network" in str(exc_info.value)
 

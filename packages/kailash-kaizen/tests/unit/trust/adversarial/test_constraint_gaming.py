@@ -55,35 +55,29 @@ class TestCostLimitGaming:
 
     def test_cost_limit_negative_value_rejected(self, dimension: CostLimitDimension):
         """
-        Adversarial: Negative cost should not reset or increase budget.
+        Adversarial: Negative cost must be rejected by input validation.
 
-        Attack vector: Pass negative cost_used to artificially increase remaining budget.
-        Expected: The check should still report used=0 (minimum) or fail safely.
+        Attack vector: Pass negative cost_used to artificially increase
+        remaining budget (remaining = limit - used, so a negative used would
+        inflate remaining above the limit).
 
-        SECURITY FINDING: Current implementation allows negative cost_used which
-        can inflate remaining budget beyond the limit. This should be fixed in
-        production by adding input validation for cost_used.
+        Production (src/kailash/trust/constraints/dimensions/cost_limit.py)
+        now validates cost_used and reports ``satisfied=False`` with
+        ``reason='invalid cost_used value: ...'`` when the value is negative
+        or non-finite. The prior test asserted the old permissive behaviour
+        and even documented it as a SECURITY FINDING; the hardening has
+        landed and the assertion is inverted to match the secure contract.
         """
         constraint = dimension.parse(1000)
 
         # Attack: Try to use negative cost to "add" budget
         result = dimension.check(constraint, {"cost_used": -500})
 
-        # Current behavior: negative cost_used is accepted
-        # The implementation does: remaining = max(0, limit - used) = max(0, 1000 - (-500)) = 1500
-        # This is a SECURITY GAP - remaining exceeds limit
-        assert result.satisfied is True
-
-        # Document the current behavior (this is a security finding)
-        # In a secure implementation, remaining should NEVER exceed limit
-        # KNOWN ISSUE: remaining can exceed limit with negative used values
-        # The fix would be to add: used = max(0, used) in the check method
-        if result.remaining > 1000:
-            # This documents the security gap
-            pytest.skip(
-                "SECURITY_FINDING: Negative cost_used allows remaining > limit. "
-                "Fix by adding input validation: used = max(0, used)"
-            )
+        # Secure behaviour: negative cost_used is rejected outright.
+        assert result.satisfied is False
+        assert "invalid cost_used" in (result.reason or "").lower()
+        # Remaining budget must never exceed the configured limit.
+        assert result.remaining <= 1000
 
     def test_cost_limit_overflow_attack(self, dimension: CostLimitDimension):
         """

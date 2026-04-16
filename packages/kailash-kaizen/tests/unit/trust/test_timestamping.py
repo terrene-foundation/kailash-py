@@ -885,7 +885,7 @@ class TestCARE049SecurityFeatures:
         time2 = datetime(2024, 1, 15, 11, 59, 55, tzinfo=timezone.utc)
 
         with caplog.at_level(logging.CRITICAL):
-            with patch("eatp.timestamping.datetime") as mock_datetime:
+            with patch("kailash.trust.signing.timestamping.datetime") as mock_datetime:
                 mock_datetime.now.return_value = time1
                 mock_datetime.fromisoformat = datetime.fromisoformat
                 await authority.get_timestamp(sample_hash)
@@ -922,7 +922,7 @@ class TestCARE049SecurityFeatures:
         time2 = datetime(2024, 1, 15, 12, 0, 10, tzinfo=timezone.utc)
 
         with caplog.at_level(logging.CRITICAL):
-            with patch("eatp.timestamping.datetime") as mock_datetime:
+            with patch("kailash.trust.signing.timestamping.datetime") as mock_datetime:
                 mock_datetime.now.return_value = time1
                 mock_datetime.fromisoformat = datetime.fromisoformat
                 await authority.get_timestamp(sample_hash)
@@ -958,7 +958,7 @@ class TestCARE049SecurityFeatures:
         time2 = datetime(2024, 1, 15, 12, 0, 2, tzinfo=timezone.utc)
 
         with caplog.at_level(logging.CRITICAL):
-            with patch("eatp.timestamping.datetime") as mock_datetime:
+            with patch("kailash.trust.signing.timestamping.datetime") as mock_datetime:
                 mock_datetime.now.return_value = time1
                 mock_datetime.fromisoformat = datetime.fromisoformat
                 await authority.get_timestamp(sample_hash)
