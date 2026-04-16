@@ -19,6 +19,13 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import asyncpg
 from dataflow import DataFlow
+from dataflow.migrations.constraint_validator import ConstraintValidator
+from dataflow.migrations.default_strategies import DefaultValueStrategyManager
+from dataflow.migrations.not_null_handler import (
+    ColumnDefinition,
+    DefaultValueType,
+    NotNullColumnHandler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,70 +276,78 @@ class NotNullTestHarness:
     def __init__(self, infrastructure: DatabaseInfrastructure):
         self.infrastructure = infrastructure
         self.table_factory = TableFactory(infrastructure)
-        # self._handlers: List[NotNullColumnHandler] = []  # Disabled - module not available
+        self._handlers: List[NotNullColumnHandler] = []
 
     def create_connection_manager(self) -> "StandardConnectionManager":
         """Create standardized connection manager for NOT NULL handler."""
         return StandardConnectionManager(self.infrastructure.config.url)
 
-    # def create_handler(self) -> NotNullColumnHandler:
-    #     """Create NOT NULL column handler with proper connection management."""
-    #     manager = self.create_connection_manager()
-    #     handler = NotNullColumnHandler(manager)
-    #     self._handlers.append(handler)
-    #     return handler
+    def create_handler(self) -> NotNullColumnHandler:
+        """Create NOT NULL column handler with proper connection management."""
+        manager = self.create_connection_manager()
+        handler = NotNullColumnHandler(manager)
+        self._handlers.append(handler)
+        return handler
 
-    # def create_strategy_manager(self) -> DefaultValueStrategyManager:
-    #     """Create default value strategy manager."""
-    #     return DefaultValueStrategyManager()
+    def create_strategy_manager(self) -> DefaultValueStrategyManager:
+        """Create default value strategy manager."""
+        return DefaultValueStrategyManager()
 
-    # def create_constraint_validator(self) -> ConstraintValidator:
-    #     """Create constraint validator with proper connection management."""
-    #     manager = self.create_connection_manager()
-    #     return ConstraintValidator(manager)
+    def create_constraint_validator(self) -> ConstraintValidator:
+        """Create constraint validator with proper connection management."""
+        manager = self.create_connection_manager()
+        return ConstraintValidator(manager)
 
-    # # Standard column definitions for consistent testing
-    # @staticmethod
-    # def static_column(name: str = "test_col", value: Any = "test_value") -> ColumnDefinition:
-    #     """Create standard static default column definition."""
-    #     return ColumnDefinition(
-    #         name=name,
-    #         data_type="VARCHAR(100)",
-    #         default_value=value,
-    #         default_type=DefaultValueType.STATIC
-    #     )
+    # Standard column definitions for consistent testing
+    @staticmethod
+    def static_column(name: str = "test_col", value: Any = "test_value") -> ColumnDefinition:
+        """Create standard static default column definition."""
+        return ColumnDefinition(
+            name=name,
+            data_type="VARCHAR(100)",
+            default_value=value,
+            default_type=DefaultValueType.STATIC,
+        )
 
-    # @staticmethod
-    # def computed_column(name: str = "computed_col", expression: str = "CASE WHEN id > 2 THEN 'high' ELSE 'low' END") -> ColumnDefinition:
-    #     """Create standard computed default column definition."""
-    #     return ColumnDefinition(
-    #         name=name,
-    #         data_type="VARCHAR(20)",
-    #         default_expression=expression,
-    #         default_type=DefaultValueType.COMPUTED
-    #     )
+    @staticmethod
+    def computed_column(
+        name: str = "computed_col",
+        expression: str = "CASE WHEN id > 2 THEN 'high' ELSE 'low' END",
+    ) -> ColumnDefinition:
+        """Create standard computed default column definition."""
+        return ColumnDefinition(
+            name=name,
+            data_type="VARCHAR(20)",
+            default_expression=expression,
+            default_type=DefaultValueType.COMPUTED,
+        )
 
-    # @staticmethod
-    # def function_column(name: str = "timestamp_col", function: str = "CURRENT_TIMESTAMP") -> ColumnDefinition:
-    #     """Create standard function default column definition."""
-    #     return ColumnDefinition(
-    #         name=name,
-    #         data_type="TIMESTAMP",
-    #         default_expression=function,
-    #         default_type=DefaultValueType.FUNCTION
-    # )
+    @staticmethod
+    def function_column(
+        name: str = "timestamp_col", function: str = "CURRENT_TIMESTAMP"
+    ) -> ColumnDefinition:
+        """Create standard function default column definition."""
+        return ColumnDefinition(
+            name=name,
+            data_type="TIMESTAMP",
+            default_expression=function,
+            default_type=DefaultValueType.FUNCTION,
+        )
 
     async def cleanup(self):
         """Clean up all test resources."""
-        # # Close handlers
-        # for handler in self._handlers:
-        #     if hasattr(handler, 'connection_manager'):
-        #         await handler.connection_manager.close()
-        # self._handlers.clear()
+        # Close handlers
+        for handler in self._handlers:
+            if hasattr(handler, "connection_manager"):
+                try:
+                    await handler.connection_manager.close()
+                except Exception as e:
+                    logger.warning(f"Error closing handler connection_manager: {e}")
+        self._handlers.clear()
 
         # Clean up tables
         await self.table_factory.cleanup_all()
-        logger.info("✅ NOT NULL test harness cleaned up")
+        logger.info("NotNullTestHarness cleaned up")
 
 
 class StandardConnectionManager:
@@ -401,20 +416,20 @@ class IntegrationTestSuite:
     def __init__(self, config: Optional[DatabaseConfig] = None):
         self.config = config or DatabaseConfig.from_environment()
         self.infrastructure = DatabaseInfrastructure(self.config)
-        # self.not_null_harness = NotNullTestHarness(self.infrastructure)  # Disabled - modules not available
+        self.not_null_harness = NotNullTestHarness(self.infrastructure)
         self.dataflow_harness = DataFlowTestHarness(self.infrastructure)
 
     async def initialize(self):
         """Initialize the complete test suite."""
         await self.infrastructure.initialize()
-        logger.info("🚀 Integration test suite initialized")
+        logger.info("Integration test suite initialized")
 
     async def cleanup(self):
         """Clean up the complete test suite."""
-        # await self.not_null_harness.cleanup()  # Disabled - modules not available
+        await self.not_null_harness.cleanup()
         await self.dataflow_harness.cleanup()
         await self.infrastructure.cleanup()
-        logger.info("✅ Integration test suite cleaned up")
+        logger.info("Integration test suite cleaned up")
 
     @asynccontextmanager
     async def session(self):
