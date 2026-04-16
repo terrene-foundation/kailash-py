@@ -34,8 +34,18 @@ from kailash.trust.signing.multi_sig import (
 
 
 def run_async(coro):
-    """Run an async coroutine synchronously."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    """Run an async coroutine synchronously in a fresh event loop.
+
+    ``asyncio.get_event_loop()`` no longer auto-creates a loop on the main
+    thread in Python 3.12+ — it raises ``RuntimeError: There is no current
+    event loop in thread 'MainThread'``. Each invocation uses a dedicated
+    loop and disposes of it, avoiding cross-test loop contamination.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 async def create_signer_keys(
