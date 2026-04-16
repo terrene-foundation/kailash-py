@@ -186,13 +186,19 @@ class TestTrustVerifiedRegistration:
 
     @pytest.mark.asyncio
     async def test_trust_verified_registration_success(self, registry, mock_trust_ops):
-        """Registration succeeds when trust verification passes."""
+        """Registration succeeds when trust verification passes.
+
+        Production path (src/kailash/trust/registry/agent_registry.py
+        `_verify_registration_trust`) calls ``chain.hash()`` (returns str)
+        and iterates ``chain.capabilities`` (List[CapabilityAttestation]).
+        The mock must match that surface.
+        """
         # Setup mock chain with matching capabilities
         mock_chain = MagicMock()
-        mock_chain.compute_hash.return_value = "correct_hash"
+        mock_chain.hash.return_value = "correct_hash"
         mock_attestation = MagicMock()
         mock_attestation.capability = "analyze_data"
-        mock_chain.capability_attestations = [mock_attestation]
+        mock_chain.capabilities = [mock_attestation]
 
         mock_trust_ops.verify.return_value = MagicMock(valid=True, reason=None)
         mock_trust_ops.get_chain.return_value = mock_chain
@@ -234,7 +240,8 @@ class TestTrustVerifiedRegistration:
     async def test_hash_mismatch_rejects_registration(self, registry, mock_trust_ops):
         """Registration fails when trust chain hash doesn't match."""
         mock_chain = MagicMock()
-        mock_chain.compute_hash.return_value = "actual_hash"
+        mock_chain.hash.return_value = "actual_hash"
+        mock_chain.capabilities = []
 
         mock_trust_ops.verify.return_value = MagicMock(valid=True, reason=None)
         mock_trust_ops.get_chain.return_value = mock_chain
@@ -258,11 +265,11 @@ class TestTrustVerifiedRegistration:
     ):
         """Registration fails when requested capability is not in trust chain."""
         mock_chain = MagicMock()
-        mock_chain.compute_hash.return_value = "hash123"
+        mock_chain.hash.return_value = "hash123"
         # Chain only has 'read_data' capability, not 'write_data'
         mock_attestation = MagicMock()
         mock_attestation.capability = "read_data"
-        mock_chain.capability_attestations = [mock_attestation]
+        mock_chain.capabilities = [mock_attestation]
 
         mock_trust_ops.verify.return_value = MagicMock(valid=True, reason=None)
         mock_trust_ops.get_chain.return_value = mock_chain

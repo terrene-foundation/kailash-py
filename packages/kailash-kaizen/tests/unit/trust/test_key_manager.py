@@ -372,7 +372,15 @@ class TestInMemoryKeyManagerBackwardCompat:
     """Tests for backward compatibility with TrustKeyManager."""
 
     def test_register_key(self):
-        """register_key works for backward compatibility."""
+        """register_key works for backward compatibility.
+
+        Note: The original test relied on a public ``get_key()`` accessor.
+        That accessor was removed as a hardening measure -- returning raw
+        private-key material from a public API is a key-exfiltration
+        vector. The equivalent behavior is now verified through the safe
+        surfaces: ``has_key()`` confirms registration, and
+        ``sign_with_key()`` proves the registered key is usable.
+        """
         key_manager = InMemoryKeyManager()
 
         # Generate a test key
@@ -383,13 +391,21 @@ class TestInMemoryKeyManagerBackwardCompat:
         # Register it
         key_manager.register_key("legacy-key", private_key)
 
-        # Should be retrievable
-        assert key_manager.get_key("legacy-key") == private_key
+        # Should be retrievable via the safe API surface
+        assert key_manager.has_key("legacy-key") is True
+        # And actually usable for signing (proves the stored material is intact)
+        signature = key_manager.sign_with_key("legacy-key", "test payload")
+        assert isinstance(signature, str) and len(signature) > 0
 
     def test_get_key_nonexistent(self):
-        """get_key returns None for nonexistent key."""
+        """has_key returns False for nonexistent key.
+
+        Replaces the original ``get_key("nonexistent") is None`` check.
+        ``get_key`` was removed (see ``test_register_key``); ``has_key``
+        is the safe public equivalent.
+        """
         key_manager = InMemoryKeyManager()
-        assert key_manager.get_key("nonexistent") is None
+        assert key_manager.has_key("nonexistent") is False
 
     @pytest.mark.asyncio
     async def test_registered_key_can_sign(self):
@@ -409,66 +425,55 @@ class TestInMemoryKeyManagerBackwardCompat:
 
 
 class TestAWSKMSKeyManager:
-    """Tests for AWSKMSKeyManager stub."""
+    """Tests for AWSKMSKeyManager.
+
+    AWSKMSKeyManager is a full boto3-backed implementation (not a stub).
+    It uses AWS KMS ECDSA P-256 for signing (Ed25519 is unavailable in KMS).
+    These tests verify the init-time contract against both the injected-
+    client and ambient-boto3 paths; operational methods (generate_keypair,
+    sign, verify, rotate_key, revoke_key, list_keys) are covered by the
+    integration suite which runs against real KMS or moto.
+    """
 
     def test_init_accepts_kms_client(self):
-        """Can be initialized with a KMS client."""
-        # Mock client
+        """Can be initialized with an injected KMS client (DI path)."""
+        # Injected client bypasses the boto3 import entirely -- this is
+        # the path tests and dependency-injected callers use.
         mock_client = object()
         key_manager = AWSKMSKeyManager(kms_client=mock_client)
-        assert key_manager._kms_client == mock_client
+        assert key_manager._kms_client is mock_client
 
-    def test_init_without_client(self):
-        """Can be initialized without a client."""
-        key_manager = AWSKMSKeyManager()
-        assert key_manager._kms_client is None
+    def test_init_without_client_requires_boto3(self):
+        """When no client is injected, boto3 must be available.
 
-    @pytest.mark.asyncio
-    async def test_aws_kms_stub_raises(self):
-        """test_aws_kms_stub_raises - AWSKMSKeyManager raises NotImplementedError."""
-        key_manager = AWSKMSKeyManager()
+        Production behavior in src/kailash/trust/key_manager.py
+        ``AWSKMSKeyManager.__init__``: if ``kms_client is None`` and
+        boto3 is not importable, raise ``ImportError`` naming the
+        missing extra. This is the fail-loud contract -- silent
+        ``_kms_client = None`` would defer the failure to the first
+        operational call with a worse error.
+        """
+        try:
+            import boto3  # noqa: F401
+        except ImportError:
+            with pytest.raises(ImportError, match="boto3 is required"):
+                AWSKMSKeyManager()
+        else:
+            # boto3 present: init succeeds and wires a real KMS client
+            key_manager = AWSKMSKeyManager()
+            assert key_manager._kms_client is not None
 
-        # generate_keypair
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.generate_keypair("key-1")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "create_key" in str(exc_info.value)
+    def test_init_stores_pending_deletion_days(self):
+        """The ``pending_deletion_days`` argument is persisted on the instance."""
+        key_manager = AWSKMSKeyManager(kms_client=object(), pending_deletion_days=14)
+        assert key_manager._pending_deletion_days == 14
 
-        # sign
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.sign("payload", "key-1")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "sign" in str(exc_info.value).lower()
-
-        # verify
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.verify("payload", "sig", "pubkey")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "verify" in str(exc_info.value).lower()
-
-        # rotate_key
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.rotate_key("key-1")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "schedule_key_deletion" in str(exc_info.value)
-
-        # revoke_key
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.revoke_key("key-1")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "schedule_key_deletion" in str(exc_info.value)
-
-        # get_key_metadata
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.get_key_metadata("key-1")
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "describe_key" in str(exc_info.value)
-
-        # list_keys
-        with pytest.raises(NotImplementedError) as exc_info:
-            await key_manager.list_keys()
-        assert "AWS KMS integration not yet implemented" in str(exc_info.value)
-        assert "list_keys" in str(exc_info.value)
+    def test_init_empty_state_collections(self):
+        """A fresh manager starts with empty key_arns / public_keys / metadata."""
+        key_manager = AWSKMSKeyManager(kms_client=object())
+        assert key_manager._key_arns == {}
+        assert key_manager._public_keys == {}
+        assert key_manager._metadata == {}
 
 
 class TestKeyManagerInterface:
@@ -480,8 +485,13 @@ class TestKeyManagerInterface:
         assert isinstance(key_manager, KeyManagerInterface)
 
     def test_awskms_implements_interface(self):
-        """AWSKMSKeyManager is a proper subclass."""
-        key_manager = AWSKMSKeyManager()
+        """AWSKMSKeyManager is a proper subclass.
+
+        Uses the injected-client path so the test does not require boto3
+        to be installed in the unit test environment. The interface
+        check is about type hierarchy, not runtime behavior.
+        """
+        key_manager = AWSKMSKeyManager(kms_client=object())
         assert isinstance(key_manager, KeyManagerInterface)
 
 
@@ -532,17 +542,35 @@ class TestInMemoryKeyManagerSecurityMethods:
 
     @pytest.fixture
     def key_manager_with_keys(self):
-        """Create an InMemoryKeyManager with some keys loaded."""
-        import asyncio
+        """Create an InMemoryKeyManager loaded with two known keypairs.
+
+        Uses ``register_key`` with freshly generated keypairs so each test
+        knows the exact base64-encoded private-key string that landed in
+        ``_keys``. This is what allows the repr/str tests to assert the
+        known secret value is absent from the representation without
+        relying on the removed public ``get_key()`` accessor. The public
+        half of each pair is also stored under ``_public_keys`` so the
+        later ``test_key_manager_still_functional_after_security_methods``
+        test can verify signatures using ``get_public_key()``.
+        """
+        from kailash.trust.signing.crypto import generate_keypair
 
         key_manager = InMemoryKeyManager()
-        # Use run to execute async in sync context for fixture
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(key_manager.generate_keypair("test-key-1"))
-            loop.run_until_complete(key_manager.generate_keypair("test-key-2"))
-        finally:
-            loop.close()
+        private1, public1 = generate_keypair()
+        private2, public2 = generate_keypair()
+        key_manager.register_key("test-key-1", private1)
+        key_manager.register_key("test-key-2", private2)
+        # register_key only populates _keys / _metadata; populate _public_keys
+        # directly so get_public_key() works the same as a generate_keypair()
+        # path would have provided.
+        key_manager._public_keys["test-key-1"] = public1
+        key_manager._public_keys["test-key-2"] = public2
+        # Attach known private-key strings to the fixture for test assertions;
+        # this is test-only metadata, not a production access path.
+        key_manager._test_private_keys = {
+            "test-key-1": private1,
+            "test-key-2": private2,
+        }
         return key_manager
 
     def test_repr_does_not_expose_keys(self, key_manager_with_keys):
@@ -556,11 +584,9 @@ class TestInMemoryKeyManagerSecurityMethods:
         # Should NOT contain any base64 key material (keys are long base64 strings)
         # Private keys are typically 64+ bytes when base64 encoded
         assert "==" not in representation  # Base64 padding
-        # Check that actual key values are not in the repr
-        for key_id in ["test-key-1", "test-key-2"]:
-            private_key = key_manager_with_keys.get_key(key_id)
-            if private_key:
-                assert private_key not in representation
+        # Check that the actual registered private-key strings are absent
+        for private_key in key_manager_with_keys._test_private_keys.values():
+            assert private_key not in representation
 
     def test_str_does_not_expose_keys(self, key_manager_with_keys):
         """str() should show key count but not key material."""
@@ -572,11 +598,9 @@ class TestInMemoryKeyManagerSecurityMethods:
 
         # Should NOT contain any base64 key material
         assert "==" not in string_rep  # Base64 padding
-        # Check that actual key values are not in the str
-        for key_id in ["test-key-1", "test-key-2"]:
-            private_key = key_manager_with_keys.get_key(key_id)
-            if private_key:
-                assert private_key not in string_rep
+        # Check that the actual registered private-key strings are absent
+        for private_key in key_manager_with_keys._test_private_keys.values():
+            assert private_key not in string_rep
 
     def test_pickle_raises_type_error(self, key_manager_with_keys):
         """pickle.dumps() should raise TypeError to prevent serialization."""

@@ -479,16 +479,23 @@ class TestConstraintDimensionRegistry:
         assert result is None
 
     def test_builtin_dimensions_set(self):
-        """BUILTIN_DIMENSIONS contains expected dimensions."""
+        """BUILTIN_DIMENSIONS contains expected dimensions.
+
+        Source of truth: src/kailash/trust/constraints/dimension.py
+        ConstraintDimensionRegistry.BUILTIN_DIMENSIONS. The canonical set is
+        the six-dimension CARE trust model (cost, time, resources, rate,
+        data_access, communication). Older ad-hoc dimension names
+        (geo_restrictions, budget_limit, max_delegation_depth,
+        allowed_actions) are NOT built-ins — they would be custom
+        dimensions requiring review if needed.
+        """
         expected = {
             "cost_limit",
             "time_window",
             "resources",
             "rate_limit",
-            "geo_restrictions",
-            "budget_limit",
-            "max_delegation_depth",
-            "allowed_actions",
+            "data_access",
+            "communication",
         }
 
         assert ConstraintDimensionRegistry.BUILTIN_DIMENSIONS == expected
