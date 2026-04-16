@@ -13,7 +13,8 @@ from datetime import datetime
 import pytest
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kailash.trust.governance import (
+
+from kaizen.trust.governance import (
     BudgetHistoryModel,
     BudgetResetService,
     ExternalAgentBudget,
@@ -342,7 +343,7 @@ class TestBudgetEnforcementWithRealDatabase:
         Action: Estimate cost for copilot_studio
         Expected: Cost matches CostEstimator directly
         """
-        from kailash.trust.governance import ExternalAgentCostEstimator
+        from kaizen.trust.governance import ExternalAgentCostEstimator
 
         cost_estimator = ExternalAgentCostEstimator()
         enforcer = ExternalAgentBudgetEnforcer(

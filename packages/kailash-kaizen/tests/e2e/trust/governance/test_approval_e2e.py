@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kailash.trust.governance import (
+
+from kaizen.trust.governance import (
     ApprovalLevel,
     ApprovalManager,
     ApprovalPolicy,
