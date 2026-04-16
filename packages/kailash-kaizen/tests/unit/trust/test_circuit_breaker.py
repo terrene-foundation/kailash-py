@@ -119,7 +119,7 @@ class TestCircuitBreakerConfig:
             "high": 2.0,
             "critical": 5.0,
         }
-        assert config.downgrade_on_open == "human_decides"
+        assert config.downgrade_on_open == "supervised"
 
     def test_config_custom_values(self):
         """Test custom configuration values."""
@@ -129,14 +129,14 @@ class TestCircuitBreakerConfig:
             half_open_max_calls=5,
             failure_window_seconds=600,
             severity_weights={"low": 1.0, "medium": 2.0, "high": 3.0, "critical": 4.0},
-            downgrade_on_open="blocked",
+            downgrade_on_open="pseudo",
         )
 
         assert config.failure_threshold == 10
         assert config.recovery_timeout == 120
         assert config.half_open_max_calls == 5
         assert config.failure_window_seconds == 600
-        assert config.downgrade_on_open == "blocked"
+        assert config.downgrade_on_open == "pseudo"
 
     def test_config_invalid_threshold(self):
         """Test that invalid threshold raises error."""
@@ -191,7 +191,7 @@ class TestPostureCircuitBreaker:
         """Test circuit opens when weighted failure count exceeds threshold."""
         config = CircuitBreakerConfig(failure_threshold=3)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Record 3 medium failures (weight=1.0 each)
         for i in range(3):
@@ -210,7 +210,7 @@ class TestPostureCircuitBreaker:
         """Test that critical failures with weight 5.0 open circuit with 1 failure."""
         config = CircuitBreakerConfig(failure_threshold=5)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Record 1 critical failure (weight=5.0)
         await breaker.record_failure(
@@ -234,7 +234,7 @@ class TestPostureCircuitBreaker:
         """Test can_proceed returns False when circuit is OPEN."""
         config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout=60)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -250,7 +250,7 @@ class TestPostureCircuitBreaker:
         # Use very small timeout for testing
         config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -270,7 +270,7 @@ class TestPostureCircuitBreaker:
             failure_threshold=1, recovery_timeout=0, half_open_max_calls=2
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open then transition to half-open
         await breaker.record_failure(
@@ -291,7 +291,7 @@ class TestPostureCircuitBreaker:
             failure_threshold=1, recovery_timeout=0, half_open_max_calls=3
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open then transition to half-open
         await breaker.record_failure(
@@ -365,11 +365,9 @@ class TestPostureCircuitBreaker:
     @pytest.mark.asyncio
     async def test_posture_downgrade_on_open(self, posture_machine):
         """Test that PostureStateMachine.transition is called on circuit open."""
-        config = CircuitBreakerConfig(
-            failure_threshold=1, downgrade_on_open="human_decides"
-        )
+        config = CircuitBreakerConfig(failure_threshold=1, downgrade_on_open="pseudo")
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -377,7 +375,7 @@ class TestPostureCircuitBreaker:
         )
 
         # Verify posture was downgraded
-        assert posture_machine.get_posture("agent-001") == TrustPosture.HUMAN_DECIDES
+        assert posture_machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
     @pytest.mark.asyncio
     async def test_severity_weights(self, posture_machine):
@@ -413,8 +411,8 @@ class TestPostureCircuitBreaker:
         """Test that circuit states are independent per agent."""
         config = CircuitBreakerConfig(failure_threshold=1)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
-        posture_machine.set_posture("agent-002", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+        posture_machine.set_posture("agent-002", TrustPosture.AUTONOMOUS)
 
         # Open circuit for agent-001 only
         await breaker.record_failure(
@@ -427,11 +425,9 @@ class TestPostureCircuitBreaker:
     @pytest.mark.asyncio
     async def test_original_posture_stored(self, posture_machine):
         """Test that original posture is stored when circuit opens."""
-        config = CircuitBreakerConfig(
-            failure_threshold=1, downgrade_on_open="human_decides"
-        )
+        config = CircuitBreakerConfig(failure_threshold=1, downgrade_on_open="pseudo")
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -439,24 +435,22 @@ class TestPostureCircuitBreaker:
         )
 
         metrics = breaker.get_metrics("agent-001")
-        assert metrics["original_posture"] == "full_autonomy"
-        assert metrics["current_posture"] == "human_decides"
+        assert metrics["original_posture"] == "autonomous"
+        assert metrics["current_posture"] == "pseudo"
 
     @pytest.mark.asyncio
     async def test_posture_not_downgraded_if_already_lower(self, posture_machine):
         """Test that posture is not downgraded if already at or below target."""
-        config = CircuitBreakerConfig(
-            failure_threshold=1, downgrade_on_open="human_decides"
-        )
+        config = CircuitBreakerConfig(failure_threshold=1, downgrade_on_open="pseudo")
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.BLOCKED)
+        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
 
         # Open the circuit - should not change posture
         await breaker.record_failure(
             "agent-001", "Error", "Error", "action", severity="medium"
         )
 
-        assert posture_machine.get_posture("agent-001") == TrustPosture.BLOCKED
+        assert posture_machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
     @pytest.mark.asyncio
     async def test_half_open_limited_calls(self, posture_machine):
@@ -465,7 +459,7 @@ class TestPostureCircuitBreaker:
             failure_threshold=1, recovery_timeout=0, half_open_max_calls=2
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open then transition to half-open
         await breaker.record_failure(
@@ -491,7 +485,7 @@ class TestPostureCircuitBreaker:
             failure_threshold=1, recovery_timeout=0, half_open_max_calls=1
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -518,7 +512,7 @@ class TestPostureCircuitBreaker:
         """Test metrics include time information in OPEN state."""
         config = CircuitBreakerConfig(failure_threshold=1, recovery_timeout=60)
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open the circuit
         await breaker.record_failure(
@@ -538,7 +532,7 @@ class TestPostureCircuitBreaker:
             failure_threshold=1, recovery_timeout=0, half_open_max_calls=3
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         # Open and transition to half-open
         await breaker.record_failure(

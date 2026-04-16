@@ -360,7 +360,7 @@ class TestVerifySenderCapability:
         attestation.expires_at = None
 
         chain = MagicMock()
-        chain.capability_attestations = [attestation]
+        chain.capabilities = [attestation]
         mock_trust_ops.get_chain.return_value = chain
 
         envelope = SecureMessageEnvelope(
@@ -383,7 +383,7 @@ class TestVerifySenderCapability:
         attestation.expires_at = None
 
         chain = MagicMock()
-        chain.capability_attestations = [attestation]
+        chain.capabilities = [attestation]
         mock_trust_ops.get_chain.return_value = chain
 
         envelope = SecureMessageEnvelope(
@@ -406,7 +406,7 @@ class TestVerifySenderCapability:
         attestation.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
 
         chain = MagicMock()
-        chain.capability_attestations = [attestation]
+        chain.capabilities = [attestation]
         mock_trust_ops.get_chain.return_value = chain
 
         envelope = SecureMessageEnvelope(

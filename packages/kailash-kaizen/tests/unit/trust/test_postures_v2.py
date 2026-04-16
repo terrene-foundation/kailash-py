@@ -40,67 +40,67 @@ class TestTrustPosture5Postures:
     def test_five_postures_exist(self):
         """Test all 5 postures exist."""
         assert len(TrustPosture) == 5
-        assert TrustPosture.FULL_AUTONOMY.value == "full_autonomy"
-        assert TrustPosture.ASSISTED.value == "assisted"
+        assert TrustPosture.AUTONOMOUS.value == "full_autonomy"
+        assert TrustPosture.SUPERVISED.value == "assisted"
         assert TrustPosture.SUPERVISED.value == "supervised"
-        assert TrustPosture.HUMAN_DECIDES.value == "human_decides"
-        assert TrustPosture.BLOCKED.value == "blocked"
+        assert TrustPosture.PSEUDO.value == "human_decides"
+        assert TrustPosture.PSEUDO.value == "blocked"
 
     def test_autonomy_levels(self):
         """Test autonomy_level property for each posture."""
-        assert TrustPosture.FULL_AUTONOMY.autonomy_level == 5
-        assert TrustPosture.ASSISTED.autonomy_level == 4
+        assert TrustPosture.AUTONOMOUS.autonomy_level == 5
+        assert TrustPosture.SUPERVISED.autonomy_level == 4
         assert TrustPosture.SUPERVISED.autonomy_level == 3
-        assert TrustPosture.HUMAN_DECIDES.autonomy_level == 2
-        assert TrustPosture.BLOCKED.autonomy_level == 1
+        assert TrustPosture.PSEUDO.autonomy_level == 2
+        assert TrustPosture.PSEUDO.autonomy_level == 1
 
     def test_can_upgrade_to(self):
         """Test can_upgrade_to method."""
-        assert TrustPosture.BLOCKED.can_upgrade_to(TrustPosture.HUMAN_DECIDES) is True
-        assert TrustPosture.BLOCKED.can_upgrade_to(TrustPosture.SUPERVISED) is True
-        assert TrustPosture.BLOCKED.can_upgrade_to(TrustPosture.ASSISTED) is True
-        assert TrustPosture.BLOCKED.can_upgrade_to(TrustPosture.FULL_AUTONOMY) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.PSEUDO) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.SUPERVISED) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.SUPERVISED) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.AUTONOMOUS) is True
 
-        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.ASSISTED) is True
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.SUPERVISED) is True
         assert (
-            TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.FULL_AUTONOMY) is True
+            TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.AUTONOMOUS) is True
         )
-        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.BLOCKED) is False
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.PSEUDO) is False
         assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.SUPERVISED) is False
 
         assert (
-            TrustPosture.FULL_AUTONOMY.can_upgrade_to(TrustPosture.FULL_AUTONOMY)
+            TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.AUTONOMOUS)
             is False
         )
-        assert TrustPosture.FULL_AUTONOMY.can_upgrade_to(TrustPosture.BLOCKED) is False
+        assert TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.PSEUDO) is False
 
     def test_can_downgrade_to(self):
         """Test can_downgrade_to method."""
         assert (
-            TrustPosture.FULL_AUTONOMY.can_downgrade_to(TrustPosture.ASSISTED) is True
+            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.SUPERVISED) is True
         )
         assert (
-            TrustPosture.FULL_AUTONOMY.can_downgrade_to(TrustPosture.SUPERVISED) is True
+            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.SUPERVISED) is True
         )
         assert (
-            TrustPosture.FULL_AUTONOMY.can_downgrade_to(TrustPosture.HUMAN_DECIDES)
+            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.PSEUDO)
             is True
         )
-        assert TrustPosture.FULL_AUTONOMY.can_downgrade_to(TrustPosture.BLOCKED) is True
+        assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.PSEUDO) is True
 
         assert (
-            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.HUMAN_DECIDES) is True
+            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.PSEUDO) is True
         )
-        assert TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.BLOCKED) is True
+        assert TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.PSEUDO) is True
         assert (
-            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.FULL_AUTONOMY)
+            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.AUTONOMOUS)
             is False
         )
         assert (
             TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.SUPERVISED) is False
         )
 
-        assert TrustPosture.BLOCKED.can_downgrade_to(TrustPosture.BLOCKED) is False
+        assert TrustPosture.PSEUDO.can_downgrade_to(TrustPosture.PSEUDO) is False
 
 
 class TestPostureComparison:
@@ -108,57 +108,57 @@ class TestPostureComparison:
 
     def test_less_than(self):
         """Test __lt__ operator."""
-        assert TrustPosture.BLOCKED < TrustPosture.HUMAN_DECIDES
-        assert TrustPosture.HUMAN_DECIDES < TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED < TrustPosture.ASSISTED
-        assert TrustPosture.ASSISTED < TrustPosture.FULL_AUTONOMY
+        assert TrustPosture.PSEUDO < TrustPosture.PSEUDO
+        assert TrustPosture.PSEUDO < TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED < TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED < TrustPosture.AUTONOMOUS
 
-        assert not (TrustPosture.FULL_AUTONOMY < TrustPosture.BLOCKED)
+        assert not (TrustPosture.AUTONOMOUS < TrustPosture.PSEUDO)
         assert not (TrustPosture.SUPERVISED < TrustPosture.SUPERVISED)
 
     def test_less_than_or_equal(self):
         """Test __le__ operator."""
-        assert TrustPosture.BLOCKED <= TrustPosture.HUMAN_DECIDES
+        assert TrustPosture.PSEUDO <= TrustPosture.PSEUDO
         assert TrustPosture.SUPERVISED <= TrustPosture.SUPERVISED
-        assert TrustPosture.ASSISTED <= TrustPosture.FULL_AUTONOMY
+        assert TrustPosture.SUPERVISED <= TrustPosture.AUTONOMOUS
 
-        assert not (TrustPosture.FULL_AUTONOMY <= TrustPosture.BLOCKED)
+        assert not (TrustPosture.AUTONOMOUS <= TrustPosture.PSEUDO)
 
     def test_greater_than(self):
         """Test __gt__ operator."""
-        assert TrustPosture.FULL_AUTONOMY > TrustPosture.ASSISTED
-        assert TrustPosture.ASSISTED > TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED > TrustPosture.HUMAN_DECIDES
-        assert TrustPosture.HUMAN_DECIDES > TrustPosture.BLOCKED
+        assert TrustPosture.AUTONOMOUS > TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED > TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED > TrustPosture.PSEUDO
+        assert TrustPosture.PSEUDO > TrustPosture.PSEUDO
 
-        assert not (TrustPosture.BLOCKED > TrustPosture.FULL_AUTONOMY)
+        assert not (TrustPosture.PSEUDO > TrustPosture.AUTONOMOUS)
         assert not (TrustPosture.SUPERVISED > TrustPosture.SUPERVISED)
 
     def test_greater_than_or_equal(self):
         """Test __ge__ operator."""
-        assert TrustPosture.FULL_AUTONOMY >= TrustPosture.ASSISTED
+        assert TrustPosture.AUTONOMOUS >= TrustPosture.SUPERVISED
         assert TrustPosture.SUPERVISED >= TrustPosture.SUPERVISED
-        assert TrustPosture.HUMAN_DECIDES >= TrustPosture.BLOCKED
+        assert TrustPosture.PSEUDO >= TrustPosture.PSEUDO
 
-        assert not (TrustPosture.BLOCKED >= TrustPosture.FULL_AUTONOMY)
+        assert not (TrustPosture.PSEUDO >= TrustPosture.AUTONOMOUS)
 
     def test_comparison_ordering(self):
         """Test that postures can be sorted by autonomy level."""
         postures = [
             TrustPosture.SUPERVISED,
-            TrustPosture.FULL_AUTONOMY,
-            TrustPosture.BLOCKED,
-            TrustPosture.ASSISTED,
-            TrustPosture.HUMAN_DECIDES,
+            TrustPosture.AUTONOMOUS,
+            TrustPosture.PSEUDO,
+            TrustPosture.SUPERVISED,
+            TrustPosture.PSEUDO,
         ]
         sorted_postures = sorted(postures)
 
         assert sorted_postures == [
-            TrustPosture.BLOCKED,
-            TrustPosture.HUMAN_DECIDES,
+            TrustPosture.PSEUDO,
+            TrustPosture.PSEUDO,
             TrustPosture.SUPERVISED,
-            TrustPosture.ASSISTED,
-            TrustPosture.FULL_AUTONOMY,
+            TrustPosture.SUPERVISED,
+            TrustPosture.AUTONOMOUS,
         ]
 
 
@@ -181,7 +181,7 @@ class TestPostureTransitionRequest:
         request = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.ASSISTED,
+            to_posture=TrustPosture.SUPERVISED,
         )
         assert request.is_upgrade is True
         assert request.is_downgrade is False
@@ -191,7 +191,7 @@ class TestPostureTransitionRequest:
         """Test is_downgrade property."""
         request = PostureTransitionRequest(
             agent_id="agent-001",
-            from_posture=TrustPosture.FULL_AUTONOMY,
+            from_posture=TrustPosture.AUTONOMOUS,
             to_posture=TrustPosture.SUPERVISED,
         )
         assert request.is_upgrade is False
@@ -213,7 +213,7 @@ class TestPostureTransitionRequest:
         """Test request with metadata."""
         request = PostureTransitionRequest(
             agent_id="agent-001",
-            from_posture=TrustPosture.BLOCKED,
+            from_posture=TrustPosture.PSEUDO,
             to_posture=TrustPosture.SUPERVISED,
             reason="Agent behavior improved",
             requester_id="admin-001",
@@ -233,7 +233,7 @@ class TestTransitionResult:
         result = TransitionResult(
             success=True,
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.ASSISTED,
+            to_posture=TrustPosture.SUPERVISED,
             transition_type=PostureTransition.UPGRADE,
             reason="Proven reliable",
         )
@@ -245,7 +245,7 @@ class TestTransitionResult:
         result = TransitionResult(
             success=False,
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.FULL_AUTONOMY,
+            to_posture=TrustPosture.AUTONOMOUS,
             transition_type=PostureTransition.UPGRADE,
             reason="Missing approval",
             blocked_by="upgrade_approval_required",
@@ -257,7 +257,7 @@ class TestTransitionResult:
         """Test serialization."""
         result = TransitionResult(
             success=True,
-            from_posture=TrustPosture.BLOCKED,
+            from_posture=TrustPosture.PSEUDO,
             to_posture=TrustPosture.SUPERVISED,
             transition_type=PostureTransition.UPGRADE,
             reason="Test",
@@ -287,7 +287,7 @@ class TestTransitionGuard:
         upgrade_request = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.ASSISTED,
+            to_posture=TrustPosture.SUPERVISED,
         )
         assert guard.check(upgrade_request) is False
 
@@ -295,7 +295,7 @@ class TestTransitionGuard:
         upgrade_request_approved = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.ASSISTED,
+            to_posture=TrustPosture.SUPERVISED,
             requester_id="admin-001",
         )
         assert guard.check(upgrade_request_approved) is True
@@ -303,7 +303,7 @@ class TestTransitionGuard:
         # Downgrade should pass (guard doesn't apply)
         downgrade_request = PostureTransitionRequest(
             agent_id="agent-001",
-            from_posture=TrustPosture.ASSISTED,
+            from_posture=TrustPosture.SUPERVISED,
             to_posture=TrustPosture.SUPERVISED,
         )
         assert guard.check(downgrade_request) is True  # Guard doesn't apply
@@ -321,8 +321,8 @@ class TestPostureStateMachine:
     def test_set_and_get_posture(self):
         """Test set_posture and get_posture."""
         machine = PostureStateMachine()
-        machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
-        assert machine.get_posture("agent-001") == TrustPosture.FULL_AUTONOMY
+        machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+        assert machine.get_posture("agent-001") == TrustPosture.AUTONOMOUS
 
     def test_successful_upgrade_with_approval(self):
         """Test successful upgrade when requester_id is provided."""
@@ -333,7 +333,7 @@ class TestPostureStateMachine:
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.ASSISTED,
+                to_posture=TrustPosture.SUPERVISED,
                 reason="Agent proven reliable",
                 requester_id="admin-001",
             )
@@ -341,7 +341,7 @@ class TestPostureStateMachine:
 
         assert result.success is True
         assert result.transition_type == PostureTransition.UPGRADE
-        assert machine.get_posture("agent-001") == TrustPosture.ASSISTED
+        assert machine.get_posture("agent-001") == TrustPosture.SUPERVISED
 
     def test_upgrade_blocked_without_approval(self):
         """Test upgrade is blocked when requester_id is missing."""
@@ -352,7 +352,7 @@ class TestPostureStateMachine:
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.ASSISTED,
+                to_posture=TrustPosture.SUPERVISED,
                 reason="Upgrade attempt without approval",
             )
         )
@@ -365,12 +365,12 @@ class TestPostureStateMachine:
     def test_downgrade_allowed_without_approval(self):
         """Test downgrade works without requester_id."""
         machine = PostureStateMachine()
-        machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-001",
-                from_posture=TrustPosture.FULL_AUTONOMY,
+                from_posture=TrustPosture.AUTONOMOUS,
                 to_posture=TrustPosture.SUPERVISED,
                 reason="Security concern",
             )
@@ -388,8 +388,8 @@ class TestPostureStateMachine:
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-001",
-                from_posture=TrustPosture.BLOCKED,  # Wrong!
-                to_posture=TrustPosture.ASSISTED,
+                from_posture=TrustPosture.PSEUDO,  # Wrong!
+                to_posture=TrustPosture.SUPERVISED,
                 requester_id="admin-001",
             )
         )
@@ -400,7 +400,7 @@ class TestPostureStateMachine:
     def test_emergency_downgrade(self):
         """Test emergency_downgrade bypasses guards."""
         machine = PostureStateMachine()
-        machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         result = machine.emergency_downgrade(
             agent_id="agent-001",
@@ -410,8 +410,8 @@ class TestPostureStateMachine:
 
         assert result.success is True
         assert result.transition_type == PostureTransition.EMERGENCY_DOWNGRADE
-        assert result.to_posture == TrustPosture.BLOCKED
-        assert machine.get_posture("agent-001") == TrustPosture.BLOCKED
+        assert result.to_posture == TrustPosture.PSEUDO
+        assert machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
     def test_emergency_downgrade_from_any_posture(self):
         """Test emergency_downgrade works from any posture."""
@@ -421,7 +421,7 @@ class TestPostureStateMachine:
             machine.set_posture("agent-001", posture)
             result = machine.emergency_downgrade("agent-001", "Emergency")
             assert result.success is True
-            assert machine.get_posture("agent-001") == TrustPosture.BLOCKED
+            assert machine.get_posture("agent-001") == TrustPosture.PSEUDO
 
     def test_transition_history(self):
         """Test transition history is recorded."""
@@ -433,7 +433,7 @@ class TestPostureStateMachine:
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.ASSISTED,
+                to_posture=TrustPosture.SUPERVISED,
                 requester_id="admin-001",
             )
         )
@@ -456,7 +456,7 @@ class TestPostureStateMachine:
                 PostureTransitionRequest(
                     agent_id="agent-001",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                     requester_id="admin-001",
                 )
             )
@@ -472,19 +472,19 @@ class TestPostureStateMachine:
         machine.add_guard(
             TransitionGuard(
                 name="no_full_autonomy",
-                check_fn=lambda req: req.to_posture != TrustPosture.FULL_AUTONOMY,
+                check_fn=lambda req: req.to_posture != TrustPosture.AUTONOMOUS,
                 applies_to=[PostureTransition.UPGRADE],
                 reason_on_failure="Full autonomy not allowed",
             )
         )
 
-        machine.set_posture("agent-001", TrustPosture.ASSISTED)
+        machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-001",
-                from_posture=TrustPosture.ASSISTED,
-                to_posture=TrustPosture.FULL_AUTONOMY,
+                from_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.AUTONOMOUS,
             )
         )
 
@@ -567,19 +567,19 @@ class TestBackwardCompatibility:
             is_valid=True,
             trust_level="high",
         )
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
 
         result = mapper.map_to_posture(
             is_valid=False,
         )
-        assert result.posture == TrustPosture.BLOCKED
+        assert result.posture == TrustPosture.PSEUDO
 
     def test_trust_posture_is_string_enum(self):
         """Test TrustPosture still inherits from str."""
-        assert isinstance(TrustPosture.FULL_AUTONOMY, str)
+        assert isinstance(TrustPosture.AUTONOMOUS, str)
         assert TrustPosture.SUPERVISED == "supervised"
         # Use .value for string representation
-        assert TrustPosture.BLOCKED.value == "blocked"
+        assert TrustPosture.PSEUDO.value == "blocked"
 
     def test_get_posture_for_action_returns_assisted_for_audit(self):
         """Test get_posture_for_action now returns ASSISTED for audit."""
@@ -588,12 +588,12 @@ class TestBackwardCompatibility:
             requires_audit=True,
         )
         # Changed from SUPERVISED to ASSISTED in v2
-        assert posture == TrustPosture.ASSISTED
+        assert posture == TrustPosture.SUPERVISED
 
     def test_get_posture_for_action_still_returns_blocked(self):
         """Test get_posture_for_action still returns BLOCKED when not allowed."""
         posture = get_posture_for_action(is_allowed=False)
-        assert posture == TrustPosture.BLOCKED
+        assert posture == TrustPosture.PSEUDO
 
     def test_get_posture_for_action_still_returns_human_decides(self):
         """Test get_posture_for_action still returns HUMAN_DECIDES for approval."""
@@ -601,7 +601,7 @@ class TestBackwardCompatibility:
             is_allowed=True,
             requires_approval=True,
         )
-        assert posture == TrustPosture.HUMAN_DECIDES
+        assert posture == TrustPosture.PSEUDO
 
 
 class TestAssistedPostureMapping:
@@ -615,7 +615,7 @@ class TestAssistedPostureMapping:
             trust_level="normal",
             audit_required=True,
         )
-        assert result.posture == TrustPosture.ASSISTED
+        assert result.posture == TrustPosture.SUPERVISED
 
     def test_mapper_returns_supervised_for_low_trust(self):
         """Test mapper returns SUPERVISED for low trust level."""
@@ -635,7 +635,7 @@ class TestAssistedPostureMapping:
 
         mapper = TrustPostureMapper()
         result = mapper.map_verification_result(MockVerification())
-        assert result.posture == TrustPosture.ASSISTED
+        assert result.posture == TrustPosture.SUPERVISED
 
 
 class TestAllExports:

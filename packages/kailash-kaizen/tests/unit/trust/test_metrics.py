@@ -39,30 +39,30 @@ class TestRecordPosture:
 
     def test_record_posture(self, collector: TrustMetricsCollector):
         """Test recording posture for an agent."""
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         metrics = collector.get_posture_metrics()
-        assert metrics.posture_distribution["full_autonomy"] == 1
-        assert metrics.posture_distribution["blocked"] == 0
+        assert metrics.posture_distribution["autonomous"] == 1
+        assert metrics.posture_distribution["pseudo"] == 0
 
     def test_record_posture_multiple_agents(self, collector: TrustMetricsCollector):
         """Test recording postures for multiple agents."""
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_posture("agent-002", TrustPosture.SUPERVISED)
         collector.record_posture("agent-003", TrustPosture.SUPERVISED)
 
         metrics = collector.get_posture_metrics()
-        assert metrics.posture_distribution["full_autonomy"] == 1
+        assert metrics.posture_distribution["autonomous"] == 1
         assert metrics.posture_distribution["supervised"] == 2
 
     def test_record_posture_update(self, collector: TrustMetricsCollector):
         """Test updating posture for same agent."""
-        collector.record_posture("agent-001", TrustPosture.BLOCKED)
+        collector.record_posture("agent-001", TrustPosture.PSEUDO)
         collector.record_posture("agent-001", TrustPosture.SUPERVISED)
 
         metrics = collector.get_posture_metrics()
         # Should only count latest posture
-        assert metrics.posture_distribution["blocked"] == 0
+        assert metrics.posture_distribution["pseudo"] == 0
         assert metrics.posture_distribution["supervised"] == 1
 
 
@@ -211,21 +211,21 @@ class TestGetPostureMetricsWithDistribution:
         self, collector: TrustMetricsCollector
     ):
         """Test getting posture metrics includes all posture types."""
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
-        collector.record_posture("agent-002", TrustPosture.ASSISTED)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
+        collector.record_posture("agent-002", TrustPosture.SUPERVISED)
         collector.record_posture("agent-003", TrustPosture.SUPERVISED)
-        collector.record_posture("agent-004", TrustPosture.HUMAN_DECIDES)
-        collector.record_posture("agent-005", TrustPosture.BLOCKED)
+        collector.record_posture("agent-004", TrustPosture.PSEUDO)
+        collector.record_posture("agent-005", TrustPosture.PSEUDO)
 
         metrics = collector.get_posture_metrics()
 
         # All posture types should be in distribution
         assert len(metrics.posture_distribution) == 5
-        assert metrics.posture_distribution["full_autonomy"] == 1
-        assert metrics.posture_distribution["assisted"] == 1
+        assert metrics.posture_distribution["autonomous"] == 1
         assert metrics.posture_distribution["supervised"] == 1
-        assert metrics.posture_distribution["human_decides"] == 1
-        assert metrics.posture_distribution["blocked"] == 1
+        assert metrics.posture_distribution["supervised"] == 1
+        assert metrics.posture_distribution["pseudo"] == 1
+        assert metrics.posture_distribution["pseudo"] == 1
 
     def test_get_posture_metrics_empty_distribution(
         self, collector: TrustMetricsCollector
@@ -236,10 +236,10 @@ class TestGetPostureMetricsWithDistribution:
         # All posture types should exist with 0 count
         assert len(metrics.posture_distribution) == 5
         for posture_value in [
-            "full_autonomy",
-            "assisted",
+            "autonomous",
             "supervised",
-            "human_decides",
+            "supervised",
+            "pseudo",
             "blocked",
         ]:
             assert metrics.posture_distribution[posture_value] == 0
@@ -285,8 +285,8 @@ class TestAveragePostureLevelCalculation:
     def test_average_posture_level_calculation(self, collector: TrustMetricsCollector):
         """Test average posture level with mixed agents."""
         # FULL_AUTONOMY (5) + BLOCKED (1) = 6 / 2 = 3.0
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
-        collector.record_posture("agent-002", TrustPosture.BLOCKED)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
+        collector.record_posture("agent-002", TrustPosture.PSEUDO)
 
         metrics = collector.get_posture_metrics()
         assert metrics.average_posture_level == 3.0
@@ -309,22 +309,22 @@ class TestAveragePostureLevelCalculation:
     def test_average_posture_level_all_postures(self, collector: TrustMetricsCollector):
         """Test average with one agent at each posture."""
         # 5 + 4 + 3 + 2 + 1 = 15 / 5 = 3.0
-        collector.record_posture("a1", TrustPosture.FULL_AUTONOMY)
-        collector.record_posture("a2", TrustPosture.ASSISTED)
+        collector.record_posture("a1", TrustPosture.AUTONOMOUS)
+        collector.record_posture("a2", TrustPosture.SUPERVISED)
         collector.record_posture("a3", TrustPosture.SUPERVISED)
-        collector.record_posture("a4", TrustPosture.HUMAN_DECIDES)
-        collector.record_posture("a5", TrustPosture.BLOCKED)
+        collector.record_posture("a4", TrustPosture.PSEUDO)
+        collector.record_posture("a5", TrustPosture.PSEUDO)
 
         metrics = collector.get_posture_metrics()
         assert metrics.average_posture_level == 3.0
 
     def test_posture_level_map_values(self):
         """Test that posture level map has correct values."""
-        assert POSTURE_LEVEL_MAP[TrustPosture.FULL_AUTONOMY] == 5
-        assert POSTURE_LEVEL_MAP[TrustPosture.ASSISTED] == 4
+        assert POSTURE_LEVEL_MAP[TrustPosture.AUTONOMOUS] == 5
+        assert POSTURE_LEVEL_MAP[TrustPosture.SUPERVISED] == 4
         assert POSTURE_LEVEL_MAP[TrustPosture.SUPERVISED] == 3
-        assert POSTURE_LEVEL_MAP[TrustPosture.HUMAN_DECIDES] == 2
-        assert POSTURE_LEVEL_MAP[TrustPosture.BLOCKED] == 1
+        assert POSTURE_LEVEL_MAP[TrustPosture.PSEUDO] == 2
+        assert POSTURE_LEVEL_MAP[TrustPosture.PSEUDO] == 1
 
 
 class TestResetClearsAll:
@@ -333,7 +333,7 @@ class TestResetClearsAll:
     def test_reset_clears_all(self, collector: TrustMetricsCollector):
         """Test that reset clears all collected metrics."""
         # Add some data
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_transition("upgrade")
         collector.record_circuit_breaker_open()
         collector.record_emergency_downgrade()
@@ -347,7 +347,7 @@ class TestResetClearsAll:
         # Verify data was recorded
         posture_metrics = collector.get_posture_metrics()
         constraint_metrics = collector.get_constraint_metrics()
-        assert posture_metrics.posture_distribution["full_autonomy"] == 1
+        assert posture_metrics.posture_distribution["autonomous"] == 1
         assert constraint_metrics.evaluations_total == 1
 
         # Reset
@@ -357,7 +357,7 @@ class TestResetClearsAll:
         posture_metrics = collector.get_posture_metrics()
         constraint_metrics = collector.get_constraint_metrics()
 
-        assert posture_metrics.posture_distribution["full_autonomy"] == 0
+        assert posture_metrics.posture_distribution["autonomous"] == 0
         assert posture_metrics.transitions_by_type == {}
         assert posture_metrics.circuit_breaker_opens == 0
         assert posture_metrics.emergency_downgrades == 0
@@ -409,7 +409,7 @@ class TestMetricsDataclasses:
 
     def test_posture_metrics_to_dict(self, collector: TrustMetricsCollector):
         """Test PostureMetrics.to_dict serialization."""
-        collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_transition("upgrade")
         collector.record_circuit_breaker_open()
 

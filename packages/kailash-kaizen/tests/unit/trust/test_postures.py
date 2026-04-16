@@ -32,11 +32,11 @@ class TestTrustPosture:
 
     def test_posture_values(self):
         """Test all posture values exist."""
-        assert TrustPosture.FULL_AUTONOMY.value == "full_autonomy"
-        assert TrustPosture.ASSISTED.value == "assisted"
+        assert TrustPosture.AUTONOMOUS.value == "full_autonomy"
+        assert TrustPosture.SUPERVISED.value == "assisted"
         assert TrustPosture.SUPERVISED.value == "supervised"
-        assert TrustPosture.HUMAN_DECIDES.value == "human_decides"
-        assert TrustPosture.BLOCKED.value == "blocked"
+        assert TrustPosture.PSEUDO.value == "human_decides"
+        assert TrustPosture.PSEUDO.value == "blocked"
 
     def test_posture_count(self):
         """Test that we have exactly 5 postures."""
@@ -44,7 +44,7 @@ class TestTrustPosture:
 
     def test_posture_is_string_enum(self):
         """Test that TrustPosture inherits from str."""
-        assert isinstance(TrustPosture.FULL_AUTONOMY, str)
+        assert isinstance(TrustPosture.AUTONOMOUS, str)
         assert TrustPosture.SUPERVISED == "supervised"
 
 
@@ -117,13 +117,13 @@ class TestPostureResult:
         """Test full initialization."""
         constraints = PostureConstraints(audit_required=True)
         result = PostureResult(
-            posture=TrustPosture.HUMAN_DECIDES,
+            posture=TrustPosture.PSEUDO,
             constraints=constraints,
             reason="Sensitive operation",
             verification_details={"agent_id": "agent-001"},
         )
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        assert result.posture == TrustPosture.PSEUDO
         assert result.constraints.audit_required is True
         assert result.reason == "Sensitive operation"
         assert result.verification_details == {"agent_id": "agent-001"}
@@ -131,7 +131,7 @@ class TestPostureResult:
     def test_to_dict(self):
         """Test serialization."""
         result = PostureResult(
-            posture=TrustPosture.BLOCKED,
+            posture=TrustPosture.PSEUDO,
             reason="Access denied",
         )
 
@@ -173,12 +173,12 @@ class TestTrustPostureMapper:
     def test_custom_initialization(self):
         """Test custom initialization."""
         mapper = TrustPostureMapper(
-            default_posture=TrustPosture.FULL_AUTONOMY,
+            default_posture=TrustPosture.AUTONOMOUS,
             sensitive_capabilities=["custom_sensitive"],
             high_risk_tools=["custom_risk"],
         )
 
-        assert mapper._default_posture == TrustPosture.FULL_AUTONOMY
+        assert mapper._default_posture == TrustPosture.AUTONOMOUS
         assert mapper._sensitive_capabilities == ["custom_sensitive"]
         assert mapper._high_risk_tools == ["custom_risk"]
 
@@ -188,7 +188,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(None)
 
-        assert result.posture == TrustPosture.BLOCKED
+        assert result.posture == TrustPosture.PSEUDO
         assert "No verification result" in result.reason
 
     def test_map_invalid_result_blocks(self):
@@ -198,7 +198,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.BLOCKED
+        assert result.posture == TrustPosture.PSEUDO
         assert result.reason == "Denied"
 
     def test_map_valid_result_default_posture(self):
@@ -220,7 +220,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
 
     def test_map_full_trust_level_full_autonomy(self):
         """Test full trust level returns FULL_AUTONOMY."""
@@ -232,7 +232,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
 
     def test_map_approval_required_human_decides(self):
         """Test approval_required returns HUMAN_DECIDES."""
@@ -244,7 +244,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        assert result.posture == TrustPosture.PSEUDO
         assert result.constraints.approval_required is True
 
     def test_map_human_in_loop_human_decides(self):
@@ -257,7 +257,7 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        assert result.posture == TrustPosture.PSEUDO
 
     def test_map_audit_required_assisted(self):
         """Test audit_required with normal trust returns ASSISTED."""
@@ -270,7 +270,7 @@ class TestTrustPostureMapper:
         result = mapper.map_verification_result(verification)
 
         # With normal trust level (default), audit_required now returns ASSISTED
-        assert result.posture == TrustPosture.ASSISTED
+        assert result.posture == TrustPosture.SUPERVISED
         assert "Assisted mode" in result.reason
 
     def test_map_sensitive_capability_supervised(self):
@@ -350,7 +350,7 @@ class TestMapToPosture:
             reason="Access denied",
         )
 
-        assert result.posture == TrustPosture.BLOCKED
+        assert result.posture == TrustPosture.PSEUDO
         assert result.reason == "Access denied"
 
     def test_human_decides_when_approval_required(self):
@@ -362,7 +362,7 @@ class TestMapToPosture:
             approval_required=True,
         )
 
-        assert result.posture == TrustPosture.HUMAN_DECIDES
+        assert result.posture == TrustPosture.PSEUDO
         assert result.constraints.approval_required is True
         assert result.constraints.audit_required is True
 
@@ -376,7 +376,7 @@ class TestMapToPosture:
         )
 
         # With normal trust level (default), audit_required now returns ASSISTED
-        assert result.posture == TrustPosture.ASSISTED
+        assert result.posture == TrustPosture.SUPERVISED
         assert result.constraints.audit_required is True
 
     def test_supervised_for_low_trust(self):
@@ -399,7 +399,7 @@ class TestMapToPosture:
             trust_level="high",
         )
 
-        assert result.posture == TrustPosture.FULL_AUTONOMY
+        assert result.posture == TrustPosture.AUTONOMOUS
 
     def test_default_posture(self):
         """Test default posture."""
@@ -423,7 +423,7 @@ class TestConvenienceFunctions:
         result = map_verification_to_posture(verification)
 
         assert isinstance(result, PostureResult)
-        assert result.posture != TrustPosture.BLOCKED
+        assert result.posture != TrustPosture.PSEUDO
 
     def test_map_verification_to_posture_with_capability(self):
         """Test with capability filter."""
@@ -441,7 +441,7 @@ class TestConvenienceFunctions:
         """Test get_posture_for_action when not allowed."""
         posture = get_posture_for_action(is_allowed=False)
 
-        assert posture == TrustPosture.BLOCKED
+        assert posture == TrustPosture.PSEUDO
 
     def test_get_posture_for_action_human_decides(self):
         """Test get_posture_for_action with approval required."""
@@ -450,7 +450,7 @@ class TestConvenienceFunctions:
             requires_approval=True,
         )
 
-        assert posture == TrustPosture.HUMAN_DECIDES
+        assert posture == TrustPosture.PSEUDO
 
     def test_get_posture_for_action_assisted(self):
         """Test get_posture_for_action with audit required returns ASSISTED."""
@@ -460,7 +460,7 @@ class TestConvenienceFunctions:
         )
 
         # Now returns ASSISTED instead of SUPERVISED when audit is required
-        assert posture == TrustPosture.ASSISTED
+        assert posture == TrustPosture.SUPERVISED
 
     def test_get_posture_for_action_full_autonomy(self):
         """Test get_posture_for_action with full access."""
@@ -470,4 +470,4 @@ class TestConvenienceFunctions:
             requires_approval=False,
         )
 
-        assert posture == TrustPosture.FULL_AUTONOMY
+        assert posture == TrustPosture.AUTONOMOUS

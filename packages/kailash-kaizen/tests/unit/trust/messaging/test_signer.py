@@ -50,7 +50,7 @@ class TestSignMessage:
     def mock_chain(self):
         """Create mock trust chain."""
         chain = MagicMock()
-        chain.compute_hash.return_value = "chain-hash-123"
+        chain.hash.return_value = "chain-hash-123"
         return chain
 
     @pytest.mark.asyncio
@@ -231,7 +231,7 @@ class TestSignReply:
         trust_ops = MagicMock()
         trust_ops.get_chain = AsyncMock()
         chain = MagicMock()
-        chain.compute_hash.return_value = "chain-hash-123"
+        chain.hash.return_value = "chain-hash-123"
         trust_ops.get_chain.return_value = chain
         return trust_ops
 

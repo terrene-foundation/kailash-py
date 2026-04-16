@@ -138,7 +138,7 @@ class TestFullAutonomyExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that FULL_AUTONOMY executes directly without restrictions."""
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -157,7 +157,7 @@ class TestFullAutonomyExecution:
         self, posture_machine: PostureStateMachine, mock_async_agent: MockAsyncBaseAgent
     ):
         """Test FULL_AUTONOMY works with async base agents."""
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
         agent = PostureAwareAgent(
             base_agent=mock_async_agent,
@@ -179,7 +179,7 @@ class TestBlockedExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that BLOCKED posture raises PermissionError."""
-        posture_machine.set_posture("agent-001", TrustPosture.BLOCKED)
+        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -202,7 +202,7 @@ class TestHumanDecidesExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that HUMAN_DECIDES without approval_handler raises ValueError."""
-        posture_machine.set_posture("agent-001", TrustPosture.HUMAN_DECIDES)
+        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -222,7 +222,7 @@ class TestHumanDecidesExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test HUMAN_DECIDES with approved request executes."""
-        posture_machine.set_posture("agent-001", TrustPosture.HUMAN_DECIDES)
+        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
         approval_handler = MockApprovalHandler(approve=True)
 
         agent = PostureAwareAgent(
@@ -243,7 +243,7 @@ class TestHumanDecidesExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test HUMAN_DECIDES with denied request raises PermissionError."""
-        posture_machine.set_posture("agent-001", TrustPosture.HUMAN_DECIDES)
+        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
         approval_handler = MockApprovalHandler(approve=False)
 
         agent = PostureAwareAgent(
@@ -330,7 +330,7 @@ class TestAssistedExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test ASSISTED mode waits for delay then executes."""
-        posture_machine.set_posture("agent-001", TrustPosture.ASSISTED)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
         notification_handler = MockNotificationHandler()
 
         agent = PostureAwareAgent(
@@ -358,7 +358,7 @@ class TestAssistedExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that ASSISTED mode can be cancelled during delay."""
-        posture_machine.set_posture("agent-001", TrustPosture.ASSISTED)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -387,7 +387,7 @@ class TestAssistedExecution:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test ASSISTED mode works without notification handler."""
-        posture_machine.set_posture("agent-001", TrustPosture.ASSISTED)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -411,7 +411,7 @@ class TestCircuitBreakerIntegration:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that open circuit breaker blocks execution."""
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
         circuit_breaker = MockCircuitBreaker(is_open_val=True)
 
         agent = PostureAwareAgent(
@@ -432,7 +432,7 @@ class TestCircuitBreakerIntegration:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test that successful execution is recorded to circuit breaker."""
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
         circuit_breaker = MockCircuitBreaker(is_open_val=False)
 
         agent = PostureAwareAgent(
@@ -452,7 +452,7 @@ class TestCircuitBreakerIntegration:
         self, posture_machine: PostureStateMachine
     ):
         """Test that failed execution is recorded to circuit breaker."""
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
         circuit_breaker = MockCircuitBreaker(is_open_val=False)
 
         # Create failing agent
@@ -489,8 +489,8 @@ class TestPostureProperty:
         assert agent.posture == TrustPosture.SUPERVISED
 
         # Change posture and verify
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
-        assert agent.posture == TrustPosture.FULL_AUTONOMY
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+        assert agent.posture == TrustPosture.AUTONOMOUS
 
     def test_agent_id_property(self, posture_machine: PostureStateMachine):
         """Test that agent_id property returns correct ID."""
@@ -511,7 +511,7 @@ class TestCancelPending:
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
         """Test cancel_pending returns True when there's a pending execution."""
-        posture_machine.set_posture("agent-001", TrustPosture.ASSISTED)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,

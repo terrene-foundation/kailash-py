@@ -93,14 +93,14 @@ class TestHistoryBoundsBasic:
                         PostureTransitionRequest(
                             agent_id="test-agent",
                             from_posture=TrustPosture.SUPERVISED,
-                            to_posture=TrustPosture.ASSISTED,
+                            to_posture=TrustPosture.SUPERVISED,
                         )
                     )
                 else:
                     machine.transition(
                         PostureTransitionRequest(
                             agent_id="test-agent",
-                            from_posture=TrustPosture.ASSISTED,
+                            from_posture=TrustPosture.SUPERVISED,
                             to_posture=TrustPosture.SUPERVISED,
                         )
                     )
@@ -131,14 +131,14 @@ class TestHistoryBoundsBasic:
                     PostureTransitionRequest(
                         agent_id="agent",
                         from_posture=TrustPosture.SUPERVISED,
-                        to_posture=TrustPosture.ASSISTED,
+                        to_posture=TrustPosture.SUPERVISED,
                     )
                 )
             else:
                 machine.transition(
                     PostureTransitionRequest(
                         agent_id="agent",
-                        from_posture=TrustPosture.ASSISTED,
+                        from_posture=TrustPosture.SUPERVISED,
                         to_posture=TrustPosture.SUPERVISED,
                     )
                 )
@@ -172,7 +172,7 @@ class TestMostRecentTransitionsPreserved:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                     reason=f"old_batch_{i}",
                 )
             )
@@ -187,7 +187,7 @@ class TestMostRecentTransitionsPreserved:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                     reason=reason,
                 )
             )
@@ -231,7 +231,7 @@ class TestEmergencyDowngradeUsesBoundedHistory:
 
         try:
             for i in range(num_downgrades):
-                machine.set_posture(f"agent-{i % 5}", TrustPosture.FULL_AUTONOMY)
+                machine.set_posture(f"agent-{i % 5}", TrustPosture.AUTONOMOUS)
                 machine.emergency_downgrade(
                     agent_id=f"agent-{i % 5}",
                     reason=f"Emergency {i}",
@@ -249,7 +249,7 @@ class TestEmergencyDowngradeUsesBoundedHistory:
         """Test that emergency downgrade transitions are properly recorded."""
         machine = PostureStateMachine(require_upgrade_approval=False)
 
-        machine.set_posture("test-agent", TrustPosture.FULL_AUTONOMY)
+        machine.set_posture("test-agent", TrustPosture.AUTONOMOUS)
         machine.emergency_downgrade(
             agent_id="test-agent",
             reason="Security incident",
@@ -262,7 +262,7 @@ class TestEmergencyDowngradeUsesBoundedHistory:
 
         last_transition = history[-1]
         assert last_transition.transition_type == PostureTransition.EMERGENCY_DOWNGRADE
-        assert last_transition.to_posture == TrustPosture.BLOCKED
+        assert last_transition.to_posture == TrustPosture.PSEUDO
         assert last_transition.success is True
 
 
@@ -282,11 +282,11 @@ class TestTransitionViaGuardsUsesBoundedHistory:
 
         try:
             for i in range(num_transitions):
-                machine.set_posture("agent", TrustPosture.BLOCKED)
+                machine.set_posture("agent", TrustPosture.PSEUDO)
                 machine.transition(
                     PostureTransitionRequest(
                         agent_id="agent",
-                        from_posture=TrustPosture.BLOCKED,
+                        from_posture=TrustPosture.PSEUDO,
                         to_posture=TrustPosture.SUPERVISED,
                         reason=f"Upgrade {i}",
                     )
@@ -318,7 +318,7 @@ class TestTransitionViaGuardsUsesBoundedHistory:
                     PostureTransitionRequest(
                         agent_id="agent",
                         from_posture=TrustPosture.SUPERVISED,
-                        to_posture=TrustPosture.FULL_AUTONOMY,
+                        to_posture=TrustPosture.AUTONOMOUS,
                         reason=f"Blocked attempt {i}",
                         # No requester_id - should be blocked by guard
                     )
@@ -354,7 +354,7 @@ class TestHistoryRetrievalAfterBounding:
                 PostureTransitionRequest(
                     agent_id=agent_id,
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
@@ -384,7 +384,7 @@ class TestHistoryRetrievalAfterBounding:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
@@ -410,7 +410,7 @@ class TestMemoryGrowthPrevention:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
@@ -424,7 +424,7 @@ class TestMemoryGrowthPrevention:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
@@ -456,7 +456,7 @@ class TestEdgeCases:
             PostureTransitionRequest(
                 agent_id="agent",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.ASSISTED,
+                to_posture=TrustPosture.SUPERVISED,
             )
         )
 
@@ -475,7 +475,7 @@ class TestEdgeCases:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
@@ -493,7 +493,7 @@ class TestEdgeCases:
                 PostureTransitionRequest(
                     agent_id="agent",
                     from_posture=TrustPosture.SUPERVISED,
-                    to_posture=TrustPosture.ASSISTED,
+                    to_posture=TrustPosture.SUPERVISED,
                 )
             )
 
