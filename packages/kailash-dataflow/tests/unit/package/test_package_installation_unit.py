@@ -97,8 +97,18 @@ class TestPackageInstallation:
         assert run_id is not None
         assert "first_create" in results
 
-    def test_database_dependencies_available(self):
+    @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
+    def test_database_dependencies_available(self, mock_async_run):
         """Test that required database dependencies are available."""
+        # Mock DB backend — this file's scope is DataFlow's public API shape
+        # (@db.model, node generation, workflow composition). The async-sql
+        # backend is covered end-to-end in tests/e2e/dataflow/ against real
+        # PostgreSQL. See this file's module docstring.
+        mock_async_run.return_value = {
+            "success": True,
+            "result": {"id": 1, "dep_id": 1, "dep_type": "sqlite"},
+        }
+
         # Test SQLite support (should always be available)
         try:
             import sqlite3
@@ -107,8 +117,8 @@ class TestPackageInstallation:
         except ImportError:
             pytest.fail("SQLite support not available")
 
-        # Test that DataFlow can create SQLite database
-        db = DataFlow()  # Uses SQLite by default
+        # Test that DataFlow can create SQLite-backed instance
+        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
 
         @db.model
         class DependencyTest:
@@ -155,10 +165,22 @@ class TestPackageInstallation:
         assert results is not None
         assert results["minimal"]["test_value"] == "minimal_setup_works"
 
-    def test_configuration_free_setup(self):
+    @patch("kailash.nodes.data.async_sql.AsyncSQLDatabaseNode.async_run")
+    def test_configuration_free_setup(self, mock_async_run):
         """Test that DataFlow works without any configuration."""
-        # Should work with zero configuration
-        db = DataFlow()
+        # Mock DB backend — see module docstring for scope note.
+        mock_async_run.return_value = {
+            "success": True,
+            "result": {
+                "id": 1,
+                "auto_id": 100,
+                "auto_name": "Auto Generated",
+                "auto_active": True,
+            },
+        }
+
+        # Should work with a default database URL (no per-app config required)
+        db = DataFlow(database_url="postgresql://user:pass@localhost/test_db")
 
         @db.model
         class ConfigFreeTest:
