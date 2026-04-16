@@ -124,7 +124,7 @@ class DatabaseInfrastructure:
         logger.info("✅ Database infrastructure cleaned up")
 
 
-class TestTableFactory:
+class TableFactory:
     """Factory for creating standardized test tables."""
 
     def __init__(self, infrastructure: DatabaseInfrastructure):
@@ -268,7 +268,7 @@ class NotNullTestHarness:
 
     def __init__(self, infrastructure: DatabaseInfrastructure):
         self.infrastructure = infrastructure
-        self.table_factory = TestTableFactory(infrastructure)
+        self.table_factory = TableFactory(infrastructure)
         # self._handlers: List[NotNullColumnHandler] = []  # Disabled - module not available
 
     def create_connection_manager(self) -> "StandardConnectionManager":
@@ -359,7 +359,7 @@ class DataFlowTestHarness:
 
     def __init__(self, infrastructure: DatabaseInfrastructure):
         self.infrastructure = infrastructure
-        self.table_factory = TestTableFactory(infrastructure)
+        self.table_factory = TableFactory(infrastructure)
         self._dataflow_instances = []  # Track DataFlow instances for cleanup
 
     def create_dataflow(self, **kwargs) -> DataFlow:
@@ -480,9 +480,9 @@ class PerformanceMeasurement:
     ):
         """Assert minimum throughput requirements."""
         actual_throughput = rows / duration if duration > 0 else 0
-        assert actual_throughput >= min_rows_per_second, (
-            f"{operation_name} throughput {actual_throughput:.0f} rows/s below minimum {min_rows_per_second} rows/s"
-        )
+        assert (
+            actual_throughput >= min_rows_per_second
+        ), f"{operation_name} throughput {actual_throughput:.0f} rows/s below minimum {min_rows_per_second} rows/s"
 
 
 # Integration test decorators and markers

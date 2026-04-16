@@ -69,6 +69,7 @@ markers = [
     "unit: Unit tests (no I/O, no network)",
     "integration: Integration tests (real stores, files)",
     "property: Property-based tests (Hypothesis)",
+    "regression: Regression tests for fixed bugs",
 ]
 
 [tool.ruff]

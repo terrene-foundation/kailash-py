@@ -5,7 +5,7 @@ issues like shared state pollution, NodeRegistry contamination, and test
 order dependencies.
 """
 
-from typing import Any, Dict, Set
+from typing import Any, Dict
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +13,7 @@ import pytest
 from kailash.nodes.base import NodeRegistry
 
 
-class TestIsolation:
+class IsolationHelper:
     """Test isolation utilities for clean test execution."""
 
     def __init__(self):
@@ -43,7 +43,7 @@ class TestIsolation:
 
 
 # Global test isolation instance
-test_isolation = TestIsolation()
+test_isolation = IsolationHelper()
 
 
 @pytest.fixture(autouse=True)
@@ -137,7 +137,7 @@ def ensure_test_isolation(test_func):
     return wrapper
 
 
-class TestOrderValidator:
+class OrderValidationHelper:
     """Utility to validate test order independence."""
 
     def __init__(self):
@@ -225,7 +225,7 @@ class TestOrderValidator:
 
 
 # Global test order validator
-test_order_validator = TestOrderValidator()
+test_order_validator = OrderValidationHelper()
 
 
 @pytest.fixture
@@ -252,7 +252,7 @@ def reset_all_global_state():
     reset_global_state()
 
 
-class TestStateSnapshot:
+class StateSnapshotHelper:
     """Utility to capture and restore test state snapshots."""
 
     def __init__(self):
@@ -288,7 +288,7 @@ class TestStateSnapshot:
 @pytest.fixture
 def test_state_snapshot():
     """Provide test state snapshot functionality."""
-    snapshot = TestStateSnapshot()
+    snapshot = StateSnapshotHelper()
     yield snapshot
     snapshot.clear_snapshots()
 
