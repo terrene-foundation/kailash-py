@@ -1,45 +1,91 @@
 source_repo: kailash-py
-codify_date: "2026-04-15"
-codify_session: "feat(ci): declare Python 3.14 support across all packages (PR #474)"
-sdk_version: 2.8.6
+codify_date: "2026-04-16"
+codify_session: "Pre-release sweep — DataFlow __del__ deadlock fix, orphan test sweep (9 files), Kaizen trust test drift realignment, 3 institutional learnings codified"
+sdk_version: 2.8.8
 coc_version: 1.0.3
-status: distributed
-reviewed_date: "2026-04-15T05:30:00Z"
-distributed_date: "2026-04-15T05:30:00Z"
-review_notes: "Both entries classified GLOBAL at loom Gate 1 (python-version-bump.md skill + SKILL.md index update). Placed at loom/.claude/skills/10-deployment-git/. Loom bumped 2.8.7 → 2.8.8. Gate 2 distributed to kailash-coc-claude-py USE template. Cross-SDK follow-up: kailash-rs should author a rust-version-bump.md variant when the next kailash-rs codify runs."
+status: pending_review
 changes:
-  - file: skills/10-deployment-git/python-version-bump.md
+  - file: skills/26-eatp-reference/eatp-trust-posture-canonical.md
     action: created
     suggested_tier: global
     reason: |
-      New playbook capturing the end-to-end recipe for declaring support
-      for a new CPython minor release across the SDK. Validated by the
-      3.13 → 3.14 bump (PR #474, 2026-04-15). Three steps:
-        1. Add `Python :: 3.X` classifier to all 10 pyproject.toml files
-           (root + 9 sub-packages).
-        2. Append `"3.X"` to the 4 CI matrix files (unified-ci,
-           test-kailash-ml, test-kailash-align, trust-plane).
-        3. Verify locally with `uv venv --python 3.X` + per-package
-           `uv pip install --dry-run` BEFORE pushing — catches missing
-           ML-stack wheels (torch/transformers/accelerate) without
-           burning CI minutes.
-      Also documents the durable cross-surface version-test pattern
-      (assert SemVer regex AND `pkg.__version__ == _version.__version__`)
-      that prevents the recurring "stale literal version assertion"
-      failure mode caught in PR #474 (kailash-align test had been red
-      on main for two release bumps because fixture hardcoded "0.2.1"
-      after the package shipped 0.3.1).
-      Pure Python recipe — no language-specific content. Classify global
-      so the rs/rb variants can adapt for their own classifier/matrix
-      surfaces.
-    diff_lines: "+89"
-  - file: skills/10-deployment-git/SKILL.md
+      Authoritative reference for the five canonical TrustPosture names
+      (AUTONOMOUS/DELEGATING/SUPERVISED/TOOL/PSEUDO) vs the four
+      backward-compat aliases (DELEGATED/CONTINUOUS_INSIGHT/
+      SHARED_PLANNING/PSEUDO_AGENT). Contents:
+        - autonomy_level table for each canonical posture
+        - legacy-name → canonical equivalent mapping (FULL_AUTONOMY →
+          AUTONOMOUS, HUMAN_DECIDES → TOOL, BLOCKED → PSEUDO, ASSISTED
+          → SUPERVISED) — HUMAN_DECIDES → TOOL is the mapping that keeps
+          getting wrong (mapper's approval_required branch returns TOOL,
+          autonomy_level 2, not PSEUDO)
+        - mapper branch → posture table (from TrustPostureMapper.
+          map_verification_result source)
+        - serialization contract (.value is lowercase string)
+      Evidence: two consecutive session wrapups inverted canonical vs
+      alias; third session propagated the inversion into a kaizen agent
+      brief before source verification caught it. Pure EATP content —
+      should load globally for all Python targets.
+    diff_lines: "+86"
+  - file: skills/26-eatp-reference/SKILL.md
     action: modified
     suggested_tier: global
     reason: |
-      Added an index entry for the new python-version-bump playbook
-      under the Deployment Lifecycle section, between deployment-ci
-      and the Docker section. Five-line entry with the trigger,
-      3-step summary, and gotcha headline so the playbook is
-      discoverable from the skill's main TOC.
-    diff_lines: "+7"
+      Linked eatp-trust-posture-canonical.md with "Load first when
+      touching trust posture tests." Progressive-disclosure entry so
+      SKILL.md surfaces the trust posture reference ahead of quickstart
+      / api-reference when trust tests are the subject.
+    diff_lines: "+1"
+  - file: rules/patterns.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Strengthened § Async Resource Cleanup to address the DataFlow
+      __del__ deadlock pattern fixed in commit 4f5dbe7f. Additions:
+        - MUST NOT call close()/cleanup()/any-logger-touching method
+          from __del__
+        - DO/DO NOT code examples
+        - BLOCKED rationalizations ("we just need to close the
+          connection", "async_safe_run handles the event loop", etc.)
+        - Origin: commit 4f5dbe7f with the deadlock chain — finalizer
+          holds logging root lock → close() → async_safe_run →
+          asyncio.new_event_loop → selector init → logger.debug →
+          blocks on same lock.
+      The deadlock has reappeared in multiple prior sessions ("DataFlow
+      unit suite hangs"). The strengthened rule closes the rationalization
+      gap that allowed the pattern to be reintroduced.
+    diff_lines: "+35"
+  - file: rules/orphan-detection.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Added two MUST rules and extended the Detection Protocol:
+        - Rule 4: API removal MUST sweep tests in the same PR. One
+          orphan test import takes down collection of every test after
+          it. BLOCKED rationalizations include "tests cleaned up in
+          follow-up PR", "integration tier is separate scope."
+        - Rule 5: pytest --collect-only returning 0 is a merge gate.
+          Collection failures are invisible under unit-only CI but
+          become merge-blocking when anyone runs the full suite.
+        - Detection Protocol step 4: run --collect-only across tests/
+          and packages/*/tests/ to catch orphans mechanically.
+      Origin: 9 orphan test files deleted across commits d3e7e0ef +
+      5edc941f, orphaned since the DataFlow 2.0 refactor (53dab715
+      "delete 14,500 LOC" in 2026-03).
+    diff_lines: "+45"
+
+audit_summary:
+  commits_this_session: 20
+  tests_green:
+    root_sdk_unit: "3309 passed"
+    dataflow_unit: "3732 passed"
+    nexus_unit: "1551 passed"
+    ml_unit: "803 passed"
+    pact_unit: "1346 passed"
+    kaizen_unit: "8744 passed, 0 failed"
+    pact_integration: "18 passed"
+    ml_integration: "59 passed"
+    collect_only_all_packages: "37201 tests, 0 errors"
+  known_yellow:
+    dataflow_integration: "806 passed, 375 failed (pre-existing API drift from DataFlow 2.0 refactor 53dab715 — separate workstream)"
+    nexus_integration: "256 passed, 20 failed (JWT validator + MCP test setup drift)"

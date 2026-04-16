@@ -1,0 +1,45 @@
+source_repo: kailash-py
+codify_date: "2026-04-15"
+codify_session: "feat(ci): declare Python 3.14 support across all packages (PR #474)"
+sdk_version: 2.8.6
+coc_version: 1.0.3
+status: distributed
+reviewed_date: "2026-04-15T05:30:00Z"
+distributed_date: "2026-04-15T05:30:00Z"
+review_notes: "Both entries classified GLOBAL at loom Gate 1 (python-version-bump.md skill + SKILL.md index update). Placed at loom/.claude/skills/10-deployment-git/. Loom bumped 2.8.7 → 2.8.8. Gate 2 distributed to kailash-coc-claude-py USE template. Cross-SDK follow-up: kailash-rs should author a rust-version-bump.md variant when the next kailash-rs codify runs."
+changes:
+  - file: skills/10-deployment-git/python-version-bump.md
+    action: created
+    suggested_tier: global
+    reason: |
+      New playbook capturing the end-to-end recipe for declaring support
+      for a new CPython minor release across the SDK. Validated by the
+      3.13 → 3.14 bump (PR #474, 2026-04-15). Three steps:
+        1. Add `Python :: 3.X` classifier to all 10 pyproject.toml files
+           (root + 9 sub-packages).
+        2. Append `"3.X"` to the 4 CI matrix files (unified-ci,
+           test-kailash-ml, test-kailash-align, trust-plane).
+        3. Verify locally with `uv venv --python 3.X` + per-package
+           `uv pip install --dry-run` BEFORE pushing — catches missing
+           ML-stack wheels (torch/transformers/accelerate) without
+           burning CI minutes.
+      Also documents the durable cross-surface version-test pattern
+      (assert SemVer regex AND `pkg.__version__ == _version.__version__`)
+      that prevents the recurring "stale literal version assertion"
+      failure mode caught in PR #474 (kailash-align test had been red
+      on main for two release bumps because fixture hardcoded "0.2.1"
+      after the package shipped 0.3.1).
+      Pure Python recipe — no language-specific content. Classify global
+      so the rs/rb variants can adapt for their own classifier/matrix
+      surfaces.
+    diff_lines: "+89"
+  - file: skills/10-deployment-git/SKILL.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Added an index entry for the new python-version-bump playbook
+      under the Deployment Lifecycle section, between deployment-ci
+      and the Docker section. Five-line entry with the trigger,
+      3-step summary, and gotcha headline so the playbook is
+      discoverable from the skill's main TOC.
+    diff_lines: "+7"
