@@ -53,7 +53,7 @@ class TestConnectionPoolIntegration:
         # Verify pool configuration through connection manager
         assert hasattr(db, "_connection_manager")
         connection_manager = db._connection_manager
-        assert connection_manager._connection_stats["pool_size"] == 5
+        assert connection_manager.get_connection_stats()["pool_size"] == 5
 
     def test_concurrent_database_operations(self, test_suite):
         """Test concurrent database operations with connection pooling."""
@@ -218,7 +218,7 @@ class TestConnectionPoolIntegration:
 
         # Get initial pool stats from connection manager
         connection_manager = db._connection_manager
-        initial_pool_size = connection_manager._connection_stats["pool_size"]
+        initial_pool_size = connection_manager.get_connection_stats()["pool_size"]
 
         # Perform operations and monitor pool
         for i in range(5):
@@ -236,7 +236,7 @@ class TestConnectionPoolIntegration:
             assert result is not None
 
         # Pool configuration should remain consistent
-        final_pool_size = connection_manager._connection_stats["pool_size"]
+        final_pool_size = connection_manager.get_connection_stats()["pool_size"]
         assert final_pool_size == initial_pool_size  # Configuration should not change
 
     def test_connection_pool_with_transactions(self, test_suite):
@@ -340,7 +340,7 @@ class TestConnectionPoolIntegration:
 
         # Verify connections are properly managed through connection manager
         connection_manager = db._connection_manager
-        pool_size = connection_manager._connection_stats["pool_size"]
+        pool_size = connection_manager.get_connection_stats()["pool_size"]
         assert pool_size == 2  # Should maintain configured pool size
 
     def test_bulk_operations_with_connection_pooling(self, test_suite):
