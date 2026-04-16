@@ -175,10 +175,16 @@ class TestSecurityFeatures:
 
         Security Requirement:
         - Prevent DoS via extremely long key names
-        - Reject keys exceeding 256 characters
+        - Reject keys exceeding 256 characters (MAX_KEY_LENGTH in validation.py)
         - Return 400 Bad Request status
 
-        Implementation: nexus/core.py:552-554 (_execute_workflow)
+        Implementation:
+        - nexus/validation.py:103-111 raises ValueError("Input keys exceed
+          maximum length") for keys > MAX_KEY_LENGTH.
+        - nexus/core.py:2644-2649 catches the ValueError and returns the
+          generic detail "Invalid workflow inputs." to avoid leaking
+          validation internals to untrusted clients. The detailed reason
+          is only surfaced in server logs.
         """
         # Create key with 257 characters (exceeds 256 limit)
         long_key = "k" * 257
@@ -186,11 +192,13 @@ class TestSecurityFeatures:
 
         response = self.client.post("/api/secure-test", json=payload)
 
-        # Verify rejection
+        # Verify rejection: 400 with the generic validation-error detail.
         assert response.status_code == 400, (
             f"Expected 400 Bad Request, got {response.status_code}"
         )
-        assert "too long" in response.text.lower() or "key" in response.text.lower()
+        assert "invalid workflow inputs" in response.text.lower(), (
+            f"Response should report generic validation failure, got: {response.text}"
+        )
 
         print(f"✓ Key length limit enforced: {len(long_key)} characters rejected")
 
