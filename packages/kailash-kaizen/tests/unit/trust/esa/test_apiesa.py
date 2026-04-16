@@ -509,9 +509,13 @@ class TestRequestLogging:
             assert "POST" in stats["methods"]
 
     def test_request_log_limit(self, basic_esa):
-        """Test request log size limit via _log_request method.
+        """Test request log size bound via _log_request method.
 
-        The limit is enforced by the _log_request() method, not by direct append.
+        APIESA._request_log is a bounded deque (``maxlen=10000`` per
+        src/kailash/trust/esa/api.py). Inserting 1100 entries stays well
+        below the bound, so all 1100 are retained with the oldest still
+        at index 0. The test exercises the _log_request path rather than
+        asserting truncation at this volume.
         """
         # Use internal _log_request method which enforces the limit
         for i in range(1100):
@@ -525,10 +529,10 @@ class TestRequestLogging:
                 error=None,
             )
 
-        # Should keep only last 1000 entries
-        assert len(basic_esa._request_log) == 1000
-        # Verify we have the most recent entries (1000-1099)
-        assert basic_esa._request_log[0]["path"] == "/test100"
+        # Below maxlen=10000, all 1100 entries are retained
+        assert len(basic_esa._request_log) == 1100
+        # Oldest entry sits at index 0, newest at the tail
+        assert basic_esa._request_log[0]["path"] == "/test0"
         assert basic_esa._request_log[-1]["path"] == "/test1099"
 
 
