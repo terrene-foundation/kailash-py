@@ -19,6 +19,20 @@ from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 
 # Test Component 2: Integration Tests for MCP Protocol Features
+#
+# These tests exercise the MCP protocol over WebSocket. The production
+# WebSocket-capable MCP server is only available when fastmcp is installed
+# (see kailash_mcp/server.py:577 — fastmcp is the preferred transport
+# backend; without it, the MCPChannel run_in_executor path defaults to
+# STDIO and cannot serve WebSocket, producing a TaskGroup error at
+# startup). Skip the whole module when fastmcp is missing rather than
+# run 12 tests that will all fail with the same root cause.
+pytest.importorskip(
+    "fastmcp",
+    reason="fastmcp is required for MCP-over-WebSocket integration tests; "
+    "the official mcp.server.FastMCP fallback does not expose a WebSocket "
+    "transport (kailash_mcp/server.py:1636 + MCPChannel.start path).",
+)
 
 
 def find_free_port(start_port: int = 8000) -> int:
@@ -49,7 +63,10 @@ class TestMCPProtocolIntegration:
             mcp_port=mcp_port,
             enable_auth=False,  # Disable auth for integration tests
             enable_monitoring=True,
-            enable_http_transport=False,  # Test WebSocket only for now
+            # MCP server/channel wiring in core.py:760-767 bails early when
+            # enable_http_transport=False; the channel is not bound and the
+            # WebSocket test cannot connect. See _initialize_mcp_server.
+            enable_http_transport=True,
             enable_sse_transport=False,
             enable_discovery=False,
         )
@@ -553,7 +570,9 @@ class TestMCPHealthAndMetrics:
             mcp_port=mcp_port,
             enable_auth=False,
             enable_monitoring=True,
-            enable_http_transport=False,
+            # MCP server/channel wiring in core.py:760-767 bails early when
+            # enable_http_transport=False.
+            enable_http_transport=True,
             enable_sse_transport=False,
             enable_discovery=False,
             enable_durability=False,  # Disable caching for tests
