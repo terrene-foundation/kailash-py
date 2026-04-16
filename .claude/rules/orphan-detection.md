@@ -68,6 +68,48 @@ If a manager is found to be an orphan and the team decides not to wire it, it MU
 
 **Why:** Deprecation banners are easy to miss; consumers continue importing the symbol and silently shipping insecure code. Deletion is the only signal that survives a `pip install kailash --upgrade`.
 
+### 4. API Removal MUST Sweep Tests In The Same PR
+
+Any PR that removes a public symbol (module, class, function, attribute) MUST delete or port the tests that import it, in the same commit. Test files that reference the removed symbol become orphans — they fail at `pytest --collect-only` with `ModuleNotFoundError` / `ImportError`, which blocks every subsequent test run.
+
+```python
+# DO — remove the API and its tests in one commit
+# git show <sha>:
+# D  src/pkg/legacy_module.py
+# D  tests/integration/test_legacy_module.py
+# D  tests/e2e/test_legacy_module_e2e.py
+
+# DO NOT — remove the API, leave the tests
+# git show <sha>:
+# D  src/pkg/legacy_module.py
+# (test files still import pkg.legacy_module, collection fails on next run)
+```
+
+**BLOCKED rationalizations:**
+
+- "The tests will be cleaned up in a follow-up PR"
+- "CI doesn't run those tests anyway"
+- "The tests are obsolete; they don't need to move"
+- "Integration tier is separate scope"
+- "`pytest --collect-only` isn't part of CI"
+
+**Why:** Test files that fail at collection block the ENTIRE suite from running, not just themselves. One orphan test import takes down the 100 tests collected after it. Evidence: kailash-py commits `d3e7e0ef` + `5edc941f` deleted 9 orphan test files left behind by the DataFlow 2.0 refactor (`53dab715`) — integration collection had been failing since that refactor landed, but nobody noticed because the collection error was buried in the middle of a log.
+
+### 5. Collect-Only Is A Merge Gate
+
+`pytest --collect-only` across every test directory MUST return exit 0 before any PR merges. A collection error is a blocker in the same class as a test failure, regardless of which test file contains the error.
+
+```bash
+# DO — gate in CI, pre-commit, or /redteam
+.venv/bin/python -m pytest --collect-only tests/ packages/*/tests/
+# exit 0 required
+
+# DO NOT — "we only run unit tests in CI, integration is manual"
+# (unit tests pass, integration collection is silently red for months)
+```
+
+**Why:** Collection failures are invisible in "unit-only CI" setups yet become merge-blocking the moment someone runs the full suite locally. The only way to keep the full suite runnable is to gate every PR on collect-only-green.
+
 ## MUST NOT
 
 - Land a `db.X` / `app.X` facade without the production call site in the same PR
@@ -89,6 +131,7 @@ When auditing for orphans, run this protocol against every class exposed on the 
 1. **Surface scan** — list every property, method, and attribute on the framework's top-level class that returns a `*Manager` / `*Executor` / `*Store` / `*Registry` / `*Engine` / `*Service`.
 2. **Hot-path grep** — for each candidate, grep the framework's source (NOT tests, NOT downstream consumers) for calls into the class's methods. Zero matches in the hot path = orphan.
 3. **Tier 2 grep** — for each non-orphan, grep `tests/integration/` and `tests/e2e/` for the class name. Zero matches = unverified wiring.
-4. **Disposition** — every orphan and every unverified wiring MUST be either fixed (wire + test) or deleted (remove from public surface).
+4. **Collect-only sweep** — run `.venv/bin/python -m pytest --collect-only tests/ packages/*/tests/`. Every `ERROR <path>` / `ModuleNotFoundError` / `ImportError` at collection is a test-orphan. Disposition: delete the orphan test file (if the API is gone) or port its imports (if the API moved).
+5. **Disposition** — every orphan and every unverified wiring MUST be either fixed (wire + test) or deleted (remove from public surface).
 
 This protocol runs as part of `/redteam` and `/codify`.

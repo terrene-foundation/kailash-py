@@ -33,6 +33,7 @@ RBAC (4 roles), OIDC (JWKS auto-discovery), SIEM (CEF/OCSF/TLS syslog), Dashboar
 
 ## Implementation Reference (load on demand)
 
+- **[eatp-trust-posture-canonical.md](eatp-trust-posture-canonical.md)** — Canonical TrustPosture names (AUTONOMOUS/DELEGATING/SUPERVISED/TOOL/PSEUDO), legacy aliases, mapper branch → posture table. Load first when touching trust posture tests.
 - **[eatp-sdk-quickstart.md](eatp-sdk-quickstart.md)** — Getting started, 4-operation lifecycle, store selection
 - **[eatp-sdk-api-reference.md](eatp-sdk-api-reference.md)** — Complete API surface, module reference, type signatures
 - **[eatp-sdk-patterns.md](eatp-sdk-patterns.md)** — Implementation patterns, critical gotchas, architecture

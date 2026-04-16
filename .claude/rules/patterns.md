@@ -104,5 +104,33 @@ from kaizen.core import BaseAgent, Signature, InputField, OutputField
 - Use `def __del__(self, _warnings=warnings)` signature (survives interpreter shutdown)
 - Set class-level defaults for `__del__` safety
 - MUST NOT use `asyncio` in `__del__` — async cleanup in finalizers is unreliable
+- MUST NOT call `close()` / `cleanup()` / any method that might emit a log line from `__del__` — emit `ResourceWarning` and return. Real cleanup is the caller's responsibility via `with` / `await obj.close_async()`.
 
-**Why:** Without `__del__` warnings, leaked connections and file handles go undetected until resource exhaustion crashes the process in production.
+**Why:** Without `__del__` warnings, leaked connections and file handles go undetected until resource exhaustion crashes the process in production. Calling `close()` from `__del__` on an async resource is worse than leaking: the finalizer fires from inside Python's logging machinery during GC, `close()` spawns a new event loop whose selector init calls `logger.debug()`, and that acquires the root logging lock already held by the finalizer thread — deadlocking the process.
+
+```python
+# DO — emit warning, do nothing else
+def __del__(self, _warnings=warnings):
+    if not self._closed:
+        _warnings.warn(
+            f"{type(self).__name__} not closed; call await obj.close_async()",
+            ResourceWarning,
+            stacklevel=2,
+        )
+
+# DO NOT — async cleanup routed through logging-touching paths
+def __del__(self):
+    if not self._closed:
+        async_safe_run(self.close())  # deadlocks when __del__ fires from logging GC
+```
+
+**BLOCKED rationalizations:**
+
+- "We just need to close the connection to prevent leaks"
+- "The resource warning is too noisy; let's just clean up silently"
+- "async_safe_run handles the event loop correctly"
+- "It only deadlocks sometimes, and only in tests"
+
+**Why:** Every one of these has been argued before and reintroduced the deadlock. The deadlock is non-deterministic — it fires only when GC happens to finalize the resource while the logging root lock is held, which happens most often under test load. "It works in dev" is exactly the path to a production incident.
+
+Origin: kailash-py commit `4f5dbe7f` (2026-04-16) and prior "DataFlow unit suite hangs" reports across multiple sessions. `DataFlow.__del__` called `self.close()` → `async_safe_run()` → `asyncio.new_event_loop()` → selector init → `logger.debug()` → deadlock on root logging lock held by GC finalizer.
