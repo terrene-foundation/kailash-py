@@ -201,8 +201,15 @@ class TestHumanDecidesExecution:
     async def test_human_decides_without_handler_raises(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test that HUMAN_DECIDES without approval_handler raises ValueError."""
-        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
+        """Test that TOOL without approval_handler raises ValueError.
+
+        Production ``PostureAwareAgent.run`` (src/kailash/trust/agents/posture_agent.py)
+        routes the approval-required branch through ``TrustPosture.TOOL``.
+        PSEUDO is the blocked-from-execution branch and raises PermissionError
+        unconditionally, so this test must set TOOL to reach the approval code
+        path (Decision 007 renamed HUMAN_DECIDES → TOOL).
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.TOOL)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -221,8 +228,12 @@ class TestHumanDecidesExecution:
     async def test_human_decides_with_approval(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test HUMAN_DECIDES with approved request executes."""
-        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
+        """Test TOOL with approved request executes.
+
+        TOOL posture (formerly HUMAN_DECIDES) routes through the approval
+        handler; a True return from the handler permits execution.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.TOOL)
         approval_handler = MockApprovalHandler(approve=True)
 
         agent = PostureAwareAgent(
@@ -242,8 +253,12 @@ class TestHumanDecidesExecution:
     async def test_human_decides_with_denial(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test HUMAN_DECIDES with denied request raises PermissionError."""
-        posture_machine.set_posture("agent-001", TrustPosture.PSEUDO)
+        """Test TOOL with denied request raises PermissionError.
+
+        TOOL posture asks the approval handler; a False return surfaces as
+        PermissionError with the canonical ``denied by approver`` message.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.TOOL)
         approval_handler = MockApprovalHandler(approve=False)
 
         agent = PostureAwareAgent(
@@ -329,8 +344,15 @@ class TestAssistedExecution:
     async def test_assisted_with_delay(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test ASSISTED mode waits for delay then executes."""
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        """Test DELEGATING mode waits for delay then executes.
+
+        Production ``PostureAwareAgent.run`` routes the notification+delay
+        branch through ``TrustPosture.DELEGATING`` (formerly ASSISTED /
+        CONTINUOUS_INSIGHT). SUPERVISED goes straight to audited execution
+        with no notification and no cancellation window, so this test must
+        use DELEGATING to exercise the notification handler and audit log.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATING)
         notification_handler = MockNotificationHandler()
 
         agent = PostureAwareAgent(
@@ -350,15 +372,20 @@ class TestAssistedExecution:
         assert len(notification_handler.notifications) == 1
         assert notification_handler.notifications[0]["agent_id"] == "agent-001"
 
-        # Check audit log (ASSISTED also audits)
+        # Check audit log (DELEGATING also audits)
         assert len(agent.audit_log) == 1
 
     @pytest.mark.asyncio
     async def test_assisted_cancel_during_delay(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test that ASSISTED mode can be cancelled during delay."""
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        """Test that DELEGATING mode can be cancelled during delay.
+
+        The cancel-during-delay window lives on the DELEGATING branch
+        in production. SUPERVISED uses audit-only execution with no
+        cancellation opportunity.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATING)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -386,8 +413,13 @@ class TestAssistedExecution:
     async def test_assisted_without_notification_handler(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test ASSISTED mode works without notification handler."""
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        """Test DELEGATING mode works without notification handler.
+
+        The notification handler is optional for DELEGATING — the delay
+        + cancel window still runs, and absence of a handler is not a
+        hard error.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATING)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,
@@ -510,8 +542,13 @@ class TestCancelPending:
     async def test_cancel_pending_returns_true_when_pending(
         self, posture_machine: PostureStateMachine, mock_agent: MockBaseAgent
     ):
-        """Test cancel_pending returns True when there's a pending execution."""
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        """Test cancel_pending returns True when there's a pending execution.
+
+        ``cancel_pending`` flips the cancel event created by the DELEGATING
+        branch during its delay window. SUPERVISED doesn't create that
+        event (no delay), so cancel_pending() would return False there.
+        """
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATING)
 
         agent = PostureAwareAgent(
             base_agent=mock_agent,

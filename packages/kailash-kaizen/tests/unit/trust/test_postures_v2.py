@@ -35,71 +35,71 @@ from kailash.trust.posture.postures import (
 
 
 class TestTrustPosture5Postures:
-    """Test 5-posture model with autonomy levels."""
+    """Test 5-posture model with autonomy levels.
+
+    Canonical scale per Decision 007 (src/kailash/trust/posture/postures.py):
+    AUTONOMOUS=5, DELEGATING=4, SUPERVISED=3, TOOL=2, PSEUDO=1. Wire values
+    match the lowercase member name (``"autonomous"`` etc.).
+    """
 
     def test_five_postures_exist(self):
-        """Test all 5 postures exist."""
+        """Test all 5 canonical postures exist with lowercase wire values."""
         assert len(TrustPosture) == 5
-        assert TrustPosture.AUTONOMOUS.value == "full_autonomy"
-        assert TrustPosture.SUPERVISED.value == "assisted"
+        assert TrustPosture.AUTONOMOUS.value == "autonomous"
+        assert TrustPosture.DELEGATING.value == "delegating"
         assert TrustPosture.SUPERVISED.value == "supervised"
-        assert TrustPosture.PSEUDO.value == "human_decides"
-        assert TrustPosture.PSEUDO.value == "blocked"
+        assert TrustPosture.TOOL.value == "tool"
+        assert TrustPosture.PSEUDO.value == "pseudo"
 
     def test_autonomy_levels(self):
         """Test autonomy_level property for each posture."""
         assert TrustPosture.AUTONOMOUS.autonomy_level == 5
-        assert TrustPosture.SUPERVISED.autonomy_level == 4
+        assert TrustPosture.DELEGATING.autonomy_level == 4
         assert TrustPosture.SUPERVISED.autonomy_level == 3
-        assert TrustPosture.PSEUDO.autonomy_level == 2
+        assert TrustPosture.TOOL.autonomy_level == 2
         assert TrustPosture.PSEUDO.autonomy_level == 1
 
     def test_can_upgrade_to(self):
-        """Test can_upgrade_to method."""
-        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.PSEUDO) is True
+        """Test can_upgrade_to method uses strict inequality of autonomy_level."""
+        # PSEUDO (1) can upgrade to anything higher
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.TOOL) is True
         assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.SUPERVISED) is True
-        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.SUPERVISED) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.DELEGATING) is True
         assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.AUTONOMOUS) is True
+        # Same posture is not an upgrade
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.PSEUDO) is False
 
-        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.SUPERVISED) is True
-        assert (
-            TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.AUTONOMOUS) is True
-        )
-        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.PSEUDO) is False
+        # SUPERVISED (3) can upgrade to DELEGATING (4) and AUTONOMOUS (5)
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.DELEGATING) is True
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.AUTONOMOUS) is True
+        # Cannot upgrade to lower or same
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.TOOL) is False
         assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.SUPERVISED) is False
 
-        assert (
-            TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.AUTONOMOUS)
-            is False
-        )
+        # AUTONOMOUS (5) is the top — no upgrades
+        assert TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.AUTONOMOUS) is False
         assert TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.PSEUDO) is False
 
     def test_can_downgrade_to(self):
-        """Test can_downgrade_to method."""
-        assert (
-            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.SUPERVISED) is True
-        )
-        assert (
-            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.SUPERVISED) is True
-        )
-        assert (
-            TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.PSEUDO)
-            is True
-        )
+        """Test can_downgrade_to method uses strict inequality of autonomy_level."""
+        # AUTONOMOUS (5) can downgrade to any lower posture
+        assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.DELEGATING) is True
+        assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.SUPERVISED) is True
+        assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.TOOL) is True
         assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.PSEUDO) is True
 
-        assert (
-            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.PSEUDO) is True
-        )
+        # SUPERVISED (3) can downgrade to TOOL (2) or PSEUDO (1)
+        assert TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.TOOL) is True
         assert TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.PSEUDO) is True
+        # Cannot downgrade to higher or same
         assert (
-            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.AUTONOMOUS)
-            is False
+            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.DELEGATING) is False
         )
         assert (
             TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.SUPERVISED) is False
         )
 
+        # PSEUDO (1) is the bottom — no downgrades
         assert TrustPosture.PSEUDO.can_downgrade_to(TrustPosture.PSEUDO) is False
 
 
@@ -107,12 +107,15 @@ class TestPostureComparison:
     """Test comparison operators."""
 
     def test_less_than(self):
-        """Test __lt__ operator."""
-        assert TrustPosture.PSEUDO < TrustPosture.PSEUDO
+        """Test __lt__ operator against the five canonical postures."""
+        # Strictly lower autonomy level → less-than is True
+        assert TrustPosture.PSEUDO < TrustPosture.TOOL
         assert TrustPosture.PSEUDO < TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED < TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED < TrustPosture.AUTONOMOUS
+        assert TrustPosture.TOOL < TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED < TrustPosture.DELEGATING
+        assert TrustPosture.DELEGATING < TrustPosture.AUTONOMOUS
 
+        # Reverse and equal comparisons return False
         assert not (TrustPosture.AUTONOMOUS < TrustPosture.PSEUDO)
         assert not (TrustPosture.SUPERVISED < TrustPosture.SUPERVISED)
 
@@ -125,11 +128,11 @@ class TestPostureComparison:
         assert not (TrustPosture.AUTONOMOUS <= TrustPosture.PSEUDO)
 
     def test_greater_than(self):
-        """Test __gt__ operator."""
-        assert TrustPosture.AUTONOMOUS > TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED > TrustPosture.SUPERVISED
-        assert TrustPosture.SUPERVISED > TrustPosture.PSEUDO
-        assert TrustPosture.PSEUDO > TrustPosture.PSEUDO
+        """Test __gt__ operator against the five canonical postures."""
+        assert TrustPosture.AUTONOMOUS > TrustPosture.DELEGATING
+        assert TrustPosture.DELEGATING > TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED > TrustPosture.TOOL
+        assert TrustPosture.TOOL > TrustPosture.PSEUDO
 
         assert not (TrustPosture.PSEUDO > TrustPosture.AUTONOMOUS)
         assert not (TrustPosture.SUPERVISED > TrustPosture.SUPERVISED)
@@ -148,16 +151,16 @@ class TestPostureComparison:
             TrustPosture.SUPERVISED,
             TrustPosture.AUTONOMOUS,
             TrustPosture.PSEUDO,
-            TrustPosture.SUPERVISED,
-            TrustPosture.PSEUDO,
+            TrustPosture.TOOL,
+            TrustPosture.DELEGATING,
         ]
         sorted_postures = sorted(postures)
 
         assert sorted_postures == [
             TrustPosture.PSEUDO,
-            TrustPosture.PSEUDO,
+            TrustPosture.TOOL,
             TrustPosture.SUPERVISED,
-            TrustPosture.SUPERVISED,
+            TrustPosture.DELEGATING,
             TrustPosture.AUTONOMOUS,
         ]
 
@@ -177,11 +180,16 @@ class TestPostureTransitionRequest:
     """Test PostureTransitionRequest dataclass."""
 
     def test_upgrade_detection(self):
-        """Test is_upgrade property."""
+        """Test is_upgrade property with a strictly-higher target posture.
+
+        transition_type compares ``from_posture.autonomy_level`` to
+        ``to_posture.autonomy_level``; SUPERVISED→DELEGATING (3→4) is the
+        canonical minimal upgrade step on the five-posture scale.
+        """
         request = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.DELEGATING,
         )
         assert request.is_upgrade is True
         assert request.is_downgrade is False
@@ -254,7 +262,12 @@ class TestTransitionResult:
         assert result.blocked_by == "upgrade_approval_required"
 
     def test_to_dict(self):
-        """Test serialization."""
+        """Test serialization using canonical posture wire strings.
+
+        TransitionResult.to_dict serialises postures via ``.value``, which
+        for the canonical enum is the lowercase member name. Pre-Decision-007
+        strings like ``"blocked"`` are no longer emitted.
+        """
         result = TransitionResult(
             success=True,
             from_posture=TrustPosture.PSEUDO,
@@ -265,7 +278,7 @@ class TestTransitionResult:
         data = result.to_dict()
 
         assert data["success"] is True
-        assert data["from_posture"] == "blocked"
+        assert data["from_posture"] == "pseudo"
         assert data["to_posture"] == "supervised"
         assert data["transition_type"] == "upgrade"
         assert "timestamp" in data
@@ -275,7 +288,14 @@ class TestTransitionGuard:
     """Test TransitionGuard dataclass."""
 
     def test_guard_applies_to_upgrade(self):
-        """Test guard that applies to upgrades."""
+        """Test guard that applies to upgrades.
+
+        Guard.check returns True whenever the transition type is outside
+        ``applies_to``. To exercise the ``applies_to`` match and the mismatch,
+        the upgrade requests must cross an autonomy_level boundary
+        (SUPERVISED→DELEGATING) and the non-upgrade request must go in the
+        opposite direction (AUTONOMOUS→SUPERVISED).
+        """
         guard = TransitionGuard(
             name="test_guard",
             check_fn=lambda req: req.requester_id is not None,
@@ -287,7 +307,7 @@ class TestTransitionGuard:
         upgrade_request = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.DELEGATING,
         )
         assert guard.check(upgrade_request) is False
 
@@ -295,7 +315,7 @@ class TestTransitionGuard:
         upgrade_request_approved = PostureTransitionRequest(
             agent_id="agent-001",
             from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.DELEGATING,
             requester_id="admin-001",
         )
         assert guard.check(upgrade_request_approved) is True
@@ -303,7 +323,7 @@ class TestTransitionGuard:
         # Downgrade should pass (guard doesn't apply)
         downgrade_request = PostureTransitionRequest(
             agent_id="agent-001",
-            from_posture=TrustPosture.SUPERVISED,
+            from_posture=TrustPosture.AUTONOMOUS,
             to_posture=TrustPosture.SUPERVISED,
         )
         assert guard.check(downgrade_request) is True  # Guard doesn't apply
@@ -313,10 +333,14 @@ class TestPostureStateMachine:
     """Test PostureStateMachine class."""
 
     def test_default_initialization(self):
-        """Test default initialization."""
+        """Test default initialization.
+
+        ``PostureStateMachine`` defaults ``default_posture`` to
+        ``TrustPosture.TOOL`` per CARE spec RT-17: tool agents start at
+        autonomy_level=2 and escalate from there.
+        """
         machine = PostureStateMachine()
-        # Default posture is SUPERVISED
-        assert machine.get_posture("unknown-agent") == TrustPosture.SUPERVISED
+        assert machine.get_posture("unknown-agent") == TrustPosture.TOOL
 
     def test_set_and_get_posture(self):
         """Test set_posture and get_posture."""
@@ -325,7 +349,11 @@ class TestPostureStateMachine:
         assert machine.get_posture("agent-001") == TrustPosture.AUTONOMOUS
 
     def test_successful_upgrade_with_approval(self):
-        """Test successful upgrade when requester_id is provided."""
+        """Test successful upgrade when requester_id is provided.
+
+        Upgrade = strictly higher autonomy_level. SUPERVISED(3)→DELEGATING(4)
+        is the canonical minimal upgrade on the five-posture scale.
+        """
         machine = PostureStateMachine()
         machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
@@ -333,7 +361,7 @@ class TestPostureStateMachine:
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.DELEGATING,
                 reason="Agent proven reliable",
                 requester_id="admin-001",
             )
@@ -341,10 +369,15 @@ class TestPostureStateMachine:
 
         assert result.success is True
         assert result.transition_type == PostureTransition.UPGRADE
-        assert machine.get_posture("agent-001") == TrustPosture.SUPERVISED
+        assert machine.get_posture("agent-001") == TrustPosture.DELEGATING
 
     def test_upgrade_blocked_without_approval(self):
-        """Test upgrade is blocked when requester_id is missing."""
+        """Test upgrade is blocked when requester_id is missing.
+
+        The default ``upgrade_approval_required`` guard blocks any upgrade
+        whose request carries no requester_id. The transition must be a
+        real upgrade (SUPERVISED→DELEGATING) to invoke the guard.
+        """
         machine = PostureStateMachine()
         machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
@@ -352,7 +385,7 @@ class TestPostureStateMachine:
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.DELEGATING,
                 reason="Upgrade attempt without approval",
             )
         )
@@ -428,12 +461,12 @@ class TestPostureStateMachine:
         machine = PostureStateMachine()
         machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
-        # Perform some transitions
+        # Perform some transitions — SUPERVISED→DELEGATING is a real upgrade
         machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-001",
                 from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.DELEGATING,
                 requester_id="admin-001",
             )
         )
@@ -575,47 +608,67 @@ class TestBackwardCompatibility:
         assert result.posture == TrustPosture.PSEUDO
 
     def test_trust_posture_is_string_enum(self):
-        """Test TrustPosture still inherits from str."""
+        """Test TrustPosture still inherits from str and emits canonical values."""
         assert isinstance(TrustPosture.AUTONOMOUS, str)
         assert TrustPosture.SUPERVISED == "supervised"
-        # Use .value for string representation
-        assert TrustPosture.PSEUDO.value == "blocked"
+        # Canonical wire value is the lowercase member name
+        assert TrustPosture.PSEUDO.value == "pseudo"
 
-    def test_get_posture_for_action_returns_assisted_for_audit(self):
-        """Test get_posture_for_action now returns ASSISTED for audit."""
+    def test_get_posture_for_action_returns_delegating_for_audit(self):
+        """Test get_posture_for_action returns DELEGATING for audit-only.
+
+        ``get_posture_for_action`` branch (src/kailash/trust/posture/postures.py):
+        allowed + audit + no approval → DELEGATING. Pre-Decision-007 this was
+        ASSISTED which lives today as DELEGATING on the canonical five-posture
+        scale.
+        """
         posture = get_posture_for_action(
             is_allowed=True,
             requires_audit=True,
         )
-        # Changed from SUPERVISED to ASSISTED in v2
-        assert posture == TrustPosture.SUPERVISED
+        assert posture == TrustPosture.DELEGATING
 
     def test_get_posture_for_action_still_returns_blocked(self):
-        """Test get_posture_for_action still returns BLOCKED when not allowed."""
+        """Test get_posture_for_action still returns PSEUDO when not allowed.
+
+        PSEUDO replaces the pre-Decision-007 BLOCKED name; the semantic
+        (agent cannot execute) is preserved.
+        """
         posture = get_posture_for_action(is_allowed=False)
         assert posture == TrustPosture.PSEUDO
 
-    def test_get_posture_for_action_still_returns_human_decides(self):
-        """Test get_posture_for_action still returns HUMAN_DECIDES for approval."""
+    def test_get_posture_for_action_still_returns_tool_for_approval(self):
+        """Test get_posture_for_action returns TOOL when approval is required.
+
+        Pre-Decision-007 HUMAN_DECIDES branch collapses to TOOL — human
+        co-plans the action and agent executes approved plans.
+        """
         posture = get_posture_for_action(
             is_allowed=True,
             requires_approval=True,
         )
-        assert posture == TrustPosture.PSEUDO
+        assert posture == TrustPosture.TOOL
 
 
 class TestAssistedPostureMapping:
-    """Test ASSISTED posture is used appropriately in mapping."""
+    """Test DELEGATING posture (formerly ASSISTED) is used appropriately.
 
-    def test_mapper_returns_assisted_for_audit_with_normal_trust(self):
-        """Test mapper returns ASSISTED when audit required with normal trust."""
+    Pre-Decision-007 the ASSISTED posture covered the "audit-required +
+    normal-or-higher trust" case. That case now maps to DELEGATING: agent
+    executes autonomously while the human monitors via audit, which matches
+    the semantic of "operator watches, agent acts". The low-trust path
+    still maps to SUPERVISED.
+    """
+
+    def test_mapper_returns_delegating_for_audit_with_normal_trust(self):
+        """Test mapper returns DELEGATING when audit required with normal trust."""
         mapper = TrustPostureMapper()
         result = mapper.map_to_posture(
             is_valid=True,
             trust_level="normal",
             audit_required=True,
         )
-        assert result.posture == TrustPosture.SUPERVISED
+        assert result.posture == TrustPosture.DELEGATING
 
     def test_mapper_returns_supervised_for_low_trust(self):
         """Test mapper returns SUPERVISED for low trust level."""
@@ -626,8 +679,8 @@ class TestAssistedPostureMapping:
         )
         assert result.posture == TrustPosture.SUPERVISED
 
-    def test_mapper_verification_result_assisted(self):
-        """Test map_verification_result uses ASSISTED for audit with normal trust."""
+    def test_mapper_verification_result_delegating(self):
+        """Test map_verification_result uses DELEGATING for audit+normal trust."""
 
         class MockVerification:
             valid = True
@@ -635,7 +688,7 @@ class TestAssistedPostureMapping:
 
         mapper = TrustPostureMapper()
         result = mapper.map_verification_result(MockVerification())
-        assert result.posture == TrustPosture.SUPERVISED
+        assert result.posture == TrustPosture.DELEGATING
 
 
 class TestAllExports:

@@ -31,12 +31,19 @@ class TestTrustPosture:
     """Test TrustPosture enum."""
 
     def test_posture_values(self):
-        """Test all posture values exist."""
-        assert TrustPosture.AUTONOMOUS.value == "full_autonomy"
-        assert TrustPosture.SUPERVISED.value == "assisted"
+        """Test that canonical posture values match Decision 007 wire strings.
+
+        Canonical TrustPosture (src/kailash/trust/posture/postures.py):
+        AUTONOMOUS='autonomous', DELEGATING='delegating', SUPERVISED='supervised',
+        TOOL='tool', PSEUDO='pseudo'. Pre-Decision-007 names (FULL_AUTONOMY,
+        ASSISTED, HUMAN_DECIDES, BLOCKED) are no longer attribute names on
+        the enum.
+        """
+        assert TrustPosture.AUTONOMOUS.value == "autonomous"
+        assert TrustPosture.DELEGATING.value == "delegating"
         assert TrustPosture.SUPERVISED.value == "supervised"
-        assert TrustPosture.PSEUDO.value == "human_decides"
-        assert TrustPosture.PSEUDO.value == "blocked"
+        assert TrustPosture.TOOL.value == "tool"
+        assert TrustPosture.PSEUDO.value == "pseudo"
 
     def test_posture_count(self):
         """Test that we have exactly 5 postures."""
@@ -129,7 +136,12 @@ class TestPostureResult:
         assert result.verification_details == {"agent_id": "agent-001"}
 
     def test_to_dict(self):
-        """Test serialization."""
+        """Test serialization.
+
+        PostureResult.to_dict serialises the posture via ``.value``, so the
+        canonical ``PSEUDO`` member becomes the wire string ``"pseudo"``.
+        The pre-Decision-007 ``"blocked"`` value is no longer emitted.
+        """
         result = PostureResult(
             posture=TrustPosture.PSEUDO,
             reason="Access denied",
@@ -137,7 +149,7 @@ class TestPostureResult:
 
         data = result.to_dict()
 
-        assert data["posture"] == "blocked"
+        assert data["posture"] == "pseudo"
         assert data["reason"] == "Access denied"
         assert "constraints" in data
         assert "verification_details" in data
@@ -234,8 +246,13 @@ class TestTrustPostureMapper:
 
         assert result.posture == TrustPosture.AUTONOMOUS
 
-    def test_map_approval_required_human_decides(self):
-        """Test approval_required returns HUMAN_DECIDES."""
+    def test_map_approval_required_tool(self):
+        """Test approval_required returns TOOL.
+
+        Mapper branch: ``approval_required or human_in_loop`` selects TOOL
+        (human co-plans, agent executes approved plan). Pre-Decision-007
+        name HUMAN_DECIDES now maps to TOOL.
+        """
         mapper = TrustPostureMapper()
         verification = MockVerificationResult(
             valid=True,
@@ -244,11 +261,11 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.PSEUDO
+        assert result.posture == TrustPosture.TOOL
         assert result.constraints.approval_required is True
 
-    def test_map_human_in_loop_human_decides(self):
-        """Test human_in_loop returns HUMAN_DECIDES."""
+    def test_map_human_in_loop_tool(self):
+        """Test human_in_loop returns TOOL (mapper branch shared with approval)."""
         mapper = TrustPostureMapper()
         verification = MockVerificationResult(
             valid=True,
@@ -257,10 +274,17 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        assert result.posture == TrustPosture.PSEUDO
+        assert result.posture == TrustPosture.TOOL
 
-    def test_map_audit_required_assisted(self):
-        """Test audit_required with normal trust returns ASSISTED."""
+    def test_map_audit_required_delegating(self):
+        """Test audit_required with normal trust returns DELEGATING.
+
+        Mapper branch: when audit_required=True and trust_level is
+        normal/high/full, the posture is DELEGATING (agent executes,
+        human monitors via audit). Pre-Decision-007 ASSISTED semantics
+        split into DELEGATING (audit with trust) vs SUPERVISED (audit
+        without trust).
+        """
         mapper = TrustPostureMapper()
         verification = MockVerificationResult(
             valid=True,
@@ -269,9 +293,8 @@ class TestTrustPostureMapper:
 
         result = mapper.map_verification_result(verification)
 
-        # With normal trust level (default), audit_required now returns ASSISTED
-        assert result.posture == TrustPosture.SUPERVISED
-        assert "Assisted mode" in result.reason
+        assert result.posture == TrustPosture.DELEGATING
+        assert "Delegating mode" in result.reason
 
     def test_map_sensitive_capability_supervised(self):
         """Test sensitive capability returns SUPERVISED."""
@@ -353,8 +376,13 @@ class TestMapToPosture:
         assert result.posture == TrustPosture.PSEUDO
         assert result.reason == "Access denied"
 
-    def test_human_decides_when_approval_required(self):
-        """Test HUMAN_DECIDES when approval_required."""
+    def test_tool_when_approval_required(self):
+        """Test TOOL when approval_required.
+
+        ``map_to_posture`` branch: approval_required → TOOL (Decision 007
+        canonical). Audit is still required because the approval path
+        implies a reviewable action.
+        """
         mapper = TrustPostureMapper()
 
         result = mapper.map_to_posture(
@@ -362,12 +390,17 @@ class TestMapToPosture:
             approval_required=True,
         )
 
-        assert result.posture == TrustPosture.PSEUDO
+        assert result.posture == TrustPosture.TOOL
         assert result.constraints.approval_required is True
         assert result.constraints.audit_required is True
 
-    def test_assisted_when_audit_required(self):
-        """Test ASSISTED when audit_required with normal trust level."""
+    def test_delegating_when_audit_required(self):
+        """Test DELEGATING when audit_required with normal trust level.
+
+        ``map_to_posture`` branch: with trust_level normal/high/full and
+        audit_required=True, posture is DELEGATING (agent executes while
+        human monitors the audit trail).
+        """
         mapper = TrustPostureMapper()
 
         result = mapper.map_to_posture(
@@ -375,8 +408,7 @@ class TestMapToPosture:
             audit_required=True,
         )
 
-        # With normal trust level (default), audit_required now returns ASSISTED
-        assert result.posture == TrustPosture.SUPERVISED
+        assert result.posture == TrustPosture.DELEGATING
         assert result.constraints.audit_required is True
 
     def test_supervised_for_low_trust(self):
@@ -443,24 +475,31 @@ class TestConvenienceFunctions:
 
         assert posture == TrustPosture.PSEUDO
 
-    def test_get_posture_for_action_human_decides(self):
-        """Test get_posture_for_action with approval required."""
+    def test_get_posture_for_action_tool(self):
+        """Test get_posture_for_action with approval required returns TOOL.
+
+        ``get_posture_for_action`` branch: ``requires_approval=True`` →
+        TOOL per Decision 007 canonical mapping.
+        """
         posture = get_posture_for_action(
             is_allowed=True,
             requires_approval=True,
         )
 
-        assert posture == TrustPosture.PSEUDO
+        assert posture == TrustPosture.TOOL
 
-    def test_get_posture_for_action_assisted(self):
-        """Test get_posture_for_action with audit required returns ASSISTED."""
+    def test_get_posture_for_action_delegating(self):
+        """Test get_posture_for_action with audit required returns DELEGATING.
+
+        ``get_posture_for_action`` branch: ``requires_audit=True`` without
+        approval → DELEGATING (agent acts, audit captures the trail).
+        """
         posture = get_posture_for_action(
             is_allowed=True,
             requires_audit=True,
         )
 
-        # Now returns ASSISTED instead of SUPERVISED when audit is required
-        assert posture == TrustPosture.SUPERVISED
+        assert posture == TrustPosture.DELEGATING
 
     def test_get_posture_for_action_full_autonomy(self):
         """Test get_posture_for_action with full access."""
