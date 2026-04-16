@@ -227,7 +227,23 @@ class TestPatternCaching:
         assert cache_info["maxsize"] == 2
 
     def test_cache_performance_improvement(self):
-        """Cache hit should be faster than or equal to cache miss."""
+        """Repeated lookups of the same exception MUST hit the cache.
+
+        Behavioral rewrite (2026-04-16): the previous version measured
+        wall-clock perf_counter() differences between one miss and ten
+        hits and asserted avg_hit <= miss * 2. That is a flaky timing
+        test — under concurrent pytest workers or CI load the first
+        call is not always the slowest, and the ratio inverts. Per
+        rules/testing.md (tests MUST be deterministic), perf ratios
+        with factor-of-2 slack produce intermittent failures that
+        erode trust in the whole suite.
+
+        The actual cache contract is observable via get_cache_info():
+        after one call followed by N repeats of the same exception,
+        the cache MUST record 1 miss and N hits. That asserts the
+        same invariant the timing test tried to assert, but
+        deterministically and without sleep.
+        """
         from dataflow.core.config import ErrorEnhancerConfig, PerformanceMode
         from dataflow.core.error_enhancer import ErrorEnhancer
 
@@ -236,25 +252,24 @@ class TestPatternCaching:
 
         exception = KeyError("Parameter 'data' is missing")
 
-        # Measure cache miss time
-        start = time.perf_counter()
+        # First call: cache miss (populates the pattern cache).
         enhancer.find_error_definition(exception)
-        miss_time = time.perf_counter() - start
 
-        # Measure cache hit time (run multiple times for accuracy)
-        hit_times = []
+        # Ten repeats of the same exception: each MUST hit the cache.
         for _ in range(10):
-            start = time.perf_counter()
             enhancer.find_error_definition(exception)
-            hit_times.append(time.perf_counter() - start)
 
-        avg_hit_time = sum(hit_times) / len(hit_times)
-
-        # Cache hit should be faster than or equal to miss (allowing for measurement variance)
-        # Main benefit is consistent performance, not necessarily dramatic speedup
-        assert avg_hit_time <= miss_time * 2, (
-            f"Cache hit ({avg_hit_time:.6f}s) should not be significantly slower than "
-            f"miss ({miss_time:.6f}s)"
+        info = enhancer.get_cache_info()
+        # Behavioral contract: more hits than misses after repeated lookups.
+        assert info["hits"] > info["misses"], (
+            f"Expected cache to favor hits after repeated lookups of the "
+            f"same exception, but got hits={info['hits']} "
+            f"misses={info['misses']}. The cache is not memoising."
+        )
+        # And specifically: 1 miss + 10 hits for this exact lookup pattern.
+        assert info["misses"] >= 1 and info["hits"] >= 10, (
+            f"Expected at least 1 miss and at least 10 hits across the 11 "
+            f"calls; got misses={info['misses']} hits={info['hits']}."
         )
 
 
