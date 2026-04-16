@@ -210,21 +210,26 @@ class TestGetPostureMetricsWithDistribution:
     def test_get_posture_metrics_with_distribution(
         self, collector: TrustMetricsCollector
     ):
-        """Test getting posture metrics includes all posture types."""
+        """Test getting posture metrics includes all five canonical posture types.
+
+        Canonical postures (Decision 007): AUTONOMOUS, DELEGATING, SUPERVISED,
+        TOOL, PSEUDO. One agent at each posture distinct from the others so the
+        distribution assertion remains meaningful.
+        """
         collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
-        collector.record_posture("agent-002", TrustPosture.SUPERVISED)
+        collector.record_posture("agent-002", TrustPosture.DELEGATING)
         collector.record_posture("agent-003", TrustPosture.SUPERVISED)
-        collector.record_posture("agent-004", TrustPosture.PSEUDO)
+        collector.record_posture("agent-004", TrustPosture.TOOL)
         collector.record_posture("agent-005", TrustPosture.PSEUDO)
 
         metrics = collector.get_posture_metrics()
 
-        # All posture types should be in distribution
+        # All five posture types should be in distribution, one agent each
         assert len(metrics.posture_distribution) == 5
         assert metrics.posture_distribution["autonomous"] == 1
+        assert metrics.posture_distribution["delegating"] == 1
         assert metrics.posture_distribution["supervised"] == 1
-        assert metrics.posture_distribution["supervised"] == 1
-        assert metrics.posture_distribution["pseudo"] == 1
+        assert metrics.posture_distribution["tool"] == 1
         assert metrics.posture_distribution["pseudo"] == 1
 
     def test_get_posture_metrics_empty_distribution(
@@ -233,14 +238,14 @@ class TestGetPostureMetricsWithDistribution:
         """Test getting posture metrics when no agents recorded."""
         metrics = collector.get_posture_metrics()
 
-        # All posture types should exist with 0 count
+        # All five canonical posture types should exist with 0 count
         assert len(metrics.posture_distribution) == 5
         for posture_value in [
             "autonomous",
+            "delegating",
             "supervised",
-            "supervised",
+            "tool",
             "pseudo",
-            "blocked",
         ]:
             assert metrics.posture_distribution[posture_value] == 0
 
@@ -284,7 +289,7 @@ class TestAveragePostureLevelCalculation:
 
     def test_average_posture_level_calculation(self, collector: TrustMetricsCollector):
         """Test average posture level with mixed agents."""
-        # FULL_AUTONOMY (5) + BLOCKED (1) = 6 / 2 = 3.0
+        # AUTONOMOUS (5) + PSEUDO (1) = 6 / 2 = 3.0
         collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_posture("agent-002", TrustPosture.PSEUDO)
 
@@ -307,23 +312,31 @@ class TestAveragePostureLevelCalculation:
         assert metrics.average_posture_level == 0.0
 
     def test_average_posture_level_all_postures(self, collector: TrustMetricsCollector):
-        """Test average with one agent at each posture."""
-        # 5 + 4 + 3 + 2 + 1 = 15 / 5 = 3.0
+        """Test average with one agent at each canonical posture.
+
+        Five canonical postures (Decision 007): AUTONOMOUS=5, DELEGATING=4,
+        SUPERVISED=3, TOOL=2, PSEUDO=1. Sum 15 over 5 agents = 3.0.
+        """
         collector.record_posture("a1", TrustPosture.AUTONOMOUS)
-        collector.record_posture("a2", TrustPosture.SUPERVISED)
+        collector.record_posture("a2", TrustPosture.DELEGATING)
         collector.record_posture("a3", TrustPosture.SUPERVISED)
-        collector.record_posture("a4", TrustPosture.PSEUDO)
+        collector.record_posture("a4", TrustPosture.TOOL)
         collector.record_posture("a5", TrustPosture.PSEUDO)
 
         metrics = collector.get_posture_metrics()
         assert metrics.average_posture_level == 3.0
 
     def test_posture_level_map_values(self):
-        """Test that posture level map has correct values."""
+        """Test that posture level map has correct canonical values.
+
+        Per src/kailash/trust/metrics.py POSTURE_LEVEL_MAP, which mirrors
+        TrustPosture.autonomy_level: AUTONOMOUS=5, DELEGATING=4,
+        SUPERVISED=3, TOOL=2, PSEUDO=1.
+        """
         assert POSTURE_LEVEL_MAP[TrustPosture.AUTONOMOUS] == 5
-        assert POSTURE_LEVEL_MAP[TrustPosture.SUPERVISED] == 4
+        assert POSTURE_LEVEL_MAP[TrustPosture.DELEGATING] == 4
         assert POSTURE_LEVEL_MAP[TrustPosture.SUPERVISED] == 3
-        assert POSTURE_LEVEL_MAP[TrustPosture.PSEUDO] == 2
+        assert POSTURE_LEVEL_MAP[TrustPosture.TOOL] == 2
         assert POSTURE_LEVEL_MAP[TrustPosture.PSEUDO] == 1
 
 
