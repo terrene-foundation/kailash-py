@@ -1228,28 +1228,60 @@ class Inspector:
         """
         # Get model from DataFlow
         models = getattr(self.db, "_models", {})
-        model_class = models.get(model_name)
+        model_entry = models.get(model_name)
 
-        if not model_class:
+        if not model_entry:
             raise ValueError(f"Model '{model_name}' not found")
 
-        # Extract schema information
-        schema = {}
+        # Extract schema information. DataFlow registers each model as a
+        # dict of {"class": cls, "fields": {name: {type, required, ...}},
+        # "table_name": str}. Older SQLAlchemy-style classes (with
+        # `__table__`) are still supported as a fallback.
+        schema: Dict[str, Any] = {}
         table_name = ""
-        primary_key = None
+        primary_key: Optional[str] = None
 
-        if hasattr(model_class, "__table__"):
-            table = model_class.__table__
-            table_name = table.name
-
-            for column in table.columns:
-                schema[column.name] = {
-                    "type": str(column.type),
-                    "nullable": column.nullable,
-                    "primary_key": column.primary_key,
+        if isinstance(model_entry, dict):
+            table_name = model_entry.get("table_name", "") or ""
+            fields = model_entry.get("fields", {}) or {}
+            for field_name, field_meta in fields.items():
+                field_type = (
+                    field_meta.get("type") if isinstance(field_meta, dict) else None
+                )
+                required = (
+                    field_meta.get("required", True)
+                    if isinstance(field_meta, dict)
+                    else True
+                )
+                is_pk = (
+                    field_name == "id" or field_meta.get("primary_key", False)
+                    if isinstance(field_meta, dict)
+                    else False
+                )
+                schema[field_name] = {
+                    "type": (
+                        getattr(field_type, "__name__", str(field_type))
+                        if field_type
+                        else "unknown"
+                    ),
+                    "nullable": not required,
+                    "primary_key": is_pk,
                 }
-                if column.primary_key:
-                    primary_key = column.name
+                if is_pk:
+                    primary_key = field_name
+        else:
+            model_class = model_entry
+            if hasattr(model_class, "__table__"):
+                table = model_class.__table__
+                table_name = table.name
+                for column in table.columns:
+                    schema[column.name] = {
+                        "type": str(column.type),
+                        "nullable": column.nullable,
+                        "primary_key": column.primary_key,
+                    }
+                    if column.primary_key:
+                        primary_key = column.name
 
         # Generate list of nodes
         generated_nodes = [
@@ -1694,15 +1726,45 @@ class Inspector:
             >>> print(info.show())
             >>> print(info.expected_params)
         """
-        # Parse node ID to extract model and type
-        # This is simplified - real implementation would query DataFlow
-        parts = node_id.split("_")
-        if len(parts) >= 2:
-            model_name = parts[0].title()
-            node_type = "_".join(parts[1:])
-        else:
-            model_name = "Unknown"
-            node_type = "unknown"
+        # Parse node ID to extract model and type. Two shapes are accepted:
+        #   1. PascalCase "{Model}{Op}Node"  — the canonical DataFlow
+        #      generated-node naming (e.g. "ProductCreateNode",
+        #      "UserReadByIdNode", "OrderBulkCreateNode").
+        #   2. snake_case "{model}_{op}"     — legacy / user-supplied IDs.
+        # The PascalCase branch strips a trailing "Node" suffix and matches
+        # the remainder against the known operation vocabulary so multi-
+        # word ops ("read_by_id", "bulk_create") are recovered correctly.
+        _KNOWN_OPS = [
+            "read_by_id",
+            "bulk_create",
+            "bulk_update",
+            "bulk_delete",
+            "bulk_upsert",
+            "create",
+            "read",
+            "update",
+            "delete",
+            "list",
+            "count",
+            "upsert",
+        ]
+        model_name = "Unknown"
+        node_type = "unknown"
+        if node_id.endswith("Node") and node_id != "Node":
+            stem = node_id[:-4]
+            for op in _KNOWN_OPS:
+                # Match PascalCase op suffix (e.g. "Create", "ReadById",
+                # "BulkCreate") at the end of stem.
+                op_pascal = "".join(part.title() for part in op.split("_"))
+                if stem.endswith(op_pascal) and len(stem) > len(op_pascal):
+                    model_name = stem[: -len(op_pascal)]
+                    node_type = op
+                    break
+        if node_type == "unknown":
+            parts = node_id.split("_")
+            if len(parts) >= 2:
+                model_name = parts[0].title()
+                node_type = "_".join(parts[1:])
 
         # Get expected parameters based on node type
         expected_params = {}
@@ -1886,35 +1948,37 @@ results, run_id = runtime.execute(workflow.build())
         workflow_connections = getattr(workflow, "connections", [])
 
         for conn in workflow_connections:
-            # Extract connection details - handle both dict and Pydantic objects
+            # Extract connection details - handle both dict and Pydantic objects.
+            # WorkflowBuilder stores each connection as a dict keyed by
+            # `from_node` / `from_output` / `to_node` / `to_input` (the
+            # canonical shape since the 2026-Q1 WorkflowBuilder refactor).
+            # Older or built-workflow shapes used `source_*` / `target_*`;
+            # we accept both so Inspector stays compatible across builders.
             if hasattr(conn, "get"):
-                # Dict-like object
-                source_node = conn.get("source_node", "")
-                source_param = conn.get("source_parameter", "")
-                target_node = conn.get("target_node", "")
-                target_param = conn.get("target_parameter", "")
+                conn_dict = conn
+            elif hasattr(conn, "model_dump"):
+                conn_dict = conn.model_dump()
+            elif hasattr(conn, "__dict__"):
+                conn_dict = conn.__dict__
             else:
-                # Pydantic object - access fields directly
-                if hasattr(conn, "__dict__"):
-                    conn_dict = conn.__dict__
-                elif hasattr(conn, "model_dump"):
-                    conn_dict = conn.model_dump()
-                else:
-                    conn_dict = {}
+                conn_dict = {}
 
-                # Get from the dict - built workflows use source_output/target_input
-                source_node = conn_dict.get("source_node", "")
-                source_param = (
-                    conn_dict.get("source_output")
-                    or conn_dict.get("source_parameter")
-                    or ""
-                )
-                target_node = conn_dict.get("target_node", "")
-                target_param = (
-                    conn_dict.get("target_input")
-                    or conn_dict.get("target_parameter")
-                    or ""
-                )
+            source_node = (
+                conn_dict.get("from_node") or conn_dict.get("source_node") or ""
+            )
+            source_param = (
+                conn_dict.get("from_output")
+                or conn_dict.get("source_output")
+                or conn_dict.get("source_parameter")
+                or ""
+            )
+            target_node = conn_dict.get("to_node") or conn_dict.get("target_node") or ""
+            target_param = (
+                conn_dict.get("to_input")
+                or conn_dict.get("target_input")
+                or conn_dict.get("target_parameter")
+                or ""
+            )
 
             # Filter by node_id if provided
             if node_id and source_node != node_id and target_node != node_id:
@@ -2026,17 +2090,29 @@ results, run_id = runtime.execute(workflow.build())
         # Get all connections
         all_connections = self.connections()
 
-        # Extract all nodes
+        # Extract all nodes — include every node declared on the workflow,
+        # not only nodes that appear in a connection. Isolated nodes MUST
+        # be visible in the graph so `workflow_summary.node_count` and
+        # `validation.isolated_nodes` report correctly.
         nodes: Set[str] = set()
+        workflow_nodes = getattr(workflow, "nodes", {}) or {}
+        if isinstance(workflow_nodes, dict):
+            nodes.update(workflow_nodes.keys())
         for conn in all_connections:
-            nodes.add(conn.source_node)
-            nodes.add(conn.target_node)
+            if conn.source_node:
+                nodes.add(conn.source_node)
+            if conn.target_node:
+                nodes.add(conn.target_node)
 
         # Build adjacency lists for incoming/outgoing connections
         incoming: Dict[str, List[str]] = {node: [] for node in nodes}
         outgoing: Dict[str, List[str]] = {node: [] for node in nodes}
 
         for conn in all_connections:
+            # Guard against malformed connections (empty node IDs) — skip
+            # them rather than crashing the whole graph analysis.
+            if not conn.source_node or not conn.target_node:
+                continue
             incoming[conn.target_node].append(conn.source_node)
             outgoing[conn.source_node].append(conn.target_node)
 

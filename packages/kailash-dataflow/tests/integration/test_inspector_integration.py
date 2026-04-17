@@ -42,19 +42,19 @@ class TestInspectorWithRealWorkflows:
         # Create Inspector
         inspector = Inspector(db)
 
-        # Test model inspection
+        # Test model inspection — ModelInfo exposes `schema` dict
         model_info = inspector.model("Product")
         assert model_info.name == "Product"
-        assert "id" in model_info.fields
-        assert "name" in model_info.fields
-        assert "price" in model_info.fields
-        assert "in_stock" in model_info.fields
+        assert "id" in model_info.schema
+        assert "name" in model_info.schema
+        assert "price" in model_info.schema
+        assert "in_stock" in model_info.schema
 
-        # Test generated nodes
+        # Test generated nodes — NodeInfo exposes `expected_params`
         node_info = inspector.node("ProductCreateNode")
         assert node_info.node_id == "ProductCreateNode"
-        assert "id" in node_info.parameters
-        assert "name" in node_info.parameters
+        # For create nodes, `data` holds the per-record dict of model fields
+        assert "data" in node_info.expected_params
 
     @pytest.mark.asyncio
     async def test_inspector_with_complex_workflow_chain(self, standard_dataflow):
@@ -89,8 +89,8 @@ class TestInspectorWithRealWorkflows:
         workflow.add_node("OrderReadNode", "read_order", {})
         workflow.add_connection("create_order", "id", "read_order", "id")
 
-        # Step 3: Update order — config carried inline (WorkflowBuilder.add_parameter
-        # was removed in the 2.0 API; set node params via add_node's config arg).
+        # Step 3: Update order — pass filter+fields inline (WorkflowBuilder
+        # no longer exposes add_parameter; config-on-add is the canonical path)
         workflow.add_node(
             "OrderUpdateNode",
             "update_order",
@@ -101,22 +101,23 @@ class TestInspectorWithRealWorkflows:
         # Create Inspector with workflow
         inspector = Inspector(db, workflow)
 
-        # Test workflow analysis
+        # Test workflow analysis — workflow_summary() returns WorkflowSummary
         summary = inspector.workflow_summary()
-        assert summary["node_count"] == 3
-        assert summary["connection_count"] == 2
-        assert len(summary["entry_points"]) > 0
+        assert summary.node_count == 3
+        assert summary.connection_count == 2
+        assert len(summary.entry_points) > 0
 
         # Test connection analysis
         connections = inspector.connections()
         assert len(connections) == 2
 
-        # Test parameter tracing
+        # Test parameter tracing — ParameterTrace exposes source_node /
+        # source_parameter; there is no `destination_*` field because a trace
+        # is inherently anchored on the target (the node/param being traced).
         trace = inspector.trace_parameter("read_order", "id")
         assert trace.source_node == "create_order"
-        assert trace.source_param == "id"
-        assert trace.destination_node == "read_order"
-        assert trace.destination_param == "id"
+        assert trace.source_parameter == "id"
+        assert trace.parameter_name == "id"
 
         # Test execution order
         order = inspector.execution_order()
@@ -158,11 +159,14 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Test parameter flow from create to read
+        # Test parameter flow from create to read — parameter_flow() returns
+        # a list of ParameterTrace (forward traces). Each trace is anchored
+        # on the downstream node/param (parameter_name), with source_node/
+        # source_parameter pointing back at the starting point.
         flows = inspector.parameter_flow("create_invoice", "id")
         assert len(flows) > 0
         assert any(
-            f.destination_node == "read_invoice" and f.destination_param == "id"
+            f.parameter_name == "id" and f.source_node == "create_invoice"
             for f in flows
         )
 
@@ -195,14 +199,21 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Validate connections
-        is_valid, issues = inspector.validate_connections()
-        assert is_valid or len(issues) == 0  # Should be valid
+        # Validate connections — now returns List[ConnectionInfo] of
+        # invalid connections only (empty list = all valid).
+        invalid = inspector.validate_connections()
+        assert invalid == []
 
-        # Test connection graph
+        # Test connection graph — connection_graph() returns a
+        # ConnectionGraph dataclass with nodes / connections / entry_points.
         graph = inspector.connection_graph()
-        assert "create_customer" in graph
-        assert "read_customer" in graph["create_customer"]
+        assert "create_customer" in graph.nodes
+        assert "read_customer" in graph.nodes
+        # The create -> read edge should be reflected in graph.connections
+        assert any(
+            c.source_node == "create_customer" and c.target_node == "read_customer"
+            for c in graph.connections
+        )
 
     @pytest.mark.asyncio
     async def test_inspector_model_schema_diff_real_models(self, standard_dataflow):
@@ -313,12 +324,12 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Calculate metrics
+        # Calculate metrics — workflow_metrics() returns WorkflowMetrics
         metrics = inspector.workflow_metrics()
-        assert metrics["node_count"] == 5
-        assert metrics["connection_count"] == 4
-        assert metrics["depth"] >= 4
-        assert isinstance(metrics["complexity"], (int, float))
+        assert metrics.total_nodes == 5
+        assert metrics.total_connections == 4
+        assert metrics.critical_path_length >= 4
+        assert isinstance(metrics.avg_connections_per_node, (int, float))
 
     @pytest.mark.asyncio
     async def test_inspector_workflow_validation_report(self, standard_dataflow):
@@ -345,12 +356,13 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Generate validation report
+        # Generate validation report — returns WorkflowValidationReport
         report = inspector.workflow_validation_report()
-        assert isinstance(report["is_valid"], bool)
-        assert isinstance(report["errors"], list)
-        assert isinstance(report["warnings"], list)
-        assert isinstance(report["suggestions"], list)
+        assert isinstance(report.is_valid, bool)
+        assert isinstance(report.error_count, int)
+        assert isinstance(report.warning_count, int)
+        assert isinstance(report.info_count, int)
+        assert isinstance(report.issues, list)
 
     @pytest.mark.asyncio
     async def test_inspector_node_dependencies_real_workflow(self, standard_dataflow):
@@ -448,7 +460,8 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Find connection chain
+        # Find connection chain — returns List[ConnectionInfo], fields are
+        # source_node / target_node (not destination_node).
         chain = inspector.connection_chain("create_review", "update_review")
         assert len(chain) == 2
         assert chain[0].source_node == "create_review"
@@ -506,12 +519,12 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Generate visualization data
+        # Generate visualization data — returns WorkflowVisualizationData
         viz_data = inspector.workflow_visualization_data()
-        assert "nodes" in viz_data
-        assert "edges" in viz_data
-        assert len(viz_data["nodes"]) == 2
-        assert len(viz_data["edges"]) == 1
+        assert isinstance(viz_data.nodes, list)
+        assert isinstance(viz_data.edges, list)
+        assert len(viz_data.nodes) == 2
+        assert len(viz_data.edges) == 1
 
     @pytest.mark.asyncio
     async def test_inspector_model_instances_count_real_data(self, standard_dataflow):
@@ -557,12 +570,13 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Generate performance profile
+        # Generate performance profile — returns WorkflowPerformanceProfile
         profile = inspector.workflow_performance_profile()
-        assert isinstance(profile, dict)
-        assert (
-            "node_count" in profile or "estimated_time" in profile or len(profile) > 0
-        )
+        assert isinstance(profile.estimated_execution_time_ms, float)
+        assert isinstance(profile.parallelization_potential, float)
+        assert isinstance(profile.sequential_bottlenecks, list)
+        assert isinstance(profile.parallel_stages, list)
+        assert isinstance(profile.resource_requirements, dict)
 
     @pytest.mark.asyncio
     async def test_inspector_parameter_consumers_real_workflow(self, standard_dataflow):
@@ -589,11 +603,12 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Find consumers of create_notif's 'id' output
+        # Find consumers of create_notif's 'id' output — now returns a list
+        # of consumer node IDs (str), not ParameterTrace instances.
         consumers = inspector.parameter_consumers("create_notif", "id")
         assert isinstance(consumers, list)
         if len(consumers) > 0:
-            assert any(c.destination_node == "read_notif" for c in consumers)
+            assert "read_notif" in consumers
 
     @pytest.mark.asyncio
     async def test_inspector_find_parameter_source_real_workflow(
@@ -622,11 +637,12 @@ class TestInspectorWithRealWorkflows:
 
         inspector = Inspector(db, workflow)
 
-        # Find source of read_session's 'id' parameter
+        # Find source of read_session's 'id' parameter — returns the source
+        # node ID (str) directly, or None if the parameter is a workflow
+        # input without an upstream connection.
         source = inspector.find_parameter_source("read_session", "id")
-        if source:
-            assert source.source_node == "create_session"
-            assert source.source_param == "id"
+        if source is not None:
+            assert source == "create_session"
 
     @pytest.mark.asyncio
     async def test_inspector_instance_info_real_database(self, standard_dataflow):
@@ -634,11 +650,12 @@ class TestInspectorWithRealWorkflows:
         db = standard_dataflow
         inspector = Inspector(db)
 
-        # Get instance info
+        # Get instance info — InstanceInfo now exposes models dict and
+        # full database_url; model_count is len(models).
         instance_info = inspector.instance()
         assert instance_info.database_url is not None
-        assert isinstance(instance_info.model_count, int)
-        assert instance_info.model_count >= 0
+        assert isinstance(instance_info.models, dict)
+        assert len(instance_info.models) >= 0
 
 
 @pytest.mark.integration
@@ -688,20 +705,26 @@ class TestInspectorComplexScenarios:
 
         inspector = Inspector(db, workflow)
 
-        # Test comprehensive workflow analysis
+        # Test comprehensive workflow analysis — dataclass attribute access
         summary = inspector.workflow_summary()
-        assert summary["node_count"] == 3
-        assert summary["connection_count"] == 3
+        assert summary.node_count == 3
+        assert summary.connection_count == 3
 
         # Test execution order spans all models
         order = inspector.execution_order()
         assert len(order) == 3
         assert order[0] == "create_user"
 
-        # Test connection graph
+        # Test connection graph — ConnectionGraph dataclass exposes nodes
+        # and connections; the create_user -> create_post edge should be
+        # present via graph.connections.
         graph = inspector.connection_graph()
-        assert "create_user" in graph
-        assert "create_post" in graph["create_user"]
+        assert "create_user" in graph.nodes
+        assert "create_post" in graph.nodes
+        assert any(
+            c.source_node == "create_user" and c.target_node == "create_post"
+            for c in graph.connections
+        )
 
     @pytest.mark.asyncio
     async def test_inspector_end_to_end_debugging_workflow(self, standard_dataflow):
@@ -732,24 +755,25 @@ class TestInspectorComplexScenarios:
         workflow.add_node("BugReadNode", "investigate_bug", {})
         workflow.add_connection("report_bug", "id", "investigate_bug", "id")
 
-        # Update node config inlined — WorkflowBuilder.add_parameter removed in 2.0 API.
+        # Inline the `fields` config (add_parameter is no longer supported
+        # on WorkflowBuilder; all node config goes through add_node).
         workflow.add_node("BugUpdateNode", "fix_bug", {"fields": {"fixed": True}})
         workflow.add_connection("investigate_bug", "id", "fix_bug", "filter.id")
 
         inspector = Inspector(db, workflow)
 
         # Simulate debugging session
-        # 1. Understand workflow structure
+        # 1. Understand workflow structure — dataclass attribute access
         summary = inspector.workflow_summary()
-        assert summary["node_count"] == 3
+        assert summary.node_count == 3
 
         # 2. Trace parameter flow
         trace = inspector.trace_parameter("investigate_bug", "id")
         assert trace.source_node == "report_bug"
 
-        # 3. Validate connections
-        is_valid, issues = inspector.validate_connections()
-        assert is_valid or len(issues) == 0
+        # 3. Validate connections — empty list means no invalid connections
+        invalid = inspector.validate_connections()
+        assert invalid == []
 
         # 4. Check execution order
         order = inspector.execution_order()
