@@ -79,20 +79,41 @@ def runtime():
 
 @pytest.fixture
 async def connection_manager(test_suite):
-    """Create connection manager for tests."""
+    """Create async connection manager for tests.
 
-    class MockDataFlow:
-        def __init__(self, url):
-            self.config = type("Config", (), {})()
-            self.config.database = type("Database", (), {})()
-            self.config.database.url = url
+    Mirrors the ``test_dependency_analyzer_integration_fixed`` pattern:
+    DependencyAnalyzer awaits ``connection_manager.get_connection()``
+    expecting an asyncpg connection, but the production
+    MigrationConnectionManager.get_connection() is a **sync** psycopg2
+    context manager — awaiting it raises
+    ``TypeError: object _GeneratorContextManager can't be used in 'await'
+    expression``. The analyzer's contract is async; the manager under
+    test is sync. Until that interface split is reconciled in the SDK,
+    this fixture yields a minimal async manager that matches the
+    analyzer's actual usage.
+    """
+    import asyncpg
 
-    mock_dataflow = MockDataFlow(test_suite.config.url)
-    manager = MigrationConnectionManager(mock_dataflow)
+    class AsyncConnectionManager:
+        def __init__(self, ts):
+            self.test_suite = ts
+            self._connections = []
+
+        async def get_connection(self):
+            connection = await asyncpg.connect(self.test_suite.config.url)
+            self._connections.append(connection)
+            return connection
+
+        def close_all_connections(self):
+            for connection in self._connections:
+                if not connection.is_closed():
+                    asyncio.create_task(connection.close())
+            self._connections.clear()
+
+    manager = AsyncConnectionManager(test_suite)
 
     yield manager
 
-    # Cleanup
     manager.close_all_connections()
 
 
@@ -104,10 +125,15 @@ async def accuracy_analyzer(connection_manager):
 
 
 @pytest.fixture
-async def test_connection(test_database):
-    """Direct connection for test setup."""
-    pool = test_database._pool
-    async with pool.acquire() as conn:
+async def test_connection(test_suite):
+    """Direct connection for test setup.
+
+    Routed through IntegrationTestSuite.get_connection() per
+    tests/CLAUDE.md — the legacy `test_database` fixture was removed
+    during the DataFlow 2.0 migration but call sites still referenced
+    `test_database._pool`, blocking test collection.
+    """
+    async with test_suite.get_connection() as conn:
         yield conn
 
 
@@ -271,9 +297,9 @@ class TestDependencyDetectionAccuracy:
             )
 
             # Validate FK detection
-            assert dependency_report.has_dependencies() is True, (
-                "CRITICAL: Must detect FK dependencies"
-            )
+            assert (
+                dependency_report.has_dependencies() is True
+            ), "CRITICAL: Must detect FK dependencies"
             assert DependencyType.FOREIGN_KEY in dependency_report.dependencies
 
             detected_fks = dependency_report.dependencies[DependencyType.FOREIGN_KEY]
@@ -283,24 +309,24 @@ class TestDependencyDetectionAccuracy:
             missing_fks = expected_fks - detected_fk_names
             extra_fks = detected_fk_names - expected_fks
 
-            assert len(missing_fks) == 0, (
-                f"CRITICAL ACCURACY FAILURE: Missing FKs: {missing_fks}"
-            )
-            assert len(detected_fks) >= len(expected_fks), (
-                f"Expected at least {len(expected_fks)} FKs, found {len(detected_fks)}"
-            )
+            assert (
+                len(missing_fks) == 0
+            ), f"CRITICAL ACCURACY FAILURE: Missing FKs: {missing_fks}"
+            assert len(detected_fks) >= len(
+                expected_fks
+            ), f"Expected at least {len(expected_fks)} FKs, found {len(detected_fks)}"
 
             # Verify FK details accuracy
             for fk in detected_fks:
-                assert fk.target_table == f"acc_target_{test_id}", (
-                    f"FK {fk.constraint_name} has wrong target table"
-                )
-                assert fk.target_column == "id", (
-                    f"FK {fk.constraint_name} has wrong target column"
-                )
-                assert fk.impact_level == ImpactLevel.CRITICAL, (
-                    f"FK {fk.constraint_name} must be CRITICAL"
-                )
+                assert (
+                    fk.target_table == f"acc_target_{test_id}"
+                ), f"FK {fk.constraint_name} has wrong target table"
+                assert (
+                    fk.target_column == "id"
+                ), f"FK {fk.constraint_name} has wrong target column"
+                assert (
+                    fk.impact_level == ImpactLevel.CRITICAL
+                ), f"FK {fk.constraint_name} must be CRITICAL"
 
             logger.info(
                 f"✅ Primary key FK detection: {len(detected_fks)}/{len(expected_fks)} FKs detected"
@@ -327,15 +353,15 @@ class TestDependencyDetectionAccuracy:
             unique_fk_names = {fk.constraint_name for fk in unique_fks}
             business_fk_names = {fk.constraint_name for fk in business_fks}
 
-            assert f"fk_unique_{test_id}" in unique_fk_names, (
-                "Must detect FK to unique_code column"
-            )
-            assert f"fk_multi_code_{test_id}" in unique_fk_names, (
-                "Must detect multi-FK to unique_code column"
-            )
-            assert f"fk_business_{test_id}" in business_fk_names, (
-                "Must detect FK to business_key column"
-            )
+            assert (
+                f"fk_unique_{test_id}" in unique_fk_names
+            ), "Must detect FK to unique_code column"
+            assert (
+                f"fk_multi_code_{test_id}" in unique_fk_names
+            ), "Must detect multi-FK to unique_code column"
+            assert (
+                f"fk_business_{test_id}" in business_fk_names
+            ), "Must detect FK to business_key column"
 
             logger.info(
                 f"✅ Unique column FK detection: unique_code({len(unique_fks)}) business_key({len(business_fks)})"
@@ -357,12 +383,12 @@ class TestDependencyDetectionAccuracy:
             comp_a_fk_names = {fk.constraint_name for fk in comp_a_fks}
             comp_b_fk_names = {fk.constraint_name for fk in comp_b_fks}
 
-            assert f"fk_composite_{test_id}" in comp_a_fk_names, (
-                "Must detect composite FK on composite_key_a"
-            )
-            assert f"fk_composite_{test_id}" in comp_b_fk_names, (
-                "Must detect composite FK on composite_key_b"
-            )
+            assert (
+                f"fk_composite_{test_id}" in comp_a_fk_names
+            ), "Must detect composite FK on composite_key_a"
+            assert (
+                f"fk_composite_{test_id}" in comp_b_fk_names
+            ), "Must detect composite FK on composite_key_b"
 
             logger.info(
                 f"✅ Composite FK detection: comp_a({len(comp_a_fks)}) comp_b({len(comp_b_fks)})"
@@ -396,9 +422,9 @@ class TestDependencyDetectionAccuracy:
                 f"  ✅ Overall FK accuracy: {accuracy_rate:.1f}% (Requirement: 100%)"
             )
 
-            assert accuracy_rate >= 100.0, (
-                f"FK detection accuracy below 100%: {accuracy_rate:.1f}%"
-            )
+            assert (
+                accuracy_rate >= 100.0
+            ), f"FK detection accuracy below 100%: {accuracy_rate:.1f}%"
 
         finally:
             # Cleanup handled by fixture
@@ -567,12 +593,12 @@ class TestDependencyDetectionAccuracy:
             # Note: Nested view might or might not be detected depending on implementation
             # It depends on view that depends on target column, so it's indirectly dependent
 
-            assert dependency_report.has_dependencies() is True, (
-                "CRITICAL: Must detect view dependencies"
-            )
-            assert DependencyType.VIEW in dependency_report.dependencies, (
-                "CRITICAL: Must detect VIEW dependency type"
-            )
+            assert (
+                dependency_report.has_dependencies() is True
+            ), "CRITICAL: Must detect view dependencies"
+            assert (
+                DependencyType.VIEW in dependency_report.dependencies
+            ), "CRITICAL: Must detect VIEW dependency type"
 
             detected_views = dependency_report.dependencies[DependencyType.VIEW]
             detected_view_names = {view.view_name for view in detected_views}
@@ -581,9 +607,9 @@ class TestDependencyDetectionAccuracy:
             missing_views = expected_views - detected_view_names
             extra_views = detected_view_names - expected_views
 
-            assert len(missing_views) == 0, (
-                f"CRITICAL ACCURACY FAILURE: Missing views: {missing_views}"
-            )
+            assert (
+                len(missing_views) == 0
+            ), f"CRITICAL ACCURACY FAILURE: Missing views: {missing_views}"
 
             logger.info("View detection results:")
             logger.info(f"  Expected views: {len(expected_views)}")
@@ -642,9 +668,9 @@ class TestDependencyDetectionAccuracy:
                 f"  ✅ Overall view accuracy: {accuracy_rate:.1f}% (Requirement: 100%)"
             )
 
-            assert accuracy_rate >= 100.0, (
-                f"View detection accuracy below 100%: {accuracy_rate:.1f}%"
-            )
+            assert (
+                accuracy_rate >= 100.0
+            ), f"View detection accuracy below 100%: {accuracy_rate:.1f}%"
 
         finally:
             # Cleanup handled by fixture
@@ -841,9 +867,9 @@ class TestDependencyDetectionAccuracy:
                 # Note: Statement-level trigger might not be detected if it doesn't directly reference the column
             }
 
-            assert dependency_report.has_dependencies() is True, (
-                "CRITICAL: Must detect trigger dependencies"
-            )
+            assert (
+                dependency_report.has_dependencies() is True
+            ), "CRITICAL: Must detect trigger dependencies"
 
             if DependencyType.TRIGGER in dependency_report.dependencies:
                 detected_triggers = dependency_report.dependencies[
@@ -874,9 +900,7 @@ class TestDependencyDetectionAccuracy:
                     assert trigger.impact_level in [
                         ImpactLevel.HIGH,
                         ImpactLevel.MEDIUM,
-                    ], (
-                        f"Trigger {trigger.trigger_name} should have HIGH or MEDIUM impact"
-                    )
+                    ], f"Trigger {trigger.trigger_name} should have HIGH or MEDIUM impact"
 
                 # Calculate accuracy
                 triggers_found = len(triggers_using_target)
@@ -898,9 +922,9 @@ class TestDependencyDetectionAccuracy:
                 )
 
                 # Allow some flexibility for trigger detection as it's complex
-                assert accuracy_rate >= 80.0, (
-                    f"Trigger detection accuracy too low: {accuracy_rate:.1f}%"
-                )
+                assert (
+                    accuracy_rate >= 80.0
+                ), f"Trigger detection accuracy too low: {accuracy_rate:.1f}%"
 
                 if accuracy_rate < 100.0:
                     logger.warning(
@@ -1027,9 +1051,9 @@ class TestDependencyDetectionAccuracy:
                 f"exclude_overlapping_targets_{test_id}",
             }
 
-            assert dependency_report.has_dependencies() is True, (
-                "CRITICAL: Must detect index/constraint dependencies"
-            )
+            assert (
+                dependency_report.has_dependencies() is True
+            ), "CRITICAL: Must detect index/constraint dependencies"
 
             # **INDEX DETECTION VALIDATION**
             if DependencyType.INDEX in dependency_report.dependencies:
@@ -1089,9 +1113,7 @@ class TestDependencyDetectionAccuracy:
                         ImpactLevel.LOW,
                         ImpactLevel.MEDIUM,
                         ImpactLevel.HIGH,
-                    ], (
-                        f"Constraint {const.constraint_name} should have appropriate impact"
-                    )
+                    ], f"Constraint {const.constraint_name} should have appropriate impact"
 
                 constraint_accuracy = (
                     len(found_constraints) / len(expected_constraints)
@@ -1126,12 +1148,12 @@ class TestDependencyDetectionAccuracy:
             )
 
             # Allow some flexibility for specialized constraints
-            assert index_accuracy >= 90.0, (
-                f"Index detection accuracy too low: {index_accuracy:.1f}%"
-            )
-            assert constraint_accuracy >= 80.0, (
-                f"Constraint detection accuracy too low: {constraint_accuracy:.1f}%"
-            )
+            assert (
+                index_accuracy >= 90.0
+            ), f"Index detection accuracy too low: {index_accuracy:.1f}%"
+            assert (
+                constraint_accuracy >= 80.0
+            ), f"Constraint detection accuracy too low: {constraint_accuracy:.1f}%"
 
         finally:
             # Cleanup handled by fixture
@@ -1153,10 +1175,17 @@ class TestDependencyDetectionAccuracy:
         )
 
         # Create edge case scenarios
+        # NOTE: This block MUST use ``.format()`` rather than an f-string.
+        # Python 3.12+ parses f-strings with real expression grammar, so the
+        # JSON literal ``{"nested": {"array": [1,2,3]}}`` below is treated as
+        # an f-string replacement field whose format-spec is ` [1,2,3]` —
+        # raising ``ValueError: Invalid format specifier``. Placeholders here
+        # use ``{tid}`` exclusively so literal braces in JSON / plpgsql pass
+        # through untouched.
         await test_connection.execute(
-            f"""
+            """
             -- Table with special characters in names
-            CREATE TABLE "acc_edge-test_#{test_id}" (
+            CREATE TABLE "acc_edge-test_#{tid}" (
                 id SERIAL PRIMARY KEY,
                 "target-column with spaces" VARCHAR(200),
                 "数据列" TEXT,  -- Unicode column name
@@ -1165,7 +1194,7 @@ class TestDependencyDetectionAccuracy:
             );
 
             -- Table with complex data types
-            CREATE TABLE acc_complex_types_{test_id} (
+            CREATE TABLE acc_complex_types_{tid} (
                 id SERIAL PRIMARY KEY,
                 json_target JSONB,
                 array_target INTEGER[],
@@ -1176,15 +1205,15 @@ class TestDependencyDetectionAccuracy:
             );
 
             -- FK with special character names
-            CREATE TABLE "acc_fk-test_#{test_id}" (
+            CREATE TABLE "acc_fk-test_#{tid}" (
                 id SERIAL PRIMARY KEY,
                 "target_ref-with-dash" INTEGER,
-                CONSTRAINT "fk_special-chars_{test_id}" FOREIGN KEY ("target_ref-with-dash")
-                    REFERENCES "acc_edge-test_#{test_id}"(id) ON DELETE SET NULL
+                CONSTRAINT "fk_special-chars_{tid}" FOREIGN KEY ("target_ref-with-dash")
+                    REFERENCES "acc_edge-test_#{tid}"(id) ON DELETE SET NULL
             );
 
             -- View with special characters and complex logic
-            CREATE VIEW "acc_view-with-special_#{test_id}" AS
+            CREATE VIEW "acc_view-with-special_#{tid}" AS
             SELECT
                 id,
                 "target-column with spaces",
@@ -1194,21 +1223,21 @@ class TestDependencyDetectionAccuracy:
                     WHEN "target-column with spaces" ~ '[^[:print:]]' THEN 'CONTAINS_UNPRINTABLE'
                     ELSE 'NORMAL_VALUE'
                 END as value_classification
-            FROM "acc_edge-test_#{test_id}"
+            FROM "acc_edge-test_#{tid}"
             WHERE "target-column with spaces" IS NOT NULL;
 
             -- Index with special characters
-            CREATE INDEX "acc_idx-special_{test_id}" ON "acc_edge-test_#{test_id}"("target-column with spaces");
+            CREATE INDEX "acc_idx-special_{tid}" ON "acc_edge-test_#{tid}"("target-column with spaces");
 
             -- Constraint with complex logic and special characters
-            ALTER TABLE "acc_edge-test_#{test_id}" ADD CONSTRAINT "check_special-target_{test_id}"
+            ALTER TABLE "acc_edge-test_#{tid}" ADD CONSTRAINT "check_special-target_{tid}"
                 CHECK (
                     "target-column with spaces" IS NULL OR
                     (LENGTH("target-column with spaces") > 0 AND "target-column with spaces" != '')
                 );
 
             -- Test with NULL and special values
-            INSERT INTO "acc_edge-test_#{test_id}" ("target-column with spaces", "数据列", "column_with_'quotes'") VALUES
+            INSERT INTO "acc_edge-test_#{tid}" ("target-column with spaces", "数据列", "column_with_'quotes'") VALUES
             (NULL, '测试数据', '''quoted'''),
             ('', '空字符串', 'quote"inside'),
             ('normal_value', '正常数据', 'normal'),
@@ -1217,10 +1246,12 @@ class TestDependencyDetectionAccuracy:
             (E'newline\\nvalue', 'newline数据', E'tab\\tvalue');
 
             -- Complex JSONB operations
-            INSERT INTO acc_complex_types_{test_id} (json_target, array_target, bytea_target) VALUES
-            ('{"key": "value", "nested": {"array": [1,2,3]}}'::jsonb, ARRAY[1,2,3,4,5], '\\xDEADBEEF'::bytea),
-            ('{"special": "chars!@#", "unicode": "测试"}'::jsonb, ARRAY[]::INTEGER[], NULL);
-        """
+            INSERT INTO acc_complex_types_{tid} (json_target, array_target, bytea_target) VALUES
+            ('{{"key": "value", "nested": {{"array": [1,2,3]}}}}'::jsonb, ARRAY[1,2,3,4,5], '\\xDEADBEEF'::bytea),
+            ('{{"special": "chars!@#", "unicode": "测试"}}'::jsonb, ARRAY[]::INTEGER[], NULL);
+        """.format(
+                tid=test_id
+            )
         )
 
         try:
@@ -1234,9 +1265,9 @@ class TestDependencyDetectionAccuracy:
                 '"acc_edge-test_#{test_id}"', '"target-column with spaces"'
             )
 
-            assert special_report.has_dependencies() is True, (
-                "CRITICAL: Must detect dependencies for special character columns"
-            )
+            assert (
+                special_report.has_dependencies() is True
+            ), "CRITICAL: Must detect dependencies for special character columns"
 
             # Verify FK detection with special characters
             if DependencyType.FOREIGN_KEY in special_report.dependencies:
@@ -1331,9 +1362,9 @@ class TestDependencyDetectionAccuracy:
                 )
             """
             )
-            assert table_exists is True, (
-                "CRITICAL: SQL injection prevention failed - table was affected"
-            )
+            assert (
+                table_exists is True
+            ), "CRITICAL: SQL injection prevention failed - table was affected"
 
             logger.info("🎯 EDGE CASE DETECTION ACCURACY VALIDATION COMPLETE")
             logger.info("  ✅ Special character column names: Handled")
@@ -1416,9 +1447,9 @@ class TestDependencyDetectionAccuracy:
             )
 
             # Should detect cross-schema dependencies
-            assert cross_report.has_dependencies() is True, (
-                "CRITICAL: Must detect cross-schema dependencies"
-            )
+            assert (
+                cross_report.has_dependencies() is True
+            ), "CRITICAL: Must detect cross-schema dependencies"
 
             # Verify cross-schema FK detection
             if DependencyType.FOREIGN_KEY in cross_report.dependencies:

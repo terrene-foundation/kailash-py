@@ -71,13 +71,15 @@ def runtime():
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer, DependencyReport
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine, RiskLevel
 
-# Test database configuration
+# Test database configuration — aligned with IntegrationTestSuite (port 5434).
+# The legacy port 5433 / dataflow_test credentials belonged to a decommissioned
+# test container; the current shared SDK Docker infrastructure uses port 5434.
 TEST_DB_CONFIG = {
     "host": "localhost",
-    "port": 5433,
-    "database": "dataflow_test",
-    "user": "dataflow_test",
-    "password": "dataflow_test_password",
+    "port": 5434,
+    "database": "kailash_test",
+    "user": "test_user",
+    "password": "test_password",
 }
 
 
