@@ -579,39 +579,93 @@ class DependencyAnalyzer:
 
         MEDIUM IMPACT: Indexes on the column will be automatically dropped.
         """
-        # Query to find indexes that include the column
+        # Find every index on the table with enough metadata to decide
+        # whether it references the target column. Three cases to handle:
+        #
+        # 1. Direct column index — ix.indkey contains the column's attnum.
+        #    Matched by joining pg_attribute on attnum = ANY(indkey).
+        # 2. Expression index — ix.indkey contains 0 in the expression
+        #    slot, so the pg_attribute join filters it out. pg_attribute
+        #    has no attnum=0 row. These indexes (UPPER(col), to_tsvector(
+        #    'english', col), GIN on expression) MUST still be reported;
+        #    the column name appears inside pg_get_indexdef() even though
+        #    it is not a top-level indexed column.
+        # 3. Partial index — the WHERE predicate lives in ix.indpred and
+        #    is_partial MUST be set so operators know the drop may cascade
+        #    into the predicate.
+        #
+        # The query returns one row per index with the full indexdef plus
+        # indexprs/indpred presence flags; Python decides membership by
+        # checking either the direct attname list OR whether the column
+        # name appears tokenized inside the indexdef expression.
         index_query = """
-        SELECT DISTINCT
-            i.relname as index_name,
-            am.amname as index_type,
-            pg_get_indexdef(i.oid) as index_definition,
-            ix.indisunique as is_unique,
-            array_agg(a.attname ORDER BY a.attnum) as columns
+        SELECT
+            i.relname AS index_name,
+            am.amname AS index_type,
+            pg_get_indexdef(i.oid) AS index_definition,
+            ix.indisunique AS is_unique,
+            ix.indexprs IS NOT NULL AS has_expression,
+            ix.indpred IS NOT NULL AS is_partial,
+            COALESCE(
+                ARRAY(
+                    SELECT a.attname
+                    FROM pg_attribute a
+                    WHERE a.attrelid = t.oid
+                        AND a.attnum = ANY(ix.indkey)
+                        AND a.attnum > 0
+                    ORDER BY a.attnum
+                ),
+                ARRAY[]::text[]
+            ) AS direct_columns
         FROM pg_class t
         JOIN pg_index ix ON t.oid = ix.indrelid
         JOIN pg_class i ON i.oid = ix.indexrelid
         JOIN pg_am am ON i.relam = am.oid
-        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        JOIN pg_namespace n ON n.oid = t.relnamespace
         WHERE t.relname = $1
             AND t.relkind = 'r'
             AND i.relkind = 'i'
-            AND a.attname = $2
-        GROUP BY i.relname, am.amname, i.oid, ix.indisunique
+            AND n.nspname = 'public'
         ORDER BY i.relname
         """
 
         try:
             async with self._acquire_connection(connection) as connection:
-                rows = await connection.fetch(index_query, table_name, column_name)
+                rows = await connection.fetch(index_query, table_name)
                 dependencies = []
 
+                column_lower = column_name.lower()
                 for row in rows:
+                    direct_columns = list(row["direct_columns"] or [])
+                    definition = row["index_definition"] or ""
+                    has_expression = bool(row["has_expression"])
+
+                    # Case 1: column is a direct indexed column (e.g. btree,
+                    # partial index, composite index containing the column).
+                    matched_direct = column_name in direct_columns
+
+                    # Case 2: column appears inside an expression or
+                    # predicate. Tokenize on non-identifier chars to avoid
+                    # the "target_col substring of target_column_extra"
+                    # false positive that killed the naive ILIKE approach
+                    # in find_view_dependencies.
+                    matched_expression = False
+                    if has_expression or row["is_partial"]:
+                        tokens = re.findall(
+                            r"[A-Za-z_][A-Za-z0-9_]*", definition.lower()
+                        )
+                        matched_expression = column_lower in tokens
+
+                    if not (matched_direct or matched_expression):
+                        continue
+
                     dep = IndexDependency(
                         index_name=row["index_name"],
                         index_type=row["index_type"],
-                        columns=row["columns"],
-                        is_unique=row["is_unique"],
-                        index_definition=row["index_definition"],
+                        columns=direct_columns if direct_columns else [column_name],
+                        is_unique=bool(row["is_unique"]),
+                        is_partial=bool(row["is_partial"]),
+                        index_definition=definition,
                     )
                     dependencies.append(dep)
 
@@ -638,42 +692,97 @@ class DependencyAnalyzer:
 
         MEDIUM IMPACT: Check constraints referencing the column will fail.
         """
-        # Query to find constraints that reference the column
+        # Query pg_constraint directly so EXCLUDE constraints are covered
+        # alongside CHECK / UNIQUE / PRIMARY KEY. information_schema only
+        # exposes CHECK and UNIQUE, so the prior query silently dropped
+        # EXCLUDE constraints — a dropped column referenced by an EXCLUDE
+        # constraint fails at commit time with no audit signal. Collecting
+        # the referenced column names via unnest(conkey) + pg_attribute
+        # avoids the information_schema fan-out where key_column_usage
+        # returns one row per indexed column.
+        #
+        # NOT NULL constraints live on pg_attribute (attnotnull), not
+        # pg_constraint. They are column-level dependencies — dropping a
+        # NOT NULL column's constraint is trivially coupled to dropping
+        # the column itself, but other tooling (migration safety audits)
+        # needs to see the NOT NULL as a constraint row. UNION ALL with a
+        # synthetic row for attnotnull columns preserves that contract.
         constraint_query = """
         SELECT
-            tc.constraint_name,
-            tc.constraint_type,
-            COALESCE(cc.check_clause, tc.constraint_name) as constraint_definition,
-            array_agg(kcu.column_name) as columns
-        FROM information_schema.table_constraints AS tc
-        LEFT JOIN information_schema.check_constraints AS cc
-            ON tc.constraint_name = cc.constraint_name
-            AND tc.table_schema = cc.constraint_schema
-        LEFT JOIN information_schema.key_column_usage AS kcu
-            ON tc.constraint_name = kcu.constraint_name
-            AND tc.table_schema = kcu.table_schema
-        WHERE tc.table_name = $1
-            AND tc.table_schema = 'public'
-            AND tc.constraint_type IN ('CHECK', 'UNIQUE')
-            AND (
-                cc.check_clause ILIKE '%' || $2 || '%'
-                OR kcu.column_name = $2
-            )
-        GROUP BY tc.constraint_name, tc.constraint_type, cc.check_clause
-        ORDER BY tc.constraint_name
+            con.conname AS constraint_name,
+            CASE con.contype
+                WHEN 'c' THEN 'CHECK'
+                WHEN 'u' THEN 'UNIQUE'
+                WHEN 'p' THEN 'PRIMARY KEY'
+                WHEN 'x' THEN 'EXCLUDE'
+                WHEN 'f' THEN 'FOREIGN KEY'
+                ELSE con.contype::text
+            END AS constraint_type,
+            pg_get_constraintdef(con.oid) AS constraint_definition,
+            COALESCE(
+                ARRAY(
+                    SELECT a.attname
+                    FROM unnest(con.conkey) AS k(attnum)
+                    JOIN pg_attribute a
+                        ON a.attrelid = con.conrelid
+                        AND a.attnum = k.attnum
+                    ORDER BY k.attnum
+                ),
+                ARRAY[]::text[]
+            ) AS columns
+        FROM pg_constraint con
+        JOIN pg_class cls ON cls.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+        WHERE ns.nspname = 'public'
+            AND cls.relname = $1
+            AND con.contype IN ('c', 'u', 'p', 'x')
+        UNION ALL
+        SELECT
+            cls.relname || '_' || a.attname || '_not_null' AS constraint_name,
+            'NOT NULL' AS constraint_type,
+            a.attname || ' IS NOT NULL' AS constraint_definition,
+            ARRAY[a.attname]::text[] AS columns
+        FROM pg_attribute a
+        JOIN pg_class cls ON cls.oid = a.attrelid
+        JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+        WHERE ns.nspname = 'public'
+            AND cls.relname = $1
+            AND a.attnum > 0
+            AND NOT a.attisdropped
+            AND a.attnotnull
+        ORDER BY constraint_name
         """
 
         try:
             async with self._acquire_connection(connection) as connection:
-                rows = await connection.fetch(constraint_query, table_name, column_name)
+                rows = await connection.fetch(constraint_query, table_name)
                 dependencies = []
 
+                column_lower = column_name.lower()
                 for row in rows:
+                    columns = list(row["columns"] or [])
+                    definition = row["constraint_definition"] or ""
+
+                    # Membership rule: column is in the constraint's direct
+                    # column list (UNIQUE, PK, EXCLUDE's indexed column)
+                    # OR appears tokenized inside the constraintdef text
+                    # (CHECK clauses, EXCLUDE's USING ... WITH expressions).
+                    in_direct = column_name in columns
+                    in_def = False
+                    if not in_direct:
+                        tokens = re.findall(
+                            r"[A-Za-z_][A-Za-z0-9_]*", definition.lower()
+                        )
+                        in_def = column_lower in tokens
+
+                    if not (in_direct or in_def):
+                        continue
+
                     dep = ConstraintDependency(
                         constraint_name=row["constraint_name"],
                         constraint_type=row["constraint_type"],
-                        definition=row["constraint_definition"],
-                        columns=row["columns"] or [],
+                        definition=definition,
+                        columns=columns,
                     )
                     dependencies.append(dep)
 
