@@ -37,11 +37,19 @@ def find_free_port(start_port: int = 8000) -> int:
 
 @pytest.fixture(scope="module")
 def docker_env():
-    """Set up Docker test environment."""
+    """Set up Docker test environment.
+
+    ``DockerTestEnvironment.start`` / ``.stop`` are ``async def`` — call them
+    via ``asyncio.run`` from this sync fixture (matches the e2e fixture in
+    ``test_production_scenarios.py``). Calling them bare produces
+    ``RuntimeWarning: coroutine ... was never awaited`` at GC.
+    """
+    import asyncio
+
     env = DockerTestEnvironment()
-    env.start()
+    asyncio.run(env.start())
     yield env
-    env.stop()
+    asyncio.run(env.stop())
 
 
 class TestAPIChannelIntegration:

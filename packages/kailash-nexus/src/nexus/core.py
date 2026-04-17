@@ -128,6 +128,57 @@ class NexusPluginProtocol(Protocol):
         ...
 
 
+def _run_sync_shutdown(coro: Any) -> None:
+    """Drive an async cleanup coroutine to completion from a sync context.
+
+    The sync ``Nexus.stop()`` path has to await async shutdown on transport
+    channels (MCP, WebSocket, simple MCP server). Previously this called
+    ``asyncio.new_event_loop().run_until_complete(obj.stop())`` which:
+
+    1. Fails with ``RuntimeError: ... event loop is already running`` when
+       ``Nexus.stop()`` is invoked from inside an async test (the
+       coroutine created by ``obj.stop()`` was orphaned — producing
+       ``RuntimeWarning: coroutine '...' was never awaited`` at GC).
+    2. Could race with pytest's own loop teardown.
+
+    The helper:
+
+    * If a loop is already running, schedules the coroutine as a
+      fire-and-forget task on that loop. A shutdown path can't block on
+      the already-running loop without deadlocking. We explicitly mark
+      the task so it doesn't trigger an "exception was never retrieved"
+      warning if it fails.
+    * Otherwise, runs the coroutine to completion on a fresh loop.
+    * On ANY failure, ``coro.close()`` is called explicitly so the
+      coroutine object is never GC'd with an "unawaited" state.
+    """
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+
+    if running is not None:
+        # Inside a running loop — schedule and return. Caller cannot wait.
+        task = running.create_task(coro)
+        task.add_done_callback(lambda _t: None)
+        return
+
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(coro)
+    except BaseException:
+        # Ensure the coroutine object is explicitly closed on any failure
+        # path — otherwise GC emits "coroutine was never awaited".
+        coro.close()
+        raise
+    finally:
+        try:
+            loop.close()
+        finally:
+            asyncio.set_event_loop(None)
+
+
 def _extract_user_from_args(args: tuple, kwargs: dict) -> Any:
     """Best-effort user extraction from handler arguments.
 
@@ -2831,40 +2882,22 @@ Check the documentation or explore available resources.
         # Stop MCP channel/server if running
         if hasattr(self, "_mcp_channel") and self._mcp_channel:
             try:
-                # MCP channel needs to be stopped in its event loop
-                import asyncio
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._mcp_channel.stop())
-                loop.close()
+                _run_sync_shutdown(self._mcp_channel.stop())
             except Exception as e:
                 logger.warning(
                     f"Error stopping MCP channel during shutdown: {type(e).__name__}: {e}"
                 )
         elif hasattr(self, "_ws_server") and self._ws_server:
             try:
-                # Stop WebSocket server
-                import asyncio
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._ws_server.stop())
-                loop.close()
+                _run_sync_shutdown(self._ws_server.stop())
             except Exception as e:
                 logger.warning(
                     f"Error stopping WebSocket server during shutdown: {type(e).__name__}: {e}"
                 )
         elif hasattr(self, "_mcp_server"):
             try:
-                # Fallback: stop simple server
-                import asyncio
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 if hasattr(self._mcp_server, "stop"):
-                    loop.run_until_complete(self._mcp_server.stop())
-                loop.close()
+                    _run_sync_shutdown(self._mcp_server.stop())
             except Exception as e:
                 logger.warning(
                     f"Error stopping MCP server during shutdown: {type(e).__name__}: {e}"
