@@ -238,6 +238,60 @@ async def clean_test_table(postgres_connection, unique_table_name):
 
 
 @pytest.fixture
+async def test_suite():
+    """Integration test suite per ``tests/CLAUDE.md``.
+
+    Every integration test that exercises real infrastructure SHOULD use
+    ``test_suite`` — it owns the PostgreSQL config, connection pool, and
+    database cleanup. Promoted from per-file fixture definitions to this
+    shared conftest because ~40 test files under ``tests/integration/``
+    previously defined local copies (or forgot to, causing
+    ``fixture 'test_suite' not found`` errors for ~60 tests).
+    """
+    from tests.infrastructure.test_harness import IntegrationTestSuite
+
+    suite = IntegrationTestSuite()
+    async with suite.session():
+        yield suite
+
+
+@pytest.fixture
+async def memory_test_suite():
+    """Memory-backed SQLite test suite (unit-tier harness exposed at
+    integration tier for error-validation tests that don't need real
+    PostgreSQL but still want to exercise the DataFlow engine).
+
+    Tests under ``tests/integration/`` that request ``memory_dataflow``
+    (e.g. ``test_nodes_enhanced_errors.py``, ``test_jsonb_bug_reproduction.py``)
+    will receive a SQLite-memory engine here — matching the fixture's
+    semantics in ``tests/unit/conftest.py``.
+    """
+    from tests.fixtures.unit_test_harness import (
+        UnitTestDatabaseConfig,
+        UnitTestSuite,
+    )
+
+    config = UnitTestDatabaseConfig.memory_database()
+    suite = UnitTestSuite(config)
+    async with suite.session():
+        yield suite
+
+
+@pytest.fixture
+async def memory_dataflow(memory_test_suite):
+    """DataFlow against memory_test_suite (SQLite in-memory).
+
+    Cleanup on exit per rules/testing.md § "Fixtures Yield + Cleanup"
+    — explicit ``close_async()`` avoids the GC-finalizer deadlock.
+    """
+    dataflow = memory_test_suite.dataflow_harness.create_dataflow()
+    try:
+        yield dataflow
+    finally:
+        await dataflow.close_async()
+
+
+@pytest.fixture
 async def test_table_with_constraints(postgres_connection):
     """Create test table with various constraint types."""
     table_name = f"constrained_test_{int(time.time() * 1000000)}"
