@@ -364,11 +364,49 @@ class ImpactAnalysisReporter:
         resource_requirements = "Standard migration resources"
 
         if mitigation_plan:
-            if hasattr(mitigation_plan, "strategies"):
+            # PrioritizedMitigationPlan exposes the strategies as
+            # `mitigation_strategies` (see mitigation_strategy_engine.py:123).
+            # The legacy `strategies` attribute never existed on the current
+            # dataclass, so the prior hasattr() check always resolved to 0,
+            # silently under-reporting mitigation coverage in every impact
+            # report. Check both names for forward-compat.
+            # PrioritizedMitigationPlan exposes the strategies as
+            # `mitigation_strategies` (see mitigation_strategy_engine.py:123).
+            # The legacy `strategies` attribute never existed on the current
+            # dataclass, so the prior hasattr() check always resolved to 0,
+            # silently under-reporting mitigation coverage in every impact
+            # report. Check both names for forward-compat.
+            if hasattr(mitigation_plan, "mitigation_strategies"):
+                mitigation_count = len(mitigation_plan.mitigation_strategies)
+            elif hasattr(mitigation_plan, "strategies"):
                 mitigation_count = len(mitigation_plan.strategies)
-            if hasattr(mitigation_plan, "risk_reduction_potential"):
+            # Risk reduction: the real field on PrioritizedMitigationPlan is
+            # `projected_risk_reduction` (per-category dict) + `projected_overall_risk`;
+            # legacy `risk_reduction_potential` never shipped. Derive an overall
+            # reduction number from the projection fields.
+            if hasattr(mitigation_plan, "projected_overall_risk") and hasattr(
+                mitigation_plan.current_risk_assessment, "overall_score"
+            ):
+                current = mitigation_plan.current_risk_assessment.overall_score
+                projected = mitigation_plan.projected_overall_risk
+                risk_reduction = max(0.0, current - projected)
+            elif hasattr(mitigation_plan, "risk_reduction_potential"):
                 risk_reduction = mitigation_plan.risk_reduction_potential
-            if hasattr(mitigation_plan, "estimated_timeline"):
+            # Implementation timeline: the plan carries a numeric
+            # `total_estimated_effort` (hours); legacy `estimated_timeline`
+            # string never shipped. Format effort into a human timeline.
+            if (
+                hasattr(mitigation_plan, "total_estimated_effort")
+                and mitigation_plan.total_estimated_effort > 0
+            ):
+                effort_hours = mitigation_plan.total_estimated_effort
+                if effort_hours < 8:
+                    implementation_timeline = f"{effort_hours:.1f} hours"
+                elif effort_hours < 40:
+                    implementation_timeline = f"{effort_hours / 8:.1f} days"
+                else:
+                    implementation_timeline = f"{effort_hours / 40:.1f} weeks"
+            elif hasattr(mitigation_plan, "estimated_timeline"):
                 implementation_timeline = mitigation_plan.estimated_timeline
             if hasattr(mitigation_plan, "resource_estimate"):
                 resource_requirements = mitigation_plan.resource_estimate
