@@ -124,6 +124,50 @@ markers = [
     "integration: Integration tests (real stores, real models)",
     "bench: Benchmark tests (performance)",
 ]
+# Scoped warning filters — each entry has a documented origin + disposition
+# per rules/observability.md MUST Rule 5. Unfiltered suite emits ~240
+# upstream RuntimeWarnings from sklearn/numpy internals processing
+# rank-degenerate synthetic test fixtures; filters suppress the known-harmless
+# categories while letting production warnings through.
+# Rule: use bare message-match (no module path) — module-scoped filters
+# that reference lazy-imported packages (lightning.fabric.utilities,
+# sklearn.exceptions, kailash_ml._decorators) cause pytest to import those
+# modules at filter-parse time and intermittently segfault during
+# xgboost/aiosqlite cleanup (observed on python 3.13 + pytest 9).
+filterwarnings = [
+    # sklearn PCA / NMF / extmath matmul divide-by-zero on rank-deficient
+    # synthetic test fixtures (test_preprocessing.py PCA, test_clustering.py
+    # spectral embedding with disconnected synthetic graph).
+    "ignore:divide by zero encountered in matmul:RuntimeWarning",
+    "ignore:invalid value encountered in matmul:RuntimeWarning",
+    "ignore:overflow encountered in matmul:RuntimeWarning",
+    "ignore:invalid value encountered in divide:RuntimeWarning",
+    # Scientific-compute convergence warnings — tests pass sklearn
+    # LogisticRegression small max_iter + NMF on dense random matrices
+    # to exercise early-stop behavior. Warning expected, not actionable.
+    "ignore:.*failed to converge.*:UserWarning",
+    "ignore:.*Maximum number of iterations.*:UserWarning",
+    # sklearn spectral embedding on disconnected synthetic graphs.
+    "ignore:Graph is not fully connected:UserWarning",
+    # LightGBM fitted with feature names, predicted on numpy array. Harmless
+    # in the rank/convert helpers that drop feature names intentionally.
+    "ignore:X does not have valid feature names, but LGBMClassifier was fitted with feature names:UserWarning",
+    # Lightning "GPU available but not used" — the sklearn adapter is
+    # CPU-only per ml-backends.md §5.1, so forcing accelerator="cpu" is
+    # correct. Lightning's setup hint does not apply.
+    "ignore:GPU available but not used.*:UserWarning",
+    # Upstream Lightning 2.x deprecation — LeafSpec vs TreeSpec.is_leaf().
+    # Lightning's internal _pytree.py uses `LeafSpec` with backticks in the
+    # message so the regex must match the literal text.
+    "ignore:.*isinstance.treespec, LeafSpec.*deprecated.*:",
+    # Lightning performance hint for num_workers on small test fixtures.
+    "ignore:The .train_dataloader. does not have many workers:UserWarning",
+    # Our own @experimental decorator surfaces ExperimentalWarning when
+    # P2 engines (FeatureEngineer, ModelVisualizer) are instantiated in
+    # tests. These are by design — the decorator IS the tracking mechanism
+    # per zero-tolerance.md Rule 2 iterative-TODOs carve-out.
+    "ignore:.*is experimental \\(P2\\)\\..*:UserWarning",
+]
 
 [tool.ruff]
 target-version = "py311"

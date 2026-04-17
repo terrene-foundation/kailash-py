@@ -1387,11 +1387,14 @@ class TestPCA:
         """DataFrame with 100 numeric features (many redundant)."""
         rng = np.random.RandomState(42)
         n = 200
-        # Generate 5 independent sources, then expand to 100 features
+        # Generate 5 independent sources, then expand to 100 features.
+        # Noise magnitude 1.0 (not 0.1) so the 100-d matrix is full-rank —
+        # with 0.1 the matrix was rank-5 embedded in 100-d space and
+        # sklearn's PCA / NMF internals triggered divide-by-zero matmul
+        # warnings while computing variance for degenerate components.
         sources = rng.randn(n, 5)
-        # Create 100 features as random linear combinations of 5 sources
         weights = rng.randn(5, 100)
-        features = sources @ weights + rng.randn(n, 100) * 0.1
+        features = sources @ weights + rng.randn(n, 100) * 1.0
         data: dict[str, list[float]] = {}
         for i in range(100):
             data[f"feat_{i}"] = features[:, i].tolist()
