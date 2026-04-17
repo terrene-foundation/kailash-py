@@ -123,6 +123,7 @@ markers = [
     "unit: Unit tests (no I/O, no network)",
     "integration: Integration tests (real stores, real models)",
     "bench: Benchmark tests (performance)",
+    "regression: Permanent regression tests (never delete; see rules/testing.md)",
 ]
 # Scoped warning filters — each entry has a documented origin + disposition
 # per rules/observability.md MUST Rule 5. Unfiltered suite emits ~240

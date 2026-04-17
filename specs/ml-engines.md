@@ -831,6 +831,8 @@ See §6. Integration tests: `test_onnx_roundtrip_{sklearn,xgboost,lightgbm,catbo
 
 **Why (delta vs competitors):** PyCaret has no DL primitive (requires a separate `pycaret.nlp` / `pycaret.classification` split). MLflow has no unified training surface (`mlflow.pyfunc` is a model wrapper, not a trainer).
 
+**Implementation status (verified 2026-04-17 — redteam):** Phase 3 wires sklearn / xgboost / lightgbm / torch / lightning families through the Lightning Trainer with the resolver (§3 MUST 2 holds). **RL is not yet wired — HIGH finding**: `kailash_ml.rl.RLTrainer` does NOT consult `detect_backend()`, does NOT flow through `MLEngine`/`ModelRegistry`/`ExperimentTracker`, and returns `RLTrainingResult` rather than the unified `TrainingResult` (§4 contract). The orphan state is pinned by `tests/regression/test_rl_orphan_guard.py` until Phase 6 (redesign proposal §9) wires `km.rl.Engine` and flips the guard tests into wiring assertions per `rules/facade-manager-detection.md` § 1. Same finding applies to `kailash_ml.agents.*` — zero production call sites inside `engines/*`.
+
 #### 5. Async `ExperimentTracker`
 
 `ExperimentTracker` MUST expose async-native entry points (`log_metric`, `log_params`, `run` context manager). See `ml-tracking.md` for the full contract. Integration test: `test_tracker_async_nested_runs`.

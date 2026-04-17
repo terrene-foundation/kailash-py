@@ -344,6 +344,8 @@ Every per-backend file MUST exercise ALL of:
 4. The same run's `TrainingResult.device_used` reads back through `ModelRegistry.get_model()` unchanged (state-persistence verification per `rules/testing.md` § Tier 2).
 5. A non-Lightning family run (sklearn MUST be in every file) produces a `TrainingResult` with `backend="cpu"` regardless of hardware, and (for xgboost/lightgbm on cuda-only backends) an `UnsupportedFamily` is raised when the family cannot run on the backend.
 
+**Implementation status (verified 2026-04-17 — redteam):** Tier 1 coverage landed at `tests/unit/test_device_resolver.py` and `tests/unit/test_trainable_protocol.py`. Tier 2 hardware-contract landed at `tests/integration/test_backend_resolver_contract.py` and asserts clauses §2.2, §2.3, §3.3, §4.1, §5.1 on real hardware (no mocks). The per-backend integration files enumerated above are NOT all present — only the combined contract file exists at 2026-04-17. Splitting into `backends/test_<name>_backend.py` is Phase 5 (redesign proposal §9) once CI lanes are provisioned (§11 OPEN QUESTION 1). **RL + `agents/` subpackages do NOT consult the resolver** (pinned by `tests/regression/test_rl_orphan_guard.py`) — Phase 6 fix required.
+
 ### 6.2 MUST: `skipif` Via Probe, Not Via Marker Alone
 
 ```python
