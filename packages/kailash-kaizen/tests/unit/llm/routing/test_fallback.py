@@ -12,6 +12,7 @@ import asyncio
 import os
 
 import pytest
+
 from kaizen.llm.routing.fallback import (
     FallbackEvent,
     FallbackResult,
@@ -113,15 +114,28 @@ class TestFallbackResult:
 class TestFallbackRouterCreation:
     """Tests for FallbackRouter creation."""
 
-    def test_create_default(self):
-        """Test creating with defaults reads from env."""
-        router = FallbackRouter()
+    def test_create_requires_default_or_chain(self):
+        """FallbackRouter() with no default and no chain must raise ValueError.
 
-        expected = os.environ.get(
-            "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+        Regression guard for GH #485: earlier versions silently fell back to
+        OPENAI_PROD_MODEL / DEFAULT_LLM_MODEL env vars, which leaked OpenAI
+        defaults into non-OpenAI routers. The new contract requires explicit
+        per-router configuration.
+        """
+        with pytest.raises(ValueError, match="default_model.*fallback_chain"):
+            FallbackRouter()
+
+    def test_create_defaults_from_chain_first_entry(self):
+        """When default_model is omitted, fallback_chain[0] becomes default."""
+        router = FallbackRouter(
+            fallback_chain=["gemini-3-flash-preview", "claude-sonnet-5"],
         )
-        assert router.default_model == expected
-        assert router.fallback_chain == []
+
+        assert router.default_model == "gemini-3-flash-preview"
+        assert router.fallback_chain == [
+            "gemini-3-flash-preview",
+            "claude-sonnet-5",
+        ]
 
     def test_create_with_chain(self):
         """Test creating with fallback chain."""
@@ -136,6 +150,7 @@ class TestFallbackRouterCreation:
     def test_create_with_retry_settings(self):
         """Test creating with retry settings."""
         router = FallbackRouter(
+            default_model="gpt-4",
             max_retries=5,
             retry_delay_seconds=2.0,
             exponential_backoff=False,
@@ -151,7 +166,7 @@ class TestFallbackChainManagement:
 
     def test_set_fallback_chain(self):
         """Test setting fallback chain."""
-        router = FallbackRouter()
+        router = FallbackRouter(default_model="seed-model")
 
         router.set_fallback_chain(["model1", "model2", "model3"])
 
@@ -433,6 +448,7 @@ class TestRetryDelay:
     def test_exponential_backoff(self):
         """Test exponential backoff delay."""
         router = FallbackRouter(
+            default_model="gpt-4",
             retry_delay_seconds=1.0,
             exponential_backoff=True,
         )
@@ -444,6 +460,7 @@ class TestRetryDelay:
     def test_fixed_delay(self):
         """Test fixed delay (no backoff)."""
         router = FallbackRouter(
+            default_model="gpt-4",
             retry_delay_seconds=1.0,
             exponential_backoff=False,
         )
@@ -496,7 +513,7 @@ class TestErrorClassification:
 
     def test_should_fallback_rate_limit(self):
         """Test rate limit triggers fallback."""
-        router = FallbackRouter()
+        router = FallbackRouter(default_model="gpt-4")
 
         class RateLimitError(Exception):
             pass
@@ -505,18 +522,18 @@ class TestErrorClassification:
 
     def test_should_fallback_timeout(self):
         """Test timeout triggers fallback."""
-        router = FallbackRouter()
+        router = FallbackRouter(default_model="gpt-4")
 
         assert router._should_fallback(Exception("Request timeout")) is True
 
     def test_should_not_fallback_auth(self):
         """Test auth error doesn't trigger fallback."""
-        router = FallbackRouter()
+        router = FallbackRouter(default_model="gpt-4")
 
         assert router._should_not_fallback(Exception("Invalid API key")) is True
 
     def test_should_not_fallback_permission(self):
         """Test permission error doesn't trigger fallback."""
-        router = FallbackRouter()
+        router = FallbackRouter(default_model="gpt-4")
 
         assert router._should_not_fallback(Exception("Permission denied")) is True

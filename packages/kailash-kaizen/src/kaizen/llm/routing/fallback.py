@@ -172,12 +172,19 @@ class FallbackRouter(LLMRouter):
                 required_capabilities are specified in route_with_fallback, models
                 lacking those capabilities are skipped.
         """
-        # Resolve default_model from environment if not provided
+        # When default_model is not provided, fall back to the first entry of
+        # fallback_chain. We intentionally do NOT read OPENAI_PROD_MODEL /
+        # DEFAULT_LLM_MODEL here — those are process-level env hints for a
+        # specific provider and leak OpenAI-specific defaults into non-OpenAI
+        # routers (see GH #485). Per-router defaults must be explicit.
         if default_model is None:
-            default_model = os.environ.get(
-                "OPENAI_PROD_MODEL",
-                os.environ.get("DEFAULT_LLM_MODEL"),
-            )
+            if fallback_chain:
+                default_model = fallback_chain[0]
+            else:
+                raise ValueError(
+                    "FallbackRouter requires either default_model or a "
+                    "non-empty fallback_chain"
+                )
 
         super().__init__(
             available_models=available_models,
