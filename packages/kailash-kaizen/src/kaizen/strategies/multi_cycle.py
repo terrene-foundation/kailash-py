@@ -253,18 +253,26 @@ class MultiCycleStrategy:
                             # Trigger PRE_TOOL_USE hook
                             if hasattr(agent, "hook_manager") and agent.hook_manager:
                                 import asyncio
+                                import contextvars
 
                                 from kaizen.core.autonomy.hooks.types import HookEvent
 
                                 try:
                                     loop = asyncio.get_running_loop()
-                                    # In async context - use thread pool
+                                    # In async context - use thread pool.
+                                    # Copy contextvars into the worker so
+                                    # caller-set request-scoped state
+                                    # (e.g. active provider, tracing IDs)
+                                    # stays observable inside the hook
+                                    # (issue #486).
                                     import concurrent.futures
 
                                     with (
                                         concurrent.futures.ThreadPoolExecutor()
                                     ) as pool:
+                                        ctx = contextvars.copy_context()
                                         pool.submit(
+                                            ctx.run,
                                             asyncio.run,
                                             agent.hook_manager.trigger(
                                                 HookEvent.PRE_TOOL_USE,
@@ -293,16 +301,22 @@ class MultiCycleStrategy:
                             # Execute the tool!
                             import asyncio
                             import concurrent.futures
+                            import contextvars
 
                             if asyncio.iscoroutinefunction(agent.execute_tool):
                                 # Check if we're in a running event loop
                                 try:
                                     loop = asyncio.get_running_loop()
-                                    # We're in an async context - use thread pool to avoid nested loop
+                                    # We're in an async context - use thread pool to avoid nested loop.
+                                    # Copy contextvars so caller-set state
+                                    # reaches the tool coroutine
+                                    # (issue #486).
                                     with (
                                         concurrent.futures.ThreadPoolExecutor()
                                     ) as pool:
+                                        ctx = contextvars.copy_context()
                                         tool_result = pool.submit(
+                                            ctx.run,
                                             asyncio.run,
                                             agent.execute_tool(tool_name, tool_params),
                                         ).result()
@@ -338,11 +352,16 @@ class MultiCycleStrategy:
 
                                 try:
                                     loop = asyncio.get_running_loop()
-                                    # In async context - use thread pool
+                                    # In async context - use thread pool.
+                                    # Copy contextvars so caller-set
+                                    # state reaches the hook coroutine
+                                    # (issue #486).
                                     with (
                                         concurrent.futures.ThreadPoolExecutor()
                                     ) as pool:
+                                        ctx = contextvars.copy_context()
                                         pool.submit(
+                                            ctx.run,
                                             asyncio.run,
                                             agent.hook_manager.trigger(
                                                 HookEvent.POST_TOOL_USE,
@@ -760,16 +779,21 @@ class MultiCycleStrategy:
         # Fire PRE_TOOL_USE hook
         if hasattr(agent, "hook_manager") and agent.hook_manager:
             import asyncio
+            import contextvars
 
             from kaizen.core.autonomy.hooks.types import HookEvent
 
             try:
                 loop = asyncio.get_running_loop()
-                # In async context - use thread pool
+                # In async context - use thread pool. Copy contextvars
+                # so caller-set request-scoped state reaches the hook
+                # coroutine (issue #486).
                 import concurrent.futures
 
                 with concurrent.futures.ThreadPoolExecutor() as pool:
+                    ctx = contextvars.copy_context()
                     pool.submit(
+                        ctx.run,
                         asyncio.run,
                         agent.hook_manager.trigger(
                             HookEvent.PRE_TOOL_USE,
@@ -802,14 +826,19 @@ class MultiCycleStrategy:
 
         import asyncio
         import concurrent.futures
+        import contextvars
 
         if asyncio.iscoroutinefunction(agent.execute_tool):
             # Check if we're in a running event loop
             try:
                 loop = asyncio.get_running_loop()
-                # We're in an async context - use thread pool to avoid nested loop
+                # We're in an async context - use thread pool to avoid
+                # nested loop. Copy contextvars so caller-set state
+                # reaches the tool coroutine (issue #486).
                 with concurrent.futures.ThreadPoolExecutor() as pool:
+                    ctx = contextvars.copy_context()
                     tool_result = pool.submit(
+                        ctx.run,
                         asyncio.run,
                         agent.execute_tool(tool_name, arguments),
                     ).result()
@@ -832,9 +861,13 @@ class MultiCycleStrategy:
 
             try:
                 loop = asyncio.get_running_loop()
-                # In async context - use thread pool
+                # In async context - use thread pool. Copy contextvars
+                # so caller-set state reaches the hook coroutine
+                # (issue #486).
                 with concurrent.futures.ThreadPoolExecutor() as pool:
+                    ctx = contextvars.copy_context()
                     pool.submit(
+                        ctx.run,
                         asyncio.run,
                         agent.hook_manager.trigger(
                             HookEvent.POST_TOOL_USE,

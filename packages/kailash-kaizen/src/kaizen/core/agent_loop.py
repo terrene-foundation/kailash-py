@@ -17,6 +17,7 @@ Licensed under Apache-2.0
 
 import asyncio
 import concurrent.futures
+import contextvars
 import inspect
 import logging
 from dataclasses import dataclass, field
@@ -56,14 +57,22 @@ def run_async_hook(coro) -> None:
     Handles the async/sync boundary for hook triggers. Uses
     ThreadPoolExecutor when inside an existing event loop, or
     asyncio.run() when no loop is running.
+
+    Copies the current contextvars context into the worker thread so
+    that request-scoped state (active provider, active session, tracing
+    IDs) set by the caller remains observable inside the coroutine. See
+    issue #486 -- without ``copy_context().run`` every contextvar silently
+    reverts to its default inside the worker.
     """
     try:
         asyncio.get_running_loop()
         # Inside an event loop -- run in a thread to avoid nesting
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            executor.submit(asyncio.run, coro).result(timeout=5.0)
+            ctx = contextvars.copy_context()
+            executor.submit(ctx.run, asyncio.run, coro).result(timeout=5.0)
     except RuntimeError:
-        # No event loop -- safe to use asyncio.run()
+        # No event loop -- safe to use asyncio.run() (runs on the caller's
+        # thread, so contextvars propagate naturally).
         asyncio.run(coro)
 
 
@@ -257,6 +266,16 @@ def _execute_strategy(agent, processed_inputs: dict) -> dict:
 
     Returns:
         Execution result dict.
+
+    Note:
+        When the caller is already inside a running event loop we hand
+        the coroutine to a worker thread. ``ThreadPoolExecutor`` does
+        NOT propagate :mod:`contextvars` into its workers, so we copy
+        the caller's context explicitly and run the coroutine inside
+        that context (issue #486). Without this, request-scoped state
+        used by custom provider routing (active provider, active
+        session, tracing IDs) silently resets to defaults inside the
+        strategy's LLM dispatch and tool invocations.
     """
     if hasattr(agent.strategy, "execute"):
         if inspect.iscoroutinefunction(agent.strategy.execute):
@@ -264,8 +283,11 @@ def _execute_strategy(agent, processed_inputs: dict) -> dict:
             try:
                 asyncio.get_running_loop()
                 with concurrent.futures.ThreadPoolExecutor() as executor:
+                    ctx = contextvars.copy_context()
                     future = executor.submit(
-                        asyncio.run, agent.strategy.execute(agent, processed_inputs)
+                        ctx.run,
+                        asyncio.run,
+                        agent.strategy.execute(agent, processed_inputs),
                     )
                     return future.result()
             except RuntimeError:

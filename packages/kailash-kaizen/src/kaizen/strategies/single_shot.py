@@ -21,6 +21,7 @@ Updated: 2025-10-01 (Phase 2 Implementation)
 
 import asyncio
 import concurrent.futures
+import contextvars
 import json
 import logging
 import re
@@ -28,6 +29,7 @@ from typing import Any, Dict, List
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
 from kaizen.core.deprecation import deprecated
 
 logger = logging.getLogger(__name__)
@@ -598,6 +600,11 @@ class SingleShotStrategy:
           async), run the coroutine in a ``ThreadPoolExecutor`` to avoid
           a nested ``asyncio.run()`` which would raise ``RuntimeError``.
         * Otherwise call ``asyncio.run()`` directly.
+
+        Copies the caller's contextvars into the worker thread so any
+        request-scoped state set by the caller (active provider, active
+        session, tracing IDs) is observable inside the MCP tool
+        invocation. See issue #486.
         """
         coro = agent.execute_mcp_tool(tool_name, tool_args)
 
@@ -605,7 +612,8 @@ class SingleShotStrategy:
             asyncio.get_running_loop()
             # Inside an event loop -- use a thread pool to avoid nesting
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, coro).result()
+                ctx = contextvars.copy_context()
+                return pool.submit(ctx.run, asyncio.run, coro).result()
         except RuntimeError:
             # No running event loop -- safe to use asyncio.run() directly
             return asyncio.run(coro)

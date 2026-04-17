@@ -23,6 +23,7 @@ Author: Kaizen Framework Team
 Created: 2025-10-01
 """
 
+import contextvars
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, List, Optional
@@ -271,14 +272,26 @@ class BatchProcessingMixin:
         Notes:
             - Task 3.18: Parallel batch processing
             - Task 3.19: Updates progress during execution
+            - Issue #486: Each submit wraps the processor in a
+              ``copy_context().run`` so caller-set contextvars (active
+              provider, active session, tracing IDs) remain observable
+              inside the worker thread.
         """
         results = [None] * len(inputs)
         errors = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all tasks
+            # Submit all tasks. ``ThreadPoolExecutor`` does NOT propagate
+            # contextvars into its workers, so we copy the caller's
+            # context once per submission (cheap) and run the processor
+            # inside that context (issue #486).
             future_to_index = {
-                executor.submit(processor, input_item, **kwargs): i
+                executor.submit(
+                    contextvars.copy_context().run,
+                    processor,
+                    input_item,
+                    **kwargs,
+                ): i
                 for i, input_item in enumerate(inputs)
             }
 

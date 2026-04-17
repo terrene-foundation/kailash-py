@@ -1170,9 +1170,17 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return {"query": user_query, "action": action, "context": "default"}
 
     def _run_async_in_sync_context(self, coro):
-        """Run async coroutine in sync context using existing pattern from parent class."""
+        """Run async coroutine in sync context using existing pattern from parent class.
+
+        When the caller is inside a running event loop the coroutine
+        runs on a worker thread. ``ThreadPoolExecutor`` does NOT
+        propagate :mod:`contextvars` into its workers, so we copy the
+        caller's context explicitly and run the coroutine inside that
+        context (issue #486).
+        """
         try:
             import asyncio
+            import contextvars
 
             # Try to get existing event loop
             loop = asyncio.get_event_loop()
@@ -1181,7 +1189,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 import concurrent.futures
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, coro)
+                    ctx = contextvars.copy_context()
+                    future = executor.submit(ctx.run, asyncio.run, coro)
                     return future.result()
             else:
                 # Loop exists but not running, use run_until_complete
