@@ -2199,13 +2199,14 @@ Final Answer: 6 hours"""
             # Call the provider
             response = provider_instance.chat(**chat_kwargs)
 
-            # Ensure usage totals are calculated
-            if "usage" in response:
+            # Ensure usage totals are calculated. Custom providers may emit
+            # None counters (see issue #487); coerce to 0 before arithmetic.
+            if response.get("usage"):
                 usage = response["usage"]
-                if usage.get("total_tokens", 0) == 0:
-                    usage["total_tokens"] = usage.get("prompt_tokens", 0) + usage.get(
-                        "completion_tokens", 0
-                    )
+                if not usage.get("total_tokens"):
+                    prompt = usage.get("prompt_tokens") or 0
+                    completion = usage.get("completion_tokens") or 0
+                    usage["total_tokens"] = prompt + completion
 
             return response
 
@@ -2259,11 +2260,25 @@ Final Answer: 6 hours"""
     def _calculate_usage_metrics(
         self, messages: list[dict], response: dict, model: str, provider: str
     ) -> dict[str, Any]:
-        """Calculate token usage and cost metrics."""
-        usage = response.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = prompt_tokens + completion_tokens
+        """Calculate token usage and cost metrics.
+
+        Custom providers (e.g. WebSocket bridges to browser-side Ollama) may
+        omit tokenizer counts and emit ``usage={'prompt_tokens': None, ...}``
+        or ``usage=None``. Coerce every missing/None counter to 0 before
+        arithmetic so a provider that returns content successfully never
+        crashes the post-dispatch metrics calculation. See issue #487.
+        """
+        # Provider may emit `usage=None`, not just missing key.
+        usage = response.get("usage") or {}
+        # `.get(key, 0)` returns None when the key exists and is None; `or 0`
+        # normalises both missing-key and None-value to 0.
+        prompt_tokens = usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("completion_tokens") or 0
+        # Trust the provider's explicit total_tokens if present; otherwise
+        # derive from the (now-coerced) parts.
+        total_tokens = usage.get("total_tokens")
+        if total_tokens is None:
+            total_tokens = prompt_tokens + completion_tokens
 
         # Mock cost calculation (real implementation would use current pricing)
         mock_costs = {
@@ -2278,6 +2293,10 @@ Final Answer: 6 hours"""
             completion_tokens / 1000
         ) * cost_per_1k["output"]
 
+        # Guard against ZeroDivisionError when all counts are zero (all-None
+        # provider response coerced to 0); efficiency is undefined, return 0.0.
+        efficiency_score = completion_tokens / total_tokens if total_tokens else 0.0
+
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -2285,7 +2304,7 @@ Final Answer: 6 hours"""
             "estimated_cost_usd": round(estimated_cost, 6),
             "model": model,
             "provider": provider,
-            "efficiency_score": completion_tokens / max(total_tokens, 1),
+            "efficiency_score": efficiency_score,
         }
 
     def _extract_tool_call_info(self, tool_call) -> dict[str, Any]:
@@ -2648,21 +2667,31 @@ Final Answer: 6 hours"""
         )
 
     def _extract_token_usage(self, response: Dict[str, Any]) -> TokenUsage:
-        """Extract token usage from LLM response."""
+        """Extract token usage from LLM response.
+
+        Custom providers may emit None counters (see issue #487); every
+        ``.get()`` is chained with ``or 0`` so None-value is normalised the
+        same as missing-key.
+        """
         usage = TokenUsage()
 
-        # Check if response has usage data
-        if "usage" in response:
+        # Check if response has usage data (None-safe: provider may emit
+        # ``usage=None`` rather than omit the key).
+        if response.get("usage"):
             usage_data = response["usage"]
-            usage.prompt_tokens = usage_data.get("prompt_tokens", 0)
-            usage.completion_tokens = usage_data.get("completion_tokens", 0)
-            usage.total_tokens = usage_data.get("total_tokens", 0)
+            usage.prompt_tokens = usage_data.get("prompt_tokens") or 0
+            usage.completion_tokens = usage_data.get("completion_tokens") or 0
+            usage.total_tokens = (
+                usage_data.get("total_tokens")
+                if usage_data.get("total_tokens") is not None
+                else usage.prompt_tokens + usage.completion_tokens
+            )
 
         # Anthropic format
         elif "metadata" in response and "usage" in response["metadata"]:
-            usage_data = response["metadata"]["usage"]
-            usage.prompt_tokens = usage_data.get("input_tokens", 0)
-            usage.completion_tokens = usage_data.get("output_tokens", 0)
+            usage_data = response["metadata"]["usage"] or {}
+            usage.prompt_tokens = usage_data.get("input_tokens") or 0
+            usage.completion_tokens = usage_data.get("output_tokens") or 0
             usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
 
         # Fallback: estimate from text length
