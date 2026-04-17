@@ -96,10 +96,13 @@ class TestPostgreSQLMigrationEngineIntegration:
             # Second execution should not fail (due to IF NOT EXISTS)
             dataflow._execute_ddl_with_transaction(sql)
 
-            # Verify table exists
+            # Verify table exists. _generate_create_table_sql routes model
+            # names through ``_class_name_to_table_name``, which pluralises:
+            # "integration_test_user" -> "integration_test_users". Check the
+            # actual produced name, not the model name.
             cursor = connection.cursor()
             cursor.execute(
-                "SELECT tablename FROM pg_tables WHERE tablename = 'integration_test_user'"
+                "SELECT tablename FROM pg_tables WHERE tablename = 'integration_test_users'"
             )
             tables = cursor.fetchall()
             cursor.close()
@@ -108,7 +111,7 @@ class TestPostgreSQLMigrationEngineIntegration:
         finally:
             # Cleanup
             cursor = connection.cursor()
-            cursor.execute("DROP TABLE IF EXISTS integration_test_user")
+            cursor.execute("DROP TABLE IF EXISTS integration_test_users")
             cursor.close()
             connection.close()
 
@@ -188,9 +191,9 @@ class TestPostgreSQLMigrationEngineIntegration:
             )
             tables = cursor.fetchall()
             cursor.close()
-            assert len(tables) == 0, (
-                "Transaction rollback failed - table exists when it shouldn't"
-            )
+            assert (
+                len(tables) == 0
+            ), "Transaction rollback failed - table exists when it shouldn't"
 
         finally:
             # Cleanup any remaining tables
@@ -395,9 +398,9 @@ class TestPostgreSQLMigrationEngineIntegration:
             execution_time = end_time - start_time
 
             # Should complete within reasonable time (< 10 seconds for PostgreSQL integration test)
-            assert execution_time < 10.0, (
-                f"PostgreSQL migration system too slow: {execution_time} seconds"
-            )
+            assert (
+                execution_time < 10.0
+            ), f"PostgreSQL migration system too slow: {execution_time} seconds"
 
             # Verify PostgreSQL migration system is still functional
             assert hasattr(dataflow, "_migration_system")

@@ -5201,9 +5201,25 @@ class DataFlow(DataFlowEventMixin):
 
             # Create a connection wrapper that supports the needed interface
             class AsyncSQLConnectionWrapper:
+                """Thin sync-style wrapper around AsyncSQLDatabaseNode.
+
+                Each ``execute()`` spins up a fresh node (its own pool), which
+                auto-commits. Transactions are NOT expressed here — for real
+                cross-statement atomicity callers use
+                ``DataFlow._execute_multi_statement_ddl`` which runs the whole
+                BEGIN + N DDL + COMMIT inside a single asyncpg connection via
+                ``async_safe_run`` and a single ``conn.transaction()`` block.
+
+                Before this class was reworked, ``fetchall()`` returned ``[]``
+                hardcoded — a zero-tolerance Rule 2 stub that masked every
+                failed DDL / SELECT round-trip. Now ``fetchall()`` returns the
+                last execute()'s rows as tuples (DB-API 2.0 shape).
+                """
+
                 def __init__(self, connection_string):
                     self.connection_string = connection_string
                     self._transaction = None
+                    self._last_rows: list = []
 
                 def cursor(self):
                     return self
@@ -5224,18 +5240,39 @@ class DataFlow(DataFlowEventMixin):
                         fetch_mode="all",
                         validate_queries=False,
                     )
-                    return node.execute()
+                    result = node.execute()
+                    # AsyncSQLDatabaseNode returns {"result": {"data": [...], ...}}.
+                    # Unwrap "data" for fetchall() and convert each dict row to a
+                    # tuple to match the DB-API 2.0 contract that most callers
+                    # expect from cursor.fetchall().
+                    self._last_rows = []
+                    try:
+                        data = (result or {}).get("result", {}).get("data", [])
+                        if isinstance(data, list):
+                            for row in data:
+                                if isinstance(row, dict):
+                                    self._last_rows.append(tuple(row.values()))
+                                else:
+                                    self._last_rows.append(row)
+                    except Exception:
+                        self._last_rows = []
+                    return result
 
                 def fetchall(self):
-                    return []
+                    return list(self._last_rows)
 
                 def fetchone(self):
-                    return None
+                    return self._last_rows[0] if self._last_rows else None
 
                 def commit(self):
+                    # Each execute() auto-commits via its node's pool.
+                    # Real cross-statement atomicity is provided by
+                    # DataFlow._execute_multi_statement_ddl which runs
+                    # BEGIN + DDLs + COMMIT on a single asyncpg connection.
                     pass
 
                 def rollback(self):
+                    # Same reason as commit() — per-execute auto-commit.
                     pass
 
                 def close(self):
@@ -5270,68 +5307,84 @@ class DataFlow(DataFlowEventMixin):
             return sqlite3.connect(":memory:", check_same_thread=False)
 
     def _execute_ddl_with_transaction(self, ddl_statement: str):
-        """Execute DDL statement within a database transaction with rollback capability."""
-        connection = self._get_async_sql_connection()
-        transaction = None
+        """Execute a single DDL statement inside a transaction with rollback.
 
-        try:
-            # Begin transaction
-            transaction = connection.begin()
-
-            # Execute DDL statement
-            connection.execute(ddl_statement)
-
-            # Commit transaction
-            transaction.commit()
-
-            logger.debug(
-                "engine.ddl_executed_successfully",
-                extra={"ddl_statement": ddl_statement[:100]},
-            )
-
-        except Exception as e:
-            # Rollback transaction on error
-            if transaction:
-                transaction.rollback()
-                logger.error(
-                    "engine.ddl_transaction_rolled_back_due_to", extra={"error": str(e)}
-                )
-            raise e
-        finally:
-            if connection:
-                connection.close()
+        Must run BEGIN, the DDL, and COMMIT on the SAME asyncpg connection
+        and inside the SAME event loop — running them via three separate
+        ``async_safe_run`` calls binds each to a fresh, short-lived loop
+        and asyncpg refuses the resulting cross-loop usage. We use a
+        single ``run_all`` coroutine so the entire transaction lives in
+        one event loop.
+        """
+        self._execute_multi_statement_ddl([ddl_statement])
 
     def _execute_multi_statement_ddl(self, ddl_statements: List[str]):
-        """Execute multiple DDL statements within a single transaction."""
-        connection = self._get_async_sql_connection()
-        transaction = None
+        """Execute multiple DDL statements inside a single transaction.
+
+        Same contract as ``_execute_ddl_with_transaction`` — BEGIN, each
+        DDL, COMMIT all run on one asyncpg connection inside one event
+        loop. On any failure, ROLLBACK runs on the same connection so
+        the partial work is undone atomically.
+        """
+        database_url = self.config.database.url
+        if (
+            database_url is None
+            or database_url == ":memory:"
+            or not (
+                "postgresql" in database_url.lower()
+                or "postgres" in database_url.lower()
+            )
+        ):
+            # Fallback: SQLite / other — run each DDL through the wrapper.
+            # This path does not provide cross-statement atomicity, matching
+            # prior behavior; PostgreSQL gets the real transactional path.
+            connection = self._get_async_sql_connection()
+            try:
+                for stmt in ddl_statements:
+                    connection.execute(stmt)
+            finally:
+                if connection:
+                    connection.close()
+            return
+
+        import asyncpg
+
+        from ..adapters.connection_parser import ConnectionParser
+
+        async def run_all():
+            components = ConnectionParser.parse_connection_string(database_url)
+            safe = ConnectionParser.build_connection_string(
+                scheme=components.get("scheme"),
+                host=components.get("host"),
+                database=components.get("database"),
+                username=components.get("username"),
+                password=components.get("password"),
+                port=components.get("port"),
+                **components.get("query_params", {}),
+            )
+            conn = await asyncpg.connect(safe)
+            try:
+                async with conn.transaction():
+                    for stmt in ddl_statements:
+                        await conn.execute(stmt)
+            finally:
+                await conn.close()
 
         try:
-            # Begin transaction
-            transaction = connection.begin()
-
-            # Execute all DDL statements
-            for statement in ddl_statements:
-                connection.execute(statement)
-
-            # Commit transaction
-            transaction.commit()
-
+            async_safe_run(run_all())
             logger.debug(
-                f"Multi-statement DDL executed successfully: {len(ddl_statements)} statements"
+                "engine.multi_ddl_executed_successfully",
+                extra={"statements": len(ddl_statements)},
             )
-
         except Exception as e:
-            # Rollback transaction on error
-            if transaction:
-                transaction.rollback()
-                logger.error(
-                    f"Multi-statement DDL transaction rolled back due to error: {e}"
-                )
-            raise e
-        finally:
-            if connection:
-                connection.close()
+            # asyncpg's ``async with conn.transaction()`` already ROLLed back
+            # by the time this exception propagates — re-raise so callers see
+            # the original error cause.
+            logger.error(
+                "engine.multi_ddl_transaction_rolled_back",
+                extra={"error": str(e)},
+            )
+            raise
 
     def _trigger_universal_schema_management(
         self, model_name: str, fields: Dict[str, Any]
