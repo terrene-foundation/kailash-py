@@ -100,8 +100,10 @@ class DataFlow(DataFlowEventMixin):
         multi_tenant: bool = False,
         encryption_key: Optional[str] = None,
         audit_logging: bool = False,
-        cache_enabled: bool = True,
-        cache_ttl: int = 3600,
+        cache_enabled: Optional[
+            bool
+        ] = None,  # None = honour config; True/False = override
+        cache_ttl: Optional[int] = None,  # None = honour config; int = override
         monitoring: Optional[
             bool
         ] = None,  # Changed to Optional to detect when explicitly set
@@ -276,15 +278,22 @@ class DataFlow(DataFlowEventMixin):
 
                 # Prepare config parameters
                 # FIX: CACHE_INVALIDATION_BUG_REPORT.md - enable_caching is alias for cache_enabled
-                effective_cache_enabled = (
-                    enable_caching if enable_caching is not None else cache_enabled
-                )
+                # Both cache_enabled and cache_ttl are Optional — when omitted,
+                # fall back to the DataFlowConfig defaults (True, 3600) so the
+                # pre-existing "default on" behaviour is preserved.
+                if enable_caching is not None:
+                    effective_cache_enabled = enable_caching
+                elif cache_enabled is not None:
+                    effective_cache_enabled = cache_enabled
+                else:
+                    effective_cache_enabled = True  # matches DataFlowConfig default
+                effective_cache_ttl = cache_ttl if cache_ttl is not None else 3600
                 config_params = {
                     "database": database_config,
                     "monitoring": monitoring_config,
                     "security": security_config,
                     "enable_query_cache": effective_cache_enabled,
-                    "cache_ttl": cache_ttl,
+                    "cache_ttl": effective_cache_ttl,
                 }
 
                 # Add direct parameters that should be passed through
