@@ -386,13 +386,31 @@ class DependencyAnalyzer:
 
         HIGH IMPACT: Removing a column used in views will break those views.
         """
-        # Query to find views that reference the column
+        # Query both pg_views AND pg_matviews so materialized views are
+        # detected as view dependencies. pg_views covers regular views only;
+        # pg_matviews is a separate catalog and missing it causes materialized
+        # views to be silent orphans in the dependency report — operators
+        # drop a column, pg_matviews refresh throws, and the failure surfaces
+        # in production, not in the audit.
         view_query = """
         SELECT
             schemaname,
             viewname,
-            definition
+            definition,
+            FALSE AS is_materialized
         FROM pg_views
+        WHERE schemaname = 'public'
+            AND (
+                definition ILIKE '%' || $1 || '.' || $2 || '%'
+                OR definition ILIKE '%' || $2 || '%'
+            )
+        UNION ALL
+        SELECT
+            schemaname,
+            matviewname AS viewname,
+            definition,
+            TRUE AS is_materialized
+        FROM pg_matviews
         WHERE schemaname = 'public'
             AND (
                 definition ILIKE '%' || $1 || '.' || $2 || '%'
@@ -452,6 +470,7 @@ class DependencyAnalyzer:
                             view_definition=definition,
                             schema_name=row.get("schemaname")
                             or row.get("schema_name", "public"),
+                            is_materialized=bool(row.get("is_materialized", False)),
                         )
                         dependencies.append(dep)
 
