@@ -75,11 +75,73 @@ def runtime():
 class TestApplicationSafeRenameIntegration:
     """Integration tests for application-safe rename strategies with real PostgreSQL."""
 
+    # Tables/views this test class touches (cleanup tracked here because
+    # the rename strategies create side artifacts like migration_alias_users
+    # and accounts_old_backup that aren't in the test's DDL).
+    _TEST_TABLES = [
+        "users",
+        "accounts",
+        "accounts_old_backup",
+        "users_old_backup",
+        "departments",
+        "employees",
+        "staff_members",
+        "large_table",
+        "renamed_large_table",
+        "large_table_old_backup",
+    ]
+    _TEST_VIEWS = [
+        "user_summary",
+        "migration_alias_users",
+        "users_alias",
+        "accounts_alias",
+    ]
+
+    async def _drop_all(self, test_suite):
+        async with test_suite.get_connection() as conn:
+            for view in self._TEST_VIEWS:
+                await conn.execute(f"DROP VIEW IF EXISTS {view} CASCADE")
+            for tbl in self._TEST_TABLES:
+                await conn.execute(f"DROP TABLE IF EXISTS {tbl} CASCADE")
+
+    @pytest.fixture
+    async def connection(self, test_suite):
+        """Raw asyncpg connection for DDL setup/teardown."""
+        conn = await asyncpg.connect(test_suite.config.url)
+        yield conn
+        if not conn.is_closed():
+            await conn.close()
+
+    @pytest.fixture
+    async def db_manager(self, test_suite):
+        """Connection manager backed by IntegrationTestSuite."""
+
+        class _SuiteManager:
+            def __init__(self, suite):
+                self.suite = suite
+                self._conns = []
+
+            async def get_connection(self):
+                c = await asyncpg.connect(self.suite.config.url)
+                self._conns.append(c)
+                return c
+
+            async def close_all(self):
+                for c in self._conns:
+                    if not c.is_closed():
+                        await c.close()
+                self._conns.clear()
+
+        manager = _SuiteManager(test_suite)
+        yield manager
+        await manager.close_all()
+
     @pytest.fixture
     async def sample_table_setup(self, test_suite):
-        """Create sample table for rename testing."""
+        """Create sample table, view, and index for rename testing."""
+        await self._drop_all(test_suite)
         async with test_suite.get_connection() as connection:
-            # Create sample table with data
+            # Schema
             await connection.execute(
                 """
                 CREATE TABLE users (
@@ -88,46 +150,30 @@ class TestApplicationSafeRenameIntegration:
                     email VARCHAR(255) UNIQUE,
                     created_at TIMESTAMP DEFAULT NOW()
                 )
-            """
+                """
             )
-
-        # Insert sample data
-        await connection.execute(
-            """
-            INSERT INTO users (name, email) VALUES
-            ('Alice Johnson', 'alice@example.com'),
-            ('Bob Smith', 'bob@example.com'),
-            ('Charlie Brown', 'charlie@example.com')
-        """
-        )
-
-        # Create view that references the table
-        await connection.execute(
-            """
-            CREATE VIEW user_summary AS
-            SELECT name, email FROM users WHERE created_at > NOW() - INTERVAL '30 days'
-        """
-        )
-
-        # Create index
-        await connection.execute(
-            """
-            CREATE INDEX idx_users_email ON users(email)
-        """
-        )
+            # Data
+            await connection.execute(
+                """
+                INSERT INTO users (name, email) VALUES
+                ('Alice Johnson', 'alice@example.com'),
+                ('Bob Smith', 'bob@example.com'),
+                ('Charlie Brown', 'charlie@example.com')
+                """
+            )
+            # View
+            await connection.execute(
+                """
+                CREATE VIEW user_summary AS
+                SELECT name, email FROM users WHERE created_at > NOW() - INTERVAL '30 days'
+                """
+            )
+            # Index
+            await connection.execute("CREATE INDEX idx_users_email ON users(email)")
 
         yield "users"
 
-        # Cleanup
-        try:
-            await connection.execute("DROP VIEW IF EXISTS user_summary CASCADE")
-            await connection.execute("DROP TABLE IF EXISTS users CASCADE")
-            await connection.execute("DROP TABLE IF EXISTS accounts CASCADE")
-            await connection.execute(
-                "DROP VIEW IF EXISTS migration_alias_users CASCADE"
-            )
-        except Exception:
-            pass  # Ignore cleanup errors
+        await self._drop_all(test_suite)
 
     @pytest.fixture
     def mock_health_checker(self):
@@ -173,42 +219,43 @@ class TestApplicationSafeRenameIntegration:
         old_table = sample_table_setup  # "users"
         new_table = "accounts"
 
+        # All DDL + verification MUST run inside the same pool connection
+        # lifecycle; using `connection` after `async with` exits raises
+        # asyncpg.InterfaceError("connection released back to the pool").
         async with test_suite.get_connection() as connection:
-            # Execute view aliasing strategy
             result = await application_safe_strategy.execute_view_aliasing_strategy(
                 old_table_name=old_table,
                 new_table_name=new_table,
                 connection=connection,
             )
 
-        assert result.success
-        assert result.strategy_used == ZeroDowntimeStrategy.VIEW_ALIASING
-        assert result.application_downtime == 0.0  # Zero downtime achieved
-        assert len(result.created_objects) > 0
+            assert result.success
+            assert result.strategy_used == ZeroDowntimeStrategy.VIEW_ALIASING
+            assert result.application_downtime == 0.0  # Zero downtime achieved
+            assert len(result.created_objects) > 0
 
-        # Verify the rename actually happened
-        tables = await connection.fetch(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-        )
-        table_names = [row["tablename"] for row in tables]
+            tables = await connection.fetch(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+            )
+            table_names = [row["tablename"] for row in tables]
 
-        assert new_table in table_names  # New table exists
-        assert old_table not in table_names  # Old table renamed
+            assert new_table in table_names  # New table exists
+            assert old_table not in table_names  # Old table renamed
 
-        # Verify alias view was created
-        views = await connection.fetch(
-            "SELECT viewname FROM pg_views WHERE schemaname = 'public'"
-        )
-        view_names = [row["viewname"] for row in views]
+            views = await connection.fetch(
+                "SELECT viewname FROM pg_views WHERE schemaname = 'public'"
+            )
+            view_names = [row["viewname"] for row in views]
 
-        alias_views = [
-            name for name in view_names if "alias" in name and old_table in name
-        ]
-        assert len(alias_views) > 0  # Alias view created
+            alias_views = [
+                name for name in view_names if "alias" in name and old_table in name
+            ]
+            assert len(alias_views) > 0  # Alias view created
 
-        # Verify data integrity
-        new_table_count = await connection.fetchval(f"SELECT COUNT(*) FROM {new_table}")
-        assert new_table_count == 3  # All data preserved
+            new_table_count = await connection.fetchval(
+                f"SELECT COUNT(*) FROM {new_table}"
+            )
+            assert new_table_count == 3  # All data preserved
 
     async def test_blue_green_strategy_with_real_database(
         self, application_safe_strategy, connection, sample_table_setup
