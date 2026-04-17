@@ -63,7 +63,7 @@ async def test_suite():
 class TestMigrationPerformanceTrackerIntegration:
     """Integration tests for MigrationPerformanceTracker with real infrastructure."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     async def postgres_connection(self, test_suite):
         """Setup PostgreSQL connection using standardized test infrastructure."""
         import asyncpg
@@ -198,9 +198,9 @@ class TestMigrationPerformanceTrackerIntegration:
 
             # Verify performance target
             execution_time = time.perf_counter() - start_time
-            assert execution_time < 5.0, (
-                f"Integration test took {execution_time:.2f}s, exceeds 5s target"
-            )
+            assert (
+                execution_time < 5.0
+            ), f"Integration test took {execution_time:.2f}s, exceeds 5s target"
 
             # Verify metrics are added to history
             assert len(performance_tracker.performance_history) > 0
@@ -269,9 +269,9 @@ class TestMigrationPerformanceTrackerIntegration:
             assert metrics.transaction_count > 0
 
             # Verify performance
-            assert execution_time < 5.0, (
-                f"Batched execution took {execution_time:.2f}s, exceeds 5s target"
-            )
+            assert (
+                execution_time < 5.0
+            ), f"Batched execution took {execution_time:.2f}s, exceeds 5s target"
             assert metrics.execution_time_ms > 0
 
             # Verify tables were created
@@ -417,9 +417,9 @@ class TestMigrationPerformanceTrackerIntegration:
             assert all(m.success for m in all_metrics), "All migrations should succeed"
 
             # Verify execution times were measured
-            assert all(m.execution_time_ms > 0 for m in all_metrics), (
-                "All metrics should have execution times"
-            )
+            assert all(
+                m.execution_time_ms > 0 for m in all_metrics
+            ), "All metrics should have execution times"
 
             # The degraded migration should generally be slower (but not required for test to pass)
             if (
@@ -439,19 +439,19 @@ class TestMigrationPerformanceTrackerIntegration:
 
             # If regressions were found, verify they have proper structure
             for regression in regressions:
-                assert hasattr(regression, "metric_name"), (
-                    "Regression should have metric_name"
-                )
-                assert hasattr(regression, "severity"), (
-                    "Regression should have severity"
-                )
-                assert hasattr(regression, "change_percent"), (
-                    "Regression should have change_percent"
-                )
+                assert hasattr(
+                    regression, "metric_name"
+                ), "Regression should have metric_name"
+                assert hasattr(
+                    regression, "severity"
+                ), "Regression should have severity"
+                assert hasattr(
+                    regression, "change_percent"
+                ), "Regression should have change_percent"
                 if regression.is_regression():
-                    assert len(regression.recommendations) > 0, (
-                        "Regressions should have recommendations"
-                    )
+                    assert (
+                        len(regression.recommendations) > 0
+                    ), "Regressions should have recommendations"
 
         finally:
             # Cleanup test tables
@@ -520,15 +520,15 @@ class TestMigrationPerformanceTrackerIntegration:
             assert all(result.success for result in results)
 
             # Verify concurrent execution was efficient
-            assert total_time < 5.0, (
-                f"Concurrent execution took {total_time:.2f}s, exceeds 5s target"
-            )
+            assert (
+                total_time < 5.0
+            ), f"Concurrent execution took {total_time:.2f}s, exceeds 5s target"
 
             # Verify each migration has unique results
             migration_names = [result.migration_name for result in results]
-            assert len(set(migration_names)) == 3, (
-                "Each migration should have unique name"
-            )
+            assert (
+                len(set(migration_names)) == 3
+            ), "Each migration should have unique name"
 
             # Verify performance metrics are reasonable
             for result in results:
@@ -847,7 +847,7 @@ class TestMigrationPerformanceTrackerIntegration:
 class TestPerformanceTrackerWithConnectionManager:
     """Test performance tracker integration with MigrationConnectionManager."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     async def postgres_connection(self, test_suite):
         """Setup PostgreSQL connection using test suite infrastructure."""
         import asyncpg
