@@ -28,18 +28,14 @@ Dependencies:
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-import os
-
 import bcrypt
 import jwt
 
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# JWT Configuration — read from environment so deployments and tests can
-# override without editing source (tests export ``JWT_SECRET=test_secret``;
-# production exports the real secret via its own environment).
-JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-in-production")
+# JWT Configuration
+JWT_SECRET = "your-secret-key-change-in-production"  # Change in production
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 REFRESH_TOKEN_EXPIRY_SECONDS = 604800  # 7 days
@@ -201,20 +197,18 @@ def verify_token(access_token: str, secret: str = JWT_SECRET) -> Dict[str, Any]:
     try:
         decoded = jwt.decode(access_token, secret, algorithms=[JWT_ALGORITHM])
 
-        # Return every claim the JWT carried so downstream middleware /
-        # endpoints can see role, email, and custom claims without re-
-        # decoding. Prior return dropped everything except user_id/org_id/
-        # exp, which silently stripped role from the request context and
-        # caused every role-gated endpoint to fall back to the "member"
-        # default.
-        return {
-            "valid": True,
-            "user_id": decoded["user_id"],
-            "org_id": decoded.get("org_id"),
-            "email": decoded.get("email"),
-            "role": decoded.get("role"),
-            "exp": decoded["exp"],
-        }
+        # Preserve every claim from the token (role, email, tenant_id, etc.)
+        # Callers such as the api_gateway_starter JWT middleware rely on
+        # the full claim set to populate request.state — stripping claims
+        # here would hide role/email from RBAC and route handlers.
+        result = dict(decoded)
+        result["valid"] = True
+        # user_id and exp are required for legacy callers that unpack them
+        # positionally; keep them explicit for schema-stability.
+        result["user_id"] = decoded["user_id"]
+        result["exp"] = decoded["exp"]
+        result.setdefault("org_id", decoded.get("org_id"))
+        return result
 
     except jwt.ExpiredSignatureError:
         return {"valid": False, "error": "Token expired", "error_code": "TOKEN_EXPIRED"}

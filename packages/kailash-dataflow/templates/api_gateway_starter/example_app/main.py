@@ -44,11 +44,19 @@ def create_app(db: DataFlow = None) -> FastAPI:
         Configured FastAPI application
 
     Middleware Stack Order (critical):
-        1. CORS - Must be first to handle preflight requests
-        2. Error Handler - Catches all exceptions from later middleware
-        3. Rate Limiting - Prevent abuse before authentication
-        4. JWT Authentication - Verify user identity
-        5. RBAC - Check permissions (decorator on endpoints)
+        FastAPI registers middleware in LIFO order — the LAST
+        ``@app.middleware("http")`` registered becomes the OUTERMOST
+        middleware (runs first on request ingress / last on egress).
+
+        Registration order below is arranged so request processing runs:
+          1. CORS (via configure_cors, added via add_middleware) — handles
+             preflight OPTIONS requests before anything else
+          2. Rate Limiting — reject abusive clients before auth work
+          3. JWT / API key Authentication — verify identity
+          4. RBAC role attachment — extract role from JWT claims
+          5. Error Handler (registered LAST = outermost) — catches
+             HTTPExceptions / ValidationErrors raised by all inner
+             middleware and handlers, formats to RFC 7807
 
     Example:
         >>> from dataflow import DataFlow
@@ -74,15 +82,13 @@ def create_app(db: DataFlow = None) -> FastAPI:
         debug=settings.debug,
     )
 
-    # 1. Configure CORS (MUST be first)
+    # Configure CORS (via add_middleware — always runs first on ingress)
     configure_cors(app, allowed_origins=settings.allowed_origins)
 
-    # 2. Global error handler (MUST be second)
-    @app.middleware("http")
-    async def error_middleware(request: Request, call_next):
-        return await error_handler_middleware(request, call_next)
-
-    # 3. Rate limiting (MUST be third)
+    # Rate limiting — registered FIRST among @app.middleware so it runs
+    # LAST on request ingress (innermost), i.e. after auth has resolved
+    # the caller. Order below (bottom-up = outer-first) is:
+    #   error -> role -> auth -> rate_limit -> (handler)
     limiter = InMemoryRateLimiter(
         rate=settings.rate_limit_requests, window=settings.rate_limit_window
     )
@@ -92,15 +98,19 @@ def create_app(db: DataFlow = None) -> FastAPI:
         # Skip rate limiting for health check
         if request.url.path == "/health":
             return await call_next(request)
+        # CORS preflight requests bypass rate limiting — they don't
+        # represent billable work and rejecting them starves the browser
+        # client of the preflight response it needs to make the real call.
+        if request.method == "OPTIONS":
+            return await call_next(request)
         return await rate_limit_middleware(request, call_next, limiter)
 
-    # 4. JWT + API key authentication (sets request.state.role as well —
-    # see the jwt_auth_middleware / api_key_auth_middleware implementations
-    # which populate role before call_next so ``@require_role`` decorators
-    # inside endpoints can gate access). A previously-separate role
-    # middleware was removed because Starlette's LIFO middleware stack
-    # made it run BEFORE auth on the request path, leaving
-    # ``request.state.role`` unset on every role-gated route.
+    # Authentication (JWT for regular, API key for /api/*). Sets both
+    # ``request.state.user_claims`` / ``api_key_data`` AND
+    # ``request.state.role`` so downstream ``@require_role`` decorators
+    # can read the role without a separate pass. The role must be set
+    # after the underlying auth middleware has populated claims, so it
+    # lives in a small wrapper around ``call_next``.
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
         # Skip auth for public endpoints
@@ -108,13 +118,40 @@ def create_app(db: DataFlow = None) -> FastAPI:
         if request.url.path in public_paths:
             return await call_next(request)
 
-        # Apply JWT or API key authentication for regular endpoints
+        # CORS preflight requests MUST bypass auth — browsers send OPTIONS
+        # without credentials, and the CORSMiddleware handles them
+        # downstream. Rejecting preflight with 401 breaks every browser
+        # client before the real request even reaches auth.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        async def call_next_with_role(inner_request: Request):
+            # At this point jwt_auth / api_key_auth have populated
+            # request.state.user_claims or request.state.api_key_data.
+            # Extract the caller's role for the RBAC decorator.
+            if hasattr(inner_request.state, "user_claims"):
+                claims = inner_request.state.user_claims
+                inner_request.state.role = claims.get("role", "member")
+            elif hasattr(inner_request.state, "api_key_data"):
+                # API keys have admin access (no per-key role concept).
+                inner_request.state.role = "admin"
+            return await call_next(inner_request)
+
+        # Apply JWT authentication for regular endpoints
         if request.url.path.startswith("/api/"):
             # API endpoints use API key authentication
-            return await api_key_auth_middleware(request, call_next, db)
+            return await api_key_auth_middleware(request, call_next_with_role, db)
         else:
             # Regular endpoints use JWT authentication
-            return await jwt_auth_middleware(request, call_next)
+            return await jwt_auth_middleware(request, call_next_with_role)
+
+    # Global error handler — registered LAST so it becomes the OUTERMOST
+    # middleware and catches HTTPException / ValidationError raised
+    # anywhere below (auth, rate limit, role, route handlers), formatting
+    # them to RFC 7807 Problem Details.
+    @app.middleware("http")
+    async def error_middleware(request: Request, call_next):
+        return await error_handler_middleware(request, call_next)
 
     # Health check endpoint (public, no authentication)
     @app.get("/health", tags=["health"])
@@ -216,6 +253,10 @@ def create_app(db: DataFlow = None) -> FastAPI:
     return app
 
 
+# Create default app instance
+app = create_app()
+
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -223,16 +264,6 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-
-    # Create the default app instance only when running as a script.
-    # Creating it at import time (``app = create_app()`` at module scope)
-    # instantiates a fresh ``DataFlow(":memory:")`` and registers the
-    # User/Organization nodes against it in the global NodeRegistry. Any
-    # subsequent test that imports this module gets workflow nodes bound
-    # to that throwaway ``:memory:`` DataFlow instead of the test's own
-    # DataFlow, which is exactly how the integration tests ended up with
-    # ``no such table: organizations``.
-    app = create_app()
 
     # Run application
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

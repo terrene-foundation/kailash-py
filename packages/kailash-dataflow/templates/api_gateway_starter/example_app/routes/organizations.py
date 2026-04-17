@@ -146,15 +146,21 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
-        # Execute DataFlow workflow
+        # Execute DataFlow workflow. See note on ``raise_on_not_found`` in
+        # users.get_user — without it the ReadNode raises and the
+        # workflow wraps the error into a 200-shaped response dict.
         workflow = WorkflowBuilder()
-        workflow.add_node("OrganizationReadNode", "read", {"id": org_id})
+        workflow.add_node(
+            "OrganizationReadNode",
+            "read",
+            {"id": org_id, "raise_on_not_found": False},
+        )
 
         runtime = LocalRuntime()
         results, _ = runtime.execute(workflow.build())
 
         org = results.get("read")
-        if not org:
+        if not org or org.get("found") is False or org.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",
@@ -195,7 +201,7 @@ def create_organization_router(db: DataFlow) -> APIRouter:
         results, _ = runtime.execute(workflow.build())
 
         org = results.get("update")
-        if not org:
+        if not org or org.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",
@@ -229,7 +235,7 @@ def create_organization_router(db: DataFlow) -> APIRouter:
         results, _ = runtime.execute(workflow.build())
 
         deleted = results.get("delete")
-        if not deleted:
+        if not deleted or deleted.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",

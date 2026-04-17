@@ -174,28 +174,26 @@ def verify_api_key(db, api_key: str) -> Dict:
     # Hash the key for lookup
     key_hash = hash_api_key(api_key)
 
-    # Find API key by hash
+    # Find API key by hash. The ListNode param is ``filter`` (singular),
+    # and the response shape is
+    # ``{"records": [...], "count": N, "limit": L}`` rather than a bare
+    # list — both of which were silently wrong before and caused
+    # verify_api_key to raise KeyError(0) for every invalid key.
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "APIKeyListNode", "list_keys", {"filters": {"key_hash": key_hash}, "limit": 1}
+        "APIKeyListNode", "list_keys", {"filter": {"key_hash": key_hash}, "limit": 1}
     )
 
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
 
-    # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
-    # rather than a raw list — the old ``keys[0]`` lookup raised ``KeyError: 0``
-    # on every verification attempt.
-    list_result = results.get("list_keys", {})
-    if isinstance(list_result, dict):
-        keys = list_result.get("records", [])
-    else:
-        keys = list_result
+    list_result = results.get("list_keys") or {}
+    records = list_result.get("records", []) if isinstance(list_result, dict) else []
 
-    if not keys:
+    if not records:
         return {"valid": False, "error": "API key not found"}
 
-    key_record = keys[0]
+    key_record = records[0]
 
     # Check if key is active
     if key_record.get("status") != "active":

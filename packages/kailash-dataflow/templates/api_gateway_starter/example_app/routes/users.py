@@ -162,15 +162,24 @@ def create_user_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
-        # Execute DataFlow workflow
+        # Execute DataFlow workflow. ``raise_on_not_found=False`` tells
+        # the ReadNode to return ``{"id": <id>, "found": False}`` rather
+        # than raising — the route translates that sentinel into RFC 7807
+        # 404 below. Without the flag the node raises an error which
+        # DataFlow packages into a success-shaped result dict with
+        # ``failed: True``, causing every not-found read to return 200.
         workflow = WorkflowBuilder()
-        workflow.add_node("UserReadNode", "read", {"id": user_id})
+        workflow.add_node(
+            "UserReadNode",
+            "read",
+            {"id": user_id, "raise_on_not_found": False},
+        )
 
         runtime = LocalRuntime()
         results, _ = runtime.execute(workflow.build())
 
         user = results.get("read")
-        if not user:
+        if not user or user.get("found") is False or user.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",
@@ -199,19 +208,27 @@ def create_user_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
-        # Execute DataFlow workflow
-        workflow = WorkflowBuilder()
-        workflow.add_node(
+        # Run update and read-back as two sequential workflows. A single
+        # workflow with both nodes and no connections lets the DAG
+        # scheduler pick an arbitrary order — observed in practice to be
+        # ``('read', 'update')`` — so the read returns the pre-update
+        # row. Two workflows guarantee update-then-read ordering.
+        #
+        # The read exists because UpdateNode's own response shape varies
+        # by dialect (PostgreSQL RETURNING gives the full row; SQLite /
+        # MySQL without RETURNING give only ``{updated, rows_affected,
+        # id}``). Reading back makes the response body dialect-invariant.
+        update_workflow = WorkflowBuilder()
+        update_workflow.add_node(
             "UserUpdateNode",
             "update",
             {"filter": {"id": user_id}, "fields": update_data},
         )
+        update_runtime = LocalRuntime()
+        update_results, _ = update_runtime.execute(update_workflow.build())
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
-
-        user = results.get("update")
-        if not user:
+        update_result = update_results.get("update")
+        if not update_result or update_result.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",
@@ -220,6 +237,16 @@ def create_user_router(db: DataFlow) -> APIRouter:
             )
             return problem.to_response()
 
+        read_workflow = WorkflowBuilder()
+        read_workflow.add_node(
+            "UserReadNode",
+            "read",
+            {"id": user_id, "raise_on_not_found": False},
+        )
+        read_runtime = LocalRuntime()
+        read_results, _ = read_runtime.execute(read_workflow.build())
+
+        user = read_results.get("read") or update_result
         return success_response(user)
 
     @router.delete("/{user_id}")
@@ -245,7 +272,7 @@ def create_user_router(db: DataFlow) -> APIRouter:
         results, _ = runtime.execute(workflow.build())
 
         deleted = results.get("delete")
-        if not deleted:
+        if not deleted or deleted.get("failed"):
             problem = ProblemDetail(
                 type=NOT_FOUND_ERROR,
                 title="Not Found",

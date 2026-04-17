@@ -5,35 +5,14 @@ Provides API key verification middleware and scope checking.
 Reuses SaaS Starter's verify_api_key function.
 """
 
+from functools import wraps
 from typing import Callable, Dict, List
 
 from fastapi import HTTPException, Request
-from fastapi.responses import JSONResponse
 from templates.saas_starter.security import api_keys
 
 # Import verify_api_key for test mocking
 verify_api_key = api_keys.verify_api_key
-
-
-def _auth_error_response(detail: str, status_code: int = 401) -> JSONResponse:
-    """Return RFC 7807 problem+json response for auth failures.
-
-    Middleware cannot raise HTTPException in Starlette's BaseHTTPMiddleware
-    stack — exceptions propagate past ``error_handler_middleware`` to the
-    ASGI layer. Returning a JSONResponse directly is the only reliable way
-    to produce a 401 from a middleware.
-    """
-    status_titles = {400: "Bad Request", 401: "Unauthorized", 403: "Forbidden"}
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "type": "about:blank",
-            "title": status_titles.get(status_code, "HTTP Error"),
-            "status": status_code,
-            "detail": detail,
-        },
-        media_type="application/problem+json",
-    )
 
 
 async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> any:
@@ -45,9 +24,8 @@ async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> 
         call_next: Next middleware in chain
         db: DataFlow instance for API key verification
 
-    Returns:
-        Response: A 401 JSONResponse (RFC 7807) on auth failure, or the
-        downstream response on success.
+    Raises:
+        HTTPException: If API key is missing, invalid, revoked, or expired
 
     Example:
         >>> from fastapi import FastAPI
@@ -60,14 +38,14 @@ async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> 
     api_key = request.headers.get("X-API-Key")
 
     if not api_key:
-        return _auth_error_response("Missing X-API-Key header")
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
 
     # Verify API key using SaaS Starter function
     verification = verify_api_key(db, api_key)
 
     if not verification.get("valid"):
         error_message = verification.get("error", "Invalid API key")
-        return _auth_error_response(error_message)
+        raise HTTPException(status_code=401, detail=error_message)
 
     # Attach API key data to request state
     request.state.api_key_data = {
@@ -78,11 +56,6 @@ async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> 
     # Include optional fields if present
     if "rate_limit" in verification:
         request.state.api_key_data["rate_limit"] = verification["rate_limit"]
-
-    # API keys have implicit admin role — matches the legacy role_middleware
-    # behavior. Populate before call_next so @require_role inside endpoints
-    # can gate access without relying on a separate middleware registration.
-    request.state.role = "admin"
 
     # Continue to next middleware
     response = await call_next(request)
@@ -107,6 +80,7 @@ def api_key_required(required_scopes: List[str] = None) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
+        @wraps(func)
         async def wrapper(request: Request, *args, **kwargs):
             # Check if api_key_data attached by middleware
             if not hasattr(request.state, "api_key_data"):

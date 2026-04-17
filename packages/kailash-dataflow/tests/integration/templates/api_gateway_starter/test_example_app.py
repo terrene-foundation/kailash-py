@@ -6,12 +6,8 @@ Uses real DataFlow database, no mocking (Tier 2 policy).
 """
 
 import os
+import tempfile
 import uuid
-
-# Tests encode JWTs with the literal secret "test_secret"; the saas_starter
-# jwt_auth module reads JWT_SECRET from the environment, so set it before
-# importing the module.
-os.environ.setdefault("JWT_SECRET", "test_secret")
 
 import pytest
 from dataflow import DataFlow
@@ -22,30 +18,70 @@ from templates.saas_starter.security.api_keys import create_api_key
 
 @pytest.fixture(scope="module")
 def db():
-    """Create PostgreSQL-backed DataFlow instance with auto-migrated schema.
+    """Create DataFlow instance against a file-backed SQLite database.
 
-    DataFlow's connection pool opens multiple connections per operation.
-    A fresh ``:memory:`` SQLite database is isolated per connection, so
-    tables auto-migrated on one connection are invisible to the next — all
-    CRUD tests in this module therefore used to fail with
-    ``no such table: organizations``. Running against the shared test
-    PostgreSQL database (``postgresql://test_user:test_password@...``)
-    gives the connection pool a real shared backend and lets
-    ``auto_migrate=True`` create the schema once per module.
+    Registers only the APIKey model needed by the api_key auth middleware
+    (imported from saas_starter). The api_gateway_starter's User and
+    Organization models are registered later when ``create_app(db)`` runs.
+
+    Registering saas_starter's full model set would conflict with
+    api_gateway_starter's distinct User/Organization schemas — the
+    saas_starter User has no ``name`` field and the saas_starter
+    Organization requires ``slug``/``plan_id``/``settings`` that these
+    tests (written against the gateway-starter schema) never supply.
+
+    Uses a temp file over ``:memory:`` so DataFlow's migration pool (which
+    opens multiple short-lived connections) sees a consistent schema —
+    bare ``sqlite:///:memory:`` gives each connection an isolated database.
     """
-    database_url = os.getenv(
-        "TEST_DATABASE_URL",
-        "postgresql://test_user:test_password@localhost:5434/kailash_test",
-    )
-    db_instance = DataFlow(database_url, auto_migrate=True)
+    from datetime import datetime
 
-    # Register SaaS Starter models (for API keys). Idempotent — safe if the
-    # companion api_gateway_starter register_models also runs on this db.
-    from templates.saas_starter.models import register_models as register_saas_models
+    tmpdir = tempfile.mkdtemp(prefix="api_gateway_test_")
+    default_url = f"sqlite:///{tmpdir}/test.db"
+    database_url = os.getenv("TEST_DATABASE_URL", default_url)
+    db_instance = DataFlow(database_url)
 
-    register_saas_models(db_instance)
+    # Register only APIKey (required by saas_starter.security.api_keys
+    # helpers invoked from the api_key auth middleware). User/Organization
+    # are owned by api_gateway_starter and registered by create_app().
+    # ``rate_limit`` and ``expires_at`` are Optional so saas_starter's
+    # ``create_api_key`` helper — which omits both fields — can insert
+    # without a WorkflowValidationError on required inputs.
+    from typing import Optional
+
+    @db_instance.model
+    class APIKey:
+        id: str
+        organization_id: str
+        name: str
+        key_hash: str
+        scopes: list
+        status: str
+        rate_limit: Optional[int] = None
+        expires_at: Optional[datetime] = None
+
+        __dataflow__ = {
+            "indexes": [
+                {"name": "idx_apikey_org", "fields": ["organization_id"]},
+                {"name": "idx_apikey_hash", "fields": ["key_hash"]},
+                {"name": "idx_apikey_status", "fields": ["status"]},
+            ]
+        }
 
     yield db_instance
+
+    # Cleanup: close the dataflow instance and remove the temp directory.
+    import shutil
+
+    try:
+        import asyncio
+
+        asyncio.run(db_instance.close_async())
+    except Exception:
+        # Cleanup errors during fixture teardown are expected (event loop
+        # may already be closed); the OS reclaims the temp dir next.
+        pass
+    shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @pytest.fixture(scope="module")
@@ -66,31 +102,17 @@ def client(app):
 
 @pytest.fixture(scope="module")
 def test_organization(db):
-    """Create test organization.
-
-    Provides the full saas_starter Organization schema (slug, plan_id,
-    settings) because the ``db`` fixture registers saas_starter models —
-    the api_gateway_starter template is designed to compose on top of the
-    saas_starter data model, so workflow nodes expect all five fields.
-    """
+    """Create test organization."""
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
 
-    org_uuid = uuid.uuid4()
-    org_id = f"org-{org_uuid}"
+    org_id = f"org-{uuid.uuid4()}"
 
     workflow = WorkflowBuilder()
     workflow.add_node(
         "OrganizationCreateNode",
         "create_org",
-        {
-            "id": org_id,
-            "name": "Test Organization",
-            "slug": f"test-org-{org_uuid}",
-            "plan_id": "plan_free",
-            "status": "active",
-            "settings": {},
-        },
+        {"id": org_id, "name": "Test Organization", "status": "active"},
     )
 
     runtime = LocalRuntime()
@@ -101,12 +123,7 @@ def test_organization(db):
 
 @pytest.fixture(scope="module")
 def test_user(db, test_organization):
-    """Create test user with hashed password.
-
-    Uses the saas_starter User schema (no ``name`` field — saas_starter
-    User model does not declare one; only id/organization_id/email/
-    password_hash/role/status).
-    """
+    """Create test user with hashed password."""
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
 
@@ -122,6 +139,7 @@ def test_user(db, test_organization):
             "id": user_id,
             "organization_id": test_organization["id"],
             "email": email,
+            "name": "Test User",
             "password_hash": password_hash,
             "role": "admin",
             "status": "active",
@@ -152,7 +170,9 @@ def jwt_token(test_user, test_organization):
         "exp": int(time.time()) + 3600,
     }
 
-    token = jwt.encode(payload, "test_secret", algorithm="HS256")
+    from templates.saas_starter.auth.jwt_auth import JWT_SECRET
+
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
     return token
 
 
@@ -203,9 +223,11 @@ class TestJWTAuthentication:
 
         import jwt
 
+        from templates.saas_starter.auth.jwt_auth import JWT_SECRET
+
         expired_token = jwt.encode(
             {"user_id": "user_123", "exp": int(time.time()) - 3600},
-            "test_secret",
+            JWT_SECRET,
             algorithm="HS256",
         )
 
@@ -244,9 +266,7 @@ class TestAPIKeyAuthentication:
 
     def test_valid_api_key_allows_access(self, client, api_key_data):
         """Valid API key should allow access."""
-        response = client.get(
-            "/api/users", headers={"X-API-Key": api_key_data["api_key"]}
-        )
+        response = client.get("/api/users", headers={"X-API-Key": api_key_data["key"]})
 
         # Should return paginated response
         assert response.status_code == 200
@@ -328,7 +348,9 @@ class TestRBAC:
             "role": "member",
             "exp": int(time.time()) + 3600,
         }
-        token = jwt.encode(payload, "test_secret", algorithm="HS256")
+        from templates.saas_starter.auth.jwt_auth import JWT_SECRET
+
+        token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
         # Access member-level endpoint
         response = client.get("/users", headers={"Authorization": f"Bearer {token}"})
@@ -375,7 +397,9 @@ class TestRBAC:
             "role": "member",
             "exp": int(time.time()) + 3600,
         }
-        token = jwt.encode(payload, "test_secret", algorithm="HS256")
+        from templates.saas_starter.auth.jwt_auth import JWT_SECRET
+
+        token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
         # Try to access admin endpoint
         response = client.post(
