@@ -23,6 +23,19 @@ from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
 @pytest.fixture
+async def test_suite():
+    """Create complete integration test suite with real PostgreSQL infrastructure.
+
+    The multi-application synchronization tests write/read through a shared
+    PostgreSQL instance, so the suite's connection/config surface is the
+    single source of truth for the DB URL used across every test in this module.
+    """
+    suite = IntegrationTestSuite()
+    async with suite.session():
+        yield suite
+
+
+@pytest.fixture
 def app1_config(test_suite):
     """Configuration for first application."""
     return DataFlowConfig(
@@ -69,24 +82,49 @@ async def ensure_migration_system(test_suite):
 
     yield dataflow
 
-    # Cleanup
-    from tests.utils.test_env_setup import cleanup_test_data
-
-    await cleanup_test_data()
-
 
 @pytest.fixture
 async def cleanup_database(test_suite, ensure_migration_system):
-    """Clean database before and after tests."""
-    from tests.utils.test_env_setup import cleanup_test_data
+    """Clean database before and after tests.
 
+    Uses the test_suite's real infrastructure — the legacy
+    tests.utils.test_env_setup.cleanup_test_data() helper points at
+    port 5433 / user `dataflow_test`, which no longer exists in the
+    shared SDK Docker infra (real infra is on port 5434).
+    """
     # Clean before test
-    await cleanup_test_data()
+    async with test_suite.get_connection() as conn:
+        await conn.execute(
+            """
+            DO $$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (
+                    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+                ) LOOP
+                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                END LOOP;
+            END $$;
+            """
+        )
 
     yield
 
     # Clean after test
-    await cleanup_test_data()
+    async with test_suite.get_connection() as conn:
+        await conn.execute(
+            """
+            DO $$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (
+                    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+                ) LOOP
+                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                END LOOP;
+            END $$;
+            """
+        )
 
 
 @pytest.mark.integration
@@ -141,8 +179,13 @@ class TestModelRegistryWithRealDatabase:
         assert len(models) > 0
         assert "TestUser" in str(models)
 
-        # Test that we can access the model registry
+        # Test that we can access the model registry. DataFlow uses lazy
+        # connection (Issue #171) — registry.initialize() is invoked inside
+        # _ensure_connected() on the first real DB touch, not at decoration
+        # time. Call initialize() explicitly so this unit of the test
+        # exercises registry semantics deterministically.
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Test model discovery
@@ -151,11 +194,10 @@ class TestModelRegistryWithRealDatabase:
 
     @pytest.mark.asyncio
     async def test_model_discovery_real_database(
-        self, db_config, app1_config, unique_test_id, cleanup_database
+        self, db_config, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test model discovery from real migration table using proper DataFlow API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
+        # Use the PostgreSQL test_suite URL for the multi-app discovery test.
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
@@ -185,8 +227,10 @@ class {project_model_name.replace("_", "")}:
 """
         )
 
-        # Registry should be initialized
+        # Registry should be initialized (lazy: explicit initialize() call
+        # required — @db.model does not open the connection).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Test model discovery
@@ -197,11 +241,16 @@ class {project_model_name.replace("_", "")}:
 
     @pytest.mark.asyncio
     async def test_multi_application_synchronization(
-        self, db_config, app1_config, app2_config, unique_test_id, cleanup_database
+        self,
+        db_config,
+        test_suite,
+        app1_config,
+        app2_config,
+        unique_test_id,
+        cleanup_database,
     ):
         """Test multi-application model synchronization scenario using proper DataFlow API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
+        test_db_url = test_suite.config.url
 
         # Developer A creates first application
         dataflow_app1 = DataFlow(
@@ -214,7 +263,8 @@ class {project_model_name.replace("_", "")}:
             email: str
             active: bool = True
 
-        # Both registries should be initialized
+        # Both registries should be initialized (lazy: explicit init call).
+        dataflow_app1._model_registry.initialize()
         assert dataflow_app1._model_registry._initialized is True
 
         # Developer B creates second application pointing to same database
@@ -234,11 +284,16 @@ class {project_model_name.replace("_", "")}:
 
     @pytest.mark.asyncio
     async def test_model_evolution_detection(
-        self, db_config, app1_config, app2_config, unique_test_id, cleanup_database
+        self,
+        db_config,
+        test_suite,
+        app1_config,
+        app2_config,
+        unique_test_id,
+        cleanup_database,
     ):
         """Test detection of model changes across applications using proper DataFlow API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
+        test_db_url = test_suite.config.url
 
         # App 1 registers initial model
         dataflow_app1 = DataFlow(
@@ -255,7 +310,8 @@ class {project_model_name.replace("_", "")}:
             test_db_url, auto_migrate=False, existing_schema_mode=True
         )
 
-        # Both registries should work
+        # Both registries should work (lazy: explicit init call).
+        dataflow_app1._model_registry.initialize()
         assert dataflow_app1._model_registry._initialized is True
         assert dataflow_app2._model_registry.initialize() is True
 
@@ -265,7 +321,13 @@ class {project_model_name.replace("_", "")}:
 
     @pytest.mark.asyncio
     async def test_consistency_validation_real_scenarios(
-        self, db_config, app1_config, app2_config, unique_test_id, cleanup_database
+        self,
+        db_config,
+        test_suite,
+        app1_config,
+        app2_config,
+        unique_test_id,
+        cleanup_database,
     ):
         """Test consistency validation with real database scenarios."""
         # Create two applications
@@ -299,11 +361,9 @@ class {project_model_name.replace("_", "")}:
 
     @pytest.mark.asyncio
     async def test_model_history_tracking(
-        self, db_config, app1_config, unique_test_id, cleanup_database
+        self, db_config, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test model version history tracking with real database using proper API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
@@ -315,8 +375,9 @@ class {project_model_name.replace("_", "")}:
             email: str
             active: bool = True
 
-        # Check that registry is working
+        # Check that registry is working (lazy: explicit init call).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Basic test - just verify we can get some version info
@@ -345,13 +406,12 @@ class TestModelRegistryEdgeCases:
 
     @pytest.mark.asyncio
     async def test_concurrent_model_registration(
-        self, app1_config, app2_config, unique_test_id, cleanup_database
+        self, test_suite, app1_config, app2_config, unique_test_id, cleanup_database
     ):
         """Test concurrent model registration from multiple applications using proper API."""
         import asyncio
 
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
+        test_db_url = test_suite.config.url
 
         async def register_model_app1():
             dataflow = DataFlow(
@@ -383,11 +443,9 @@ class TestModelRegistryEdgeCases:
 
     @pytest.mark.asyncio
     async def test_invalid_model_data_handling(
-        self, app1_config, unique_test_id, cleanup_database
+        self, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test handling of model data using proper API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
@@ -398,23 +456,23 @@ class TestModelRegistryEdgeCases:
             name: str
             active: bool = True
 
-        # Registry should be initialized
+        # Registry should be initialized (lazy: explicit init call).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
     @pytest.mark.asyncio
     async def test_database_connection_recovery(
-        self, app1_config, unique_test_id, cleanup_database
+        self, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test recovery when database connection is available using proper API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
 
-        # Test initialization with valid connection
+        # Test initialization with valid connection (lazy: explicit init).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Register a model successfully using proper API
@@ -429,11 +487,9 @@ class TestModelRegistryEdgeCases:
 
     @pytest.mark.asyncio
     async def test_large_model_definition_handling(
-        self, app1_config, unique_test_id, cleanup_database
+        self, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test handling of models with many fields using proper API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
@@ -453,8 +509,9 @@ class TestModelRegistryEdgeCases:
             field_9: int
             active: bool = True
 
-        # Registry should be working
+        # Registry should be working (lazy: explicit init call).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Should be discoverable
@@ -467,11 +524,9 @@ class TestModelRegistryEdgeCases:
 
     @pytest.mark.asyncio
     async def test_model_reconstruction_edge_cases(
-        self, app1_config, unique_test_id, cleanup_database
+        self, test_suite, app1_config, unique_test_id, cleanup_database
     ):
         """Test model reconstruction with complex field types using proper API."""
-        # Use test database URL for consistency
-        # Database URL now comes from test_suite.config.url
         dataflow = DataFlow(
             test_suite.config.url, auto_migrate=True, existing_schema_mode=False
         )
@@ -483,8 +538,9 @@ class TestModelRegistryEdgeCases:
             score: float
             active: bool = True
 
-        # Registry should be working
+        # Registry should be working (lazy: explicit init call).
         registry = dataflow._model_registry
+        registry.initialize()
         assert registry._initialized is True
 
         # Basic verification - model was registered
