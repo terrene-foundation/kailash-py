@@ -62,12 +62,14 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | [trust-posture.md](trust-posture.md) | TrustPosture state machine, BudgetTracker, PostureStore, audit store                 |
 | [trust-crypto.md](trust-crypto.md)   | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop          |
 
-## ML Lifecycle
+## ML Lifecycle (2.0 — clean-sheet contracts)
 
-| File                                   | Description                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| [ml-engines.md](ml-engines.md)         | 17 ML engines (FeatureStore, ModelRegistry, TrainingPipeline, etc.)          |
-| [ml-integration.md](ml-integration.md) | Architecture, type contracts, ONNX bridge, MLflow, agent infusion, dashboard |
+| File                                   | Description                                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [ml-engines.md](ml-engines.md)         | **MLEngine single-point Engine contract**, `Trainable` protocol, `TrainingResult`, multi-tenancy, ONNX-default, migration shim (v2.0) |
+| [ml-backends.md](ml-backends.md)       | **6 first-class backends** (cpu/cuda/mps/rocm/xpu/tpu), `detect_backend()`, precision auto, Lightning integration, hardware-gated CI  |
+| [ml-tracking.md](ml-tracking.md)       | **ExperimentTracker/ModelRegistry/ArtifactStore** (MLflow-replacement), async-context, MCP surface, GDPR erasure, MLflow import       |
+| [ml-integration.md](ml-integration.md) | (DEPRECATED — superseded by ml-engines/backends/tracking trio above; retained for 1.x legacy-namespace reference until 3.0 cut)       |
 
 ## Alignment (LLM Fine-Tuning)
 
