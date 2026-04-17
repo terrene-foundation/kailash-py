@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 import pathlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Union
 
 from kailash_ml._device import BackendInfo, detect_backend
@@ -170,6 +170,67 @@ def _default_store_url() -> str:
     if override:
         return override
     return f"sqlite:///{_DEFAULT_DB_PATH}"
+
+
+# ---------------------------------------------------------------------------
+# Family → Trainable factory
+# ---------------------------------------------------------------------------
+
+
+_FAMILY_ALIASES = {
+    "sklearn": "sklearn",
+    "random_forest": "sklearn",
+    "rf": "sklearn",
+    "logreg": "sklearn",
+    "logistic": "sklearn",
+    "xgb": "xgboost",
+    "xgboost": "xgboost",
+    "lgbm": "lightgbm",
+    "lightgbm": "lightgbm",
+    "torch": "torch",
+    "pytorch": "torch",
+    "lightning": "lightning",
+}
+
+
+def _build_trainable_from_family(family: str, *, target: str) -> Any:
+    """Resolve a family string to an initialized Trainable adapter.
+
+    Per `specs/ml-engines.md` §2.1 MUST 8 the family name is an opaque
+    registered identifier; the set of known names is maintained here.
+    Unknown family names raise a typed error naming the known families.
+    """
+    # Lazy import so that `import kailash_ml` doesn't force lightning/xgboost
+    # imports until the user actually calls fit(family=…).
+    from kailash_ml import trainable as _tr
+
+    canonical = _FAMILY_ALIASES.get(family.lower())
+    if canonical is None:
+        raise ValueError(
+            f"Unknown family: '{family}'. Known families: "
+            f"{sorted(set(_FAMILY_ALIASES.values()))}. "
+            f"Aliases: {sorted(_FAMILY_ALIASES.keys())}."
+        )
+
+    if canonical == "sklearn":
+        return _tr.SklearnTrainable(target=target)
+    if canonical == "xgboost":
+        return _tr.XGBoostTrainable(target=target)
+    if canonical == "lightgbm":
+        return _tr.LightGBMTrainable(target=target)
+    if canonical == "torch":
+        raise ValueError(
+            "family='torch' requires `trainable=TorchTrainable(model=…, "
+            "loss_fn=…)` — no zero-config default. Use family='sklearn' for "
+            "the three-line hello world, or pass your own TorchTrainable."
+        )
+    if canonical == "lightning":
+        raise ValueError(
+            "family='lightning' requires `trainable=LightningTrainable"
+            "(module=your_lightning_module)` — no zero-config default."
+        )
+    # Defensive — should be unreachable
+    raise ValueError(f"Internal: unmapped family canonical '{canonical}'")
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +458,9 @@ class MLEngine:
 
     async def fit(
         self,
+        data: Any = None,
         *,
+        target: Optional[str] = None,
         family: Optional[str] = None,
         trainable: Any = None,
         hyperparameters: Optional[Mapping[str, Any]] = None,
@@ -405,28 +468,83 @@ class MLEngine:
         n_trials: int = 0,
         metric: Optional[str] = None,
     ) -> Any:
-        """Train a single family with optional HP search.
+        """Train a single family through the Lightning-wrapped Trainable adapter.
 
-        Phase 2 validates the family/trainable mutually-exclusive
-        invariant (§2.3) and the setup-before-fit invariant, then
-        defers to Phase 3 for the actual training.
+        Per specs/ml-engines.md §5.1 the three-line hello world form is:
+
+            engine = km.Engine()
+            result = await engine.fit(df, target="churned", family="sklearn")
+
+        When ``setup()`` has not been called, ``data`` and ``target`` MUST be
+        supplied explicitly. Routing: dispatches to the family's Lightning
+        adapter (`SklearnTrainable` / `XGBoostTrainable` / etc.) which
+        internally constructs `pl.Trainer(accelerator=…, devices=…,
+        precision=…)` with concrete values resolved from `detect_backend()`
+        (§3 MUST 2 — custom training loops BLOCKED at the adapter
+        boundary). `tenant_id` is propagated from Engine into TrainingResult
+        per §4.2 MUST 3.
         """
+        # Validate family/trainable mutually-exclusive per §2.3
         if family is not None and trainable is not None:
             raise ConflictingArgumentsError(
                 "fit(family=..., trainable=...) cannot both be supplied. "
                 "Pass a registered family name OR a Trainable instance, "
                 "not both."
             )
+
+        # Default family when neither given
         if family is None and trainable is None:
-            raise ConflictingArgumentsError(
-                "fit() requires either family=... or trainable=...; " "both were None."
-            )
-        if self._setup_result is None:
+            family = "sklearn"
+
+        # Resolve data + target
+        if data is None and self._setup_result is None:
             raise EngineNotSetUpError(
-                "MLEngine.fit() requires setup() to be called first. "
-                "Invoke `await engine.setup(data, target='...')` before fit()."
+                "MLEngine.fit() requires either data=... or a prior setup() "
+                "call. Pass `data=df, target='...'` directly or invoke "
+                "`await engine.setup(data, target='...')` first."
             )
-        raise NotImplementedError(f"MLEngine.fit — {_PHASE_3}")
+        if data is None:
+            # Pull from setup result
+            raise EngineNotSetUpError(
+                "MLEngine.fit() without explicit data requires setup() to "
+                "have stored a train split. Pass data=df, target='...' "
+                "directly to fit() for now; integrated setup()->fit() lands "
+                "in a later phase."
+            )
+        if target is None:
+            raise ValueError(
+                "MLEngine.fit(data=..., target=...) requires a target column "
+                "name when data is supplied directly."
+            )
+
+        # Build the trainable from family name if not supplied
+        if trainable is None:
+            trainable = _build_trainable_from_family(family, target=target)
+
+        # Build TrainingContext from Engine's resolved backend so the
+        # trainable does NOT re-resolve (§3.2 MUST 4).
+        from kailash_ml.trainable import TrainingContext
+
+        info = self._backend_info or detect_backend()
+        ctx = TrainingContext(
+            accelerator=info.accelerator,
+            precision=info.precision,
+            devices=info.devices,
+            device_string=info.device_string,
+            backend=info.backend,
+            tenant_id=self._tenant_id,
+        )
+
+        # Delegate to the trainable's Lightning-wrapped fit path
+        result = trainable.fit(data, hyperparameters=hyperparameters or {}, context=ctx)
+
+        # §4.2 MUST 3: ensure tenant_id on result reflects Engine's tenant_id
+        if result.tenant_id != self._tenant_id:
+            from dataclasses import replace
+
+            result = replace(result, tenant_id=self._tenant_id)
+
+        return result
 
     async def predict(
         self,

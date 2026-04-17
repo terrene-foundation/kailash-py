@@ -38,19 +38,28 @@ from kailash_ml.types import (
 # `track()`.
 
 
-def train(df, target: str, **kwargs) -> TrainingResult:  # noqa: D401
-    """Three-line entry point: `best = km.train(df, target="churned")`.
+def train(
+    df, target: str, *, family: str = "sklearn", **kwargs
+) -> TrainingResult:  # noqa: D401
+    """Three-line entry point per specs/ml-engines.md §5.1.
 
-    Phase 3 implements full body (Lightning-wrapped families, auto-device
-    selection, tracker autologging). Until then this raises a typed error
-    naming the phase so callers see a clear deferral, not a mysterious
-    AttributeError.
+        import kailash_ml as km
+        best = km.train(df, target="churned")
+        print(best.metrics)
+
+    Constructs a default `MLEngine()`, routes through the requested family's
+    Lightning-wrapped Trainable adapter, returns a `TrainingResult`. Defaults
+    to `family="sklearn"` (RandomForestClassifier) for zero-config behavior.
+
+    For torch/lightning families users MUST pass a pre-built `TorchTrainable`
+    or `LightningTrainable` via `MLEngine.fit(trainable=…)` — those families
+    have no zero-config defaults.
     """
-    raise NotImplementedError(
-        "km.train — Phase 3 (Lightning integration) will implement. "
-        "The scaffolded MLEngine is available via `kailash_ml.MLEngine(...)` "
-        "for DI-style integration tests."
-    )
+    import asyncio
+
+    engine = MLEngine()
+    # engine.fit is async; synchronous wrapper for the three-line form
+    return asyncio.run(engine.fit(df, target=target, family=family, **kwargs))
 
 
 def track(experiment: str, **kwargs):

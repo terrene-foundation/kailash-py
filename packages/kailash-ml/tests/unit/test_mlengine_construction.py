@@ -76,13 +76,24 @@ class TestMLEngineDeferredBodies:
         msg = str(exc_info.value).lower()
         assert "phase" in msg or "mlengine" in msg
 
-    def test_km_train_deferral_names_phase(self):
-        """Top-level `km.train()` MUST raise NotImplementedError naming Phase 3."""
+    def test_km_train_three_line_hello_world_works(self):
+        """Top-level `km.train(df, target='y')` runs end-to-end per spec §5.1."""
+        import polars as pl
         from kailash_ml import train
 
-        with pytest.raises(NotImplementedError) as exc_info:
-            train(None, target="x")  # positional `df` arg (scaffolded signature)
-        assert "phase 3" in str(exc_info.value).lower()
+        df = pl.DataFrame(
+            {
+                "x1": list(range(40)),
+                "x2": [i * 2 for i in range(40)],
+                "y": [i % 2 for i in range(40)],
+            }
+        )
+        result = train(df, target="y")
+        # Per specs/ml-backends.md §5.1 sklearn runs on CPU
+        assert result.accelerator == "cpu"
+        assert result.precision == "32-true"
+        assert result.metrics  # non-empty dict
+        assert result.elapsed_seconds >= 0
 
     def test_km_track_deferral_names_phase(self):
         """Top-level `km.track()` MUST raise NotImplementedError naming Phase 6."""
