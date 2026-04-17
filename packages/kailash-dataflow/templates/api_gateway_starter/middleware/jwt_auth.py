@@ -90,6 +90,11 @@ async def jwt_auth_middleware(request: Request, call_next: Callable) -> any:
         "role": verification.get("role"),  # Include role if present
         "exp": verification["exp"],
     }
+    # Populate request.state.role so @require_role decorators (which run
+    # inside the endpoint, AFTER all middlewares on the request path) can
+    # gate access. Defaulting to "member" matches the role_middleware's
+    # historical behavior for missing role claims.
+    request.state.role = request.state.user_claims.get("role") or "member"
 
     # Continue to next middleware
     response = await call_next(request)

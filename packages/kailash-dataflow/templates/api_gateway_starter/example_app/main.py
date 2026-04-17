@@ -94,7 +94,13 @@ def create_app(db: DataFlow = None) -> FastAPI:
             return await call_next(request)
         return await rate_limit_middleware(request, call_next, limiter)
 
-    # 4. JWT authentication (MUST be fourth)
+    # 4. JWT + API key authentication (sets request.state.role as well —
+    # see the jwt_auth_middleware / api_key_auth_middleware implementations
+    # which populate role before call_next so ``@require_role`` decorators
+    # inside endpoints can gate access). A previously-separate role
+    # middleware was removed because Starlette's LIFO middleware stack
+    # made it run BEFORE auth on the request path, leaving
+    # ``request.state.role`` unset on every role-gated route.
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
         # Skip auth for public endpoints
@@ -102,34 +108,13 @@ def create_app(db: DataFlow = None) -> FastAPI:
         if request.url.path in public_paths:
             return await call_next(request)
 
-        # Apply JWT authentication for regular endpoints
+        # Apply JWT or API key authentication for regular endpoints
         if request.url.path.startswith("/api/"):
             # API endpoints use API key authentication
             return await api_key_auth_middleware(request, call_next, db)
         else:
             # Regular endpoints use JWT authentication
             return await jwt_auth_middleware(request, call_next)
-
-    # 5. Add role to request.state for RBAC (extract from JWT claims)
-    @app.middleware("http")
-    async def role_middleware(request: Request, call_next):
-        # Skip for public endpoints
-        public_paths = ["/health", "/docs", "/openapi.json", "/redoc"]
-        if request.url.path in public_paths:
-            return await call_next(request)
-
-        # Extract role from user_claims (set by JWT middleware)
-        if hasattr(request.state, "user_claims"):
-            # Extract role from JWT claims if present
-            user_claims = request.state.user_claims
-            request.state.role = user_claims.get(
-                "role", "member"
-            )  # Default to member if not present
-        elif hasattr(request.state, "api_key_data"):
-            # For API key authentication - no role concept, default to admin
-            request.state.role = "admin"  # API keys have admin access
-
-        return await call_next(request)
 
     # Health check endpoint (public, no authentication)
     @app.get("/health", tags=["health"])

@@ -79,6 +79,11 @@ async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> 
     if "rate_limit" in verification:
         request.state.api_key_data["rate_limit"] = verification["rate_limit"]
 
+    # API keys have implicit admin role — matches the legacy role_middleware
+    # behavior. Populate before call_next so @require_role inside endpoints
+    # can gate access without relying on a separate middleware registration.
+    request.state.role = "admin"
+
     # Continue to next middleware
     response = await call_next(request)
     return response
