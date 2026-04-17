@@ -35,6 +35,7 @@ from dataflow.migrations.table_rename_analyzer import (
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
+
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
@@ -42,39 +43,41 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
 
+
 class TestTableRenameAnalyzerIntegration:
     """Integration tests for TableRenameAnalyzer with real database."""
 
     @pytest.fixture
-    async def connection_manager(self, database_config):
-        """Create async connection manager for each test."""
+    async def connection_manager(self, test_suite):
+        """Create async connection manager backed by IntegrationTestSuite."""
 
         class AsyncConnectionManager:
             def __init__(self, db_url):
                 self.database_url = db_url
-                self._connections = {}
+                self._connections = []
 
             async def get_connection(self):
                 """Get async database connection."""
                 connection = await asyncpg.connect(self.database_url)
-                connection_id = id(connection)
-                self._connections[connection_id] = connection
+                self._connections.append(connection)
                 return connection
 
-            def close_all_connections(self):
+            async def close_all_connections(self):
                 """Close all connections."""
-                for connection in self._connections.values():
+                for connection in self._connections:
                     if not connection.is_closed():
-                        asyncio.create_task(connection.close())
+                        await connection.close()
+                self._connections.clear()
 
-        manager = AsyncConnectionManager(database_config)
+        manager = AsyncConnectionManager(test_suite.config.url)
         yield manager
-        manager.close_all_connections()
+        await manager.close_all_connections()
 
     @pytest.fixture
     async def analyzer(self, connection_manager):
@@ -273,14 +276,17 @@ class TestTableRenameAnalyzerIntegration:
         self, analyzer, test_schema
     ):
         """Test FK reference discovery with real database constraints."""
-        fk_objects = await analyzer.find_foreign_key_references("test_users")
+        table_suffix = test_schema
+        fk_objects = await analyzer.find_foreign_key_references(
+            f"test_users_{table_suffix}"
+        )
 
         # Should find both FK constraints referencing test_users
         assert len(fk_objects) == 2
 
         constraint_names = {obj.object_name for obj in fk_objects}
-        assert "fk_orders_user_id" in constraint_names
-        assert "fk_profiles_user_id" in constraint_names
+        assert f"fk_orders_user_id_{table_suffix}" in constraint_names
+        assert f"fk_profiles_user_id_{table_suffix}" in constraint_names
 
         # Verify CASCADE constraint is marked as CRITICAL
         cascade_fks = [fk for fk in fk_objects if "CASCADE" in fk.definition]
@@ -298,14 +304,17 @@ class TestTableRenameAnalyzerIntegration:
         self, analyzer, test_schema
     ):
         """Test view dependency discovery with real database views."""
-        view_objects = await analyzer.find_view_dependencies("test_users")
+        table_suffix = test_schema
+        view_objects = await analyzer.find_view_dependencies(
+            f"test_users_{table_suffix}"
+        )
 
         # Should find both views that reference test_users
         assert len(view_objects) == 2
 
         view_names = {obj.object_name for obj in view_objects}
-        assert "test_active_users" in view_names
-        assert "test_user_stats" in view_names
+        assert f"test_active_users_{table_suffix}" in view_names
+        assert f"test_user_stats_{table_suffix}" in view_names
 
         # All views should require SQL rewriting
         assert all(obj.requires_sql_rewrite for obj in view_objects)
@@ -320,14 +329,17 @@ class TestTableRenameAnalyzerIntegration:
         self, analyzer, test_schema
     ):
         """Test index dependency discovery with real database indexes."""
-        index_objects = await analyzer.find_index_dependencies("test_users")
+        table_suffix = test_schema
+        index_objects = await analyzer.find_index_dependencies(
+            f"test_users_{table_suffix}"
+        )
 
         # Should find the indexes we created (plus any automatic ones)
         assert len(index_objects) >= 2
 
         index_names = {obj.object_name for obj in index_objects}
-        assert "idx_test_users_email" in index_names
-        assert "idx_test_users_created_at" in index_names
+        assert f"idx_test_users_email_{table_suffix}" in index_names
+        assert f"idx_test_users_created_at_{table_suffix}" in index_names
 
         # Unique indexes should have higher impact
         unique_indexes = [idx for idx in index_objects if "UNIQUE" in idx.definition]
@@ -340,13 +352,16 @@ class TestTableRenameAnalyzerIntegration:
         self, analyzer, test_schema
     ):
         """Test trigger dependency discovery with real database triggers."""
-        trigger_objects = await analyzer.find_trigger_dependencies("test_users")
+        table_suffix = test_schema
+        trigger_objects = await analyzer.find_trigger_dependencies(
+            f"test_users_{table_suffix}"
+        )
 
         # Should find the audit trigger we created
         assert len(trigger_objects) >= 1
 
         trigger_names = {obj.object_name for obj in trigger_objects}
-        assert "test_users_audit_trigger" in trigger_names
+        assert f"test_users_audit_trigger_{table_suffix}" in trigger_names
 
         # All triggers should have HIGH impact and require SQL rewriting
         for trigger in trigger_objects:
@@ -357,11 +372,13 @@ class TestTableRenameAnalyzerIntegration:
     @pytest.mark.timeout(5)
     async def test_dependency_graph_construction_real_data(self, analyzer, test_schema):
         """Test dependency graph construction with real database objects."""
-        schema_objects = await analyzer.discover_schema_objects("test_users")
-        graph = await analyzer.build_dependency_graph("test_users", schema_objects)
+        table_suffix = test_schema
+        table_name = f"test_users_{table_suffix}"
+        schema_objects = await analyzer.discover_schema_objects(table_name)
+        graph = await analyzer.build_dependency_graph(table_name, schema_objects)
 
         assert isinstance(graph, DependencyGraph)
-        assert graph.root_table == "test_users"
+        assert graph.root_table == table_name
         assert len(graph.nodes) == len(schema_objects)
 
         # Check for critical dependencies
@@ -462,12 +479,13 @@ class TestTableRenameAnalyzerIntegration:
                 """
                 )
 
-            # Create multiple views
+            # Create multiple views (i=0 would duplicate col1, so use col2..col5)
             for i in range(5):
+                col_n = (i % 4) + 2  # 2,3,4,5,2
                 await connection.execute(
                     f"""
                     CREATE VIEW test_large_view_{i} AS
-                    SELECT id, col1, col{(i % 5) + 1} FROM test_large_table WHERE col3 > {i * 10};
+                    SELECT id, col1, col{col_n} FROM test_large_table WHERE col3 > {i * 10};
                 """
                 )
 
@@ -522,7 +540,10 @@ class TestTableRenameAnalyzerIntegration:
     @pytest.mark.timeout(5)
     async def test_comprehensive_analysis_accuracy(self, analyzer, test_schema):
         """Test comprehensive analysis accuracy with known schema objects."""
-        report = await analyzer.analyze_table_rename("test_users", "customers")
+        table_suffix = test_schema
+        report = await analyzer.analyze_table_rename(
+            f"test_users_{table_suffix}", "customers"
+        )
 
         # Verify we found all expected object types
         object_types_found = {obj.object_type for obj in report.schema_objects}
