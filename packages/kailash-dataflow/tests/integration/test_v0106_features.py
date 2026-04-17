@@ -7,6 +7,7 @@ These tests verify both features work correctly together and don't regress.
 """
 
 import asyncio
+import re
 import logging
 import os
 import uuid
@@ -20,11 +21,14 @@ from kailash.workflow.builder import WorkflowBuilder
 # Ensure we import from our local src directory
 from dataflow import DataFlow
 
-# Test database URL - uses kaizen_postgres container
+# Test database URL — default points at the shared SDK test infrastructure
+# (postgres:15 running on host port 5434, database "kailash_test").
+# Overridable via TEST_DATABASE_URL for CI / alternate environments.
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://kaizen_dev:kaizen_dev_password@localhost:5432/kaizen_studio",
+    "postgresql://test_user:test_password@localhost:5434/kailash_test",
 )
+
 
 class TestTimestampAutoStripping:
     """Test that auto-managed timestamp fields are auto-stripped with warnings."""
@@ -202,6 +206,7 @@ class TestTimestampAutoStripping:
             # Should NOT have auto-stripped warning
             assert "AUTO-STRIPPED" not in caplog.text
 
+
 class TestSoftDeleteAutoFilter:
     """Test that soft_delete auto-filters queries by default."""
 
@@ -253,7 +258,7 @@ class TestSoftDeleteAutoFilter:
         list_workflow.add_node(
             "SoftDeletePatientListNode",
             "list",
-            {"filter": {"id": {"$startswith": test_prefix}}},
+            {"filter": {"id": {"$regex": "^" + re.escape(test_prefix)}}},
         )
         results, _ = runtime.execute(list_workflow.build())
 
@@ -294,7 +299,7 @@ class TestSoftDeleteAutoFilter:
             "SoftDeletePatientListNode",
             "list",
             {
-                "filter": {"id": {"$startswith": test_prefix}},
+                "filter": {"id": {"$regex": "^" + re.escape(test_prefix)}},
                 "include_deleted": True,
             },
         )
@@ -334,7 +339,7 @@ class TestSoftDeleteAutoFilter:
         count_workflow.add_node(
             "SoftDeletePatientCountNode",
             "count",
-            {"filter": {"id": {"$startswith": test_prefix}}},
+            {"filter": {"id": {"$regex": "^" + re.escape(test_prefix)}}},
         )
         results, _ = runtime.execute(count_workflow.build())
 
@@ -372,7 +377,7 @@ class TestSoftDeleteAutoFilter:
             "SoftDeletePatientCountNode",
             "count",
             {
-                "filter": {"id": {"$startswith": test_prefix}},
+                "filter": {"id": {"$regex": "^" + re.escape(test_prefix)}},
                 "include_deleted": True,
             },
         )
@@ -403,7 +408,11 @@ class TestSoftDeleteAutoFilter:
         )
         runtime.execute(create_workflow.build())
 
-        # Read without include_deleted - should return not found
+        # Read without include_deleted — DataFlow 2.0 signals "not found"
+        # by raising RECORD_NOT_FOUND, which the runtime turns into a
+        # failed-node result dict with an ``error`` key. The soft-delete
+        # filter makes the deleted row invisible, so the Read behaves
+        # exactly as if the row never existed.
         read_workflow = WorkflowBuilder()
         read_workflow.add_node(
             "SoftDeletePatientReadNode",
@@ -411,10 +420,23 @@ class TestSoftDeleteAutoFilter:
             {"id": test_id},
         )
         results, _ = runtime.execute(read_workflow.build())
-
-        # Should be not found (None or found=False)
         result = results["read"]
-        assert result is None or result.get("found") is False
+
+        # Either the pre-2.0 API shape (None / found=False) or the
+        # current shape (failure dict referencing the missing record)
+        # is an acceptable "not found" signal. We check for all three.
+        is_not_found = (
+            result is None
+            or (isinstance(result, dict) and result.get("found") is False)
+            or (
+                isinstance(result, dict)
+                and result.get("failed") is True
+                and "not found" in str(result.get("error", "")).lower()
+            )
+        )
+        assert (
+            is_not_found
+        ), f"Expected 'not found' signal for soft-deleted record, got: {result}"
 
     def test_read_returns_soft_deleted_with_flag(self, db_with_soft_delete):
         """ReadNode should return soft-deleted records with include_deleted=True."""
@@ -449,6 +471,7 @@ class TestSoftDeleteAutoFilter:
         result = results["read"]
         assert result is not None
         assert result.get("id") == test_id or result.get("found") is True
+
 
 class TestModelWithoutSoftDelete:
     """Test that models without soft_delete behave normally."""
@@ -501,13 +524,14 @@ class TestModelWithoutSoftDelete:
         list_workflow.add_node(
             "RegularProductListNode",
             "list",
-            {"filter": {"id": {"$startswith": test_prefix}}},
+            {"filter": {"id": {"$regex": "^" + re.escape(test_prefix)}}},
         )
         results, _ = runtime.execute(list_workflow.build())
 
         records = results["list"]["records"]
         # Should have all 3 records (soft_delete NOT enabled)
         assert len(records) == 3
+
 
 class TestAsyncRuntime:
     """Test that features work with AsyncLocalRuntime."""
@@ -535,14 +559,18 @@ class TestAsyncRuntime:
         runtime = AsyncLocalRuntime()
         test_id = f"test-{uuid.uuid4().hex[:8]}"
 
-        # Create a record
+        # Create a record. AsyncLocalRuntime.execute_workflow_async now
+        # requires an explicit `inputs` dict (the empty-dict default was
+        # dropped in the Q1 runtime refactor — see kailash.runtime.async_local).
         create_workflow = WorkflowBuilder()
         create_workflow.add_node(
             "AsyncTestModelCreateNode",
             "create",
             {"id": test_id, "name": "Test"},
         )
-        results, _ = await runtime.execute_workflow_async(create_workflow.build())
+        results, _ = await runtime.execute_workflow_async(
+            create_workflow.build(), inputs={}
+        )
 
         # Update with timestamp - should auto-strip
         with caplog.at_level(logging.WARNING):
@@ -558,8 +586,11 @@ class TestAsyncRuntime:
                     },
                 },
             )
-            results, _ = await runtime.execute_workflow_async(update_workflow.build())
+            results, _ = await runtime.execute_workflow_async(
+                update_workflow.build(), inputs={}
+            )
             assert results["update"]["name"] == "Updated"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
