@@ -231,10 +231,6 @@ def create_app(db: DataFlow = None) -> FastAPI:
     return app
 
 
-# Create default app instance
-app = create_app()
-
-
 if __name__ == "__main__":
     import uvicorn
 
@@ -242,6 +238,16 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
+
+    # Create the default app instance only when running as a script.
+    # Creating it at import time (``app = create_app()`` at module scope)
+    # instantiates a fresh ``DataFlow(":memory:")`` and registers the
+    # User/Organization nodes against it in the global NodeRegistry. Any
+    # subsequent test that imports this module gets workflow nodes bound
+    # to that throwaway ``:memory:`` DataFlow instead of the test's own
+    # DataFlow, which is exactly how the integration tests ended up with
+    # ``no such table: organizations``.
+    app = create_app()
 
     # Run application
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

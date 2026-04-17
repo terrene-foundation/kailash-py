@@ -17,11 +17,25 @@ from templates.saas_starter.security.api_keys import create_api_key
 
 @pytest.fixture(scope="module")
 def db():
-    """Create in-memory DataFlow instance for testing."""
-    database_url = os.getenv("TEST_DATABASE_URL", ":memory:")
-    db_instance = DataFlow(database_url)
+    """Create PostgreSQL-backed DataFlow instance with auto-migrated schema.
 
-    # Register SaaS Starter models (for API keys)
+    DataFlow's connection pool opens multiple connections per operation.
+    A fresh ``:memory:`` SQLite database is isolated per connection, so
+    tables auto-migrated on one connection are invisible to the next — all
+    CRUD tests in this module therefore used to fail with
+    ``no such table: organizations``. Running against the shared test
+    PostgreSQL database (``postgresql://test_user:test_password@...``)
+    gives the connection pool a real shared backend and lets
+    ``auto_migrate=True`` create the schema once per module.
+    """
+    database_url = os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql://test_user:test_password@localhost:5434/kailash_test",
+    )
+    db_instance = DataFlow(database_url, auto_migrate=True)
+
+    # Register SaaS Starter models (for API keys). Idempotent — safe if the
+    # companion api_gateway_starter register_models also runs on this db.
     from templates.saas_starter.models import register_models as register_saas_models
 
     register_saas_models(db_instance)
@@ -47,17 +61,31 @@ def client(app):
 
 @pytest.fixture(scope="module")
 def test_organization(db):
-    """Create test organization."""
+    """Create test organization.
+
+    Provides the full saas_starter Organization schema (slug, plan_id,
+    settings) because the ``db`` fixture registers saas_starter models —
+    the api_gateway_starter template is designed to compose on top of the
+    saas_starter data model, so workflow nodes expect all five fields.
+    """
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
 
-    org_id = f"org-{uuid.uuid4()}"
+    org_uuid = uuid.uuid4()
+    org_id = f"org-{org_uuid}"
 
     workflow = WorkflowBuilder()
     workflow.add_node(
         "OrganizationCreateNode",
         "create_org",
-        {"id": org_id, "name": "Test Organization", "status": "active"},
+        {
+            "id": org_id,
+            "name": "Test Organization",
+            "slug": f"test-org-{org_uuid}",
+            "plan_id": "plan_free",
+            "status": "active",
+            "settings": {},
+        },
     )
 
     runtime = LocalRuntime()
@@ -68,7 +96,12 @@ def test_organization(db):
 
 @pytest.fixture(scope="module")
 def test_user(db, test_organization):
-    """Create test user with hashed password."""
+    """Create test user with hashed password.
+
+    Uses the saas_starter User schema (no ``name`` field — saas_starter
+    User model does not declare one; only id/organization_id/email/
+    password_hash/role/status).
+    """
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
 
@@ -84,7 +117,6 @@ def test_user(db, test_organization):
             "id": user_id,
             "organization_id": test_organization["id"],
             "email": email,
-            "name": "Test User",
             "password_hash": password_hash,
             "role": "admin",
             "status": "active",
