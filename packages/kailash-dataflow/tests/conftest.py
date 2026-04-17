@@ -335,7 +335,10 @@ DATABASE_CONFIGS = [
     {"id": "sqlite_memory", "url": ":memory:", "type": "sqlite"},
     {
         "id": "sqlite_file",
-        "url": f"sqlite:///tmp/dataflow_test_{int(__import__('time').time())}_{__import__('random').randint(1000, 9999)}.db",
+        # sqlite:////tmp/... — four slashes for an absolute path to /tmp.
+        # Three slashes resolve relative to the test cwd (tmp/ does not exist
+        # under the pytest working dir and model_registry.create_table fails).
+        "url": f"sqlite:////tmp/dataflow_test_{int(__import__('time').time())}_{__import__('random').randint(1000, 9999)}.db",
         "type": "sqlite",
     },
 ]
