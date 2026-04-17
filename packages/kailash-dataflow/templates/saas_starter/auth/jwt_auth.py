@@ -201,10 +201,18 @@ def verify_token(access_token: str, secret: str = JWT_SECRET) -> Dict[str, Any]:
     try:
         decoded = jwt.decode(access_token, secret, algorithms=[JWT_ALGORITHM])
 
+        # Return every claim the JWT carried so downstream middleware /
+        # endpoints can see role, email, and custom claims without re-
+        # decoding. Prior return dropped everything except user_id/org_id/
+        # exp, which silently stripped role from the request context and
+        # caused every role-gated endpoint to fall back to the "member"
+        # default.
         return {
             "valid": True,
             "user_id": decoded["user_id"],
             "org_id": decoded.get("org_id"),
+            "email": decoded.get("email"),
+            "role": decoded.get("role"),
             "exp": decoded["exp"],
         }
 
