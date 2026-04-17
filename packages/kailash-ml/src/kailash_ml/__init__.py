@@ -12,8 +12,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
 
+from kailash_ml._device import BackendInfo, detect_backend
+from kailash_ml._result import TrainingResult
 from kailash_ml._version import __version__
+from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
+from kailash_ml.trainable import Trainable
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -22,6 +26,44 @@ from kailash_ml.types import (
     MLToolProtocol,
     ModelSignature,
 )
+
+# ---------------------------------------------------------------------------
+# kailash-ml 2.0 convenience functions (km.train, km.track)
+# ---------------------------------------------------------------------------
+#
+# These are the "PyCaret-better" / "MLflow-better" entry points described in
+# the redesign proposal. Phase 2 ships the signatures and the typed deferral
+# so `import kailash_ml as km; km.train(...)` gives a clear actionable error;
+# Phase 3 (Lightning integration) completes `train()`, Phase 6 completes
+# `track()`.
+
+
+def train(df, target: str, **kwargs) -> TrainingResult:  # noqa: D401
+    """Three-line entry point: `best = km.train(df, target="churned")`.
+
+    Phase 3 implements full body (Lightning-wrapped families, auto-device
+    selection, tracker autologging). Until then this raises a typed error
+    naming the phase so callers see a clear deferral, not a mysterious
+    AttributeError.
+    """
+    raise NotImplementedError(
+        "km.train — Phase 3 (Lightning integration) will implement. "
+        "The scaffolded MLEngine is available via `kailash_ml.MLEngine(...)` "
+        "for DI-style integration tests."
+    )
+
+
+def track(experiment: str, **kwargs):
+    """Async-context experiment tracker: `async with km.track('exp') as t: ...`.
+
+    Phase 6 (Registry + Tracking) implements full body with the MLflow-better
+    contract from `specs/ml-tracking.md`. Until then this raises a typed
+    error naming the phase.
+    """
+    raise NotImplementedError(
+        "km.track — Phase 6 (ExperimentTracker) will implement per "
+        "specs/ml-tracking.md. Use kailash_ml.MLEngine(tracker=...) for DI."
+    )
 
 
 def __getattr__(name: str):  # noqa: N807
@@ -71,6 +113,14 @@ def __getattr__(name: str):  # noqa: N807
 
 __all__ = [
     "__version__",
+    # kailash-ml 2.0 kernel (Phase 2 — scaffolded, filled in Phase 3+)
+    "MLEngine",
+    "BackendInfo",
+    "detect_backend",
+    "TrainingResult",
+    "Trainable",
+    "train",
+    "track",
     # Types (from kailash_ml.types)
     "AgentInfusionProtocol",
     "FeatureField",
@@ -78,7 +128,7 @@ __all__ = [
     "MetricSpec",
     "MLToolProtocol",
     "ModelSignature",
-    # Engines
+    # Engines (1.x primitives — demoted to kailash_ml.legacy.* at 2.0 cut)
     "FeatureStore",
     "ModelRegistry",
     "TrainingPipeline",
