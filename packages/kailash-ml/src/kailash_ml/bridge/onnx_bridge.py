@@ -212,11 +212,15 @@ class OnnxBridge:
                     export_time_seconds=time.perf_counter() - start,
                 )
 
+        # Narrowed by the `if n_features is None: ... return` block above.
+        assert n_features is not None  # nosec B101 — static-narrow aid
         try:
             if framework == "sklearn":
                 onnx_bytes = self._export_sklearn(model, n_features)
             elif framework == "lightgbm":
                 onnx_bytes = self._export_lightgbm(model, n_features)
+            elif framework == "xgboost":
+                onnx_bytes = self._export_xgboost(model, n_features)
             else:
                 return OnnxExportResult(
                     success=False,
@@ -329,7 +333,7 @@ class OnnxBridge:
 
         initial_type = [("input", FloatTensorType([None, n_features]))]
         onnx_model = skl2onnx.convert_sklearn(model, initial_types=initial_type)
-        return onnx_model.SerializeToString()
+        return onnx_model.SerializeToString()  # type: ignore[union-attr]
 
     def _export_lightgbm(self, model: Any, n_features: int) -> bytes:
         """Export LightGBM model to ONNX bytes."""
@@ -338,4 +342,21 @@ class OnnxBridge:
 
         initial_type = [("input", FloatTensorType([None, n_features]))]
         onnx_model = onnxmltools.convert_lightgbm(model, initial_types=initial_type)
-        return onnx_model.SerializeToString()
+        return onnx_model.SerializeToString()  # type: ignore[union-attr]
+
+    def _export_xgboost(self, model: Any, n_features: int) -> bytes:
+        """Export XGBoost model to ONNX bytes.
+
+        Fulfils the `_COMPAT_MATRIX["xgboost"]` "guaranteed" claim — prior to
+        this branch, xgboost models fell through to the generic "Export not
+        implemented" skip path, contradicting the compatibility matrix.
+
+        Uses onnxmltools (base dep) — supports both sklearn-API XGBoost
+        (XGBClassifier/XGBRegressor) and Booster instances.
+        """
+        import onnxmltools
+        from onnxmltools.convert.common.data_types import FloatTensorType
+
+        initial_type = [("input", FloatTensorType([None, n_features]))]
+        onnx_model = onnxmltools.convert_xgboost(model, initial_types=initial_type)
+        return onnx_model.SerializeToString()  # type: ignore[union-attr]

@@ -4,7 +4,7 @@ Machine learning lifecycle for the Kailash ecosystem. Train models, store featur
 
 Part of the [Kailash Python SDK](https://github.com/terrene-foundation/kailash-py) by the Terrene Foundation.
 
-**Version**: 0.7.0 | **License**: Apache-2.0 | **Python**: 3.11+
+**Version**: 0.9.0 | **License**: Apache-2.0 | **Python**: 3.11+
 
 ---
 
