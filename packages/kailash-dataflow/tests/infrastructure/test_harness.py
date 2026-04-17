@@ -300,7 +300,9 @@ class NotNullTestHarness:
 
     # Standard column definitions for consistent testing
     @staticmethod
-    def static_column(name: str = "test_col", value: Any = "test_value") -> ColumnDefinition:
+    def static_column(
+        name: str = "test_col", value: Any = "test_value"
+    ) -> ColumnDefinition:
         """Create standard static default column definition."""
         return ColumnDefinition(
             name=name,
@@ -338,16 +340,14 @@ class NotNullTestHarness:
         """Clean up all test resources."""
         # Close handlers
         for handler in self._handlers:
-            if hasattr(handler, "connection_manager"):
-                try:
+            if hasattr(handler, "connection_manager") and handler.connection_manager:
+                if hasattr(handler.connection_manager, "close"):
                     await handler.connection_manager.close()
-                except Exception as e:
-                    logger.warning(f"Error closing handler connection_manager: {e}")
         self._handlers.clear()
 
         # Clean up tables
         await self.table_factory.cleanup_all()
-        logger.info("NotNullTestHarness cleaned up")
+        logger.info("✅ NOT NULL test harness cleaned up")
 
 
 class StandardConnectionManager:
@@ -422,14 +422,14 @@ class IntegrationTestSuite:
     async def initialize(self):
         """Initialize the complete test suite."""
         await self.infrastructure.initialize()
-        logger.info("Integration test suite initialized")
+        logger.info("🚀 Integration test suite initialized")
 
     async def cleanup(self):
         """Clean up the complete test suite."""
         await self.not_null_harness.cleanup()
         await self.dataflow_harness.cleanup()
         await self.infrastructure.cleanup()
-        logger.info("Integration test suite cleaned up")
+        logger.info("✅ Integration test suite cleaned up")
 
     @asynccontextmanager
     async def session(self):

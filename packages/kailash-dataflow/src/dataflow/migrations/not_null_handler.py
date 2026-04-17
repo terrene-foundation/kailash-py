@@ -1026,7 +1026,11 @@ class NotNullColumnHandler:
         total_updated = 0
 
         while True:
-            updated = await connection.fetchval(
+            # Use fetch() to return every RETURNING row so the batch count
+            # reflects real rows updated. `fetchval` returns only the first
+            # cell, which silently collapses any N-row update to 1 and breaks
+            # the loop's progress tracking.
+            updated_rows = await connection.fetch(
                 f"""
                 WITH batch AS (
                     SELECT ctid FROM {plan.table_name}
@@ -1041,10 +1045,10 @@ class NotNullColumnHandler:
             """
             )
 
-            if not updated:
+            if not updated_rows:
                 break
 
-            total_updated += len(updated) if isinstance(updated, list) else 1
+            total_updated += len(updated_rows)
 
             # Add small delay for very large batches
             if batch_size > 10000:

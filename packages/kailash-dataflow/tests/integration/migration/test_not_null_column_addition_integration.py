@@ -347,20 +347,26 @@ class TestDefaultValueStrategyManagerIntegration:
         assert strategy_type == DefaultValueType.FOREIGN_KEY
         assert "Foreign key" in reason
 
-        # Test invalid foreign key reference
-        invalid_fk_column = ColumnDefinition(
-            name="invalid_fk",
+        # `recommend_strategy` is a synchronous API that makes a
+        # recommendation from the column metadata alone — it does NOT open
+        # a database connection to verify the referenced table exists.
+        # Live reachability validation is performed later by
+        # `ConstraintValidator.validate_foreign_key_references` on a real
+        # connection. The recommendation layer simply returns FOREIGN_KEY
+        # for any column whose `foreign_key_reference` is populated.
+        unreachable_fk_column = ColumnDefinition(
+            name="unreachable_fk",
             data_type="INTEGER",
             foreign_key_reference="nonexistent_table(id)",
             default_value=1,
             default_type=DefaultValueType.STATIC,
         )
 
-        invalid_strategy_type, invalid_reason = manager.recommend_strategy(
-            invalid_fk_column, table_info
+        unreachable_strategy_type, unreachable_reason = manager.recommend_strategy(
+            unreachable_fk_column, table_info
         )
-        # Should fall back to static since FK is invalid
-        assert invalid_strategy_type == DefaultValueType.STATIC
+        assert unreachable_strategy_type == DefaultValueType.FOREIGN_KEY
+        assert "Foreign key" in unreachable_reason
 
     @pytest.mark.asyncio
     async def test_validate_unique_constraints_real_database(self, not_null_harness):
@@ -446,16 +452,26 @@ class TestEndToEndScenarios:
             )
 
             constraint_list = []
+            # asyncpg returns `contype` as a single-byte `bytes` value
+            # (PostgreSQL "char" type). Decode before dictionary lookup so
+            # the "c"/"f"/"p"/"u" map keys actually match.
+            type_map = {
+                "c": "CHECK",
+                "f": "FOREIGN KEY",
+                "p": "PRIMARY KEY",
+                "u": "UNIQUE",
+            }
             for row in constraints:
+                raw_contype = row["contype"]
+                contype_key = (
+                    raw_contype.decode("ascii")
+                    if isinstance(raw_contype, (bytes, bytearray))
+                    else raw_contype
+                )
                 constraint_list.append(
                     {
                         "name": row["conname"],
-                        "constraint_type": {
-                            "c": "CHECK",
-                            "f": "FOREIGN KEY",
-                            "p": "PRIMARY KEY",
-                            "u": "UNIQUE",
-                        }.get(row["contype"], "UNKNOWN"),
+                        "constraint_type": type_map.get(contype_key, "UNKNOWN"),
                         "constraint_definition": row["definition"],
                     }
                 )
