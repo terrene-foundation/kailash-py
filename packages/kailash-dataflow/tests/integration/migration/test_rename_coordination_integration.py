@@ -80,38 +80,70 @@ from dataflow.migrations.table_rename_analyzer import (
 class TestRenameCoordinationIntegration:
     """Integration tests for rename coordination with real PostgreSQL."""
 
-    @pytest.fixture(scope="class")
-    async def infrastructure(self):
-        """Setup real infrastructure for testing."""
-        manager = RealInfrastructure()
-        yield manager
+    # Tables created by these tests; tracked for per-test cleanup since
+    # they are created outside the class-scope test_suite lifecycle.
+    # Order matters: child tables with FK references MUST be listed before
+    # their parents so CASCADE drops resolve cleanly on fresh databases.
+    _TEST_TABLES = [
+        "order_items",
+        "orders",
+        "app_users",
+        "users",
+        "simple_test_table",
+        "renamed_simple_test_table",
+        "renamed_simple_table",
+        "child_table",
+        "parent_table",
+        "renamed_parent_table",
+        "data_table",
+        "renamed_data_table",
+        "multi_ref_table",
+        "renamed_multi_ref",
+        "error_test_table",
+        "existing_target",
+        "rollback_test_table",
+        "renamed_rollback_table",
+        "existing_table",
+        *[f"perf_table_{i}" for i in range(10)],
+        "renamed_perf_table_0",
+    ]
+    _TEST_VIEWS = ["data_summary_view"]
 
     @pytest.fixture
-    async def clean_database(self, infrastructure):
-        """Ensure clean database state for each test."""
-        await cleanup_test_data()
+    async def clean_database(self, test_suite):
+        """Ensure clean database state for each test (tables + views)."""
+
+        async def _cleanup():
+            async with test_suite.get_connection() as conn:
+                for view in self._TEST_VIEWS:
+                    await conn.execute(f"DROP VIEW IF EXISTS {view} CASCADE")
+                for tbl in self._TEST_TABLES:
+                    await conn.execute(f"DROP TABLE IF EXISTS {tbl} CASCADE")
+
+        await _cleanup()
         yield
-        await cleanup_test_data()
+        await _cleanup()
 
     @pytest.fixture
-    async def test_connection(self):
-        """Get test database connection."""
-        connection = await get_test_connection()
+    async def test_connection(self, test_suite):
+        """Raw asyncpg connection used for DDL and the rename call."""
+        connection = await asyncpg.connect(test_suite.config.url)
         yield connection
-        await connection.close()
+        if not connection.is_closed():
+            await connection.close()
 
     @pytest.fixture
     async def connection_manager(self, test_connection):
-        """Mock connection manager for testing."""
+        """Connection manager that hands analyzers the live test connection."""
 
-        class TestConnectionManager:
+        class SharedConnectionManager:
             def __init__(self, connection):
                 self.connection = connection
 
             async def get_connection(self):
                 return self.connection
 
-        return TestConnectionManager(test_connection)
+        return SharedConnectionManager(test_connection)
 
     @pytest.fixture
     async def coordination_engine(self, connection_manager):
@@ -649,17 +681,38 @@ class TestRenameCoordinationIntegration:
 class TestRenameCoordinationPerformance:
     """Performance-focused integration tests."""
 
+    @pytest.fixture
+    async def perf_cleanup(self, test_suite):
+        """Drop perf-test tables before and after each run."""
+
+        async def _cleanup():
+            async with test_suite.get_connection() as conn:
+                await conn.execute("DROP TABLE IF EXISTS perf_boundary_test CASCADE")
+                for i in range(5):
+                    await conn.execute(f"DROP TABLE IF EXISTS perf_renamed_{i} CASCADE")
+
+        await _cleanup()
+        yield
+        await _cleanup()
+
     @pytest.mark.asyncio
-    async def test_coordination_engine_performance_boundaries(self, clean_database):
+    async def test_coordination_engine_performance_boundaries(
+        self, test_suite, perf_cleanup
+    ):
         """Test coordination engine performance boundaries."""
-        connection = await get_test_connection()
+        connection = await asyncpg.connect(test_suite.config.url)
 
         try:
             # Test with minimal setup
+            class _SharedManager:
+                def __init__(self, conn):
+                    self._conn = conn
+
+                async def get_connection(self):
+                    return self._conn
+
             coordination_engine = RenameCoordinationEngine(
-                connection_manager=type(
-                    "MockManager", (), {"get_connection": lambda self: connection}
-                )()
+                connection_manager=_SharedManager(connection)
             )
 
             # Create test table
@@ -706,9 +759,9 @@ class TestRenameCoordinationPerformance:
             print(f"Coordination performance: avg={avg_time:.3f}s, max={max_time:.3f}s")
 
             # Reasonable performance expectations for integration tests
-            assert avg_time < 2.0, (
-                f"Average coordination time too slow: {avg_time:.3f}s"
-            )
+            assert (
+                avg_time < 2.0
+            ), f"Average coordination time too slow: {avg_time:.3f}s"
             assert max_time < 5.0, f"Max coordination time too slow: {max_time:.3f}s"
 
         finally:

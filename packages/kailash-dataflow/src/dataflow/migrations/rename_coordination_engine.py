@@ -484,7 +484,10 @@ class RenameCoordinationEngine:
             "rename_coordination_engine.simulating_fk_drop_coordination_for",
             extra={"description": step.description},
         )
-        await connection.execute("-- FK drop step completed")
+        # Use SELECT 1 instead of a bare comment: asyncpg's simple-query
+        # protocol returns a null command-tag for comment-only queries and
+        # raises "NoneType has no attribute decode" in protocol.pyx.
+        await connection.execute("SELECT 1 -- FK drop step completed")
 
     async def _execute_rename_step(
         self, step: RenameWorkflowStep, connection: asyncpg.Connection
@@ -530,8 +533,8 @@ class RenameCoordinationEngine:
                     f"SQL rewriter failed, executing basic command: {e}"
                 )
 
-        # Execute a simple comment instead of potentially problematic SQL
-        await connection.execute("-- View rewrite step completed")
+        # See _execute_fk_drop_step for the asyncpg comment-only-query quirk.
+        await connection.execute("SELECT 1 -- View rewrite step completed")
 
     async def _execute_trigger_rewrite_step(
         self, step: RenameWorkflowStep, connection: asyncpg.Connection
@@ -554,7 +557,8 @@ class RenameCoordinationEngine:
             pass
 
         # Execute a simple comment instead of potentially problematic SQL
-        await connection.execute("-- FK recreate step completed")
+        # See _execute_fk_drop_step for the asyncpg comment-only-query quirk.
+        await connection.execute("SELECT 1 -- FK recreate step completed")
 
     # Helper methods
 
