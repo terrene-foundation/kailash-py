@@ -46,6 +46,14 @@ class ConnectionManagerAdapter:
         """
         self.dataflow = dataflow_instance
         self._transaction_started = False
+        # A single asyncpg connection held for the lifetime of an explicit
+        # transaction. The non-transaction path spawns a per-call workflow
+        # (each with its own pool), which is why BEGIN / COMMIT / ROLLBACK
+        # through the workflow path does not actually scope an INSERT —
+        # different connection every query. During a transaction we pin
+        # all queries to this one asyncpg connection so BEGIN / COMMIT /
+        # ROLLBACK are observed correctly.
+        self._tx_connection = None
 
         # Auto-detect parameter style from database type if not provided
         if parameter_style:
@@ -109,6 +117,15 @@ class ConnectionManagerAdapter:
             # Convert parameter placeholders if needed
             converted_sql, converted_params = self._convert_parameters(sql, params)
 
+            # If a transaction is open, route the query through the held
+            # asyncpg connection so BEGIN / COMMIT / ROLLBACK actually scope
+            # the operation. The workflow-based path spins up a fresh pool
+            # per call, defeating transactionality.
+            if self._transaction_started and self._tx_connection is not None:
+                return await self._execute_on_tx_connection(
+                    converted_sql, converted_params
+                )
+
             # Use WorkflowBuilder pattern for query execution (DataFlow standard)
             workflow = WorkflowBuilder()
             workflow.add_node(
@@ -153,36 +170,81 @@ class ConnectionManagerAdapter:
             logger.error("connection_adapter.params", extra={"params": params})
             raise
 
-    async def begin_transaction(self) -> None:
-        """Begin database transaction."""
-        try:
-            # Use WorkflowBuilder for transaction operations
-            workflow = WorkflowBuilder()
-            workflow.add_node(
-                "AsyncSQLDatabaseNode",
-                "begin_transaction",
-                {
-                    "connection_string": self._connection_string,
-                    "database_type": self._database_type,
-                    "query": "BEGIN",
-                    "validate_queries": False,
-                },
-            )
+    async def _execute_on_tx_connection(
+        self, sql: str, params: Optional[List]
+    ) -> List[Dict[str, Any]]:
+        """Execute a query on the held transaction connection.
 
-            if self._is_async:
-                results, _ = await self._runtime.execute_workflow_async(
-                    workflow.build(), inputs={}
-                )
+        Only called when a transaction is active. PostgreSQL-only — MySQL
+        and SQLite transaction routing is not yet implemented on this path
+        and callers still go through the workflow path for those dialects.
+        """
+        conn = self._tx_connection
+        sql_upper = sql.upper().strip()
+        if any(
+            sql_upper.startswith(dml)
+            for dml in ["INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER"]
+        ):
+            if params:
+                status = await conn.execute(sql, *params)
             else:
-                results, _ = self._runtime.execute(workflow.build())
+                status = await conn.execute(sql)
+            # asyncpg returns "INSERT 0 N", "UPDATE N", etc. — surface the N.
+            rows_affected = 0
+            if isinstance(status, str):
+                parts = status.split()
+                if parts and parts[-1].isdigit():
+                    rows_affected = int(parts[-1])
+            return [{"rows_affected": rows_affected}]
+        if params:
+            rows = await conn.fetch(sql, *params)
+        else:
+            rows = await conn.fetch(sql)
+        return [dict(r) for r in rows]
 
-            if "begin_transaction" not in results or results["begin_transaction"].get(
-                "error"
-            ):
-                error_msg = results.get("begin_transaction", {}).get(
-                    "error", "Unknown error"
+    async def _get_tx_connection(self):
+        """Open a dedicated asyncpg connection for the current transaction."""
+        if self._database_type != "postgresql":
+            # For MySQL / SQLite we fall back to the workflow path; those
+            # dialects need their own drivers here and were not part of
+            # the bug this path fixes.
+            return None
+        import asyncpg
+
+        return await asyncpg.connect(self._connection_string)
+
+    async def begin_transaction(self) -> None:
+        """Begin database transaction on a dedicated held connection."""
+        if self._transaction_started:
+            raise RuntimeError(
+                "begin_transaction called while a transaction is already "
+                "active — call commit_transaction or rollback_transaction first"
+            )
+        try:
+            self._tx_connection = await self._get_tx_connection()
+            if self._tx_connection is not None:
+                await self._tx_connection.execute("BEGIN")
+            else:
+                # Fallback path for non-postgresql dialects — the workflow
+                # path cannot scope the transaction but we preserve the
+                # existing (pre-fix) behavior so nothing regresses.
+                workflow = WorkflowBuilder()
+                workflow.add_node(
+                    "AsyncSQLDatabaseNode",
+                    "begin_transaction",
+                    {
+                        "connection_string": self._connection_string,
+                        "database_type": self._database_type,
+                        "query": "BEGIN",
+                        "validate_queries": False,
+                    },
                 )
-                raise RuntimeError(f"Begin transaction failed: {error_msg}")
+                if self._is_async:
+                    await self._runtime.execute_workflow_async(
+                        workflow.build(), inputs={}
+                    )
+                else:
+                    self._runtime.execute(workflow.build())
 
             self._transaction_started = True
             logger.debug("Transaction started via ConnectionManagerAdapter")
@@ -191,38 +253,39 @@ class ConnectionManagerAdapter:
                 "connection_adapter.failed_to_begin_transaction",
                 extra={"error": str(e)},
             )
+            if self._tx_connection is not None:
+                try:
+                    await self._tx_connection.close()
+                except Exception:
+                    logger.debug("tx connection close failed during begin rollback")
+                self._tx_connection = None
             raise
 
     async def commit_transaction(self) -> None:
-        """Commit database transaction."""
+        """Commit the active database transaction."""
         try:
-            workflow = WorkflowBuilder()
-            workflow.add_node(
-                "AsyncSQLDatabaseNode",
-                "commit_transaction",
-                {
-                    "connection_string": self._connection_string,
-                    "database_type": self._database_type,
-                    "query": "COMMIT",
-                    "validate_queries": False,
-                },
-            )
-
-            if self._is_async:
-                results, _ = await self._runtime.execute_workflow_async(
-                    workflow.build(), inputs={}
-                )
+            if self._tx_connection is not None:
+                await self._tx_connection.execute("COMMIT")
+                await self._tx_connection.close()
+                self._tx_connection = None
             else:
-                results, _ = self._runtime.execute(workflow.build())
-
-            if "commit_transaction" not in results or results["commit_transaction"].get(
-                "error"
-            ):
-                error_msg = results.get("commit_transaction", {}).get(
-                    "error", "Unknown error"
+                workflow = WorkflowBuilder()
+                workflow.add_node(
+                    "AsyncSQLDatabaseNode",
+                    "commit_transaction",
+                    {
+                        "connection_string": self._connection_string,
+                        "database_type": self._database_type,
+                        "query": "COMMIT",
+                        "validate_queries": False,
+                    },
                 )
-                raise RuntimeError(f"Commit transaction failed: {error_msg}")
-
+                if self._is_async:
+                    await self._runtime.execute_workflow_async(
+                        workflow.build(), inputs={}
+                    )
+                else:
+                    self._runtime.execute(workflow.build())
             self._transaction_started = False
             logger.debug("Transaction committed via ConnectionManagerAdapter")
         except Exception as e:
@@ -233,35 +296,30 @@ class ConnectionManagerAdapter:
             raise
 
     async def rollback_transaction(self) -> None:
-        """Rollback database transaction."""
+        """Rollback the active database transaction."""
         try:
-            workflow = WorkflowBuilder()
-            workflow.add_node(
-                "AsyncSQLDatabaseNode",
-                "rollback_transaction",
-                {
-                    "connection_string": self._connection_string,
-                    "database_type": self._database_type,
-                    "query": "ROLLBACK",
-                    "validate_queries": False,
-                },
-            )
-
-            if self._is_async:
-                results, _ = await self._runtime.execute_workflow_async(
-                    workflow.build(), inputs={}
-                )
+            if self._tx_connection is not None:
+                await self._tx_connection.execute("ROLLBACK")
+                await self._tx_connection.close()
+                self._tx_connection = None
             else:
-                results, _ = self._runtime.execute(workflow.build())
-
-            if "rollback_transaction" not in results or results[
-                "rollback_transaction"
-            ].get("error"):
-                error_msg = results.get("rollback_transaction", {}).get(
-                    "error", "Unknown error"
+                workflow = WorkflowBuilder()
+                workflow.add_node(
+                    "AsyncSQLDatabaseNode",
+                    "rollback_transaction",
+                    {
+                        "connection_string": self._connection_string,
+                        "database_type": self._database_type,
+                        "query": "ROLLBACK",
+                        "validate_queries": False,
+                    },
                 )
-                raise RuntimeError(f"Rollback transaction failed: {error_msg}")
-
+                if self._is_async:
+                    await self._runtime.execute_workflow_async(
+                        workflow.build(), inputs={}
+                    )
+                else:
+                    self._runtime.execute(workflow.build())
             self._transaction_started = False
             logger.debug("Transaction rolled back via ConnectionManagerAdapter")
         except Exception as e:
@@ -419,6 +477,32 @@ class ConnectionManagerAdapter:
                 return result
 
         elif isinstance(result, dict):
+            # AsyncSQLDatabaseNode returns {"data": [...], "row_count": N, ...}
+            # Unwrap the envelope so callers see the data rows directly — otherwise
+            # every SELECT looks truthy (the envelope dict is truthy even when
+            # data=[]) and every INSERT looks indistinguishable from a NO-OP
+            # caused by ON CONFLICT DO NOTHING.
+            if "data" in result:
+                data = result["data"]
+                if isinstance(data, list):
+                    if len(data) == 0:
+                        sql_upper = original_sql.upper().strip()
+                        if any(
+                            sql_upper.startswith(dml)
+                            for dml in [
+                                "INSERT",
+                                "UPDATE",
+                                "DELETE",
+                                "CREATE",
+                                "DROP",
+                                "ALTER",
+                            ]
+                        ):
+                            # DML: surface row_count so callers can detect NO-OP
+                            return [{"rows_affected": result.get("row_count", 0)}]
+                        return []
+                    return self._convert_to_legacy_format(data, original_sql)
+                return [data] if data is not None else []
             # Single result - wrap in list
             return [result]
 

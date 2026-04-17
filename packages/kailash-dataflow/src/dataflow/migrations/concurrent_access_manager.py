@@ -380,6 +380,14 @@ class MigrationLockManager:
         Returns:
             LockStatus with current lock information
         """
+        # Ensure the lock table exists before querying it. ``acquire_migration_lock``
+        # creates the table lazily on first use; ``check_lock_status`` must do the
+        # same or callers that check status before acquiring hit
+        # ``UndefinedTableError``.
+        if not self._table_ensured:
+            await self._ensure_lock_table()
+            self._table_ensured = True
+
         # Clean up expired locks first
         await self._cleanup_expired_locks()
 

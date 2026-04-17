@@ -70,6 +70,9 @@ async def clean_database(postgres_connection):
         # Drop test tables
         await postgres_connection.execute("DROP TABLE IF EXISTS test_users")
         await postgres_connection.execute("DROP TABLE IF EXISTS test_products")
+        # test_table is leaked between prior runs of adapter/transaction
+        # tests; include it in cleanup so CREATE TABLE is idempotent.
+        await postgres_connection.execute("DROP TABLE IF EXISTS test_table")
 
     await cleanup()
     yield
@@ -263,6 +266,12 @@ class TestRealPostgreSQLLocking:
         """Test that expired locks are automatically cleaned up."""
         schema_name = f"test_schema_{uuid.uuid4().hex[:8]}"
 
+        # ``clean_database`` drops ``dataflow_migration_locks``; the lock
+        # manager creates it lazily on first acquire/check. Force table
+        # creation here so the manual INSERT below has somewhere to land.
+        await migration_lock_manager._ensure_lock_table()
+        migration_lock_manager._table_ensured = True
+
         # Manually insert an expired lock
         expired_time = datetime.now() - timedelta(minutes=10)  # 10 minutes ago
         fake_process_id = f"expired_process_{uuid.uuid4().hex[:8]}"
@@ -425,8 +434,12 @@ class TestConnectionAdapterIntegration:
             "INSERT INTO test_table (id, name) VALUES (%s, %s)", [1, "test_name"]
         )
 
-        # Should return success indicator for DML
-        assert result == [{"success": True}]
+        # Adapter now unwraps the AsyncSQLDatabaseNode envelope and surfaces
+        # rows_affected (see connection_adapter._normalize_result) so callers
+        # can distinguish INSERT success from ON CONFLICT NO-OP. The legacy
+        # "success: True" sentinel was ambiguous for ON CONFLICT DO NOTHING.
+        assert isinstance(result, list) and len(result) == 1
+        assert "rows_affected" in result[0]
 
         # Verify data was inserted
         actual_data = await postgres_connection.fetch("SELECT id, name FROM test_table")
