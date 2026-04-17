@@ -497,19 +497,38 @@ class DependencyAnalyzer:
 
         HIGH IMPACT: Triggers referencing the column (OLD.column, NEW.column) will fail.
         """
-        # Query to find triggers on the table
+        # Query to find triggers on the table. Join pg_trigger → pg_proc
+        # via tgfoid (the function OID) to get the function body — NOT via
+        # ILIKE against information_schema.triggers.action_statement, which
+        # only contains "EXECUTE FUNCTION name()" and fuzzy-matches every
+        # proc whose name happens to appear as a substring (and misses the
+        # OLD.column / NEW.column references that live in the function body).
         trigger_query = """
         SELECT DISTINCT
-            t.trigger_name,
-            t.event_manipulation,
-            t.action_timing,
-            t.action_statement,
-            p.proname as function_name
-        FROM information_schema.triggers t
-        LEFT JOIN pg_proc p ON t.action_statement ILIKE '%' || p.proname || '%'
-        WHERE t.event_object_table = $1
-            AND t.event_object_schema = 'public'
-        ORDER BY t.trigger_name
+            tg.tgname AS trigger_name,
+            CASE
+                WHEN (tg.tgtype & 4) <> 0 THEN 'INSERT'
+                WHEN (tg.tgtype & 8) <> 0 THEN 'DELETE'
+                WHEN (tg.tgtype & 16) <> 0 THEN 'UPDATE'
+                WHEN (tg.tgtype & 32) <> 0 THEN 'TRUNCATE'
+                ELSE 'UNKNOWN'
+            END AS event_manipulation,
+            CASE
+                WHEN (tg.tgtype & 2) <> 0 THEN 'BEFORE'
+                WHEN (tg.tgtype & 64) <> 0 THEN 'INSTEAD OF'
+                ELSE 'AFTER'
+            END AS action_timing,
+            pg_get_triggerdef(tg.oid) AS action_statement,
+            p.proname AS function_name,
+            p.prosrc AS function_source
+        FROM pg_trigger tg
+        JOIN pg_class c ON c.oid = tg.tgrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_proc p ON p.oid = tg.tgfoid
+        WHERE n.nspname = 'public'
+            AND c.relname = $1
+            AND NOT tg.tgisinternal
+        ORDER BY tg.tgname
         """
 
         try:
@@ -518,9 +537,16 @@ class DependencyAnalyzer:
                 dependencies = []
 
                 for row in rows:
-                    # Check if trigger might reference the column
+                    # Check function body AND action_statement. The function
+                    # body is where OLD.column / NEW.column live; the action
+                    # statement (CREATE TRIGGER DDL) may also reference a
+                    # column via WHEN (OLD.col IS DISTINCT FROM NEW.col)
+                    # clauses.
+                    function_source = row["function_source"] or ""
                     action_statement = row["action_statement"] or ""
-                    if self._trigger_references_column(action_statement, column_name):
+                    if self._trigger_references_column(
+                        function_source, column_name
+                    ) or self._trigger_references_column(action_statement, column_name):
                         dep = TriggerDependency(
                             trigger_name=row["trigger_name"],
                             event=row["event_manipulation"],
