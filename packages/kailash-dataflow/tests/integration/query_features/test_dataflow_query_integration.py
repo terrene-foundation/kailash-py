@@ -65,7 +65,7 @@ class TestDataFlowQueryIntegration:
         config = DataFlowConfig()
         config.environment = Environment.DEVELOPMENT
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Query builder should be initialized
         assert db._query_builder is not None
@@ -79,7 +79,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Query cache should be initialized
         assert db._query_cache is not None
@@ -93,7 +93,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = False
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Query cache should not be initialized
         assert db._query_cache is None
@@ -136,7 +136,7 @@ class TestDataFlowQueryIntegration:
             config.enable_query_cache = True
             config.cache_invalidation_strategy = strategy_name
 
-            db = DataFlow(config)
+            db = DataFlow(config=config)
             cache = db.get_query_cache()
 
             assert cache is not None
@@ -147,7 +147,7 @@ class TestDataFlowQueryIntegration:
         config = DataFlowConfig()
         config.environment = Environment.DEVELOPMENT
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Test basic query building
         builder = db.build_query("users")
@@ -170,7 +170,7 @@ class TestDataFlowQueryIntegration:
         config = DataFlowConfig()
         config.environment = Environment.DEVELOPMENT
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Test tenant isolation
         builder = db.build_query("users", tenant_id="tenant_123")
@@ -185,7 +185,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = False
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Should return None when cache is disabled
         result = db.execute_cached_query("SELECT * FROM users", [])
@@ -203,7 +203,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Inject a real in-memory cache in place of any auto-created Redis one
         real_cache = InMemoryQueryCache()
@@ -233,7 +233,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         @db.model
         class User:
@@ -256,7 +256,7 @@ class TestDataFlowQueryIntegration:
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Query cache should be registered
         resource_registry = db.get_resource_registry()
@@ -273,7 +273,7 @@ class TestDataFlowQueryIntegration:
         config.cache_invalidation_strategy = "invalid_strategy"
 
         # Should handle invalid strategy gracefully
-        db = DataFlow(config)
+        db = DataFlow(config=config)
         cache = db.get_query_cache()
 
         # Should default to pattern_based
@@ -286,7 +286,7 @@ class TestDataFlowQueryIntegration:
         config.security.multi_tenant = True
         config.enable_query_cache = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Should work with multi-tenant setup
         builder = db.build_query("users", tenant_id="tenant_123")
@@ -304,7 +304,7 @@ class TestDataFlowQueryIntegration:
         config.redis_host = "custom-redis"
         config.redis_port = 6380
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
         cache = db.get_query_cache()
 
         # Should use custom configuration
@@ -321,7 +321,7 @@ class TestDataFlowQueryWorkflowIntegration:
         config = DataFlowConfig()
         config.environment = Environment.DEVELOPMENT
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         # Build query
         builder = db.build_query("users")
@@ -340,7 +340,7 @@ class TestDataFlowQueryWorkflowIntegration:
         config.environment = Environment.DEVELOPMENT
         config.auto_generate_nodes = True
 
-        db = DataFlow(config)
+        db = DataFlow(config=config)
 
         @db.model
         class User:
