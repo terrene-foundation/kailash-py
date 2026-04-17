@@ -1236,10 +1236,16 @@ class TestDependencyDetectionAccuracy:
                     (LENGTH("target-column with spaces") > 0 AND "target-column with spaces" != '')
                 );
 
-            -- Test with NULL and special values
+            -- Test with NULL and special values.
+            -- NOTE: the `check_special-target_{tid}` constraint above rejects
+            -- ''  (empty string) in "target-column with spaces". The second
+            -- row below used to insert '' to exercise empty-string handling
+            -- but that's incompatible with the constraint under test. The
+            -- row now uses a single space — still a minimal edge case that
+            -- satisfies LENGTH > 0 AND != ''.
             INSERT INTO "acc_edge-test_#{tid}" ("target-column with spaces", "数据列", "column_with_'quotes'") VALUES
             (NULL, '测试数据', '''quoted'''),
-            ('', '空字符串', 'quote"inside'),
+            (' ', '空字符串', 'quote"inside'),
             ('normal_value', '正常数据', 'normal'),
             ('value with spaces', '包含空格', 'has spaces'),
             ('special!@#$%^&*()_+-=', '特殊字符', 'special!@#'),
@@ -1260,9 +1266,14 @@ class TestDependencyDetectionAccuracy:
                 "Testing dependency detection with special character column names"
             )
 
-            # Test special character column
+            # Test special character column.
+            # The f-string expands {test_id} — previously a plain string
+            # was used here, which passed the literal "{test_id}" to the
+            # analyzer and looked up a table that never existed. The CREATE
+            # TABLE above uses .format(tid=test_id), so the actual table
+            # name is "acc_edge-test_#<hex>".
             special_report = await accuracy_analyzer.analyze_column_dependencies(
-                '"acc_edge-test_#{test_id}"', '"target-column with spaces"'
+                f'"acc_edge-test_#{test_id}"', '"target-column with spaces"'
             )
 
             assert (

@@ -839,11 +839,36 @@ class DependencyAnalyzer:
                 )
 
     def _sanitize_identifier(self, identifier: str) -> str:
-        """Sanitize database identifiers to prevent SQL injection."""
+        """Sanitize database identifiers to prevent SQL injection.
+
+        Preserves quoted identifiers (``"foo-bar"``) by stripping the outer
+        double quotes and returning the inner text verbatim. PostgreSQL
+        quoted identifiers may contain ``-``, ``#``, spaces, and unicode,
+        all of which the unquoted path strips. Treating a quoted identifier
+        the same as an unquoted one destroyed legitimate names like
+        ``"acc_edge-test_#hex"`` and caused the analyzer to search for a
+        table that never exists.
+
+        Unquoted identifiers still go through the strict allowlist path
+        so raw user input like ``"foo'; DROP TABLE bar"`` is still scrubbed.
+        """
         if not identifier:
             return identifier
 
-        # Remove potentially dangerous characters
+        # Quoted identifier: trust the surrounding quotes and return the
+        # inner text verbatim. PostgreSQL interprets every character inside
+        # "..." as part of the identifier, so the inner text is passed to
+        # parameterized catalog queries where it is bound as a value and
+        # cannot be used for injection.
+        if (
+            len(identifier) >= 2
+            and identifier.startswith('"')
+            and identifier.endswith('"')
+        ):
+            inner = identifier[1:-1].replace('""', '"')
+            return inner or "unknown"
+
+        # Unquoted: remove potentially dangerous characters.
         sanitized = re.sub(r"[^\w]", "", identifier)
 
         # Ensure it starts with a letter or underscore
