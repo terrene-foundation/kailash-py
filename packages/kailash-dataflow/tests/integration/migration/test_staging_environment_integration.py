@@ -78,6 +78,31 @@ def runtime():
 class TestStagingEnvironmentManagerIntegration:
     """Integration tests for StagingEnvironmentManager with real PostgreSQL."""
 
+    @pytest.fixture(autouse=True)
+    def _setup(self, test_suite):
+        """Per-test setup exposing manager + prod_db_config via self.
+
+        Tests reference ``self.manager`` / ``self.prod_db_config`` in their
+        finally blocks and assertions, so the manager_config fixture alone
+        is not sufficient — each test needs these attributes bound at
+        method-entry time, before the try/finally wraps run.
+        """
+        self.prod_db_config = ProductionDatabase(
+            host=test_suite.config.host,
+            port=test_suite.config.port,
+            database=test_suite.config.database,
+            user=test_suite.config.user,
+            password=test_suite.config.password,
+            schema_name="public",
+        )
+        self.config = StagingEnvironmentConfig(
+            default_data_sample_size=0.1,
+            max_staging_environments=3,
+            cleanup_timeout_seconds=60,
+            schema_replication_timeout=120,
+        )
+        self.manager = StagingEnvironmentManager(self.config)
+
     @pytest.fixture
     def manager_config(self, test_suite):
         """Create staging environment manager configuration."""
@@ -124,9 +149,9 @@ class TestStagingEnvironmentManagerIntegration:
     def teardown_method(self):
         """Cleanup after each test method."""
         test_duration = time.time() - self.test_start_time
-        assert test_duration < 5.0, (
-            f"Test exceeded 5 second timeout: {test_duration:.2f}s"
-        )
+        assert (
+            test_duration < 5.0
+        ), f"Test exceeded 5 second timeout: {test_duration:.2f}s"
 
     @pytest.mark.asyncio
     async def test_production_database_connection_validation(
@@ -301,19 +326,24 @@ class TestStagingEnvironmentManagerIntegration:
 class TestStagingEnvironmentProductionSchemaIntegration:
     """Integration tests for production schema operations with real database setup."""
 
-    @classmethod
-    def setup_class(cls):
-        """Setup test class with production-like schema."""
-        cls.prod_db_config = ProductionDatabase(
-            host="localhost",
-            port=5435,  # Correct port for dataflow_test_postgres container
-            database="dataflow_test",
-            user="dataflow_test",
-            password="dataflow_test_password",
-        )
+    @pytest.fixture(autouse=True)
+    def _setup(self, test_suite):
+        """Per-test setup using shared integration test infrastructure.
 
-        cls.config = StagingEnvironmentConfig(cleanup_timeout_seconds=60)
-        cls.manager = StagingEnvironmentManager(cls.config)
+        Replaces ``setup_class`` because class-level setup cannot inject the
+        function-scoped ``test_suite`` fixture. Hardcoded credentials pointing
+        at ``dataflow_test_postgres:5435`` no longer exist in this infra;
+        the shared suite runs PostgreSQL on 5434.
+        """
+        self.prod_db_config = ProductionDatabase(
+            host=test_suite.config.host,
+            port=test_suite.config.port,
+            database=test_suite.config.database,
+            user=test_suite.config.user,
+            password=test_suite.config.password,
+        )
+        self.config = StagingEnvironmentConfig(cleanup_timeout_seconds=60)
+        self.manager = StagingEnvironmentManager(self.config)
 
     @pytest.mark.asyncio
     async def test_production_schema_inspection(self):
@@ -372,8 +402,20 @@ class TestStagingEnvironmentProductionSchemaIntegration:
                 await self.manager.cleanup_staging_environment(staging_env.staging_id)
 
     @pytest.mark.asyncio
-    async def test_data_sampling_simulation(self):
+    async def test_data_sampling_simulation(self, test_suite):
         """Test data sampling workflow simulation."""
+        # Pre-create a real test_table in production so sample_production_data
+        # has something to COUNT(*) against. Drop it afterwards to keep the
+        # shared DB clean. Data sampling is a real SQL operation, not a
+        # mock — Tier 2 rules require real infrastructure throughout.
+        async with test_suite.get_connection() as conn:
+            await conn.execute(
+                "CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, value INT)"
+            )
+            await conn.execute(
+                "INSERT INTO test_table (value) SELECT i FROM generate_series(1, 10) i"
+            )
+
         staging_env = None
         try:
             # Create staging environment
@@ -398,29 +440,28 @@ class TestStagingEnvironmentProductionSchemaIntegration:
         finally:
             if staging_env:
                 await self.manager.cleanup_staging_environment(staging_env.staging_id)
+            async with test_suite.get_connection() as conn:
+                await conn.execute("DROP TABLE IF EXISTS test_table")
 
 
 class TestStagingEnvironmentIntegrationWithMigrationComponents:
     """Integration tests with existing migration system components."""
 
-    @classmethod
-    def setup_class(cls):
-        """Setup integration test environment."""
-        cls.prod_db_config = ProductionDatabase(
-            host="localhost",
-            port=5435,  # Correct port for dataflow_test_postgres container
-            database="dataflow_test",
-            user="dataflow_test",
-            password="dataflow_test_password",
+    @pytest.fixture(autouse=True)
+    def _setup(self, test_suite):
+        """Per-test setup using shared integration test infrastructure."""
+        self.prod_db_config = ProductionDatabase(
+            host=test_suite.config.host,
+            port=test_suite.config.port,
+            database=test_suite.config.database,
+            user=test_suite.config.user,
+            password=test_suite.config.password,
         )
-
-        cls.config = StagingEnvironmentConfig()
-        cls.manager = StagingEnvironmentManager(cls.config)
-
-        # Initialize migration components for integration testing
-        cls.dependency_analyzer = DependencyAnalyzer()
-        cls.foreign_key_analyzer = ForeignKeyAnalyzer()
-        cls.risk_engine = RiskAssessmentEngine()
+        self.config = StagingEnvironmentConfig()
+        self.manager = StagingEnvironmentManager(self.config)
+        self.dependency_analyzer = DependencyAnalyzer()
+        self.foreign_key_analyzer = ForeignKeyAnalyzer()
+        self.risk_engine = RiskAssessmentEngine()
 
     @pytest.mark.asyncio
     async def test_integration_with_dependency_analyzer(self):
@@ -498,19 +539,18 @@ class TestStagingEnvironmentIntegrationWithMigrationComponents:
 class TestStagingEnvironmentPerformanceValidation:
     """Performance validation tests for staging environment operations."""
 
-    @classmethod
-    def setup_class(cls):
-        """Setup performance test environment."""
-        cls.prod_db_config = ProductionDatabase(
-            host="localhost",
-            port=5435,  # Correct port for dataflow_test_postgres container
-            database="dataflow_test",
-            user="dataflow_test",
-            password="dataflow_test_password",
+    @pytest.fixture(autouse=True)
+    def _setup(self, test_suite):
+        """Per-test setup using shared integration test infrastructure."""
+        self.prod_db_config = ProductionDatabase(
+            host=test_suite.config.host,
+            port=test_suite.config.port,
+            database=test_suite.config.database,
+            user=test_suite.config.user,
+            password=test_suite.config.password,
         )
-
-        cls.config = StagingEnvironmentConfig()
-        cls.manager = StagingEnvironmentManager(cls.config)
+        self.config = StagingEnvironmentConfig()
+        self.manager = StagingEnvironmentManager(self.config)
 
     @pytest.mark.asyncio
     async def test_staging_environment_creation_performance(self):
@@ -527,9 +567,9 @@ class TestStagingEnvironmentPerformanceValidation:
             creation_time = time.time() - start_time
 
             # Verify creation completed within performance bounds
-            assert creation_time < 5.0, (
-                f"Staging environment creation took {creation_time:.2f}s (exceeds 5s limit)"
-            )
+            assert (
+                creation_time < 5.0
+            ), f"Staging environment creation took {creation_time:.2f}s (exceeds 5s limit)"
             assert staging_env.status == StagingEnvironmentStatus.ACTIVE
 
         finally:
@@ -537,9 +577,9 @@ class TestStagingEnvironmentPerformanceValidation:
                 cleanup_start = time.time()
                 await self.manager.cleanup_staging_environment(staging_env.staging_id)
                 cleanup_time = time.time() - cleanup_start
-                assert cleanup_time < 2.0, (
-                    f"Cleanup took {cleanup_time:.2f}s (exceeds 2s limit)"
-                )
+                assert (
+                    cleanup_time < 2.0
+                ), f"Cleanup took {cleanup_time:.2f}s (exceeds 2s limit)"
 
     @pytest.mark.asyncio
     async def test_concurrent_staging_environment_operations(self):
@@ -564,9 +604,9 @@ class TestStagingEnvironmentPerformanceValidation:
             creation_time = time.time() - start_time
 
             # Verify concurrent creation performance
-            assert creation_time < 8.0, (
-                f"Concurrent creation took {creation_time:.2f}s (exceeds 8s limit)"
-            )
+            assert (
+                creation_time < 8.0
+            ), f"Concurrent creation took {creation_time:.2f}s (exceeds 8s limit)"
             assert len(environments) == 2
 
             # Verify all environments are active

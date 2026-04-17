@@ -617,17 +617,22 @@ class StagingEnvironmentManager:
     def _generate_staging_db_config(
         self, prod_db: ProductionDatabase, staging_id: str
     ) -> StagingDatabase:
-        """Generate staging database configuration from production config."""
+        """Generate staging database configuration from production config.
+
+        Staging uses the SAME server as production (different database name),
+        because spinning up a separate PostgreSQL on ``prod.port + 1`` is a
+        deployment-time concern, not a default at the SDK layer. Operators
+        who need a dedicated staging server override this on the returned
+        StagingDatabase before creation.
+        """
         staging_db_name = f"staging_{prod_db.database}_{staging_id}"
 
         return StagingDatabase(
-            host=prod_db.host,  # Could be different host in real implementation
-            port=(
-                prod_db.port + 1 if prod_db.port is not None else None
-            ),  # Could use different port
+            host=prod_db.host,
+            port=prod_db.port,
             database=staging_db_name,
-            user=prod_db.user,  # Could use different user
-            password=prod_db.password,  # Could use different password
+            user=prod_db.user,
+            password=prod_db.password,
             schema_name=prod_db.schema_name,
             ssl_mode=prod_db.ssl_mode,
             connection_timeout=prod_db.connection_timeout,
@@ -673,21 +678,85 @@ class StagingEnvironmentManager:
         return self._connection_pools[pool_key]
 
     async def _create_staging_database(self, staging_env: StagingEnvironment) -> None:
-        """Create the staging database."""
-        # This would create the actual staging database
-        # For now, we simulate successful creation
+        """Create the staging database on the same server as production.
+
+        Uses a short-lived connection to the default ``postgres`` maintenance
+        DB to issue ``CREATE DATABASE`` — CREATE DATABASE cannot run inside a
+        transaction and cannot target a database that is currently in use,
+        so it must come from a separate connection. The staging DB name is
+        routed through the PostgreSQL dialect's ``quote_identifier`` helper
+        per ``rules/dataflow-identifier-safety.md`` so a malicious
+        production DB name cannot inject DDL here.
+        """
+        from dataflow.adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("postgresql")
+        staging_db = staging_env.staging_db
+        quoted_name = dialect.quote_identifier(staging_db.database)
+
+        # Connect to the maintenance DB, not the staging DB we're about to
+        # create — "postgres" exists on every PostgreSQL server by convention.
+        admin_conn = await asyncpg.connect(
+            host=staging_db.host,
+            port=staging_db.port,
+            database="postgres",
+            user=staging_db.user,
+            password=staging_db.password,
+            ssl=staging_db.ssl_mode,
+            timeout=staging_db.connection_timeout,
+        )
+        try:
+            await admin_conn.execute(f"CREATE DATABASE {quoted_name}")
+        finally:
+            await admin_conn.close()
+
         logger.info(
             "staging_environment_manager.created_staging_database",
-            extra={"database": staging_env.staging_db.database},
+            extra={"database": staging_db.database},
         )
 
     async def _drop_staging_database(self, staging_env: StagingEnvironment) -> None:
-        """Drop the staging database."""
-        # This would drop the actual staging database
-        # For now, we simulate successful cleanup
+        """Drop the staging database.
+
+        Closes any cached connection pool to the staging DB first, then
+        issues ``DROP DATABASE ... WITH (FORCE)`` (PG 13+) from a separate
+        connection to the maintenance DB. Identifier routed through
+        ``quote_identifier`` per ``rules/dataflow-identifier-safety.md``.
+        """
+        from dataflow.adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("postgresql")
+        staging_db = staging_env.staging_db
+        quoted_name = dialect.quote_identifier(staging_db.database)
+
+        # Close and remove any cached pool to the staging DB so DROP DATABASE
+        # is not refused by "database is being accessed by other users".
+        pool_key = f"{staging_db.host}:{staging_db.port}:{staging_db.database}"
+        pool = self._connection_pools.pop(pool_key, None)
+        if pool is not None:
+            await pool.close()
+
+        admin_conn = await asyncpg.connect(
+            host=staging_db.host,
+            port=staging_db.port,
+            database="postgres",
+            user=staging_db.user,
+            password=staging_db.password,
+            ssl=staging_db.ssl_mode,
+            timeout=staging_db.connection_timeout,
+        )
+        try:
+            # FORCE terminates leftover connections; IF EXISTS makes the
+            # drop idempotent so partial-failure cleanup doesn't raise.
+            await admin_conn.execute(
+                f"DROP DATABASE IF EXISTS {quoted_name} WITH (FORCE)"
+            )
+        finally:
+            await admin_conn.close()
+
         logger.info(
             "staging_environment_manager.dropped_staging_database",
-            extra={"database": staging_env.staging_db.database},
+            extra={"database": staging_db.database},
         )
 
     async def _get_production_tables(
