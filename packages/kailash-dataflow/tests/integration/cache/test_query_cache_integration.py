@@ -33,9 +33,13 @@ class TestQueryCacheBasics:
 
         db = DataFlow(
             test_db_url,
-            enable_query_cache=True,  # Enable caching
+            cache_enabled=True,  # DataFlow 2.0 kwarg name (was enable_query_cache)
             cache_ttl=300,
         )
+
+        # DataFlow 2.0 lazy-initializes cache on first connect. Initialize
+        # eagerly for Tier 2 tests that exercise the cache directly.
+        db._initialize_cache_integration()
 
         # Cache should initialize with async backend (InMemoryCache if Redis unavailable, AsyncRedisCacheAdapter if available)
         assert db._cache_integration is not None
@@ -57,10 +61,13 @@ class TestQueryCacheBasics:
 
         db = DataFlow(
             test_db_url,
-            enable_query_cache=True,
+            cache_enabled=True,
             cache_ttl=600,
             cache_max_size=5000,
         )
+
+        # Eagerly initialize cache for Tier 2 test observation.
+        db._initialize_cache_integration()
 
         # Cache should be initialized
         assert db._cache_integration is not None
@@ -80,13 +87,17 @@ class TestCacheBackendAutoDetection:
     async def test_auto_detection_with_no_redis(self, test_db_url):
         """Test that system initializes cache backend (either InMemoryCache or AsyncRedisCacheAdapter)."""
         from dataflow import DataFlow
+        from dataflow.core.config import DataFlowConfig
 
-        # Enable caching (backend auto-detection)
-        db = DataFlow(
-            test_db_url,
-            enable_query_cache=True,
-            cache_redis_url="redis://nonexistent-server:6379/0",
-        )
+        # DataFlow 2.0: cache_redis_url lives on the config object (the kwarg
+        # name is ``redis_url``; we use the config form to exercise the
+        # ``config.cache_redis_url`` read path in _initialize_cache_integration).
+        config = DataFlowConfig()
+        config.enable_query_cache = True
+        config.cache_redis_url = "redis://nonexistent-server:6379/0"
+
+        db = DataFlow(test_db_url, config=config)
+        db._initialize_cache_integration()
 
         # Should initialize with async backend (InMemoryCache if Redis unavailable, AsyncRedisCacheAdapter if available)
         assert db._cache_integration is not None
@@ -103,7 +114,8 @@ class TestCacheMetrics:
         """Test that cache hits and misses are tracked correctly."""
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -130,9 +142,10 @@ class TestCacheMetrics:
 
         db = DataFlow(
             test_db_url,
-            enable_query_cache=True,
+            cache_enabled=True,
             cache_max_size=3,  # Small size to trigger evictions
         )
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -156,7 +169,8 @@ class TestCacheInvalidation:
         """Test invalidating all cache entries for a model."""
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -192,9 +206,10 @@ class TestCacheTTL:
 
         db = DataFlow(
             test_db_url,
-            enable_query_cache=True,
+            cache_enabled=True,
             cache_ttl=1,  # 1 second TTL
         )
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -218,9 +233,10 @@ class TestCacheTTL:
 
         db = DataFlow(
             test_db_url,
-            enable_query_cache=True,
+            cache_enabled=True,
             cache_ttl=10,  # Default 10 seconds
         )
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -246,7 +262,8 @@ class TestCacheConcurrency:
 
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -277,7 +294,8 @@ class TestCacheConcurrency:
 
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -313,7 +331,8 @@ class TestCachePerformance:
         """Test that caching provides performance improvement."""
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
@@ -338,7 +357,8 @@ class TestCachePerformance:
         """Test that cache operations complete quickly."""
         from dataflow import DataFlow
 
-        db = DataFlow(test_db_url, enable_query_cache=True)
+        db = DataFlow(test_db_url, cache_enabled=True)
+        db._initialize_cache_integration()
 
         cache_manager = db._cache_integration.cache_manager
 
