@@ -89,10 +89,14 @@ class TestInspectorWithRealWorkflows:
         workflow.add_node("OrderReadNode", "read_order", {})
         workflow.add_connection("create_order", "id", "read_order", "id")
 
-        # Step 3: Update order
-        workflow.add_node("OrderUpdateNode", "update_order", {})
+        # Step 3: Update order — config carried inline (WorkflowBuilder.add_parameter
+        # was removed in the 2.0 API; set node params via add_node's config arg).
+        workflow.add_node(
+            "OrderUpdateNode",
+            "update_order",
+            {"fields": {"quantity": 10}},
+        )
         workflow.add_connection("read_order", "id", "update_order", "filter.id")
-        workflow.add_parameter("update_order", "fields", {"quantity": 10})
 
         # Create Inspector with workflow
         inspector = Inspector(db, workflow)
@@ -728,9 +732,9 @@ class TestInspectorComplexScenarios:
         workflow.add_node("BugReadNode", "investigate_bug", {})
         workflow.add_connection("report_bug", "id", "investigate_bug", "id")
 
-        workflow.add_node("BugUpdateNode", "fix_bug", {})
+        # Update node config inlined — WorkflowBuilder.add_parameter removed in 2.0 API.
+        workflow.add_node("BugUpdateNode", "fix_bug", {"fields": {"fixed": True}})
         workflow.add_connection("investigate_bug", "id", "fix_bug", "filter.id")
-        workflow.add_parameter("fix_bug", "fields", {"fixed": True})
 
         inspector = Inspector(db, workflow)
 
