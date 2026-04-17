@@ -23,9 +23,10 @@ Core dependency types detected:
 import asyncio
 import logging
 import re
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 import asyncpg
 
@@ -249,55 +250,53 @@ class DependencyAnalyzer:
             f"Analyzing dependencies for {safe_table_name}.{safe_column_name}"
         )
 
-        if connection is None:
-            connection = await self._get_connection()
-
         # Initialize report
         report = DependencyReport(safe_table_name, safe_column_name)
 
         try:
-            # Analyze all dependency types sequentially to avoid connection conflicts
-            # Running in parallel causes "another operation in progress" errors with asyncpg
+            async with self._acquire_connection(connection) as connection:
+                # Analyze all dependency types sequentially to avoid connection conflicts
+                # Running in parallel causes "another operation in progress" errors with asyncpg
 
-            report.dependencies[DependencyType.FOREIGN_KEY] = (
-                await self.find_foreign_key_dependencies(
-                    safe_table_name, safe_column_name, connection
+                report.dependencies[DependencyType.FOREIGN_KEY] = (
+                    await self.find_foreign_key_dependencies(
+                        safe_table_name, safe_column_name, connection
+                    )
                 )
-            )
 
-            report.dependencies[DependencyType.VIEW] = (
-                await self.find_view_dependencies(
-                    safe_table_name, safe_column_name, connection
+                report.dependencies[DependencyType.VIEW] = (
+                    await self.find_view_dependencies(
+                        safe_table_name, safe_column_name, connection
+                    )
                 )
-            )
 
-            report.dependencies[DependencyType.TRIGGER] = (
-                await self.find_trigger_dependencies(
-                    safe_table_name, safe_column_name, connection
+                report.dependencies[DependencyType.TRIGGER] = (
+                    await self.find_trigger_dependencies(
+                        safe_table_name, safe_column_name, connection
+                    )
                 )
-            )
 
-            report.dependencies[DependencyType.INDEX] = (
-                await self.find_index_dependencies(
-                    safe_table_name, safe_column_name, connection
+                report.dependencies[DependencyType.INDEX] = (
+                    await self.find_index_dependencies(
+                        safe_table_name, safe_column_name, connection
+                    )
                 )
-            )
 
-            report.dependencies[DependencyType.CONSTRAINT] = (
-                await self.find_constraint_dependencies(
-                    safe_table_name, safe_column_name, connection
+                report.dependencies[DependencyType.CONSTRAINT] = (
+                    await self.find_constraint_dependencies(
+                        safe_table_name, safe_column_name, connection
+                    )
                 )
-            )
 
-            analysis_time = time.time() - start_time
-            report.total_analysis_time = analysis_time
+                analysis_time = time.time() - start_time
+                report.total_analysis_time = analysis_time
 
-            self.logger.info(
-                f"Dependency analysis complete for {safe_table_name}.{safe_column_name}: "
-                f"Found {report.get_total_dependency_count()} dependencies in {analysis_time:.2f}s"
-            )
+                self.logger.info(
+                    f"Dependency analysis complete for {safe_table_name}.{safe_column_name}: "
+                    f"Found {report.get_total_dependency_count()} dependencies in {analysis_time:.2f}s"
+                )
 
-            return report
+                return report
 
         except Exception as e:
             self.logger.error(
@@ -318,9 +317,6 @@ class DependencyAnalyzer:
         CRITICAL: This detects foreign keys that reference the target column.
         Removing a column referenced by FK constraints will break referential integrity.
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find all foreign keys referencing this table.column
         fk_query = """
         SELECT DISTINCT
@@ -349,27 +345,28 @@ class DependencyAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(fk_query, table_name, column_name)
-            dependencies = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(fk_query, table_name, column_name)
+                dependencies = []
 
-            for row in rows:
-                dep = ForeignKeyDependency(
-                    constraint_name=row["constraint_name"],
-                    source_table=row["source_table"],
-                    source_column=row["source_column"],
-                    target_table=row["target_table"],
-                    target_column=row["target_column"],
-                    on_delete=row.get("delete_rule")
-                    or row.get("on_delete", "RESTRICT"),
-                    on_update=row.get("update_rule")
-                    or row.get("on_update", "RESTRICT"),
+                for row in rows:
+                    dep = ForeignKeyDependency(
+                        constraint_name=row["constraint_name"],
+                        source_table=row["source_table"],
+                        source_column=row["source_column"],
+                        target_table=row["target_table"],
+                        target_column=row["target_column"],
+                        on_delete=row.get("delete_rule")
+                        or row.get("on_delete", "RESTRICT"),
+                        on_update=row.get("update_rule")
+                        or row.get("on_update", "RESTRICT"),
+                    )
+                    dependencies.append(dep)
+
+                self.logger.debug(
+                    f"Found {len(dependencies)} foreign key dependencies for {table_name}.{column_name}"
                 )
-                dependencies.append(dep)
-
-            self.logger.debug(
-                f"Found {len(dependencies)} foreign key dependencies for {table_name}.{column_name}"
-            )
-            return dependencies
+                return dependencies
 
         except Exception as e:
             self.logger.error(
@@ -389,9 +386,6 @@ class DependencyAnalyzer:
 
         HIGH IMPACT: Removing a column used in views will break those views.
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find views that reference the column
         view_query = """
         SELECT
@@ -407,34 +401,35 @@ class DependencyAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(view_query, table_name, column_name)
-            dependencies = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(view_query, table_name, column_name)
+                dependencies = []
 
-            for row in rows:
-                # Additional check to ensure the column is actually referenced
-                definition = row.get("definition") or row.get("view_definition", "")
-                definition_lower = definition.lower()
-                column_patterns = [
-                    f"{table_name.lower()}.{column_name.lower()}",
-                    f" {column_name.lower()} ",
-                    f" {column_name.lower()},",
-                    f"({column_name.lower()}",
-                    f"{column_name.lower()})",
-                ]
+                for row in rows:
+                    # Additional check to ensure the column is actually referenced
+                    definition = row.get("definition") or row.get("view_definition", "")
+                    definition_lower = definition.lower()
+                    column_patterns = [
+                        f"{table_name.lower()}.{column_name.lower()}",
+                        f" {column_name.lower()} ",
+                        f" {column_name.lower()},",
+                        f"({column_name.lower()}",
+                        f"{column_name.lower()})",
+                    ]
 
-                if any(pattern in definition_lower for pattern in column_patterns):
-                    dep = ViewDependency(
-                        view_name=row.get("viewname") or row.get("view_name"),
-                        view_definition=definition,
-                        schema_name=row.get("schemaname")
-                        or row.get("schema_name", "public"),
-                    )
-                    dependencies.append(dep)
+                    if any(pattern in definition_lower for pattern in column_patterns):
+                        dep = ViewDependency(
+                            view_name=row.get("viewname") or row.get("view_name"),
+                            view_definition=definition,
+                            schema_name=row.get("schemaname")
+                            or row.get("schema_name", "public"),
+                        )
+                        dependencies.append(dep)
 
-            self.logger.debug(
-                f"Found {len(dependencies)} view dependencies for {table_name}.{column_name}"
-            )
-            return dependencies
+                self.logger.debug(
+                    f"Found {len(dependencies)} view dependencies for {table_name}.{column_name}"
+                )
+                return dependencies
 
         except Exception as e:
             self.logger.error(
@@ -454,9 +449,6 @@ class DependencyAnalyzer:
 
         HIGH IMPACT: Triggers referencing the column (OLD.column, NEW.column) will fail.
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find triggers on the table
         trigger_query = """
         SELECT DISTINCT
@@ -473,26 +465,27 @@ class DependencyAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(trigger_query, table_name)
-            dependencies = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(trigger_query, table_name)
+                dependencies = []
 
-            for row in rows:
-                # Check if trigger might reference the column
-                action_statement = row["action_statement"] or ""
-                if self._trigger_references_column(action_statement, column_name):
-                    dep = TriggerDependency(
-                        trigger_name=row["trigger_name"],
-                        event=row["event_manipulation"],
-                        timing=row["action_timing"],
-                        function_name=row["function_name"] or "unknown",
-                        action_statement=action_statement,
-                    )
-                    dependencies.append(dep)
+                for row in rows:
+                    # Check if trigger might reference the column
+                    action_statement = row["action_statement"] or ""
+                    if self._trigger_references_column(action_statement, column_name):
+                        dep = TriggerDependency(
+                            trigger_name=row["trigger_name"],
+                            event=row["event_manipulation"],
+                            timing=row["action_timing"],
+                            function_name=row["function_name"] or "unknown",
+                            action_statement=action_statement,
+                        )
+                        dependencies.append(dep)
 
-            self.logger.debug(
-                f"Found {len(dependencies)} trigger dependencies for {table_name}.{column_name}"
-            )
-            return dependencies
+                self.logger.debug(
+                    f"Found {len(dependencies)} trigger dependencies for {table_name}.{column_name}"
+                )
+                return dependencies
 
         except Exception as e:
             self.logger.error(
@@ -512,9 +505,6 @@ class DependencyAnalyzer:
 
         MEDIUM IMPACT: Indexes on the column will be automatically dropped.
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find indexes that include the column
         index_query = """
         SELECT DISTINCT
@@ -537,23 +527,24 @@ class DependencyAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(index_query, table_name, column_name)
-            dependencies = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(index_query, table_name, column_name)
+                dependencies = []
 
-            for row in rows:
-                dep = IndexDependency(
-                    index_name=row["index_name"],
-                    index_type=row["index_type"],
-                    columns=row["columns"],
-                    is_unique=row["is_unique"],
-                    index_definition=row["index_definition"],
+                for row in rows:
+                    dep = IndexDependency(
+                        index_name=row["index_name"],
+                        index_type=row["index_type"],
+                        columns=row["columns"],
+                        is_unique=row["is_unique"],
+                        index_definition=row["index_definition"],
+                    )
+                    dependencies.append(dep)
+
+                self.logger.debug(
+                    f"Found {len(dependencies)} index dependencies for {table_name}.{column_name}"
                 )
-                dependencies.append(dep)
-
-            self.logger.debug(
-                f"Found {len(dependencies)} index dependencies for {table_name}.{column_name}"
-            )
-            return dependencies
+                return dependencies
 
         except Exception as e:
             self.logger.error(
@@ -573,9 +564,6 @@ class DependencyAnalyzer:
 
         MEDIUM IMPACT: Check constraints referencing the column will fail.
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find constraints that reference the column
         constraint_query = """
         SELECT
@@ -602,22 +590,23 @@ class DependencyAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(constraint_query, table_name, column_name)
-            dependencies = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(constraint_query, table_name, column_name)
+                dependencies = []
 
-            for row in rows:
-                dep = ConstraintDependency(
-                    constraint_name=row["constraint_name"],
-                    constraint_type=row["constraint_type"],
-                    definition=row["constraint_definition"],
-                    columns=row["columns"] or [],
+                for row in rows:
+                    dep = ConstraintDependency(
+                        constraint_name=row["constraint_name"],
+                        constraint_type=row["constraint_type"],
+                        definition=row["constraint_definition"],
+                        columns=row["columns"] or [],
+                    )
+                    dependencies.append(dep)
+
+                self.logger.debug(
+                    f"Found {len(dependencies)} constraint dependencies for {table_name}.{column_name}"
                 )
-                dependencies.append(dep)
-
-            self.logger.debug(
-                f"Found {len(dependencies)} constraint dependencies for {table_name}.{column_name}"
-            )
-            return dependencies
+                return dependencies
 
         except Exception as e:
             self.logger.error(
@@ -629,11 +618,42 @@ class DependencyAnalyzer:
     # Helper methods
 
     async def _get_connection(self) -> asyncpg.Connection:
-        """Get database connection from connection manager."""
+        """Get database connection from connection manager.
+
+        NOTE: Prefer _acquire_connection() for all analyzer call sites.
+        Raw get_connection() acquires without close() leak asyncpg
+        connections (Cluster B: TooManyConnectionsError mid-analysis).
+        """
         if self.connection_manager is None:
             raise ValueError("Connection manager not configured")
 
         return await self.connection_manager.get_connection()
+
+    @asynccontextmanager
+    async def _acquire_connection(
+        self, connection: Optional[asyncpg.Connection]
+    ) -> AsyncIterator[asyncpg.Connection]:
+        """Acquire-or-borrow connection with ownership-aware cleanup.
+
+        If ``connection`` is not None, yields it unchanged (caller owns
+        lifecycle). If None, acquires a fresh connection and closes it
+        on exit including on exception. Single leak-proof acquire point.
+        """
+        if connection is not None:
+            yield connection
+            return
+
+        owned = await self._get_connection()
+        try:
+            yield owned
+        finally:
+            try:
+                await owned.close()
+            except Exception as close_exc:  # noqa: BLE001
+                self.logger.warning(
+                    "dependency_analyzer.connection_close_failed",
+                    extra={"error": str(close_exc)},
+                )
 
     def _sanitize_identifier(self, identifier: str) -> str:
         """Sanitize database identifiers to prevent SQL injection."""

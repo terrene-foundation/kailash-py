@@ -25,9 +25,10 @@ import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 import asyncpg
 
@@ -327,35 +328,33 @@ class TableRenameAnalyzer:
         )
 
         try:
-            if connection is None:
-                connection = await self._get_connection()
+            async with self._acquire_connection(connection) as connection:
+                # Discover all schema objects that reference the table
+                schema_objects = await self.discover_schema_objects(
+                    safe_old_name, connection
+                )
 
-            # Discover all schema objects that reference the table
-            schema_objects = await self.discover_schema_objects(
-                safe_old_name, connection
-            )
+                # Build dependency graph
+                dependency_graph = await self.build_dependency_graph(
+                    safe_old_name, schema_objects
+                )
 
-            # Build dependency graph
-            dependency_graph = await self.build_dependency_graph(
-                safe_old_name, schema_objects
-            )
+                # Create comprehensive report
+                report = TableRenameReport(
+                    old_table_name=safe_old_name,
+                    new_table_name=safe_new_name,
+                    schema_objects=schema_objects,
+                    dependency_graph=dependency_graph,
+                    validation=validation,
+                    total_analysis_time=time.time() - start_time,
+                )
 
-            # Create comprehensive report
-            report = TableRenameReport(
-                old_table_name=safe_old_name,
-                new_table_name=safe_new_name,
-                schema_objects=schema_objects,
-                dependency_graph=dependency_graph,
-                validation=validation,
-                total_analysis_time=time.time() - start_time,
-            )
+                self.logger.info(
+                    f"Table rename analysis complete: {len(schema_objects)} objects found, "
+                    f"risk level: {report.impact_summary.overall_risk.value}"
+                )
 
-            self.logger.info(
-                f"Table rename analysis complete: {len(schema_objects)} objects found, "
-                f"risk level: {report.impact_summary.overall_risk.value}"
-            )
-
-            return report
+                return report
 
         except Exception as e:
             self.logger.error(
@@ -377,43 +376,43 @@ class TableRenameAnalyzer:
         Returns:
             List of SchemaObject instances
         """
-        if connection is None:
-            connection = await self._get_connection()
-
-        all_objects = []
+        all_objects: List[SchemaObject] = []
 
         try:
-            # Discover all object types sequentially to avoid connection conflicts
-            # Using parallel execution can cause "operation is in progress" errors
-            # with shared connections
+            async with self._acquire_connection(connection) as connection:
+                # Discover all object types sequentially to avoid connection conflicts
+                # Using parallel execution can cause "operation is in progress" errors
+                # with shared connections
 
-            # Find incoming FK references (other tables referencing this table)
-            incoming_fk_objects = await self.find_foreign_key_references(
-                table_name, connection
-            )
-            all_objects.extend(incoming_fk_objects)
+                # Find incoming FK references (other tables referencing this table)
+                incoming_fk_objects = await self.find_foreign_key_references(
+                    table_name, connection
+                )
+                all_objects.extend(incoming_fk_objects)
 
-            # Find outgoing FK references (this table referencing other tables)
-            # This is needed for circular dependency detection
-            outgoing_fk_objects = await self.find_outgoing_foreign_key_references(
-                table_name, connection
-            )
-            all_objects.extend(outgoing_fk_objects)
+                # Find outgoing FK references (this table referencing other tables)
+                # This is needed for circular dependency detection
+                outgoing_fk_objects = await self.find_outgoing_foreign_key_references(
+                    table_name, connection
+                )
+                all_objects.extend(outgoing_fk_objects)
 
-            view_objects = await self.find_view_dependencies(table_name, connection)
-            all_objects.extend(view_objects)
+                view_objects = await self.find_view_dependencies(table_name, connection)
+                all_objects.extend(view_objects)
 
-            index_objects = await self.find_index_dependencies(table_name, connection)
-            all_objects.extend(index_objects)
+                index_objects = await self.find_index_dependencies(
+                    table_name, connection
+                )
+                all_objects.extend(index_objects)
 
-            trigger_objects = await self.find_trigger_dependencies(
-                table_name, connection
-            )
-            all_objects.extend(trigger_objects)
+                trigger_objects = await self.find_trigger_dependencies(
+                    table_name, connection
+                )
+                all_objects.extend(trigger_objects)
 
-            self.logger.debug(
-                f"Discovered {len(all_objects)} schema objects for {table_name}"
-            )
+                self.logger.debug(
+                    f"Discovered {len(all_objects)} schema objects for {table_name}"
+                )
 
         except Exception as e:
             self.logger.error(
@@ -428,9 +427,6 @@ class TableRenameAnalyzer:
         self, table_name: str, connection: Optional[asyncpg.Connection] = None
     ) -> List[SchemaObject]:
         """Find all foreign key constraints that reference the target table."""
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find all FKs referencing this table
         fk_query = """
         SELECT DISTINCT
@@ -460,28 +456,29 @@ class TableRenameAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(fk_query, table_name)
-            fk_objects = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(fk_query, table_name)
+                fk_objects = []
 
-            for row in rows:
-                # Determine impact level based on CASCADE rules
-                definition = row.get("constraint_definition", "")
-                impact_level = RenameImpactLevel.HIGH
+                for row in rows:
+                    # Determine impact level based on CASCADE rules
+                    definition = row.get("constraint_definition", "")
+                    impact_level = RenameImpactLevel.HIGH
 
-                if "CASCADE" in definition.upper():
-                    impact_level = RenameImpactLevel.CRITICAL
+                    if "CASCADE" in definition.upper():
+                        impact_level = RenameImpactLevel.CRITICAL
 
-                fk_obj = SchemaObject(
-                    object_name=row["constraint_name"],
-                    object_type=SchemaObjectType.FOREIGN_KEY,
-                    definition=definition,
-                    depends_on_table=table_name,
-                    references_table=row["source_table"],
-                    impact_level=impact_level,
-                )
-                fk_objects.append(fk_obj)
+                    fk_obj = SchemaObject(
+                        object_name=row["constraint_name"],
+                        object_type=SchemaObjectType.FOREIGN_KEY,
+                        definition=definition,
+                        depends_on_table=table_name,
+                        references_table=row["source_table"],
+                        impact_level=impact_level,
+                    )
+                    fk_objects.append(fk_obj)
 
-            return fk_objects
+                return fk_objects
 
         except Exception as e:
             self.logger.error(
@@ -498,9 +495,6 @@ class TableRenameAnalyzer:
         self, table_name: str, connection: Optional[asyncpg.Connection] = None
     ) -> List[SchemaObject]:
         """Find all foreign key constraints that this table owns (outgoing references)."""
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query to find all FKs that this table owns (pointing to other tables)
         outgoing_fk_query = """
         SELECT DISTINCT
@@ -530,32 +524,33 @@ class TableRenameAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(outgoing_fk_query, table_name)
-            fk_objects = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(outgoing_fk_query, table_name)
+                fk_objects = []
 
-            for row in rows:
-                # Determine impact level based on CASCADE rules
-                definition = row.get("constraint_definition", "")
-                impact_level = RenameImpactLevel.HIGH
+                for row in rows:
+                    # Determine impact level based on CASCADE rules
+                    definition = row.get("constraint_definition", "")
+                    impact_level = RenameImpactLevel.HIGH
 
-                if "CASCADE" in definition.upper():
-                    impact_level = RenameImpactLevel.CRITICAL
+                    if "CASCADE" in definition.upper():
+                        impact_level = RenameImpactLevel.CRITICAL
 
-                # For outgoing FKs, the table being renamed depends on the target table
-                # This is the reverse relationship from incoming FKs
-                fk_obj = SchemaObject(
-                    object_name=row["constraint_name"],
-                    object_type=SchemaObjectType.FOREIGN_KEY,
-                    definition=definition,
-                    depends_on_table=row[
-                        "target_table"
-                    ],  # This table depends on the target
-                    references_table=table_name,  # The source table (being renamed)
-                    impact_level=impact_level,
-                )
-                fk_objects.append(fk_obj)
+                    # For outgoing FKs, the table being renamed depends on the target table
+                    # This is the reverse relationship from incoming FKs
+                    fk_obj = SchemaObject(
+                        object_name=row["constraint_name"],
+                        object_type=SchemaObjectType.FOREIGN_KEY,
+                        definition=definition,
+                        depends_on_table=row[
+                            "target_table"
+                        ],  # This table depends on the target
+                        references_table=table_name,  # The source table (being renamed)
+                        impact_level=impact_level,
+                    )
+                    fk_objects.append(fk_obj)
 
-            return fk_objects
+                return fk_objects
 
         except Exception as e:
             self.logger.error(
@@ -572,9 +567,6 @@ class TableRenameAnalyzer:
         self, table_name: str, connection: Optional[asyncpg.Connection] = None
     ) -> List[SchemaObject]:
         """Find all views that reference the target table."""
-        if connection is None:
-            connection = await self._get_connection()
-
         # Query for regular views - improved pattern matching
         view_query = """
         SELECT
@@ -611,32 +603,33 @@ class TableRenameAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(view_query, table_name)
-            view_objects = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(view_query, table_name)
+                view_objects = []
 
-            for row in rows:
-                # Use the is_materialized field from our query
-                definition = row.get("definition", "")
-                is_materialized = row.get("is_materialized", False)
-                impact_level = (
-                    RenameImpactLevel.HIGH
-                    if is_materialized
-                    else RenameImpactLevel.MEDIUM
-                )
+                for row in rows:
+                    # Use the is_materialized field from our query
+                    definition = row.get("definition", "")
+                    is_materialized = row.get("is_materialized", False)
+                    impact_level = (
+                        RenameImpactLevel.HIGH
+                        if is_materialized
+                        else RenameImpactLevel.MEDIUM
+                    )
 
-                view_obj = SchemaObject(
-                    object_name=row["viewname"],
-                    object_type=SchemaObjectType.VIEW,
-                    definition=definition,
-                    depends_on_table=table_name,
-                    schema_name=row.get("schemaname", "public"),
-                    impact_level=impact_level,
-                    requires_sql_rewrite=True,
-                    is_materialized=is_materialized,
-                )
-                view_objects.append(view_obj)
+                    view_obj = SchemaObject(
+                        object_name=row["viewname"],
+                        object_type=SchemaObjectType.VIEW,
+                        definition=definition,
+                        depends_on_table=table_name,
+                        schema_name=row.get("schemaname", "public"),
+                        impact_level=impact_level,
+                        requires_sql_rewrite=True,
+                        is_materialized=is_materialized,
+                    )
+                    view_objects.append(view_obj)
 
-            return view_objects
+                return view_objects
 
         except Exception as e:
             self.logger.error(
@@ -653,9 +646,6 @@ class TableRenameAnalyzer:
         self, table_name: str, connection: Optional[asyncpg.Connection] = None
     ) -> List[SchemaObject]:
         """Find all indexes on the target table."""
-        if connection is None:
-            connection = await self._get_connection()
-
         index_query = """
         SELECT
             indexname,
@@ -668,26 +658,29 @@ class TableRenameAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(index_query, table_name)
-            index_objects = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(index_query, table_name)
+                index_objects = []
 
-            for row in rows:
-                # Unique indexes have higher impact
-                is_unique = "UNIQUE" in row["indexdef"].upper()
-                impact_level = (
-                    RenameImpactLevel.HIGH if is_unique else RenameImpactLevel.MEDIUM
-                )
+                for row in rows:
+                    # Unique indexes have higher impact
+                    is_unique = "UNIQUE" in row["indexdef"].upper()
+                    impact_level = (
+                        RenameImpactLevel.HIGH
+                        if is_unique
+                        else RenameImpactLevel.MEDIUM
+                    )
 
-                index_obj = SchemaObject(
-                    object_name=row["indexname"],
-                    object_type=SchemaObjectType.INDEX,
-                    definition=row["indexdef"],
-                    depends_on_table=table_name,
-                    impact_level=impact_level,
-                )
-                index_objects.append(index_obj)
+                    index_obj = SchemaObject(
+                        object_name=row["indexname"],
+                        object_type=SchemaObjectType.INDEX,
+                        definition=row["indexdef"],
+                        depends_on_table=table_name,
+                        impact_level=impact_level,
+                    )
+                    index_objects.append(index_obj)
 
-            return index_objects
+                return index_objects
 
         except Exception as e:
             self.logger.error(
@@ -704,9 +697,6 @@ class TableRenameAnalyzer:
         self, table_name: str, connection: Optional[asyncpg.Connection] = None
     ) -> List[SchemaObject]:
         """Find all triggers on the target table."""
-        if connection is None:
-            connection = await self._get_connection()
-
         trigger_query = """
         SELECT DISTINCT
             trigger_name,
@@ -721,21 +711,22 @@ class TableRenameAnalyzer:
         """
 
         try:
-            rows = await connection.fetch(trigger_query, table_name)
-            trigger_objects = []
+            async with self._acquire_connection(connection) as connection:
+                rows = await connection.fetch(trigger_query, table_name)
+                trigger_objects = []
 
-            for row in rows:
-                trigger_obj = SchemaObject(
-                    object_name=row["trigger_name"],
-                    object_type=SchemaObjectType.TRIGGER,
-                    definition=row.get("action_statement", ""),
-                    depends_on_table=table_name,
-                    impact_level=RenameImpactLevel.HIGH,
-                    requires_sql_rewrite=True,
-                )
-                trigger_objects.append(trigger_obj)
+                for row in rows:
+                    trigger_obj = SchemaObject(
+                        object_name=row["trigger_name"],
+                        object_type=SchemaObjectType.TRIGGER,
+                        definition=row.get("action_statement", ""),
+                        depends_on_table=table_name,
+                        impact_level=RenameImpactLevel.HIGH,
+                        requires_sql_rewrite=True,
+                    )
+                    trigger_objects.append(trigger_obj)
 
-            return trigger_objects
+                return trigger_objects
 
         except Exception as e:
             self.logger.error(
@@ -825,11 +816,54 @@ class TableRenameAnalyzer:
     # Helper methods
 
     async def _get_connection(self) -> asyncpg.Connection:
-        """Get database connection from connection manager."""
+        """Get database connection from connection manager.
+
+        NOTE: Prefer _acquire_connection() for all analyzer call sites.
+        Every raw get_connection() acquire MUST be paired with close()
+        in a try/finally, otherwise the analyzer leaks asyncpg
+        connections and exhausts max_connections on repeated analysis
+        (Cluster B: TooManyConnectionsError mid-analysis).
+        """
         if self.connection_manager is None:
             raise TableRenameError("Connection manager not configured")
 
         return await self.connection_manager.get_connection()
+
+    @asynccontextmanager
+    async def _acquire_connection(
+        self, connection: Optional[asyncpg.Connection]
+    ) -> AsyncIterator[asyncpg.Connection]:
+        """Acquire-or-borrow connection with ownership-aware cleanup.
+
+        If ``connection`` is not None, the caller owns the connection and
+        this context manager yields it unchanged (no close). If None, a
+        fresh connection is acquired from ``self.connection_manager`` and
+        closed on exit, including on exception.
+
+        This is the single leak-proof acquire point for this analyzer.
+        Every method that previously ran
+        ``if connection is None: connection = await self._get_connection()``
+        without a matching close MUST be migrated to
+        ``async with self._acquire_connection(connection) as connection:``.
+        """
+        if connection is not None:
+            # Borrowed connection: caller owns lifecycle.
+            yield connection
+            return
+
+        owned = await self._get_connection()
+        try:
+            yield owned
+        finally:
+            try:
+                await owned.close()
+            except (
+                Exception
+            ) as close_exc:  # noqa: BLE001 — log, do not mask primary failure
+                self.logger.warning(
+                    "table_rename_analyzer.connection_close_failed",
+                    extra={"error": str(close_exc)},
+                )
 
     def _sanitize_identifier(self, identifier: str) -> str:
         """Sanitize database identifiers to prevent SQL injection."""
@@ -1059,9 +1093,6 @@ class TableRenameAnalyzer:
         Returns:
             RenameExecutionResult with execution details
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         result = RenameExecutionResult(
             operation_id=plan.operation_id,
             old_table_name=plan.old_table_name,
@@ -1070,69 +1101,71 @@ class TableRenameAnalyzer:
 
         start_time = time.time()
 
-        try:
-            # Start transaction
-            await connection.execute("BEGIN")
-
-            # Execute each step
-            for step in plan.steps:
-                try:
-                    step_start = time.time()
-
-                    # Execute the SQL
-                    await connection.execute(step.sql)
-
-                    step_duration = int((time.time() - step_start) * 1000)
-                    result.completed_steps.append(step)
-
-                    self.logger.debug(
-                        f"Completed step: {step.description} in {step_duration}ms"
-                    )
-
-                except Exception as step_error:
-                    self.logger.error(
-                        "table_rename_analyzer.step_failed",
-                        extra={
-                            "description": step.description,
-                            "step_error": step_error,
-                        },
-                    )
-                    result.failed_step = step
-                    result.error_message = str(step_error)
-
-                    # Attempt rollback
-                    await self._rollback_rename(
-                        plan, result.completed_steps, connection
-                    )
-
-                    await connection.execute("ROLLBACK")
-                    result.success = False
-                    result.rollback_executed = True
-
-                    return result
-
-            # Commit transaction
-            await connection.execute("COMMIT")
-
-            result.success = True
-            result.execution_time_ms = int((time.time() - start_time) * 1000)
-
-            self.logger.info(
-                f"Table rename executed successfully in {result.execution_time_ms}ms"
-            )
-
-        except Exception as e:
-            self.logger.error(
-                "table_rename_analyzer.rename_execution_failed", extra={"error": str(e)}
-            )
-
+        async with self._acquire_connection(connection) as connection:
             try:
-                await connection.execute("ROLLBACK")
-            except Exception:
-                pass
+                # Start transaction
+                await connection.execute("BEGIN")
 
-            result.success = False
-            result.error_message = str(e)
+                # Execute each step
+                for step in plan.steps:
+                    try:
+                        step_start = time.time()
+
+                        # Execute the SQL
+                        await connection.execute(step.sql)
+
+                        step_duration = int((time.time() - step_start) * 1000)
+                        result.completed_steps.append(step)
+
+                        self.logger.debug(
+                            f"Completed step: {step.description} in {step_duration}ms"
+                        )
+
+                    except Exception as step_error:
+                        self.logger.error(
+                            "table_rename_analyzer.step_failed",
+                            extra={
+                                "description": step.description,
+                                "step_error": step_error,
+                            },
+                        )
+                        result.failed_step = step
+                        result.error_message = str(step_error)
+
+                        # Attempt rollback
+                        await self._rollback_rename(
+                            plan, result.completed_steps, connection
+                        )
+
+                        await connection.execute("ROLLBACK")
+                        result.success = False
+                        result.rollback_executed = True
+
+                        return result
+
+                # Commit transaction
+                await connection.execute("COMMIT")
+
+                result.success = True
+                result.execution_time_ms = int((time.time() - start_time) * 1000)
+
+                self.logger.info(
+                    f"Table rename executed successfully in {result.execution_time_ms}ms"
+                )
+
+            except Exception as e:
+                self.logger.error(
+                    "table_rename_analyzer.rename_execution_failed",
+                    extra={"error": str(e)},
+                )
+
+                try:
+                    await connection.execute("ROLLBACK")
+                except Exception:
+                    pass
+
+                result.success = False
+                result.error_message = str(e)
 
         return result
 
@@ -1183,21 +1216,21 @@ class TableRenameAnalyzer:
         Returns:
             True if rename was successful
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         try:
-            # Check that new table exists
-            new_exists = await connection.fetchval(
-                "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)", new_name
-            )
+            async with self._acquire_connection(connection) as connection:
+                # Check that new table exists
+                new_exists = await connection.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)",
+                    new_name,
+                )
 
-            # Check that old table does not exist
-            old_exists = await connection.fetchval(
-                "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)", old_name
-            )
+                # Check that old table does not exist
+                old_exists = await connection.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE tablename = $1)",
+                    old_name,
+                )
 
-            return new_exists and not old_exists
+                return new_exists and not old_exists
 
         except Exception as e:
             self.logger.error(

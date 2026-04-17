@@ -24,9 +24,10 @@ import asyncio
 import logging
 import re
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 
 import asyncpg
 
@@ -268,47 +269,47 @@ class ForeignKeyAnalyzer:
             extra={"safe_table": safe_table, "safe_operation": safe_operation},
         )
 
-        if connection is None:
-            connection = await self._get_connection()
-
-        # Find all FKs that reference this table (assuming column analysis)
-        # For now, we'll analyze the primary key column as it's most commonly referenced
-        primary_key_column = await self._get_primary_key_column(safe_table, connection)
-
-        if primary_key_column:
-            fk_dependencies = (
-                await self.dependency_analyzer.find_foreign_key_dependencies(
-                    safe_table, primary_key_column, connection
-                )
+        async with self._acquire_connection(connection) as connection:
+            # Find all FKs that reference this table (assuming column analysis)
+            # For now, we'll analyze the primary key column as it's most commonly referenced
+            primary_key_column = await self._get_primary_key_column(
+                safe_table, connection
             )
-        else:
-            fk_dependencies = []
 
-        # Determine impact level based on FK analysis
-        impact_level = self._calculate_impact_level(safe_operation, fk_dependencies)
+            if primary_key_column:
+                fk_dependencies = (
+                    await self.dependency_analyzer.find_foreign_key_dependencies(
+                        safe_table, primary_key_column, connection
+                    )
+                )
+            else:
+                fk_dependencies = []
 
-        # For operations with CASCADE constraints, always mark as CRITICAL
-        has_cascade = any(
-            fk.on_delete == "CASCADE" or fk.on_update == "CASCADE"
-            for fk in fk_dependencies
-        )
-        if has_cascade and safe_operation in ["modify_column_type", "drop_column"]:
-            impact_level = FKImpactLevel.CRITICAL
+            # Determine impact level based on FK analysis
+            impact_level = self._calculate_impact_level(safe_operation, fk_dependencies)
 
-        # Create impact report
-        report = FKImpactReport(
-            table_name=safe_table,
-            operation_type=safe_operation,
-            affected_foreign_keys=fk_dependencies,
-            impact_level=impact_level,
-        )
+            # For operations with CASCADE constraints, always mark as CRITICAL
+            has_cascade = any(
+                fk.on_delete == "CASCADE" or fk.on_update == "CASCADE"
+                for fk in fk_dependencies
+            )
+            if has_cascade and safe_operation in ["modify_column_type", "drop_column"]:
+                impact_level = FKImpactLevel.CRITICAL
 
-        self.logger.info(
-            f"FK impact analysis complete: {len(fk_dependencies)} FKs affected, "
-            f"impact level: {impact_level.value}"
-        )
+            # Create impact report
+            report = FKImpactReport(
+                table_name=safe_table,
+                operation_type=safe_operation,
+                affected_foreign_keys=fk_dependencies,
+                impact_level=impact_level,
+            )
 
-        return report
+            self.logger.info(
+                f"FK impact analysis complete: {len(fk_dependencies)} FKs affected, "
+                f"impact level: {impact_level.value}"
+            )
+
+            return report
 
     async def find_all_foreign_key_chains(
         self,
@@ -337,9 +338,6 @@ class ForeignKeyAnalyzer:
         if cache_key in self._chain_cache:
             return self._chain_cache[cache_key]
 
-        if connection is None:
-            connection = await self._get_connection()
-
         self.logger.info(
             "foreign_key_analyzer.finding_fk_chains_for_table",
             extra={"safe_table": safe_table},
@@ -348,20 +346,21 @@ class ForeignKeyAnalyzer:
         chains = []
         visited_tables = set()
 
-        try:
-            chain = await self._build_fk_chain_recursive(
-                safe_table, connection, visited_tables, max_depth
-            )
-            if chain and chain.nodes:
-                chains.append(chain)
+        async with self._acquire_connection(connection) as connection:
+            try:
+                chain = await self._build_fk_chain_recursive(
+                    safe_table, connection, visited_tables, max_depth
+                )
+                if chain and chain.nodes:
+                    chains.append(chain)
 
-            # Cache the results
-            self._chain_cache[cache_key] = chains
+                # Cache the results
+                self._chain_cache[cache_key] = chains
 
-        except RecursionError:
-            raise CircularDependencyError(
-                f"Circular FK dependency detected involving table: {safe_table}"
-            )
+            except RecursionError:
+                raise CircularDependencyError(
+                    f"Circular FK dependency detected involving table: {safe_table}"
+                )
 
         self.logger.info(
             "foreign_key_analyzer.found_fk_chains_for",
@@ -383,9 +382,6 @@ class ForeignKeyAnalyzer:
         Returns:
             IntegrityValidation with safety analysis
         """
-        if connection is None:
-            connection = await self._get_connection()
-
         violations = []
         warnings = []
         recommended_actions = []
@@ -395,31 +391,35 @@ class ForeignKeyAnalyzer:
         column = getattr(operation, "column", "")
         op_type = getattr(operation, "operation_type", "")
 
-        # Find FK dependencies for the target
-        if column:
-            # Handle async mock properly
-            if hasattr(
-                self.dependency_analyzer.find_foreign_key_dependencies, "_mock_name"
-            ):
-                # This is a mock, call it and check if it's a coroutine
-                import asyncio
+        async with self._acquire_connection(connection) as connection:
+            # Find FK dependencies for the target
+            if column:
+                # Handle async mock properly
+                if hasattr(
+                    self.dependency_analyzer.find_foreign_key_dependencies,
+                    "_mock_name",
+                ):
+                    # This is a mock, call it and check if it's a coroutine
+                    import asyncio
 
-                result = self.dependency_analyzer.find_foreign_key_dependencies(
-                    table, column, connection
-                )
-                if asyncio.iscoroutine(result):
-                    fk_deps = await result
-                elif hasattr(result, "return_value"):
-                    fk_deps = result.return_value
+                    result = self.dependency_analyzer.find_foreign_key_dependencies(
+                        table, column, connection
+                    )
+                    if asyncio.iscoroutine(result):
+                        fk_deps = await result
+                    elif hasattr(result, "return_value"):
+                        fk_deps = result.return_value
+                    else:
+                        fk_deps = result
                 else:
-                    fk_deps = result
+                    fk_deps = (
+                        await self.dependency_analyzer.find_foreign_key_dependencies(
+                            table, column, connection
+                        )
+                    )
             else:
-                fk_deps = await self.dependency_analyzer.find_foreign_key_dependencies(
-                    table, column, connection
-                )
-        else:
-            # For table-level operations, check all FKs
-            fk_deps = await self._find_all_table_foreign_keys(table, connection)
+                # For table-level operations, check all FKs
+                fk_deps = await self._find_all_table_foreign_keys(table, connection)
 
         # Analyze each FK dependency
         for fk_dep in fk_deps:
@@ -471,102 +471,133 @@ class ForeignKeyAnalyzer:
         Returns:
             FKSafeMigrationPlan with step-by-step execution plan
         """
-        if connection is None:
-            connection = await self._get_connection()
-
-        # First validate referential integrity
-        validation = await self.validate_referential_integrity(operation, connection)
-
-        if not validation.is_safe and "CASCADE" in str(validation.violations):
-            raise CascadeRiskError(
-                "Operation involves CASCADE constraints with high data loss risk. "
-                "Manual review required before proceeding."
+        async with self._acquire_connection(connection) as connection:
+            # First validate referential integrity
+            validation = await self.validate_referential_integrity(
+                operation, connection
             )
 
-        operation_id = str(uuid.uuid4())
-        steps = []
+            if not validation.is_safe and "CASCADE" in str(validation.violations):
+                raise CascadeRiskError(
+                    "Operation involves CASCADE constraints with high data loss risk. "
+                    "Manual review required before proceeding."
+                )
 
-        # Extract operation details
-        table = getattr(operation, "table", "")
-        column = getattr(operation, "column", "")
-        op_type = getattr(operation, "operation_type", "")
+            operation_id = str(uuid.uuid4())
+            steps: List[MigrationStep] = []
 
-        # Find affected FK constraints
-        if column:
-            fk_deps = await self.dependency_analyzer.find_foreign_key_dependencies(
-                table, column, connection
-            )
-        else:
-            fk_deps = []
+            # Extract operation details
+            table = getattr(operation, "table", "")
+            column = getattr(operation, "column", "")
+            op_type = getattr(operation, "operation_type", "")
 
-        # Generate steps based on FK dependencies
-        if fk_deps:
-            # Step 1: Disable FK constraints
-            for fk_dep in fk_deps:
+            # Find affected FK constraints
+            if column:
+                fk_deps = await self.dependency_analyzer.find_foreign_key_dependencies(
+                    table, column, connection
+                )
+            else:
+                fk_deps = []
+
+            # Generate steps based on FK dependencies
+            if fk_deps:
+                # Step 1: Disable FK constraints
+                for fk_dep in fk_deps:
+                    steps.append(
+                        MigrationStep(
+                            step_type="drop_constraint",
+                            description=f"Temporarily drop FK constraint {fk_dep.constraint_name}",
+                            sql_command=f"ALTER TABLE {fk_dep.source_table} DROP CONSTRAINT {fk_dep.constraint_name}",
+                            estimated_duration=2.0,
+                            rollback_command=f"-- Restore FK constraint {fk_dep.constraint_name}",
+                            requires_exclusive_lock=True,
+                        )
+                    )
+
+            # Step 2: Perform the actual operation
+            if op_type == "modify_column_type":
+                new_type = getattr(operation, "new_type", "VARCHAR(255)")
                 steps.append(
                     MigrationStep(
-                        step_type="drop_constraint",
-                        description=f"Temporarily drop FK constraint {fk_dep.constraint_name}",
-                        sql_command=f"ALTER TABLE {fk_dep.source_table} DROP CONSTRAINT {fk_dep.constraint_name}",
-                        estimated_duration=2.0,
-                        rollback_command=f"-- Restore FK constraint {fk_dep.constraint_name}",
+                        step_type="modify_column",
+                        description=f"Modify column {table}.{column} type",
+                        sql_command=f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {new_type}",
+                        estimated_duration=5.0,
+                        rollback_command=f"-- Rollback column type change for {table}.{column}",
                         requires_exclusive_lock=True,
                     )
                 )
 
-        # Step 2: Perform the actual operation
-        if op_type == "modify_column_type":
-            new_type = getattr(operation, "new_type", "VARCHAR(255)")
-            steps.append(
-                MigrationStep(
-                    step_type="modify_column",
-                    description=f"Modify column {table}.{column} type",
-                    sql_command=f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {new_type}",
-                    estimated_duration=5.0,
-                    rollback_command=f"-- Rollback column type change for {table}.{column}",
-                    requires_exclusive_lock=True,
-                )
+            # Step 3: Re-enable FK constraints
+            if fk_deps:
+                for fk_dep in fk_deps:
+                    steps.append(
+                        MigrationStep(
+                            step_type="add_constraint",
+                            description=f"Restore FK constraint {fk_dep.constraint_name}",
+                            sql_command=f"ALTER TABLE {fk_dep.source_table} ADD CONSTRAINT {fk_dep.constraint_name} "
+                            f"FOREIGN KEY ({fk_dep.source_column}) REFERENCES {fk_dep.target_table}({fk_dep.target_column})",
+                            estimated_duration=3.0,
+                            requires_exclusive_lock=False,
+                        )
+                    )
+
+            # Determine risk level
+            risk_level = FKImpactLevel.LOW if not fk_deps else FKImpactLevel.HIGH
+
+            plan = FKSafeMigrationPlan(
+                operation_id=operation_id,
+                steps=steps,
+                requires_transaction=True,
+                risk_level=risk_level,
             )
 
-        # Step 3: Re-enable FK constraints
-        if fk_deps:
-            for fk_dep in fk_deps:
-                steps.append(
-                    MigrationStep(
-                        step_type="add_constraint",
-                        description=f"Restore FK constraint {fk_dep.constraint_name}",
-                        sql_command=f"ALTER TABLE {fk_dep.source_table} ADD CONSTRAINT {fk_dep.constraint_name} "
-                        f"FOREIGN KEY ({fk_dep.source_column}) REFERENCES {fk_dep.target_table}({fk_dep.target_column})",
-                        estimated_duration=3.0,
-                        requires_exclusive_lock=False,
-                    )
-                )
+            self.logger.info(
+                "foreign_key_analyzer.generated_fk_safe_migration_plan_with",
+                extra={"count": len(steps)},
+            )
 
-        # Determine risk level
-        risk_level = FKImpactLevel.LOW if not fk_deps else FKImpactLevel.HIGH
-
-        plan = FKSafeMigrationPlan(
-            operation_id=operation_id,
-            steps=steps,
-            requires_transaction=True,
-            risk_level=risk_level,
-        )
-
-        self.logger.info(
-            "foreign_key_analyzer.generated_fk_safe_migration_plan_with",
-            extra={"count": len(steps)},
-        )
-
-        return plan
+            return plan
 
     # Helper methods
 
     async def _get_connection(self) -> asyncpg.Connection:
-        """Get database connection from connection manager."""
+        """Get database connection from connection manager.
+
+        NOTE: Prefer _acquire_connection() for all analyzer call sites.
+        Raw get_connection() acquires without close() leak asyncpg
+        connections (Cluster B: TooManyConnectionsError mid-analysis).
+        """
         if self.connection_manager is None:
             raise ValueError("Connection manager not configured")
 
         return await self.connection_manager.get_connection()
+
+    @asynccontextmanager
+    async def _acquire_connection(
+        self, connection: Optional[asyncpg.Connection]
+    ) -> AsyncIterator[asyncpg.Connection]:
+        """Acquire-or-borrow connection with ownership-aware cleanup.
+
+        If ``connection`` is not None, yields it unchanged (caller owns
+        lifecycle). If None, acquires a fresh connection and closes it
+        on exit including on exception. Single leak-proof acquire point.
+        """
+        if connection is not None:
+            yield connection
+            return
+
+        owned = await self._get_connection()
+        try:
+            yield owned
+        finally:
+            try:
+                await owned.close()
+            except Exception as close_exc:  # noqa: BLE001
+                self.logger.warning(
+                    "foreign_key_analyzer.connection_close_failed",
+                    extra={"error": str(close_exc)},
+                )
 
     def _sanitize_identifier(self, identifier: str) -> str:
         """Sanitize database identifiers to prevent SQL injection."""
