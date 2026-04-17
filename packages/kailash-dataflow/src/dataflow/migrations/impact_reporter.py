@@ -481,6 +481,54 @@ class ImpactReporter:
             critical_fks = [
                 dep for dep in fk_deps if dep.impact_level == ImpactLevel.CRITICAL
             ]
+            # Separate out CASCADE-configured FKs — these propagate deletion
+            # across referencing tables on row removal. Surfacing cascade
+            # specifically is a safety-critical signal for column removal:
+            # a CASCADE on the target column's parent row can silently wipe
+            # multiple dependent tables. Without this dedicated warning, the
+            # impact report lumped CASCADE into generic FK text and operators
+            # had no cue that row deletion would chain.
+            cascade_fks = [
+                dep for dep in fk_deps if getattr(dep, "on_delete", "") == "CASCADE"
+            ]
+            if cascade_fks:
+                affected_tables = sorted(
+                    {
+                        getattr(dep, "source_table", None)
+                        or getattr(dep, "target_table", "")
+                        for dep in cascade_fks
+                        if (
+                            getattr(dep, "source_table", None)
+                            or getattr(dep, "target_table", None)
+                        )
+                    }
+                )
+                recommendations.append(
+                    Recommendation(
+                        type=RecommendationType.DO_NOT_REMOVE,
+                        title="⛓️ CASCADE Deletion Chain Detected",
+                        description=(
+                            f"Found {len(cascade_fks)} foreign key constraint(s) with "
+                            f"ON DELETE CASCADE. Removing this column risks cascade "
+                            f"deletion across multiple tables: "
+                            f"{', '.join(affected_tables) if affected_tables else 'see details'}. "
+                            f"Silent data loss is possible across the dependency chain."
+                        ),
+                        action_steps=[
+                            "Audit every CASCADE FK before proceeding",
+                            "Replace CASCADE with RESTRICT / SET NULL if the chain is unintended",
+                            "Back up every table in the cascade chain",
+                            "Coordinate with every owning team",
+                        ],
+                        priority=ImpactLevel.CRITICAL,
+                        sql_example=(
+                            "ALTER TABLE referencing_table "
+                            "DROP CONSTRAINT fk_constraint_name, "
+                            "ADD CONSTRAINT fk_constraint_name FOREIGN KEY (col) "
+                            "REFERENCES parent(col) ON DELETE RESTRICT;"
+                        ),
+                    )
+                )
             if critical_fks:
                 recommendations.append(
                     Recommendation(
@@ -633,6 +681,20 @@ class ImpactReporter:
 
                     if len(dep_list) > 5:
                         lines.append(f"  ... and {len(dep_list) - 5} more")
+
+        # Add ALL recommendation titles + descriptions, not just the primary.
+        # The prior code only surfaced the risk-level rec (e.g. "DO NOT
+        # REMOVE"), hiding dependency-specific warnings such as the
+        # CASCADE deletion chain warning from operators reading the
+        # console output. A user running `impact_report.format_console()`
+        # on a table with 5 CASCADE FKs had no cue that row deletion
+        # would chain across tables.
+        if len(report.recommendations) > 1:
+            lines.append("\n⚠️  ADDITIONAL WARNINGS:")
+            lines.append("─" * 30)
+            for rec in report.recommendations[1:]:
+                lines.append(f"• {rec.title}")
+                lines.append(f"   {rec.description}")
 
         # Add action steps from primary recommendation
         if report.recommendations and report.recommendations[0].action_steps:
