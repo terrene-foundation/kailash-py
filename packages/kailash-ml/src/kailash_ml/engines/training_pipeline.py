@@ -19,14 +19,13 @@ import numpy as np
 import polars as pl
 from kailash_ml.types import (
     AgentInfusionProtocol,
-    FeatureField,
     FeatureSchema,
     MetricSpec,
     ModelSignature,
 )
 
 from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
-from kailash_ml.interop import to_lgb_dataset, to_sklearn_input
+from kailash_ml.interop import to_sklearn_input
 
 logger = logging.getLogger(__name__)
 
@@ -445,7 +444,7 @@ class TrainingPipeline:
 
         Returns metric dict.
         """
-        mv = await self._registry.get_model(model_name, version)
+        await self._registry.get_model(model_name, version)  # raises if missing
         artifact_bytes = await self._registry.load_artifact(model_name, version)
         # SECURITY: pickle deserialization executes arbitrary code.
         # Only load artifacts from TRUSTED sources (models you trained yourself).
@@ -491,7 +490,7 @@ class TrainingPipeline:
         model_spec: ModelSpec,
     ) -> Any:
         """Train an sklearn model."""
-        X_train, y_train, _col_info = to_sklearn_input(
+        X_train, y_train, _ = to_sklearn_input(
             train_data, feature_columns=feature_cols, target_column=target_col
         )
         model = model_spec.instantiate()
@@ -507,16 +506,17 @@ class TrainingPipeline:
     ) -> Any:
         """Train a LightGBM model."""
         try:
-            import lightgbm as lgb
+            import lightgbm
         except ImportError as exc:
             raise ImportError(
                 "lightgbm is required for LightGBM training. "
                 "Install it with: pip install lightgbm"
             ) from exc
+        del lightgbm  # availability probe only; model_spec.instantiate returns LGBM
 
         # Use the instantiate path for LightGBM sklearn API
         model = model_spec.instantiate()
-        X_train, y_train, _col_info = to_sklearn_input(
+        X_train, y_train, _ = to_sklearn_input(
             train_data, feature_columns=feature_cols, target_column=target_col
         )
         model.fit(X_train, y_train)
@@ -538,24 +538,45 @@ class TrainingPipeline:
         e.g. ``"lightning.pytorch.demos.boring_classes.BoringModel"``.
         Hyperparameters are passed to both the module constructor and the
         Trainer (separated by prefix ``trainer_`` for Trainer kwargs).
+
+        Device selection: per ``specs/ml-backends.md`` §4.1 every
+        ``L.Trainer()`` call MUST pass concrete ``accelerator`` / ``devices``
+        / ``precision`` resolved from ``detect_backend()``. Caller-supplied
+        ``trainer_accelerator`` / ``trainer_devices`` / ``trainer_precision``
+        in ``model_spec.hyperparameters`` override the resolver.
         """
         try:
-            import lightning as L
-            import torch
-            from torch.utils.data import DataLoader, TensorDataset
+            import lightning as L  # pyright: ignore[reportMissingImports]  # optional dl extra
+            import torch  # pyright: ignore[reportMissingImports]  # optional dl extra
+            from torch.utils.data import (
+                DataLoader,
+                TensorDataset,
+            )  # pyright: ignore[reportMissingImports]
         except ImportError as exc:
             raise ImportError(
                 "PyTorch Lightning is required for DL training. "
                 "Install with: pip install kailash-ml[dl]"
             ) from exc
 
+        from kailash_ml._device import detect_backend
+
         X_train, y_train, _ = to_sklearn_input(
             train_data, feature_columns=feature_cols, target_column=target_col
         )
 
-        # Separate trainer kwargs (prefixed with trainer_) from module kwargs
-        module_kwargs = {}
+        # Resolve backend up-front so the Trainer is never CPU-by-default on
+        # an accelerator host (§1 proposal: training_pipeline.py:581-591
+        # previously instantiated L.Trainer() with no accelerator).
+        backend_info = detect_backend(None)
+
+        # Separate trainer kwargs (prefixed with trainer_) from module kwargs.
+        # Trainer defaults are seeded from the resolved backend; caller
+        # hyperparameters prefixed with trainer_ win if supplied.
+        module_kwargs: dict[str, Any] = {}
         trainer_kwargs: dict[str, Any] = {
+            "accelerator": backend_info.accelerator,
+            "devices": backend_info.devices,
+            "precision": backend_info.precision,
             "max_epochs": 10,
             "enable_progress_bar": False,
             "enable_model_summary": False,
@@ -585,6 +606,19 @@ class TrainingPipeline:
             dataset,
             batch_size=trainer_kwargs.pop("batch_size", 32),
             shuffle=True,
+        )
+
+        # Log resolved backend at INFO (per ml-backends.md §4.1).
+        logger.info(
+            "training_pipeline.lightning.backend_selected",
+            extra={
+                "accelerator": trainer_kwargs["accelerator"],
+                "devices": str(trainer_kwargs["devices"]),
+                "precision": trainer_kwargs["precision"],
+                "device_string": backend_info.device_string,
+                "backend": backend_info.backend,
+                "diagnostic_source": backend_info.diagnostic_source,
+            },
         )
 
         # Train

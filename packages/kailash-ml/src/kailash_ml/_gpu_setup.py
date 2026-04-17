@@ -161,7 +161,7 @@ def main() -> None:
     print()
     print("Or for the full GPU suite (includes RL, agents, XGBoost, CatBoost):")
     print(
-        f"  {sys.executable} -m pip install 'kailash-ml[full-gpu]' "
+        f"  {sys.executable} -m pip install 'kailash-ml[all-gpu]' "
         f"--extra-index-url {index_url}"
     )
 
