@@ -183,7 +183,14 @@ def verify_api_key(db, api_key: str) -> Dict:
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
 
-    keys = results.get("list_keys", [])
+    # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
+    # rather than a raw list — the old ``keys[0]`` lookup raised ``KeyError: 0``
+    # on every verification attempt.
+    list_result = results.get("list_keys", {})
+    if isinstance(list_result, dict):
+        keys = list_result.get("records", [])
+    else:
+        keys = list_result
 
     if not keys:
         return {"valid": False, "error": "API key not found"}

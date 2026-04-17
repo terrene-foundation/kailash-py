@@ -8,6 +8,11 @@ Uses real DataFlow database, no mocking (Tier 2 policy).
 import os
 import uuid
 
+# Tests encode JWTs with the literal secret "test_secret"; the saas_starter
+# jwt_auth module reads JWT_SECRET from the environment, so set it before
+# importing the module.
+os.environ.setdefault("JWT_SECRET", "test_secret")
+
 import pytest
 from dataflow import DataFlow
 from fastapi.testclient import TestClient

@@ -28,14 +28,18 @@ Dependencies:
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+import os
+
 import bcrypt
 import jwt
 
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# JWT Configuration
-JWT_SECRET = "your-secret-key-change-in-production"  # Change in production
+# JWT Configuration — read from environment so deployments and tests can
+# override without editing source (tests export ``JWT_SECRET=test_secret``;
+# production exports the real secret via its own environment).
+JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 REFRESH_TOKEN_EXPIRY_SECONDS = 604800  # 7 days
