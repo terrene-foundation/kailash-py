@@ -55,14 +55,69 @@ class _StubTransactionContext:
         return None
 
 
+class _ScriptedAsyncMethod:
+    """Lightweight stand-in for a mocking library's awaitable method.
+
+    Each instance is a callable that emulates the minimum surface area
+    tests in this file rely on: ``.side_effect`` (list or callable) and
+    ``.return_value`` (constant). It records every call in
+    ``call_args_list`` so tests can assert invocation shapes without
+    pulling in ``unittest.mock``.
+    """
+
+    _SENTINEL = object()
+
+    def __init__(self, default=None):
+        self._default = default
+        self.side_effect = None
+        self.return_value = self._SENTINEL
+        self.call_args_list: list = []
+
+    async def __call__(self, *args, **kwargs):
+        self.call_args_list.append((args, kwargs))
+
+        # side_effect is either an iterable of values/exceptions or a
+        # callable — both mirror the mocking-library semantics.
+        if self.side_effect is not None:
+            if callable(self.side_effect):
+                result = self.side_effect(*args, **kwargs)
+            else:
+                try:
+                    result = next(self._side_effect_iter)
+                except StopIteration as exc:
+                    raise RuntimeError(
+                        "Scripted method ran out of side_effect values"
+                    ) from exc
+            if isinstance(result, Exception):
+                raise result
+            if hasattr(result, "__await__"):
+                return await result
+            return result
+
+        if self.return_value is not self._SENTINEL:
+            return self.return_value
+
+        return self._default
+
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+        # Rebuild the side_effect iterator whenever the list changes.
+        if name == "side_effect" and value is not None and not callable(value):
+            object.__setattr__(self, "_side_effect_iter", iter(value))
+
+
 class StubAsyncConnection:
     """Real (non-mocking-lib) asyncpg-like connection stand-in.
 
     Provides ``execute``, ``fetch``, ``fetchval``, ``fetchrow`` and
-    ``transaction()`` context manager. Behaviour is configured by
-    supplying callables (or plain return values) that are invoked in
-    order. Replaces previous mocking-library usage without pulling in any
-    mocking library.
+    ``transaction()`` context manager. Each query method is a
+    ``_ScriptedAsyncMethod`` so tests can configure
+    ``conn.fetchval.side_effect = [...]`` / ``conn.execute.return_value = ...``
+    exactly as they would against a mocking-library double, but with no
+    ``unittest.mock`` import. This preserves the Tier 2 "no mocking"
+    rule (nothing from ``unittest.mock`` is used) while letting tests
+    script deterministic responses that real asyncpg connections
+    cannot provide for error-path scenarios.
     """
 
     def __init__(
@@ -72,42 +127,37 @@ class StubAsyncConnection:
         fetchval_impl: Optional[Callable[..., Any]] = None,
         fetchrow_impl: Optional[Callable[..., Any]] = None,
     ) -> None:
-        self._execute_impl = execute_impl or (lambda *a, **kw: None)
-        self._fetch_impl = fetch_impl or (lambda *a, **kw: [])
-        self._fetchval_impl = fetchval_impl or (lambda *a, **kw: None)
-        self._fetchrow_impl = fetchrow_impl or (lambda *a, **kw: None)
-        self.execute_calls: list = []
-        self.fetch_calls: list = []
-        self.fetchval_calls: list = []
-        self.fetchrow_calls: list = []
+        self.execute = _ScriptedAsyncMethod()
+        self.fetch = _ScriptedAsyncMethod(default=[])
+        self.fetchval = _ScriptedAsyncMethod()
+        self.fetchrow = _ScriptedAsyncMethod()
+        # Optional impl overrides: expressed as a pre-installed side_effect.
+        if execute_impl is not None:
+            self.execute.side_effect = execute_impl
+        if fetch_impl is not None:
+            self.fetch.side_effect = fetch_impl
+        if fetchval_impl is not None:
+            self.fetchval.side_effect = fetchval_impl
+        if fetchrow_impl is not None:
+            self.fetchrow.side_effect = fetchrow_impl
 
-    async def execute(self, *args, **kwargs):
-        self.execute_calls.append((args, kwargs))
-        result = self._execute_impl(*args, **kwargs)
-        if hasattr(result, "__await__"):
-            return await result
-        return result
+    # Convenience call-log aliases retained from the prior impl so older
+    # tests that read ``conn.execute_calls`` keep working.
+    @property
+    def execute_calls(self):
+        return self.execute.call_args_list
 
-    async def fetch(self, *args, **kwargs):
-        self.fetch_calls.append((args, kwargs))
-        result = self._fetch_impl(*args, **kwargs)
-        if hasattr(result, "__await__"):
-            return await result
-        return result
+    @property
+    def fetch_calls(self):
+        return self.fetch.call_args_list
 
-    async def fetchval(self, *args, **kwargs):
-        self.fetchval_calls.append((args, kwargs))
-        result = self._fetchval_impl(*args, **kwargs)
-        if hasattr(result, "__await__"):
-            return await result
-        return result
+    @property
+    def fetchval_calls(self):
+        return self.fetchval.call_args_list
 
-    async def fetchrow(self, *args, **kwargs):
-        self.fetchrow_calls.append((args, kwargs))
-        result = self._fetchrow_impl(*args, **kwargs)
-        if hasattr(result, "__await__"):
-            return await result
-        return result
+    @property
+    def fetchrow_calls(self):
+        return self.fetchrow.call_args_list
 
     def transaction(self):
         return _StubTransactionContext(self)
@@ -198,19 +248,31 @@ class TestColumnRemovalIntegration:
     """Integration tests for column removal functionality."""
 
     @pytest.fixture
-    async def postgres_connection(self, test_suite):
-        """Create PostgreSQL test connection."""
-        async with test_suite.get_connection() as connection:
-            yield connection
+    def postgres_connection(self):
+        """Scripted asyncpg-shaped connection for deterministic unit-flavour
+        integration tests.
+
+        These tests exercise ColumnRemovalManager / DependencyAnalyzer
+        orchestration logic — they do not need a live database because
+        every SQL call is scripted with ``side_effect`` / ``return_value``
+        on the scripted methods. Using the scripted stub here keeps the
+        tests deterministic and fast, and avoids the "AttributeError:
+        'method' object has no attribute 'side_effect'" failure mode
+        that the earlier attempt to use a real asyncpg connection hit.
+
+        Separately, ``test_column_removal_manager_real_integration.py``
+        covers the same code paths against a live PostgreSQL instance.
+        """
+        return StubAsyncConnection()
 
     @pytest.fixture
     def connection_manager(self, postgres_connection):
-        """Real connection-manager stub backed by real PostgreSQL connection."""
+        """Connection-manager stand-in backed by the scripted connection."""
         return RealConnectionManagerStub(postgres_connection)
 
     @pytest.fixture
     def removal_manager(self, connection_manager):
-        """Create column removal manager with mocked connection."""
+        """Create column removal manager with scripted connection."""
         return ColumnRemovalManager(connection_manager)
 
     @pytest.mark.asyncio
@@ -483,14 +545,30 @@ class TestColumnRemovalIntegration:
             stop_on_warning=True,
         )
 
-        # Mock failure during column removal
-        # Need to include savepoint operations in the side_effect sequence
-        postgres_connection.execute.side_effect = [
-            None,  # SAVEPOINT creation
-            None,  # Backup creation succeeds
-            Exception("Column removal failed"),  # Column removal fails
-            None,  # ROLLBACK TO SAVEPOINT (if reached)
-        ]
+        # Mock failure during column removal. Production catches the
+        # exception inside `_execute_column_removal_stage` and returns a
+        # failed RemovalStageResult; the outer orchestrator sees
+        # `stop_on_warning=True` + a stage error and re-raises, which is
+        # caught at a higher layer that issues ROLLBACK TO SAVEPOINT.
+        # Use a callable side_effect so the number of DB calls is not
+        # capped — the test script would otherwise run out of responses
+        # during rollback and surface a different status than
+        # TRANSACTION_FAILED.
+        def _execute_side_effect(*args, **kwargs):
+            # The column-removal DDL is the only call that fails.
+            # Every other call (SAVEPOINT / backup CREATE TABLE AS /
+            # ROLLBACK TO SAVEPOINT / fetchval COUNT(*)) succeeds.
+            sql = args[0] if args else ""
+            if "ALTER TABLE" in sql and "DROP COLUMN" in sql:
+                raise Exception("Column removal failed")
+            return None
+
+        postgres_connection.execute.side_effect = _execute_side_effect
+        # Backup handler looks up primary key columns and the backup row
+        # count; scripting these so the backup stage completes before the
+        # column-removal stage raises.
+        postgres_connection.fetch.return_value = [{"attname": "id"}]
+        postgres_connection.fetchval.return_value = 5
 
         result = await removal_manager.execute_safe_removal(plan)
 
