@@ -230,14 +230,30 @@ class LLMCostTracker:
             )
 
     def _compute_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        """Compute cost for a single call. Uses simple default pricing."""
-        import os
+        """Compute cost for a single call.
 
+        Pricing precedence (first hit wins):
+            1. Model-specific env var — ``KAILASH_ML_LLM_COST_INPUT_PER_1K_<UPPER>``
+               where ``<UPPER>`` is ``model.upper()`` with non-alphanumeric chars
+               replaced by ``_`` (e.g. ``gpt-4o-mini`` → ``GPT_4O_MINI``).
+            2. Global env var — ``KAILASH_ML_LLM_COST_INPUT_PER_1K``.
+            3. Hard-coded default (0.003 input / 0.015 output per 1k tokens).
+        """
+        import os
+        import re
+
+        suffix = re.sub(r"[^A-Za-z0-9]+", "_", model).strip("_").upper()
         input_cost_per_1k = float(
-            os.environ.get("KAILASH_ML_LLM_COST_INPUT_PER_1K", "0.003")
+            os.environ.get(
+                f"KAILASH_ML_LLM_COST_INPUT_PER_1K_{suffix}",
+                os.environ.get("KAILASH_ML_LLM_COST_INPUT_PER_1K", "0.003"),
+            )
         )
         output_cost_per_1k = float(
-            os.environ.get("KAILASH_ML_LLM_COST_OUTPUT_PER_1K", "0.015")
+            os.environ.get(
+                f"KAILASH_ML_LLM_COST_OUTPUT_PER_1K_{suffix}",
+                os.environ.get("KAILASH_ML_LLM_COST_OUTPUT_PER_1K", "0.015"),
+            )
         )
         return (input_tokens / 1000.0) * input_cost_per_1k + (
             output_tokens / 1000.0
@@ -285,7 +301,9 @@ def _cuda_available() -> bool:
             check=False,
         )
         return result.returncode == 0 and bool(result.stdout.strip())
-    except Exception:  # noqa: BLE001 -- any failure (missing binary, timeout, OS) => no GPU
+    except (
+        Exception
+    ):  # noqa: BLE001 -- any failure (missing binary, timeout, OS) => no GPU
         return False
 
 
@@ -313,24 +331,15 @@ def _select_xgboost_device() -> str:
 
 
 def _classification_candidates() -> list[tuple[str, str, dict[str, Any]]]:
-    """Default classification candidates (XGBoost device resolved lazily)."""
+    """Default classification candidates with runtime GPU detection.
+
+    Returns the frozen sklearn baseline extended with xgboost and lightgbm —
+    xgboost's ``device`` kwarg is resolved per-call via ``_select_xgboost_device``
+    so `AutoMLEngine.run()` consistently logs the accelerator decision.
+    """
     xgb_device = _select_xgboost_device()
     return [
-        (
-            "sklearn.ensemble.RandomForestClassifier",
-            "sklearn",
-            {"n_estimators": 50, "random_state": 42},
-        ),
-        (
-            "sklearn.ensemble.GradientBoostingClassifier",
-            "sklearn",
-            {"n_estimators": 50, "random_state": 42},
-        ),
-        (
-            "sklearn.linear_model.LogisticRegression",
-            "sklearn",
-            {"max_iter": 200, "random_state": 42},
-        ),
+        *_CLASSIFICATION_CANDIDATES,
         (
             "xgboost.XGBClassifier",
             "xgboost",
@@ -350,20 +359,10 @@ def _classification_candidates() -> list[tuple[str, str, dict[str, Any]]]:
 
 
 def _regression_candidates() -> list[tuple[str, str, dict[str, Any]]]:
-    """Default regression candidates (XGBoost device resolved lazily)."""
+    """Default regression candidates with runtime GPU detection."""
     xgb_device = _select_xgboost_device()
     return [
-        (
-            "sklearn.ensemble.RandomForestRegressor",
-            "sklearn",
-            {"n_estimators": 50, "random_state": 42},
-        ),
-        (
-            "sklearn.ensemble.GradientBoostingRegressor",
-            "sklearn",
-            {"n_estimators": 50, "random_state": 42},
-        ),
-        ("sklearn.linear_model.Ridge", "sklearn", {"alpha": 1.0}),
+        *_REGRESSION_CANDIDATES,
         (
             "xgboost.XGBRegressor",
             "xgboost",
@@ -382,10 +381,9 @@ def _regression_candidates() -> list[tuple[str, str, dict[str, Any]]]:
     ]
 
 
-# Back-compat constants (frozen snapshots without xgboost device resolution
-# side effects) — tests import these directly. Both call sites in ``run()``
-# use the factory functions so the device is logged on every run, not just
-# on first import.
+# Back-compat constants (frozen sklearn baseline — no xgboost device resolution
+# side effects). Tests import these directly. The factory functions above
+# extend them with xgboost + lightgbm for actual AutoML runs.
 _CLASSIFICATION_CANDIDATES: list[tuple[str, str, dict[str, Any]]] = [
     (
         "sklearn.ensemble.RandomForestClassifier",
@@ -427,19 +425,37 @@ _REGRESSION_CANDIDATES: list[tuple[str, str, dict[str, Any]]] = [
 class AutoMLEngine:
     """[P1: Production with Caveats] Automated model selection and optimization.
 
-    Orchestrates HyperparameterSearch across multiple model families,
-    ranks results, and optionally augments decisions with Kaizen agents.
-    Agent augmentation requires double opt-in: ``pip install kailash-ml[agents]``
-    AND ``agent=True`` at call site.
+    Composes four primitives via dependency injection:
+
+    1. ``TrainingPipeline`` (constructor ``pipeline=``) — trains each candidate
+       model family with default hyperparameters for the quick-rank pass.
+    2. ``HyperparameterSearch`` (constructor ``search=``) — runs the deep
+       optimization sweep on the top-ranked candidate after quick-rank.
+    3. ``ModelRegistry`` (constructor ``registry=``, optional) — when
+       supplied, registers the best model at STAGING if thresholds are met.
+    4. ``ExperimentTracker`` (``run(tracker=...)``, optional) — when supplied,
+       opens a parent run for the AutoML session and threads the same tracker
+       through every child training + hyperparameter-search call so all
+       candidate metrics and chosen params land in one hierarchical trace.
+
+    Kaizen agent augmentation is opt-in via ``run(agent=True)`` AND
+    ``pip install kailash-ml[agents]`` — the engine does NOT call an LLM
+    unless both signals are present.
 
     Parameters
     ----------
     pipeline:
-        TrainingPipeline for training candidates.
+        TrainingPipeline for training candidates (required).
     search:
-        HyperparameterSearch for deep optimization.
+        HyperparameterSearch for deep optimization (required).
     registry:
-        Optional ModelRegistry for registration.
+        Optional ModelRegistry; when supplied, best model is registered.
+
+    Notes
+    -----
+    ExperimentTracker is NOT a constructor argument — it is per-call because
+    a single AutoMLEngine instance may drive many sessions that each belong
+    to different experiments. See ``run(tracker=...)``.
     """
 
     def __init__(
@@ -480,11 +496,7 @@ class AutoMLEngine:
             all training and search calls for hierarchical logging.
             Typed as ``Any`` to avoid circular imports.
         """
-        from kailash_ml.engines.hyperparameter_search import (
-            ParamDistribution,
-            SearchConfig,
-            SearchSpace,
-        )
+        from kailash_ml.engines.hyperparameter_search import SearchConfig
         from kailash_ml.engines.training_pipeline import ModelSpec
 
         start_time = time.perf_counter()
@@ -497,6 +509,7 @@ class AutoMLEngine:
                 experiment_name,
                 run_name="automl",
             )
+            assert parent_run_obj is not None  # narrows for pyright
             parent_run_id = parent_run_obj.id
             await tracker.log_params(
                 parent_run_id,
@@ -621,11 +634,15 @@ class AutoMLEngine:
     def _get_candidates(
         self, config: AutoMLConfig
     ) -> list[tuple[str, str, dict[str, Any]]]:
-        """Get candidate model families for the task type."""
+        """Get candidate model families for the task type.
+
+        Calls the factory functions so ``_select_xgboost_device`` logs the
+        resolved xgboost backend on every AutoML run.
+        """
         if config.task_type == "classification":
-            return list(_CLASSIFICATION_CANDIDATES)
+            return _classification_candidates()
         elif config.task_type == "regression":
-            return list(_REGRESSION_CANDIDATES)
+            return _regression_candidates()
         else:
             raise ValueError(f"Unknown task type: {config.task_type}")
 
@@ -671,7 +688,15 @@ class AutoMLEngine:
                 ]
 
     def _default_search_space(self, model_class: str, framework: str) -> Any:
-        """Create a default search space for a model class."""
+        """Create a default search space for a model class.
+
+        Framework is used as the primary discriminator for xgboost + lightgbm
+        (their class names don't contain ``randomforest`` / ``gradientboosting``
+        keywords, so an earlier implementation silently fell through to the
+        generic ``n_estimators``-only space — missing learning_rate tuning,
+        the single most impactful xgb/lgbm knob). Model_class is used for
+        sklearn families where cls_name encodes the intent.
+        """
         from kailash_ml.engines.hyperparameter_search import (
             ParamDistribution,
             SearchSpace,
@@ -679,6 +704,32 @@ class AutoMLEngine:
 
         cls_name = model_class.split(".")[-1].lower()
 
+        if framework == "xgboost":
+            return SearchSpace(
+                [
+                    ParamDistribution("n_estimators", "int_uniform", low=50, high=400),
+                    ParamDistribution(
+                        "learning_rate", "log_uniform", low=0.01, high=0.3
+                    ),
+                    ParamDistribution("max_depth", "int_uniform", low=3, high=12),
+                    ParamDistribution("subsample", "uniform", low=0.5, high=1.0),
+                    ParamDistribution("colsample_bytree", "uniform", low=0.5, high=1.0),
+                ]
+            )
+        if framework == "lightgbm":
+            return SearchSpace(
+                [
+                    ParamDistribution("n_estimators", "int_uniform", low=50, high=400),
+                    ParamDistribution(
+                        "learning_rate", "log_uniform", low=0.01, high=0.3
+                    ),
+                    ParamDistribution("num_leaves", "int_uniform", low=15, high=127),
+                    ParamDistribution("max_depth", "int_uniform", low=-1, high=12),
+                    ParamDistribution(
+                        "min_child_samples", "int_uniform", low=5, high=50
+                    ),
+                ]
+            )
         if "randomforest" in cls_name:
             return SearchSpace(
                 [
@@ -686,7 +737,7 @@ class AutoMLEngine:
                     ParamDistribution("max_depth", "int_uniform", low=3, high=20),
                 ]
             )
-        elif "gradientboosting" in cls_name:
+        if "gradientboosting" in cls_name:
             return SearchSpace(
                 [
                     ParamDistribution("n_estimators", "int_uniform", low=20, high=200),
@@ -696,21 +747,20 @@ class AutoMLEngine:
                     ParamDistribution("max_depth", "int_uniform", low=2, high=10),
                 ]
             )
-        elif "logisticregression" in cls_name:
+        if "logisticregression" in cls_name:
             return SearchSpace(
                 [
                     ParamDistribution("C", "log_uniform", low=0.01, high=10.0),
                 ]
             )
-        elif "ridge" in cls_name:
+        if "ridge" in cls_name:
             return SearchSpace(
                 [
                     ParamDistribution("alpha", "log_uniform", low=0.01, high=100.0),
                 ]
             )
-        else:
-            return SearchSpace(
-                [
-                    ParamDistribution("n_estimators", "int_uniform", low=10, high=100),
-                ]
-            )
+        return SearchSpace(
+            [
+                ParamDistribution("n_estimators", "int_uniform", low=10, high=100),
+            ]
+        )

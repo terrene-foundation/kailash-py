@@ -3,19 +3,13 @@
 """Tests for AutoMLEngine."""
 from __future__ import annotations
 
-import math
-
 import polars as pl
 import pytest
 from kailash_ml.engines.automl_engine import (
     AutoMLConfig,
     AutoMLEngine,
-    AutoMLResult,
-    CandidateResult,
     LLMBudgetExceededError,
     LLMCostTracker,
-    _CLASSIFICATION_CANDIDATES,
-    _REGRESSION_CANDIDATES,
 )
 from kailash_ml.types import FeatureField, FeatureSchema
 
@@ -176,19 +170,24 @@ class TestBaselineRecommendation:
 class TestGetCandidates:
     """Tests for _get_candidates."""
 
-    def test_classification_returns_3_candidates(self) -> None:
+    def test_classification_returns_all_families(self) -> None:
         engine = AutoMLEngine(pipeline=None, search=None)
         candidates = engine._get_candidates(AutoMLConfig(task_type="classification"))
-        assert len(candidates) == 3
+        # sklearn baseline (3) + xgboost + lightgbm = 5
+        assert len(candidates) == 5
         classes = [c[0] for c in candidates]
         assert any("RandomForest" in c for c in classes)
+        assert any("xgboost" in c for c in classes)
+        assert any("lightgbm" in c for c in classes)
 
-    def test_regression_returns_3_candidates(self) -> None:
+    def test_regression_returns_all_families(self) -> None:
         engine = AutoMLEngine(pipeline=None, search=None)
         candidates = engine._get_candidates(AutoMLConfig(task_type="regression"))
-        assert len(candidates) == 3
+        assert len(candidates) == 5
         classes = [c[0] for c in candidates]
         assert any("Ridge" in c for c in classes)
+        assert any("xgboost" in c for c in classes)
+        assert any("lightgbm" in c for c in classes)
 
     def test_unknown_task_type_raises(self) -> None:
         engine = AutoMLEngine(pipeline=None, search=None)
