@@ -14,7 +14,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["main", "detect_cuda_version"]
+__all__ = ["main", "detect_cuda_version", "resolve_torch_wheel"]
 
 # Maps CUDA major.minor to the PyTorch index URL suffix
 _CUDA_INDEX_MAP: dict[str, str] = {
@@ -127,6 +127,132 @@ def _best_cuda_tag(version: str) -> str:
             break
 
     return best or "cu121"  # safe default
+
+
+_ROCM_INDEX_MAP: dict[str, str] = {
+    # PyTorch publishes ROCm wheels for a few recent versions. Keep in sync
+    # with https://download.pytorch.org/whl/rocm*/.
+    "5.7": "rocm5.7",
+    "6.0": "rocm6.0",
+    "6.1": "rocm6.1",
+    "6.2": "rocm6.2",
+}
+
+
+def resolve_torch_wheel(
+    accelerator: str,
+    *,
+    cuda_version: str | None = None,
+    rocm_version: str | None = None,
+) -> dict[str, str | None]:
+    """Return the recommended torch install recipe for `accelerator`.
+
+    Plain-data helper: does NOT execute pip. Callers can print the `command`
+    field, or parse `package` + `extra_index_url` independently (e.g. for
+    generating a requirements.txt or constructing a uv install invocation).
+
+    Supported accelerators match ``KNOWN_BACKENDS`` in ``_device.py``:
+    ``cuda``, ``mps``, ``rocm``, ``xpu``, ``tpu``, ``cpu``.
+
+    Parameters
+    ----------
+    accelerator:
+        One of ``"cuda"``, ``"mps"``, ``"rocm"``, ``"xpu"``, ``"tpu"``, ``"cpu"``.
+    cuda_version:
+        Optional CUDA version override (e.g. ``"12.1"``). If omitted and
+        ``accelerator == "cuda"``, ``detect_cuda_version()`` is used.
+    rocm_version:
+        Optional ROCm version override (e.g. ``"6.1"``). Required when
+        ``accelerator == "rocm"`` — we cannot auto-detect ROCm at pip time.
+
+    Returns
+    -------
+    dict
+        ``{"accelerator": str, "package": str, "extra_index_url": str | None,
+          "command": str, "notes": str}``.
+
+    Raises
+    ------
+    ValueError
+        If ``accelerator`` is not one of the supported values.
+    """
+    known = {"cuda", "mps", "rocm", "xpu", "tpu", "cpu"}
+    if accelerator not in known:
+        raise ValueError(
+            f"Unknown accelerator '{accelerator}'. " f"Valid: {sorted(known)}."
+        )
+
+    if accelerator == "cuda":
+        version = cuda_version or detect_cuda_version()
+        tag = _best_cuda_tag(version) if version else "cu121"
+        index = f"https://download.pytorch.org/whl/{tag}"
+        return {
+            "accelerator": "cuda",
+            "package": "kailash-ml[dl-gpu]",
+            "extra_index_url": index,
+            "command": (
+                f"{sys.executable} -m pip install 'kailash-ml[dl-gpu]' "
+                f"--extra-index-url {index}"
+            ),
+            "notes": (
+                f"CUDA {version or 'unknown (defaulted to cu121)'} — " f"{tag} wheel"
+            ),
+        }
+
+    if accelerator == "rocm":
+        # Only the user knows their ROCm install; nvcc-style probes do not
+        # exist on AMD hosts, so we require an explicit version.
+        ver = rocm_version or "6.1"
+        tag = _ROCM_INDEX_MAP.get(ver, "rocm6.1")
+        index = f"https://download.pytorch.org/whl/{tag}"
+        return {
+            "accelerator": "rocm",
+            "package": "kailash-ml[dl]",
+            "extra_index_url": index,
+            "command": (
+                f"{sys.executable} -m pip install 'kailash-ml[dl]' "
+                f"--extra-index-url {index}"
+            ),
+            "notes": f"ROCm {ver} — {tag} wheel (AMD Instinct)",
+        }
+
+    if accelerator == "xpu":
+        # PyTorch >=2.5 ships native XPU support in the default wheel.
+        return {
+            "accelerator": "xpu",
+            "package": "kailash-ml[dl]",
+            "extra_index_url": None,
+            "command": f"{sys.executable} -m pip install 'kailash-ml[dl]'",
+            "notes": (
+                "Intel XPU native support ships with the default torch wheel "
+                "(torch>=2.5). No --extra-index-url required."
+            ),
+        }
+
+    if accelerator == "tpu":
+        return {
+            "accelerator": "tpu",
+            "package": "kailash-ml[dl]",
+            "extra_index_url": None,
+            "command": (f"{sys.executable} -m pip install 'kailash-ml[dl]' torch_xla"),
+            "notes": (
+                "TPU support requires torch_xla — install alongside [dl] on a "
+                "Google Cloud TPU VM."
+            ),
+        }
+
+    # mps + cpu both use the default wheel.
+    return {
+        "accelerator": accelerator,
+        "package": "kailash-ml[dl]",
+        "extra_index_url": None,
+        "command": f"{sys.executable} -m pip install 'kailash-ml[dl]'",
+        "notes": (
+            "Apple Silicon MPS is built into the default torch universal2 wheel."
+            if accelerator == "mps"
+            else "CPU-only install (default torch wheel)."
+        ),
+    }
 
 
 def main() -> None:

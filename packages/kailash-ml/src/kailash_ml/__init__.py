@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
 
 from kailash_ml._device import BackendInfo, detect_backend
+from kailash_ml._gpu_setup import resolve_torch_wheel
 from kailash_ml._result import TrainingResult
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
@@ -130,6 +131,7 @@ __all__ = [
     "Trainable",
     "train",
     "track",
+    "resolve_torch_wheel",
     # Types (from kailash_ml.types)
     "AgentInfusionProtocol",
     "FeatureField",

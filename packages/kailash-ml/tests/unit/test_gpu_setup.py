@@ -8,7 +8,11 @@ from unittest.mock import patch
 
 import pytest
 
-from kailash_ml._gpu_setup import _best_cuda_tag, detect_cuda_version
+from kailash_ml._gpu_setup import (
+    _best_cuda_tag,
+    detect_cuda_version,
+    resolve_torch_wheel,
+)
 
 
 class TestDetectCudaVersion:
@@ -74,3 +78,60 @@ class TestMainFunction:
         captured = capsys.readouterr()
         assert "Detected CUDA version: 12.4" in captured.out
         assert "cu124" in captured.out
+
+
+class TestResolveTorchWheel:
+    """Programmatic wheel resolver for the 6 supported accelerators."""
+
+    def test_unknown_accelerator_raises(self):
+        with pytest.raises(ValueError, match="Unknown accelerator"):
+            resolve_torch_wheel("gpu")
+
+    def test_cpu_uses_default_wheel(self):
+        result = resolve_torch_wheel("cpu")
+        assert result["accelerator"] == "cpu"
+        assert result["extra_index_url"] is None
+        assert "kailash-ml[dl]" in result["command"]
+
+    def test_mps_uses_default_wheel(self):
+        result = resolve_torch_wheel("mps")
+        assert result["accelerator"] == "mps"
+        assert result["extra_index_url"] is None
+        assert "kailash-ml[dl]" in result["command"]
+        assert "MPS" in result["notes"]
+
+    def test_cuda_with_explicit_version_uses_matching_tag(self):
+        result = resolve_torch_wheel("cuda", cuda_version="12.4")
+        assert result["accelerator"] == "cuda"
+        assert result["extra_index_url"] == "https://download.pytorch.org/whl/cu124"
+        assert "kailash-ml[dl-gpu]" in result["command"]
+
+    def test_cuda_with_detected_version(self):
+        with patch("kailash_ml._gpu_setup.detect_cuda_version", return_value="11.8"):
+            result = resolve_torch_wheel("cuda")
+        assert result["extra_index_url"] == "https://download.pytorch.org/whl/cu118"
+
+    def test_cuda_without_detection_defaults_to_cu121(self):
+        with patch("kailash_ml._gpu_setup.detect_cuda_version", return_value=None):
+            result = resolve_torch_wheel("cuda")
+        assert result["extra_index_url"] == "https://download.pytorch.org/whl/cu121"
+
+    def test_rocm_defaults_to_6_1(self):
+        result = resolve_torch_wheel("rocm")
+        assert result["accelerator"] == "rocm"
+        assert result["extra_index_url"] == "https://download.pytorch.org/whl/rocm6.1"
+
+    def test_rocm_with_explicit_version(self):
+        result = resolve_torch_wheel("rocm", rocm_version="6.0")
+        assert result["extra_index_url"] == "https://download.pytorch.org/whl/rocm6.0"
+
+    def test_xpu_uses_default_wheel_with_torch_2_5_note(self):
+        result = resolve_torch_wheel("xpu")
+        assert result["accelerator"] == "xpu"
+        assert result["extra_index_url"] is None
+        assert "torch>=2.5" in result["notes"]
+
+    def test_tpu_includes_torch_xla(self):
+        result = resolve_torch_wheel("tpu")
+        assert result["accelerator"] == "tpu"
+        assert "torch_xla" in result["command"]

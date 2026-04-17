@@ -58,13 +58,13 @@ dl = [
     "timm>=1.0",
     "transformers>=4.40",
 ]
+# Back-compat alias: [dl-gpu] used to duplicate every [dl] entry + add
+# onnxruntime-gpu. As of 0.9.1 it extends [dl] instead, so the deep-learning
+# dependency set lives in ONE place. Users who passed `kailash-ml[dl-gpu]`
+# before get the same install plus onnxruntime-gpu. The GPU torch wheel is
+# selected via `pip --extra-index-url` (see `kailash-ml-gpu-setup`).
 dl-gpu = [
-    "torch>=2.2",
-    "lightning>=2.2",
-    "torchvision>=0.17",
-    "torchaudio>=2.2",
-    "timm>=1.0",
-    "transformers>=4.40",
+    "kailash-ml[dl]",
     "onnxruntime-gpu>=1.17",
 ]
 rl = [
