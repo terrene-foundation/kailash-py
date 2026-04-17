@@ -406,18 +406,47 @@ class DependencyAnalyzer:
                 dependencies = []
 
                 for row in rows:
-                    # Additional check to ensure the column is actually referenced
+                    # Only accept a view if its definition references the
+                    # *qualified* column (table.column) OR the view also
+                    # references the target table by name. Matching on the
+                    # unqualified column alone (" id " etc.) is a
+                    # false-positive magnet: every view in the database that
+                    # SELECTs an `id` column would be reported as a
+                    # dependency of every other table's `id` column.
                     definition = row.get("definition") or row.get("view_definition", "")
                     definition_lower = definition.lower()
-                    column_patterns = [
-                        f"{table_name.lower()}.{column_name.lower()}",
-                        f" {column_name.lower()} ",
-                        f" {column_name.lower()},",
-                        f"({column_name.lower()}",
-                        f"{column_name.lower()})",
-                    ]
+                    table_lower = table_name.lower()
+                    column_lower = column_name.lower()
 
-                    if any(pattern in definition_lower for pattern in column_patterns):
+                    # Strong signal: qualified column reference.
+                    qualified_ref = f"{table_lower}.{column_lower}"
+                    if qualified_ref in definition_lower:
+                        matched = True
+                    else:
+                        # Weaker signal: the view must mention the target
+                        # TABLE AND the target column tokenized as its own
+                        # word. This permits bare-column selects from the
+                        # target table while rejecting identically-named
+                        # columns in unrelated tables.
+                        column_patterns = [
+                            f" {column_lower} ",
+                            f" {column_lower},",
+                            f"({column_lower}",
+                            f"{column_lower})",
+                            f" {column_lower}\n",
+                            f" {column_lower};",
+                        ]
+                        mentions_table = (
+                            f" {table_lower} " in definition_lower
+                            or f" {table_lower}\n" in definition_lower
+                            or f"({table_lower} " in definition_lower
+                            or f"({table_lower})" in definition_lower
+                        )
+                        matched = mentions_table and any(
+                            pattern in definition_lower for pattern in column_patterns
+                        )
+
+                    if matched:
                         dep = ViewDependency(
                             view_name=row.get("viewname") or row.get("view_name"),
                             view_definition=definition,

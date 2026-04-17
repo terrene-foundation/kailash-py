@@ -82,6 +82,10 @@ class TestForeignKeyAnalyzerIntegration:
             "fk_test_category_groups",
             "fk_test_department",
             "fk_test_employee",
+            # Standalone fixture used by test_validate_referential_integrity_real_safe_operation
+            # — was missing from the cleanup list so leftover state from a
+            # prior run blocked the next CREATE TABLE with DuplicateTableError.
+            "fk_test_standalone",
         ]
 
         # Add dynamically created spoke tables
@@ -504,9 +508,15 @@ class TestForeignKeyAnalyzerIntegration:
             connection=real_connection,
         )
 
-        # Should handle gracefully without crashing
+        # Should handle gracefully without crashing. The FK analyzer's
+        # _sanitize_identifier (foreign_key_analyzer.py:602) preserves
+        # underscores as valid SQL identifier characters — the legacy
+        # expectation `"nonexistenttable"` dated from an earlier sanitizer
+        # that stripped underscores and has since been relaxed. The
+        # identifier passes through unchanged because it already matches
+        # the allowed character class [\w_]+.
         assert isinstance(result, FKImpactReport)
-        assert result.table_name == "nonexistenttable"  # Sanitized
+        assert result.table_name == "non_existent_table"
         assert result.impact_level == FKImpactLevel.SAFE  # No FKs found
         assert len(result.affected_foreign_keys) == 0
 
