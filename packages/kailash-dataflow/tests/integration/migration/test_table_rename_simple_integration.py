@@ -55,16 +55,34 @@ class TestTableRenameAnalyzerSimpleIntegration:
 
     @pytest.fixture
     async def connection_manager(self, test_suite):
-        """Create simple connection manager."""
+        """Create connection manager backed by IntegrationTestSuite pool."""
 
-        class SimpleConnectionManager:
+        class SuiteConnectionManager:
             def __init__(self, suite):
                 self.suite = suite
+                self._connections = []
 
             async def get_connection(self):
-                return await self.suite.get_connection().__aenter__()
+                conn = await asyncpg.connect(self.suite.config.url)
+                self._connections.append(conn)
+                return conn
 
-        return SimpleConnectionManager(test_suite)
+            async def close_all(self):
+                for conn in self._connections:
+                    if not conn.is_closed():
+                        await conn.close()
+                self._connections.clear()
+
+        manager = SuiteConnectionManager(test_suite)
+        yield manager
+        await manager.close_all()
+
+    @pytest.fixture
+    async def connection(self, connection_manager):
+        """Raw asyncpg connection for DDL setup/teardown."""
+        conn = await connection_manager.get_connection()
+        yield conn
+        # connection_manager.close_all() handles cleanup at session end
 
     @pytest.fixture
     async def analyzer(self, connection_manager):
