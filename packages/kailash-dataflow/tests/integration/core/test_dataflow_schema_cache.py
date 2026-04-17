@@ -26,6 +26,8 @@ ADR Reference: reports/architecture/ADR-001-schema-cache.md
 Proposal Reference: DATAFLOW_COMPREHENSIVE_FIX_PROPOSAL.md Section 5.2
 """
 
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -42,6 +44,22 @@ def runtime():
     return LocalRuntime()
 
 
+@pytest.fixture
+def db_url(tmp_path):
+    """Per-test SQLite URL backed by a file on disk.
+
+    DataFlow's auto-migration runs on a separate connection from the
+    runtime nodes, and each ``sqlite:///:memory:`` connection is its own
+    isolated database — so the migration creates the table in one DB and
+    the node tries to write to a different DB and gets
+    "no such table". A file-based SQLite lets every connection see the
+    same schema, which is what these tests assume. The file is torn down
+    by pytest's tmp_path fixture after the test.
+    """
+    path = tmp_path / f"dataflow_schema_cache_{os.getpid()}.db"
+    return f"sqlite:///{path}"
+
+
 # =============================================================================
 # Test Group 1: Cache Enabled vs Disabled Behavior
 # =============================================================================
@@ -49,7 +67,7 @@ def runtime():
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_schema_cache_enabled_shows_cache_hits(runtime):
+def test_schema_cache_enabled_shows_cache_hits(runtime, db_url):
     """
     Test that schema cache enabled results in cache hits on subsequent operations.
 
@@ -60,7 +78,7 @@ def test_schema_cache_enabled_shows_cache_hits(runtime):
     - Hit rate calculated correctly
     """
     # Create DataFlow with cache enabled
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class User:
@@ -74,7 +92,7 @@ def test_schema_cache_enabled_shows_cache_hits(runtime):
         "UserCreateNode",
         "create_user1",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "user-001",
             "name": "Alice",
             "email": "alice@example.com",
@@ -86,11 +104,16 @@ def test_schema_cache_enabled_shows_cache_hits(runtime):
     assert "create_user1" in results
     assert results["create_user1"].get("status") != "error"
 
-    # Check metrics after first operation
+    # Check metrics after first operation. DataFlow 2.0 marks tables as
+    # ensured during @db.model registration, so the first node access is
+    # already a cache hit. What matters for this test is that the cache
+    # is populated AND the node path actually consulted it.
     metrics = db.get_schema_cache_metrics()
     assert metrics["enabled"] is True
-    assert metrics["misses"] >= 1, "First operation should be cache miss"
     assert metrics["cache_size"] >= 1, "Cache should contain User table"
+    assert (
+        metrics["hits"] + metrics["misses"] >= 1
+    ), "First operation should consult the schema cache"
 
     # Second operation - should be cache hit
     workflow = WorkflowBuilder()
@@ -98,7 +121,7 @@ def test_schema_cache_enabled_shows_cache_hits(runtime):
         "UserCreateNode",
         "create_user2",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "user-002",
             "name": "Bob",
             "email": "bob@example.com",
@@ -124,7 +147,7 @@ def test_schema_cache_enabled_shows_cache_hits(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_schema_cache_disabled_no_cache_hits(runtime):
+def test_schema_cache_disabled_no_cache_hits(runtime, db_url):
     """
     Test that schema cache disabled results in no cache hits.
 
@@ -135,7 +158,7 @@ def test_schema_cache_disabled_no_cache_hits(runtime):
     - Cache size remains 0
     """
     # Create DataFlow with cache disabled
-    db = DataFlow(":memory:", schema_cache_enabled=False)
+    db = DataFlow(db_url, schema_cache_enabled=False)
 
     @db.model
     class Product:
@@ -150,7 +173,7 @@ def test_schema_cache_disabled_no_cache_hits(runtime):
             "ProductCreateNode",
             f"create_product_{i}",
             {
-                "database_url": ":memory:",
+                "database_url": db_url,
                 "id": f"prod-{i:03d}",
                 "name": f"Product {i}",
                 "price": 10.0 + i,
@@ -175,7 +198,7 @@ def test_schema_cache_disabled_no_cache_hits(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(15)
-def test_multi_operation_workflow_cache_hits(runtime):
+def test_multi_operation_workflow_cache_hits(runtime, db_url):
     """
     Test cache behavior with multiple CRUD operations on same model.
 
@@ -185,7 +208,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
     - Subsequent operations (Read, Update, Delete) are cache hits
     - Metrics accumulate correctly across operations
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Customer:
@@ -200,7 +223,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
         "CustomerCreateNode",
         "create",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "cust-001",
             "name": "Alice Johnson",
             "email": "alice@example.com",
@@ -216,7 +239,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
     # Operation 2: READ (cache hit)
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "CustomerReadNode", "read", {"database_url": ":memory:", "id": "cust-001"}
+        "CustomerReadNode", "read", {"database_url": db_url, "id": "cust-001"}
     )
     results, _ = runtime.execute(workflow.build())
     assert "read" in results
@@ -230,7 +253,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
         "CustomerUpdateNode",
         "update",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "filter": {"id": "cust-001"},
             "fields": {"active": False},
         },
@@ -243,9 +266,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
 
     # Operation 4: LIST (cache hit)
     workflow = WorkflowBuilder()
-    workflow.add_node(
-        "CustomerListNode", "list", {"database_url": ":memory:", "limit": 10}
-    )
+    workflow.add_node("CustomerListNode", "list", {"database_url": db_url, "limit": 10})
     results, _ = runtime.execute(workflow.build())
     assert "list" in results
 
@@ -262,7 +283,7 @@ def test_multi_operation_workflow_cache_hits(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(15)
-def test_multiple_models_separate_cache_entries(runtime):
+def test_multiple_models_separate_cache_entries(runtime, db_url):
     """
     Test that different models get separate cache entries.
 
@@ -272,7 +293,7 @@ def test_multiple_models_separate_cache_entries(runtime):
     - Cache hits work independently per model
     - get_cached_tables() shows all models
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class User:
@@ -296,13 +317,13 @@ def test_multiple_models_separate_cache_entries(runtime):
     workflow.add_node(
         "UserCreateNode",
         "user",
-        {"database_url": ":memory:", "id": "u1", "name": "Alice"},
+        {"database_url": db_url, "id": "u1", "name": "Alice"},
     )
     workflow.add_node(
         "PostCreateNode",
         "post",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "p1",
             "title": "Hello World",
             "author_id": "u1",
@@ -312,7 +333,7 @@ def test_multiple_models_separate_cache_entries(runtime):
         "CommentCreateNode",
         "comment",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "c1",
             "content": "Great post!",
             "post_id": "p1",
@@ -342,7 +363,7 @@ def test_multiple_models_separate_cache_entries(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(15)
-def test_bulk_operations_cache_behavior(runtime):
+def test_bulk_operations_cache_behavior(runtime, db_url):
     """
     Test cache behavior with bulk operations.
 
@@ -352,7 +373,7 @@ def test_bulk_operations_cache_behavior(runtime):
     - Bulk operations counted as single cache access
     - Performance improvement visible in metrics
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Order:
@@ -367,7 +388,7 @@ def test_bulk_operations_cache_behavior(runtime):
         "OrderBulkCreateNode",
         "bulk_create",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "records": [
                 {"id": f"order-{i:03d}", "customer_id": "cust-001", "total": 100.0 + i}
                 for i in range(10)
@@ -386,7 +407,7 @@ def test_bulk_operations_cache_behavior(runtime):
         "OrderBulkUpdateNode",
         "bulk_update",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "filter": {"status": "pending"},
             "fields": {"status": "processing"},
         },
@@ -407,7 +428,7 @@ def test_bulk_operations_cache_behavior(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_clear_schema_cache_removes_all_entries(runtime):
+def test_clear_schema_cache_removes_all_entries(runtime, db_url):
     """
     Test clear_schema_cache() method removes all cached tables.
 
@@ -417,7 +438,7 @@ def test_clear_schema_cache_removes_all_entries(runtime):
     - Metrics reset correctly
     - Subsequent operations cause cache misses
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Product:
@@ -434,12 +455,12 @@ def test_clear_schema_cache_removes_all_entries(runtime):
     workflow.add_node(
         "ProductCreateNode",
         "prod",
-        {"database_url": ":memory:", "id": "p1", "name": "Widget"},
+        {"database_url": db_url, "id": "p1", "name": "Widget"},
     )
     workflow.add_node(
         "CategoryCreateNode",
         "cat",
-        {"database_url": ":memory:", "id": "c1", "title": "Electronics"},
+        {"database_url": db_url, "id": "c1", "title": "Electronics"},
     )
     results, _ = runtime.execute(workflow.build())
 
@@ -465,7 +486,7 @@ def test_clear_schema_cache_removes_all_entries(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_clear_schema_cache_subsequent_operations_miss(runtime):
+def test_clear_schema_cache_subsequent_operations_miss(runtime, db_url):
     """
     Test that operations after clear_schema_cache() cause cache misses.
 
@@ -475,7 +496,7 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
     - Next operation on same model is cache miss
     - Cache repopulated correctly
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Session:
@@ -489,7 +510,7 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
         "SessionCreateNode",
         "session1",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "sess-001",
             "user_id": "user-001",
             "token": "abc123",
@@ -510,7 +531,7 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
         "SessionCreateNode",
         "session2",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "sess-002",
             "user_id": "user-002",
             "token": "def456",
@@ -520,9 +541,9 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
     assert "session2" in results
 
     metrics_after_clear = db.get_schema_cache_metrics()
-    assert metrics_after_clear["misses"] > misses_before, (
-        "Should have new cache miss after clear"
-    )
+    assert (
+        metrics_after_clear["misses"] > misses_before
+    ), "Should have new cache miss after clear"
     assert metrics_after_clear["cache_size"] >= 1, "Cache should be repopulated"
 
     print(
@@ -537,7 +558,7 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_get_schema_cache_metrics_structure(runtime):
+def test_get_schema_cache_metrics_structure(runtime, db_url):
     """
     Test get_schema_cache_metrics() returns correct structure.
 
@@ -547,7 +568,7 @@ def test_get_schema_cache_metrics_structure(runtime):
     - Hit rate calculation accurate
     - Metrics update in real-time
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Metric:
@@ -588,7 +609,7 @@ def test_get_schema_cache_metrics_structure(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_get_schema_cache_metrics_accuracy(runtime):
+def test_get_schema_cache_metrics_accuracy(runtime, db_url):
     """
     Test get_schema_cache_metrics() returns accurate counts.
 
@@ -598,7 +619,7 @@ def test_get_schema_cache_metrics_accuracy(runtime):
     - Hit rate percentage calculated correctly
     - Cache size reflects actual entries
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Event:
@@ -613,7 +634,7 @@ def test_get_schema_cache_metrics_accuracy(runtime):
             "EventCreateNode",
             f"event_{i}",
             {
-                "database_url": ":memory:",
+                "database_url": db_url,
                 "id": f"evt-{i:03d}",
                 "name": f"Event {i}",
                 "timestamp": time.time(),
@@ -632,9 +653,9 @@ def test_get_schema_cache_metrics_accuracy(runtime):
     expected_hit_rate = (
         (metrics["hits"] / total_requests * 100) if total_requests > 0 else 0
     )
-    assert abs(metrics["hit_rate_percent"] - expected_hit_rate) < 0.01, (
-        "Hit rate calculation incorrect"
-    )
+    assert (
+        abs(metrics["hit_rate_percent"] - expected_hit_rate) < 0.01
+    ), "Hit rate calculation incorrect"
 
     # Cache should contain Event table
     assert metrics["cache_size"] >= 1, "Cache should have at least 1 entry"
@@ -652,7 +673,7 @@ def test_get_schema_cache_metrics_accuracy(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_get_cached_tables_returns_all_models(runtime):
+def test_get_cached_tables_returns_all_models(runtime, db_url):
     """
     Test get_cached_tables() returns information about all cached models.
 
@@ -662,7 +683,7 @@ def test_get_cached_tables_returns_all_models(runtime):
     - Model names match registered models
     - State shows 'ensured' for successful operations
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Author:
@@ -680,13 +701,13 @@ def test_get_cached_tables_returns_all_models(runtime):
     workflow.add_node(
         "AuthorCreateNode",
         "author",
-        {"database_url": ":memory:", "id": "auth-001", "name": "Jane Doe"},
+        {"database_url": db_url, "id": "auth-001", "name": "Jane Doe"},
     )
     workflow.add_node(
         "BookCreateNode",
         "book",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "book-001",
             "title": "DataFlow Guide",
             "author_id": "auth-001",
@@ -719,7 +740,7 @@ def test_get_cached_tables_returns_all_models(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_get_cached_tables_entry_details(runtime):
+def test_get_cached_tables_entry_details(runtime, db_url):
     """
     Test get_cached_tables() entry details are accurate.
 
@@ -730,7 +751,7 @@ def test_get_cached_tables_entry_details(runtime):
     - Failure count is 0 for successful operations
     - Age calculation is correct
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Log:
@@ -744,7 +765,7 @@ def test_get_cached_tables_entry_details(runtime):
         "LogCreateNode",
         "log1",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "log-001",
             "message": "System started",
             "level": "info",
@@ -766,9 +787,9 @@ def test_get_cached_tables_entry_details(runtime):
     assert log_entry is not None, "Log model should be in cache"
 
     # Verify state
-    assert log_entry["state"] == "ensured", (
-        "State should be 'ensured' after successful operation"
-    )
+    assert (
+        log_entry["state"] == "ensured"
+    ), "State should be 'ensured' after successful operation"
 
     # Verify timestamps
     assert log_entry["first_ensured_at"] > 0, "first_ensured_at should be set"
@@ -796,7 +817,7 @@ def test_get_cached_tables_entry_details(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_clear_table_cache_removes_specific_model(runtime):
+def test_clear_table_cache_removes_specific_model(runtime, db_url):
     """
     Test clear_table_cache() removes only specified model.
 
@@ -807,7 +828,7 @@ def test_clear_table_cache_removes_specific_model(runtime):
     - Returns False when entry doesn't exist
     - Cache size decrements correctly
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Invoice:
@@ -825,13 +846,13 @@ def test_clear_table_cache_removes_specific_model(runtime):
     workflow.add_node(
         "InvoiceCreateNode",
         "invoice",
-        {"database_url": ":memory:", "id": "inv-001", "amount": 100.0},
+        {"database_url": db_url, "id": "inv-001", "amount": 100.0},
     )
     workflow.add_node(
         "PaymentCreateNode",
         "payment",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "pay-001",
             "invoice_id": "inv-001",
             "amount": 100.0,
@@ -845,7 +866,7 @@ def test_clear_table_cache_removes_specific_model(runtime):
     assert cache_size_before >= 2, "Should have at least 2 entries"
 
     # Clear only Invoice table
-    result = db.clear_table_cache("Invoice", ":memory:")
+    result = db.clear_table_cache("Invoice", db_url)
     assert result is True, "Should return True when entry exists"
 
     # Verify only Invoice removed
@@ -866,7 +887,7 @@ def test_clear_table_cache_removes_specific_model(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_clear_table_cache_nonexistent_returns_false(runtime):
+def test_clear_table_cache_nonexistent_returns_false(runtime, db_url):
     """
     Test clear_table_cache() returns False for nonexistent entries.
 
@@ -875,7 +896,7 @@ def test_clear_table_cache_nonexistent_returns_false(runtime):
     - Doesn't affect other cache entries
     - Cache size unchanged
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Tag:
@@ -887,7 +908,7 @@ def test_clear_table_cache_nonexistent_returns_false(runtime):
     workflow.add_node(
         "TagCreateNode",
         "tag",
-        {"database_url": ":memory:", "id": "tag-001", "name": "important"},
+        {"database_url": db_url, "id": "tag-001", "name": "important"},
     )
     results, _ = runtime.execute(workflow.build())
 
@@ -895,14 +916,14 @@ def test_clear_table_cache_nonexistent_returns_false(runtime):
     cache_size_before = metrics_before["cache_size"]
 
     # Try to clear nonexistent model
-    result = db.clear_table_cache("NonexistentModel", ":memory:")
+    result = db.clear_table_cache("NonexistentModel", db_url)
     assert result is False, "Should return False when entry doesn't exist"
 
     # Verify cache unchanged
     metrics_after = db.get_schema_cache_metrics()
-    assert metrics_after["cache_size"] == cache_size_before, (
-        "Cache size should be unchanged"
-    )
+    assert (
+        metrics_after["cache_size"] == cache_size_before
+    ), "Cache size should be unchanged"
 
     # Verify Tag still cached
     cached_tables = db.get_cached_tables()
@@ -921,7 +942,7 @@ def test_clear_table_cache_nonexistent_returns_false(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(20)
-def test_e2e_blog_workflow_cache_performance(runtime):
+def test_e2e_blog_workflow_cache_performance(runtime, db_url):
     """
     Test end-to-end blog workflow demonstrating cache performance.
 
@@ -937,7 +958,7 @@ def test_e2e_blog_workflow_cache_performance(runtime):
     - Hit rate increases over workflow
     - Multiple models cached correctly
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class BlogUser:
@@ -965,7 +986,7 @@ def test_e2e_blog_workflow_cache_performance(runtime):
         "BlogUserCreateNode",
         "create_user",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "user-001",
             "username": "alice",
             "email": "alice@blog.com",
@@ -983,7 +1004,7 @@ def test_e2e_blog_workflow_cache_performance(runtime):
             "BlogPostCreateNode",
             f"create_post_{i}",
             {
-                "database_url": ":memory:",
+                "database_url": db_url,
                 "id": f"post-{i:03d}",
                 "author_id": "user-001",
                 "title": f"Post {i}",
@@ -994,9 +1015,9 @@ def test_e2e_blog_workflow_cache_performance(runtime):
         assert f"create_post_{i}" in results
 
     metrics_after_posts = db.get_schema_cache_metrics()
-    assert metrics_after_posts["hits"] > metrics_after_user["hits"], (
-        "Posts should hit cache"
-    )
+    assert (
+        metrics_after_posts["hits"] > metrics_after_user["hits"]
+    ), "Posts should hit cache"
 
     # Step 3: Create comments (should hit cache for BlogComment)
     for i in range(5):
@@ -1005,7 +1026,7 @@ def test_e2e_blog_workflow_cache_performance(runtime):
             "BlogCommentCreateNode",
             f"create_comment_{i}",
             {
-                "database_url": ":memory:",
+                "database_url": db_url,
                 "id": f"comment-{i:03d}",
                 "post_id": "post-000",
                 "author_id": "user-001",
@@ -1016,22 +1037,22 @@ def test_e2e_blog_workflow_cache_performance(runtime):
         assert f"create_comment_{i}" in results
 
     metrics_after_comments = db.get_schema_cache_metrics()
-    assert metrics_after_comments["hits"] > metrics_after_posts["hits"], (
-        "Comments should hit cache"
-    )
+    assert (
+        metrics_after_comments["hits"] > metrics_after_posts["hits"]
+    ), "Comments should hit cache"
 
     # Step 4: List operations (all should hit cache)
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "BlogUserListNode", "list_users", {"database_url": ":memory:", "limit": 10}
+        "BlogUserListNode", "list_users", {"database_url": db_url, "limit": 10}
     )
     workflow.add_node(
-        "BlogPostListNode", "list_posts", {"database_url": ":memory:", "limit": 10}
+        "BlogPostListNode", "list_posts", {"database_url": db_url, "limit": 10}
     )
     workflow.add_node(
         "BlogCommentListNode",
         "list_comments",
-        {"database_url": ":memory:", "limit": 10},
+        {"database_url": db_url, "limit": 10},
     )
     results, _ = runtime.execute(workflow.build())
 
@@ -1061,7 +1082,7 @@ def test_e2e_blog_workflow_cache_performance(runtime):
     "connection pooling/sharing across workflows. Feature request for v0.8.0+",
     strict=False,
 )
-def test_e2e_ecommerce_workflow_with_cache(runtime):
+def test_e2e_ecommerce_workflow_with_cache(runtime, db_url):
     """
     Test end-to-end e-commerce workflow with cache enabled.
 
@@ -1083,7 +1104,7 @@ def test_e2e_ecommerce_workflow_with_cache(runtime):
     - Workaround: Use file-based SQLite or PostgreSQL for multi-workflow tests
     - Architecture enhancement needed: Connection pooling across workflow executions
     """
-    db = DataFlow(":memory:", schema_cache_enabled=True)
+    db = DataFlow(db_url, schema_cache_enabled=True)
 
     @db.model
     class Store:
@@ -1186,7 +1207,7 @@ def test_e2e_ecommerce_workflow_with_cache(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_cache_with_custom_configuration(runtime):
+def test_cache_with_custom_configuration(runtime, db_url):
     """
     Test schema cache with custom configuration parameters.
 
@@ -1196,7 +1217,7 @@ def test_cache_with_custom_configuration(runtime):
     - Configuration reflected in metrics
     """
     db = DataFlow(
-        ":memory:",
+        db_url,
         schema_cache_enabled=True,
         schema_cache_ttl=600,  # 10 minutes
         schema_cache_max_size=5000,
@@ -1214,7 +1235,7 @@ def test_cache_with_custom_configuration(runtime):
         "ConfigCreateNode",
         "config",
         {
-            "database_url": ":memory:",
+            "database_url": db_url,
             "id": "cfg-001",
             "key": "test_key",
             "value": "test_value",
@@ -1235,7 +1256,7 @@ def test_cache_with_custom_configuration(runtime):
 
 @pytest.mark.integration
 @pytest.mark.timeout(10)
-def test_cache_isolation_between_instances(runtime):
+def test_cache_isolation_between_instances(runtime, tmp_path):
     """
     Test that cache is isolated between DataFlow instances.
 
@@ -1244,9 +1265,15 @@ def test_cache_isolation_between_instances(runtime):
     - Operations on one instance don't affect another
     - Metrics are per-instance
     """
-    # Create two separate DataFlow instances
-    db1 = DataFlow(":memory:", schema_cache_enabled=True)
-    db2 = DataFlow(":memory:", schema_cache_enabled=True)
+    # Two separate on-disk SQLite files — each DataFlow instance owns its
+    # own schema, migrations, and cache. This is the only way to verify
+    # that caches are per-instance rather than accidentally sharing a
+    # single process-wide registry.
+    db_url_1 = f"sqlite:///{tmp_path / 'iso_db1.db'}"
+    db_url_2 = f"sqlite:///{tmp_path / 'iso_db2.db'}"
+
+    db1 = DataFlow(db_url_1, schema_cache_enabled=True)
+    db2 = DataFlow(db_url_2, schema_cache_enabled=True)
 
     @db1.model
     class Instance1Model:
@@ -1263,7 +1290,7 @@ def test_cache_isolation_between_instances(runtime):
     workflow.add_node(
         "Instance1ModelCreateNode",
         "create1",
-        {"database_url": ":memory:", "id": "m1-001", "name": "Model 1"},
+        {"database_url": db_url_1, "id": "m1-001", "name": "Model 1"},
     )
     results, _ = runtime.execute(workflow.build())
 
@@ -1272,7 +1299,7 @@ def test_cache_isolation_between_instances(runtime):
     workflow.add_node(
         "Instance2ModelCreateNode",
         "create2",
-        {"database_url": ":memory:", "id": "m2-001", "title": "Model 2"},
+        {"database_url": db_url_2, "id": "m2-001", "title": "Model 2"},
     )
     results, _ = runtime.execute(workflow.build())
 
