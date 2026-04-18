@@ -9,13 +9,13 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Awaitable, Callable, Optional
 
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.websockets import WebSocket
-from pydantic import BaseModel, Field
 
 from ..api.workflow_api import WorkflowAPI
 from ..runtime.shutdown import ShutdownCoordinator
@@ -109,6 +109,8 @@ class WorkflowServer:
         max_workers: int = 10,
         cors_origins: list[str] | None = None,
         runtime: Any = None,
+        startup_hook: Optional[Callable[[], Awaitable[None]]] = None,
+        shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
         **kwargs,
     ):
         """Initialize the workflow server.
@@ -120,6 +122,15 @@ class WorkflowServer:
             max_workers: Maximum thread pool workers
             cors_origins: Allowed CORS origins
             runtime: Optional LocalRuntime instance for signal/query support
+            startup_hook: Optional async callback awaited inside the FastAPI
+                lifespan, after `router._startup()` fires, BEFORE the server
+                starts accepting requests. Tasks created here run inside
+                uvicorn's loop and survive for the server's lifetime.
+            shutdown_hook: Optional async callback awaited inside the FastAPI
+                lifespan AFTER the server has stopped accepting requests but
+                BEFORE `router._shutdown()` and ShutdownCoordinator run.
+                Exceptions are swallowed and logged at WARN; they never
+                prevent router/coordinator cleanup.
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
@@ -136,15 +147,63 @@ class WorkflowServer:
             "executor", lambda: self.executor.shutdown(wait=True), priority=0
         )
 
-        # Create FastAPI app with lifespan
+        # Create FastAPI app with lifespan.
+        #
+        # Historical bug #500: passing ANY custom `lifespan` to FastAPI()
+        # replaces Starlette's `_DefaultLifespan`, which was the only code
+        # that iterated `router.on_startup` / `router.on_shutdown`. A custom
+        # lifespan that does not explicitly invoke `app.router._startup()`
+        # silently drops every user-registered router-level hook.
+        #
+        # Historical bug #501: Nexus plugin startup hooks were invoked
+        # *before* uvicorn booted via `asyncio.run(hook())`, which created a
+        # throwaway event loop, ran the hook (which often scheduled
+        # long-lived background tasks via `asyncio.create_task(...)`), and
+        # then closed the loop — cancelling every task the hook had just
+        # created. Running plugin hooks inside the FastAPI lifespan places
+        # them on uvicorn's loop, where any task they schedule survives for
+        # the server's lifetime.
+        #
+        # Both halves converge on the same fix: route all startup hooks
+        # through this lifespan context. See workspaces/issues-500-501.
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            # Startup
+            # Startup — honor FastAPI's documented pattern (#500).
+            # Starlette's public Router.startup() coroutine iterates
+            # every handler registered via `router.on_startup.append(...)`
+            # — exactly the set that the default `_DefaultLifespan` used
+            # to iterate before we replaced it.
             logger.info(f"Starting {title} v{version}")
-            yield
-            # Shutdown -- delegate to coordinator for sequenced cleanup
-            logger.info("Shutting down workflow server via ShutdownCoordinator")
-            await self.shutdown_coordinator.shutdown()
+            await app.router.startup()
+            # Run injected Nexus plugin startup hooks inside uvicorn's loop
+            # so any background tasks they spawn survive (#501).
+            if startup_hook is not None:
+                await startup_hook()
+            try:
+                yield
+            finally:
+                # Shutdown — symmetric to startup, but every step is
+                # best-effort so one failing cleanup cannot block the next.
+                logger.info("Shutting down workflow server via ShutdownCoordinator")
+                if shutdown_hook is not None:
+                    try:
+                        await shutdown_hook()
+                    except Exception:
+                        # Cleanup path — log and continue so router.shutdown
+                        # and ShutdownCoordinator still run. Same carve-out
+                        # as zero-tolerance.md Rule 3.
+                        logger.warning(
+                            "Shutdown hook raised during lifespan teardown",
+                            exc_info=True,
+                        )
+                try:
+                    await app.router.shutdown()
+                except Exception:
+                    logger.warning(
+                        "router.shutdown raised during lifespan teardown",
+                        exc_info=True,
+                    )
+                await self.shutdown_coordinator.shutdown()
 
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan

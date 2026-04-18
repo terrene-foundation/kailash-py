@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from collections.abc import Generator
@@ -38,12 +39,23 @@ from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
-# Set up event loop policy for better async cleanup
-asyncio.set_event_loop_policy(
-    asyncio.WindowsSelectorEventLoopPolicy()
-    if os.name == "nt"
-    else asyncio.DefaultEventLoopPolicy()
-)
+# Set up event loop policy for better async cleanup.
+#
+# Python 3.14 deprecated `asyncio.set_event_loop_policy` and
+# `asyncio.DefaultEventLoopPolicy` (slated for removal in 3.16). On 3.14+
+# the default event-loop implementation is already the "selector" policy
+# we want, so we skip the explicit set. On older Pythons we keep the
+# explicit policy set so Windows tests select `WindowsSelectorEventLoopPolicy`.
+if sys.version_info < (3, 14):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+        if os.name == "nt"
+        else asyncio.DefaultEventLoopPolicy()
+    )
+elif os.name == "nt":
+    # Windows on 3.14+ still needs the selector policy (proactor loop lacks
+    # features pytest-asyncio relies on). Access via the public 3.14 API.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Configure pytest-asyncio to use strict mode
 pytest_plugins = ("pytest_asyncio",)
@@ -58,7 +70,7 @@ def is_sdk_dev_running():
     try:
         response = requests.get("http://localhost:8889/health", timeout=1)
         return response.status_code == 200
-    except:
+    except requests.RequestException:
         return False
 
 

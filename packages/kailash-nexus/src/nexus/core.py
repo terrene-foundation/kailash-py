@@ -417,6 +417,9 @@ class Nexus:
         self._plugins: Dict[str, Any] = {}
         self._startup_hooks: List[Callable[[], None]] = []
         self._shutdown_hooks: List[Callable[[], None]] = []
+        # Idempotency flag: the FastAPI lifespan fires shutdown hooks
+        # first; stop() must not fire them a second time (#500/#501).
+        self._shutdown_hooks_fired: bool = False
 
         # CORS configuration
         self._cors_origins = cors_origins
@@ -719,6 +722,11 @@ class Nexus:
             # Create gateway using module-level create_gateway (patchable by tests)
             # Pass self.runtime to share a single AsyncLocalRuntime (fixes #211
             # dual-runtime bug where gateway created its own pool independently).
+            #
+            # startup_hook / shutdown_hook route plugin lifecycle hooks through
+            # the FastAPI lifespan so they run inside uvicorn's event loop
+            # (fixes #501 — tasks scheduled by plugin on_startup hooks no
+            # longer die when asyncio.run()'s throwaway loop closes).
             gateway = create_gateway(
                 title="Kailash Nexus - Zero-Config Workflow Platform",
                 server_type=self._server_type,
@@ -729,6 +737,8 @@ class Nexus:
                 cors_origins=None,  # Nexus handles CORS natively
                 max_workers=max_workers,
                 runtime=getattr(self, "runtime", None),
+                startup_hook=self._call_startup_hooks_async,
+                shutdown_hook=self._call_shutdown_hooks_async,
             )
             # Store in HTTPTransport
             self._http_transport._gateway = gateway
@@ -1975,12 +1985,21 @@ Check the documentation or explore available resources.
         """Call all registered startup hooks.
 
         Errors are logged but do not prevent other hooks from running.
+
+        NOTE (#501): this synchronous entry point remains for backward
+        compatibility with callers that construct Nexus without a
+        WorkflowServer (tests, legacy scripts). In the production
+        start() path it is NO LONGER invoked — plugin startup hooks now
+        run via :meth:`_call_startup_hooks_async` inside the FastAPI
+        lifespan so tasks scheduled by the hook survive for the
+        server's lifetime. See ``_call_startup_hooks_async`` for the
+        production path.
         """
-        import asyncio
+        import inspect
 
         for hook in self._startup_hooks:
             try:
-                if asyncio.iscoroutinefunction(hook):
+                if inspect.iscoroutinefunction(hook):
                     self._run_async_hook(hook)
                 else:
                     hook()
@@ -1992,17 +2011,80 @@ Check the documentation or explore available resources.
 
         Errors are logged but do not prevent other hooks from running.
         Hooks run in reverse registration order (last installed runs first).
-        """
-        import asyncio
 
+        NOTE (#501): see ``_call_startup_hooks`` — this sync entry
+        point is retained for non-server callers. Production shutdown
+        goes through :meth:`_call_shutdown_hooks_async` inside the
+        FastAPI lifespan. If the async path already fired (flag
+        ``_shutdown_hooks_fired``), this method is a no-op so
+        ``stop()`` after uvicorn's lifespan does not double-fire hooks.
+        """
+        import inspect
+
+        if self._shutdown_hooks_fired:
+            logger.debug(
+                "Shutdown hooks already fired inside FastAPI lifespan; "
+                "stop() is a no-op for this dimension"
+            )
+            return
+        self._shutdown_hooks_fired = True
         for hook in reversed(self._shutdown_hooks):
             try:
-                if asyncio.iscoroutinefunction(hook):
+                if inspect.iscoroutinefunction(hook):
                     self._run_async_hook(hook)
                 else:
                     hook()
             except Exception as e:
                 logger.error(f"Shutdown hook failed: {e}")
+
+    async def _call_startup_hooks_async(self) -> None:
+        """Awaitable variant invoked from the FastAPI lifespan.
+
+        This runs inside uvicorn's event loop, NOT a throwaway loop
+        created by ``asyncio.run``. Any ``asyncio.create_task(...)``
+        scheduled by a hook therefore survives for the server's
+        lifetime (fixes #501).
+
+        Errors from individual hooks are logged via ``logger.exception``
+        so the full traceback is preserved (zero-tolerance Rule 3) but
+        do not prevent later hooks from running.
+        """
+        import inspect
+
+        for hook in self._startup_hooks:
+            try:
+                if inspect.iscoroutinefunction(hook):
+                    await hook()
+                else:
+                    hook()
+            except Exception:
+                logger.exception("Startup hook failed: %s", hook)
+
+    async def _call_shutdown_hooks_async(self) -> None:
+        """Awaitable shutdown counterpart, invoked from the FastAPI lifespan.
+
+        Hooks run in reverse registration order (last installed runs
+        first). Errors are logged via ``logger.exception`` but do not
+        prevent later shutdown hooks, router `_shutdown`, or the
+        ShutdownCoordinator from running.
+
+        Sets ``_shutdown_hooks_fired`` on entry so a later sync call
+        from ``stop()`` will short-circuit and not double-fire the
+        hooks.
+        """
+        import inspect
+
+        if self._shutdown_hooks_fired:
+            return
+        self._shutdown_hooks_fired = True
+        for hook in reversed(self._shutdown_hooks):
+            try:
+                if inspect.iscoroutinefunction(hook):
+                    await hook()
+                else:
+                    hook()
+            except Exception:
+                logger.exception("Shutdown hook failed: %s", hook)
 
     @property
     def plugins(self) -> Dict[str, Any]:
@@ -2788,8 +2870,15 @@ Check the documentation or explore available resources.
 
         self._running = True
 
-        # Call plugin startup hooks
-        self._call_startup_hooks()
+        # NOTE (#501): plugin startup hooks are NO LONGER invoked here.
+        # They now run inside the FastAPI lifespan (see
+        # ``_call_startup_hooks_async`` wired via ``startup_hook=`` in
+        # ``_initialize_gateway``) so any ``asyncio.create_task(...)``
+        # they schedule lives on uvicorn's event loop and survives for
+        # the server's lifetime. The pre-uvicorn invocation used
+        # ``asyncio.run`` which created and immediately tore down a
+        # throwaway loop, cancelling every task the hooks had just
+        # created.
 
         # Log successful startup
         self._log_startup_success()

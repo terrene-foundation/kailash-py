@@ -5,7 +5,7 @@ production-ready servers with enterprise features enabled by default.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
 from ..gateway.security import SecretManager
 from ..resources.registry import ResourceRegistry
@@ -33,6 +33,9 @@ def create_gateway(
     # Enterprise components
     resource_registry: Optional[ResourceRegistry] = None,
     secret_manager: Optional[SecretManager] = None,
+    # Lifespan hooks (run inside FastAPI lifespan / uvicorn loop)
+    startup_hook: Optional[Callable[[], Awaitable[None]]] = None,
+    shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
     # Backward compatibility
     **kwargs,
 ) -> WorkflowServer:
@@ -93,6 +96,8 @@ def create_gateway(
         "version": version,
         "max_workers": max_workers,
         "cors_origins": cors_origins,
+        "startup_hook": startup_hook,
+        "shutdown_hook": shutdown_hook,
         **kwargs,
     }
 

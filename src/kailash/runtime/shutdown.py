@@ -40,6 +40,7 @@ Version:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import signal
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -146,7 +147,7 @@ class ShutdownCoordinator:
         for priority, name, handler in self._handlers:
             try:
                 logger.info("Shutdown [%d] %s...", priority, name)
-                if asyncio.iscoroutinefunction(handler):
+                if inspect.iscoroutinefunction(handler):
                     await asyncio.wait_for(handler(), timeout=per_handler_timeout)
                 else:
                     # Run sync handler -- still respect timeout via executor
