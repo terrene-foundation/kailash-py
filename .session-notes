@@ -1,69 +1,127 @@
-# Session Notes — 2026-04-18 (Round 4)
+# Session Notes — 2026-04-18 (Round 4, wrap)
 
 ## Where we are
 
-Round-4 landed: 3 HIGH redteam fixes committed atomically (e203ba27,
-ed1265e8, eab947dc), defense-in-depth GH issue #499 filed consolidating
-the 9 MED findings, `kailash-dataflow 2.0.9` CHANGELOG prepped with
-accurate per-commit Security section. Version itself already at 2.0.9
-in `pyproject.toml` + `__init__.py` from prior session. Issue-498
-`/todos` gate in progress — option (A) confirmed baseline.
+Round 4 closed: 3 HIGH redteam fixes shipped as `dataflow-v2.0.9` on
+PyPI, #477 + #478 + #499 all resolved, `/todos` for #498 approved
+with option-A baseline, `/analyze` for #500 + #501 identifies a
+unified fix. Main is 5 commits ahead of the pre-round state and fully
+pushed. Next session picks up at `/implement` for #498 Session 1
+and/or `/todos` for #500+#501.
 
 ## Read first
 
-1. `workspaces/OUTSTANDING.md` — consolidated open-issue view across all
-   workspaces, by priority, with status per GH issue
-2. `workspaces/issues-492-497/04-validate/aggregate-round1.md` — redteam
-   verdict + per-finding disposition
-3. `workspaces/issues-492-497/journal/0001-0003-RISK-*.md` — 3 HIGH
-   findings' origin + fix rationale (all now landed)
-4. `workspaces/issue-498-llm-deployment/journal/0001-DISCOVERY-python-no-llm-client-today.md`
-   — critical back-compat divergence driving option (A)
-5. `workspaces/issue-498-llm-deployment/02-plans/01-shard-breakdown.md`
-   — 8-session implementation plan with S4b/S6 splits
-6. `workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md`
-   — Python-adapted ADR
+1. `workspaces/OUTSTANDING.md` — refreshed with current issue state,
+   new #500/#501 workspace row, #477/#478 now CLOSED
+2. `workspaces/issue-498-llm-deployment/todos/active/` — 11 per-session
+   todo files ready for /implement (gitignored; local only)
+3. `workspaces/issue-498-llm-deployment/02-plans/03-redteam-amendments.md`
+   — 5 MED red-team findings to fold into each session's work
+4. `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md` —
+   the unified fix design for #500+#501
+5. `workspaces/issues-500-501/journal/0001-DISCOVERY-unified-fix-site.md`
+   — why both bugs collapse to one fix and one PR
 
 ## Landed this round
+
+### Commits on main (5 ahead → pushed)
 
 - `e203ba27` fix(dataflow): stop logging raw bound params on query failure (HIGH-1)
 - `ed1265e8` fix(dataflow): delete BulkUpsertNode pool dead branch (HIGH-2)
 - `eab947dc` fix(dataflow): delete `_tenant_trust_manager` orphan facade (HIGH-3)
-- GH issue #499 filed: `defense-in-depth: consolidate 9 MED findings from redteam round-1`
-- CHANGELOG `packages/kailash-dataflow/CHANGELOG.md` entry for 2.0.9 Security section
-  rewritten with accurate per-commit descriptions (release-specialist's first draft had
-  inaccurate issue mapping + wrong fix summaries — overwritten)
+- `0ee41038` chore(workspace): redteam round-1 artifacts + 2.0.9 CHANGELOG + session notes
+- `d82db8c2` docs(workspace): #498 /todos gate — option-A decision + redteam amendments
+
+### Released
+
+- **Tag `dataflow-v2.0.9`** pushed; `publish-pypi.yml` ran green
+  (~2min); wheel on PyPI; GitHub Release auto-created.
+
+### GitHub issues
+
+- **#499** filed: `defense-in-depth: consolidate 9 MED findings`
+- **#477 closed** (commit `6fcba899` → `dataflow-v2.0.9`)
+- **#478 closed** (commit `6fcba899` → `dataflow-v2.0.9`)
+
+### Workspaces
+
+- `issues-492-497/` — CLEARED (all 5 GH issues closed + 3 HIGH shipped)
+- `issue-498-llm-deployment/` — `/todos` approved: 11 todo files
+  generated, option-A DECISION journal, 5-MED red-team amendments
+- `issues-500-501/` — NEW: `/analyze` done, unified fix identified,
+  single-session implementation expected
 
 ## Open — next session
 
-- **Release authorization for `kailash-dataflow 2.0.9`** — version/CHANGELOG ready,
-  PyPI publish + tag NOT executed. Human must authorize per
-  `rules/autonomous-execution.md` structural gate. TestPyPI validation optional per
-  `deployment.md` patch-release exception.
-- **Push commits to GitHub** — main has 3 HIGH fixes + chore; not yet pushed.
-- **Close #477 + #478 with release SHA** once 2.0.9 ships (per
-  `rules/git.md` issue closure discipline).
-- **#498 `/todos`** — result of this session's invocation pending; review the
-  plan artifacts at `workspaces/issue-498-llm-deployment/todos/active/`.
+1. **`/implement` Session 1 for #498** (S1+S2 foundation types +
+   OpenAI migration, ~700 LOC, no dependencies). Read
+   `todos/active/001-session-1-*.md`; fold MED-1 and MED-3 (6.M2)
+   additions per `02-plans/03-redteam-amendments.md`.
+2. **`/todos` for issues-500-501** — single shard, ~80-120 LOC. Skip
+   sub-sharding; the capacity budget is well under a single session.
+3. **`/implement` for issues-500-501** — expected same session as its
+   /todos given small surface. Unblocks impact-verse workaround
+   removal.
+4. **File cross-SDK issue on kailash-rs** re: issue-template
+   verification of back-compat targets in receiving SDK (mentioned in
+   `issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
+   § "For Discussion").
+5. **kailash Core SDK 2.8.7 release cut** — prerequisite for
+   downstream users to pick up `LocalRuntime.mark_externally_managed`
+   public API that `dataflow-v2.0.9` depends on. Outside my session
+   scope — human decides when to cut.
 
 ## Traps
 
-- `pytest --timeout-method=signal` hangs on asyncio selector loops — use
-  `--timeout-method=thread`.
-- Pyright warnings at `connection_adapter.py:144,249,…` are PRE-EXISTING; do not
-  "fix" as part of commits.
-- `_tenant_trust_manager` attribute now absent — `hasattr(db,
-  "_tenant_trust_manager")` is False. Wiring it back requires same-PR production
-  call site per `rules/orphan-detection.md` MUST 3; regression test at
-  `test_tenant_trust_manager_not_attached_as_facade` will fail loudly otherwise.
+- `pytest --timeout-method=signal` hangs on asyncio selector loops;
+  use `--timeout-method=thread`.
+- Pyright warnings at `connection_adapter.py:144,249,…` are
+  PRE-EXISTING; do not "fix" as part of unrelated commits.
+- `_tenant_trust_manager` attribute now ABSENT from `DataFlow`;
+  `hasattr(db, "_tenant_trust_manager")` is False. Wiring it back
+  requires same-PR production call site per `rules/orphan-detection.md`
+  MUST 3. The regression test
+  `test_tenant_trust_manager_not_attached_as_facade` fails loudly on
+  reintroduction without a call site.
 - `BulkUpsertNode` with `use_pooled_connection=True` now raises
-  `NodeValidationError` (was silent fallback). Any caller passing that kwarg
-  needs `BulkCreatePoolNode` or `connection_string=...`.
+  `NodeValidationError` (was silent fallback). Callers need
+  `BulkCreatePoolNode` or `connection_string=...`.
 - Python has NO `LlmClient` class today — #498 brief's "preserve
-  `kailash.LlmClient()`" is wrong about Python baseline. Target is the provider
-  registry at `kaizen.providers.registry` (39 consumers). See DISCOVERY journal.
-- Release-specialist incorrectly mapped HIGH fixes to #495/#492/#497 and
-  described HIGH-1 as "routing through sanitizer" (the fix was stop-logging,
-  not sanitization) and HIGH-2 as "unreachable dead code" (the branch was
-  reachable and silently fell back). CHANGELOG was rewritten; guard against
-  same drift on next release prep.
+  `kailash.LlmClient()`" doesn't apply; back-compat target is the
+  provider registry at `kaizen.providers.registry` (39 consumers).
+  Decision journal
+  `issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
+  locks in option A.
+- FastAPI's `router._startup()` / `._shutdown()` are underscore-
+  prefixed private attrs; no public API. The issue-500-501 fix
+  depends on them. A Tier 2 wiring test (`test_router_on_startup_fires.py`)
+  that boots real uvicorn catches rename-at-test time, not
+  production time. Not optional.
+- Release-specialist can produce inaccurate CHANGELOG text when it
+  maps fixes to unrelated issue numbers. Always hand-verify the
+  CHANGELOG before a release. This round caught it; if it recurs,
+  invest in a verification script.
+
+## Verified numerical claims (per rules/testing.md § "Verified Numerical Claims")
+
+- 5 commits pushed to `origin/main`:
+  `git log --oneline d5f528ce..d82db8c2 | wc -l` → 5
+- 11 todo files for #498:
+  `ls workspaces/issue-498-llm-deployment/todos/active/ | wc -l` → 11
+- 3 journal entries for issues-492-497:
+  `ls workspaces/issues-492-497/journal/00*-RISK-*.md | wc -l` → 3
+- 2 journal entries for issue-498-llm-deployment:
+  `ls workspaces/issue-498-llm-deployment/journal/00*.md | wc -l` → 2
+- 1 journal entry for issues-500-501:
+  `ls workspaces/issues-500-501/journal/00*.md | wc -l` → 1
+
+## References
+
+- `workspaces/OUTSTANDING.md` (refreshed)
+- `workspaces/issues-492-497/04-validate/aggregate-round1.md`
+- `workspaces/issue-498-llm-deployment/02-plans/01-shard-breakdown.md`
+- `workspaces/issue-498-llm-deployment/02-plans/03-redteam-amendments.md`
+- `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md`
+- GH: #477, #478, #492, #493, #495, #496, #497, #498, #499, #500, #501
+- PyPI: <https://pypi.org/project/kailash-dataflow/2.0.9/>
+- Release: <https://github.com/terrene-foundation/kailash-py/releases/tag/dataflow-v2.0.9>

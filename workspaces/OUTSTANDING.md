@@ -1,6 +1,6 @@
 # Outstanding GH Issues — kailash-py
 
-Generated: 2026-04-18 (post `/redteam` round-2, post `/analyze` for #498)
+Generated: 2026-04-18 (round 4: 3 HIGH landed, 2.0.9 shipped, `/analyze` for #498 + #500/#501)
 
 Single consolidated view of all open issues with workspace assignment,
 priority, status, and blocking dependencies. Supersedes ad-hoc lists.
@@ -30,25 +30,47 @@ and `journal/0001-0003-RISK-*.md`.
 | 496 | CLOSED | PG placeholder audit — fix shipped in 7a4fd364             |
 | 497 | CLOSED | Nexus webhook HMAC audit — architectural (commit 27c77cf4) |
 
-### 🔄 issue-498-llm-deployment — WIP (`/analyze` done)
+### 🔄 issue-498-llm-deployment — WIP (`/todos` approved, awaiting `/implement`)
 
 Cross-SDK mirror of kailash-rs#406. Four-axis LLM deployment abstraction.
 8 sessions (10 sub-shards after S4b/S6 splits per autonomous-execution
-capacity budget).
+capacity budget). `/todos` approved by human 2026-04-18 with option A
+(additive `LlmClient`, keep provider registry). 11 per-session todo
+files in `todos/active/`. 5 MED red-team findings folded into
+`02-plans/03-redteam-amendments.md`.
 
-- **#498** — OPEN, analyst surfaced: Python has NO `LlmClient` today, so
-  back-compat target = provider registry (`kaizen.providers.registry`),
-  not an `LlmClient` class. Flag at `/todos` gate.
+- **#498** — WIP, next session starts Session 1 (S1+S2 foundation +
+  OpenAI migration, ~700 LOC). STP unblocks at Session 3 (Bedrock-Claude
+  bearer-only path).
+
+### 🔄 issues-500-501 — WIP (`/analyze` done, unified fix identified)
+
+Two Nexus startup-hook bugs filed by impact-verse downstream team.
+Both converge on a single fix: move startup hooks into FastAPI
+`lifespan` (which runs inside uvicorn's loop), wire
+`app.router._startup()` / `._shutdown()` in the same lifespan. See
+`workspaces/issues-500-501/01-analysis/01-root-cause-unified.md` and
+`journal/0001-DISCOVERY-unified-fix-site.md`.
+
+- **#500** — OPEN, `router.on_startup` silently ignored (missing
+  `await app.router._startup()` in `workflow_server.py:140-147`).
+- **#501** — OPEN, plugin `on_startup` async hooks die via
+  `asyncio.run()` in `nexus/core.py:1972`. Tasks cancelled at loop
+  close.
+
+Single-session fix expected (~80-120 LOC, 4 invariants).
 
 ## By priority / category
 
 ### P0 — Bugs blocking users today
 
-| #   | Labels     | Title (short)                                        | Status          | Notes                                                                                                   |
-| --- | ---------- | ---------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
-| 480 | bug, x-sdk | DataFlowExpress malformed PG create/list/read        | **OPEN**        | Downstream workaround: `execute_raw(sql, [params])` with `$N`. Cross-SDK w/ kailash-rs#403.             |
-| 478 | bug        | model_registry emits LocalRuntime DeprecationWarning | **IMPLEMENTED** | Fixed in commit 6fcba899 (mark_externally_managed API). Close pending `kailash-dataflow 2.0.9` release. |
-| 477 | bug        | SignatureMeta broken on Python 3.14 (PEP 749)        | **IMPLEMENTED** | Fixed in commit 6fcba899 (annotations helper + regression test). Close pending release.                 |
+| #   | Labels     | Title (short)                                                 | Status     | Notes                                                                                                      |
+| --- | ---------- | ------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| 480 | bug, x-sdk | DataFlowExpress malformed PG create/list/read                 | **OPEN**   | Downstream workaround: `execute_raw(sql, [params])` with `$N`. Cross-SDK w/ kailash-rs#403.                |
+| 500 | bug        | Nexus custom lifespan ignores `router.on_startup`             | **WIP**    | Paired with #501; unified fix identified in `workspaces/issues-500-501/`. Downstream impact-verse relies.  |
+| 501 | bug        | `_call_startup_hooks` kills scheduled tasks via `asyncio.run` | **WIP**    | Paired with #500; unified fix identified. Blocks all async plugin startup that schedules background tasks. |
+| 478 | bug        | model_registry emits LocalRuntime DeprecationWarning          | **CLOSED** | Fixed in commit `6fcba899`; released in `dataflow-v2.0.9` (2026-04-18).                                    |
+| 477 | bug        | SignatureMeta broken on Python 3.14 (PEP 749)                 | **CLOSED** | Fixed in commit `6fcba899`; released in `dataflow-v2.0.9` (2026-04-18).                                    |
 
 ### P1 — Features / enhancements
 
@@ -71,14 +93,7 @@ deployment-scoped client — #462/#463 may be subsumed. Re-scope after
 
 ## Already shipped, waiting on release cut
 
-These are IMPLEMENTED in main but the issue is OPEN because
-`kailash-dataflow 2.0.9` / next-release hasn't cut yet. Close with
-release SHA per `rules/git.md` § Issue Closure Discipline.
-
-| #   | Fix commit | Release blocker             |
-| --- | ---------- | --------------------------- |
-| 477 | 6fcba899   | kailash 2.8.7 (or next cut) |
-| 478 | 6fcba899   | kailash-dataflow 2.0.9      |
+(Empty — `dataflow-v2.0.9` closed #477 and #478 on 2026-04-18.)
 
 ## Deferred / out-of-scope (loose ends from `.session-notes`)
 
@@ -90,8 +105,9 @@ release SHA per `rules/git.md` § Issue Closure Discipline.
 
 ## Red-team MEDIUM findings from 2026-04-18 round-1 (defense-in-depth)
 
-Non-exploitable gaps surfaced during `/redteam`. File as single issue
-tagged `defense-in-depth` for batch fix.
+Non-exploitable gaps surfaced during `/redteam`. Filed as **GH #499**
+(`defense-in-depth: consolidate 9 MED findings from redteam round-1`)
+on 2026-04-18.
 
 1. `engine.py:3756, 3774, 3800` PRAGMA paths read `sqlite_master` without `_validate_identifier`
 2. `kaizen/trust/migrations/eatp_human_origin.py:203, 271, 319` identifier interpolation (kailash-core sibling validates)
@@ -105,10 +121,20 @@ tagged `defense-in-depth` for batch fix.
 
 ## Next session priorities
 
-1. Sample-merge + push redteam round-1 fixes (4 files, 3 journal entries)
-2. `/todos` gate for #498 — confirm back-compat target (provider registry, not LlmClient class)
-3. File the consolidated `defense-in-depth` GH issue for items 1-9 above
-4. Cut `kailash-dataflow 2.0.9` to close #477 + #478 with release SHAs
+1. **Start `/implement` Session 1 for #498** — S1+S2 foundation types +
+   OpenAI migration (~700 LOC). Read `todos/active/001-session-1-*.md`
+   first; fold MED-1 and MED-3 (6.M2) additions per
+   `02-plans/03-redteam-amendments.md`.
+2. **`/todos` for issues-500-501 (#500+#501 unified fix)** — single
+   shard, ~80-120 LOC, both bugs close in one PR. Analysis + root-cause
+   already done; go directly to /todos.
+3. **File cross-SDK issue on kailash-rs** re: cross-SDK issue template
+   should verify back-compat targets exist in the receiving SDK before
+   using Rust-shaped language (decision journal 0002 in
+   `issue-498-llm-deployment/` mentions this).
+4. **Coordinate impact-verse workaround removal** once issues-500-501
+   fix lands — downstream ships a lifespan wrapper at commit `f1186b28`
+   that becomes redundant.
 
 ## References
 
