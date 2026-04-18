@@ -607,33 +607,26 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
     ) -> Dict[str, Any]:
         """Execute parameterized SQL query (issue #492).
 
-        ``params`` is a flat positional list bound by the driver. The pool
-        path forwards them through ``DataFlowConnectionManager.execute``;
-        the direct path forwards them through ``AsyncSQLDatabaseNode``'s
-        ``params`` argument.
+        ``params`` is a flat positional list bound by the driver and
+        forwarded through ``AsyncSQLDatabaseNode``.
+
+        Pool routing is not wired on this node: ``DataFlowConnectionManager``
+        does not implement ``operation="execute"`` (see workflow_connection_manager
+        allowlist), so a pool path would silently fall through to the direct
+        path — a zero-tolerance Rule 3 (silent fallback) + dataflow-pool Rule 3
+        (deceptive configuration) violation. When pool routing is needed, use
+        ``BulkCreatePoolNode`` or extend ``DataFlowConnectionManager``.
         """
-        # Check if we have connection pool access via mixin
-        use_pooled_connection = kwargs.get("use_pooled_connection", False)
-
-        if use_pooled_connection and self.connection_pool_id and self._pool_manager:
-            # Use connection pool via DataFlowConnectionManager
-            try:
-                return await self._pool_manager.execute(
-                    operation="execute", query=query, params=params
-                )
-            except Exception as e:
-                # Log and fallback to direct connection
-                import logging
-
-                logging.warning(
-                    f"Failed to execute via pool: {e}, falling back to direct connection"
-                )
-
-        # Fallback to direct AsyncSQLDatabaseNode
-        if not self.connection_string:
+        if kwargs.get("use_pooled_connection"):
             raise NodeValidationError(
-                "No connection_string or connection pool available"
+                "BulkUpsertNode does not support use_pooled_connection. "
+                "DataFlowConnectionManager.execute() has no 'execute' operation. "
+                "Use BulkCreatePoolNode for pool-routed inserts, or pass "
+                "connection_string for direct execution."
             )
+
+        if not self.connection_string:
+            raise NodeValidationError("BulkUpsertNode requires connection_string")
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
