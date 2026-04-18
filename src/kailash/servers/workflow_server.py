@@ -4,6 +4,7 @@ This module provides WorkflowServer - a renamed and improved version of
 WorkflowAPIGateway with clearer naming and better organization.
 """
 
+import asyncio
 import logging
 import time
 from collections import defaultdict, deque
@@ -111,6 +112,7 @@ class WorkflowServer:
         runtime: Any = None,
         startup_hook: Optional[Callable[[], Awaitable[None]]] = None,
         shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
+        startup_hook_timeout: Optional[float] = None,
         **kwargs,
     ):
         """Initialize the workflow server.
@@ -131,6 +133,14 @@ class WorkflowServer:
                 BEFORE `router._shutdown()` and ShutdownCoordinator run.
                 Exceptions are swallowed and logged at WARN; they never
                 prevent router/coordinator cleanup.
+            startup_hook_timeout: Optional seconds to wait for ``startup_hook``
+                before timing out and raising. ``None`` (the default) means
+                wait indefinitely — matches historical behavior. Set this to
+                a finite value (e.g. 30.0) when a slow or hung plugin
+                ``on_startup`` must not pin the FastAPI lifespan forever and
+                prevent uvicorn from accepting connections. On timeout, the
+                lifespan's shutdown branch still runs so partial startup
+                state is torn down.
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
@@ -173,18 +183,49 @@ class WorkflowServer:
             # every handler registered via `router.on_startup.append(...)`
             # — exactly the set that the default `_DefaultLifespan` used
             # to iterate before we replaced it.
-            logger.info(f"Starting {title} v{version}")
-            await app.router.startup()
-            # Run injected Nexus plugin startup hooks inside uvicorn's loop
-            # so any background tasks they spawn survive (#501).
-            if startup_hook is not None:
-                await startup_hook()
+            #
+            # Security (sec H1 / round-1 red-team): the `try:` MUST wrap
+            # `router.startup()` and `startup_hook()` too. If either raises
+            # before the `yield`, the `finally:` block still runs, so every
+            # resource registered with ShutdownCoordinator (ThreadPoolExecutor
+            # + any plugin-registered cleanups) is torn down. A `try:` that
+            # only wrapped `yield` leaked the coordinator on partial-startup
+            # crashes and any Nexus plugin whose on_startup ran earlier in
+            # the hook chain saw its paired on_shutdown silently skipped.
+            logger.info(
+                "workflow_server.lifespan.startup",
+                extra={"title": title, "version": version},
+            )
             try:
+                await app.router.startup()
+                # Run injected Nexus plugin startup hooks inside uvicorn's
+                # loop so any background tasks they spawn survive (#501).
+                if startup_hook is not None:
+                    if startup_hook_timeout is not None:
+                        # sec M2: bound the wait so a hung plugin cannot pin
+                        # uvicorn's lifespan forever. On timeout the except
+                        # branch re-raises after the finally: has run the
+                        # full teardown path.
+                        try:
+                            await asyncio.wait_for(
+                                startup_hook(), timeout=startup_hook_timeout
+                            )
+                        except asyncio.TimeoutError:
+                            logger.error(
+                                "workflow_server.startup_hook.timeout",
+                                extra={
+                                    "timeout_seconds": startup_hook_timeout,
+                                },
+                            )
+                            raise
+                    else:
+                        await startup_hook()
                 yield
             finally:
                 # Shutdown — symmetric to startup, but every step is
                 # best-effort so one failing cleanup cannot block the next.
-                logger.info("Shutting down workflow server via ShutdownCoordinator")
+                # This path runs on BOTH normal shutdown AND aborted startup.
+                logger.info("workflow_server.lifespan.shutdown")
                 if shutdown_hook is not None:
                     try:
                         await shutdown_hook()
@@ -193,17 +234,24 @@ class WorkflowServer:
                         # and ShutdownCoordinator still run. Same carve-out
                         # as zero-tolerance.md Rule 3.
                         logger.warning(
-                            "Shutdown hook raised during lifespan teardown",
+                            "workflow_server.lifespan.shutdown_hook_failed",
                             exc_info=True,
                         )
                 try:
                     await app.router.shutdown()
                 except Exception:
                     logger.warning(
-                        "router.shutdown raised during lifespan teardown",
+                        "workflow_server.lifespan.router_shutdown_failed",
                         exc_info=True,
                     )
-                await self.shutdown_coordinator.shutdown()
+                try:
+                    await self.shutdown_coordinator.shutdown()
+                except Exception:
+                    logger.warning(
+                        "workflow_server.lifespan.coordinator_shutdown_failed",
+                        exc_info=True,
+                    )
+                logger.info("workflow_server.lifespan.shutdown_complete")
 
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan
