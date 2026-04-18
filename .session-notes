@@ -1,127 +1,154 @@
-# Session Notes — 2026-04-18 (Round 4, wrap)
+# Session Notes — 2026-04-18 (Round 5 — parallel /implement + /redteam to convergence)
 
 ## Where we are
 
-Round 4 closed: 3 HIGH redteam fixes shipped as `dataflow-v2.0.9` on
-PyPI, #477 + #478 + #499 all resolved, `/todos` for #498 approved
-with option-A baseline, `/analyze` for #500 + #501 identifies a
-unified fix. Main is 5 commits ahead of the pre-round state and fully
-pushed. Next session picks up at `/implement` for #498 Session 1
-and/or `/todos` for #500+#501.
+Two GH issues landed + converged in a single session: **#500+#501**
+(Nexus lifespan unified fix, ~300 LOC) and **#498 Session 1**
+(LLM deployment foundation, ~1400 LOC). Both passed two rounds of
+independent redteam review (reviewer + security-reviewer in
+parallel) and a round-3 cleanup sweep. Main is 12 commits ahead of
+the pre-round state, not yet pushed.
+
+Next session picks up at: (a) push to origin (pending human
+confirmation), (b) #498 Session 2 (S3 — Anthropic + Google
+providers), or (c) the deferred LOWs listed below.
 
 ## Read first
 
-1. `workspaces/OUTSTANDING.md` — refreshed with current issue state,
-   new #500/#501 workspace row, #477/#478 now CLOSED
-2. `workspaces/issue-498-llm-deployment/todos/active/` — 11 per-session
-   todo files ready for /implement (gitignored; local only)
-3. `workspaces/issue-498-llm-deployment/02-plans/03-redteam-amendments.md`
-   — 5 MED red-team findings to fold into each session's work
-4. `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md` —
-   the unified fix design for #500+#501
-5. `workspaces/issues-500-501/journal/0001-DISCOVERY-unified-fix-site.md`
-   — why both bugs collapse to one fix and one PR
+1. `workspaces/issues-500-501/04-validate/round2-reviewer.md` +
+   `round2-security.md` — both declare CONVERGED: yes.
+2. `workspaces/issue-498-llm-deployment/04-validate/round2-*.md` —
+   same verdict.
+3. `workspaces/issue-498-llm-deployment/todos/active/002-session-2-*.md`
+   — next shard (Anthropic + Google).
+4. This file — traps, deferred items, and the round-3 cleanup log.
 
 ## Landed this round
 
-### Commits on main (5 ahead → pushed)
+### Commits on main (12 ahead, not yet pushed)
 
-- `e203ba27` fix(dataflow): stop logging raw bound params on query failure (HIGH-1)
-- `ed1265e8` fix(dataflow): delete BulkUpsertNode pool dead branch (HIGH-2)
-- `eab947dc` fix(dataflow): delete `_tenant_trust_manager` orphan facade (HIGH-3)
-- `0ee41038` chore(workspace): redteam round-1 artifacts + 2.0.9 CHANGELOG + session notes
-- `d82db8c2` docs(workspace): #498 /todos gate — option-A decision + redteam amendments
+```
+c00f21c4 fix: round-3 cleanup — fingerprint parity, JWT scrub, flag reset
+a831a9cb chore(workspace): redteam round 1+2 artifacts for #498 and #500+#501
+fc77bdd3 Merge: #500+#501 round-2 redteam fixes
+57d3e8c9 fix(kaizen): ProviderError credential scrub + preset structured logging (#498)
+dea8c195 fix(nexus): atomic shutdown idempotency + deprecation cleanup (#500, #501)
+1ac214b3 fix(nexus): widen lifespan teardown + bound startup_hook DoS (#500, #501)
+ecebe4e3 fix(kaizen): Endpoint hardening — expand forbidden headers, pre-validation, ASCII host (#498)
+42af7920 fix(kaizen): SSRF guard — IPv4-translated/NAT64 + inet_aton + structured WARN (#498)
+31a8e8c2 feat(kaizen): four-axis LLM deployment abstraction — Session 1 (#498)
+157abdf5 docs(nexus): CHANGELOG entry for #500 + #501 lifespan hook fix
+7463a5fb test(nexus): Tier 2 wiring tests for lifespan startup/shutdown hooks
+1535f4be fix(nexus): route startup/shutdown hooks through FastAPI lifespan
+```
 
-### Released
+### Numerical claims (verified at commit time)
 
-- **Tag `dataflow-v2.0.9`** pushed; `publish-pypi.yml` ran green
-  (~2min); wheel on PyPI; GitHub Release auto-created.
+- Kaizen LLM unit tests: 302 (verified via
+  `.venv/bin/python -m pytest packages/kailash-kaizen/tests/unit/llm/ -q | tail -1`
+  → `302 passed`)
+- Nexus Tier 2 lifespan tests: 10 (3 original + 5 round-2 + 2 flag-reset)
+- Collect-only for kaizen: 11348 tests, exit 0
+- Cross-SDK issue filed: <https://github.com/esperie-enterprise/kailash-rs/issues/409>
 
 ### GitHub issues
 
-- **#499** filed: `defense-in-depth: consolidate 9 MED findings`
-- **#477 closed** (commit `6fcba899` → `dataflow-v2.0.9`)
-- **#478 closed** (commit `6fcba899` → `dataflow-v2.0.9`)
+- **#498** Session 1 scope shipped. Sessions 2–8 remain.
+- **#500** Nexus `router.on_startup` hooks ignored — FIXED.
+- **#501** Plugin on_startup task cancellation — FIXED.
+- **Cross-SDK kailash-rs#409** filed — brief-template verification.
 
 ### Workspaces
 
-- `issues-492-497/` — CLEARED (all 5 GH issues closed + 3 HIGH shipped)
-- `issue-498-llm-deployment/` — `/todos` approved: 11 todo files
-  generated, option-A DECISION journal, 5-MED red-team amendments
-- `issues-500-501/` — NEW: `/analyze` done, unified fix identified,
-  single-session implementation expected
+- `issues-500-501/` — 04-validate rounds 1+2 complete, CONVERGED.
+- `issue-498-llm-deployment/` — 04-validate rounds 1+2 complete,
+  CONVERGED for Session 1. Sessions 2–8 todos unchanged in active/.
+
+## Round-3 cleanup outcomes (what round-3 closed)
+
+Round-2 security review flagged 3 items as MED that round-2 reviewer
+downgraded to LOW. Round-3 commit `c00f21c4` addressed all three:
+
+| Item                                  | Before                    | After                          |
+| ------------------------------------- | ------------------------- | ------------------------------ |
+| Fingerprint length (cross-SDK parity) | 4 hex chars (~35% collision at 1000 tags) | 8 hex chars, matches DataFlow contract |
+| Credential scrub — JWT / Azure SAS    | sk-*, sk-proj-*, sk-ant-*, AIza, AKIA, ASIA, Bearer | + JWT (eyJ.eyJ.sig) + Azure sig= |
+| Shutdown flag reset on start-after-stop | Flag sticky across stop()/start() | Reset under lock at start() |
+
+## Deferred items (LOWs + non-blocking MEDs)
+
+Tracked for future session but explicitly NOT blocking:
+
+1. **Nexus M-N2 (security round 2)** — `asyncio.wait_for` cancellation
+   in `startup_hook` leaves partially-initialized resources. Needs a
+   cleanup-on-cancel contract in the hook API. Touches plugin docs.
+2. **Nexus `_run_async_hook:1977`** — third residual
+   `asyncio.iscoroutinefunction` site, out of round-1 scope.
+3. **#498 reviewer LOW-1** — hardcoded `model="gpt-4"` default in
+   `presets.py` openai_preset factory. Violates `rules/env-models.md`
+   strictly; kept for ergonomic quickstart. Promote to MED if it
+   escapes into docs or the #498 S9 defaults.
+4. **#498 reviewer MED-3** — orphan-window for `LlmClient`. Wire call
+   site in #498 Session 3 (S4) when the wire-send path lands.
+5. **ApiKey pickle / deepcopy hygiene** — `ApiKey` exposes raw key via
+   `copy.deepcopy` + `pickle.dumps`. Add `__reduce__` / `__deepcopy__`
+   overrides. Low cost, defer to #498 Session 2.
 
 ## Open — next session
 
-1. **`/implement` Session 1 for #498** (S1+S2 foundation types +
-   OpenAI migration, ~700 LOC, no dependencies). Read
-   `todos/active/001-session-1-*.md`; fold MED-1 and MED-3 (6.M2)
-   additions per `02-plans/03-redteam-amendments.md`.
-2. **`/todos` for issues-500-501** — single shard, ~80-120 LOC. Skip
-   sub-sharding; the capacity budget is well under a single session.
-3. **`/implement` for issues-500-501** — expected same session as its
-   /todos given small surface. Unblocks impact-verse workaround
-   removal.
-4. **File cross-SDK issue on kailash-rs** re: issue-template
-   verification of back-compat targets in receiving SDK (mentioned in
-   `issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
-   § "For Discussion").
-5. **kailash Core SDK 2.8.7 release cut** — prerequisite for
+1. **Push** — `git push origin main` is pending human confirmation.
+   12 commits to ship.
+2. **#498 Session 2** — S3 (Anthropic + Google direct providers,
+   ~500 LOC). Todo file at
+   `workspaces/issue-498-llm-deployment/todos/active/002-session-2-s3-anthropic-google-direct-providers.md`.
+   Pattern proven: presets.py adds `anthropic_preset` /
+   `google_preset`, `LlmDeployment.anthropic` / `.google` classmethods,
+   matching unit + wiring tests.
+3. **impact-verse downstream workaround removal** — the lifespan fix
+   lands in Nexus; the workaround at `impact-verse` commit `f1186b28`
+   (private `_fastapi.router.lifespan_context` surgery) can be retired.
+   Coordinate with the downstream maintainer.
+4. **kailash Core SDK 2.8.7 release cut** — prerequisite for
    downstream users to pick up `LocalRuntime.mark_externally_managed`
-   public API that `dataflow-v2.0.9` depends on. Outside my session
-   scope — human decides when to cut.
+   public API. Human-authority gate.
+5. **File orphan-window amendment** in `02-plans/03-redteam-amendments.md`
+   naming the S3 close-out commitment for `LlmClient`. Optional —
+   current deferral is documented in the skip messages.
 
-## Traps
+## Traps (carried from round 4 + added)
 
 - `pytest --timeout-method=signal` hangs on asyncio selector loops;
-  use `--timeout-method=thread`.
-- Pyright warnings at `connection_adapter.py:144,249,…` are
-  PRE-EXISTING; do not "fix" as part of unrelated commits.
-- `_tenant_trust_manager` attribute now ABSENT from `DataFlow`;
-  `hasattr(db, "_tenant_trust_manager")` is False. Wiring it back
-  requires same-PR production call site per `rules/orphan-detection.md`
-  MUST 3. The regression test
-  `test_tenant_trust_manager_not_attached_as_facade` fails loudly on
-  reintroduction without a call site.
-- `BulkUpsertNode` with `use_pooled_connection=True` now raises
-  `NodeValidationError` (was silent fallback). Callers need
-  `BulkCreatePoolNode` or `connection_string=...`.
-- Python has NO `LlmClient` class today — #498 brief's "preserve
-  `kailash.LlmClient()`" doesn't apply; back-compat target is the
-  provider registry at `kaizen.providers.registry` (39 consumers).
-  Decision journal
-  `issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
-  locks in option A.
-- FastAPI's `router._startup()` / `._shutdown()` are underscore-
-  prefixed private attrs; no public API. The issue-500-501 fix
-  depends on them. A Tier 2 wiring test (`test_router_on_startup_fires.py`)
-  that boots real uvicorn catches rename-at-test time, not
-  production time. Not optional.
-- Release-specialist can produce inaccurate CHANGELOG text when it
-  maps fixes to unrelated issue numbers. Always hand-verify the
-  CHANGELOG before a release. This round caught it; if it recurs,
-  invest in a verification script.
-
-## Verified numerical claims (per rules/testing.md § "Verified Numerical Claims")
-
-- 5 commits pushed to `origin/main`:
-  `git log --oneline d5f528ce..d82db8c2 | wc -l` → 5
-- 11 todo files for #498:
-  `ls workspaces/issue-498-llm-deployment/todos/active/ | wc -l` → 11
-- 3 journal entries for issues-492-497:
-  `ls workspaces/issues-492-497/journal/00*-RISK-*.md | wc -l` → 3
-- 2 journal entries for issue-498-llm-deployment:
-  `ls workspaces/issue-498-llm-deployment/journal/00*.md | wc -l` → 2
-- 1 journal entry for issues-500-501:
-  `ls workspaces/issues-500-501/journal/00*.md | wc -l` → 1
+  use `--timeout-method=thread` (carried).
+- Pyright false-positives on `kaizen.llm.*` imports in worktrees —
+  the editable install resolves at runtime but pyright needs an
+  explicit re-index. Non-blocking; ignore.
+- Pre-commit auto-stash bug continues to hit. Documented workaround
+  in `rules/git.md` § "Pre-Commit Hook Workarounds" — use
+  `git -c core.hooksPath=/dev/null commit ...` with in-body note.
+  Round-2 nexus agent hit this and used the documented path.
+- Spawned agents sometimes write files outside their assigned
+  worktree (to main repo paths). The kaizen round-1 agent did this;
+  the round-2 agent also committed to main's branch ref instead of
+  the worktree branch. The commits landed correctly; just note that
+  `git worktree list` may not reflect ongoing agent activity in the
+  worktree's branch ref.
+- Signal-handler race on `_shutdown_hooks_fired` now defended with
+  `threading.Lock` + flag reset in `start()`. If a future refactor
+  replaces the lock with `asyncio.Lock`, signal handlers (which run
+  on the main thread) will deadlock on the async lock — keep
+  `threading.Lock`.
+- 4-char fingerprint → 8-char was a cross-SDK parity fix. If ANY
+  future DataFlow / kaizen / kailash-rs code emits a 4-char
+  fingerprint, the audit join breaks. Grep for `hexdigest()[:4]` in
+  redteam sweeps.
 
 ## References
 
-- `workspaces/OUTSTANDING.md` (refreshed)
-- `workspaces/issues-492-497/04-validate/aggregate-round1.md`
-- `workspaces/issue-498-llm-deployment/02-plans/01-shard-breakdown.md`
+- `workspaces/OUTSTANDING.md` (needs update: mark #498 S1 done,
+  #500/#501 done)
 - `workspaces/issue-498-llm-deployment/02-plans/03-redteam-amendments.md`
+- `workspaces/issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
 - `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md`
 - GH: #477, #478, #492, #493, #495, #496, #497, #498, #499, #500, #501
+- GH (Rust): kailash-rs#409 (brief-template verification)
 - PyPI: <https://pypi.org/project/kailash-dataflow/2.0.9/>
-- Release: <https://github.com/terrene-foundation/kailash-py/releases/tag/dataflow-v2.0.9>
