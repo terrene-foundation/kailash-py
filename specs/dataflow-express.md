@@ -390,6 +390,10 @@ Bulk upsert using database-native `INSERT ... ON CONFLICT`. Validates `conflict_
 
 **Returns:** `{"records": [...], "created": int, "updated": int, "total": int}`
 
+**SQL safety (issue #492):** All VALUES are bound through driver parameters, never string-escaped. The internal helper `BulkUpsertNode._build_upsert_query(...)` returns `(sql, params)` where the SQL contains dialect-appropriate placeholders (`$N` for PostgreSQL, `?` for SQLite, `%s` for MySQL) and `params` is a flat list bound by the driver. Hand-rolled `value.replace("'", "''")` is BLOCKED — see `rules/security.md` § Parameterized Queries.
+
+**Failure semantics:** A batch that raises during execution propagates as `NodeExecutionError` with the underlying driver error in the message AND a structured WARN log line `bulk_upsert.batch_error: <error>` per `rules/observability.md` Rule 7 (no silent partial failure).
+
 ### 3.11 Filter Syntax
 
 Express operations accept MongoDB-style filter dictionaries:

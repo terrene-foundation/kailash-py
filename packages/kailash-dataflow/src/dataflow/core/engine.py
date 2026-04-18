@@ -29,7 +29,24 @@ from typing import (
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
 
+from kailash.db.dialect import _validate_identifier
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+
+# Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
+# (rules/dataflow-identifier-safety.md). The MODIFY_COLUMN path takes a
+# `new_type` from migration metadata which may be caller-influenced; we accept
+# only simple SQL type tokens with optional parenthesized precision/scale, e.g.
+# ``VARCHAR(255)``, ``NUMERIC(10,2)``, ``JSONB``, ``INTEGER``. Anything else
+# (semicolons, statement chaining, comments) is rejected at the build site.
+_SQL_TYPE_PATTERN = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_]*(\s*\(\s*\d+(\s*,\s*\d+)?\s*\))?$"
+)
+
+
+def _is_safe_sql_type(value: str) -> bool:
+    return isinstance(value, str) and bool(_SQL_TYPE_PATTERN.match(value.strip()))
+
+
 from kailash.utils.url_credentials import (  # Round 2 RT fix: credential-safe URL logging
     mask_url,
 )
@@ -6213,10 +6230,18 @@ class DataFlow(DataFlowEventMixin):
         operation_type = operation.operation_type
         details = operation.details
 
+        # rules/dataflow-identifier-safety.md MUST 1: every dynamic identifier
+        # used in DDL MUST be validated through the canonical helper before
+        # interpolation. table_name comes from the migration framework but
+        # MigrationOperation.details may carry caller-influenced column names
+        # and types — refuse anything that fails the allowlist.
+        _validate_identifier(table_name)
+
         if operation_type == "ADD_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
+            _validate_identifier(column_name)
 
             # Get the field info for this column from the model
             model_name = None
@@ -6245,12 +6270,14 @@ class DataFlow(DataFlowEventMixin):
             column_name = details.get("column_name")
             if not column_name:
                 return ""
+            _validate_identifier(column_name)
             return f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
 
         elif operation_type == "MODIFY_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
+            _validate_identifier(column_name)
 
             # Get new type from changes or details
             changes = details.get("changes", {})
@@ -6258,6 +6285,15 @@ class DataFlow(DataFlowEventMixin):
 
             if not new_type:
                 return ""
+            # new_type is a SQL type (e.g. "VARCHAR(255)", "INTEGER", "JSONB").
+            # Validate against the type allowlist; baseline validator only
+            # accepts simple identifiers, so allow SQL-type-shape strings via
+            # an explicit, conservative whitelist.
+            if not _is_safe_sql_type(new_type):
+                raise ValueError(
+                    f"Invalid SQL type '{new_type}' in MODIFY_COLUMN — "
+                    f"allowed: {_SQL_TYPE_PATTERN.pattern!r}"
+                )
 
             if database_type.lower() == "postgresql":
                 return f"ALTER TABLE {table_name} ALTER COLUMN {column_name} TYPE {new_type};"

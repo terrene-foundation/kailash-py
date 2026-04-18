@@ -125,7 +125,7 @@ class TestBulkUpsertConflictOnParameter:
         columns = ["id", "email", "name"]
         column_names = "id, email, name"
 
-        query = node._build_upsert_query(
+        query, params = node._build_upsert_query(
             batch, columns, column_names, False, "update", ["email"]
         )
 
@@ -134,6 +134,10 @@ class TestBulkUpsertConflictOnParameter:
         assert "DO UPDATE SET" in query
         # Verify email is excluded from update (it's the conflict field)
         assert "email = EXCLUDED.email" not in query
+        # Issue #492: VALUES MUST be parameterized, never inlined
+        assert "alice@example.com" not in query
+        assert params == ["1", "alice@example.com", "Alice"]
+        assert "$1" in query and "$2" in query and "$3" in query
 
     def test_build_query_with_composite_conflict_fields(self):
         """Test query building with composite conflict fields."""
@@ -149,7 +153,7 @@ class TestBulkUpsertConflictOnParameter:
         columns = ["id", "order_id", "product_id", "quantity"]
         column_names = "id, order_id, product_id, quantity"
 
-        query = node._build_upsert_query(
+        query, params = node._build_upsert_query(
             batch, columns, column_names, False, "update", ["order_id", "product_id"]
         )
 
@@ -161,6 +165,9 @@ class TestBulkUpsertConflictOnParameter:
         assert "product_id = EXCLUDED.product_id" not in query
         # Verify non-conflict fields are updated
         assert "quantity = EXCLUDED.quantity" in query
+        # Issue #492: VALUES MUST be parameterized
+        assert params == ["1", "ord-1", "prod-A", 5]
+        assert "$1" in query and "$4" in query
 
     def test_build_query_ignores_immutable_fields(self):
         """Test that id and created_at are never updated, regardless of conflict_on."""
@@ -183,7 +190,7 @@ class TestBulkUpsertConflictOnParameter:
         columns = ["id", "email", "name", "created_at", "updated_at"]
         column_names = "id, email, name, created_at, updated_at"
 
-        query = node._build_upsert_query(
+        query, _params = node._build_upsert_query(
             batch, columns, column_names, False, "update", ["email"]
         )
 
@@ -206,7 +213,7 @@ class TestBulkUpsertConflictOnParameter:
         column_names = "id, email"
 
         # Empty conflict_on should build valid query (though semantically odd)
-        query = node._build_upsert_query(
+        query, _params = node._build_upsert_query(
             batch, columns, column_names, False, "update", []
         )
 
@@ -270,7 +277,7 @@ class TestBulkUpsertBackwardCompatibility:
         column_names = "id, email, name"
 
         # When conflict_on=None, should use config conflict_columns
-        query = node._build_upsert_query(
+        query, _params = node._build_upsert_query(
             batch,
             columns,
             column_names,
@@ -295,7 +302,7 @@ class TestBulkUpsertBackwardCompatibility:
         column_names = "id, username, email"
 
         # Runtime override with username instead of email
-        query = node._build_upsert_query(
+        query, _params = node._build_upsert_query(
             batch,
             columns,
             column_names,

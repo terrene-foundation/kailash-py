@@ -6,9 +6,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+from kailash.db.dialect import _validate_identifier
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+
+# Allowlist of supported dialects. Unknown values (typos like "postgres",
+# "pg") MUST raise loudly rather than fall through to SQLite REPLACE
+# semantics, which masks misconfiguration as a non-fatal SQL syntax error
+# at execution time. See `rules/dataflow-identifier-safety.md`.
+_SUPPORTED_DIALECTS = frozenset({"postgresql", "mysql", "sqlite"})
 
 from .workflow_connection_manager import SmartNodeConnectionMixin
 
@@ -318,12 +325,15 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             total_inserted = 0
             total_updated = 0
             all_upserted_records = []
+            batch_errors: List[str] = []
+            batches_attempted = 0
 
             for i in range(0, len(deduplicated_data), self.batch_size):
                 batch = deduplicated_data[i : i + self.batch_size]
+                batches_attempted += 1
 
-                # Build UPSERT query
-                query = self._build_upsert_query(
+                # Build UPSERT query (parameterized — see issue #492)
+                query, params = self._build_upsert_query(
                     batch,
                     columns,
                     column_names,
@@ -334,7 +344,7 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
                 # Execute batch using connection pool if available, otherwise fallback
                 try:
-                    result = await self._execute_query(query, **kwargs)
+                    result = await self._execute_query(query, params=params, **kwargs)
 
                     # Process result to count upserts and get records
                     batch_rows, batch_inserted, batch_updated, batch_records = (
@@ -348,12 +358,28 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                         all_upserted_records.extend(batch_records)
 
                 except Exception as batch_error:
-                    # For batch errors, log but continue (could implement fallback logic here)
+                    # rules/observability.md Rule 7 — bulk partial-failure WARN
+                    # MUST include the error message so operators can triage.
+                    err_str = str(batch_error)
                     logger.warning(
-                        "bulk_upsert.batch_error", extra={"error": str(batch_error)}
+                        "bulk_upsert.batch_error: %s",
+                        err_str,
+                        extra={"error": err_str, "batch_size": len(batch)},
                     )
-                    # For now, skip failed batches but could implement retry or individual processing
-                    continue
+                    batch_errors.append(err_str)
+                    # Continue processing later batches: callers receive partial
+                    # success in (rows_affected, inserted, updated) and the
+                    # accumulated `batch_errors` list. If EVERY batch failed we
+                    # raise so the caller doesn't mistake the run for a no-op
+                    # success.
+
+            if batch_errors and batches_attempted == len(batch_errors):
+                # Fail loud when nothing succeeded — no rows landed AND every
+                # batch errored. Single-batch payloads converge here too.
+                raise NodeExecutionError(
+                    f"bulk_upsert: all {batches_attempted} batch(es) failed; "
+                    f"first_error={batch_errors[0]}"
+                )
 
             return (
                 total_rows_affected,
@@ -381,9 +407,12 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
             # Add timestamps if enabled
             if self.auto_timestamps:
-                from datetime import datetime
+                from datetime import datetime, timezone
 
-                now = datetime.utcnow()
+                # Naive UTC: asyncpg binds naive datetimes to TIMESTAMP (without tz);
+                # `datetime.utcnow()` is deprecated, so derive the same value via
+                # `now(timezone.utc).replace(tzinfo=None)`.
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 if "created_at" not in new_row:
                     new_row["created_at"] = now
                 if "updated_at" not in new_row:
@@ -428,38 +457,65 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         return_records: bool,
         merge_strategy: str,
         conflict_on: List[str],
-    ) -> str:
-        """Build UPSERT query with proper conflict resolution."""
-        # Build value rows with proper escaping
-        value_rows = []
+    ) -> tuple[str, List[Any]]:
+        """Build UPSERT query with parameterized VALUES (issue #492).
+
+        Returns ``(sql, params)`` where ``sql`` contains dialect-appropriate
+        placeholders ($N for PostgreSQL, ? for SQLite, %s for MySQL) and
+        ``params`` is a flat list in row-major order matching ``columns``.
+
+        VALUES MUST be bound through driver parameters — never string-escaped.
+        Every dynamic identifier (table_name, columns, conflict_on,
+        version_field) MUST be validated through ``_validate_identifier``
+        per ``rules/dataflow-identifier-safety.md`` MUST 1, then
+        interpolated into the SQL string. Drivers cannot bind identifiers,
+        so the validator's strict allowlist regex is the single defense.
+        See ``rules/security.md`` § Parameterized Queries.
+        """
+        dialect = (self.database_type or "postgresql").lower()
+        if dialect not in _SUPPORTED_DIALECTS:
+            raise NodeValidationError(
+                f"Unsupported database_type {self.database_type!r}; expected one of "
+                f"{sorted(_SUPPORTED_DIALECTS)}"
+            )
+
+        # Identifier safety: validate BEFORE any interpolation.
+        _validate_identifier(self.table_name)
+        for col in columns:
+            _validate_identifier(col)
+        for col in conflict_on:
+            _validate_identifier(col)
+        if self.version_control and self.version_field:
+            _validate_identifier(self.version_field)
+
+        params: List[Any] = []
+        value_rows: List[str] = []
+
         for row in batch:
-            row_values = []
+            placeholders: List[str] = []
             for col in columns:
                 value = row.get(col)
-                if value is None:
-                    row_values.append("NULL")
-                elif isinstance(value, str):
-                    escaped_value = value.replace("'", "''")
-                    row_values.append(f"'{escaped_value}'")
-                elif isinstance(value, bool):
-                    row_values.append("true" if value else "false")
-                elif hasattr(value, "isoformat"):  # datetime objects
-                    row_values.append(f"'{value.isoformat()}'")
-                else:
-                    row_values.append(str(value))
-            value_rows.append(f"({', '.join(row_values)})")
+                if dialect == "postgresql":
+                    placeholders.append(f"${len(params) + 1}")
+                elif dialect == "mysql":
+                    placeholders.append("%s")
+                else:  # sqlite
+                    placeholders.append("?")
+                # Drivers serialize None → NULL, datetime → timestamp, bool → boolean.
+                params.append(value)
+            value_rows.append(f"({', '.join(placeholders)})")
 
-        # Build base query
-        base_query = f"INSERT INTO {self.table_name} ({column_names}) VALUES {', '.join(value_rows)}"
+        base_query = (
+            f"INSERT INTO {self.table_name} ({column_names}) "
+            f"VALUES {', '.join(value_rows)}"
+        )
 
-        # Add conflict resolution
-        if self.database_type == "postgresql":
+        if dialect == "postgresql":
             conflict_columns_str = ", ".join(conflict_on)
 
             if merge_strategy == "ignore":
                 query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
             else:  # update strategy
-                # Build update clauses, excluding conflict columns and immutable fields
                 update_clauses = []
                 for col in columns:
                     if col not in conflict_on and col not in [
@@ -467,33 +523,32 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                         "created_at",
                     ]:
                         if col == self.version_field and self.version_control:
-                            # Increment version on update
                             update_clauses.append(
                                 f"{col} = {self.table_name}.{col} + 1"
                             )
                         elif col == "updated_at" and self.auto_timestamps:
-                            # Update timestamp on update
                             update_clauses.append(f"{col} = CURRENT_TIMESTAMP")
                         else:
                             update_clauses.append(f"{col} = EXCLUDED.{col}")
 
                 if update_clauses:
                     update_clause = ", ".join(update_clauses)
-                    query = f"{base_query} ON CONFLICT ({conflict_columns_str}) DO UPDATE SET {update_clause}"
+                    query = (
+                        f"{base_query} ON CONFLICT ({conflict_columns_str}) "
+                        f"DO UPDATE SET {update_clause}"
+                    )
                 else:
-                    # If no update clauses, fallback to DO NOTHING
                     query = (
                         f"{base_query} ON CONFLICT ({conflict_columns_str}) DO NOTHING"
                     )
         else:
-            # For other databases, use REPLACE or INSERT OR REPLACE
+            # SQLite/MySQL fallback uses INSERT OR REPLACE semantics.
             query = base_query.replace("INSERT INTO", "INSERT OR REPLACE INTO")
 
-        # Add RETURNING clause for PostgreSQL if needed
-        if self.database_type == "postgresql" and return_records:
+        if dialect == "postgresql" and return_records:
             query += " RETURNING *"
 
-        return query
+        return query, params
 
     def _process_upsert_result(
         self, result: Dict[str, Any], batch_size: int, return_records: bool = False
@@ -544,8 +599,19 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
         return rows_affected, inserted_count, updated_count, upserted_records
 
-    async def _execute_query(self, query: str, **kwargs) -> Dict[str, Any]:
-        """Execute SQL query using connection pool if available, otherwise direct connection."""
+    async def _execute_query(
+        self,
+        query: str,
+        params: Optional[List[Any]] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Execute parameterized SQL query (issue #492).
+
+        ``params`` is a flat positional list bound by the driver. The pool
+        path forwards them through ``DataFlowConnectionManager.execute``;
+        the direct path forwards them through ``AsyncSQLDatabaseNode``'s
+        ``params`` argument.
+        """
         # Check if we have connection pool access via mixin
         use_pooled_connection = kwargs.get("use_pooled_connection", False)
 
@@ -553,7 +619,7 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             # Use connection pool via DataFlowConnectionManager
             try:
                 return await self._pool_manager.execute(
-                    operation="execute", query=query
+                    operation="execute", query=query, params=params
                 )
             except Exception as e:
                 # Log and fallback to direct connection
@@ -577,7 +643,7 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             validate_queries=False,  # Allow UPSERT operations
         )
 
-        return await db_node.async_run(query=query)
+        return await db_node.async_run(query=query, params=params)
 
 
 # For backward compatibility, also alias the old method name

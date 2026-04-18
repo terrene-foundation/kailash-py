@@ -21,6 +21,7 @@ import logging
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
+from kailash.db.dialect import _validate_identifier
 from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
@@ -374,6 +375,10 @@ class SyncDDLExecutor:
             """
             result = self.execute_query(sql, (table_name,))
         elif self._db_type == "sqlite":
+            # rules/dataflow-identifier-safety.md MUST 1: identifiers in DDL/PRAGMA
+            # paths MUST be validated against the canonical regex before
+            # interpolation. PRAGMA arguments are not parameterizable.
+            _validate_identifier(table_name)
             sql = f"PRAGMA table_info({table_name})"
             result = self.execute_query(sql)
         else:
