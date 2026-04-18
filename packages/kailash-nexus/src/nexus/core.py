@@ -5,6 +5,7 @@ that implements true zero-configuration workflow orchestration.
 """
 
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -206,7 +207,10 @@ def _wrap_with_guard(func: Callable, guard: Any, handler_name: str) -> Callable:
     """
     import functools
 
-    if asyncio.iscoroutinefunction(func):
+    # inspect.iscoroutinefunction — Python 3.14 deprecated asyncio's form; the
+    # two helpers match for plain coroutines and inspect's handles classmethod /
+    # partial wrappers more correctly. See zero-tolerance.md Rule 1.
+    if inspect.iscoroutinefunction(func):
 
         @functools.wraps(func)
         async def async_guarded(*args: Any, **kwargs: Any) -> Any:
@@ -417,9 +421,19 @@ class Nexus:
         self._plugins: Dict[str, Any] = {}
         self._startup_hooks: List[Callable[[], None]] = []
         self._shutdown_hooks: List[Callable[[], None]] = []
-        # Idempotency flag: the FastAPI lifespan fires shutdown hooks
+        # Idempotency flag + lock: the FastAPI lifespan fires shutdown hooks
         # first; stop() must not fire them a second time (#500/#501).
+        #
+        # The lock closes the TOCTOU window (sec H2 / round-1 red-team): the
+        # sync path (invoked from a signal handler / main thread) and the
+        # async path (invoked from uvicorn's event loop) can both read False
+        # between the check and the set, and without the lock both would
+        # iterate the hook loop and fire every hook twice. The lock makes the
+        # check-and-set atomic across both paths. CPython's GIL makes the
+        # individual load and store atomic but NOT the compound check-then-set,
+        # which is what matters here.
         self._shutdown_hooks_fired: bool = False
+        self._shutdown_hooks_fired_lock: threading.Lock = threading.Lock()
 
         # CORS configuration
         self._cors_origins = cors_origins
@@ -1608,7 +1622,8 @@ Check the documentation or explore available resources.
         # Validate: reject sync functions — BaseHTTPMiddleware.dispatch
         # must return an awaitable. A sync function would block the event
         # loop and surface as a "coroutine expected" error at request time.
-        if not asyncio.iscoroutinefunction(func):
+        # inspect.iscoroutinefunction — see note on _wrap_with_guard.
+        if not inspect.iscoroutinefunction(func):
             func_name = getattr(func, "__name__", repr(func))
             raise TypeError(
                 f"use_middleware expects an async function, got sync "
@@ -1995,8 +2010,6 @@ Check the documentation or explore available resources.
         server's lifetime. See ``_call_startup_hooks_async`` for the
         production path.
         """
-        import inspect
-
         for hook in self._startup_hooks:
             try:
                 if inspect.iscoroutinefunction(hook):
@@ -2019,15 +2032,16 @@ Check the documentation or explore available resources.
         ``_shutdown_hooks_fired``), this method is a no-op so
         ``stop()`` after uvicorn's lifespan does not double-fire hooks.
         """
-        import inspect
-
-        if self._shutdown_hooks_fired:
-            logger.debug(
-                "Shutdown hooks already fired inside FastAPI lifespan; "
-                "stop() is a no-op for this dimension"
-            )
-            return
-        self._shutdown_hooks_fired = True
+        # Atomic check-and-set under the idempotency lock: closes the TOCTOU
+        # window with _call_shutdown_hooks_async (sec H2 / round-1 red-team).
+        with self._shutdown_hooks_fired_lock:
+            if self._shutdown_hooks_fired:
+                logger.debug(
+                    "Shutdown hooks already fired inside FastAPI lifespan; "
+                    "stop() is a no-op for this dimension"
+                )
+                return
+            self._shutdown_hooks_fired = True
         for hook in reversed(self._shutdown_hooks):
             try:
                 if inspect.iscoroutinefunction(hook):
@@ -2049,8 +2063,6 @@ Check the documentation or explore available resources.
         so the full traceback is preserved (zero-tolerance Rule 3) but
         do not prevent later hooks from running.
         """
-        import inspect
-
         for hook in self._startup_hooks:
             try:
                 if inspect.iscoroutinefunction(hook):
@@ -2070,13 +2082,17 @@ Check the documentation or explore available resources.
 
         Sets ``_shutdown_hooks_fired`` on entry so a later sync call
         from ``stop()`` will short-circuit and not double-fire the
-        hooks.
+        hooks. The check-and-set is protected by
+        ``_shutdown_hooks_fired_lock`` so the sync path (signal
+        handler / main thread) and this async path (uvicorn loop)
+        cannot both observe False and both iterate the hook loop
+        (sec H2 / round-1 red-team).
         """
-        import inspect
-
-        if self._shutdown_hooks_fired:
-            return
-        self._shutdown_hooks_fired = True
+        # Atomic check-and-set under the idempotency lock.
+        with self._shutdown_hooks_fired_lock:
+            if self._shutdown_hooks_fired:
+                return
+            self._shutdown_hooks_fired = True
         for hook in reversed(self._shutdown_hooks):
             try:
                 if inspect.iscoroutinefunction(hook):

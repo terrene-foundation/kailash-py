@@ -36,6 +36,7 @@ def create_gateway(
     # Lifespan hooks (run inside FastAPI lifespan / uvicorn loop)
     startup_hook: Optional[Callable[[], Awaitable[None]]] = None,
     shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
+    startup_hook_timeout: Optional[float] = None,
     # Backward compatibility
     **kwargs,
 ) -> WorkflowServer:
@@ -58,6 +59,19 @@ def create_gateway(
         enable_health_checks: Enable comprehensive health checks
         resource_registry: Optional ResourceRegistry instance
         secret_manager: Optional SecretManager instance
+        startup_hook: Optional async callback awaited inside uvicorn's event
+            loop during FastAPI lifespan startup. Runs after ``router.startup()``
+            fires but BEFORE the server accepts requests. Background tasks
+            created here survive for the server's lifetime.
+        shutdown_hook: Optional async callback awaited inside uvicorn's event
+            loop during FastAPI lifespan shutdown. Runs AFTER the server stops
+            accepting requests but BEFORE ``router.shutdown()`` and the
+            ShutdownCoordinator. Exceptions are logged at WARN and never
+            prevent router/coordinator cleanup.
+        startup_hook_timeout: Optional seconds to wait for ``startup_hook``
+            before timing out. ``None`` (default) waits indefinitely. A finite
+            value defends against a hung plugin pinning uvicorn's lifespan
+            and preventing it from accepting connections.
         **kwargs: Additional arguments passed to server constructor
 
     Returns:
@@ -98,6 +112,7 @@ def create_gateway(
         "cors_origins": cors_origins,
         "startup_hook": startup_hook,
         "shutdown_hook": shutdown_hook,
+        "startup_hook_timeout": startup_hook_timeout,
         **kwargs,
     }
 
