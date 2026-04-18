@@ -1,79 +1,75 @@
-# Session Notes — 2026-04-16 (continued, second cut)
+# Session Notes — 2026-04-18
 
 ## Where we are
 
-Pre-release sweep converged. 13 commits this session, all on `main`, all green:
-
-- 2 kaizen test realignments (canonical enum names, trust unit files)
-- 1 DataFlow `__del__` deadlock fix (breaks the long-standing hang)
-- 7 DataFlow unit-suite cleanups (27 pre-existing failures → 0)
-- 1 DataFlow integration cleanup (8 orphan files deleted after 53dab715 API removal)
-- 1 Kaizen namespace fix (45c4ab2f shim removal left 4 collect-time errors)
-- 1 gitignore entry for `:memory:*` test artifacts
-
-**State at wrapup:**
-
-- `pytest --collect-only` across **6 packages** = 37,201 tests, **0 collection errors**.
-- `pytest packages/kailash-dataflow/tests/unit/` = **3732 passed, 51 skipped, 0 failed** in 113s.
-- `pytest packages/kailash-kaizen/tests/unit/trust/` = **111 passed** (constraint + registry + key_manager).
-- `pytest packages/kailash-kaizen/tests/integration/enterprise_app/test_trust_posture_integration.py` = **18 passed**.
-
-**Not yet run this session** (release-blocker status: untested, likely green):
-
-- DataFlow integration/e2e (needs Postgres on port 5434, IntegrationTestSuite)
-- Kaizen full unit + integration
-- Nexus, PACT, ML full runs
-- Root SDK full unit run
+Large DataFlow + Kaizen sweep closed out. 3 P0 security fixes
+shipped (#490 mutation-return redaction, #491 event-payload PK
+hashing, #490-companion Tier 2 suite). 6 dataflow.migration test
+orphans deleted. Runtime-artifact paths now gitignored. 92 session
+commits pushed to `origin/main`.
 
 ## Read first
 
-1. `CLAUDE.md` + `rules/python-environment.md` — **`.venv/bin/python`, never bare `python`**.
-2. `git log --oneline 7f252967..HEAD` — this session's 13 commits.
-3. `src/kailash/trust/posture/postures.py` — **canonical `TrustPosture` names are `AUTONOMOUS / DELEGATING / SUPERVISED / TOOL / PSEUDO`**. The previous `.session-notes` had this inverted — see Traps below.
-4. Commit `4f5dbe7f` — explains why `DataFlow.__del__` must emit only `ResourceWarning` and not call `close()`. This is a long-dormant production deadlock that also caused every prior "DataFlow unit suite hangs" report.
-5. `rules/observability.md` § 6.2 "Mask Form Uniform Across Helpers" — for the `mask_sensitive_values` output shape. Canonical form is `scheme://***MASKED***@host[:port]/path` (userinfo masked together, `***MASKED***@` is the grep sentinel).
+1. `git log --oneline origin/main~92..origin/main` — this session's 92
+   commits, newest first
+2. `.claude/rules/event-payload-classification.md` — synced upstream
+   to `/Users/esperie/repos/loom/.claude/rules/` + added to
+   `sync-manifest.yaml` global_tier. Loom-side commit is pending —
+   loom has unrelated in-flight changes; next loom session should
+   land this alongside whatever else is staged.
+3. `packages/kailash-dataflow/src/dataflow/features/express.py` —
+   #490 fix wired across 6 mutation-return paths. Key pattern:
+   `update()` and `upsert()` now read-back via `self.read()` post-
+   write (dialect-portable; SQLite UpdateNode returns metadata
+   only). `bulk_update` has the pinned delegation comment per
+   `dataflow-classification.md` MUST Rule 2.
+4. GH issue #493 — 3 pre-existing security-suite failures on main
+   (SQL injection sanitizer drift + DDL error log level drift).
+   Unrelated to this session's work; needs a dedicated sanitizer
+   session.
 
-## Traps — corrected from prior session
+## Recent closed items
 
-- **TrustPosture canonical names (CORRECTED).** Previous notes said `DELEGATED / CONTINUOUS_INSIGHT / SHARED_PLANNING / PSEUDO_AGENT` are canonical. They are **aliases**. Canonical names from `src/kailash/trust/posture/postures.py`:
-  - `AUTONOMOUS` (level 5) — alias `DELEGATED`
-  - `DELEGATING` (level 4) — alias `CONTINUOUS_INSIGHT`
-  - `SUPERVISED` (level 3) — alias `SHARED_PLANNING`
-  - `TOOL` (level 2) — no alias (was `HUMAN_DECIDES` in a long-removed surface)
-  - `PSEUDO` (level 1) — alias `PSEUDO_AGENT`
-  Legacy names that raise `AttributeError`: `FULL_AUTONOMY`, `HUMAN_DECIDES`, `BLOCKED`, `ASSISTED`.
-  Semantic mapping when reading old tests: `FULL_AUTONOMY → AUTONOMOUS`, `HUMAN_DECIDES → TOOL` (follow the `approval_required` branch in `TrustPostureMapper`, not the "denied" branch), `BLOCKED → PSEUDO`, `ASSISTED → SUPERVISED`.
+- #490 — mutation-return classification leak, 25/25 tests green
+  (6 SQLite regression + 9 Tier 2 PostgreSQL + 10 #491 Tier 2)
+- #491 — event-payload classified-PK hashing (36060c98)
+- 6 dataflow.migration test orphans deleted (e550949c)
+- gitignore for `performance_data/`, `.coc-sync-marker`,
+  `scheduled_tasks.lock` (7a4d38d7)
+- workspaces/gh-issues-apr14/ and workspaces/kailash-ml-audit/
+  tracked (7a4d38d7)
 
-- **`asyncio` in `__del__` is BLOCKED** (`rules/patterns.md` § Async Resource Cleanup). `DataFlow.__del__` previously routed through `async_safe_run` which spawned a new event loop thread that itself called `logger.debug()` during selector init — deadlock on the logging root lock when the finalizer fired from inside logging machinery (GC during `logger.isEnabledFor`). Fix: `__del__` emits `ResourceWarning` only; cleanup via `await db.close_async()` or `with` ctx. **Do not restore async cleanup in `__del__`** under any circumstance.
+## In-flight / next session
 
-- `extra={"name": ...}` in `logger.*` calls → runtime `KeyError`. `name` is a reserved LogRecord attribute (see commit `fa7e1872`). Same class: `msg`, `message`, `module`, `filename`, `pathname`, `levelname`, `lineno`, `funcName`, `created`, `thread`, `processName`, `args`, `exc_info`, `stack_info`, `asctime`.
+- Issue #493 — 3 pre-existing security-suite test failures
+  (test_create_node_sql_injection_protection,
+  test_parameter_type_enforcement_prevents_injection,
+  test_ddl_error_logging_and_reporting). Investigation: decide
+  canonical sanitizer output form (quote-escape vs token-replace
+  vs raise), align the 3 tests to that contract, pin in
+  `rules/security.md`.
+- Loom-side commit for `event-payload-classification.md` + manifest
+  entry. Loom has other in-flight changes (learning-digest, rule
+  updates to orphan-detection/patterns/schema-migration/tenant-
+  isolation, rs variant skill) — bundle carefully.
 
-- `async def test_x(...)` that calls sync `LocalRuntime.execute(...)` deadlocks. Use `AsyncLocalRuntime` + `await runtime.execute_workflow_async(...)`.
+## Traps
 
-- Pre-commit auto-stash loops when hooks rewrite the tree. Use `git -c core.hooksPath=/dev/null commit …` and document the bypass per `rules/git.md` § Pre-Commit Hook Workarounds. `--no-verify` is BLOCKED.
-
-- **DataFlow worktree pre-commit tries to run pytest against `.venv/bin/python` inside the worktree**, which doesn't exist (worktree shares main's venv). Pre-commit hook needs teaching to resolve to the main repo's venv. Until then, worktree commits use the `core.hooksPath=/dev/null` bypass.
-
-- **Removed-API orphan tests.** Commit `53dab715` ("DataFlow 2.0 Phase 0-2 — delete 14,500 LOC") removed `dataflow.nodes.bulk_create / bulk_delete / bulk_update`. Their test files were orphaned; 8 were deleted this session (`d3e7e0ef`). If you see `ModuleNotFoundError: No module named 'dataflow.nodes.bulk_create'`, the file is orphaned — delete it, don't resurrect the module. Bulk coverage lives at `BulkUpsertNode`, `BulkCreatePoolNode`, `BulkOperations` (feature), and `db.express.{create,update,delete}`.
-
-- **Kaizen trust shim removal.** Commit `45c4ab2f` removed 63 re-export shims under `kailash.trust.*`. Canonical imports live at `kaizen.trust.*`. If a test fails with `ImportError: cannot import name 'X' from 'kailash.trust.governance'`, rename the import to `kaizen.trust.governance` — verified by `.venv/bin/python -c "from kaizen.trust.governance import …"`.
-
-- Test cruft pattern: `:memory:<suffix>` as a non-URI SQLite DB name creates a real file at repo root. Use URI form per `rules/patterns.md` § SQLite Connection Management. Gitignore entry landed in `8eb30aed`; structural fix deferred.
-
-## Local env reminders
-
-- **Shared `.venv` managed by `uv`**, no pip in the venv. Install via `uv pip install <pkg>`.
-- Installed this session for collect-time correctness: `hypothesis`, `psycopg2-binary`, `pytest-httpserver`. These are test-time deps declared in sub-package `[test]` extras (per `rules/python-environment.md` Rule 4) — CI should install them via the sub-package extras, not root `pyproject.toml`.
-
-## Out-of-scope blockers flagged (NOT release blockers, but owed per Rule 1)
-
-- DataFlow integration/e2e tests reference removed `AsyncSQLDatabaseNode.async_run` attribute in some places — pyright attribute warnings only (not collect-time). Likely a narrower API shape on the current base class.
-- `LocalRuntime.execute()` without a context manager emits `DeprecationWarning` across 14+ tests in `test_package_installation_unit.py` and many more. Systematic refactor target.
-- Pyright pre-existing noise in DataFlow source (`kailash.utils.annotations` import unresolved, `TenantContextSwitch` undefined, `asyncio` possibly unbound in some branches). Exceeds this shard's capacity budget.
-- `test_bulk_upsert_node_integration.py` has pyright warnings on `async_run` / `cleanup` attributes of `Node` base class. Runtime is fine (subclasses add them); consider `# type: ignore[attr-defined]` or stricter base class typing.
-
-## Open questions for the human
-
-- Ship now (collect-only green + DataFlow unit green) or also run full Kaizen / Nexus / PACT / ML / root unit suites first?
-- Before next `/release`: does CI install sub-package test extras automatically, or should the release workflow add an explicit `pip install -e 'packages/kailash-pact[test]'` step to prevent the collection errors this session surfaced?
-- `test_bulk_upsert_node_integration.py` was salvaged by removing the dead `BulkCreateNode` import. No other test in the file was run this session; should we open an integration-tier run against real Postgres before release to confirm runtime behavior?
+- `pytest --timeout-method=signal` hangs on asyncio selector loops;
+  use `--timeout-method=thread`.
+- Worktree dispatches silently base on old commits. Before cherry-
+  picking any `worktree-agent-*` branch, check `git merge-base
+  <branch> main`. Prefer wholesale file-checkout if diverged too
+  far (see commit `911722aa` pattern).
+- `PostToolUse` formatter sometimes reverts Edits; re-apply sticks.
+- Pre-commit hook `pytest-check` resolves to worktree-absolute paths
+  and fails in isolated worktrees. Use `git -c core.hooksPath=
+  /dev/null commit` with bypass documented in commit body per
+  `rules/git.md`.
+- `git checkout <branch> -- <path>` run from inside an agent
+  worktree operates on the worktree's tree, not `main`. Always
+  verify `git branch --show-current` before applying cross-worktree
+  ops.
+- SQLite `UpdateNode` / `UpsertNode` return metadata (filter,
+  fields, rows_affected), NOT the row. PostgreSQL returns the row
+  via RETURNING. Always read-back if you need the full record.
