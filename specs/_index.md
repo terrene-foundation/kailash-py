@@ -31,12 +31,13 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Kaizen (AI Agent Framework)
 
-| File                                         | Description                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------- |
-| [kaizen-core.md](kaizen-core.md)             | BaseAgent, BaseAgentConfig, AgentLoop, CoreAgent, Kaizen framework           |
-| [kaizen-signatures.md](kaizen-signatures.md) | Signature system, InputField, OutputField, templates, structured output      |
-| [kaizen-providers.md](kaizen-providers.md)   | Provider system, execution strategies, tool integration (MCP), memory        |
-| [kaizen-advanced.md](kaizen-advanced.md)     | Composition, optimization, cost tracking, audio, A2A protocol, configuration |
+| File                                                   | Description                                                                                                                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [kaizen-core.md](kaizen-core.md)                       | BaseAgent, BaseAgentConfig, AgentLoop, CoreAgent, Kaizen framework                                                                                              |
+| [kaizen-signatures.md](kaizen-signatures.md)           | Signature system, InputField, OutputField, templates, structured output                                                                                         |
+| [kaizen-providers.md](kaizen-providers.md)             | Provider system, execution strategies, tool integration (MCP), memory                                                                                           |
+| [kaizen-advanced.md](kaizen-advanced.md)               | Composition, optimization, cost tracking, audio, A2A protocol, configuration                                                                                    |
+| [kaizen-llm-deployments.md](kaizen-llm-deployments.md) | LlmClient + LlmDeployment four-axis abstraction (#498): 24 presets, auth strategies, URI/selector/legacy env resolution, §6 security contract, cross-SDK parity |
 
 ## Kaizen Agents (Layer 2 Patterns)
 

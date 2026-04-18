@@ -13,6 +13,46 @@ The changelog has been reorganized into individual files for better management. 
 - **[sdk-users/6-reference/changelogs/unreleased/](sdk-users/6-reference/changelogs/unreleased/)** - Unreleased changes
 - **[sdk-users/6-reference/changelogs/releases/](sdk-users/6-reference/changelogs/releases/)** - Individual release changelogs
 
+## Unreleased
+
+### kailash-kaizen — #498 LLM Deployment Abstraction (Sessions 1-8 complete)
+
+Four-axis LLM deployment abstraction: 24 preset factories spanning direct providers (OpenAI, Anthropic, Google, 13 others), AWS Bedrock (5 families), GCP Vertex (Claude + Gemini), and Azure OpenAI — all with cross-SDK byte-parity to `kailash-rs#406`. Additive API: existing `kaizen.providers.registry` continues to work unchanged (39 consumer files verified via regression test).
+
+#### Added
+
+- **`LlmDeployment` + `LlmClient`** — `kaizen.llm.deployment.LlmDeployment` (frozen four-axis: wire + endpoint + auth + grammar), `kaizen.llm.client.LlmClient.from_deployment()`, `from_deployment_sync()`, `from_env()`.
+- **Direct-provider presets (S3)** — 16 factories: `openai`, `anthropic`, `google`, `cohere`, `mistral`, `perplexity`, `huggingface`, `ollama`, `docker_model_runner`, `groq`, `together`, `fireworks`, `openrouter`, `deepseek`, `lm_studio`, `llama_cpp`. Each classmethod on `LlmDeployment` (e.g. `LlmDeployment.anthropic(...)`).
+- **AWS Bedrock (S4a + S4b-i + S4b-ii)** — 5 preset families (`bedrock_claude`, `bedrock_llama`, `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere`) with `AwsBearerToken` (bearer-only path unblocks STP) and `AwsSigV4` (botocore-backed canonicalization + `asyncio.Lock` credential rotation). `BEDROCK_SUPPORTED_REGIONS` allowlist with 27 regions (cross-SDK parity).
+- **GCP Vertex AI (S5)** — `vertex_claude` + `vertex_gemini` presets with `GcpOauth` (single-flight `asyncio.Lock` refresh, `CachedToken`, cloud-platform scope pinned).
+- **Azure OpenAI (S6)** — `azure_openai` preset with `AzureEntra` (3 variants: api-key, workload-identity, managed-identity via `azure.identity`). `COGNITIVE_SERVICES_SCOPE` + `AZURE_OPENAI_DEFAULT_API_VERSION="2024-06-01"` pinned.
+- **`LlmClient.from_env()` three-tier precedence (S7)** — URI (`KAILASH_LLM_DEPLOYMENT`) > selector (`KAILASH_LLM_PROVIDER`) > legacy per-provider keys. Per-scheme strict regex validation on `bedrock://`, `vertex://`, `azure://`, `openai-compat://`. Migration-window isolation: deployment-tier + legacy coexistence emits `WARNING llm_client.migration.legacy_and_deployment_both_configured` and the deployment path wins.
+- **`LlmHttpClient` + `SafeDnsResolver` (S4c)** — single constructor path for LLM HTTP traffic; structural SSRF defense at DNS-resolve time rejects literal private IPs AND DNS that resolves to private IPs (TOCTOU / rebinding protection). Grep-auditable: only `http_client.py` may construct `httpx.AsyncClient` in `kaizen/llm/**`.
+- **§6 security test suite** — `test_credential_comparison_uses_constant_time.py` (6.4), `test_llmclient_redacts_classified_prompt_fields.py` (6.5), `test_llmhttpclient_ssrf_rejects_private_ips.py` + `..._dns.py`, `test_deployment_preset_regex_rejects_injection.py`, `test_aws_credentials_zeroize_on_rotate.py` (6.8).
+- **ApiKey pickle/deepcopy hygiene** — `__reduce__` / `__deepcopy__` / `__copy__` overrides route reconstruction through `__init__` (re-derives fingerprint). Prevents accidental `__slots__`-level SecretStr exposure.
+- **Cross-SDK parity suite (S9)** — `packages/kailash-kaizen/tests/cross_sdk_parity/test_preset_names_match_rust.py` pins preset names, region lists, scope constants, api-version default, and `auth_strategy_kind`/`grammar_kind` labels byte-for-byte against the Rust SDK.
+- **Spec: `specs/kaizen-llm-deployments.md`** — domain-truth authority per `rules/specs-authority.md`.
+
+#### Fixed
+
+- **Nexus `router.on_startup` hooks ignored (#500)** — custom FastAPI `lifespan` was replacing Starlette's `_DefaultLifespan` without invoking `app.router._startup()`. Fixed by routing all startup/shutdown through a unified lifespan (`src/kailash/servers/workflow_server.py`).
+- **Nexus plugin `on_startup` tasks cancelled (#501)** — `asyncio.run(hook())` created a throwaway event loop that killed any `create_task(...)` the hook scheduled. Fixed by running plugin hooks inside uvicorn's loop via `_call_startup_hooks_async` in the FastAPI lifespan.
+- **Nexus cancel-cleanup contract (M-N2)** — added three-clause contract to `startup_hook_timeout` docstring: plugin `on_shutdown` MUST be safe against partial-init state, `on_startup` MUST handle `CancelledError` for spawned tasks, MUST NOT swallow. Two Tier 2 tests verify.
+- **Third `asyncio.iscoroutinefunction` residual** — replaced with `inspect.iscoroutinefunction` in `packages/kailash-nexus/src/nexus/auth/audit/backends/custom.py` (Python 3.14 forward-compatible).
+- **`model="gpt-4"` hardcoded default removed** — `openai_preset` now requires `model` explicitly per `rules/env-models.md`.
+
+#### Changed
+
+- **`LlmDeployment._NOT_YET_IMPLEMENTED` is now empty.** Every primary preset classmethod is fully wired; no `NotImplementedError` stubs remain on `LlmDeployment`.
+- **`model` parameter required on every preset** (no hardcoded defaults per `rules/env-models.md`).
+
+#### Related
+
+- Cross-SDK: `kailash-rs#406` (parallel implementation), `kailash-rs#409` (brief-template verification).
+- Workspace: `workspaces/issue-498-llm-deployment/` (ADR-0001, 8 session todos, redteam amendments).
+
+---
+
 ## Recent Releases
 
 ### kailash 2.8.7 / kailash-kaizen 2.7.5 / kailash-dataflow 2.0.9 / kaizen-agents 0.9.3 — 2026-04-15 — Python 3.14 compatibility (#477) + DataFlow internal LocalRuntime warning (#478)
