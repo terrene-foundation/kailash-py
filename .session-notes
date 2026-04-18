@@ -1,86 +1,69 @@
-# Session Notes — 2026-04-18 (Round 2)
+# Session Notes — 2026-04-18 (Round 4)
 
 ## Where we are
 
-Completed the entire `issues-492-497/` workspace queue. 5 GH issues
-closed with delivered-code references. 3 commits pushed to
-`origin/main` (7a4fd364 → 27c77cf4). Cross-SDK ticket #405 filed on
-kailash-rs.
+Round-4 landed: 3 HIGH redteam fixes committed atomically (e203ba27,
+ed1265e8, eab947dc), defense-in-depth GH issue #499 filed consolidating
+the 9 MED findings, `kailash-dataflow 2.0.9` CHANGELOG prepped with
+accurate per-commit Security section. Version itself already at 2.0.9
+in `pyproject.toml` + `__init__.py` from prior session. Issue-498
+`/todos` gate in progress — option (A) confirmed baseline.
 
-## This session closed items
+## Read first
 
-- **#492 (P0 SQLi)** — `BulkUpsertNode._build_upsert_query` rewritten
-  to return `(sql, params)` with placeholder binding. 18 SQLi
-  regression tests + 6 existing unit tests + 18 existing integration
-  tests all green. Identifier validation routed through
-  `_validate_identifier` for `table_name`, `columns`, `conflict_on`,
-  `version_field`. Dialect allowlist enforced. Bulk batch errors now
-  log WARN with continue semantics; raise only if every batch failed.
-  Commit 7a4fd364.
-- **#493 (sanitizer contract)** — All 3 drifted tests pass against the
-  pinned contract. New type-mismatch guard in `validate_inputs` (both
-  create/update + bulk_* paths). Rule pinned at
-  `rules/security.md` § Sanitizer Contract. Commit 2dbb9107.
-- **#495 (ML register_estimator audit)** — NO-GAP. kailash-py's
-  string-import + prefix-allowlist pattern dissolves the trait-object
-  problem. Audit at `04-validate/495-ml-register-estimator-audit.md`.
-- **#496 (PG placeholder audit)** — Placeholder bug NOT present.
-  Audit surfaced 2 HIGH identifier-validation gaps fixed in same
-  commit (sync_ddl_executor SQLite PRAGMA + engine ALTER TABLE
-  paths). 13-test regression at `tests/regression/
-  test_issue_496_identifier_safety.py`.
-- **#497 (Nexus webhook HMAC audit)** — Gap exists in generic
-  `Nexus.register(workflow)` path, but `WebhookTransport` ships as
-  the structural answer for signed webhooks. Architectural decision
-  recorded.
-- **Cross-SDK** — kailash-rs#405 filed for bulk_upsert.rs parity check.
+1. `workspaces/OUTSTANDING.md` — consolidated open-issue view across all
+   workspaces, by priority, with status per GH issue
+2. `workspaces/issues-492-497/04-validate/aggregate-round1.md` — redteam
+   verdict + per-finding disposition
+3. `workspaces/issues-492-497/journal/0001-0003-RISK-*.md` — 3 HIGH
+   findings' origin + fix rationale (all now landed)
+4. `workspaces/issue-498-llm-deployment/journal/0001-DISCOVERY-python-no-llm-client-today.md`
+   — critical back-compat divergence driving option (A)
+5. `workspaces/issue-498-llm-deployment/02-plans/01-shard-breakdown.md`
+   — 8-session implementation plan with S4b/S6 splits
+6. `workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md`
+   — Python-adapted ADR
 
-## Spec updates
+## Landed this round
 
-- `specs/security-data.md` § 11.3 — bulk_upsert parameterization
-  pattern + sanitizer contract pin
-- `specs/dataflow-express.md` — bulk_upsert API now documents
-  `(sql, params)` internal contract + WARN-on-batch-error semantics
+- `e203ba27` fix(dataflow): stop logging raw bound params on query failure (HIGH-1)
+- `ed1265e8` fix(dataflow): delete BulkUpsertNode pool dead branch (HIGH-2)
+- `eab947dc` fix(dataflow): delete `_tenant_trust_manager` orphan facade (HIGH-3)
+- GH issue #499 filed: `defense-in-depth: consolidate 9 MED findings from redteam round-1`
+- CHANGELOG `packages/kailash-dataflow/CHANGELOG.md` entry for 2.0.9 Security section
+  rewritten with accurate per-commit descriptions (release-specialist's first draft had
+  inaccurate issue mapping + wrong fix summaries — overwritten)
 
-## Read first — NEXT WORKSPACE
+## Open — next session
 
-No active workspace. The `issues-492-497/` queue is fully cleared.
-Next session can either:
+- **Release authorization for `kailash-dataflow 2.0.9`** — version/CHANGELOG ready,
+  PyPI publish + tag NOT executed. Human must authorize per
+  `rules/autonomous-execution.md` structural gate. TestPyPI validation optional per
+  `deployment.md` patch-release exception.
+- **Push commits to GitHub** — main has 3 HIGH fixes + chore; not yet pushed.
+- **Close #477 + #478 with release SHA** once 2.0.9 ships (per
+  `rules/git.md` issue closure discipline).
+- **#498 `/todos`** — result of this session's invocation pending; review the
+  plan artifacts at `workspaces/issue-498-llm-deployment/todos/active/`.
 
-1. Pick a new GH issue from the open queue
-2. Run `/wrapup` on the workspace and archive
-3. Address out-of-scope loose ends below
+## Traps
 
-## Out-of-scope loose ends
-
-- **Loom-side commit** for `event-payload-classification.md` rule
-  file + manifest entry (placed in loom in 2026-04-18 round 1, commit
-  still deferred). Then `/sync py` to flow into BUILD repo.
-- **Pool path dead code** in `BulkUpsertNode._execute_query` — the
-  pool branch silently falls back because
-  `DataFlowConnectionManager.execute()` doesn't implement
-  `operation="execute"`. Reviewer flagged H2 as orphan-pattern. Fix:
-  either implement the pool operation OR delete the dead branch.
-  Defer to a separate PR — out of scope for this session's #492 fix
-  per `rules/autonomous-execution.md` Per-Session Capacity Budget
-  (load-bearing already at the 5-invariant ceiling).
-- **`LocalRuntime.execute()` deprecation** — 8 tests in
-  `test_connection_sql_injection_protection.py` still use the
-  no-context-manager pattern. Pre-existing, not introduced this
-  session, scope = test-style only. File a follow-up enhancement.
-
-## Traps (carried forward)
-
-- `pytest --timeout-method=signal` hangs on asyncio selector loops;
-  use `--timeout-method=thread`.
-- Pre-commit `python-use-type-annotations` hook flags any `# type X`
-  comment as an annotation. Use "type mismatch" not "type confusion"
-  in code comments.
-- Pre-commit auto-stash + pyright noise — ignore `reportAssignmentType`
-  on `from kailash.nodes.base import ...` (pre-existing).
-- `BulkUpsertNode` adds `created_at`/`updated_at` automatically when
-  `auto_timestamps=True` (default). Test tables must include these
-  columns OR the node must be configured with `auto_timestamps=False`.
-- SQLite `UpdateNode`/`UpsertNode` return metadata only (not the
-  row). Read-back via `self.read()` is the dialect-portable pattern
-  (#490 fix).
+- `pytest --timeout-method=signal` hangs on asyncio selector loops — use
+  `--timeout-method=thread`.
+- Pyright warnings at `connection_adapter.py:144,249,…` are PRE-EXISTING; do not
+  "fix" as part of commits.
+- `_tenant_trust_manager` attribute now absent — `hasattr(db,
+  "_tenant_trust_manager")` is False. Wiring it back requires same-PR production
+  call site per `rules/orphan-detection.md` MUST 3; regression test at
+  `test_tenant_trust_manager_not_attached_as_facade` will fail loudly otherwise.
+- `BulkUpsertNode` with `use_pooled_connection=True` now raises
+  `NodeValidationError` (was silent fallback). Any caller passing that kwarg
+  needs `BulkCreatePoolNode` or `connection_string=...`.
+- Python has NO `LlmClient` class today — #498 brief's "preserve
+  `kailash.LlmClient()`" is wrong about Python baseline. Target is the provider
+  registry at `kaizen.providers.registry` (39 consumers). See DISCOVERY journal.
+- Release-specialist incorrectly mapped HIGH fixes to #495/#492/#497 and
+  described HIGH-1 as "routing through sanitizer" (the fix was stop-logging,
+  not sanitization) and HIGH-2 as "unreachable dead code" (the branch was
+  reachable and silently fell back). CHANGELOG was rewritten; guard against
+  same drift on next release prep.
