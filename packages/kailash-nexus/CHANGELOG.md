@@ -1,5 +1,19 @@
 # Nexus Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Custom FastAPI lifespan silently ignored `app.router.on_startup` / `app.router.on_shutdown` handlers** (#500): `WorkflowServer.__init__` passed a custom `lifespan` to `FastAPI()`, which replaces (not wraps) Starlette's default `_DefaultLifespan` — the only code path that iterated the router-level hooks. Any user registering a handler via the documented FastAPI pattern `app.fastapi_app.router.on_startup.append(fn)` saw `fn` silently dropped. Fix: the lifespan now explicitly invokes `await app.router._startup()` on entry and `await app.router._shutdown()` on exit.
+- **Plugin `on_startup` async hooks cancelled scheduled background tasks** (#501): `Nexus.start()` called `_call_startup_hooks()` BEFORE uvicorn booted. For async hooks, the sync path used `asyncio.run(hook())` which created a throwaway event loop, ran the hook (commonly scheduling `asyncio.create_task(periodic_job())`), then CLOSED the loop — cancelling every task the hook had just created. Uvicorn then booted its own loop and the tasks were gone. Fix: plugin startup hooks now run via `_call_startup_hooks_async` inside the FastAPI lifespan context manager, which executes on uvicorn's own event loop. Tasks scheduled by a plugin hook therefore survive for the server's lifetime. The pre-uvicorn invocation in `Nexus.start()` was removed; shutdown hooks are now called inside the lifespan via `_call_shutdown_hooks_async` (with an idempotency flag so the sync `stop()` path doesn't double-fire).
+
+### Added
+
+- `startup_hook` / `shutdown_hook` kwargs on `WorkflowServer.__init__` and `create_gateway()` so upstream wrappers (Nexus) can route lifecycle hooks through the FastAPI lifespan without re-implementing it.
+- `Nexus._call_startup_hooks_async` / `Nexus._call_shutdown_hooks_async`: awaitable hook drivers invoked from the lifespan. Errors logged via `logger.exception` (preserves traceback, zero-tolerance Rule 3); failures in one hook do not prevent later hooks, `router._shutdown`, or the `ShutdownCoordinator` from running.
+- Regression tests `tests/regression/test_issue_500_router_on_startup.py` + `tests/regression/test_issue_501_hook_task_lifetime.py` (minimal reproductions, `@pytest.mark.regression`, never deleted).
+- Tier 2 wiring tests `tests/integration/nexus/test_router_on_startup_fires.py`, `test_plugin_on_startup_task_survives.py`, and `test_shutdown_symmetric.py` — real uvicorn boot, real httpx client, real asyncio tasks.
+
 ## [1.7.2] - 2026-04-03
 
 ### Fixed
