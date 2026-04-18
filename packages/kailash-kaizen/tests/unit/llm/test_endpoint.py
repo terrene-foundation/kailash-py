@@ -129,3 +129,108 @@ def test_allows_http_for_localhost_test_use() -> None:
 def test_allows_public_https_endpoint() -> None:
     check_url("https://api.openai.com/v1")
     check_url("https://api.anthropic.com/v1")
+
+
+# --- round-1 redteam H1: IPv4-translated + NAT64 IPv6 forms ---
+@pytest.mark.parametrize(
+    "url",
+    [
+        # RFC 2765 IPv4-translated (::ffff:0:a.b.c.d) — NOT the strict
+        # IPv4-mapped form (::ffff:a.b.c.d); `ip.ipv4_mapped` returns None for
+        # these so a guard that only checks ipv4_mapped lets them through.
+        "https://[::ffff:0:127.0.0.1]/v1",
+        "https://[::ffff:0:10.0.0.1]/v1",
+        "https://[::ffff:0:192.168.1.1]/v1",
+    ],
+)
+def test_rejects_ipv4_translated_ipv6(url: str) -> None:
+    with pytest.raises(InvalidEndpoint) as exc:
+        check_url(url)
+    # Either is_reserved routes through private_ipv6, or the prefix check
+    # routes through ipv4_mapped. Both are defenses against the bypass.
+    assert exc.value.reason in {"ipv4_mapped", "private_ipv6", "loopback"}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # RFC 6052 NAT64 well-known prefix (64:ff9b::/96). Resolves to the
+        # embedded IPv4 at the NAT64 boundary. No legitimate LLM endpoint
+        # lives in this prefix.
+        "https://[64:ff9b::127.0.0.1]/v1",
+        "https://[64:ff9b::10.0.0.1]/v1",
+    ],
+)
+def test_rejects_nat64_prefix(url: str) -> None:
+    with pytest.raises(InvalidEndpoint) as exc:
+        check_url(url)
+    assert exc.value.reason in {"ipv4_mapped", "private_ipv6"}
+
+
+# --- round-1 redteam M5: inet_aton short-form IPv4 ---
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.1/",  # inet_aton resolves to 127.0.0.1
+        "http://127.0.1/",  # inet_aton resolves to 127.0.0.1
+        # Note: `http://127/` trips the scheme gate first (not a localhost
+        # label) — still rejected, just via a different reason.
+    ],
+)
+def test_rejects_inet_aton_shortform_http(url: str) -> None:
+    with pytest.raises(InvalidEndpoint) as exc:
+        check_url(url)
+    assert exc.value.reason in {"scheme", "encoded_ip_bypass"}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://127.1/v1",  # same short-form payload but https
+        "https://127.0.1/v1",
+    ],
+)
+def test_rejects_inet_aton_shortform_https(url: str) -> None:
+    with pytest.raises(InvalidEndpoint) as exc:
+        check_url(url)
+    # https://127.1 is not a standard dotted-quad → _try_parse_ip returns
+    # None → inet_aton short-form check catches it as encoded_ip_bypass.
+    assert exc.value.reason == "encoded_ip_bypass"
+
+
+# --- round-1 redteam MED-1: structured WARN log on rejection ---
+def test_rejection_emits_structured_warning(caplog) -> None:
+    """Every SSRF rejection emits a WARN log with reason + url_fingerprint."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="kaizen.llm.url_safety"):
+        with pytest.raises(InvalidEndpoint):
+            check_url("https://127.0.0.1/v1")
+
+    # Find the guard's rejection log record (may coexist with others in caplog).
+    rejected = [r for r in caplog.records if r.getMessage() == "url_safety.rejected"]
+    assert rejected, "expected a 'url_safety.rejected' WARN record"
+    rec = rejected[0]
+    assert rec.levelno == logging.WARNING
+    assert getattr(rec, "reason", None) in {
+        "loopback",
+        "private_ipv4",
+        "metadata_service",
+    }
+    # Fingerprint must be present and of the expected 4-char shape.
+    fp = getattr(rec, "url_fingerprint", None)
+    assert isinstance(fp, str) and len(fp) == 4
+
+
+def test_rejection_log_fingerprint_matches_exception(caplog) -> None:
+    """The fingerprint on the WARN log MUST equal the one on the exception."""
+    import logging
+
+    url = "https://10.0.0.42/v1"
+    with caplog.at_level(logging.WARNING, logger="kaizen.llm.url_safety"):
+        with pytest.raises(InvalidEndpoint) as exc:
+            check_url(url)
+    rejected = [r for r in caplog.records if r.getMessage() == "url_safety.rejected"]
+    assert rejected
+    # errors._fingerprint and url_safety._url_fingerprint MUST agree.
+    assert rejected[0].url_fingerprint == exc.value._fingerprint

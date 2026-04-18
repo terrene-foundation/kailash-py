@@ -29,6 +29,7 @@ uses `socket.getaddrinfo` for resolution, Rust uses hyper's resolver.
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import logging
 import socket
@@ -38,6 +39,33 @@ from urllib.parse import urlparse
 from kaizen.llm.errors import InvalidEndpoint
 
 logger = logging.getLogger(__name__)
+
+
+def _url_fingerprint(raw: str | None) -> str:
+    """Produce a short, non-reversible tag for a URL.
+
+    Must match the shape used by `errors._fingerprint` so log entries can be
+    correlated with the fingerprint stored on the raised `InvalidEndpoint`.
+    """
+    if not raw:
+        return "none"
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:4]
+
+
+def _reject(reason: str, url: str | None) -> None:
+    """Emit a structured WARN log, then raise `InvalidEndpoint`.
+
+    The fingerprint attached here matches the one stored on the exception
+    (`InvalidEndpoint._fingerprint`), so audit trails can join the log line
+    with the exception instance via the shared tag. WARN is the correct level
+    because the guard SUCCEEDED at blocking an attack — operators should see
+    that in routine dashboards (rules/observability.md MUST Rule 3).
+    """
+    logger.warning(
+        "url_safety.rejected",
+        extra={"reason": reason, "url_fingerprint": _url_fingerprint(url)},
+    )
+    raise InvalidEndpoint(reason, raw_url=url)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +93,13 @@ _METADATA_IPS = frozenset(
 _HTTP_LOCALHOST_ALLOWLIST = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
+# IPv6 embedded-IPv4 ranges — an attacker who controls a v4 target (loopback,
+# private, metadata) can wrap it in one of these IPv6 forms to bypass a guard
+# that only checks IPv6 `is_private` / `ipv4_mapped`. See round-1 redteam H1.
+_IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765 SIIT
+_NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052
+
+
 # ---------------------------------------------------------------------------
 # Private / loopback / link-local range tests
 # ---------------------------------------------------------------------------
@@ -83,14 +118,28 @@ def _is_private_ipv4(ip: ipaddress.IPv4Address) -> bool:
 
 
 def _is_private_ipv6(ip: ipaddress.IPv6Address) -> bool:
-    """Private / loopback / link-local IPv6, including IPv4-mapped."""
+    """Private / loopback / link-local IPv6, including IPv4-mapped.
+
+    Also rejects RFC 2765 IPv4-translated (`::ffff:0:a.b.c.d`) and RFC 6052
+    NAT64 well-known (`64:ff9b::a.b.c.d`) forms unconditionally — no
+    legitimate LLM endpoint lives inside these translation-prefix ranges, and
+    a permissive check lets an attacker wrap a private / loopback / metadata
+    IPv4 and bypass `ip.ipv4_mapped` (which only matches the strict
+    `::ffff:a.b.c.d/96` form). Round-1 redteam H1.
+    """
     if ip.is_private or ip.is_loopback or ip.is_link_local:
         return True
     if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
         return True
-    # IPv4-mapped addresses: ::ffff:127.0.0.1
+    # Strict IPv4-mapped addresses: ::ffff:127.0.0.1 (recognised by stdlib).
     if ip.ipv4_mapped is not None:
         return _is_private_ipv4(ip.ipv4_mapped)
+    # RFC 2765 IPv4-translated + RFC 6052 NAT64 well-known: the embedded IPv4
+    # is in the low 32 bits. We treat membership in either range as private
+    # regardless of the embedded value — these prefixes do not appear on any
+    # reachable LLM endpoint.
+    if ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK:
+        return True
     return False
 
 
@@ -108,6 +157,11 @@ def _ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
     # IPv6
     if ip.ipv4_mapped is not None:
         return "ipv4_mapped"
+    # RFC 2765 / RFC 6052 embedded-IPv4 ranges: reuse the `ipv4_mapped`
+    # reason code so downstream audit queries aggregate both the strict and
+    # the translated forms under one bucket.
+    if ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK:
+        return "ipv4_mapped"
     if ip.is_loopback:
         return "loopback"
     if ip.is_link_local:
@@ -123,6 +177,32 @@ def _try_parse_ip(
         return ipaddress.ip_address(candidate)
     except (ValueError, TypeError):
         return None
+
+
+def _try_inet_aton_shortform(candidate: str) -> ipaddress.IPv4Address | None:
+    """Resolve a string via `socket.inet_aton` if it's an IPv4 short form.
+
+    inet_aton accepts "127.1", "127.0.1", and "127" (single 32-bit int) and
+    maps them to 127.0.0.1 / 0.0.0.127. The standard `ipaddress.ip_address`
+    parser rejects these, so a guard that only checks the strict form is
+    bypassable when the HTTP library / socket layer forwards to libc.
+
+    Only returns a result for candidates that would NOT otherwise parse as a
+    standard dotted-quad IP, so legitimate `a.b.c.d` strings are left to the
+    regular parser. Round-1 redteam M5.
+    """
+    if not candidate or not isinstance(candidate, str):
+        return None
+    if ":" in candidate:  # likely IPv6 — inet_aton is v4-only
+        return None
+    # Avoid double-handling values `ipaddress` already accepts.
+    if _try_parse_ip(candidate) is not None:
+        return None
+    try:
+        packed = socket.inet_aton(candidate)
+    except (OSError, ValueError, TypeError):
+        return None
+    return ipaddress.IPv4Address(packed)
 
 
 def _detect_encoded_ip_bypass(host: str) -> bool:
@@ -200,46 +280,59 @@ def check_url(url: str, *, resolve_dns: bool = True) -> None:
     without bringing up a DNS resolver.
     """
     if not isinstance(url, str) or not url:
-        raise InvalidEndpoint(
-            "malformed_url", raw_url=url if isinstance(url, str) else None
-        )
+        _reject("malformed_url", url if isinstance(url, str) else None)
 
     try:
         parsed = urlparse(url)
     except Exception:
-        raise InvalidEndpoint("malformed_url", raw_url=url)
+        _reject("malformed_url", url)
+        return  # unreachable; _reject always raises
 
     scheme = (parsed.scheme or "").lower()
     host = parsed.hostname or ""
 
     if not host:
-        raise InvalidEndpoint("malformed_url", raw_url=url)
+        _reject("malformed_url", url)
 
     # ---- Scheme check -------------------------------------------------
     if scheme not in ("http", "https"):
-        raise InvalidEndpoint("scheme", raw_url=url)
+        _reject("scheme", url)
 
     host_lc = host.lower()
     if scheme == "http" and host_lc not in _HTTP_LOCALHOST_ALLOWLIST:
-        raise InvalidEndpoint("scheme", raw_url=url)
+        _reject("scheme", url)
 
     # ---- Metadata hostname check ------------------------------------
     if host_lc in _METADATA_HOSTNAMES:
-        raise InvalidEndpoint("metadata_host", raw_url=url)
+        _reject("metadata_host", url)
 
     # ---- Encoded IP bypass check ------------------------------------
     parsed_ip = _try_parse_ip(host)
     if parsed_ip is None and _detect_encoded_ip_bypass(host):
-        raise InvalidEndpoint("encoded_ip_bypass", raw_url=url)
+        _reject("encoded_ip_bypass", url)
+
+    # ---- inet_aton short-form check ---------------------------------
+    # `127.1` / `127.0.1` / `127` pass the dotted-split check above (no
+    # part starts with `0`, no part is pure hex) but libc resolves them to
+    # loopback. Round-1 redteam M5.
+    if parsed_ip is None:
+        shortform = _try_inet_aton_shortform(host)
+        if shortform is not None:
+            if _is_private_ipv4(shortform) or str(shortform) in _METADATA_IPS:
+                _reject("encoded_ip_bypass", url)
+            # Short-form resolving to a public IPv4: reject anyway — no
+            # legitimate LLM endpoint is addressed via the inet_aton
+            # short-form syntax, and allowing it widens the audit surface.
+            _reject("encoded_ip_bypass", url)
 
     # ---- Literal IP check -------------------------------------------
     if parsed_ip is not None:
         if isinstance(parsed_ip, ipaddress.IPv4Address) and _is_private_ipv4(parsed_ip):
-            raise InvalidEndpoint(_ip_reason(parsed_ip), raw_url=url)
+            _reject(_ip_reason(parsed_ip), url)
         if isinstance(parsed_ip, ipaddress.IPv6Address) and _is_private_ipv6(parsed_ip):
-            raise InvalidEndpoint(_ip_reason(parsed_ip), raw_url=url)
+            _reject(_ip_reason(parsed_ip), url)
         if str(parsed_ip) in _METADATA_IPS:
-            raise InvalidEndpoint("metadata_service", raw_url=url)
+            _reject("metadata_service", url)
         # Literal IP + passed range checks: accept.
         return
 
@@ -258,23 +351,19 @@ def check_url(url: str, *, resolve_dns: bool = True) -> None:
             if host_lc in _HTTP_LOCALHOST_ALLOWLIST:
                 # localhost legitimately resolves to 127.0.0.1; skip.
                 continue
-            raise InvalidEndpoint(_ip_reason(ip), raw_url=url)
+            _reject(_ip_reason(ip), url)
         if isinstance(ip, ipaddress.IPv6Address) and _is_private_ipv6(ip):
             if host_lc in _HTTP_LOCALHOST_ALLOWLIST:
                 continue
-            raise InvalidEndpoint(_ip_reason(ip), raw_url=url)
+            _reject(_ip_reason(ip), url)
         if str(ip) in _METADATA_IPS:
-            raise InvalidEndpoint("metadata_service", raw_url=url)
+            _reject("metadata_service", url)
 
     if not any_resolved and host_lc not in _HTTP_LOCALHOST_ALLOWLIST:
         # Resolution failed entirely — treat as InvalidEndpoint with
         # `resolution_failed`. Caller can retry with resolve_dns=False if the
         # host is intentionally unreachable in the test environment.
-        logger.debug(
-            "url_safety.resolution_failed",
-            extra={"reason": "resolution_failed"},
-        )
-        raise InvalidEndpoint("resolution_failed", raw_url=url)
+        _reject("resolution_failed", url)
 
 
 __all__ = ["check_url"]
