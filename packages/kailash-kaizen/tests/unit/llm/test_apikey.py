@@ -98,3 +98,78 @@ def test_apikeybearer_str_does_not_leak_key() -> None:
     s = str(bearer)
     assert raw not in s
     assert "hunter2" not in s
+
+
+def test_apikey_deepcopy_returns_distinct_instance_with_same_secret() -> None:
+    """copy.deepcopy(ApiKey) routes through __init__ rather than __slots__ restore.
+
+    Contract: deepcopy returns a distinct ApiKey object whose
+    constant_time_eq against the original returns True. The fingerprint is
+    re-derived (same value), not copied byte-for-byte from __slots__.
+    """
+    import copy
+
+    original = ApiKey("sk-hunter2-deepcopy-probe")
+    clone = copy.deepcopy(original)
+
+    assert clone is not original, "deepcopy must produce a distinct object"
+    assert clone.constant_time_eq(original) is True
+    assert clone.fingerprint == original.fingerprint
+
+
+def test_apikey_copy_returns_distinct_instance() -> None:
+    import copy
+
+    original = ApiKey("sk-hunter2-copy-probe")
+    clone = copy.copy(original)
+    assert clone is not original
+    assert clone.constant_time_eq(original) is True
+
+
+def test_apikey_pickle_roundtrip_does_not_leak_through_slots() -> None:
+    """pickle.dumps/loads of ApiKey uses __reduce__ (no __slots__ exposure).
+
+    Contract: round-trip preserves secret equality (callers using pickle
+    for in-process queues still work) while routing through __init__.
+    The pickled payload still contains the secret bytes — this test proves
+    the reconstruction path, NOT that the pickle envelope is secure.
+    (The MUST-NOT-pickle-across-trust-boundaries rule is documented in
+    the class docstring.)
+    """
+    import pickle
+
+    original = ApiKey("sk-hunter2-pickle-probe")
+    payload = pickle.dumps(original)
+    reconstructed = pickle.loads(payload)
+
+    assert reconstructed is not original
+    assert reconstructed.constant_time_eq(original) is True
+    assert reconstructed.fingerprint == original.fingerprint
+
+
+def test_apikey_reduce_declares_init_reconstruction() -> None:
+    """__reduce__ MUST name the class + secret, not the slot tuple.
+
+    Defense against future __slots__ layout changes: the reconstruction
+    routes through __init__, which re-derives the fingerprint. If anyone
+    later replaces __reduce__ with a __getstate__/__setstate__ that skips
+    __init__, this test fails and the review catches it.
+    """
+    original = ApiKey("sk-hunter2-reduce-probe")
+    reducer = original.__reduce__()
+    # (class, args_tuple) shape — no __slots__ dict as third element.
+    assert len(reducer) == 2
+    assert reducer[0] is ApiKey
+    assert len(reducer[1]) == 1  # just the secret
+
+
+def test_apikey_repr_still_does_not_leak_after_deepcopy() -> None:
+    """The secret MUST NOT appear in repr of a deepcopied ApiKey either."""
+    import copy
+
+    raw = "sk-hunter2-repr-after-deepcopy"
+    original = ApiKey(raw)
+    clone = copy.deepcopy(original)
+    assert raw not in repr(clone)
+    assert "hunter2" not in repr(clone)
+    assert "fingerprint=" in repr(clone)

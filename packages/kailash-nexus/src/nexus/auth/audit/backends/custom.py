@@ -1,6 +1,6 @@
 """Custom backend wrapper for user-provided callable (TODO-310F)."""
 
-import asyncio
+import inspect
 from typing import Awaitable, Callable, Union
 
 from nexus.auth.audit.backends.base import AuditBackend
@@ -29,7 +29,9 @@ class CustomBackend(AuditBackend):
 
     async def store(self, record: AuditRecord) -> None:
         """Store record using custom function."""
-        if asyncio.iscoroutinefunction(self._store_func):
-            await self._store_func(record)
+        # inspect.iscoroutinefunction — Python 3.14 deprecated asyncio's form;
+        # inspect's form is the documented forward-compatible spelling.
+        if inspect.iscoroutinefunction(self._store_func):
+            await self._store_func(record)  # type: ignore[misc]
         else:
             self._store_func(record)

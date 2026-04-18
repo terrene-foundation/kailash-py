@@ -11,7 +11,7 @@ Every preset factory:
   allowlist regex `^[a-z][a-z0-9_]{0,31}$`.
 * Is exposed as a classmethod on `LlmDeployment` via `_attach_preset_methods()`
   so both call styles work:
-      LlmDeployment.openai(api_key, model="gpt-4")     # classmethod form
+      LlmDeployment.openai(api_key, model=os.environ["OPENAI_PROD_MODEL"])
       from kaizen.llm.presets import openai_preset      # module-level form
 
 Session 1 ships only the `openai` preset. Every subsequent session adds its
@@ -145,7 +145,7 @@ def list_presets() -> list[str]:
 
 def openai_preset(
     api_key: str,
-    model: str = "gpt-4",
+    model: str,
     *,
     base_url: str = "https://api.openai.com",
     path_prefix: str = "/v1",
@@ -156,13 +156,23 @@ def openai_preset(
     Endpoint:    `https://api.openai.com/v1`
     Auth:        `ApiKeyBearer(Authorization_Bearer, ApiKey(api_key))`
 
+    `api_key` and `model` are REQUIRED. Per `rules/env-models.md`, model
+    names MUST come from `.env` / environment variables — no default is
+    provided by the preset. Callers:
+
+        model = os.environ["OPENAI_PROD_MODEL"]  # or DEFAULT_LLM_MODEL
+        LlmDeployment.openai(api_key, model=model)
+
     `api_key` MUST be a non-empty string; we do not accept `None` on the
     grounds that "let the provider 401" produces opaque errors.
     """
     if not isinstance(api_key, str) or not api_key:
         raise ValueError("openai_preset requires a non-empty api_key string")
     if not isinstance(model, str) or not model:
-        raise ValueError("openai_preset requires a non-empty model string")
+        raise ValueError(
+            "openai_preset requires a non-empty model string — read it from "
+            "os.environ['OPENAI_PROD_MODEL'] per rules/env-models.md"
+        )
 
     endpoint = Endpoint(
         base_url=base_url,
@@ -197,7 +207,7 @@ def _attach_openai_classmethod() -> None:
     """
 
     @classmethod  # type: ignore[misc]
-    def openai(cls, api_key: str, model: str = "gpt-4", **kwargs: Any) -> LlmDeployment:
+    def openai(cls, api_key: str, model: str, **kwargs: Any) -> LlmDeployment:
         return openai_preset(api_key, model=model, **kwargs)
 
     LlmDeployment.openai = openai  # type: ignore[attr-defined]

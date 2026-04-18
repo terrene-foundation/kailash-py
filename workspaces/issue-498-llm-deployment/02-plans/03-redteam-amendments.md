@@ -130,3 +130,107 @@ headroom).
 **Gate status:** plan is ready for human approval pending the human's
 nod. The MEDs become /implement tasks within their shard, not a
 separate approval cycle.
+
+---
+
+# Round 2 / Round 3 Amendments (2026-04-18, post-Session 1 convergence)
+
+Session 1 landed and converged through 2 parallel /redteam rounds + a
+round-3 cleanup commit (`c00f21c4`). The items below were carried over
+from rounds 1–3 as deferred LOW/MED follow-ups. This round-5 session
+resolves each one in the pristine-first sweep before the next
+implementation shard starts.
+
+## Round 5 Resolutions (pre-Session 2 cleanup sweep, 2026-04-18)
+
+### R5-1 — Nexus M-N2 cancel-cleanup contract
+
+**Was:** round-2 security MED, downgraded to LOW by reviewer. Plugin
+`on_startup` hooks cancelled by `asyncio.wait_for` left partially
+initialized state (DB connections acquired, tasks spawned) with no
+framework-enforced cleanup path.
+
+**Resolution:** Added three-clause cancel-cleanup contract to
+`src/kailash/servers/workflow_server.py`'s `startup_hook_timeout`
+docstring. Two Tier 2 integration tests at
+`tests/integration/nexus/test_startup_hook_cancel_cleanup.py` exercise
+the contract (partial-init cleanup via shutdown_hook + spawned-task
+cancellation). Real asyncio, real FastAPI lifespan, no mocking.
+
+**Commit:** R5 cleanup (see session commit).
+
+### R5-2 — `_run_async_hook:1977` third residual `asyncio.iscoroutinefunction` site
+
+**Was:** third residual `asyncio.iscoroutinefunction` call (Python 3.14
+deprecated) out of round-1 scope. Surface audit found the actual
+remaining site at
+`packages/kailash-nexus/src/nexus/auth/audit/backends/custom.py:32`,
+not the line in session notes.
+
+**Resolution:** Replaced `asyncio.iscoroutinefunction` with
+`inspect.iscoroutinefunction` (forward-compatible). 64/64 auth/custom
+tests green.
+
+### R5-3 — #498 LOW-1 hardcoded `model="gpt-4"` default
+
+**Was:** round-2 reviewer LOW-1. `openai_preset` / `LlmDeployment.openai`
+defaulted `model` to the literal `"gpt-4"`, violating
+`rules/env-models.md` ("BLOCKED: model='gpt-4'"). Kept in round-3 for
+ergonomic quickstart despite the rule.
+
+**Resolution:** Made `model` a REQUIRED parameter (no default) on both
+`openai_preset` and the classmethod. The docstring points callers to
+`os.environ["OPENAI_PROD_MODEL"]`. Added two new unit tests covering
+the required-model contract. Migration path is clean for Session 2+
+(every new preset takes `model` as a required parameter).
+
+### R5-4 — ApiKey pickle/deepcopy hygiene
+
+**Was:** round-2 defer followup. `ApiKey.__slots__` values were
+exposed via `copy.deepcopy` and `pickle.dumps` default protocols —
+the SecretStr payload shipped across pickling boundaries (multi-process
+queues, test cassettes, exception reprs).
+
+**Resolution:** Added `__reduce__`, `__deepcopy__`, and `__copy__`
+overrides that route reconstruction through `__init__`. 5 new unit
+tests in `test_apikey.py` cover the round-trip contract. The override
+does NOT eliminate cross-process secret-bearing pickle payloads
+(that's a caller discipline issue documented in the class docstring),
+but it DOES prevent accidental **slots**-level repr leakage via
+in-process copying.
+
+## MED-3 (deferred to Session 3 close-out) — `LlmClient` orphan-window amendment
+
+**Was:** #498 round-2 reviewer MED-3. `LlmClient` is a facade class
+per `rules/facade-manager-detection.md` §2 (name matches `*Client`
+pattern — adjacent to the manager-shape regex). Session 1 ships
+`LlmClient.from_deployment(LlmDeployment)` with a structural wiring
+test but no live-network hot-path consumer in the framework's own
+code (wire-send lands in Session 3's S4 via `LlmHttpClient`).
+
+**Amendment:** At Session 3 close-out, the Tier 2 integration test
+`tests/integration/llm/test_llmclient_send_wiring.py` MUST land in
+the same commit as the wire-send path. The test MUST:
+
+1. Import `LlmClient` through the framework facade (not the class
+   directly from a submodule).
+2. Construct via `LlmClient.from_deployment(LlmDeployment.openai(...))`.
+3. Invoke `client.send(prompt="...", max_tokens=1)` against a
+   cassette-recorded OpenAI endpoint.
+4. Assert the externally-observable effect: one HTTP call was made
+   with `Authorization: Bearer ...` header matching the API key's
+   fingerprint.
+
+This closes the orphan-window per `rules/facade-manager-detection.md`
+§1 ("every `db.X` / `app.X` facade has a production call site") within
+5 commits of the facade landing. Session 1's LlmClient is at commit 1
+of the 5-commit window; Session 3's wire-send will be commit 2-3,
+well within the allowance.
+
+**Affected todo:** `todos/active/003-session-3-s4a-bedrock-claude-plus-s4b-i-sigv4-core.md`
+— add `test_llmclient_send_wiring.py` under **Tests (T2)**.
+
+**Failure mode if NOT addressed by Session 3:** LlmClient joins the
+Phase 5.11 orphan class (documented facade with no production call
+site). Session 3 gate MUST fail on /redteam if the wiring test file
+is absent.

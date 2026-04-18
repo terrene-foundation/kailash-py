@@ -42,7 +42,7 @@ async def test_llmclient_from_deployment_openai_wiring() -> None:
 @pytest.mark.integration
 def test_llmclient_from_deployment_constructs_client() -> None:
     """Structural wiring: the client holds the deployment correctly."""
-    deployment = LlmDeployment.openai("sk-test-structural-only")
+    deployment = LlmDeployment.openai("sk-test-structural-only", model="gpt-4o-mini")
     client = LlmClient.from_deployment(deployment)
     assert client.deployment is deployment
     assert client.deployment.wire.name == "OpenAiChat"

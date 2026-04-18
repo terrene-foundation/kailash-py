@@ -141,6 +141,29 @@ class WorkflowServer:
                 prevent uvicorn from accepting connections. On timeout, the
                 lifespan's shutdown branch still runs so partial startup
                 state is torn down.
+
+                Cancel-cleanup contract (sec M-N2 / round-2 red-team): on
+                timeout, ``asyncio.wait_for`` cancels the hook's coroutine.
+                If the hook had already acquired resources (DB connections,
+                spawned tasks, opened files) before the cancellation, those
+                resources are NOT automatically released by the framework.
+                The framework's cleanup obligation is limited to invoking
+                ``shutdown_hook`` in the lifespan's ``finally:`` block, so
+                plugin authors MUST:
+
+                1. Register a ``shutdown_hook`` that is idempotent and
+                   safe against partial-init state — every resource the
+                   ``startup_hook`` could have acquired before cancellation
+                   MUST be safe to release in ``shutdown_hook`` even if the
+                   ``startup_hook`` never reached the paired acquisition.
+                2. Handle ``asyncio.CancelledError`` inside ``startup_hook``
+                   itself if the hook spawns tasks via
+                   ``asyncio.create_task`` that cannot be cancelled via the
+                   parent coroutine's cancellation. The hook MUST cancel
+                   and await its own spawned tasks on cancellation, or
+                   register them with the ``shutdown_hook`` for teardown.
+                3. NOT swallow ``CancelledError`` — after cleaning up,
+                   re-raise so ``wait_for`` sees the cancellation complete.
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}

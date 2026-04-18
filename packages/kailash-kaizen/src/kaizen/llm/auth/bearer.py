@@ -95,6 +95,40 @@ class ApiKey:
     def __repr__(self) -> str:
         return f"ApiKey(fingerprint={self._fingerprint})"
 
+    # Serialization hygiene: copy.deepcopy / pickle.dumps MUST NOT expose
+    # the raw key. The default Python protocols pickle __slots__ values
+    # as-is, which would ship `SecretStr("sk-...")` over the wire to any
+    # log aggregator that captures exception reprs, any multi-process
+    # pickling queue, and any test that inadvertently pickles a config.
+    #
+    # Contract: pickling / deep-copying returns an ApiKey that carries the
+    # same secret (so legitimate in-process copies still work) but routes
+    # through __init__, which re-derives the fingerprint. Pickle payloads
+    # that escape the process to disk / to a remote worker / to a log
+    # aggregator remain secret-bearing — the only defense against THAT is
+    # "don't pickle credentials across process boundaries". This override
+    # prevents accidental in-process leakage via __dict__-style reprs.
+    #
+    # Round-2 defer followup: ApiKey pickle/deepcopy hygiene.
+    def __reduce__(self):  # type: ignore[override]
+        # Re-construct via __init__ rather than via __slots__ restore so
+        # the fingerprint is re-derived (defensive against a future slot
+        # layout change that would produce a mismatched fingerprint).
+        return (self.__class__, (self._secret,))
+
+    def __deepcopy__(self, memo):
+        # Deepcopy returns a distinct ApiKey with the same secret. This
+        # keeps existing copy-based patterns working while routing through
+        # the explicit constructor (no __slots__ bypass).
+        new = self.__class__(self._secret)
+        memo[id(self)] = new
+        return new
+
+    def __copy__(self):
+        # Shallow copy — same contract as deepcopy; there is no meaningful
+        # "shallow vs deep" distinction for a frozen secret holder.
+        return self.__class__(self._secret)
+
 
 class StaticNone:
     """AuthStrategy for endpoints that don't require auth.
