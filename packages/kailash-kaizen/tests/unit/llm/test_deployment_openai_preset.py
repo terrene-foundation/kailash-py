@@ -66,13 +66,17 @@ def test_llm_deployment_is_frozen() -> None:
         d.wire = WireProtocol.AnthropicMessages  # type: ignore[misc]
 
 
-def test_deferred_presets_raise_not_implemented() -> None:
-    """Every non-S1/S2/S3/S4/S5 preset must raise with a session marker.
-
-    S5 lands vertex_claude + vertex_gemini. Only azure_* remain deferred
-    to Session 6.
-    """
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.azure_entra("k")
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.azure_openai("k")
+def test_all_primary_presets_are_implemented() -> None:
+    """Sessions 1-6 wire every primary preset. No NotImplementedError
+    remains on `LlmDeployment.<preset>()` after Session 6 (S6)."""
+    # Every attached classmethod should be callable (may raise
+    # ValueError/ModelRequired on bad input, but NOT NotImplementedError).
+    assert callable(LlmDeployment.openai)
+    assert callable(LlmDeployment.anthropic)
+    assert callable(LlmDeployment.google)
+    assert callable(LlmDeployment.bedrock_claude)
+    assert callable(LlmDeployment.bedrock_llama)
+    assert callable(LlmDeployment.vertex_claude)
+    assert callable(LlmDeployment.vertex_gemini)
+    assert callable(LlmDeployment.azure_openai)
+    assert callable(LlmDeployment.azure_entra)

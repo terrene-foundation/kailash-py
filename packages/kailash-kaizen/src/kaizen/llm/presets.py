@@ -33,7 +33,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
@@ -1403,6 +1403,167 @@ def _register_and_attach_session_5_presets() -> None:
 
 
 _register_and_attach_session_5_presets()
+
+
+# ---------------------------------------------------------------------------
+# Azure OpenAI preset (Session 6 -- S6)
+# ---------------------------------------------------------------------------
+
+from kaizen.llm.auth.azure import AzureEntra
+from kaizen.llm.grammar.azure_openai import AzureOpenAIGrammar
+
+# Default Azure OpenAI api-version. Pinned; matches the Rust SDK constant
+# (`kailash-rs/crates/kailash-kaizen/src/llm/deployment/azure.rs::DEFAULT_API_VERSION`).
+# Operators who need a different version pass `api_version=...` to the preset.
+AZURE_OPENAI_DEFAULT_API_VERSION: str = "2024-06-01"
+
+# Azure resource-name allowlist regex. Azure requires 3-24 alphanumeric +
+# hyphen chars, must start with a letter. Narrow on purpose: the value
+# is interpolated into the endpoint host (`{resource}.openai.azure.com`)
+# and a permissive match is a host-control vector.
+_AZURE_RESOURCE_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,22}[a-z0-9]$")
+
+_GRAMMAR_AZURE_OPENAI = AzureOpenAIGrammar()
+
+
+def _validate_azure_resource(resource_name: Any) -> str:
+    """Validate an Azure OpenAI resource name against the strict allowlist."""
+    if not isinstance(resource_name, str) or not resource_name:
+        raise ValueError(
+            "azure_openai preset requires a non-empty resource_name "
+            "(e.g. 'my-openai-resource')"
+        )
+    if not _AZURE_RESOURCE_NAME_RE.match(resource_name):
+        raise ValueError(
+            "azure_openai resource_name failed validation against "
+            f"^[a-z][a-z0-9-]{{1,22}}[a-z0-9]$ "
+            f"(resource_fingerprint={_fingerprint(resource_name)})"
+        )
+    return resource_name
+
+
+def azure_openai_preset(
+    resource_name: str,
+    deployment_name: str,
+    auth: AzureEntra,
+    *,
+    api_version: Optional[str] = None,
+) -> LlmDeployment:
+    """Azure OpenAI deployment -- composed with an AzureEntra auth strategy.
+
+    Wire:        `OpenAiChat` (Azure OpenAI speaks the same on-wire JSON
+                 as OpenAI-direct; only the URL + auth differ).
+    Endpoint:    `https://{resource}.openai.azure.com/openai/deployments/{deployment}`
+                 with `?api-version={api_version}` appended by the wire
+                 adapter at completion time.
+    Auth:        any `AzureEntra` instance -- api-key, workload-identity,
+                 or managed-identity variant.
+    Model:       The `deployment_name` IS the model identifier on the
+                 wire; Azure does not use upstream OpenAI model ids.
+
+    Required arguments:
+
+    * `resource_name` -- Azure resource name matching the strict regex.
+    * `deployment_name` -- Caller-chosen Azure deployment name, 1-64
+      chars of `[a-zA-Z0-9_-]`.
+    * `auth` -- pre-constructed `AzureEntra` (callers own the variant).
+
+    Optional:
+
+    * `api_version` -- defaults to `AZURE_OPENAI_DEFAULT_API_VERSION`.
+
+    Cross-SDK parity: preset name `azure_openai` + default api-version +
+    endpoint path template are byte-identical to the Rust SDK.
+    """
+    validated_resource = _validate_azure_resource(resource_name)
+    resolved_deployment = _GRAMMAR_AZURE_OPENAI.resolve(deployment_name)
+    if api_version is None:
+        api_version = AZURE_OPENAI_DEFAULT_API_VERSION
+    if not isinstance(api_version, str) or not api_version:
+        raise ValueError(
+            "azure_openai api_version must be a non-empty string "
+            f"(default is '{AZURE_OPENAI_DEFAULT_API_VERSION}')"
+        )
+    if not isinstance(auth, AzureEntra):
+        raise TypeError(
+            "azure_openai preset requires an AzureEntra auth instance; "
+            f"got {type(auth).__name__}"
+        )
+
+    endpoint_host = f"{validated_resource}.openai.azure.com"
+    path_prefix = f"/openai/deployments/{resolved_deployment}"
+    endpoint = Endpoint(
+        base_url=f"https://{endpoint_host}",
+        path_prefix=path_prefix,
+    )
+    deployment = LlmDeployment(
+        wire=WireProtocol.OpenAiChat,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=resolved_deployment,
+    )
+    logger.info(
+        "llm.deployment.azure_openai.constructed",
+        extra={
+            "deployment_preset": "azure_openai",
+            "resource": validated_resource,
+            "deployment_name": resolved_deployment,
+            "auth_strategy_kind": auth.auth_strategy_kind(),
+            "endpoint_host": endpoint_host,
+            "api_version": api_version,
+        },
+    )
+    return deployment
+
+
+def _register_and_attach_session_6_presets() -> None:
+    """Register azure_openai + azure_entra, attach classmethods.
+
+    `azure_entra` is exposed as `LlmDeployment.azure_entra(api_key=..., ...)`
+    returning a bare AzureEntra auth (for composition with azure_openai),
+    rather than an LlmDeployment -- matching the Rust SDK's Azure shape
+    where auth and deployment are constructed separately.
+
+    Replaces the `LlmDeployment.azure_openai` + `LlmDeployment.azure_entra`
+    NotImplementedError stubs.
+    """
+    register_preset("azure_openai", azure_openai_preset)
+
+    @classmethod  # type: ignore[misc]
+    def azure_openai_cm(
+        cls,
+        resource_name: str,
+        deployment_name: str,
+        auth: AzureEntra,
+        *,
+        api_version: Optional[str] = None,
+    ) -> LlmDeployment:
+        return azure_openai_preset(
+            resource_name,
+            deployment_name,
+            auth,
+            api_version=api_version,
+        )
+
+    @classmethod  # type: ignore[misc]
+    def azure_entra_cm(
+        cls,
+        *,
+        api_key: Optional[str] = None,
+        workload_identity: bool = False,
+        managed_identity_client_id: Optional[str] = None,
+    ) -> AzureEntra:
+        return AzureEntra(
+            api_key=api_key,
+            workload_identity=workload_identity,
+            managed_identity_client_id=managed_identity_client_id,
+        )
+
+    LlmDeployment.azure_openai = azure_openai_cm  # type: ignore[attr-defined]
+    LlmDeployment.azure_entra = azure_entra_cm  # type: ignore[attr-defined]
+
+
+_register_and_attach_session_6_presets()
 
 
 __all__ = [

@@ -328,10 +328,7 @@ class LlmDeployment(BaseModel):
     # `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere` follow the
     # same pattern in Session 4 (S4b-ii). `vertex_claude` and
     # `vertex_gemini` follow the same pattern in Session 5 (S5).
-    _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {
-        "azure_openai": "Implemented in session 6 (S6)",
-        "azure_entra": "Implemented in session 6 (S6)",
-    }
+    _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {}
 
     # `openai` preset is defined in `presets.py` via runtime attachment
     # to avoid a circular import (presets depend on LlmDeployment).
@@ -343,13 +340,8 @@ class LlmDeployment(BaseModel):
     # (S4b-ii) attaches bedrock_llama / bedrock_titan / bedrock_mistral
     # / bedrock_cohere.
 
-    @classmethod
-    def azure_openai(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["azure_openai"])
-
-    @classmethod
-    def azure_entra(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["azure_entra"])
+    # azure_openai and azure_entra are attached by presets.py at import time
+    # (Session 6). No stubs remain on LlmDeployment after S6.
 
 
 __all__ = [

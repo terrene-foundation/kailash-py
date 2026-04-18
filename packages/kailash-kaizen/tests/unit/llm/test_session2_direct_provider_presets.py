@@ -583,13 +583,10 @@ def test_every_s3_deployment_is_frozen(factory) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_remaining_deferred_presets_raise_not_implemented() -> None:
-    """Only azure_* remain deferred.
-
-    Session 5 (S5) wired vertex_claude + vertex_gemini. Session 6 will
-    wire azure_openai + azure_entra.
-    """
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.azure_openai("k")
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.azure_entra("k")
+def test_all_primary_presets_are_wired_after_session_6() -> None:
+    """Session 6 (S6) wired azure_openai + azure_entra. No preset classmethod
+    on LlmDeployment raises NotImplementedError after S6."""
+    assert callable(LlmDeployment.azure_openai)
+    assert callable(LlmDeployment.azure_entra)
+    assert callable(LlmDeployment.vertex_claude)
+    assert callable(LlmDeployment.vertex_gemini)
