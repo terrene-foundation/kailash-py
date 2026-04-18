@@ -319,6 +319,22 @@ class ModelRequired(ModelGrammarError):
             )
 
 
+class ConfigError(LlmClientError):
+    """Base for configuration / environment resolution errors (#498 S7)."""
+
+
+class NoKeysConfigured(ConfigError):
+    """No deployment env vars or legacy keys resolved to a valid config."""
+
+
+class InvalidUri(ConfigError):
+    """KAILASH_LLM_DEPLOYMENT URI failed per-scheme regex validation."""
+
+
+class InvalidPresetName(ConfigError):
+    """register_preset() name failed the regex gate (#498 S8)."""
+
+
 __all__ = [
     "LlmClientError",
     "LlmError",
@@ -330,6 +346,10 @@ __all__ = [
     "Invalid",
     "Expired",
     "MissingCredential",
+    "ConfigError",
+    "NoKeysConfigured",
+    "InvalidUri",
+    "InvalidPresetName",
     "EndpointError",
     "InvalidEndpoint",
     "Unreachable",

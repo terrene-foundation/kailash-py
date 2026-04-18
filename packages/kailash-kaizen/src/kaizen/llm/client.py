@@ -114,15 +114,55 @@ class LlmClient:
         )
 
     @classmethod
-    def from_env(cls) -> "LlmClient":
+    def from_env(
+        cls,
+        *,
+        classification_policy: Optional[object] = None,
+        caller_clearance: Optional[object] = None,
+    ) -> "LlmClient":
         """Construct a client from environment variables.
 
-        NOT YET IMPLEMENTED. Session 7 (S7) wires the env-loader precedence
-        (dotenv + OS env + structured secret stores).
+        Three-tier precedence (Session 7 / S7):
+
+        1. **URI tier**: `KAILASH_LLM_DEPLOYMENT` holds a deployment URI
+           (`bedrock://`, `vertex://`, `azure://`, `openai-compat://`).
+        2. **Selector tier**: `KAILASH_LLM_PROVIDER` holds a preset name.
+        3. **Legacy tier**: per-provider `*_API_KEY` fallback, OpenAI >
+           Azure > Anthropic > Google (matches today's `autoselect_provider`).
+
+        Emits a `WARNING` if deployment-tier signals coexist with legacy
+        per-provider keys; deployment path wins. See `from_env.py` for
+        the full precedence chain + URI grammar.
         """
-        raise NotImplementedError(
-            "LlmClient.from_env() — Implemented in session 7 (S7). "
-            "For now use LlmClient.from_deployment(LlmDeployment.openai(...))."
+        from kaizen.llm.from_env import resolve_env_deployment
+
+        deployment = resolve_env_deployment()
+        return cls.from_deployment(
+            deployment,
+            classification_policy=classification_policy,
+            caller_clearance=caller_clearance,
+        )
+
+    @classmethod
+    def from_deployment_sync(
+        cls,
+        deployment: LlmDeployment,
+        *,
+        classification_policy: Optional[object] = None,
+        caller_clearance: Optional[object] = None,
+    ) -> "LlmClient":
+        """Synchronous variant of `from_deployment` for non-async callers.
+
+        Identical to `from_deployment` for the construction phase -- no
+        async operations are performed at construction time. The distinct
+        entry point exists for API symmetry with Rust's `LlmClient::
+        from_deployment_sync` and to signal intent: this client will be
+        used from sync code paths that call the sync wire-send methods.
+        """
+        return cls.from_deployment(
+            deployment,
+            classification_policy=classification_policy,
+            caller_clearance=caller_clearance,
         )
 
     def with_deployment(self, deployment: LlmDeployment) -> "LlmClient":
