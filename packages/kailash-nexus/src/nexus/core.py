@@ -844,10 +844,9 @@ class Nexus:
 
         try:
             # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
+            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
             from kailash_mcp import MCPServer
             from kailash_mcp.auth.providers import APIKeyAuth
-
-            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
 
             # Create production-ready MCP server using Core SDK
             self._mcp_server = self._create_sdk_mcp_server()
@@ -2774,7 +2773,6 @@ Check the documentation or explore available resources.
             HTTPException: If workflow not found, input invalid, or execution fails
         """
         from fastapi import HTTPException
-
         from nexus.validation import validate_workflow_inputs, validate_workflow_name
 
         # P0-5: Validate workflow name (prevent path traversal)
@@ -2869,6 +2867,15 @@ Check the documentation or explore available resources.
 
         if not self._http_transport.gateway:
             raise RuntimeError("Enterprise gateway not initialized")
+
+        # Reset shutdown-idempotency flag so a ``start() -> stop() -> start()``
+        # cycle re-arms the shutdown path. Without this, a second start leaves
+        # ``_shutdown_hooks_fired = True`` from the prior cycle and the next
+        # stop silently skips every shutdown hook. Held under the same lock
+        # that protects the check-and-set at the other call sites.
+        # Round-2 security M-N1.
+        with self._shutdown_hooks_fired_lock:
+            self._shutdown_hooks_fired = False
 
         logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
 

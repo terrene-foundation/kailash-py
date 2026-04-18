@@ -65,11 +65,11 @@ class ApiKey:
             raise TypeError("ApiKey expects str or SecretStr")
         self._secret: SecretStr = secret
         raw = secret.get_secret_value().encode("utf-8")
-        self._fingerprint: str = hashlib.sha256(raw).hexdigest()[:4]
+        self._fingerprint: str = hashlib.sha256(raw).hexdigest()[:8]
 
     @property
     def fingerprint(self) -> str:
-        """4-char SHA-256 prefix for logs / correlation."""
+        """8-char SHA-256 prefix for logs / correlation (cross-SDK parity)."""
         return self._fingerprint
 
     def get_secret_value(self) -> str:

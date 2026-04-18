@@ -52,8 +52,10 @@ _PRESET_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 
 def _fingerprint(raw: str) -> str:
-    """Short, non-reversible tag for log correlation without echoing input."""
-    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:4]
+    """8-char non-reversible tag — matches the cross-SDK contract (see
+    ``rules/event-payload-classification.md`` §2 and DataFlow's
+    ``format_record_id_for_event``)."""
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:8]
 
 
 def _validate_preset_name(name: Any) -> str:

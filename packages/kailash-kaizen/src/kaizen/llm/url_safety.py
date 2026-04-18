@@ -49,7 +49,7 @@ def _url_fingerprint(raw: str | None) -> str:
     """
     if not raw:
         return "none"
-    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:4]
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:8]
 
 
 def _reject(reason: str, url: str | None) -> None:

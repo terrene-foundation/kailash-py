@@ -219,7 +219,7 @@ def test_rejection_emits_structured_warning(caplog) -> None:
     }
     # Fingerprint must be present and of the expected 4-char shape.
     fp = getattr(rec, "url_fingerprint", None)
-    assert isinstance(fp, str) and len(fp) == 4
+    assert isinstance(fp, str) and len(fp) == 8  # cross-SDK parity
 
 
 def test_rejection_log_fingerprint_matches_exception(caplog) -> None:

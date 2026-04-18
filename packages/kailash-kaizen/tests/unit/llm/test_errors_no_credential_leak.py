@@ -24,7 +24,7 @@ def test_auth_error_invalid_does_not_echo_raw_key() -> None:
     assert "classified" not in s
     assert "payload" not in s
     # The fingerprint MUST be present for correlation.
-    expected_fp = hashlib.sha256(raw.encode()).hexdigest()[:4]
+    expected_fp = hashlib.sha256(raw.encode()).hexdigest()[:8]
     assert expected_fp in s
     # The `fingerprint` attribute is public for forensic correlation.
     assert err.fingerprint == expected_fp
@@ -82,9 +82,7 @@ def test_provider_error_scrubs_openai_key() -> None:
 
 def test_provider_error_scrubs_openai_project_key() -> None:
     """OpenAI sk-proj-* project key must be scrubbed."""
-    body = (
-        'error: {"message": "bad key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}'
-    )
+    body = 'error: {"message": "bad key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}'
     err = ProviderError(status=401, body_snippet=body)
     assert "sk-proj-" not in str(err)
     assert "[REDACTED-CRED]" in err.body_snippet
@@ -129,3 +127,39 @@ def test_provider_error_scrub_does_not_false_positive_on_short_sk() -> None:
     err = ProviderError(status=500, body_snippet=body)
     assert "sk-abc" in err.body_snippet
     assert "[REDACTED-CRED]" not in err.body_snippet
+
+
+# --- round-3 cleanup: expanded cred-scrub for JWT + Azure SAS ---
+def test_provider_error_scrubs_jwt_token() -> None:
+    """JWT bearer tokens (Azure Entra, Google OAuth id_token, any HS/RS256)
+    MUST be scrubbed. Round-2 security M-N2 (under-match gap)."""
+    jwt = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0"
+        ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    )
+    body = f"error: Authorization: Bearer {jwt}"
+    err = ProviderError(status=401, body_snippet=body)
+    # JWT body portion must not survive — the pattern covers the 3-segment form.
+    assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrubs_azure_sas_sig() -> None:
+    """Azure storage SAS `sig=` parameter MUST be scrubbed."""
+    body = (
+        "error: blob not found: https://acct.blob.core.windows.net/c/b?"
+        "sig=abc123def456ghi789jkl012mno345&se=2026-04-18"
+    )
+    err = ProviderError(status=404, body_snippet=body)
+    assert "abc123def456ghi789jkl012mno345" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_fingerprint_is_8_chars() -> None:
+    """Cross-SDK parity: fingerprint length matches DataFlow's 8-hex contract."""
+    raw = "sk-some-key-value-xxxxxxxxxxxxxxxx"
+    err = Invalid(raw)
+    assert len(err.fingerprint) == 8
+    # Stable value so a refactor that changes the hash function trips the test.
+    assert all(c in "0123456789abcdef" for c in err.fingerprint)

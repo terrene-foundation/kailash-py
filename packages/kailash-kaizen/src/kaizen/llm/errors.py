@@ -39,12 +39,15 @@ import re
 from typing import Optional
 
 
-def _fingerprint(raw: str | bytes, length: int = 4) -> str:
+def _fingerprint(raw: str | bytes, length: int = 8) -> str:
     """Produce a deterministic non-reversible tag for a sensitive value.
 
-    4 hex chars (16 bits) = sufficient for forensic correlation across a
-    single session's logs while too short for rainbow-table reversal of
-    typical API keys.
+    8 hex chars (32 bits) matches the cross-SDK contract in
+    ``rules/event-payload-classification.md`` § 2 and DataFlow's
+    ``format_record_id_for_event`` helper, so a fingerprint emitted by a
+    Python service and one emitted by a Rust service can be joined in the
+    same forensic query. At ~1000 unique tags, birthday collision is
+    ~0.01%, vs the 35% collision rate of the prior 4-char form.
     """
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
@@ -68,6 +71,12 @@ _CRED_PATTERNS = (
     re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id
     re.compile(r"ASIA[0-9A-Z]{16}"),  # AWS STS temporary
     re.compile(r"Bearer\s+[A-Za-z0-9_\-.=]{20,}"),  # generic Bearer
+    # JWT — three base64url segments separated by dots. Azure Entra access
+    # tokens, Google OAuth2 id_tokens, and any HS256/RS256 bearer all match.
+    # Catches the under-match gap from round-2 security M-N2.
+    re.compile(r"eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"),
+    # Azure storage SAS token pattern (sig= parameter in a query string).
+    re.compile(r"sig=[A-Za-z0-9%+/=_\-]{20,}"),
 )
 
 
