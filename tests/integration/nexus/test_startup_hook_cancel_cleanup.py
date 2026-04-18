@@ -23,7 +23,6 @@ import asyncio
 
 import pytest
 from fastapi import FastAPI
-
 from kailash.servers.workflow_server import WorkflowServer
 
 

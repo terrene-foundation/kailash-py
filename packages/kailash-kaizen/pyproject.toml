@@ -39,9 +39,10 @@ dependencies = [
     "azure-core>=1.38.0",
     "google-genai>=1.21.0",
     "tiktoken>=0.5.0",
-    # Server
+    # Server + HTTP client (httpx powers kaizen.llm.http_client.LlmHttpClient)
     "aiohttp>=3.13.3",
     "requests>=2.32",
+    "httpx>=0.25.0",
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "prometheus-client>=0.19.0",

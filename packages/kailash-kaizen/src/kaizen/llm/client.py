@@ -24,6 +24,7 @@ import logging
 from typing import Optional
 
 from kaizen.llm.deployment import LlmDeployment
+from kaizen.llm.redaction import redact_messages
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +34,34 @@ class LlmClient:
 
     The client holds the deployment by reference; the deployment is frozen
     so the client cannot mutate its own configuration post-construction.
+
+    Optionally carries a DataFlow-compatible classification policy so
+    every outbound `CompletionRequest.messages` payload is routed
+    through `redact_messages` before wire-layer serialization. The
+    policy is duck-typed on
+    `apply_masking_to_record(model_name, record, caller_clearance)` --
+    any class exposing that method works, but the DataFlow
+    `ClassificationPolicy` is the canonical producer. See
+    `rules/observability.md` § 8 and the §6.5 security test at
+    `tests/unit/llm/security/test_llmclient_redacts_classified_prompt_fields.py`.
     """
 
-    def __init__(self, deployment: Optional[LlmDeployment] = None) -> None:
+    def __init__(
+        self,
+        deployment: Optional[LlmDeployment] = None,
+        *,
+        classification_policy: Optional[object] = None,
+        caller_clearance: Optional[object] = None,
+    ) -> None:
         self._deployment = deployment
+        self._classification_policy = classification_policy
+        self._caller_clearance = caller_clearance
         logger.debug(
             "llm_client.constructed",
             extra={
                 "has_deployment": deployment is not None,
                 "wire": str(deployment.wire) if deployment is not None else None,
+                "has_classification_policy": classification_policy is not None,
             },
         )
 
@@ -49,15 +69,49 @@ class LlmClient:
     def deployment(self) -> Optional[LlmDeployment]:
         return self._deployment
 
+    @property
+    def classification_policy(self) -> Optional[object]:
+        return self._classification_policy
+
+    def redact_request_messages(
+        self,
+        messages,
+        *,
+        model_name: str = "LlmPromptMessage",
+    ):
+        """Apply the configured classification policy to outbound messages.
+
+        Returns a NEW list; the input is not mutated. When no policy is
+        installed this is a pure copy. Wire adapters (OpenAI / Bedrock /
+        etc.) MUST call this helper before serializing the request
+        payload so prompt PII is redacted at the boundary per §6.5.
+        """
+        return redact_messages(
+            request_messages=messages,
+            policy=self._classification_policy,
+            model_name=model_name,
+            caller_clearance=self._caller_clearance,
+        )
+
     @classmethod
-    def from_deployment(cls, deployment: LlmDeployment) -> "LlmClient":
+    def from_deployment(
+        cls,
+        deployment: LlmDeployment,
+        *,
+        classification_policy: Optional[object] = None,
+        caller_clearance: Optional[object] = None,
+    ) -> "LlmClient":
         """Construct a client for the given deployment."""
         if not isinstance(deployment, LlmDeployment):
             raise TypeError(
                 "LlmClient.from_deployment requires an LlmDeployment; "
                 f"got {type(deployment).__name__}"
             )
-        return cls(deployment=deployment)
+        return cls(
+            deployment=deployment,
+            classification_policy=classification_policy,
+            caller_clearance=caller_clearance,
+        )
 
     @classmethod
     def from_env(cls) -> "LlmClient":
@@ -78,7 +132,11 @@ class LlmClient:
                 "with_deployment requires an LlmDeployment; "
                 f"got {type(deployment).__name__}"
             )
-        return LlmClient(deployment=deployment)
+        return LlmClient(
+            deployment=deployment,
+            classification_policy=self._classification_policy,
+            caller_clearance=self._caller_clearance,
+        )
 
     async def complete(self, **kwargs: object) -> object:  # noqa: ARG002
         """Run a completion against the configured deployment.

@@ -39,7 +39,13 @@ from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
 from kaizen.llm.errors import ModelRequired
-from kaizen.llm.grammar.bedrock import BedrockClaudeGrammar
+from kaizen.llm.grammar.bedrock import (
+    BedrockClaudeGrammar,
+    BedrockCohereGrammar,
+    BedrockLlamaGrammar,
+    BedrockMistralGrammar,
+    BedrockTitanGrammar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -904,6 +910,223 @@ def _attach_bedrock_claude_classmethod() -> None:
 _attach_bedrock_claude_classmethod()
 
 
+# ---------------------------------------------------------------------------
+# Session 4 (S4b-ii) -- Bedrock Llama / Titan / Mistral / Cohere presets
+# ---------------------------------------------------------------------------
+#
+# Each of these four presets mirrors `bedrock_claude_preset` contractually:
+#
+#   * Required args: `api_key` (bearer token), `region` (Bedrock allowlist),
+#     `model` (caller alias / inference-profile / native on-wire id).
+#   * Auth: `AwsBearerToken` (bearer-token fast path). Callers with
+#     assumed-role / workload-identity credentials use `AwsSigV4` via a
+#     manually-constructed deployment -- the bearer preset is the 90% path.
+#   * Endpoint: `bedrock-runtime.{region}.amazonaws.com` -- same host as
+#     Bedrock-Claude. Bedrock routes all families through one runtime.
+#   * Wire: `BedrockInvoke` for non-Anthropic families because Llama /
+#     Titan / Mistral / Cohere on Bedrock speak the native Bedrock
+#     `invoke-model` schema, not the Anthropic Messages schema that
+#     Bedrock-Claude uses. This is a family-level shape difference, NOT
+#     a Kaizen implementation choice.
+#   * Observability: every construction emits a structured INFO log with
+#     deployment_preset, region, auth_strategy_kind, endpoint_host. Same
+#     log shape as bedrock_claude for forensic correlation.
+
+_GRAMMAR_BEDROCK_LLAMA = BedrockLlamaGrammar()
+_GRAMMAR_BEDROCK_TITAN = BedrockTitanGrammar()
+_GRAMMAR_BEDROCK_MISTRAL = BedrockMistralGrammar()
+_GRAMMAR_BEDROCK_COHERE = BedrockCohereGrammar()
+
+
+def _build_bedrock_deployment(
+    *,
+    preset_name: str,
+    api_key: str,
+    region: str,
+    model: str,
+    env_hint: str,
+    grammar: Any,
+    wire: WireProtocol,
+) -> LlmDeployment:
+    """Shared constructor for the 4 non-Claude Bedrock presets.
+
+    Consolidates validation, grammar resolution, auth construction, and
+    observability so every family's preset is a thin one-liner wrapper.
+    Rejecting drift between the 4 families is the reason this helper
+    exists -- the failure mode for Session 3 was "one preset has the
+    structured log, another forgets it".
+    """
+    if not isinstance(api_key, str) or not api_key:
+        raise ValueError(
+            f"{preset_name}_preset requires a non-empty api_key string "
+            f"(typically os.environ['AWS_BEARER_TOKEN_BEDROCK'])"
+        )
+    if not isinstance(model, str) or not model:
+        raise ModelRequired(deployment_preset=preset_name, env_hint=env_hint)
+    resolved_model = grammar.resolve(model)
+    auth = AwsBearerToken(token=api_key, region=region)
+    endpoint_host = f"bedrock-runtime.{region}.amazonaws.com"
+    endpoint = Endpoint(base_url=f"https://{endpoint_host}", path_prefix="")
+    deployment = LlmDeployment(
+        wire=wire,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=resolved_model,
+    )
+    logger.info(
+        f"llm.deployment.{preset_name}.constructed",
+        extra={
+            "deployment_preset": preset_name,
+            "region": region,
+            "auth_strategy_kind": auth.auth_strategy_kind(),
+            "endpoint_host": endpoint_host,
+        },
+    )
+    return deployment
+
+
+def bedrock_llama_preset(
+    api_key: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """AWS Bedrock Meta Llama deployment (bearer-token auth).
+
+    Wire: `BedrockInvoke` -- Llama on Bedrock speaks the native Bedrock
+    invoke-model schema, not Anthropic Messages.
+    Endpoint: `https://bedrock-runtime.{region}.amazonaws.com`
+    Auth: `AwsBearerToken(token, region)`
+
+    Short aliases: `llama-3-8b`, `llama-3-70b`, `llama-3.1-8b`,
+    `llama-3.1-70b`, `llama-3.1-405b`, `llama-3.2-1b`, `llama-3.2-3b`,
+    `llama-3.2-11b`, `llama-3.2-90b`, `llama-3.3-70b`.
+    Also accepts `meta.*` on-wire ids and `{region}.meta.*` profiles.
+    """
+    return _build_bedrock_deployment(
+        preset_name="bedrock_llama",
+        api_key=api_key,
+        region=region,
+        model=model,
+        env_hint="BEDROCK_LLAMA_MODEL_ID",
+        grammar=_GRAMMAR_BEDROCK_LLAMA,
+        wire=WireProtocol.BedrockInvoke,
+    )
+
+
+def bedrock_titan_preset(
+    api_key: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """AWS Bedrock Amazon Titan deployment (bearer-token auth).
+
+    Wire: `BedrockInvoke`
+    Endpoint: `https://bedrock-runtime.{region}.amazonaws.com`
+    Auth: `AwsBearerToken(token, region)`
+
+    Short aliases: `titan-text-lite`, `titan-text-express`,
+    `titan-text-premier`, `titan-embed-text`, `titan-embed-text-v2`,
+    `titan-embed-image`. Also accepts `amazon.*` on-wire ids.
+    """
+    return _build_bedrock_deployment(
+        preset_name="bedrock_titan",
+        api_key=api_key,
+        region=region,
+        model=model,
+        env_hint="BEDROCK_TITAN_MODEL_ID",
+        grammar=_GRAMMAR_BEDROCK_TITAN,
+        wire=WireProtocol.BedrockInvoke,
+    )
+
+
+def bedrock_mistral_preset(
+    api_key: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """AWS Bedrock Mistral deployment (bearer-token auth).
+
+    Wire: `BedrockInvoke`
+    Endpoint: `https://bedrock-runtime.{region}.amazonaws.com`
+    Auth: `AwsBearerToken(token, region)`
+
+    Distinct from `mistral_preset` (Mistral-direct API). On-wire ids here
+    are `mistral.*-v1:0`. Short aliases: `mistral-7b`, `mixtral-8x7b`,
+    `mistral-small`, `mistral-large`, `mistral-large-2407`.
+    """
+    return _build_bedrock_deployment(
+        preset_name="bedrock_mistral",
+        api_key=api_key,
+        region=region,
+        model=model,
+        env_hint="BEDROCK_MISTRAL_MODEL_ID",
+        grammar=_GRAMMAR_BEDROCK_MISTRAL,
+        wire=WireProtocol.BedrockInvoke,
+    )
+
+
+def bedrock_cohere_preset(
+    api_key: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """AWS Bedrock Cohere deployment (bearer-token auth).
+
+    Wire: `BedrockInvoke`
+    Endpoint: `https://bedrock-runtime.{region}.amazonaws.com`
+    Auth: `AwsBearerToken(token, region)`
+
+    Distinct from `cohere_preset` (Cohere-direct API). On-wire ids here
+    are `cohere.*-v1:0`. Short aliases: `cohere-command`,
+    `cohere-command-light`, `cohere-command-r`, `cohere-command-r-plus`,
+    `cohere-embed-english`, `cohere-embed-multilingual`.
+    """
+    return _build_bedrock_deployment(
+        preset_name="bedrock_cohere",
+        api_key=api_key,
+        region=region,
+        model=model,
+        env_hint="BEDROCK_COHERE_MODEL_ID",
+        grammar=_GRAMMAR_BEDROCK_COHERE,
+        wire=WireProtocol.BedrockInvoke,
+    )
+
+
+def _register_and_attach_session_4_presets() -> None:
+    """Register the 4 S4b-ii Bedrock presets AND replace the
+    NotImplementedError stubs on LlmDeployment.
+
+    `bedrock_cohere` is added here as a NEW preset (not previously
+    stubbed on LlmDeployment because the deployment.py stub list only
+    contained `bedrock_llama` / `bedrock_titan` / `bedrock_mistral`); it
+    is attached via `setattr` the same way the S3 presets are.
+    """
+    table = [
+        ("bedrock_llama", bedrock_llama_preset),
+        ("bedrock_titan", bedrock_titan_preset),
+        ("bedrock_mistral", bedrock_mistral_preset),
+        ("bedrock_cohere", bedrock_cohere_preset),
+    ]
+    for name, factory in table:
+        register_preset(name, factory)
+
+        def _bedrock_cm(
+            cls,
+            api_key: str,
+            region: str,
+            model: str,
+            _factory=factory,
+        ) -> LlmDeployment:
+            return _factory(api_key, region=region, model=model)
+
+        _bedrock_cm.__name__ = name
+        _bedrock_cm.__qualname__ = f"LlmDeployment.{name}"
+        setattr(LlmDeployment, name, classmethod(_bedrock_cm))
+
+
+_register_and_attach_session_4_presets()
+
+
 __all__ = [
     # S1
     "openai_preset",
@@ -928,4 +1151,9 @@ __all__ = [
     "llama_cpp_preset",
     # S4a -- Bedrock Claude
     "bedrock_claude_preset",
+    # S4b-ii -- Bedrock non-Claude families
+    "bedrock_llama_preset",
+    "bedrock_titan_preset",
+    "bedrock_mistral_preset",
+    "bedrock_cohere_preset",
 ]

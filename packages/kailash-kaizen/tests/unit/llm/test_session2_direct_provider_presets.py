@@ -584,17 +584,12 @@ def test_every_s3_deployment_is_frozen(factory) -> None:
 
 
 def test_remaining_deferred_presets_raise_not_implemented() -> None:
-    """bedrock_llama/titan/mistral / azure_* / vertex_* stay deferred.
+    """azure_* and vertex_* stay deferred.
 
-    `bedrock_claude` is wired as a real preset in Session 3 (S4a); this
-    test excludes it. The remaining bedrock_* families land in S4b-ii.
+    Session 3 (S4a) wired `bedrock_claude`. Session 4 (S4b-ii) wired
+    `bedrock_llama`, `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere`.
+    Sessions 5 (Vertex) and 6 (Azure) will wire the rest.
     """
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.bedrock_llama("k")
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.bedrock_titan("k")
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.bedrock_mistral("k")
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_openai("k")
     with pytest.raises(NotImplementedError, match=r"session"):

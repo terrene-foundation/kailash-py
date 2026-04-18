@@ -37,7 +37,14 @@ from kaizen.llm.errors import (
     ModelGrammarError,
     ModelRequired,
 )
-from kaizen.llm.grammar.bedrock import BedrockClaudeGrammar
+from kaizen.llm.grammar.bedrock import (
+    BedrockClaudeGrammar,
+    BedrockCohereGrammar,
+    BedrockLlamaGrammar,
+    BedrockMistralGrammar,
+    BedrockTitanGrammar,
+)
+from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver
 from kaizen.llm.reasoning import (
     CapabilityMatchAgent,
     CapabilityMatchSignature,
@@ -91,8 +98,15 @@ __all__ = [
     "BEDROCK_SUPPORTED_REGIONS",
     "RegionNotAllowed",
     "ClockSkew",
-    # Grammar
+    # Grammar (#498 S4a + S4b-ii)
     "BedrockClaudeGrammar",
+    "BedrockLlamaGrammar",
+    "BedrockTitanGrammar",
+    "BedrockMistralGrammar",
+    "BedrockCohereGrammar",
+    # HTTP client + SafeDnsResolver (#498 S4c)
+    "LlmHttpClient",
+    "SafeDnsResolver",
     # SSRF guard
     "check_url",
     # Error taxonomy

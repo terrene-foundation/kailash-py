@@ -324,11 +324,10 @@ class LlmDeployment(BaseModel):
     # Marker messages for each deferred preset; pinned so `grep
     # "Implemented in session"` surfaces the full list at audit time.
     # `bedrock_claude` moved out of this dict in Session 3 (S4a) and is
-    # now wired via `presets.py` runtime attachment.
+    # now wired via `presets.py` runtime attachment. `bedrock_llama`,
+    # `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere` follow the
+    # same pattern in Session 4 (S4b-ii).
     _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {
-        "bedrock_llama": "Implemented in session 4 (S4b-ii)",
-        "bedrock_titan": "Implemented in session 4 (S4b-ii)",
-        "bedrock_mistral": "Implemented in session 4 (S4b-ii)",
         "azure_openai": "Implemented in session 5 (S5)",
         "azure_entra": "Implemented in session 6 (S6)",
         "vertex_gemini": "Implemented in session 6 (S6)",
@@ -340,19 +339,9 @@ class LlmDeployment(BaseModel):
     # `presets.py` runtime attachment: anthropic, google, cohere,
     # mistral, perplexity, huggingface, ollama, docker_model_runner,
     # groq, together, fireworks, openrouter, deepseek, lm_studio,
-    # llama_cpp. Session 3 (S4a) attaches bedrock_claude.
-
-    @classmethod
-    def bedrock_llama(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["bedrock_llama"])
-
-    @classmethod
-    def bedrock_titan(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["bedrock_titan"])
-
-    @classmethod
-    def bedrock_mistral(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["bedrock_mistral"])
+    # llama_cpp. Session 3 (S4a) attaches bedrock_claude. Session 4
+    # (S4b-ii) attaches bedrock_llama / bedrock_titan / bedrock_mistral
+    # / bedrock_cohere.
 
     @classmethod
     def azure_openai(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
