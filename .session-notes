@@ -1,67 +1,86 @@
-# Session Notes — 2026-04-18
+# Session Notes — 2026-04-18 (Round 2)
 
 ## Where we are
 
-3 P0 security fixes shipped this session (#490, #491, #490 Tier 2
-companion suite). 93 commits pushed to `origin/main` (7f252967 →
-008720f0). 6 dataflow.migration test orphans deleted. Runtime-
-artifact paths now gitignored.
+Completed the entire `issues-492-497/` workspace queue. 5 GH issues
+closed with delivered-code references. 3 commits pushed to
+`origin/main` (7a4fd364 → 27c77cf4). Cross-SDK ticket #405 filed on
+kailash-rs.
 
-New consolidated workspace created for next session at
-`workspaces/issues-492-497/` with `/analyze` phase complete.
-5 open GH issues queued for `/todos` → `/implement`.
+## This session closed items
 
-## Read first — ACTIVE WORKSPACE
+- **#492 (P0 SQLi)** — `BulkUpsertNode._build_upsert_query` rewritten
+  to return `(sql, params)` with placeholder binding. 18 SQLi
+  regression tests + 6 existing unit tests + 18 existing integration
+  tests all green. Identifier validation routed through
+  `_validate_identifier` for `table_name`, `columns`, `conflict_on`,
+  `version_field`. Dialect allowlist enforced. Bulk batch errors now
+  log WARN with continue semantics; raise only if every batch failed.
+  Commit 7a4fd364.
+- **#493 (sanitizer contract)** — All 3 drifted tests pass against the
+  pinned contract. New type-mismatch guard in `validate_inputs` (both
+  create/update + bulk_* paths). Rule pinned at
+  `rules/security.md` § Sanitizer Contract. Commit 2dbb9107.
+- **#495 (ML register_estimator audit)** — NO-GAP. kailash-py's
+  string-import + prefix-allowlist pattern dissolves the trait-object
+  problem. Audit at `04-validate/495-ml-register-estimator-audit.md`.
+- **#496 (PG placeholder audit)** — Placeholder bug NOT present.
+  Audit surfaced 2 HIGH identifier-validation gaps fixed in same
+  commit (sync_ddl_executor SQLite PRAGMA + engine ALTER TABLE
+  paths). 13-test regression at `tests/regression/
+  test_issue_496_identifier_safety.py`.
+- **#497 (Nexus webhook HMAC audit)** — Gap exists in generic
+  `Nexus.register(workflow)` path, but `WebhookTransport` ships as
+  the structural answer for signed webhooks. Architectural decision
+  recorded.
+- **Cross-SDK** — kailash-rs#405 filed for bulk_upsert.rs parity check.
 
-1. `workspaces/issues-492-497/.session-notes` — active workspace notes
-2. `workspaces/issues-492-497/briefs/01-scope.md` — scope + priorities
-3. `workspaces/issues-492-497/01-analysis/01-failure-points-and-requirements.md` — per-issue failure points, risk, effort estimates
+## Spec updates
 
-## Session 2026-04-18 closed items
+- `specs/security-data.md` § 11.3 — bulk_upsert parameterization
+  pattern + sanitizer contract pin
+- `specs/dataflow-express.md` — bulk_upsert API now documents
+  `(sql, params)` internal contract + WARN-on-batch-error semantics
 
-- #490 mutation-return classification leak, 25/25 tests green
-  (commit 0a9da432)
-- #491 event-payload classified-PK hashing (commit 36060c98)
-- 6 dataflow.migration test orphans deleted (commit e550949c)
-- gitignore for `performance_data/`, `.coc-sync-marker`,
-  `scheduled_tasks.lock` (commit 7a4d38d7)
-- workspaces/gh-issues-apr14/ and workspaces/kailash-ml-audit/
-  tracked (commit 7a4d38d7)
-- Issue #493 filed (3 pre-existing sanitizer failures)
-- Issue #494 closed (cross-SDK parity tracker for #490)
-- `event-payload-classification.md` synced to loom + manifest
-  updated (loom-side commit pending)
+## Read first — NEXT WORKSPACE
 
-## New workspace queue for next session
+No active workspace. The `issues-492-497/` queue is fully cleared.
+Next session can either:
 
-Workspace: `issues-492-497/` — 5 open issues consolidated
+1. Pick a new GH issue from the open queue
+2. Run `/wrapup` on the workspace and archive
+3. Address out-of-scope loose ends below
 
-- **#492 P0** — bulk_upsert SQLi (`nodes/bulk_upsert.py:423-496`)
-- **#493 P1** — 3 pre-existing sanitizer test failures
-- **#495 P2** — ML register_estimator() cross-SDK parity
-- **#496 P2** — PG placeholder bug class verification (audit)
-- **#497 P2** — Nexus webhook HMAC raw-body exposure (audit)
+## Out-of-scope loose ends
 
-Next phase: `/todos` → `/implement`. Recommended execution order
-from `/analyze`: #492 sequential → #493 parallel shard →
-#495/#496/#497 parallel audits via worktrees.
+- **Loom-side commit** for `event-payload-classification.md` rule
+  file + manifest entry (placed in loom in 2026-04-18 round 1, commit
+  still deferred). Then `/sync py` to flow into BUILD repo.
+- **Pool path dead code** in `BulkUpsertNode._execute_query` — the
+  pool branch silently falls back because
+  `DataFlowConnectionManager.execute()` doesn't implement
+  `operation="execute"`. Reviewer flagged H2 as orphan-pattern. Fix:
+  either implement the pool operation OR delete the dead branch.
+  Defer to a separate PR — out of scope for this session's #492 fix
+  per `rules/autonomous-execution.md` Per-Session Capacity Budget
+  (load-bearing already at the 5-invariant ceiling).
+- **`LocalRuntime.execute()` deprecation** — 8 tests in
+  `test_connection_sql_injection_protection.py` still use the
+  no-context-manager pattern. Pre-existing, not introduced this
+  session, scope = test-style only. File a follow-up enhancement.
 
 ## Traps (carried forward)
 
 - `pytest --timeout-method=signal` hangs on asyncio selector loops;
   use `--timeout-method=thread`.
-- Pre-commit hook `pytest-check` fails in isolated worktrees.
-  Use `git -c core.hooksPath=/dev/null commit` per `rules/git.md`.
-- SQLite `UpdateNode` / `UpsertNode` return metadata only (not the
-  row). PostgreSQL returns the row via RETURNING. Read-back via
-  `self.read()` is the dialect-portable pattern — established by
-  #490 fix in `features/express.py`.
-- Worktree dispatches silently base on old commits. Before cherry-
-  picking any `worktree-agent-*` branch, check `git merge-base
-  <branch> main`.
-
-## Out-of-workspace loose ends
-
-- Loom-side commit + `/sync py` for `event-payload-classification.md`
-  (rule file + manifest entry already placed in loom; commit
-  deferred).
+- Pre-commit `python-use-type-annotations` hook flags any `# type X`
+  comment as an annotation. Use "type mismatch" not "type confusion"
+  in code comments.
+- Pre-commit auto-stash + pyright noise — ignore `reportAssignmentType`
+  on `from kailash.nodes.base import ...` (pre-existing).
+- `BulkUpsertNode` adds `created_at`/`updated_at` automatically when
+  `auto_timestamps=True` (default). Test tables must include these
+  columns OR the node must be configured with `auto_timestamps=False`.
+- SQLite `UpdateNode`/`UpsertNode` return metadata only (not the
+  row). Read-back via `self.read()` is the dialect-portable pattern
+  (#490 fix).
