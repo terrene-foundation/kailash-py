@@ -6,9 +6,12 @@ These tests lock in the contract that the DataFlow trust subsystem
 (CARE-019/020/021) is:
 
 1. Dormant by default — constructing a ``DataFlow`` without trust kwargs
-   leaves ``_trust_executor``, ``_audit_store`` and
-   ``_tenant_trust_manager`` as ``None`` and the Express path behaves
-   identically to pre-trust DataFlow.
+   leaves ``_trust_executor`` and ``_audit_store`` as ``None`` and the
+   Express path behaves identically to pre-trust DataFlow.
+   ``TenantTrustManager`` is NOT attached as a ``db.*`` facade (removed
+   2026-04-18 per rules/orphan-detection.md MUST 3 — zero production
+   call sites). Consumers that need cross-tenant verification instantiate
+   ``dataflow.trust.multi_tenant.TenantTrustManager`` directly.
 2. Instantiable via the new ``trust_enforcement_mode`` and
    ``trust_audit_enabled`` kwargs (or the equivalent ``SecurityConfig``
    fields), without requiring a live database connection.
@@ -194,12 +197,21 @@ class _RecordingExecutor:
 
 
 def test_trust_disabled_by_default():
-    """Default DataFlow has trust subsystems dormant."""
+    """Default DataFlow has trust subsystems dormant.
+
+    ``_tenant_trust_manager`` is NOT an attribute on DataFlow (removed
+    2026-04-18 per rules/orphan-detection.md MUST 3). The class remains
+    available at ``dataflow.trust.multi_tenant.TenantTrustManager`` for
+    standalone consumer use.
+    """
     db = DataFlow("sqlite:///:memory:")
     try:
         assert db._trust_executor is None
         assert db._audit_store is None
-        assert db._tenant_trust_manager is None
+        assert not hasattr(db, "_tenant_trust_manager"), (
+            "_tenant_trust_manager facade should NOT exist on DataFlow until "
+            "a production call site is wired (rules/orphan-detection.md MUST 3)."
+        )
         assert db.config.security.trust_enforcement_mode == "disabled"
         assert db.config.security.trust_audit_enabled is False
     finally:
@@ -253,14 +265,32 @@ def test_trust_audit_enabled_kwarg_instantiates_store():
         db.close()
 
 
-def test_multi_tenant_plus_trust_instantiates_tenant_manager():
+def test_tenant_trust_manager_not_attached_as_facade():
+    """Regression: ``_tenant_trust_manager`` was removed from the DataFlow
+    facade on 2026-04-18 because no framework hot path invoked its
+    methods (Phase 5.11-shaped orphan). When a production call site is
+    wired, the facade MUST be re-added in the SAME PR. Until then, this
+    test asserts the facade is absent so reintroducing it without a
+    call site fails loudly.
+
+    See rules/orphan-detection.md MUST 1+3, specs/dataflow-core.md § 21.2,
+    workspaces/issues-492-497/journal/0003-RISK-tenant-trust-manager-orphan.md.
+    """
     db = DataFlow(
         "sqlite:///:memory:",
         multi_tenant=True,
         trust_enforcement_mode="permissive",
     )
     try:
-        assert db._tenant_trust_manager is not None
+        assert not hasattr(db, "_tenant_trust_manager"), (
+            "Re-adding _tenant_trust_manager without a production call site "
+            "recreates the Phase 5.11 orphan. Wire into features/express.py "
+            "in the SAME PR."
+        )
+        # The class itself remains importable for standalone consumer use.
+        from dataflow.trust.multi_tenant import TenantTrustManager
+
+        assert TenantTrustManager is not None
     finally:
         db.close()
 

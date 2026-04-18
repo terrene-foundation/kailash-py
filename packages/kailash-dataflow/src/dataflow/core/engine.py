@@ -624,7 +624,6 @@ class DataFlow(DataFlowEventMixin):
 
         self._trust_executor: Optional[Any] = None
         self._audit_store: Optional[Any] = None
-        self._tenant_trust_manager: Optional[Any] = None
 
         if _resolved_trust_mode != "disabled" or _resolved_trust_audit:
             # Import lazily so workspaces that never enable trust pay no
@@ -658,11 +657,13 @@ class DataFlow(DataFlowEventMixin):
                 extra={"signed": trust_audit_signing_key is not None},
             )
 
-        if self.config.security.multi_tenant and _resolved_trust_mode != "disabled":
-            from dataflow.trust.multi_tenant import TenantTrustManager
-
-            self._tenant_trust_manager = TenantTrustManager(strict_mode=True)
-            logger.info("trust.tenant_manager.initialised")
+        # NOTE: `TenantTrustManager` is available as a standalone class at
+        # `dataflow.trust.multi_tenant.TenantTrustManager` for consumers that
+        # need cross-tenant delegation verification. It is NOT attached as a
+        # `db.*` facade here because no framework hot-path (express read/list,
+        # trust executor) invokes its methods — attaching it would be a
+        # Phase-5.11-shaped orphan (rules/orphan-detection.md MUST 3). When a
+        # production call site lands, wire it at that same PR.
 
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
