@@ -32,10 +32,12 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, ClassVar, Dict, Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from kaizen.llm.auth import AuthStrategy
+from kaizen.llm.errors import InvalidEndpoint
 from kaizen.llm.url_safety import check_url
 
 # `AuthStrategy` is a typing Protocol — Pydantic cannot validate a Protocol
@@ -84,11 +86,40 @@ class Endpoint(BaseModel):
     required_headers: Dict[str, str] = Field(default_factory=dict)
     query_params: Dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("base_url", mode="after")
+    @field_validator("base_url", mode="before")
     @classmethod
-    def _validate_base_url(cls, v: HttpUrl) -> HttpUrl:
-        """Route every `base_url` through the SSRF guard before accepting."""
-        check_url(str(v))
+    def _validate_base_url(cls, v: Any) -> Any:
+        """Route every `base_url` through the SSRF guard BEFORE Pydantic normalises.
+
+        `mode="before"` means `check_url` sees the raw string the caller
+        supplied, not Pydantic's `HttpUrl`-normalised form (which strips
+        default paths, canonicalises IDN, and re-encodes percent sequences).
+        A future Pydantic normalisation bug, or any urlparse divergence
+        between the raw and normalised views, would otherwise leave an
+        unaudited surface between `check_url`'s view and what the HTTP
+        client actually sees. Round-1 redteam M2.
+
+        Additionally rejects non-ASCII hostnames at the raw-string level to
+        defeat IDN homograph attacks (e.g. Cyrillic `а` in "api.opеnai.com"):
+        Pydantic would happily punycode-encode and pass the host to
+        `check_url`, which sees only the ASCII punycode and has no way to
+        detect the confusable. Rejecting at the raw layer is the only place
+        the Unicode form is still visible.
+        """
+        if isinstance(v, str):
+            # ASCII-host check runs FIRST so a non-resolving IDN reject comes
+            # through as `malformed_url` (homograph-defense intent) rather
+            # than `resolution_failed` (which looks like a transient error).
+            try:
+                parsed = urlparse(v)
+            except Exception:
+                raise InvalidEndpoint("malformed_url", raw_url=v)
+            host = parsed.hostname or ""
+            try:
+                host.encode("ascii")
+            except UnicodeEncodeError:
+                raise InvalidEndpoint("malformed_url", raw_url=v)
+            check_url(v)
         return v
 
 
@@ -97,12 +128,13 @@ class Endpoint(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-# Headers a caller MUST NOT install via `with_extra_header`. Case-insensitive.
-# Source: ADR-0001 D1. These are precisely the headers that carry auth,
-# routing, or API-version identity — letting a caller override them from the
-# "extra" surface would silently defeat the deployment's contract.
+# Headers a caller MUST NOT install via `with_extra_header`. Case-insensitive;
+# the caller's name is `.strip().lower()`-normalised before lookup so
+# leading/trailing whitespace (" Authorization", "Authorization\t") cannot
+# bypass the check. Source: ADR-0001 D1 + round-1 redteam H2.
 _FORBIDDEN_EXTRA_HEADERS = frozenset(
     {
+        # Auth / routing / version (original D1 set)
         "authorization",
         "host",
         "cookie",
@@ -110,6 +142,28 @@ _FORBIDDEN_EXTRA_HEADERS = frozenset(
         "x-api-key",
         "x-goog-api-key",
         "anthropic-version",
+        # HTTP request-smuggling primitives. Transfer-Encoding + Content-Length
+        # desync between the client and upstream proxy is the classical
+        # request-smuggling vector; both must be controlled by the HTTP
+        # library, not the caller.
+        "transfer-encoding",
+        "content-length",
+        # Proxy-level auth. Proxy-Authorization installs a second credential
+        # against an intermediate proxy; Proxy-Authenticate is its response
+        # counterpart. Either in "extras" is an egress-integration risk.
+        "proxy-authorization",
+        "proxy-authenticate",
+        # Upstream-trust / client-IP spoofing. If the provider or any
+        # intermediate layer trusts these for tenant isolation or per-IP rate
+        # limiting, the caller can forge the source IP and defeat both.
+        "x-forwarded-for",
+        "x-real-ip",
+        "forwarded",
+        # HTTP method override — lets a POST masquerade as DELETE against
+        # Rails/Django-style providers that honour the header.
+        "x-http-method-override",
+        "x-http-method",
+        "x-method-override",
     }
 )
 
@@ -129,15 +183,28 @@ class ResolvedModel(BaseModel):
     def with_extra_header(self, name: str, value: str) -> "ResolvedModel":
         """Return a copy with one additional header.
 
-        Rejects the 7 forbidden header names case-insensitively. The raw
-        header name does NOT appear in the error message (log-injection
-        defense); the caller receives a stable error code and must audit
-        their code path.
+        Rejects the forbidden header names case-insensitively AND
+        whitespace-insensitively — `.strip().lower()` runs before the
+        allowlist lookup so `" Authorization"`, `"Authorization\\t"`, and
+        `"Authorization "` all reject. Downstream HTTP libraries
+        (httpx, requests) may normalise header names but not all consumers
+        do; normalising here is the only structural defense. Round-1
+        redteam H2.
+
+        The raw header name does NOT appear in the error message
+        (log-injection defense); the caller receives a stable error code
+        and must audit their code path.
         """
         if not isinstance(name, str) or not isinstance(value, str):
             raise TypeError("extra header name and value must both be str")
-        lowered = name.lower()
-        if lowered in _FORBIDDEN_EXTRA_HEADERS:
+        # Whitespace-strip + case-fold before allowlist lookup. The ORIGINAL
+        # user-supplied `name` is stored unmodified in extra_headers because
+        # the HTTP layer may treat "X-Custom-Trace" and "x-custom-trace" as
+        # distinct dict keys in non-normalising consumers.
+        normalised = name.strip().lower()
+        if not normalised:
+            raise ValueError("extra header name must not be empty / whitespace-only")
+        if normalised in _FORBIDDEN_EXTRA_HEADERS:
             raise ValueError(
                 "header name is reserved by the deployment layer; "
                 "refusing to accept it as an extra header"
