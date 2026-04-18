@@ -509,7 +509,10 @@ class DataFlowExpress:
             await self._trust_record_success(
                 model, "create", plan, rows_affected=1, query_params=data
             )
-            return result
+            # Issue #490: classification redaction MUST apply on the
+            # mutation return path, same contract as read(). See
+            # rules/dataflow-classification.md MUST Rule 1.
+            return self._apply_classification_mask_record(model, result)
 
         return await self._execute_with_timing(f"{model}.create", _create())
 
@@ -645,7 +648,20 @@ class DataFlowExpress:
                 rows_affected=1,
                 query_params={"id": id, "fields": fields},
             )
-            return result
+            # Issue #490: normalize the return to the full record shape
+            # (same as read()) and apply read-path redaction. UpdateNode's
+            # return is dialect-dependent (PostgreSQL UPDATE ... RETURNING
+            # includes the row; SQLite returns metadata only), so read-back
+            # is the only portable way to match the documented contract.
+            # NOTE: redaction contract — read() applies
+            # _apply_classification_mask_record. Do NOT inline a SELECT +
+            # row_to_dict here without porting the redaction call, or
+            # classified fields leak on every update response.
+            # See rules/dataflow-classification.md MUST Rules 1 and 2.
+            fresh = await self.read(model, id, cache_ttl=0)
+            if isinstance(fresh, dict):
+                return fresh
+            return self._apply_classification_mask_record(model, result)
 
         return await self._execute_with_timing(f"{model}.update", _update())
 
@@ -1001,10 +1017,25 @@ class DataFlowExpress:
                 )
                 self._db._emit_write_event(model, "upsert", record_id=record_id)
 
-            # Return the record directly for simpler API
+            # Return the record directly for simpler API.
+            # Issue #490: normalize the return to the full record shape
+            # (same as read()) and apply read-path redaction. UpsertNode's
+            # return is dialect-dependent (PostgreSQL ON CONFLICT ... RETURNING
+            # includes the row; SQLite often returns metadata only), so
+            # read-back is the only portable way to match the documented
+            # contract.
+            # NOTE: redaction contract — read() applies
+            # _apply_classification_mask_record. Do NOT inline a SELECT +
+            # row_to_dict here without porting the redaction call.
+            # See rules/dataflow-classification.md MUST Rules 1 and 2.
+            pk = data.get("id") if isinstance(data, dict) else None
+            if pk is not None:
+                fresh = await self.read(model, pk, cache_ttl=0)
+                if isinstance(fresh, dict):
+                    return fresh
             if isinstance(result, dict) and "record" in result:
-                return result["record"]
-            return result
+                return self._apply_classification_mask_record(model, result["record"])
+            return self._apply_classification_mask_record(model, result)
 
         return await self._execute_with_timing(f"{model}.upsert", _upsert())
 
@@ -1060,6 +1091,20 @@ class DataFlowExpress:
                 )
                 self._db._emit_write_event(model, "upsert", record_id=record_id)
 
+            # Issue #490: mutation return MUST apply read-path redaction.
+            # See rules/dataflow-classification.md MUST Rule 1. The top-level
+            # shape is {"created", "action", "record"}; mask the nested
+            # "record" dict when present, and also mask any top-level
+            # classified column echoed on the envelope itself.
+            if isinstance(result, dict):
+                if "record" in result and isinstance(result["record"], dict):
+                    result = {
+                        **result,
+                        "record": self._apply_classification_mask_record(
+                            model, result["record"]
+                        ),
+                    }
+                result = self._apply_classification_mask_record(model, result)
             return result
 
         return await self._execute_with_timing(f"{model}.upsert_advanced", _upsert())
@@ -1114,13 +1159,15 @@ class DataFlowExpress:
                         },
                     )
 
-            # Handle different result formats
+            # Handle different result formats.
+            # Issue #490: mutation return MUST apply read-path redaction.
+            # See rules/dataflow-classification.md MUST Rule 1.
             if isinstance(result, list):
-                return result
+                return self._apply_classification_mask_rows(model, result)
             elif isinstance(result, dict) and "records" in result:
-                return result["records"]
+                return self._apply_classification_mask_rows(model, result["records"])
             elif isinstance(result, dict) and "items" in result:
-                return result["items"]
+                return self._apply_classification_mask_rows(model, result["items"])
             return result
 
         return await self._execute_with_timing(f"{model}.bulk_create", _bulk_create())
@@ -1150,6 +1197,12 @@ class DataFlowExpress:
         """
 
         async def _bulk_update():
+            # Issue #490 redaction contract: bulk_update delegates to
+            # self.update(), which applies _apply_classification_mask_record
+            # on its return. Do NOT inline a SELECT + row_to_dict here
+            # without porting the redaction call, or classified fields leak
+            # on every bulk_update response.
+            # See rules/dataflow-classification.md MUST Rule 2.
             results = []
             failed_count = 0
             for record in records:
@@ -1286,9 +1339,14 @@ class DataFlowExpress:
                 self._db._emit_write_event(model, "bulk_upsert", record_id=None)
 
             # Return structured result with counts.
+            # Issue #490: mutation return MUST apply read-path redaction on
+            # the records list. The scalar counts (created/updated/total)
+            # are exempt per rules/dataflow-classification.md MUST Rule 4
+            # (scalar aggregate carve-out).
             if isinstance(result, dict):
+                raw_records = result.get("records", []) or []
                 return {
-                    "records": result.get("records", []),
+                    "records": self._apply_classification_mask_rows(model, raw_records),
                     "created": result.get("inserted", 0),
                     "updated": result.get("updated", 0),
                     "total": result.get("total", len(records)),
