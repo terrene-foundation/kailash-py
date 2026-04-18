@@ -67,10 +67,16 @@ def test_llm_deployment_is_frozen() -> None:
 
 
 def test_deferred_presets_raise_not_implemented() -> None:
-    """Every non-openai preset must raise with a session marker."""
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.anthropic("k")
+    """Every non-S1/S2 preset must raise with a session marker.
+
+    S3 lands anthropic, google, cohere, mistral, perplexity, huggingface,
+    ollama, docker_model_runner, groq, together, fireworks, openrouter,
+    deepseek, lm_studio, llama_cpp — all as real implementations. Only
+    bedrock_* / azure_* / vertex_* remain deferred to later sessions.
+    """
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.bedrock_claude("k")
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_entra("k")
+    with pytest.raises(NotImplementedError, match=r"session"):
+        LlmDeployment.vertex_gemini("k")

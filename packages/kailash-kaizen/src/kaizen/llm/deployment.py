@@ -65,6 +65,13 @@ class WireProtocol(str, Enum):
     BedrockInvoke = "BedrockInvoke"
     VertexGenerateContent = "VertexGenerateContent"
     AzureOpenAi = "AzureOpenAi"
+    # Session 2 (S3) — direct providers with distinct wire schemas.
+    # Member names byte-match the Rust `WireProtocol` variants; changing
+    # them requires a coordinated cross-SDK edit + parity fixture update.
+    CohereGenerate = "CohereGenerate"
+    MistralChat = "MistralChat"
+    OllamaNative = "OllamaNative"
+    HuggingFaceInference = "HuggingFaceInference"
 
 
 # ---------------------------------------------------------------------------
@@ -317,8 +324,6 @@ class LlmDeployment(BaseModel):
     # Marker messages for each deferred preset; pinned so `grep
     # "Implemented in session"` surfaces the full list at audit time.
     _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {
-        "anthropic": "Implemented in session 2 (S3)",
-        "google": "Implemented in session 2 (S3)",
         "bedrock_claude": "Implemented in session 3 (S4a)",
         "bedrock_llama": "Implemented in session 4 (S4b-ii)",
         "bedrock_titan": "Implemented in session 4 (S4b-ii)",
@@ -330,14 +335,11 @@ class LlmDeployment(BaseModel):
 
     # `openai` preset is defined in `presets.py` via runtime attachment
     # to avoid a circular import (presets depend on LlmDeployment).
-
-    @classmethod
-    def anthropic(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["anthropic"])
-
-    @classmethod
-    def google(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["google"])
+    # Session 2 (S3) also attaches 15 direct-provider presets via
+    # `presets.py` runtime attachment: anthropic, google, cohere,
+    # mistral, perplexity, huggingface, ollama, docker_model_runner,
+    # groq, together, fireworks, openrouter, deepseek, lm_studio,
+    # llama_cpp.
 
     @classmethod
     def bedrock_claude(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
