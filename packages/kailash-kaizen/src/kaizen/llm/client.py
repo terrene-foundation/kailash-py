@@ -7,15 +7,26 @@ Additive API: introduces `LlmClient.from_deployment(...)` alongside the
 existing `kaizen.providers.registry` surface. Registry consumers are
 untouched (see the option-A decision journal in the #498 workspace).
 
-Session 1 scope:
+Public API (post-S1-S8):
 
-* `LlmClient.from_deployment(d)` returns a client carrying the deployment
-  structurally; the concrete request-send path lands in S3.
-* `LlmClient.from_env()` raises a typed `NotImplementedError` pointing at
-  session 7 (S7) — actively-tracked iterative TODO per zero-tolerance
-  Rule 2.
-* `LlmClient()` (zero-arg) additive constructor — returns an empty client
-  with `.with_deployment(d)` as the only path to a usable state.
+* `LlmClient.from_deployment(d)` — construct a client from an
+  `LlmDeployment` (all 24 preset factories + the registry shim).
+* `LlmClient.from_deployment_sync(d)` — synchronous variant for
+  cross-SDK parity with Rust's `from_deployment_sync`.
+* `LlmClient.from_env()` — three-tier precedence resolver (URI >
+  selector > legacy) with migration-window isolation. See
+  `from_env.py` for the grammar.
+* `LlmClient()` (zero-arg) additive constructor — returns an empty
+  client with `.with_deployment(d)` as the only path to a usable
+  state.
+
+The wire-layer `complete()` send-path is deliberately NOT exposed here
+until every wire-protocol adapter (OpenAIChat, AnthropicMessages,
+VertexGenerateContent, BedrockInvoke, etc.) has its dispatch function
+landed and exercised by a Tier 2 end-to-end test. Shipping a public
+`complete()` that raises `NotImplementedError` is BLOCKED per
+`rules/zero-tolerance.md` Rule 2 and `rules/orphan-detection.md` Rule 3
+(Removed = Deleted, Not Deprecated).
 """
 
 from __future__ import annotations
@@ -176,19 +187,6 @@ class LlmClient:
             deployment=deployment,
             classification_policy=self._classification_policy,
             caller_clearance=self._caller_clearance,
-        )
-
-    async def complete(self, **kwargs: object) -> object:  # noqa: ARG002
-        """Run a completion against the configured deployment.
-
-        NOT YET IMPLEMENTED. Session 3 (S3) lands the OpenAI + Anthropic +
-        Google wire adapters; subsequent sessions add Bedrock / Vertex /
-        Azure. The method is declared here so Tier 2 wiring tests can grep
-        for it.
-        """
-        raise NotImplementedError(
-            "LlmClient.complete() — wire-layer send path implemented in "
-            "session 3 (S3). Session 1 ships the structural abstraction only."
         )
 
 
