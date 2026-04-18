@@ -2,9 +2,32 @@
 LLM Module for Kaizen Agent Framework.
 
 Provides LLM routing, capability management, intelligent model selection,
-and LLM-first reasoning helpers (similarity + capability matching).
+LLM-first reasoning helpers, and the four-axis LLM deployment abstraction
+(introduced in #498 Session 1).
 """
 
+# Import presets to register openai and attach the classmethod onto LlmDeployment.
+from kaizen.llm import presets as _presets  # noqa: F401
+from kaizen.llm.auth import AuthStrategy, Custom
+from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
+from kaizen.llm.client import LlmClient
+from kaizen.llm.deployment import (
+    CompletionRequest,
+    EmbedOptions,
+    Endpoint,
+    LlmDeployment,
+    ResolvedModel,
+    RetryConfig,
+    StreamingConfig,
+    WireProtocol,
+)
+from kaizen.llm.errors import (
+    AuthError,
+    EndpointError,
+    LlmClientError,
+    LlmError,
+    ModelGrammarError,
+)
 from kaizen.llm.reasoning import (
     CapabilityMatchAgent,
     CapabilityMatchSignature,
@@ -31,8 +54,34 @@ from kaizen.llm.routing import (  # Capabilities; Task Analysis; Routing
     list_models,
     register_model,
 )
+from kaizen.llm.url_safety import check_url
 
 __all__ = [
+    # Four-axis deployment abstraction (#498)
+    "LlmDeployment",
+    "WireProtocol",
+    "Endpoint",
+    "ResolvedModel",
+    "EmbedOptions",
+    "CompletionRequest",
+    "StreamingConfig",
+    "RetryConfig",
+    "LlmClient",
+    # Auth strategies
+    "AuthStrategy",
+    "Custom",
+    "ApiKey",
+    "ApiKeyBearer",
+    "ApiKeyHeaderKind",
+    "StaticNone",
+    # SSRF guard
+    "check_url",
+    # Error taxonomy
+    "LlmClientError",
+    "LlmError",
+    "AuthError",
+    "EndpointError",
+    "ModelGrammarError",
     # Capabilities
     "LLMCapabilities",
     "MODEL_REGISTRY",
