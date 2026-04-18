@@ -41,7 +41,6 @@ from kaizen.llm.presets import (
     together_preset,
 )
 
-
 # ---------------------------------------------------------------------------
 # Cross-SDK parity: preset names match the Rust literals byte-for-byte
 # ---------------------------------------------------------------------------
@@ -585,9 +584,11 @@ def test_every_s3_deployment_is_frozen(factory) -> None:
 
 
 def test_remaining_deferred_presets_raise_not_implemented() -> None:
-    """bedrock_* / azure_* / vertex_* stay deferred after S3 lands."""
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.bedrock_claude("k")
+    """bedrock_llama/titan/mistral / azure_* / vertex_* stay deferred.
+
+    `bedrock_claude` is wired as a real preset in Session 3 (S4a); this
+    test excludes it. The remaining bedrock_* families land in S4b-ii.
+    """
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.bedrock_llama("k")
     with pytest.raises(NotImplementedError, match=r"session"):

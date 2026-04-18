@@ -25,6 +25,14 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol, runtime_checkable
 
+from kaizen.llm.auth.aws import (
+    BEDROCK_SUPPORTED_REGIONS,
+    AwsBearerToken,
+    AwsCredentials,
+    AwsSigV4,
+    ClockSkew,
+    RegionNotAllowed,
+)
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 
 
@@ -99,4 +107,11 @@ __all__ = [
     "ApiKeyBearer",
     "ApiKeyHeaderKind",
     "StaticNone",
+    # AWS auth (S4a + S4b-i)
+    "AwsBearerToken",
+    "AwsCredentials",
+    "AwsSigV4",
+    "BEDROCK_SUPPORTED_REGIONS",
+    "RegionNotAllowed",
+    "ClockSkew",
 ]

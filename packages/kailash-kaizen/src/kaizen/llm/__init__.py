@@ -9,6 +9,14 @@ LLM-first reasoning helpers, and the four-axis LLM deployment abstraction
 # Import presets to register openai and attach the classmethod onto LlmDeployment.
 from kaizen.llm import presets as _presets  # noqa: F401
 from kaizen.llm.auth import AuthStrategy, Custom
+from kaizen.llm.auth.aws import (
+    BEDROCK_SUPPORTED_REGIONS,
+    AwsBearerToken,
+    AwsCredentials,
+    AwsSigV4,
+    ClockSkew,
+    RegionNotAllowed,
+)
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.client import LlmClient
 from kaizen.llm.deployment import (
@@ -27,7 +35,9 @@ from kaizen.llm.errors import (
     LlmClientError,
     LlmError,
     ModelGrammarError,
+    ModelRequired,
 )
+from kaizen.llm.grammar.bedrock import BedrockClaudeGrammar
 from kaizen.llm.reasoning import (
     CapabilityMatchAgent,
     CapabilityMatchSignature,
@@ -74,6 +84,15 @@ __all__ = [
     "ApiKeyBearer",
     "ApiKeyHeaderKind",
     "StaticNone",
+    # AWS auth (#498 S4a + S4b-i)
+    "AwsBearerToken",
+    "AwsCredentials",
+    "AwsSigV4",
+    "BEDROCK_SUPPORTED_REGIONS",
+    "RegionNotAllowed",
+    "ClockSkew",
+    # Grammar
+    "BedrockClaudeGrammar",
     # SSRF guard
     "check_url",
     # Error taxonomy
@@ -82,6 +101,7 @@ __all__ = [
     "AuthError",
     "EndpointError",
     "ModelGrammarError",
+    "ModelRequired",
     # Capabilities
     "LLMCapabilities",
     "MODEL_REGISTRY",

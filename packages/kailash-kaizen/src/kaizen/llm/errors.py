@@ -295,6 +295,30 @@ class ModelGrammarInvalid(ModelGrammarError):
         super().__init__(f"invalid model grammar: {reason}")
 
 
+class ModelRequired(ModelGrammarError):
+    """A deployment preset was constructed without a required model string.
+
+    Per `rules/env-models.md`, model names MUST come from the environment
+    (e.g. `os.environ["BEDROCK_MODEL_ID"]` for bedrock_claude) -- no
+    hardcoded defaults. When the env var is missing or empty at the preset
+    entry point, `ModelRequired` is raised with the `deployment_preset`
+    label so operators can grep logs for the precise preset that rejected.
+    """
+
+    def __init__(self, deployment_preset: str, env_hint: Optional[str] = None) -> None:
+        self.deployment_preset = deployment_preset
+        self.env_hint = env_hint
+        if env_hint:
+            super().__init__(
+                f"model is required for deployment_preset={deployment_preset!r}; "
+                f"read it from os.environ[{env_hint!r}] per rules/env-models.md"
+            )
+        else:
+            super().__init__(
+                f"model is required for deployment_preset={deployment_preset!r}"
+            )
+
+
 __all__ = [
     "LlmClientError",
     "LlmError",
@@ -311,4 +335,5 @@ __all__ = [
     "Unreachable",
     "ModelGrammarError",
     "ModelGrammarInvalid",
+    "ModelRequired",
 ]

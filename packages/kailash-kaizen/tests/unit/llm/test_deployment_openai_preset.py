@@ -67,15 +67,16 @@ def test_llm_deployment_is_frozen() -> None:
 
 
 def test_deferred_presets_raise_not_implemented() -> None:
-    """Every non-S1/S2 preset must raise with a session marker.
+    """Every non-S1/S2/S3 preset must raise with a session marker.
 
-    S3 lands anthropic, google, cohere, mistral, perplexity, huggingface,
-    ollama, docker_model_runner, groq, together, fireworks, openrouter,
-    deepseek, lm_studio, llama_cpp — all as real implementations. Only
-    bedrock_* / azure_* / vertex_* remain deferred to later sessions.
+    S2 (S3) lands anthropic, google, cohere, mistral, perplexity,
+    huggingface, ollama, docker_model_runner, groq, together, fireworks,
+    openrouter, deepseek, lm_studio, llama_cpp — all real implementations.
+    S3 (S4a) lands `bedrock_claude`. Only bedrock_llama/titan/mistral,
+    azure_*, and vertex_gemini remain deferred.
     """
     with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.bedrock_claude("k")
+        LlmDeployment.bedrock_llama("k")
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_entra("k")
     with pytest.raises(NotImplementedError, match=r"session"):

@@ -35,8 +35,11 @@ import logging
 import re
 from typing import Any, Callable, Dict
 
+from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
+from kaizen.llm.errors import ModelRequired
+from kaizen.llm.grammar.bedrock import BedrockClaudeGrammar
 
 logger = logging.getLogger(__name__)
 
@@ -770,6 +773,137 @@ def _register_and_attach_session_2_presets() -> None:
 _register_and_attach_session_2_presets()
 
 
+# ---------------------------------------------------------------------------
+# Session 3 (S4a) -- Bedrock Claude preset
+# ---------------------------------------------------------------------------
+#
+# Distinctive preset shape vs the S3 direct-provider presets:
+#
+#   * Takes `api_key` + `region` (bearer-token auth) rather than just key.
+#   * Region is carried on the AwsBearerToken strategy AND is the source
+#     of truth for the endpoint host (bedrock-runtime.{region}.amazonaws.com).
+#   * Model is resolved via BedrockClaudeGrammar at caller time; the
+#     factory stores the RAW caller-supplied model string (e.g.
+#     "claude-sonnet-4-6") and the grammar is applied at completion time.
+#   * `ModelRequired` is raised with deployment_preset="bedrock_claude" when
+#     the model argument is absent or empty (per rules/env-models.md).
+
+
+_GRAMMAR_BEDROCK_CLAUDE = BedrockClaudeGrammar()
+
+
+def bedrock_claude_preset(
+    api_key: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """AWS Bedrock Claude deployment using a bearer-token credential.
+
+    Wire:        `AnthropicMessages` (Bedrock speaks the same Messages
+                 schema as Anthropic direct -- only the endpoint + auth
+                 change).
+    Endpoint:    `https://bedrock-runtime.{region}.amazonaws.com` --
+                 derived from the validated region. The region is NEVER
+                 taken from a URL fragment; only the allowlist-checked
+                 value goes into the hostname, so there is no
+                 grammar-injection path into the endpoint.
+    Auth:        `AwsBearerToken(token, region)` applying
+                 `Authorization: Bearer <token>`.
+    Model:       Validated via `BedrockClaudeGrammar` at caller time and
+                 stored on the deployment as the RAW caller alias. Wire
+                 adapters translate to the on-wire id via the grammar.
+
+    Required arguments:
+
+    * `api_key` -- the Bedrock bearer token (e.g. `$AWS_BEARER_TOKEN_BEDROCK`)
+    * `region` -- one of `BEDROCK_SUPPORTED_REGIONS` (typed error otherwise)
+    * `model` -- a short alias (`claude-sonnet-4-6`), inference-profile
+      id (`global.anthropic.claude-sonnet-4-6`), or native on-wire id.
+      Missing / empty raises `ModelRequired(deployment_preset="bedrock_claude",
+      env_hint="BEDROCK_MODEL_ID")`.
+
+    Observability: emits `llm.deployment.bedrock_claude.constructed` at
+    INFO with `deployment_preset`, `region`, `auth_strategy_kind`, and
+    `endpoint_host` fields. All four values are non-sensitive constants
+    (region strings are public AWS identifiers; auth_strategy_kind and
+    deployment_preset are fixed literals), so logging them verbatim is
+    injection-safe.
+
+    Cross-SDK parity: the preset name `bedrock_claude` is byte-identical
+    to the Rust literal in
+    `kailash-rs/crates/kailash-kaizen/src/llm/deployment/presets.rs`.
+    """
+    # --- api_key validation --------------------------------------------------
+    if not isinstance(api_key, str) or not api_key:
+        raise ValueError(
+            "bedrock_claude_preset requires a non-empty api_key string "
+            "(typically os.environ['AWS_BEARER_TOKEN_BEDROCK'])"
+        )
+    # --- model validation (per env-models.md) ---------------------------------
+    if not isinstance(model, str) or not model:
+        raise ModelRequired(
+            deployment_preset="bedrock_claude",
+            env_hint="BEDROCK_MODEL_ID",
+        )
+    # Route through the grammar gate at preset-build time so the caller
+    # sees the typed ModelGrammarInvalid immediately rather than at the
+    # first completion call. The resolved on-wire id is also what ends up
+    # on the deployment's `default_model` so wire adapters don't have to
+    # re-resolve. We deliberately store the RESOLVED id so downstream
+    # observability dashboards can group by the true on-wire model.
+    resolved_model = _GRAMMAR_BEDROCK_CLAUDE.resolve(model)
+    # --- auth + region -------------------------------------------------------
+    # AwsBearerToken.__init__ validates the region against the allowlist.
+    # If the region is bad we get a RegionNotAllowed raised from the
+    # auth constructor -- no need for a duplicate validate call here.
+    auth = AwsBearerToken(token=api_key, region=region)
+    endpoint_host = f"bedrock-runtime.{region}.amazonaws.com"
+    endpoint = Endpoint(
+        base_url=f"https://{endpoint_host}",
+        path_prefix="",
+    )
+    # Bedrock Claude speaks the same Messages wire as Anthropic direct;
+    # only the endpoint host + auth strategy differ. Cross-SDK parity with
+    # kailash-rs presets.rs:408.
+    deployment = LlmDeployment(
+        wire=WireProtocol.AnthropicMessages,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=resolved_model,
+    )
+    logger.info(
+        "llm.deployment.bedrock_claude.constructed",
+        extra={
+            "deployment_preset": "bedrock_claude",
+            "region": region,
+            "auth_strategy_kind": auth.auth_strategy_kind(),
+            "endpoint_host": endpoint_host,
+        },
+    )
+    return deployment
+
+
+register_preset("bedrock_claude", bedrock_claude_preset)
+
+
+def _attach_bedrock_claude_classmethod() -> None:
+    """Replace `LlmDeployment.bedrock_claude`'s NotImplementedError stub.
+
+    The stub in `deployment.py` raises until this runs; attaching here
+    follows the same pattern as every other preset (classmethod + module
+    function both legal).
+    """
+
+    @classmethod  # type: ignore[misc]
+    def bedrock_claude(cls, api_key: str, region: str, model: str) -> LlmDeployment:
+        return bedrock_claude_preset(api_key, region=region, model=model)
+
+    LlmDeployment.bedrock_claude = bedrock_claude  # type: ignore[attr-defined]
+
+
+_attach_bedrock_claude_classmethod()
+
+
 __all__ = [
     # S1
     "openai_preset",
@@ -792,4 +926,6 @@ __all__ = [
     "deepseek_preset",
     "lm_studio_preset",
     "llama_cpp_preset",
+    # S4a -- Bedrock Claude
+    "bedrock_claude_preset",
 ]

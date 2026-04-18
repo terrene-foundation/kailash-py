@@ -20,6 +20,7 @@ from kaizen.llm import LlmClient, LlmDeployment
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 async def test_llmclient_from_deployment_openai_wiring() -> None:
     """End-to-end: LlmClient.from_deployment(LlmDeployment.openai(...)) completes a real one-token request."""
     api_key = os.environ.get("OPENAI_API_KEY")

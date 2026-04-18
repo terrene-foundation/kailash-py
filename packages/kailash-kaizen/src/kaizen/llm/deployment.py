@@ -323,8 +323,9 @@ class LlmDeployment(BaseModel):
 
     # Marker messages for each deferred preset; pinned so `grep
     # "Implemented in session"` surfaces the full list at audit time.
+    # `bedrock_claude` moved out of this dict in Session 3 (S4a) and is
+    # now wired via `presets.py` runtime attachment.
     _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {
-        "bedrock_claude": "Implemented in session 3 (S4a)",
         "bedrock_llama": "Implemented in session 4 (S4b-ii)",
         "bedrock_titan": "Implemented in session 4 (S4b-ii)",
         "bedrock_mistral": "Implemented in session 4 (S4b-ii)",
@@ -339,11 +340,7 @@ class LlmDeployment(BaseModel):
     # `presets.py` runtime attachment: anthropic, google, cohere,
     # mistral, perplexity, huggingface, ollama, docker_model_runner,
     # groq, together, fireworks, openrouter, deepseek, lm_studio,
-    # llama_cpp.
-
-    @classmethod
-    def bedrock_claude(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["bedrock_claude"])
+    # llama_cpp. Session 3 (S4a) attaches bedrock_claude.
 
     @classmethod
     def bedrock_llama(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
