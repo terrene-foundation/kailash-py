@@ -10,10 +10,10 @@ Test Task 1.3: DataFlow SQL Injection Protection
 import asyncio
 
 import pytest
-from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -77,14 +77,18 @@ class TestDataFlowConnectionSQLInjectionProtection:
         # Verify that SQL injection was prevented
         create_result = results.get("create_user", {})
 
-        # If the node executed, ensure the dangerous SQL was sanitized
+        # If the node executed, ensure the dangerous SQL was sanitized.
+        # Per rules/security.md § Sanitizer Contract, the sanitizer does
+        # token-replace (NOT quote-escape): "; DROP" becomes "; STATEMENT_BLOCKED".
+        # Trailing "-- COMMENT_BLOCKED" is appended by the comment rule.
         if "id" in create_result:
-            # The dangerous SQL should have been escaped/sanitized
-            assert "DROP TABLE" not in str(create_result.get("name", ""))
-            # Verify the record was created with sanitized data
+            stored_name = str(create_result.get("name", ""))
+            # The dangerous keyword MUST be neutralized
+            assert "DROP TABLE" not in stored_name
+            # Token-replace MUST have fired
             assert (
-                create_result.get("name") == "'; DROP TABLE test_users; --"
-            )  # Escaped/quoted
+                "STATEMENT_BLOCKED" in stored_name
+            ), f"Expected STATEMENT_BLOCKED token-replace but got: {stored_name!r}"
 
     def test_list_node_filter_injection_protection(self, test_suite):
         """Test that DataFlow ListNode prevents SQL injection in filter parameters."""
@@ -340,13 +344,27 @@ result = {
 
         runtime = LocalRuntime(connection_validation="strict")
 
-        # Should raise validation error due to type mismatch
-        with pytest.raises(Exception) as exc_info:
-            runtime.execute(workflow.build())
+        # Per rules/security.md § Sanitizer Contract, declared-string fields
+        # MUST reject dict / list / set / tuple inputs (type-confusion guard).
+        # The runtime captures the validation error and surfaces it via the
+        # node result + failed_nodes; either path is acceptable evidence.
+        try:
+            results, _run_id = runtime.execute(workflow.build())
+        except Exception as exc:  # noqa: BLE001 — broad catch is intentional
+            error_msg = str(exc).lower()
+            assert (
+                "parameter type mismatch" in error_msg or "type confusion" in error_msg
+            ), f"Expected type-confusion error, got: {error_msg!r}"
+            return
 
-        # Verify it's a validation error, not a SQL injection
-        error_msg = str(exc_info.value).lower()
-        assert any(term in error_msg for term in ["validation", "type", "parameter"])
+        node_result = results.get("create_user", {})
+        assert (
+            node_result.get("failed") is True
+        ), f"Expected create_user to fail with type confusion, got: {node_result!r}"
+        node_error = str(node_result.get("error", "")).lower()
+        assert (
+            "parameter type mismatch" in node_error or "type confusion" in node_error
+        ), f"Expected type-confusion error, got: {node_error!r}"
 
 
 @pytest.mark.asyncio

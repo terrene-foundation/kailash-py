@@ -370,6 +370,8 @@ DataFlow security is enforced at multiple levels:
 - All VALUES-path queries use parameterized SQL (see `rules/infrastructure-sql.md`).
 - All identifier-path DDL uses `dialect.quote_identifier()` which validates against `^[a-zA-Z_][a-zA-Z0-9_]*$`, checks dialect-specific length limits, and quotes with dialect-appropriate characters.
 - The "reject, don't escape" rule eliminates bypass attempts -- invalid identifiers are refused, not sanitized.
+- `BulkUpsertNode._build_upsert_query` returns `(sql, params)` with dialect-appropriate placeholders (`$N` PostgreSQL, `?` SQLite, `%s` MySQL); VALUES are bound by the driver, never string-escaped (issue #492 regression).
+- DataFlow's `validate_inputs` sanitizer applies the contract pinned in `rules/security.md` § Sanitizer Contract: token-replace for display-path safety (`STATEMENT_BLOCKED`, `DROP_TABLE`, `UNION_SELECT` sentinels), and `ValueError` raise on type-confusion when a `dict`/`list`/`set`/`tuple` value is passed to a declared-`str` field (issue #493).
 
 ### 11.4 DROP Protection
 
@@ -377,4 +379,3 @@ DataFlow security is enforced at multiple levels:
 - Default is to refuse with a descriptive error naming the data loss risk.
 
 ---
-

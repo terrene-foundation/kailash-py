@@ -759,14 +759,30 @@ class NodeGenerator:
 
                 # Additional DataFlow-specific validations
                 if operation == "create" or operation == "update":
-                    # Ensure no SQL injection in individual field values
+                    # Issue #493 — declared-string fields MUST NOT receive
+                    # dict / list / set / tuple values. Without this gate, a
+                    # malicious upstream node can pass a nested structure that
+                    # bypasses the string-only sanitizer. Sanitizer contract:
+                    # token-replace for display + raise on a type mismatch.
+                    # See ``rules/security.md`` § Sanitizer Contract.
                     for field_name, field_info in self.model_fields.items():
-                        if field_name in protected_inputs:
-                            value = protected_inputs[field_name]
-                            if isinstance(value, str) and len(value) > 1000:
-                                logger.warning(
-                                    f"Suspiciously long input in field '{field_name}': {len(value)} characters"
-                                )
+                        if field_name not in protected_inputs:
+                            continue
+                        declared_type = field_info.get("type")
+                        value = protected_inputs[field_name]
+                        if declared_type is str and isinstance(
+                            value, (dict, list, set, tuple)
+                        ):
+                            raise ValueError(
+                                "parameter type mismatch: field "
+                                f"'{field_name}' declared as 'str' but received "
+                                f"'{type(value).__name__}' — type confusion "
+                                "blocked per rules/security.md § Sanitizer Contract"
+                            )
+                        if isinstance(value, str) and len(value) > 1000:
+                            logger.warning(
+                                f"Suspiciously long input in field '{field_name}': {len(value)} characters"
+                            )
 
                 elif operation == "list" or operation == "count":
                     # Special validation for filter parameters (shared by list and count)
@@ -806,12 +822,30 @@ class NodeGenerator:
                                             )
 
                 elif operation.startswith("bulk_"):
-                    # Validate bulk data doesn't contain injection
+                    # Validate bulk data doesn't contain injection.
+                    # rules/security.md § Sanitizer Contract: declared-string
+                    # fields MUST raise on dict / list / set / tuple inputs in
+                    # bulk_create / bulk_update / bulk_upsert paths too — the
+                    # same type-confusion guard as the create / update path.
                     bulk_data = protected_inputs.get("data", [])
                     if isinstance(bulk_data, list):
                         for i, record in enumerate(bulk_data):
                             if isinstance(record, dict):
                                 for field_name, value in record.items():
+                                    declared = self.model_fields.get(
+                                        field_name, {}
+                                    ).get("type")
+                                    if declared is str and isinstance(
+                                        value, (dict, list, set, tuple)
+                                    ):
+                                        raise ValueError(
+                                            "parameter type mismatch: bulk "
+                                            f"record[{i}].{field_name} declared as "
+                                            f"'str' but received "
+                                            f"'{type(value).__name__}' — type "
+                                            "confusion blocked per "
+                                            "rules/security.md § Sanitizer Contract"
+                                        )
                                     if isinstance(value, str):
                                         # Check each field in bulk data
                                         sanitized = sanitize_sql_input(

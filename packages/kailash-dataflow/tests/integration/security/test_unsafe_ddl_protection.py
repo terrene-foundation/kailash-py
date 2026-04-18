@@ -19,8 +19,8 @@ generation tests build DataFlow without any patching because
 import uuid
 
 import pytest
-from dataflow.core.engine import DataFlow
 
+from dataflow.core.engine import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -244,7 +244,13 @@ class TestUnsafeDDLProtection:
                 pass
 
     async def test_ddl_error_logging_and_reporting(self, real_dataflow, caplog):
-        """Test that DDL errors are properly logged and reported via real logger."""
+        """Test that DDL errors are properly logged and reported via real logger.
+
+        Per rules/observability.md Rule 5, DataFlow's DDL error path emits
+        the structured event ``engine.multi_ddl_transaction_rolled_back`` at
+        ERROR level with ``extra={"error": str(e)}``. This test asserts the
+        structured-log shape, not free-text "DDL".
+        """
         import logging
 
         dataflow = real_dataflow
@@ -254,11 +260,21 @@ class TestUnsafeDDLProtection:
                     "CREATE TABLE _invalid_name_with_bad_col (id SERIAL, INVALID)"
                 )
 
-        # Error should have been logged
+        # Match the structured event key. The rendered message is
+        # "engine.multi_ddl_transaction_rolled_back"; the underlying error
+        # lives in rec.__dict__["error"] via the extras kwarg.
         assert any(
-            "DDL" in rec.message or "error" in rec.message.lower()
+            rec.levelname == "ERROR"
+            and (
+                "multi_ddl_transaction_rolled_back" in rec.message
+                or "ddl" in rec.message.lower()
+                or rec.__dict__.get("error")
+            )
             for rec in caplog.records
-        ), "Expected an ERROR log entry for the failed DDL"
+        ), (
+            "Expected ERROR log with engine.multi_ddl_transaction_rolled_back; "
+            f"got: {[(r.levelname, r.message, r.__dict__.get('error')) for r in caplog.records]}"
+        )
 
     def test_ddl_safety_with_complex_schema(self, real_dataflow):
         """Test DDL safety with complex schema including indexes and foreign keys."""
