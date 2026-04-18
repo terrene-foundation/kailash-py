@@ -87,3 +87,59 @@ def test_accepts_valid_snake_case() -> None:
     from kaizen.llm.presets import _PRESET_NAME_RE
 
     assert _PRESET_NAME_RE.match(valid) is not None
+
+
+# --- round-1 redteam MED-2: structured logging on register / reject ---
+def test_register_preset_emits_info_log(caplog) -> None:
+    """Successful registration emits an INFO log with the preset name."""
+    import logging
+
+    from kaizen.llm.presets import _PRESETS, register_preset
+
+    name = "fake_preset_for_log_test"
+    # Defensive cleanup in case a prior run registered the name.
+    _PRESETS.pop(name, None)
+    with caplog.at_level(logging.INFO, logger="kaizen.llm.presets"):
+        register_preset(name, _dummy_factory)
+    records = [r for r in caplog.records if r.getMessage() == "preset.registered"]
+    assert records, "expected 'preset.registered' INFO record"
+    assert records[0].levelno == logging.INFO
+    assert getattr(records[0], "preset_name", None) == name
+    # cleanup
+    _PRESETS.pop(name, None)
+
+
+def test_validation_reject_emits_warning_with_fingerprint(caplog) -> None:
+    """A regex-rejected name emits a WARN with fingerprint but NOT the raw name."""
+    import logging
+
+    bad = "open\nai"  # CRLF injection payload
+    with caplog.at_level(logging.WARNING, logger="kaizen.llm.presets"):
+        with pytest.raises(ValueError):
+            register_preset(bad, _dummy_factory)
+    records = [
+        r for r in caplog.records if r.getMessage() == "preset.validation_rejected"
+    ]
+    assert records, "expected 'preset.validation_rejected' WARN record"
+    rec = records[0]
+    assert rec.levelno == logging.WARNING
+    # Raw bad name MUST NOT appear anywhere in the record.
+    for attr, val in rec.__dict__.items():
+        assert bad not in str(val), f"raw name leaked in record.{attr}"
+    # Fingerprint MUST be present on the record as structured data.
+    assert getattr(rec, "name_fingerprint", None) is not None
+
+
+def test_validation_reject_non_string_emits_warning(caplog) -> None:
+    """A non-string input hits the type-reject path with a typed log tag."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="kaizen.llm.presets"):
+        with pytest.raises(ValueError):
+            register_preset(42, _dummy_factory)  # type: ignore[arg-type]
+    records = [
+        r for r in caplog.records if r.getMessage() == "preset.validation_rejected"
+    ]
+    assert records
+    assert getattr(records[0], "reason", None) == "non_string"
+    assert getattr(records[0], "type", None) == "int"

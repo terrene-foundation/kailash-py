@@ -68,3 +68,64 @@ def test_provider_error_truncates_long_body() -> None:
     err = ProviderError(status=500, body_snippet=big)
     assert len(err.body_snippet) <= 300  # 256 + truncation suffix
     assert "truncated" in err.body_snippet
+
+
+# --- round-1 redteam M1 (security): credential scrub in ProviderError ---
+def test_provider_error_scrubs_openai_key() -> None:
+    """OpenAI sk-* key echoed in a 4xx body must NOT appear in str(err)."""
+    body = "error: invalid key sk-hunter2xxxxxxxxxxxxxxxxxxxx"
+    err = ProviderError(status=401, body_snippet=body)
+    assert "sk-hunter2" not in str(err)
+    assert "sk-hunter2" not in err.body_snippet
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrubs_openai_project_key() -> None:
+    """OpenAI sk-proj-* project key must be scrubbed."""
+    body = (
+        'error: {"message": "bad key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}'
+    )
+    err = ProviderError(status=401, body_snippet=body)
+    assert "sk-proj-" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrubs_anthropic_key() -> None:
+    body = "error: bad key sk-ant-api-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    err = ProviderError(status=401, body_snippet=body)
+    assert "sk-ant-" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrubs_aws_access_key() -> None:
+    body = 'error: {"message": "bad key: AKIAIOSFODNN7EXAMPLE"}'
+    err = ProviderError(status=403, body_snippet=body)
+    assert "AKIAIOSFODNN7EXAMPLE" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrubs_bearer_token() -> None:
+    body = "Invalid Authorization header: Bearer abcdefghijklmnopqrstuvwxyz0123"
+    err = ProviderError(status=401, body_snippet=body)
+    assert "abcdefghijklmnopqrstuvwxyz0123" not in str(err)
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrub_before_truncation() -> None:
+    """Credential straddling the 256-char boundary must still be fully scrubbed."""
+    # Put the key near the end so raw-truncate would chop it mid-pattern.
+    filler = "x" * 240
+    body = filler + "sk-hunter2xxxxxxxxxxxxxxxxxxxx"  # ~270 chars
+    err = ProviderError(status=500, body_snippet=body)
+    assert "sk-hunter2" not in str(err)
+    assert "sk-hunter2" not in err.body_snippet
+
+
+def test_provider_error_scrub_does_not_false_positive_on_short_sk() -> None:
+    """A 'sk-' prefix with <20 chars after must NOT be matched by the pattern."""
+    # This is a legit non-credential string — e.g., a name like "sk-abc"
+    # should survive unscrubbed (20-char minimum on the pattern).
+    body = "no credential here, sk-abc short"
+    err = ProviderError(status=500, body_snippet=body)
+    assert "sk-abc" in err.body_snippet
+    assert "[REDACTED-CRED]" not in err.body_snippet

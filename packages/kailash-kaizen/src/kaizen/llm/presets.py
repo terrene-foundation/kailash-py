@@ -63,13 +63,25 @@ def _validate_preset_name(name: Any) -> str:
     defence — CRLF in a preset name would otherwise split log lines).
     Instead it carries a 4-char SHA-256 fingerprint so the audit trail can
     correlate without reproducing the payload.
+
+    Emits a WARN log on the reject path carrying only the fingerprint —
+    the raw name is deliberately NOT logged (that's the point). Round-1
+    redteam MED-2.
     """
     if not isinstance(name, str):
+        logger.warning(
+            "preset.validation_rejected",
+            extra={"reason": "non_string", "type": type(name).__name__},
+        )
         raise ValueError(
             "preset name must be a string; rejected non-string input "
             f"(type_fingerprint={type(name).__name__})"
         )
     if not _PRESET_NAME_RE.match(name):
+        logger.warning(
+            "preset.validation_rejected",
+            extra={"reason": "regex", "name_fingerprint": _fingerprint(name)},
+        )
         raise ValueError(
             "preset name failed validation against "
             f"^[a-z][a-z0-9_]{{0,31}}$ (name_fingerprint={_fingerprint(name)})"
@@ -91,6 +103,11 @@ def register_preset(name: str, factory: Callable[..., LlmDeployment]) -> None:
     Validates `name` against `_PRESET_NAME_RE`. Rejects duplicate
     registrations with a typed error to prevent silent shadowing — if a
     refactor tries to re-register `openai`, the second call raises.
+
+    Emits an INFO log on successful registration. The preset name is a
+    public symbol (not a secret) so logging it verbatim is safe — this is
+    a config-state transition per observability.md §4. Round-1 redteam
+    MED-2.
     """
     validated = _validate_preset_name(name)
     if not callable(factory):
@@ -100,6 +117,7 @@ def register_preset(name: str, factory: Callable[..., LlmDeployment]) -> None:
             f"preset already registered (name_fingerprint={_fingerprint(validated)})"
         )
     _PRESETS[validated] = factory
+    logger.info("preset.registered", extra={"preset_name": validated})
 
 
 def get_preset(name: str) -> Callable[..., LlmDeployment]:
