@@ -1,0 +1,101 @@
+# Session Notes — issues-492-497 (2026-04-18)
+
+## Where we are
+
+Workspace freshly created. `/analyze` phase complete. Next session
+picks up at `/todos` (phase 02).
+
+5 open GH issues consolidated from the 2026-04-17 + 2026-04-18 audit
+wave:
+
+- **#492 P0** — bulk_upsert SQLi via hand-rolled string-escape
+- **#493 P1** — 3 pre-existing security-suite test failures
+- **#495 P2** — ML register_estimator() cross-SDK parity
+- **#496 P2** — PG placeholder bug class verification
+- **#497 P2** — Nexus webhook HMAC raw-body exposure
+
+## Read first
+
+1. `briefs/01-scope.md` — scope, priorities, success criteria
+2. `01-analysis/01-failure-points-and-requirements.md` — per-issue
+   failure points, requirements, risk, effort-in-sessions,
+   execution order
+3. `.claude/rules/autonomous-execution.md` § Per-Session Capacity
+   Budget — sharding thresholds (invariants, call-graph, LOC)
+
+## Key findings from /analyze
+
+- **#492** — confirmed at `packages/kailash-dataflow/src/dataflow/
+  nodes/bulk_upsert.py:423-496`. Root cause: `_build_upsert_query`
+  returns a finished SQL string instead of `(sql, params)`. ONE
+  caller at line 326 + 6 unit tests. 1 shard, ~80-120 LOC.
+- **#493** — self-contradictory assertions (lines 83 vs 86) in
+  `test_connection_sql_injection_protection.py`. Sanitizer at
+  `src/kailash/core/nodes.py:680-686` does token-replace
+  (`STATEMENT_BLOCKED`); test asserts quote-escape. DDL logger
+  emits structured key `engine.multi_ddl_transaction_rolled_back`;
+  test greps for `"DDL"` in message. Contract decision needed:
+  pin token-replace + type-confusion-raise in `rules/security.md`.
+  1 shard.
+- **#495** — `register_estimator` zero matches in kailash-py, but
+  `kailash_ml/engines/preprocessing.py` defines its OWN
+  `PreprocessingPipeline` (not sklearn-derived), so the rs bug
+  shape may not transfer. Audit-only first half-session.
+- **#496** — no direct placeholder-mismatch surface (SQLAlchemy
+  abstracts), but ~30 raw-SQL sites surfaced. Most are
+  identifier-interpolation DDL (separate
+  `dataflow-identifier-safety.md` concern).
+  `batched_migration_executor.py` cluster needs line-by-line read.
+- **#497** — `WebhookTransport` at `transports/webhook.py:252,
+  329-372` already accepts `payload_bytes` and verifies HMAC
+  correctly. Real audit question: does the GENERIC `HTTPTransport`
+  handler surface expose raw body? Audit-only.
+
+## Recommended execution order (from /analyze)
+
+- **#492 sequential** (P0, closes active vulnerability).
+- **#493 parallel shard** — contract decision coordinates with
+  #492 Tier 2 test pattern; don't block #492 on it.
+- **#495 / #496 / #497** — audits, parallel via worktrees per
+  `rules/agents.md` MUST Worktree Isolation rule. Each is
+  independent.
+- Critical path: 1-2 sessions. Audit follow-ups add sessions if
+  bugs surface.
+
+## In-flight state
+
+- `/todos` has NOT been run. Next session starts there.
+- No worktrees dispatched yet.
+- Cross-SDK issue file for #492 in kailash-rs NOT yet filed — flag
+  for `/todos` creation.
+
+## Traps (repo-level)
+
+- `pytest --timeout-method=signal` hangs on asyncio selector loops;
+  use `--timeout-method=thread`.
+- Pre-commit hook `pytest-check` resolves to worktree-absolute
+  paths and fails in isolated worktrees. Use `git -c core.hooksPath=
+  /dev/null commit` with bypass documented in commit body per
+  `rules/git.md` § Pre-Commit Hook Workarounds.
+- SQLite `UpdateNode`/`UpsertNode` return metadata (filter,
+  fields, rows_affected), NOT the row. PostgreSQL returns the
+  row via RETURNING. Read-back via `self.read()` is the
+  dialect-portable pattern (established by #490 fix in
+  `features/express.py`).
+- Worktree dispatches silently base on old commits. Before
+  cherry-picking any `worktree-agent-*` branch, check
+  `git merge-base <branch> main`.
+
+## Out of scope (already closed this session)
+
+- #490 mutation-return redaction (commit 0a9da432)
+- #491 event-payload PK hash (commit 36060c98)
+- #494 cross-SDK parity tracker for #490
+
+## Open loose ends (outside this workspace)
+
+- Loom-side commit for `event-payload-classification.md` +
+  `sync-manifest.yaml` entry (rule file + manifest already placed;
+  commit deferred because loom has unrelated in-flight changes).
+- `/sync py` from loom to flow rule to USE template + downstream
+  projects.
