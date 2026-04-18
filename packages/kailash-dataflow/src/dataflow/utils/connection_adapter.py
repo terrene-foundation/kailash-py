@@ -162,12 +162,18 @@ class ConnectionManagerAdapter:
             return self._normalize_result(raw_result, sql)
 
         except Exception as e:
+            # SQL is a parameterized statement ($N / %s / ?); safe to log.
+            # Raw params carry classified row values (PII, secrets) and MUST NOT
+            # leak to aggregators. Log only arity. See rules/security.md §
+            # "No secrets in logs" and rules/dataflow-classification.md.
             logger.error(
                 "connection_adapter.connectionmanageradapter_query_execution_failed",
-                extra={"error": str(e)},
+                extra={
+                    "error": str(e),
+                    "sql": sql,
+                    "param_count": len(params) if params is not None else 0,
+                },
             )
-            logger.error("connection_adapter.sql", extra={"sql": sql})
-            logger.error("connection_adapter.params", extra={"params": params})
             raise
 
     async def _execute_on_tx_connection(
