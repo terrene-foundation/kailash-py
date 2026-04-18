@@ -67,13 +67,12 @@ def test_llm_deployment_is_frozen() -> None:
 
 
 def test_deferred_presets_raise_not_implemented() -> None:
-    """Every non-S1/S2/S3/S4 preset must raise with a session marker.
+    """Every non-S1/S2/S3/S4/S5 preset must raise with a session marker.
 
-    S4 (S4b-ii) lands bedrock_llama, bedrock_titan, bedrock_mistral,
-    bedrock_cohere. Only azure_* and vertex_* remain deferred to
-    Sessions 5 (Vertex) and 6 (Azure).
+    S5 lands vertex_claude + vertex_gemini. Only azure_* remain deferred
+    to Session 6.
     """
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_entra("k")
     with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.vertex_gemini("k")
+        LlmDeployment.azure_openai("k")

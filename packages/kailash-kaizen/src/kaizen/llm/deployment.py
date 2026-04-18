@@ -326,11 +326,11 @@ class LlmDeployment(BaseModel):
     # `bedrock_claude` moved out of this dict in Session 3 (S4a) and is
     # now wired via `presets.py` runtime attachment. `bedrock_llama`,
     # `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere` follow the
-    # same pattern in Session 4 (S4b-ii).
+    # same pattern in Session 4 (S4b-ii). `vertex_claude` and
+    # `vertex_gemini` follow the same pattern in Session 5 (S5).
     _NOT_YET_IMPLEMENTED: ClassVar[Dict[str, str]] = {
-        "azure_openai": "Implemented in session 5 (S5)",
+        "azure_openai": "Implemented in session 6 (S6)",
         "azure_entra": "Implemented in session 6 (S6)",
-        "vertex_gemini": "Implemented in session 6 (S6)",
     }
 
     # `openai` preset is defined in `presets.py` via runtime attachment
@@ -350,10 +350,6 @@ class LlmDeployment(BaseModel):
     @classmethod
     def azure_entra(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
         raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["azure_entra"])
-
-    @classmethod
-    def vertex_gemini(cls, *args: Any, **kwargs: Any) -> "LlmDeployment":
-        raise NotImplementedError(cls._NOT_YET_IMPLEMENTED["vertex_gemini"])
 
 
 __all__ = [

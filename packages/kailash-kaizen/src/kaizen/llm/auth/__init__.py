@@ -34,6 +34,12 @@ from kaizen.llm.auth.aws import (
     RegionNotAllowed,
 )
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
+from kaizen.llm.auth.gcp import (
+    CLOUD_PLATFORM_SCOPE,
+    DEFAULT_SCOPES,
+    CachedToken,
+    GcpOauth,
+)
 
 
 @runtime_checkable
@@ -114,4 +120,9 @@ __all__ = [
     "BEDROCK_SUPPORTED_REGIONS",
     "RegionNotAllowed",
     "ClockSkew",
+    # GCP OAuth (S5)
+    "GcpOauth",
+    "CachedToken",
+    "CLOUD_PLATFORM_SCOPE",
+    "DEFAULT_SCOPES",
 ]

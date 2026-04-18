@@ -79,6 +79,12 @@ dev = [
 bedrock = [
     "botocore>=1.34",
 ]
+# Vertex AI presets (#498 Session 5, S5) -- google-auth owns the OAuth2
+# token-fetch flow; inlined JWT-bearer signing in kaizen.llm.auth.gcp
+# is BLOCKED by zero-tolerance Rule 4.
+vertex = [
+    "google-auth>=2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/terrene-foundation/kailash-py"

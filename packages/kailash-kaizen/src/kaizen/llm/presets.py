@@ -37,6 +37,7 @@ from typing import Any, Callable, Dict
 
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
+from kaizen.llm.auth.gcp import GcpOauth
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
 from kaizen.llm.errors import ModelRequired
 from kaizen.llm.grammar.bedrock import (
@@ -46,6 +47,7 @@ from kaizen.llm.grammar.bedrock import (
     BedrockMistralGrammar,
     BedrockTitanGrammar,
 )
+from kaizen.llm.grammar.vertex import VertexClaudeGrammar, VertexGeminiGrammar
 
 logger = logging.getLogger(__name__)
 
@@ -1127,6 +1129,282 @@ def _register_and_attach_session_4_presets() -> None:
 _register_and_attach_session_4_presets()
 
 
+# ---------------------------------------------------------------------------
+# Session 5 (S5) -- Vertex AI presets (Claude + Gemini)
+# ---------------------------------------------------------------------------
+#
+# Distinctive preset shape vs Bedrock:
+#
+#   * Takes `service_account_key` (dict OR path) + `project` + `region` +
+#     `model`. Auth is GcpOauth (single-flight OAuth2) rather than a static
+#     bearer token.
+#   * Endpoint host is region-specific:
+#     `https://{region}-aiplatform.googleapis.com/v1/projects/{project}/
+#     locations/{region}/publishers/{publisher}/models/{model}:rawPredict`
+#     where publisher = "anthropic" for Claude, "google" for Gemini.
+#   * Project + region are validated against strict regexes at preset
+#     construction so a malicious value never reaches the URL builder
+#     (defense in depth -- url_safety.check_url is the structural defense).
+#   * Model is resolved via the family grammar; resolved id ends up in
+#     both `default_model` AND the URL path.
+#
+# Cross-SDK parity: preset names `vertex_claude` and `vertex_gemini` are
+# byte-identical to the Rust SDK literals
+# (`kailash-rs/crates/kailash-kaizen/src/llm/deployment/presets.rs`).
+
+_GRAMMAR_VERTEX_CLAUDE = VertexClaudeGrammar()
+_GRAMMAR_VERTEX_GEMINI = VertexGeminiGrammar()
+
+
+# Strict per-segment validation regexes. GCP project IDs are 6-30 chars,
+# lowercase letters / digits / hyphen, must start with a letter. Region
+# names follow the `<area>-<locality><digit>` shape (e.g. `us-central1`,
+# `europe-west4`). The regexes are intentionally narrow because the
+# values are interpolated into the URL host + path and a permissive
+# match would be a host-control vector.
+_PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9\-]{4,28}[a-z0-9]$")
+_REGION_RE = re.compile(r"^[a-z]{2,20}-[a-z]+\d{1,2}$")
+
+
+def _validate_vertex_project(project: Any) -> str:
+    """Validate a GCP project id against the strict allowlist regex.
+
+    Raises `ValueError` with a stable error code on failure. The raw
+    project value is NOT echoed (log-injection defense -- same shape as
+    the preset-name validator). A successful return yields the unchanged
+    project id ready for URL interpolation.
+    """
+    if not isinstance(project, str) or not project:
+        raise ValueError(
+            "vertex preset requires a non-empty project string "
+            "(e.g. 'my-gcp-project-1234')"
+        )
+    if not _PROJECT_ID_RE.match(project):
+        raise ValueError(
+            "vertex project id failed validation against "
+            f"^[a-z][a-z0-9\\-]{{4,28}}[a-z0-9]$ "
+            f"(project_fingerprint={_fingerprint(project)})"
+        )
+    return project
+
+
+def _validate_vertex_region(region: Any) -> str:
+    """Validate a GCP region against the strict allowlist regex."""
+    if not isinstance(region, str) or not region:
+        raise ValueError(
+            "vertex preset requires a non-empty region string "
+            "(e.g. 'us-central1', 'europe-west4')"
+        )
+    if not _REGION_RE.match(region):
+        raise ValueError(
+            "vertex region failed validation against "
+            f"^[a-z]{{2,20}}-[a-z]+\\d{{1,2}}$ "
+            f"(region_fingerprint={_fingerprint(region)})"
+        )
+    return region
+
+
+def _build_vertex_deployment(
+    *,
+    preset_name: str,
+    publisher: str,
+    service_account_key: dict | str,
+    project: str,
+    region: str,
+    model: str,
+    env_hint: str,
+    grammar: Any,
+    wire: WireProtocol,
+) -> LlmDeployment:
+    """Shared constructor for the 2 Vertex presets.
+
+    Consolidates project/region validation, grammar resolution, GcpOauth
+    construction, endpoint assembly, and observability so each family's
+    preset is a thin wrapper. Drift between vertex_claude and
+    vertex_gemini -- specifically "one preset has the structured log,
+    another forgets it" -- is structurally impossible by construction.
+    """
+    # --- model validation (per env-models.md) -------------------------------
+    if not isinstance(model, str) or not model:
+        raise ModelRequired(deployment_preset=preset_name, env_hint=env_hint)
+    # --- project + region validation (defense in depth before URL build) ---
+    validated_project = _validate_vertex_project(project)
+    validated_region = _validate_vertex_region(region)
+    # --- grammar resolution -------------------------------------------------
+    resolved_model = grammar.resolve(model)
+    # --- auth construction --------------------------------------------------
+    # GcpOauth.__init__ validates the service-account key shape (dict or
+    # path string) and rejects empties. Scopes default to the cloud-
+    # platform scope per Vertex spec.
+    auth = GcpOauth(service_account_key=service_account_key)
+    # --- endpoint assembly --------------------------------------------------
+    endpoint_host = f"{validated_region}-aiplatform.googleapis.com"
+    # The Vertex URL embeds the model in the path (`:rawPredict` for
+    # Anthropic-on-Vertex, `:streamGenerateContent` for Gemini -- but
+    # we use `:rawPredict` for Gemini too, since the Vertex Gemini
+    # path matches the Rust SDK's choice and supports both raw + stream
+    # via the same endpoint with a query flag). path_prefix carries the
+    # full project/location/publisher/model path; the wire adapter
+    # appends `:rawPredict` at completion time.
+    path_prefix = (
+        f"/v1/projects/{validated_project}/locations/{validated_region}"
+        f"/publishers/{publisher}/models/{resolved_model}"
+    )
+    endpoint = Endpoint(
+        base_url=f"https://{endpoint_host}",
+        path_prefix=path_prefix,
+    )
+    deployment = LlmDeployment(
+        wire=wire,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=resolved_model,
+    )
+    logger.info(
+        f"llm.deployment.{preset_name}.constructed",
+        extra={
+            "deployment_preset": preset_name,
+            "project": validated_project,
+            "region": validated_region,
+            "publisher": publisher,
+            "auth_strategy_kind": auth.auth_strategy_kind(),
+            "endpoint_host": endpoint_host,
+        },
+    )
+    return deployment
+
+
+def vertex_claude_preset(
+    service_account_key: dict | str,
+    project: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """Anthropic Claude served via Google Vertex AI.
+
+    Wire:        `AnthropicMessages` (Vertex-Claude speaks Anthropic's
+                 Messages schema; only the endpoint + auth differ from
+                 Anthropic-direct).
+    Endpoint:    `https://{region}-aiplatform.googleapis.com/v1/projects/
+                 {project}/locations/{region}/publishers/anthropic/models/
+                 {resolved_model}` -- the wire adapter appends
+                 `:rawPredict` at completion time.
+    Auth:        `GcpOauth(service_account_key)` -- single-flight OAuth2
+                 token via google-auth, scoped to cloud-platform.
+    Model:       Validated via `VertexClaudeGrammar` at caller time and
+                 stored on the deployment as the resolved on-wire id.
+
+    Required arguments:
+
+    * `service_account_key` -- dict (parsed JSON) OR path string
+      (typically `os.environ["GOOGLE_APPLICATION_CREDENTIALS"]`)
+    * `project` -- GCP project id matching `^[a-z][a-z0-9-]{4,28}[a-z0-9]$`
+    * `region` -- Vertex region matching `^[a-z]{2,20}-[a-z]+\\d{1,2}$`
+      (e.g. `us-central1`, `europe-west4`)
+    * `model` -- short alias (`claude-3-opus`, `claude-sonnet-4-6`) or
+      already-versioned id (`claude-3-opus@20240229`). Missing / empty
+      raises `ModelRequired(deployment_preset="vertex_claude",
+      env_hint="VERTEX_CLAUDE_MODEL_ID")`.
+
+    Observability: emits `llm.deployment.vertex_claude.constructed` at
+    INFO with `deployment_preset`, `project`, `region`, `publisher`,
+    `auth_strategy_kind`, and `endpoint_host` -- all non-sensitive
+    operational identifiers, injection-safe to log verbatim.
+
+    Cross-SDK parity: the preset name `vertex_claude` is byte-identical
+    to the Rust SDK literal. The token cache + single-flight refresh
+    contract matches the Rust `GcpOauth` strategy.
+    """
+    return _build_vertex_deployment(
+        preset_name="vertex_claude",
+        publisher="anthropic",
+        service_account_key=service_account_key,
+        project=project,
+        region=region,
+        model=model,
+        env_hint="VERTEX_CLAUDE_MODEL_ID",
+        grammar=_GRAMMAR_VERTEX_CLAUDE,
+        wire=WireProtocol.AnthropicMessages,
+    )
+
+
+def vertex_gemini_preset(
+    service_account_key: dict | str,
+    project: str,
+    region: str,
+    model: str,
+) -> LlmDeployment:
+    """Google Gemini served via Vertex AI.
+
+    Wire:        `VertexGenerateContent`
+    Endpoint:    `https://{region}-aiplatform.googleapis.com/v1/projects/
+                 {project}/locations/{region}/publishers/google/models/
+                 {resolved_model}`
+    Auth:        `GcpOauth(service_account_key)` -- same single-flight
+                 OAuth2 strategy used by `vertex_claude_preset`.
+    Model:       Validated via `VertexGeminiGrammar`. Short aliases
+                 (`gemini-1.5-pro`, `gemini-2.0-flash`) and any
+                 `gemini-*` model id are accepted.
+
+    Required arguments mirror `vertex_claude_preset`. Missing / empty
+    `model` raises `ModelRequired(deployment_preset="vertex_gemini",
+    env_hint="VERTEX_GEMINI_MODEL_ID")`.
+
+    Cross-SDK parity: byte-identical preset name + grammar mapping with
+    the Rust SDK.
+    """
+    return _build_vertex_deployment(
+        preset_name="vertex_gemini",
+        publisher="google",
+        service_account_key=service_account_key,
+        project=project,
+        region=region,
+        model=model,
+        env_hint="VERTEX_GEMINI_MODEL_ID",
+        grammar=_GRAMMAR_VERTEX_GEMINI,
+        wire=WireProtocol.VertexGenerateContent,
+    )
+
+
+def _register_and_attach_session_5_presets() -> None:
+    """Register the 2 S5 Vertex presets AND attach as `LlmDeployment.<name>`.
+
+    Replaces the `LlmDeployment.vertex_gemini` NotImplementedError stub
+    AND adds the previously-missing `LlmDeployment.vertex_claude`
+    classmethod (no stub existed for vertex_claude in S1-S4 because the
+    deferred-stub list only contained azure_* + vertex_gemini; the
+    vertex_claude attachment is therefore a fresh `setattr`).
+    """
+    table = [
+        ("vertex_claude", vertex_claude_preset),
+        ("vertex_gemini", vertex_gemini_preset),
+    ]
+    for name, factory in table:
+        register_preset(name, factory)
+
+        def _vertex_cm(
+            cls,
+            service_account_key: dict | str,
+            project: str,
+            region: str,
+            model: str,
+            _factory=factory,
+        ) -> LlmDeployment:
+            return _factory(
+                service_account_key,
+                project=project,
+                region=region,
+                model=model,
+            )
+
+        _vertex_cm.__name__ = name
+        _vertex_cm.__qualname__ = f"LlmDeployment.{name}"
+        setattr(LlmDeployment, name, classmethod(_vertex_cm))
+
+
+_register_and_attach_session_5_presets()
+
+
 __all__ = [
     # S1
     "openai_preset",
@@ -1156,4 +1434,7 @@ __all__ = [
     "bedrock_titan_preset",
     "bedrock_mistral_preset",
     "bedrock_cohere_preset",
+    # S5 -- Vertex AI presets
+    "vertex_claude_preset",
+    "vertex_gemini_preset",
 ]

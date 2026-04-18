@@ -584,15 +584,12 @@ def test_every_s3_deployment_is_frozen(factory) -> None:
 
 
 def test_remaining_deferred_presets_raise_not_implemented() -> None:
-    """azure_* and vertex_* stay deferred.
+    """Only azure_* remain deferred.
 
-    Session 3 (S4a) wired `bedrock_claude`. Session 4 (S4b-ii) wired
-    `bedrock_llama`, `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere`.
-    Sessions 5 (Vertex) and 6 (Azure) will wire the rest.
+    Session 5 (S5) wired vertex_claude + vertex_gemini. Session 6 will
+    wire azure_openai + azure_entra.
     """
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_openai("k")
     with pytest.raises(NotImplementedError, match=r"session"):
         LlmDeployment.azure_entra("k")
-    with pytest.raises(NotImplementedError, match=r"session"):
-        LlmDeployment.vertex_gemini("k")
