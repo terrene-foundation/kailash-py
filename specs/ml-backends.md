@@ -264,9 +264,27 @@ trainer = pl.Trainer(accelerator="cuda")         # Trainer moves it again
 
 ### 4.3 MUST: `TrainingResult` Carries The Resolved Values
 
-Every `TrainingResult` returned by a Lightning-wrapped training path MUST populate `backend`, `accelerator`, `device_string`, `devices`, `precision`, and `cuda_capability` (when applicable). A TrainingResult with `backend="auto"` or `precision="auto"` is a contract violation.
+Every `TrainingResult` returned by a Lightning-wrapped training path MUST populate the following fields with concrete (never `"auto"`) values:
 
-**Why:** Downstream consumers (ExperimentTracker auto-logs, MLflow export, ModelRegistry metadata) rely on these fields for reproducibility. "auto" strings make the run impossible to replay.
+- **Top-level fields** (`accelerator`, `device_used`, `precision`, `lightning_trainer_config`) — defined in `specs/ml-engines.md` §4.1; these are the primary reproducibility envelope.
+- **`device: DeviceReport`** — the GPU-first Phase 1 transparency object; carries `family`, `backend`, `device_string`, `precision`, `fallback_reason`, `array_api`. The DeviceReport replaces what earlier drafts of this spec called the flat `backend` / `devices` / `cuda_capability` fields. CUDA capability (`major.minor`) lives on `BackendInfo`, NOT on `TrainingResult` directly — callers needing it inspect `engine.backend_info.cuda_capability`.
+
+A `TrainingResult` with `accelerator="auto"`, `precision="auto"`, or `device.backend="auto"` is a contract violation.
+
+```python
+# DO — concrete values + DeviceReport populated
+TrainingResult(
+    ..., accelerator="cuda", precision="bf16-mixed", device_used="cuda:0",
+    device=DeviceReport(family="lightning", backend="cuda",
+                         device_string="cuda:0", precision="bf16-mixed",
+                         fallback_reason=None, array_api=False),
+)
+
+# DO NOT — "auto" leak
+TrainingResult(..., accelerator="auto", precision="auto", device=None)
+```
+
+**Why:** Downstream consumers (ExperimentTracker auto-logs, MLflow export, ModelRegistry metadata) rely on these fields for reproducibility. "auto" strings make the run impossible to replay. The `device: DeviceReport` field is the Phase 1 transparency contract; without it callers cannot distinguish actual-CUDA-execution from silent-CPU-fallback (`fallback_reason="oom"` / `"cuml_eviction"` / `"array_api_offlist"` / `"array_api_runtime_unavailable"`).
 
 ---
 
@@ -277,7 +295,7 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 ### 5.1 sklearn
 
 - **Backend support**: Lightning Trainer always runs on CPU; the inner estimator MAY route through the sklearn Array API on a non-CPU device per Phase 1.
-- **TrainingResult.backend** (legacy field): always `"cpu"`.
+- **TrainingResult top-level fields**: `accelerator="cpu"`, `device_used="cpu"`. (The historical `TrainingResult.backend` field never existed; per §4.3 the canonical surface is `accelerator` + `device_used` + the GPU-first `device: DeviceReport` envelope.)
 - **DeviceReport (`TrainingResult.device`)** populates per the Phase 1 transparency contract:
   - Allowlisted estimator + non-CPU `info.backend` → engage `sklearn.config_context(array_api_dispatch=True)`, move X/y to a torch tensor on `info.device_string`, log INFO `sklearn.array_api.engaged`. `device.array_api=True`, `device.backend=info.backend`.
   - Off-allowlist estimator + non-CPU `info.backend` → CPU numpy fallback. Log WARN `sklearn.array_api.offlist`, set `device.fallback_reason="array_api_offlist"`.
@@ -362,9 +380,9 @@ Every per-backend file MUST exercise ALL of:
 
 1. `detect_backend(prefer=<that backend>)` returns a `BackendInfo` with correct fields.
 2. `resolve_precision(info, "auto")` returns the expected precision for that device class.
-3. A small `BoringModel`-style Lightning training run completes one epoch and produces a `TrainingResult` whose `backend`, `accelerator`, `devices`, `precision` match the resolution.
+3. A small `BoringModel`-style Lightning training run completes one epoch and produces a `TrainingResult` whose `accelerator`, `device_used`, `precision`, and `device.backend` (DeviceReport) match the resolution.
 4. The same run's `TrainingResult.device_used` reads back through `ModelRegistry.get_model()` unchanged (state-persistence verification per `rules/testing.md` § Tier 2).
-5. A non-Lightning family run (sklearn MUST be in every file) produces a `TrainingResult` with `backend="cpu"` regardless of hardware, and (for xgboost/lightgbm on cuda-only backends) an `UnsupportedFamily` is raised when the family cannot run on the backend.
+5. A non-Lightning family run (sklearn MUST be in every file) produces a `TrainingResult` with `accelerator="cpu"` and `device.backend="cpu"` regardless of hardware (DeviceReport may carry `array_api=True` + `device.backend=info.backend` when the Array-API path engaged for an allowlisted estimator on a non-CPU backend), and (for xgboost/lightgbm on cuda-only backends) an `UnsupportedFamily` is raised when the family cannot run on the backend.
 
 **Implementation status (verified 2026-04-17 — redteam):** Tier 1 coverage landed at `tests/unit/test_device_resolver.py` and `tests/unit/test_trainable_protocol.py`. Tier 2 hardware-contract landed at `tests/integration/test_backend_resolver_contract.py` and asserts clauses §2.2, §2.3, §3.3, §4.1, §5.1 on real hardware (no mocks). The per-backend integration files enumerated above are NOT all present — only the combined contract file exists at 2026-04-17. Splitting into `backends/test_<name>_backend.py` is Phase 5 (redesign proposal §9) once CI lanes are provisioned (§11 OPEN QUESTION 1). **RL + `agents/` subpackages do NOT consult the resolver** (pinned by `tests/regression/test_rl_orphan_guard.py`) — Phase 6 fix required.
 
@@ -497,7 +515,7 @@ This spec's semantics are shared with `kailash-rs`. Implementation details diffe
 - `resolve_precision(info, requested)` returning equivalent precision strings.
 - The error hierarchy: `BackendUnavailable`, `UnsupportedFamily`, `PrecisionUnsupported`.
 - `km.doctor()` equivalent (Rust: `kailash-ml-doctor` binary crate), with the same structured-JSON schema.
-- `TrainingResult` fields: `backend`, `device_string`, `devices`, `precision`, `cuda_capability`.
+- `TrainingResult` fields: top-level `accelerator`, `device_used`, `precision`, `lightning_trainer_config` PLUS the GPU-first `device: DeviceReport` envelope (family / backend / device_string / precision / fallback_reason / array_api). Both SDKs MUST converge on the DeviceReport shape; the legacy flat `backend` / `devices` / `cuda_capability` fields are NOT first-class on TrainingResult.
 
 ### 9.2 Python-Specific
 

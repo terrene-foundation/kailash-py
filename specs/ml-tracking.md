@@ -128,22 +128,26 @@ for trial in trials:
 
 **MUST**: On run start, the tracker MUST capture the following fields without explicit user action. Missing any field is a HIGH finding in `/redteam`:
 
-| Field                      | Source                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `start_time`               | `datetime.now(UTC)` at `__aenter__`                                                                          |
-| `end_time`                 | `datetime.now(UTC)` at `__aexit__`                                                                           |
-| `host`                     | `socket.gethostname()`                                                                                       |
-| `python_version`           | `sys.version_info` triple                                                                                    |
-| `kailash_ml_version`       | `kailash_ml.__version__`                                                                                     |
-| `lightning_version`        | `lightning.pytorch.__version__` (if importable)                                                              |
-| `torch_version`            | `torch.__version__` (if importable)                                                                          |
-| `cuda_version`             | `torch.version.cuda` (if torch and CUDA present)                                                             |
-| `git_sha`                  | `subprocess.run(["git", "rev-parse", "HEAD"])` if in a repo, else `None`. Failure logged, not raised.        |
-| `git_dirty`                | `True` if `git status --porcelain` is non-empty                                                              |
-| `device_used`              | From attached `TrainingResult.device_used` when `log_model(training_result=...)` is called                   |
-| `accelerator`              | From `TrainingResult.accelerator`                                                                            |
-| `precision`                | From `TrainingResult.precision`                                                                              |
-| `tenant_id`                | From constructor / `km.track(tenant_id=)` or raises `TenantRequiredError` when multi-tenant mode             |
+| Field                    | Source                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start_time`             | `datetime.now(UTC)` at `__aenter__`                                                                                                                                                                                                                                                                                                            |
+| `end_time`               | `datetime.now(UTC)` at `__aexit__`                                                                                                                                                                                                                                                                                                             |
+| `host`                   | `socket.gethostname()`                                                                                                                                                                                                                                                                                                                         |
+| `python_version`         | `sys.version_info` triple                                                                                                                                                                                                                                                                                                                      |
+| `kailash_ml_version`     | `kailash_ml.__version__`                                                                                                                                                                                                                                                                                                                       |
+| `lightning_version`      | `lightning.pytorch.__version__` (if importable)                                                                                                                                                                                                                                                                                                |
+| `torch_version`          | `torch.__version__` (if importable)                                                                                                                                                                                                                                                                                                            |
+| `cuda_version`           | `torch.version.cuda` (if torch and CUDA present)                                                                                                                                                                                                                                                                                               |
+| `git_sha`                | `subprocess.run(["git", "rev-parse", "HEAD"])` if in a repo, else `None`. Failure logged, not raised.                                                                                                                                                                                                                                          |
+| `git_dirty`              | `True` if `git status --porcelain` is non-empty                                                                                                                                                                                                                                                                                                |
+| `device_used`            | From attached `TrainingResult.device_used` when `log_model(training_result=...)` is called                                                                                                                                                                                                                                                     |
+| `accelerator`            | From `TrainingResult.accelerator`                                                                                                                                                                                                                                                                                                              |
+| `precision`              | From `TrainingResult.precision`                                                                                                                                                                                                                                                                                                                |
+| `device_family`          | From `TrainingResult.device.family` (DeviceReport, kailash-ml ≥ 0.12.0). Family adapter that produced the run: `"sklearn"` / `"xgboost"` / `"lightgbm"` / `"torch"` / `"lightning"` / `"umap"` / `"hdbscan"`.                                                                                                                                  |
+| `device_backend`         | From `TrainingResult.device.backend`. The actually-resolved backend (never `"auto"`); distinct from the requested backend when `device.fallback_reason` is set.                                                                                                                                                                                |
+| `device_fallback_reason` | From `TrainingResult.device.fallback_reason` (nullable). One of `"oom"` / `"cuml_eviction"` / `"array_api_offlist"` / `"array_api_runtime_unavailable"` / `"driver_missing"` / `"unsupported_family"` / `None`. Critical for reproducibility — a run that "succeeded" with `fallback_reason="oom"` actually ran on CPU, not the requested GPU. |
+| `device_array_api`       | From `TrainingResult.device.array_api` (bool). `True` iff sklearn's `config_context(array_api_dispatch=True)` engaged for this call.                                                                                                                                                                                                           |
+| `tenant_id`              | From constructor / `km.track(tenant_id=)` or raises `TenantRequiredError` when multi-tenant mode                                                                                                                                                                                                                                               |
 
 **Why:** Every reproducibility failure in the field traces to missing one of these fields. MLflow makes the Python / CUDA / device fields optional and the top-N rule of thumb is that 1 in 20 runs reproduced by another person fails because of environment drift that would have been captured here.
 
@@ -216,13 +220,13 @@ assert isinstance(df, pl.DataFrame)
 
 **MUST**: `ExperimentTracker.open(store=...)` MUST accept the following backend URIs:
 
-| URI scheme         | Use case                                             | Notes                                                                                                   |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `sqlite:///:memory:` | Unit tests only — evicted on process exit           | Alias `sqlite+memory` accepted for readability                                                         |
-| `sqlite+memory`    | Notebook workflows with no persistence               | **MUST** be supported — closes the user-reported pain point #8 in `00-synthesis-redesign-proposal.md §3.6` |
-| `sqlite:///path/to/ml.db` | Local single-file store                        | Default when `store=None` in `km.track()` — resolves to `~/.kailash_ml/ml.db`                           |
-| `postgresql://...` | Multi-user, multi-host, prod                         | Recommended for any shared team                                                                         |
-| `mysql://...`      | Multi-user, multi-host, prod                         | Same contract as PostgreSQL                                                                             |
+| URI scheme                | Use case                                  | Notes                                                                                                      |
+| ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `sqlite:///:memory:`      | Unit tests only — evicted on process exit | Alias `sqlite+memory` accepted for readability                                                             |
+| `sqlite+memory`           | Notebook workflows with no persistence    | **MUST** be supported — closes the user-reported pain point #8 in `00-synthesis-redesign-proposal.md §3.6` |
+| `sqlite:///path/to/ml.db` | Local single-file store                   | Default when `store=None` in `km.track()` — resolves to `~/.kailash_ml/ml.db`                              |
+| `postgresql://...`        | Multi-user, multi-host, prod              | Recommended for any shared team                                                                            |
+| `mysql://...`             | Multi-user, multi-host, prod              | Same contract as PostgreSQL                                                                                |
 
 **MUST**: The default `store` when `km.track()` is called with no arguments MUST be `f"sqlite:///{Path.home() / '.kailash_ml' / 'ml.db'}"`. The directory MUST be created if absent. Creation failure MUST raise a typed `TrackerStoreInitError`, not fall back to `:memory:`.
 
@@ -269,14 +273,14 @@ await registry.set_alias(name="churn", alias="production", version=5)  # moves p
 
 **MUST**: The aliases `production`, `staging`, `champion`, `challenger`, `canary`, and `shadow` MUST resolve with the following semantics when consumed by `engine.serve()` and the MCP surface:
 
-| Alias        | Meaning                                                               | Retention default           |
-| ------------ | --------------------------------------------------------------------- | --------------------------- |
-| `production` | The live-traffic model                                                | Retain indefinitely         |
-| `staging`    | Candidate for next promotion                                          | Retain last 10              |
-| `champion`   | Current best-performing model (synonym for production in A/B context) | Retain indefinitely         |
-| `challenger` | Candidate being evaluated against champion                            | Retain last 10              |
-| `canary`     | Gradually rolled-out candidate                                        | Retain last 10              |
-| `shadow`     | Receives mirrored traffic, no user-facing outputs                     | Retain last 10              |
+| Alias        | Meaning                                                               | Retention default   |
+| ------------ | --------------------------------------------------------------------- | ------------------- |
+| `production` | The live-traffic model                                                | Retain indefinitely |
+| `staging`    | Candidate for next promotion                                          | Retain last 10      |
+| `champion`   | Current best-performing model (synonym for production in A/B context) | Retain indefinitely |
+| `challenger` | Candidate being evaluated against champion                            | Retain last 10      |
+| `canary`     | Gradually rolled-out candidate                                        | Retain last 10      |
+| `shadow`     | Receives mirrored traffic, no user-facing outputs                     | Retain last 10      |
 
 **Why:** Mirror the semantics of production deployment tooling so platform teams can port their existing runbooks. Without reserved names, every team reinvents the same four aliases and the MCP tools can't render a meaningful status.
 
@@ -303,13 +307,13 @@ await registry.register(model, name="churn")  # BLOCKED — ModelSignatureRequir
 
 **MUST**: Every `ModelVersionInfo` MUST carry a non-null `lineage` dict with at least these keys:
 
-| Key                    | Type                  | Purpose                                                                                |
-| ---------------------- | --------------------- | -------------------------------------------------------------------------------------- |
-| `tracker_run_id`       | `str`                 | The ExperimentTracker run that produced the model                                      |
-| `parent_version`       | `Optional[int]`       | For fine-tuned or retrained models — the version this was derived from                 |
-| `training_data_uri`    | `Optional[str]`       | Pointer to the training dataset (S3 path, SQL query ID, DataFlow model+version)         |
-| `feature_store_version` | `Optional[str]`      | Schema version from the feature store (when the future `ml-features.md` lands)          |
-| `base_model_uri`       | `Optional[str]`       | For LoRA/alignment: the base model used                                                |
+| Key                     | Type            | Purpose                                                                         |
+| ----------------------- | --------------- | ------------------------------------------------------------------------------- |
+| `tracker_run_id`        | `str`           | The ExperimentTracker run that produced the model                               |
+| `parent_version`        | `Optional[int]` | For fine-tuned or retrained models — the version this was derived from          |
+| `training_data_uri`     | `Optional[str]` | Pointer to the training dataset (S3 path, SQL query ID, DataFlow model+version) |
+| `feature_store_version` | `Optional[str]` | Schema version from the feature store (when the future `ml-features.md` lands)  |
+| `base_model_uri`        | `Optional[str]` | For LoRA/alignment: the base model used                                         |
 
 Registration with missing `tracker_run_id` MUST raise `LineageRequiredError`.
 
@@ -410,14 +414,14 @@ async def delete_alias(
 
 **MUST**: `ArtifactStore` implementations MUST exist for each URI scheme below. `store.from_uri(uri)` is the factory:
 
-| Scheme           | Class                     | Use case                                                                |
-| ---------------- | ------------------------- | ----------------------------------------------------------------------- |
-| `file://`        | `LocalFileArtifactStore`  | Single-host dev, CI                                                     |
-| `sqlite://`      | `SqliteBlobArtifactStore` | Small artifacts (<10 MB), notebook-friendly, embedded with tracker DB   |
-| `s3://`          | `S3ArtifactStore`         | AWS prod, requires `boto3`                                              |
-| `gs://`          | `GCSArtifactStore`        | GCP prod, requires `google-cloud-storage`                               |
-| `azure://`       | `AzureBlobArtifactStore`  | Azure prod, requires `azure-storage-blob`                               |
-| `http://`, `https://` | `HTTPReadOnlyArtifactStore` | Read-only import path, used by MLflow migration                      |
+| Scheme                | Class                       | Use case                                                              |
+| --------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `file://`             | `LocalFileArtifactStore`    | Single-host dev, CI                                                   |
+| `sqlite://`           | `SqliteBlobArtifactStore`   | Small artifacts (<10 MB), notebook-friendly, embedded with tracker DB |
+| `s3://`               | `S3ArtifactStore`           | AWS prod, requires `boto3`                                            |
+| `gs://`               | `GCSArtifactStore`          | GCP prod, requires `google-cloud-storage`                             |
+| `azure://`            | `AzureBlobArtifactStore`    | Azure prod, requires `azure-storage-blob`                             |
+| `http://`, `https://` | `HTTPReadOnlyArtifactStore` | Read-only import path, used by MLflow migration                       |
 
 **Why:** Each backend exists for a specific use case; missing `sqlite://` forces notebook users onto the filesystem and breaks in JupyterHub ephemeral containers. Explicit backend list prevents the "add custom backend" sprawl MLflow experienced.
 
@@ -469,13 +473,13 @@ if not key_available:
 
 **MUST**: Each store backend MUST expose `max_artifact_bytes` configured at construction. Default values:
 
-| Backend                  | Default `max_artifact_bytes` |
-| ------------------------ | ---------------------------- |
+| Backend                   | Default `max_artifact_bytes` |
+| ------------------------- | ---------------------------- |
 | `SqliteBlobArtifactStore` | 10 MB                        |
-| `LocalFileArtifactStore` | 10 GB                        |
-| `S3ArtifactStore`        | 5 TB (S3 object limit)       |
-| `GCSArtifactStore`       | 5 TB                         |
-| `AzureBlobArtifactStore` | 200 GB                       |
+| `LocalFileArtifactStore`  | 10 GB                        |
+| `S3ArtifactStore`         | 5 TB (S3 object limit)       |
+| `GCSArtifactStore`        | 5 TB                         |
+| `AzureBlobArtifactStore`  | 200 GB                       |
 
 Exceeding the limit MUST raise `ArtifactSizeExceededError` at `put()` time with the current size, limit, and a suggestion to reconfigure or switch backend.
 
@@ -531,16 +535,16 @@ await serve_mcp(server, transport="stdio")
 
 **MUST**: `TrackerMCPServer` MUST expose the following MCP tools. Each is an independently invocable method with a JSON schema documented in the server class:
 
-| Tool name             | Purpose                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| `list_experiments`    | `(tenant_id, filter_expr, limit)` → `List[ExperimentInfo]`                              |
-| `get_run`             | `(run_id, tenant_id)` → full metadata + metrics + params + auto-captured environment    |
-| `search_runs`         | `(query, order_by, limit, tenant_id)` → `List[RunInfo]`                                 |
-| `get_model`           | `(name, alias_or_version, tenant_id)` → `ModelVersionInfo` with resolved artifact URIs  |
-| `list_models`         | `(name_pattern, tenant_id)` → `List[ModelVersionInfo]`                                  |
-| `diff_runs`           | `(run_a, run_b, tenant_id)` → `RunDiff` with per-key param/metric/env deltas            |
-| `list_aliases`        | `(name, tenant_id)` → `Dict[alias, version]`                                            |
-| `get_lineage`         | `(model_name, version, tenant_id)` → full lineage chain to training data               |
+| Tool name          | Purpose                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| `list_experiments` | `(tenant_id, filter_expr, limit)` → `List[ExperimentInfo]`                             |
+| `get_run`          | `(run_id, tenant_id)` → full metadata + metrics + params + auto-captured environment   |
+| `search_runs`      | `(query, order_by, limit, tenant_id)` → `List[RunInfo]`                                |
+| `get_model`        | `(name, alias_or_version, tenant_id)` → `ModelVersionInfo` with resolved artifact URIs |
+| `list_models`      | `(name_pattern, tenant_id)` → `List[ModelVersionInfo]`                                 |
+| `diff_runs`        | `(run_a, run_b, tenant_id)` → `RunDiff` with per-key param/metric/env deltas           |
+| `list_aliases`     | `(name, tenant_id)` → `Dict[alias, version]`                                           |
+| `get_lineage`      | `(model_name, version, tenant_id)` → full lineage chain to training data               |
 
 **Why:** These eight tools are the smallest surface that lets an agent answer "which model is in production, how does it compare to the staging candidate, and what data was each trained on?" — the core MLflow use case. `diff_runs` is the killer feature MLflow does not provide.
 
@@ -569,14 +573,14 @@ class RunDiff:
 
 **MUST**: All primary keys MUST follow the shape `kailash_ml:v1:{tenant_id}:{resource}:{id}`:
 
-| Resource     | Key shape                                                |
-| ------------ | -------------------------------------------------------- |
-| Experiments  | `kailash_ml:v1:{tenant_id}:exp:{experiment_id}`          |
-| Runs         | `kailash_ml:v1:{tenant_id}:run:{run_id}`                 |
-| Models       | `kailash_ml:v1:{tenant_id}:model:{name}:{version}`       |
-| Aliases      | `kailash_ml:v1:{tenant_id}:alias:{name}:{alias}`         |
-| Artifacts    | `kailash_ml:v1:{tenant_id}:artifact:{sha256}`            |
-| Lineage      | `kailash_ml:v1:{tenant_id}:lineage:{model}:{version}`    |
+| Resource    | Key shape                                             |
+| ----------- | ----------------------------------------------------- |
+| Experiments | `kailash_ml:v1:{tenant_id}:exp:{experiment_id}`       |
+| Runs        | `kailash_ml:v1:{tenant_id}:run:{run_id}`              |
+| Models      | `kailash_ml:v1:{tenant_id}:model:{name}:{version}`    |
+| Aliases     | `kailash_ml:v1:{tenant_id}:alias:{name}:{alias}`      |
+| Artifacts   | `kailash_ml:v1:{tenant_id}:artifact:{sha256}`         |
+| Lineage     | `kailash_ml:v1:{tenant_id}:lineage:{model}:{version}` |
 
 **Why:** Same tenant-dimension-everywhere contract as `rules/tenant-isolation.md` MUST Rule 1. Any piece of state without a tenant dimension leaks across tenants as soon as two tenants happen to share a primary key (run IDs are UUIDs but model names are user-chosen strings — overlap is the norm, not the exception).
 
@@ -615,10 +619,10 @@ await tracker.log_metric("acc", 0.9)  # raises TenantRequiredError
 
 **MUST**: Every run, model, and artifact record MUST carry two fields:
 
-| Field             | Type             | Purpose                                                                          |
-| ----------------- | ---------------- | -------------------------------------------------------------------------------- |
-| `owner_tenant_id` | `str`            | The tenant that owns the record (always populated)                               |
-| `data_subject_ids` | `List[str]`     | Optional list of data subject IDs whose personal data may be present             |
+| Field              | Type        | Purpose                                                              |
+| ------------------ | ----------- | -------------------------------------------------------------------- |
+| `owner_tenant_id`  | `str`       | The tenant that owns the record (always populated)                   |
+| `data_subject_ids` | `List[str]` | Optional list of data subject IDs whose personal data may be present |
 
 Data subject IDs are typically user IDs, customer IDs, or patient IDs that appeared in the training data. Recording them is the caller's responsibility — `km.track(data_subject_ids=[...])` is the entry point.
 
@@ -726,14 +730,14 @@ This spec is **Python-Rust shared**. The API surface (method names, signatures m
 
 ### 10.2 Rust Translation
 
-| Clause                          | Python                                   | Rust                                                       |
-| ------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| Async context manager (§2.2)    | `async with km.track(...) as t:`         | `async_trait` + `tracker.with_run(|r| async { ... }).await` |
-| ONNX export (default format §2.5) | `format="onnx"` via `skl2onnx` / `torch.onnx` | `tract-onnx` as the export backend                     |
-| Storage backends (§4.1)         | `boto3`, `google-cloud-storage`, etc.    | `rust-s3`, `google-cloud-storage-rs`, `azure_storage`      |
-| MCP surface (§5)                | `kailash-mcp` (Python)                   | `mcp-rs` (Rust)                                            |
-| Polars return (§2.6)            | `polars.DataFrame`                       | `polars::DataFrame` (Rust polars)                          |
-| Storage key shape (§6)          | Same `kailash_ml:v1:{tenant_id}:...`     | Same — binary-identical keys allow cross-SDK read         |
+| Clause                            | Python                                        | Rust                                                  |
+| --------------------------------- | --------------------------------------------- | ----------------------------------------------------- | --- | --------------------- |
+| Async context manager (§2.2)      | `async with km.track(...) as t:`              | `async_trait` + `tracker.with_run(                    | r   | async { ... }).await` |
+| ONNX export (default format §2.5) | `format="onnx"` via `skl2onnx` / `torch.onnx` | `tract-onnx` as the export backend                    |
+| Storage backends (§4.1)           | `boto3`, `google-cloud-storage`, etc.         | `rust-s3`, `google-cloud-storage-rs`, `azure_storage` |
+| MCP surface (§5)                  | `kailash-mcp` (Python)                        | `mcp-rs` (Rust)                                       |
+| Polars return (§2.6)              | `polars.DataFrame`                            | `polars::DataFrame` (Rust polars)                     |
+| Storage key shape (§6)            | Same `kailash_ml:v1:{tenant_id}:...`          | Same — binary-identical keys allow cross-SDK read     |
 
 **MUST**: Rust reads of keys written by Python (and vice versa) MUST succeed without transformation. Cross-SDK interop tests (one written in Python, read in Rust; one written in Rust, read in Python) MUST live in `kailash-py/tests/cross_sdk/` and `kailash-rs/tests/cross_sdk/` respectively.
 
@@ -753,20 +757,20 @@ This spec is **Python-Rust shared**. The API surface (method names, signatures m
 
 **MUST**: All exceptions raised from `kailash_ml.tracker`, `kailash_ml.registry`, and `kailash_ml.artifacts` MUST inherit from `TrackingError`. Subclasses:
 
-| Exception                      | Raised when                                                                      |
-| ------------------------------ | -------------------------------------------------------------------------------- |
-| `TrackerStoreInitError`        | Store URI cannot be initialized (permission, disk full, invalid connection)     |
-| `TenantRequiredError`          | Multi-tenant mode without `tenant_id`                                            |
-| `InvalidTenantIdError`         | `tenant_id` fails the safety regex                                               |
-| `ModelSignatureRequiredError`  | `registry.register()` called without `signature`                                 |
-| `LineageRequiredError`         | `registry.register()` called without a tracker context (no `tracker_run_id`)    |
-| `ArtifactEncryptionError`      | Encrypt-then-store failed; includes `.reason` field                              |
-| `ArtifactSizeExceededError`    | Artifact exceeds backend `max_artifact_bytes`                                    |
-| `RunNotFoundError`             | `get_run(run_id)` with unknown run                                               |
-| `ModelNotFoundError`           | `registry.get(name, version)` with unknown version                               |
-| `AliasNotFoundError`           | `registry.get(name, alias=)` with unset alias                                    |
-| `ErasureRefusedError`          | `delete_data_subject()` blocked by production alias                              |
-| `MigrationImportError`         | MLflow import failed for a specific record (other records continue)              |
+| Exception                     | Raised when                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `TrackerStoreInitError`       | Store URI cannot be initialized (permission, disk full, invalid connection)  |
+| `TenantRequiredError`         | Multi-tenant mode without `tenant_id`                                        |
+| `InvalidTenantIdError`        | `tenant_id` fails the safety regex                                           |
+| `ModelSignatureRequiredError` | `registry.register()` called without `signature`                             |
+| `LineageRequiredError`        | `registry.register()` called without a tracker context (no `tracker_run_id`) |
+| `ArtifactEncryptionError`     | Encrypt-then-store failed; includes `.reason` field                          |
+| `ArtifactSizeExceededError`   | Artifact exceeds backend `max_artifact_bytes`                                |
+| `RunNotFoundError`            | `get_run(run_id)` with unknown run                                           |
+| `ModelNotFoundError`          | `registry.get(name, version)` with unknown version                           |
+| `AliasNotFoundError`          | `registry.get(name, alias=)` with unset alias                                |
+| `ErasureRefusedError`         | `delete_data_subject()` blocked by production alias                          |
+| `MigrationImportError`        | MLflow import failed for a specific record (other records continue)          |
 
 **Why:** Typed exceptions make error handling surgical. MLflow raises generic `Exception` in many paths, which forces downstream code to `except Exception: ...` and swallow unrelated errors.
 
@@ -785,14 +789,14 @@ Both `packages/kailash-ml/pyproject.toml` and `packages/kailash-ml/src/kailash_m
 
 ## Appendix A. MLflow Features Consciously NOT Matched
 
-| MLflow feature         | Decision  | Reason                                                                                                 |
-| ---------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
-| `mlflow.projects`      | NOT MATCHED | Replaced by Kaizen workflow orchestration per `rules/framework-first.md`. Reimplementing projects-as-entrypoints duplicates Kaizen. |
-| `mlflow.evaluate`      | NOT MATCHED | Replaced by `engine.evaluate()` in `ml-engines.md`. Tracking records the run_id; evaluation is a training-spec concern. |
-| Model flavors (`mlflow.sklearn`, `mlflow.pytorch`, ...) | NOT MATCHED | Replaced by `format=` parameter on `log_model`. Flavor-as-module proliferates import paths; `format="onnx"` defaults enforce one canonical format. |
-| Model serving via MLflow REST | NOT MATCHED | Replaced by Nexus multi-channel serving (REST + MCP + CLI + WebSocket) per `nexus-channels.md`. |
-| AutoLog for 13 frameworks | NOT MATCHED | Auto-capture is scoped to environment fields (§2.4). Per-framework autologging is brittle (MLflow auto-log for XGBoost has been broken across 4 MLflow versions). Users call `log_metric` explicitly. |
-| System metrics (CPU, memory, GPU util) sampling | DEFERRED | Scope-deferred to a future `ml-observability.md`. Not worth coupling to tracking right now. |
+| MLflow feature                                          | Decision    | Reason                                                                                                                                                                                                |
+| ------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mlflow.projects`                                       | NOT MATCHED | Replaced by Kaizen workflow orchestration per `rules/framework-first.md`. Reimplementing projects-as-entrypoints duplicates Kaizen.                                                                   |
+| `mlflow.evaluate`                                       | NOT MATCHED | Replaced by `engine.evaluate()` in `ml-engines.md`. Tracking records the run_id; evaluation is a training-spec concern.                                                                               |
+| Model flavors (`mlflow.sklearn`, `mlflow.pytorch`, ...) | NOT MATCHED | Replaced by `format=` parameter on `log_model`. Flavor-as-module proliferates import paths; `format="onnx"` defaults enforce one canonical format.                                                    |
+| Model serving via MLflow REST                           | NOT MATCHED | Replaced by Nexus multi-channel serving (REST + MCP + CLI + WebSocket) per `nexus-channels.md`.                                                                                                       |
+| AutoLog for 13 frameworks                               | NOT MATCHED | Auto-capture is scoped to environment fields (§2.4). Per-framework autologging is brittle (MLflow auto-log for XGBoost has been broken across 4 MLflow versions). Users call `log_metric` explicitly. |
+| System metrics (CPU, memory, GPU util) sampling         | DEFERRED    | Scope-deferred to a future `ml-observability.md`. Not worth coupling to tracking right now.                                                                                                           |
 
 ## Appendix B. Open Questions
 
