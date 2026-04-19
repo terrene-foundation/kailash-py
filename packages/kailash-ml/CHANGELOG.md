@@ -1,5 +1,20 @@
 # kailash-ml Changelog
 
+## [0.13.0] - 2026-04-20 — ONNX bridge matrix completion (torch / lightning / catboost)
+
+### Added
+
+- **`OnnxBridge._export_torch`** — torch.nn.Module -> ONNX via `torch.onnx.export` with opset 17 and `dynamic_axes` on the batch dimension. The exported graph accepts any batch size at `onnxruntime.InferenceSession.run` time. Accepts `np.ndarray`, `polars.DataFrame`, or `torch.Tensor` for `sample_input`; non-tensor inputs are converted to float32 tensors.
+- **`OnnxBridge._export_lightning`** — `LightningModule` -> ONNX. Routes through `model.to_onnx()` (Lightning's wrapper around `torch.onnx.export`) when available, with a direct `torch.onnx.export` fallback. Same opset / dynamic_axes contract as the torch branch.
+- **`OnnxBridge._export_catboost`** — native `model.save_model(path, format="onnx")` branch. Uses `NamedTemporaryFile` round-trip when no `output_path` is supplied (CatBoost has no in-memory buffer API).
+- **`OnnxBridge.export(sample_input=...)` kwarg** — required for torch / lightning exports because `torch.onnx.export` traces the forward pass with a concrete tensor. Tabular branches (sklearn / lightgbm / xgboost / catboost) continue to use `n_features` and ignore this kwarg.
+- **6 Tier 2 ONNX round-trip regression tests** — `tests/integration/test_onnx_roundtrip_{sklearn,xgboost,lightgbm,catboost,torch,lightning}.py`. Each trains a minimal model on a tiny synthetic dataset, exports to ONNX via `OnnxBridge.export`, re-imports via `onnxruntime.InferenceSession`, and asserts prediction parity within `np.allclose(rtol=1e-3, atol=1e-5)` against the native model. XGBoost / LightGBM tests are skipped on darwin-arm + py3.13 per the pre-existing segfault pattern. CatBoost is skipped gracefully when the optional `[catboost]` extra is not installed. The torch test additionally covers dynamic-batch-size inference (trace with batch=1, infer with batch=32). Resolves issue #546 and `specs/ml-engines.md` §6.1 MUST 3.
+- **`_COMPAT_MATRIX` entries for `"torch"`, `"lightning"`, `"catboost"`** — the pre-flight `check_compatibility` call now returns structured compatibility metadata for every framework key that has an implemented export branch.
+
+### Fixed
+
+- **ONNX compatibility matrix orphan (closes spec-compliance gap)** — prior to this release, `_COMPAT_MATRIX` advertised `pytorch` as exportable but `OnnxBridge.export()` fell through to the generic "Export not implemented for framework" skip path for torch / lightning / catboost. The matrix made a promise the dispatch could not keep. Every framework key in the matrix now has an implemented export branch AND a Tier 2 round-trip regression test exercising that branch through `onnxruntime` (the orphan guard per `rules/orphan-detection.md` §2a — crypto-pair round-trip MUST be tested through the facade, generalized to `export` / `import` pairs).
+
 ## [0.12.1] - 2026-04-20 — Predictions.device field + kailash>=2.8.9 floor bump
 
 ### Added
