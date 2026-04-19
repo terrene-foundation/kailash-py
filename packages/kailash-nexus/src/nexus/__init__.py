@@ -89,6 +89,7 @@ from .service_client import (
     ServiceClientInvalidPathError,
     ServiceClientSerializeError,
 )
+from .typed_service_client import Decoder, TypedServiceClient
 from .errors import PermissionError as NexusPermissionError  # deprecated alias
 from .errors import RateLimitError, ServiceUnavailableError
 from .errors import TimeoutError as NexusTimeoutError
@@ -181,4 +182,7 @@ __all__ = [
     "ServiceClientDeserializeError",
     "ServiceClientInvalidPathError",
     "ServiceClientInvalidHeaderError",
+    # Typed-model service client (issue #465 + cross-SDK kailash-rs#400)
+    "TypedServiceClient",
+    "Decoder",
 ]
