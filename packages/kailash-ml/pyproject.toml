@@ -38,6 +38,13 @@ dependencies = [
     "scikit-learn>=1.5",
     "lightgbm>=4.0",
     "xgboost>=2.0",
+    # UMAP (umap-learn) is a base dep as of the cuML eviction (Phase 1).
+    # Per workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md
+    # CRITICAL-1 disposition: cuML is evicted; UMAPTrainable wraps the
+    # sklearn-native umap-learn package; sklearn.cluster.HDBSCAN covers
+    # HDBSCAN (already in scikit-learn>=1.5). Phase 2 roadmap: torch-native
+    # UMAP across MPS/ROCm/XPU.
+    "umap-learn>=0.5",
     # Lightning is the training spine for every family per ml-engines.md
     # §3 MUST 2 — every training call routes through lightning.pytorch.Trainer.
     # Therefore lightning + torch are base dependencies, not optional extras.

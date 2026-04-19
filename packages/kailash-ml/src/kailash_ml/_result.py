@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, fields
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - type-checker only
+    from kailash_ml._device_report import DeviceReport
 
 __all__ = [
     "TrainingResult",
@@ -85,6 +88,11 @@ class TrainingResult:
     split_info: Optional[Any] = None
     calibration: Optional[Any] = None
     feature_importance: Optional[Mapping[str, float]] = None
+    # GPU-first Phase 1: per-call evidence of which backend / precision /
+    # fallback actually ran. Optional for back-compat; adapters populate
+    # this when they route through the device resolver. See
+    # kailash_ml._device_report.DeviceReport.
+    device: Optional["DeviceReport"] = None
 
     def __post_init__(self) -> None:
         # Populated-required-field check (§4.2 MUST 1).

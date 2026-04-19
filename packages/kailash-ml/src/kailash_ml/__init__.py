@@ -22,7 +22,11 @@ from kailash_ml._result import TrainingResult
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
-from kailash_ml.trainable import Trainable
+from kailash_ml.trainable import (
+    HDBSCANTrainable,
+    Trainable,
+    UMAPTrainable,
+)
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -242,6 +246,10 @@ __all__ = [
     "detect_backend",
     "TrainingResult",
     "Trainable",
+    # GPU-first Phase 1 Trainables — UMAP + HDBSCAN (cuML evicted per
+    # workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md).
+    "UMAPTrainable",
+    "HDBSCANTrainable",
     "train",
     "track",
     "resolve_torch_wheel",

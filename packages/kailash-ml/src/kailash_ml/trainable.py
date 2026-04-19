@@ -52,6 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover - type-checker only
     import numpy as np  # noqa: F401 — referenced in string annotations
 
 from kailash_ml._device import UnsupportedFamily, detect_backend
+from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
 
 __all__ = [
@@ -65,6 +66,8 @@ __all__ = [
     "LightGBMTrainable",
     "TorchTrainable",
     "LightningTrainable",
+    "UMAPTrainable",
+    "HDBSCANTrainable",
 ]
 
 logger = logging.getLogger(__name__)
@@ -1195,6 +1198,439 @@ class LightGBMTrainable:
         )
         preds = self._estimator.predict(frame.to_numpy())
         return Predictions(preds, column="prediction")
+
+
+# ---------------------------------------------------------------------------
+# UMAPTrainable (Phase 1 — CPU only via umap-learn; cuML evicted per
+# workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md CRITICAL-1)
+# ---------------------------------------------------------------------------
+
+
+class UMAPTrainable:
+    """Wraps ``umap-learn``'s UMAP as a Trainable.
+
+    Phase 1 ships CPU-only via the ``umap-learn`` pip package. cuML is
+    evicted per the Phase 1 revised-stack decision (NVIDIA-only, fragile
+    wheels, blocks every other GPU backend). Users on NVIDIA accept the
+    slower path; users on every other backend gain a working path. Phase
+    2 adds torch-native UMAP across MPS/ROCm/XPU.
+
+    When ``TrainingContext.backend != "cpu"``, the adapter logs
+    ``umap.cuml_eviction`` at INFO (documented design, not degraded —
+    per ``rules/observability.md`` §3 INFO is the correct level) and
+    runs on CPU. The emitted ``DeviceReport.fallback_reason`` is
+    ``"cuml_eviction"`` so callers can distinguish this from an OOM or
+    driver-missing fallback.
+
+    UMAP is unsupervised: ``target`` is optional; when given, it is
+    split off so downstream pipelines can chain a supervised stage.
+    """
+
+    family_name = "umap"
+    _SUPPORTED_BACKENDS = ("cpu",)  # Phase 1 — CPU only
+
+    def __init__(
+        self,
+        *,
+        target: Optional[str] = None,
+        n_components: int = 2,
+        n_neighbors: int = 15,
+        random_state: int = 42,
+        **kwargs: Any,
+    ) -> None:
+        self._init_kwargs: dict[str, Any] = {
+            "n_components": n_components,
+            "n_neighbors": n_neighbors,
+            "random_state": random_state,
+            **kwargs,
+        }
+        self._target = target
+        self._reducer: Any = None
+        self._is_fitted = False
+        self._last_module: Any = None
+        self._feature_names: tuple[str, ...] = ()
+
+    def to_lightning_module(self) -> Any:
+        if self._last_module is None:
+            raise RuntimeError(
+                "UMAPTrainable.to_lightning_module() called before fit(). "
+                "Call fit(data) first."
+            )
+        return self._last_module
+
+    def get_param_distribution(self) -> HyperparameterSpace:
+        return HyperparameterSpace(
+            params=(
+                HyperparameterRange(name="n_components", kind="int", low=2, high=50),
+                HyperparameterRange(name="n_neighbors", kind="int", low=2, high=200),
+            )
+        )
+
+    def fit(
+        self,
+        data: pl.DataFrame,
+        *,
+        hyperparameters: Optional[Mapping[str, Any]] = None,
+        context: Optional[TrainingContext] = None,
+    ) -> TrainingResult:
+        import lightning.pytorch as pl_trainer
+        import numpy as np
+
+        try:
+            import umap  # umap-learn package
+        except ImportError as exc:  # pragma: no cover - declared base dep
+            raise ImportError(
+                "UMAPTrainable requires the 'umap-learn' package. "
+                "It is a base dependency of kailash-ml; reinstall via "
+                "'uv sync' or 'pip install kailash-ml'."
+            ) from exc
+
+        ctx = _effective_context(context)
+
+        # Phase 1: always CPU (cuML evicted). INFO per observability.md §3.
+        fallback_reason: Optional[str] = None
+        if ctx.backend != "cpu":
+            logger.info(
+                "umap.cuml_eviction",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "actual_backend": "cpu",
+                    "fallback_reason": "cuml_eviction",
+                },
+            )
+            fallback_reason = "cuml_eviction"
+
+        cpu_ctx = TrainingContext(
+            accelerator="cpu",
+            precision="32-true",
+            devices=1,
+            device_string="cpu",
+            backend="cpu",
+            tenant_id=ctx.tenant_id,
+            tracker_run_id=ctx.tracker_run_id,
+            trial_number=ctx.trial_number,
+        )
+
+        params = dict(self._init_kwargs)
+        if hyperparameters:
+            params.update(hyperparameters)
+        self._reducer = umap.UMAP(**params)
+
+        # UMAP is unsupervised — split off target if given, but do not require it.
+        if self._target is not None and self._target in data.columns:
+            X, _y, feature_names = _split_xy(data, self._target)
+            self._feature_names = feature_names
+        else:
+            X = data.to_numpy()
+            self._feature_names = tuple(data.columns)
+
+        X_arr = np.asarray(X)
+
+        # Build a single-epoch LightningModule that fits UMAP in
+        # on_train_start. Same pattern as XGBoost/LightGBM adapters;
+        # _make_single_epoch_module assumes supervised (y+metric), so we
+        # inline a minimal unsupervised adapter here.
+        import torch
+
+        reducer = self._reducer
+
+        class _UMAPLightningAdapter(pl_trainer.LightningModule):
+            def __init__(self) -> None:
+                super().__init__()
+                self._reducer = reducer
+                self._X = X_arr
+                self._fitted = False
+                self._bias = torch.nn.Parameter(torch.zeros(1, requires_grad=True))
+
+            def on_train_start(self) -> None:
+                self._reducer.fit(self._X)
+                self._fitted = True
+
+            def training_step(self, batch: Any, batch_idx: int) -> Any:
+                return self._bias.sum() * 0.0
+
+            def configure_optimizers(self) -> Any:
+                return torch.optim.SGD([self._bias], lr=1e-3)
+
+            def train_dataloader(self) -> Any:
+                ds = torch.utils.data.TensorDataset(
+                    torch.zeros(1, 1),
+                    torch.zeros(1, dtype=torch.long),
+                )
+                return torch.utils.data.DataLoader(ds, batch_size=1)
+
+        module = _UMAPLightningAdapter()
+
+        trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+        trainer = pl_trainer.Trainer(**trainer_kwargs)
+        t0 = time.monotonic()
+        trainer.fit(module)
+        elapsed = time.monotonic() - t0
+
+        self._is_fitted = True
+        self._last_module = module
+
+        artifact_uri = _persist_native_artifact(
+            self._reducer, prefix="umap", format="pickle"
+        )
+
+        return TrainingResult(
+            model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
+            # UMAP is unsupervised; no supervised metric to report. We
+            # emit a placeholder 0.0 so the TrainingResult contract is
+            # satisfied. Downstream metrics (trustworthiness, silhouette
+            # against a target) belong to the engine, not the adapter.
+            metrics={"umap_embedding_components": float(params["n_components"])},
+            device_used=cpu_ctx.device_string,
+            accelerator=cpu_ctx.accelerator,
+            precision=cpu_ctx.precision,
+            elapsed_seconds=elapsed,
+            tracker_run_id=cpu_ctx.tracker_run_id,
+            tenant_id=cpu_ctx.tenant_id,
+            artifact_uris={"native": artifact_uri},
+            lightning_trainer_config=trainer_kwargs,
+            family=self.family_name,
+            hyperparameters=dict(hyperparameters or {}),
+            device=DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason=fallback_reason,
+                array_api=False,
+            ),
+        )
+
+    def predict(self, X: pl.DataFrame) -> Predictions:
+        if not self._is_fitted:
+            raise RuntimeError("UMAPTrainable.predict() called before fit().")
+        # If target was used at fit time, drop it from X if present.
+        if self._target is not None and self._target in X.columns:
+            frame = X.drop(self._target)
+        else:
+            frame = X
+        embedding = self._reducer.transform(frame.to_numpy())
+        return Predictions(embedding, column="embedding")
+
+
+# ---------------------------------------------------------------------------
+# HDBSCANTrainable (Phase 1 — CPU only via sklearn.cluster.HDBSCAN;
+# cuML evicted per revised-stack.md CRITICAL-1)
+# ---------------------------------------------------------------------------
+
+
+class HDBSCANTrainable:
+    """Wraps ``sklearn.cluster.HDBSCAN`` as a Trainable.
+
+    Phase 1 ships CPU-only via sklearn 1.3+'s HDBSCAN (already in our
+    ``scikit-learn>=1.5`` base dep). cuML is evicted per the revised
+    stack decision. Phase 2 adds torch-native HDBSCAN across non-NVIDIA
+    backends.
+
+    Clustering note: HDBSCAN is transductive — ``.fit(X)`` exposes
+    ``labels_`` for the training data, but it has no canonical
+    ``.predict()`` for new points. ``HDBSCANTrainable.predict(X)``
+    re-runs ``.fit_predict(X)`` on ``X``, which clusters the new frame
+    independently. For approximate prediction on new points, fit with
+    ``prediction_data=True`` and use ``hdbscan.approximate_predict``
+    (not wrapped here — belongs in a downstream clustering engine).
+    """
+
+    family_name = "hdbscan"
+    _SUPPORTED_BACKENDS = ("cpu",)  # Phase 1 — CPU only
+
+    def __init__(
+        self,
+        *,
+        target: Optional[str] = None,
+        min_cluster_size: int = 5,
+        min_samples: Optional[int] = None,
+        **kwargs: Any,
+    ) -> None:
+        self._init_kwargs: dict[str, Any] = {
+            "min_cluster_size": min_cluster_size,
+            **kwargs,
+        }
+        if min_samples is not None:
+            self._init_kwargs["min_samples"] = min_samples
+        self._target = target
+        self._clusterer: Any = None
+        self._is_fitted = False
+        self._last_module: Any = None
+        self._feature_names: tuple[str, ...] = ()
+
+    def to_lightning_module(self) -> Any:
+        if self._last_module is None:
+            raise RuntimeError(
+                "HDBSCANTrainable.to_lightning_module() called before fit(). "
+                "Call fit(data) first."
+            )
+        return self._last_module
+
+    def get_param_distribution(self) -> HyperparameterSpace:
+        return HyperparameterSpace(
+            params=(
+                HyperparameterRange(
+                    name="min_cluster_size", kind="int", low=2, high=100
+                ),
+                HyperparameterRange(name="min_samples", kind="int", low=1, high=50),
+            )
+        )
+
+    def fit(
+        self,
+        data: pl.DataFrame,
+        *,
+        hyperparameters: Optional[Mapping[str, Any]] = None,
+        context: Optional[TrainingContext] = None,
+    ) -> TrainingResult:
+        import lightning.pytorch as pl_trainer
+        import numpy as np
+        from sklearn.cluster import HDBSCAN
+
+        ctx = _effective_context(context)
+
+        fallback_reason: Optional[str] = None
+        if ctx.backend != "cpu":
+            logger.info(
+                "hdbscan.cuml_eviction",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "actual_backend": "cpu",
+                    "fallback_reason": "cuml_eviction",
+                },
+            )
+            fallback_reason = "cuml_eviction"
+
+        cpu_ctx = TrainingContext(
+            accelerator="cpu",
+            precision="32-true",
+            devices=1,
+            device_string="cpu",
+            backend="cpu",
+            tenant_id=ctx.tenant_id,
+            tracker_run_id=ctx.tracker_run_id,
+            trial_number=ctx.trial_number,
+        )
+
+        params = dict(self._init_kwargs)
+        if hyperparameters:
+            params.update(hyperparameters)
+        self._clusterer = HDBSCAN(**params)
+
+        # HDBSCAN is unsupervised — split off target if given.
+        if self._target is not None and self._target in data.columns:
+            X, _y, feature_names = _split_xy(data, self._target)
+            self._feature_names = feature_names
+        else:
+            X = data.to_numpy()
+            self._feature_names = tuple(data.columns)
+
+        X_arr = np.asarray(X)
+
+        import torch
+
+        clusterer = self._clusterer
+
+        class _HDBSCANLightningAdapter(pl_trainer.LightningModule):
+            def __init__(self) -> None:
+                super().__init__()
+                self._clusterer = clusterer
+                self._X = X_arr
+                self._fitted = False
+                self._n_clusters = 0
+                self._n_noise = 0
+                self._bias = torch.nn.Parameter(torch.zeros(1, requires_grad=True))
+
+            def on_train_start(self) -> None:
+                self._clusterer.fit(self._X)
+                self._fitted = True
+                labels = self._clusterer.labels_
+                # -1 is the HDBSCAN noise label; positive labels are clusters.
+                unique = set(int(x) for x in labels)
+                self._n_noise = int((labels == -1).sum())
+                self._n_clusters = len(unique - {-1})
+
+            def training_step(self, batch: Any, batch_idx: int) -> Any:
+                return self._bias.sum() * 0.0
+
+            def configure_optimizers(self) -> Any:
+                return torch.optim.SGD([self._bias], lr=1e-3)
+
+            def train_dataloader(self) -> Any:
+                ds = torch.utils.data.TensorDataset(
+                    torch.zeros(1, 1),
+                    torch.zeros(1, dtype=torch.long),
+                )
+                return torch.utils.data.DataLoader(ds, batch_size=1)
+
+            @property
+            def cluster_count(self) -> int:
+                return self._n_clusters
+
+            @property
+            def noise_count(self) -> int:
+                return self._n_noise
+
+        module = _HDBSCANLightningAdapter()
+
+        trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+        trainer = pl_trainer.Trainer(**trainer_kwargs)
+        t0 = time.monotonic()
+        trainer.fit(module)
+        elapsed = time.monotonic() - t0
+
+        self._is_fitted = True
+        self._last_module = module
+
+        artifact_uri = _persist_native_artifact(
+            self._clusterer, prefix="hdbscan", format="pickle"
+        )
+
+        return TrainingResult(
+            model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
+            metrics={
+                "hdbscan_n_clusters": float(module.cluster_count),
+                "hdbscan_n_noise": float(module.noise_count),
+            },
+            device_used=cpu_ctx.device_string,
+            accelerator=cpu_ctx.accelerator,
+            precision=cpu_ctx.precision,
+            elapsed_seconds=elapsed,
+            tracker_run_id=cpu_ctx.tracker_run_id,
+            tenant_id=cpu_ctx.tenant_id,
+            artifact_uris={"native": artifact_uri},
+            lightning_trainer_config=trainer_kwargs,
+            family=self.family_name,
+            hyperparameters=dict(hyperparameters or {}),
+            device=DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason=fallback_reason,
+                array_api=False,
+            ),
+        )
+
+    def predict(self, X: pl.DataFrame) -> Predictions:
+        if not self._is_fitted:
+            raise RuntimeError("HDBSCANTrainable.predict() called before fit().")
+        # HDBSCAN is transductive. For new data, re-cluster via fit_predict.
+        # See class docstring: for approximate_predict-style behavior on
+        # new points, instantiate sklearn.cluster.HDBSCAN upstream with
+        # appropriate settings — that path belongs in a clustering engine.
+        from sklearn.cluster import HDBSCAN
+
+        if self._target is not None and self._target in X.columns:
+            frame = X.drop(self._target)
+        else:
+            frame = X
+        new_clusterer = HDBSCAN(**self._init_kwargs)
+        labels = new_clusterer.fit_predict(frame.to_numpy())
+        return Predictions(labels, column="cluster_label")
 
 
 # ---------------------------------------------------------------------------
