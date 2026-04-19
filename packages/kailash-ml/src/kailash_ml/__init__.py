@@ -245,6 +245,11 @@ __all__ = [
     "train",
     "track",
     "resolve_torch_wheel",
+    # GPU-first Phase 1 public API — device reporting + script-level overrides
+    "DeviceReport",
+    "device_report_from_backend_info",
+    "device",
+    "use_device",
     # Types (from kailash_ml.types)
     "AgentInfusionProtocol",
     "FeatureField",

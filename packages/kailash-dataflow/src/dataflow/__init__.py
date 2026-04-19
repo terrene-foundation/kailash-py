@@ -107,7 +107,7 @@ from .validation import (
 install_dataflow_logger_mask()
 
 # Legacy compatibility - maintain the original imports
-__version__ = "2.0.11"
+__version__ = "2.0.12"
 
 __all__ = [
     "DataFlow",

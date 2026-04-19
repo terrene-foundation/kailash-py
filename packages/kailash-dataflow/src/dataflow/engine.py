@@ -362,7 +362,12 @@ class DataFlowEngine:
         """
         from dataflow.validation.decorators import validate_model
 
-        return validate_model(instance)
+        # BP-049: route validation errors through the classification
+        # sanitiser so classified field names / values don't leak in
+        # caller-facing error messages.
+        policy = getattr(self._dataflow, "_classification_policy", None)
+        model_name = type(instance).__name__
+        return validate_model(instance, policy=policy, model_name=model_name)
 
     def validate_fields(
         self,
