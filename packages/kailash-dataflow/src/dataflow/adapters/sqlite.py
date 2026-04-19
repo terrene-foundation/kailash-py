@@ -7,6 +7,7 @@ SQLite-specific database adapter implementation.
 import asyncio
 import logging
 import os
+import re
 import sys
 import traceback
 import warnings
@@ -29,6 +30,36 @@ _sqlite_dialect = DialectManager.get_dialect("sqlite")
 def _safe_identifier(name: str) -> str:
     """Validate and quote a SQL identifier (SQLite double-quote style)."""
     return _sqlite_dialect.quote_identifier(name)
+
+
+# Defense-in-depth validation for PRAGMA interpolation.
+# PRAGMA names + values cannot be passed as bound parameters (SQLite grammar),
+# so they MUST be validated before f-string interpolation.
+# See rules/dataflow-identifier-safety.md (Finding #3, issue #499).
+_PRAGMA_NAME_REGEX = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+# PRAGMA values are keywords (WAL/NORMAL), integers, or -KB cache sizes.
+# Disallow quotes, semicolons, parens, spaces — everything that enables SQL injection.
+_PRAGMA_VALUE_REGEX = re.compile(r"^-?[a-zA-Z0-9_]+$")
+
+
+def _validate_pragma(name: str, value: Any) -> Tuple[str, str]:
+    """Validate PRAGMA name + value before interpolation. Raises on invalid input.
+
+    PRAGMA statements don't accept bound parameters, so names/values must be
+    interpolated. This validator is the single enforcement point: strict
+    allowlist regex, typed error on failure, no raw value echoed in message.
+    """
+    if not isinstance(name, str) or not _PRAGMA_NAME_REGEX.match(name):
+        raise ValueError(
+            f"invalid PRAGMA name (fingerprint={hash(str(name)) & 0xFFFF:04x})"
+        )
+    value_str = str(value)
+    if not _PRAGMA_VALUE_REGEX.match(value_str):
+        raise ValueError(
+            f"invalid PRAGMA value for '{name}' "
+            f"(fingerprint={hash(value_str) & 0xFFFF:04x})"
+        )
+    return name, value_str
 
 
 try:
@@ -336,7 +367,8 @@ class SQLiteAdapter(DatabaseAdapter):
                             "mmap_size",
                         ):
                             continue
-                        await conn.execute(f"PRAGMA {pragma} = {value}")
+                        safe_name, safe_value = _validate_pragma(pragma, value)
+                        await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
                     self._pool_stats.total_connections += 1
                     self._pool_stats.active_connections += 1
 
@@ -373,7 +405,8 @@ class SQLiteAdapter(DatabaseAdapter):
                         "mmap_size",
                     ):
                         continue
-                    await conn.execute(f"PRAGMA {pragma} = {value}")
+                    safe_name, safe_value = _validate_pragma(pragma, value)
+                    await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
                 yield conn
 
     async def execute_query(
@@ -758,7 +791,8 @@ class SQLiteAdapter(DatabaseAdapter):
                                 "mmap_size",
                             ):
                                 continue
-                            await conn.execute(f"PRAGMA {pragma} = {value}")
+                            safe_name, safe_value = _validate_pragma(pragma, value)
+                        await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
 
                         self._connection_pool.append(conn)
                         self._pool_stats.total_connections += 1
@@ -795,7 +829,8 @@ class SQLiteAdapter(DatabaseAdapter):
                         "mmap_size",
                     ):
                         continue
-                    await conn.execute(f"PRAGMA {pragma} = {value}")
+                    safe_name, safe_value = _validate_pragma(pragma, value)
+                    await conn.execute(f"PRAGMA {safe_name} = {safe_value}")
 
                 # Test query
                 cursor = await conn.execute("SELECT 1 as test")
@@ -842,10 +877,13 @@ class SQLiteAdapter(DatabaseAdapter):
             return
 
         try:
+            # Validate checkpoint mode (user-influenced kwarg) before interpolation.
+            # wal_checkpoint accepts: PASSIVE, FULL, RESTART, TRUNCATE.
+            _, safe_mode = _validate_pragma("wal_checkpoint", self.wal_checkpoint_mode)
             async with aiosqlite.connect(
                 self.database_path, **self._connect_kwargs
             ) as conn:
-                await conn.execute(f"PRAGMA wal_checkpoint({self.wal_checkpoint_mode})")
+                await conn.execute(f"PRAGMA wal_checkpoint({safe_mode})")
                 logger.debug("WAL checkpoint completed")
         except Exception as e:
             logger.warning("sqlite.wal_checkpoint_failed", extra={"error": str(e)})
@@ -1044,7 +1082,10 @@ class SQLiteTransaction:
                             "mmap_size",
                         ):
                             continue
-                        await self.connection.execute(f"PRAGMA {pragma} = {value}")
+                        safe_name, safe_value = _validate_pragma(pragma, value)
+                        await self.connection.execute(
+                            f"PRAGMA {safe_name} = {safe_value}"
+                        )
                     self.adapter._pool_stats.total_connections += 1
                     self.adapter._pool_stats.active_connections += 1
 

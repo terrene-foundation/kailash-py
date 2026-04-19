@@ -26,6 +26,7 @@ from .auto_migration_system import (
     MigrationType,
     TableDefinition,
 )
+from .drop_confirmation import require_force_drop
 
 logger = logging.getLogger(__name__)
 
@@ -347,8 +348,16 @@ class VisualMigrationBuilder:
         table_builder._finalize = finalize_table
         return table_builder
 
-    def drop_table(self, name: str) -> "VisualMigrationBuilder":
-        """Drop an existing table."""
+    def drop_table(
+        self, name: str, *, force_drop: bool = False
+    ) -> "VisualMigrationBuilder":
+        """Drop an existing table.
+
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
+        requires explicit ``force_drop=True``. Dropped tables are
+        unrecoverable; the flag is the last human gate before destruction.
+        """
+        require_force_drop(f"drop_table({name!r})", force_drop)
         operation = MigrationOperation(
             operation_type=MigrationType.DROP_TABLE,
             table_name=name,
@@ -388,9 +397,14 @@ class VisualMigrationBuilder:
         return column_builder
 
     def drop_column(
-        self, table_name: str, column_name: str
+        self, table_name: str, column_name: str, *, force_drop: bool = False
     ) -> "VisualMigrationBuilder":
-        """Drop a column from an existing table."""
+        """Drop a column from an existing table.
+
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
+        requires explicit ``force_drop=True``.
+        """
+        require_force_drop(f"drop_column({table_name!r}, {column_name!r})", force_drop)
         operation = MigrationOperation(
             operation_type=MigrationType.DROP_COLUMN,
             table_name=table_name,
@@ -460,9 +474,20 @@ class VisualMigrationBuilder:
         return index_builder
 
     def drop_index(
-        self, index_name: str, table_name: str = None
+        self,
+        index_name: str,
+        table_name: str = None,
+        *,
+        force_drop: bool = False,
     ) -> "VisualMigrationBuilder":
-        """Drop an index."""
+        """Drop an index.
+
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
+        requires explicit ``force_drop=True``. Indexes are rebuildable from
+        schema but dropping a large production index mid-traffic can cause
+        query plan regressions; the flag forces deliberate acknowledgement.
+        """
+        require_force_drop(f"drop_index({index_name!r})", force_drop)
         if self.dialect == "mysql" and table_name:
             sql_up = f"DROP INDEX {index_name} ON {table_name};"
         else:

@@ -17,6 +17,7 @@ from .auto_migration_system import (
     SchemaDiff,
     TableDefinition,
 )
+from .drop_confirmation import DropRefusedError, require_force_drop
 from .fk_migration_operations import (
     CompositeFKOperation,
     FKChainUpdateOperation,
@@ -96,4 +97,7 @@ __all__ = [
     "FKChainUpdateOperation",
     "CompositeFKOperation",
     "FKOperationScenario",
+    # Destructive-operation confirmation
+    "DropRefusedError",
+    "require_force_drop",
 ]

@@ -32,6 +32,8 @@ from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 # Kailash imports for async workflow pattern
 from kailash.workflow.builder import WorkflowBuilder
 
+from .drop_confirmation import require_force_drop
+
 logger = logging.getLogger(__name__)
 
 
@@ -1709,18 +1711,36 @@ class AutoMigrationSystem:
         dry_run: bool = False,
         interactive: bool = True,
         auto_confirm: bool = False,
+        *,
+        force_drop: bool = False,
     ) -> Tuple[bool, List[Migration]]:
         """
         Automatically generate and apply migrations to match target schema.
+
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, if the generated
+        migration plan contains any destructive operation (DROP_TABLE,
+        DROP_COLUMN, DROP_INDEX, DROP_CONSTRAINT), ``force_drop=True`` MUST
+        be supplied. The flag is evaluated AFTER the diff is computed so
+        additive migrations (CREATE / ADD) remain ergonomic; destructive
+        migrations require deliberate acknowledgement.
+
+        ``dry_run=True`` is exempt: the plan is shown but nothing executes.
 
         Args:
             target_schema: Target schema to migrate to
             dry_run: If True, only show what would be done
             interactive: If True, prompt user for confirmation
             auto_confirm: If True, automatically confirm all changes
+            force_drop: Required (True) when the computed plan contains any
+                DROP_TABLE / DROP_COLUMN / DROP_INDEX / DROP_CONSTRAINT
+                migration. Default False.
 
         Returns:
             Tuple of (success, list of applied migrations)
+
+        Raises:
+            DropRefusedError: if the plan contains destructive migrations
+                and ``force_drop`` is False and ``dry_run`` is False.
         """
         logger.info("Starting auto-migration process")
 
@@ -1830,6 +1850,29 @@ class AutoMigrationSystem:
                 logger.info("Dry run mode - no changes applied")
                 self._print_migration_preview(migration)
                 return True, [migration]
+
+            # rules/dataflow-identifier-safety.md MUST Rule 4: if any operation
+            # in the plan is destructive, require force_drop=True. Computed
+            # AFTER the diff so additive migrations stay ergonomic.
+            _DESTRUCTIVE_TYPES = {
+                MigrationType.DROP_TABLE,
+                MigrationType.DROP_COLUMN,
+                MigrationType.DROP_INDEX,
+                MigrationType.DROP_CONSTRAINT,
+            }
+            destructive_ops = [
+                op
+                for op in migration.operations
+                if op.operation_type in _DESTRUCTIVE_TYPES
+            ]
+            if destructive_ops:
+                op_labels = ", ".join(
+                    sorted({op.operation_type.value for op in destructive_ops})
+                )
+                require_force_drop(
+                    f"auto_migrate(destructive ops: {op_labels})",
+                    force_drop,
+                )
 
             # Apply migration while lock is still held
             success = await self._apply_migration(migration)

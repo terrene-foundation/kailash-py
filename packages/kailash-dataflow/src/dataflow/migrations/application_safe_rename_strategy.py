@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
 
+from .drop_confirmation import require_force_drop
 from .rename_coordination_engine import (
     CoordinationResult,
     RenameCoordinationEngine,
@@ -509,18 +510,34 @@ class RollbackManager:
         failed_strategy: ZeroDowntimeStrategy,
         created_objects: List[str],
         connection: Optional[asyncpg.Connection] = None,
+        *,
+        force_drop: bool = False,
     ) -> RollbackExecutionResult:
         """
         Execute rollback for failed strategy.
+
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
+        requires explicit ``force_drop=True``. Rollback runs DROP TABLE /
+        DROP VIEW against the temp objects created during the failed
+        deployment; accidentally invoking it against wrong objects is
+        unrecoverable.
 
         Args:
             failed_strategy: Strategy that failed
             created_objects: Objects created during failed execution
             connection: Database connection
+            force_drop: Must be True to execute any DROP statements.
 
         Returns:
             RollbackExecutionResult with rollback details
+
+        Raises:
+            DropRefusedError: if ``force_drop`` is False.
         """
+        require_force_drop(
+            f"execute_rollback(strategy={failed_strategy.value})",
+            force_drop,
+        )
         if connection is None:
             connection = await self.connection_manager.get_connection()
 
