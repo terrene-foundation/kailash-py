@@ -192,6 +192,10 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
 # zero-tolerance §1a).
 from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
 
+# ``km.doctor()`` diagnostic per ``specs/ml-backends.md`` §7. Eager
+# import for the same CodeQL / ``__all__`` reasons as ``track`` above.
+from kailash_ml.doctor import doctor  # noqa: E402
+
 
 def __getattr__(name: str):  # noqa: N807
     """Lazy-load engines on first access."""
@@ -261,6 +265,7 @@ __all__ = [
     "HDBSCANTrainable",
     "train",
     "track",
+    "doctor",
     "resolve_torch_wheel",
     # GPU-first Phase 1 public API — device reporting + script-level overrides
     "DeviceReport",
