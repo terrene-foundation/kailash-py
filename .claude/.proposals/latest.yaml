@@ -116,6 +116,41 @@ changes:
       bug_class: "pre-release gate blind spots discovered only post-ship"
     classification_suggestion: global
 
+  # --- Appended after initial codify (PR #532) per rules/artifact-flow.md
+  # MUST: Append, Never Overwrite Unprocessed Proposals. New patterns
+  # surfaced in #533 (nexus 2.1.1 hotfix for #531) after codify landed.
+  - id: framework-dispatch-method-drift-iterate-the-data
+    type: rule
+    severity: HIGH
+    target: rules/framework-first.md
+    section: "Framework version-stable integration — drive the data, not the method"
+    summary: |
+      kailash-nexus 2.1.0 shipped calling `app.router.startup()` +
+      `.shutdown()` as if they were stable FastAPI/Starlette coroutines.
+      FastAPI has shipped BOTH `.startup()` AND `._startup()` at
+      different versions; some production FastAPI builds exposed only
+      `_startup`. Every Nexus 2.1.0 service crashed at uvicorn lifespan
+      with AttributeError. Fix (2.1.1): iterate the `on_startup` /
+      `on_shutdown` LIST directly (what FastAPI's own _DefaultLifespan
+      does internally). The list is the stable surface; dispatch method
+      names drift.
+
+      Rule extraction: when integrating with an external framework's
+      lifecycle hook, if both (a) a dispatch method name, and (b) a
+      list/dict of registered handlers are exposed, the data structure
+      is the stable surface across versions. Dispatch method names are
+      subject to underscore-prefix transitions and removal. Drive the
+      data; don't call the dispatch.
+    evidence:
+      issue: 531
+      pre_fix_pr: none # bug shipped in #501 which became nexus 2.1.0
+      patch_pr: 533 # iterate on_startup/on_shutdown lists
+      bug_class: "framework dispatch method name drift across versions"
+      regression_tests:
+        - test_workflow_server_lifespan_runs_on_startup_hooks
+        - test_lifespan_fires_handlers_even_when_dispatch_methods_missing
+    classification_suggestion: global # applies to any Python framework integration (FastAPI, Starlette, aiohttp, etc.)
+
 summary_note: |
   All 6 items derive from real failure modes shipped this session and
   caught either by the post-release reviewer or by direct cross-SDK
