@@ -48,7 +48,13 @@ from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_prese
 from .probes import ProbeManager, ProbeResponse, ProbeState
 from .registry import HandlerDef, HandlerParam, HandlerRegistry
 from .sse import register_sse_endpoint
-from .transports import HTTPTransport, MCPTransport, Transport
+from .transports import (
+    HTTPTransport,
+    MCPTransport,
+    Transport,
+    WebhookTransport,
+    WebSocketTransport,
+)
 from .websocket_handlers import Connection, MessageHandler, MessageHandlerRegistry
 
 with _warnings.catch_warnings():
@@ -72,6 +78,10 @@ from .errors import (
     NexusError,
     NotFoundError,
 )
+from .errors import PermissionError as NexusPermissionError  # deprecated alias
+from .errors import RateLimitError, ServiceUnavailableError
+from .errors import TimeoutError as NexusTimeoutError
+from .errors import UnauthorizedError, ValidationError
 from .http_client import (
     HttpClient,
     HttpClientConfig,
@@ -79,6 +89,7 @@ from .http_client import (
     HttpResponse,
     InvalidEndpointError,
 )
+from .outbound import post_webhook, probe_remote_health
 from .service_client import (
     ServiceClient,
     ServiceClientDeserializeError,
@@ -90,11 +101,6 @@ from .service_client import (
     ServiceClientSerializeError,
 )
 from .typed_service_client import Decoder, TypedServiceClient
-from .outbound import post_webhook, probe_remote_health
-from .errors import PermissionError as NexusPermissionError  # deprecated alias
-from .errors import RateLimitError, ServiceUnavailableError
-from .errors import TimeoutError as NexusTimeoutError
-from .errors import UnauthorizedError, ValidationError
 
 __version__ = "2.1.1"
 __all__ = [
@@ -105,6 +111,8 @@ __all__ = [
     "Transport",
     "HTTPTransport",
     "MCPTransport",
+    "WebhookTransport",
+    "WebSocketTransport",
     # Handler Registry
     "HandlerDef",
     "HandlerParam",
