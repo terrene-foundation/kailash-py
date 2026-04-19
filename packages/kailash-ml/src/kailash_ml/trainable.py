@@ -611,10 +611,48 @@ class SklearnTrainable:
         trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
         trainer = pl_trainer.Trainer(**trainer_kwargs)
         t0 = time.monotonic()
+        # If engage_array_api was True but scipy's Array API support is
+        # not enabled at the env-var level (SCIPY_ARRAY_API=1 before any
+        # scipy/sklearn import), sklearn's config_context raises at
+        # enter-time. We catch that and fall back to the CPU numpy path
+        # with a WARN log so the deployment gap is visible in log
+        # aggregators. This is the documented failure mode of sklearn's
+        # array_api_dispatch — it requires a pre-import env-var switch
+        # that many production images do not yet set by default.
+        array_api_runtime_failed = False
         if engage_array_api:
             import sklearn  # noqa: PLC0415 — local to GPU path
 
-            with sklearn.config_context(array_api_dispatch=True):
+            try:
+                with sklearn.config_context(array_api_dispatch=True):
+                    trainer.fit(module)
+            except RuntimeError as exc:
+                # scipy array_api gate — "Scikit-learn array API support
+                # was enabled but scipy's own support is not enabled"
+                if "array API" not in str(exc) and "array_api" not in str(exc):
+                    raise
+                logger.warning(
+                    "sklearn.array_api.runtime_unavailable",
+                    extra={
+                        "family": self.family_name,
+                        "estimator_class": estimator_class,
+                        "requested_backend": ctx.backend,
+                        "fallback_reason": "array_api_runtime_unavailable",
+                        "hint": "set SCIPY_ARRAY_API=1 before any sklearn/scipy import",
+                    },
+                )
+                array_api_runtime_failed = True
+                # Retry CPU numpy path — rebuild module with un-tensor'd
+                # inputs so the estimator sees plain arrays.
+                module = _make_single_epoch_module(
+                    self._estimator,
+                    X,
+                    y,
+                    metric_name=metric_name,
+                    metric_fn=metric_fn,
+                    module_name="SklearnLightningAdapter",
+                )
+                trainer = pl_trainer.Trainer(**trainer_kwargs)
                 trainer.fit(module)
         else:
             trainer.fit(module)
@@ -633,7 +671,7 @@ class SklearnTrainable:
         # ran, not what was requested. Array API path points at the
         # resolved GPU device; fallback path points at "cpu" with
         # ``fallback_reason`` set when a non-CPU request was ignored.
-        if engage_array_api:
+        if engage_array_api and not array_api_runtime_failed:
             device_report = DeviceReport(
                 family=self.family_name,
                 backend=ctx.backend,
@@ -641,6 +679,18 @@ class SklearnTrainable:
                 precision=ctx.precision,
                 fallback_reason=None,
                 array_api=True,
+            )
+        elif engage_array_api and array_api_runtime_failed:
+            # Array API was ATTEMPTED but scipy's env-var gate blocked
+            # it; we fell back to CPU numpy. Report the failure shape
+            # so operators can grep for the deployment gap.
+            device_report = DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason="array_api_runtime_unavailable",
+                array_api=False,
             )
         else:
             device_report = DeviceReport(
@@ -1532,6 +1582,10 @@ class UMAPTrainable:
             "n_components": n_components,
             "n_neighbors": n_neighbors,
             "random_state": random_state,
+            # umap-learn warns that `random_state` forces `n_jobs=1`; pre-set
+            # the value so umap's "overridden to 1" UserWarning does not
+            # fire. See umap_.py:1952 (umap-learn 0.5+).
+            "n_jobs": kwargs.pop("n_jobs", 1),
             **kwargs,
         }
         self._target = target
@@ -1740,6 +1794,10 @@ class HDBSCANTrainable:
     ) -> None:
         self._init_kwargs: dict[str, Any] = {
             "min_cluster_size": min_cluster_size,
+            # sklearn 1.5+ emits a FutureWarning that `copy` defaults are
+            # changing (False → True in sklearn 1.10). Pre-set the 1.10
+            # default so the upgrade is a no-op.
+            "copy": kwargs.pop("copy", True),
             **kwargs,
         }
         if min_samples is not None:
