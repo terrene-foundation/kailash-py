@@ -126,13 +126,29 @@ class TrainingContext:
 
 
 class Predictions:
-    """Typed envelope around a model's prediction output."""
+    """Typed envelope around a model's prediction output.
 
-    __slots__ = ("_raw", "_column")
+    Carries a ``device: Optional[DeviceReport]`` — populated by every
+    Phase-1 family adapter — so callers can programmatically distinguish
+    a CUDA-resolved predict from a CPU-fallback predict. The adapter
+    caches the DeviceReport from its most-recent ``fit()`` call and
+    stamps it onto every ``Predictions`` it returns until the next
+    ``fit()`` overwrites it. See
+    ``workspaces/kailash-ml-gpu-stack/journal/0005-GAP-predictions-device-field-missing.md``.
+    """
 
-    def __init__(self, raw: Any, *, column: str = "prediction") -> None:
+    __slots__ = ("_raw", "_column", "_device")
+
+    def __init__(
+        self,
+        raw: Any,
+        *,
+        column: str = "prediction",
+        device: Optional[DeviceReport] = None,
+    ) -> None:
         self._raw = raw
         self._column = column
+        self._device = device
 
     @property
     def raw(self) -> Any:
@@ -141,6 +157,18 @@ class Predictions:
     @property
     def column(self) -> str:
         return self._column
+
+    @property
+    def device(self) -> Optional[DeviceReport]:
+        """Per-call device evidence for this predict, if the adapter fitted.
+
+        ``None`` is returned only by callers that construct ``Predictions``
+        directly without going through a fitted Trainable (rare;
+        typically only in unit tests). Every Phase-1 adapter's
+        ``predict()`` populates this from the device report cached at
+        fit-time.
+        """
+        return self._device
 
     def to_polars(self) -> pl.DataFrame:
         if isinstance(self._raw, pl.DataFrame):
@@ -702,6 +730,8 @@ class SklearnTrainable:
                 array_api=False,
             )
 
+        self._last_device_report = device_report
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={metric_name: module.metric},
@@ -732,7 +762,7 @@ class SklearnTrainable:
             frame = X
         arr = frame.to_numpy()
         preds = self._estimator.predict(arr)
-        return Predictions(preds, column="prediction")
+        return Predictions(preds, column="prediction", device=self._last_device_report)
 
 
 # ---------------------------------------------------------------------------
@@ -891,6 +921,16 @@ class TorchTrainable:
         # reflects the actually-resolved Lightning accelerator (no
         # eviction / OOM fallback path here; native multi-backend
         # support via L.Trainer per ml-backends.md §5.4).
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend=ctx.backend,
+            device_string=ctx.device_string,
+            precision=ctx.precision,
+            fallback_reason=None,
+            array_api=False,
+        )
+        self._last_device_report = device_report
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={"train_loss": module.mean_loss},
@@ -904,14 +944,7 @@ class TorchTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"learning_rate": lr, "max_epochs": max_epochs},
-            device=DeviceReport(
-                family=self.family_name,
-                backend=ctx.backend,
-                device_string=ctx.device_string,
-                precision=ctx.precision,
-                fallback_reason=None,
-                array_api=False,
-            ),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -930,7 +963,11 @@ class TorchTrainable:
         self._model.eval()
         with torch.no_grad():
             preds = self._model(X_t)
-        return Predictions(preds.detach().cpu().numpy(), column="prediction")
+        return Predictions(
+            preds.detach().cpu().numpy(),
+            column="prediction",
+            device=self._last_device_report,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1038,6 +1075,16 @@ class LightningTrainable:
         # reflects the actually-resolved Lightning accelerator (no
         # eviction / OOM fallback path here; native multi-backend
         # support via L.Trainer per ml-backends.md §5.5).
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend=ctx.backend,
+            device_string=ctx.device_string,
+            precision=ctx.precision,
+            fallback_reason=None,
+            array_api=False,
+        )
+        self._last_device_report = device_report
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics=metrics,
@@ -1051,14 +1098,7 @@ class LightningTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"max_epochs": max_epochs},
-            device=DeviceReport(
-                family=self.family_name,
-                backend=ctx.backend,
-                device_string=ctx.device_string,
-                precision=ctx.precision,
-                fallback_reason=None,
-                array_api=False,
-            ),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1077,7 +1117,11 @@ class LightningTrainable:
         self._module.eval()
         with torch.no_grad():
             preds = self._module(X_t)
-        return Predictions(preds.detach().cpu().numpy(), column="prediction")
+        return Predictions(
+            preds.detach().cpu().numpy(),
+            column="prediction",
+            device=self._last_device_report,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1286,6 +1330,7 @@ class XGBoostTrainable:
             fallback_reason=fallback_reason,
             array_api=False,
         )
+        self._last_device_report = device_report
 
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
@@ -1312,7 +1357,7 @@ class XGBoostTrainable:
             else X
         )
         preds = self._estimator.predict(frame.to_numpy())
-        return Predictions(preds, column="prediction")
+        return Predictions(preds, column="prediction", device=self._last_device_report)
 
 
 # ---------------------------------------------------------------------------
@@ -1537,6 +1582,7 @@ class LightGBMTrainable:
             fallback_reason=fallback_reason,
             array_api=False,
         )
+        self._last_device_report = device_report
 
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
@@ -1563,7 +1609,7 @@ class LightGBMTrainable:
             else X
         )
         preds = self._estimator.predict(frame.to_numpy())
-        return Predictions(preds, column="prediction")
+        return Predictions(preds, column="prediction", device=self._last_device_report)
 
 
 # ---------------------------------------------------------------------------
@@ -1745,6 +1791,16 @@ class UMAPTrainable:
             self._reducer, prefix="umap", format="pickle"
         )
 
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend="cpu",
+            device_string="cpu",
+            precision="32-true",
+            fallback_reason=fallback_reason,
+            array_api=False,
+        )
+        self._last_device_report = device_report
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             # UMAP is unsupervised; no supervised metric to report. We
@@ -1762,14 +1818,7 @@ class UMAPTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
-            device=DeviceReport(
-                family=self.family_name,
-                backend="cpu",
-                device_string="cpu",
-                precision="32-true",
-                fallback_reason=fallback_reason,
-                array_api=False,
-            ),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1781,7 +1830,9 @@ class UMAPTrainable:
         else:
             frame = X
         embedding = self._reducer.transform(frame.to_numpy())
-        return Predictions(embedding, column="embedding")
+        return Predictions(
+            embedding, column="embedding", device=self._last_device_report
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1963,6 +2014,16 @@ class HDBSCANTrainable:
             self._clusterer, prefix="hdbscan", format="pickle"
         )
 
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend="cpu",
+            device_string="cpu",
+            precision="32-true",
+            fallback_reason=fallback_reason,
+            array_api=False,
+        )
+        self._last_device_report = device_report
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={
@@ -1979,14 +2040,7 @@ class HDBSCANTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
-            device=DeviceReport(
-                family=self.family_name,
-                backend="cpu",
-                device_string="cpu",
-                precision="32-true",
-                fallback_reason=fallback_reason,
-                array_api=False,
-            ),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -2004,7 +2058,9 @@ class HDBSCANTrainable:
             frame = X
         new_clusterer = HDBSCAN(**self._init_kwargs)
         labels = new_clusterer.fit_predict(frame.to_numpy())
-        return Predictions(labels, column="cluster_label")
+        return Predictions(
+            labels, column="cluster_label", device=self._last_device_report
+        )
 
 
 # ---------------------------------------------------------------------------
