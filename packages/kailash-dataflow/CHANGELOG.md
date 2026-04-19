@@ -1,5 +1,16 @@
 # DataFlow Changelog
 
+## [2.0.10] - 2026-04-19 — Identifier quoting + defense-in-depth hardening + force_downgrade split (#480 #499 #510)
+
+### Security
+
+- **Express CRUD PG identifier quoting (#480, PR #503)**: `DataFlowExpress` CRUD methods (`create`, `read`, `update`, `delete`, `list`, `count`) now route all table and column name interpolations in PostgreSQL DDL and DML through `dialect.quote_identifier()`. Prior to this fix, Express CRUD SQL used unquoted identifiers in PostgreSQL, allowing model names with reserved words or special characters to produce syntax errors or (in adversarial contexts) injection via crafted model names.
+- **9 defense-in-depth MED findings (#499, PRs #504 #508)**: batch close of medium-severity findings from the post-convergence security audit. Includes: constant-time comparison enforcement in credential validators, structured-error sanitization to avoid leaking DB internals in error messages, input length guards on several public API entry points, and tightening of exception handler scopes that were too broad.
+
+### Changed
+
+- **`force_drop` vs `force_downgrade` split (#510, PR #517)**: The `force_drop=True` flag on `dialect.drop_table()` (primitive DDL layer) is now distinct from the new `force_downgrade=True` flag on `MigrationManager.apply_downgrade()` (orchestrator layer). Before this refactor, `force_drop` was overloaded to mean both "acknowledge this individual DROP" and "acknowledge this destructive migration rollback." They now carry independent semantics per `rules/schema-migration.md` MUST Rule 7 and `rules/dataflow-identifier-safety.md` MUST Rule 4.
+
 ## [2.0.9] - 2026-04-18 — Security hardening + Python 3.14 compatibility (#477 #478)
 
 ### Security
