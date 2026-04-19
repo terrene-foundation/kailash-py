@@ -130,6 +130,10 @@ For in-depth documentation, see `packages/kailash-kaizen/docs/`:
 - **[kaizen-agent-execution](kaizen-agent-execution.md)** - Agent execution patterns
 - **[README](README.md)** - Framework overview
 
+### LLM Wire Layer (Lower-Level)
+
+- **[kaizen-llm-deployment](kaizen-llm-deployment.md)** - `kaizen.llm.LlmClient` + four-axis `LlmDeployment` + 24 presets + `from_env()` precedence + wire-send dispatch. **Load first when touching `LlmDeployment`, `LlmClient.embed()`/`complete()`, `wire_protocols/*`, or adding a new wire-send method.** Spec: `specs/kaizen-llm-deployments.md`.
+
 ### Agent Patterns
 
 - **[kaizen-agent-patterns](kaizen-agent-patterns.md)** - Common agent design patterns

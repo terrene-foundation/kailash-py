@@ -1,154 +1,82 @@
-# Session Notes — 2026-04-18 (Round 5 — parallel /implement + /redteam to convergence)
+# Session Notes — 2026-04-19 (Round 7)
 
 ## Where we are
 
-Two GH issues landed + converged in a single session: **#500+#501**
-(Nexus lifespan unified fix, ~300 LOC) and **#498 Session 1**
-(LLM deployment foundation, ~1400 LOC). Both passed two rounds of
-independent redteam review (reviewer + security-reviewer in
-parallel) and a round-3 cleanup sweep. Main is 12 commits ahead of
-the pre-round state, not yet pushed.
-
-Next session picks up at: (a) push to origin (pending human
-confirmation), (b) #498 Session 2 (S3 — Anthropic + Google
-providers), or (c) the deferred LOWs listed below.
+Round 7 closed 6 of 8 outstanding issues in one session. Five PRs
+merged (#502-#506). Kailash-ml now has first-class sklearn-compatible
+composites (`Pipeline` / `FeatureUnion` / `ColumnTransformer` +
+`register_estimator`); Nexus has a typed `HttpClient` + `ServiceClient`
+surface (112 new tests, SSRF-aware by default); DataFlow got 5 of 9
+MED defense-in-depth findings fixed. Also delivered: a validated
+architecture for GPU-first kailash-ml (see workspaces/kailash-ml-gpu-stack/).
 
 ## Read first
 
-1. `workspaces/issues-500-501/04-validate/round2-reviewer.md` +
-   `round2-security.md` — both declare CONVERGED: yes.
-2. `workspaces/issue-498-llm-deployment/04-validate/round2-*.md` —
-   same verdict.
-3. `workspaces/issue-498-llm-deployment/todos/active/002-session-2-*.md`
-   — next shard (Anthropic + Google).
-4. This file — traps, deferred items, and the round-3 cleanup log.
+1. `gh pr list --state merged --repo terrene-foundation/kailash-py --limit 8` —
+   Round-6 shipped #502 (embed), #503 (PG quoting). Round-7 shipped
+   #504 (defense-in-depth), #505 (Nexus HttpClient+ServiceClient),
+   #506 (ml Pipeline+register_estimator).
+2. `gh issue list --state open --repo terrene-foundation/kailash-py` —
+   remaining open: #499 (reopened, 4/9 MED findings deferred), #465
+   (OpenAPI-generated S2S client, depends on delivered #464 pattern).
+3. `workspaces/kailash-ml-gpu-stack/04-validate/00-convergence.md` —
+   validated architecture for GPU-first kailash-ml. Ships the redteam
+   findings + revised stack + 8-item implementation punch list.
+4. `workspaces/kailash-ml-gpu-stack/journal/0001-0003-*.md` — three
+   journal-worthy findings from the redteam (cuML eviction, DeviceReport
+   missing, XGBoost OOM silent crash).
 
-## Landed this round
+## In-flight state
 
-### Commits on main (12 ahead, not yet pushed)
+- `workspaces/OUTSTANDING.md` is STALE (round-5 snapshot). The real
+  current list: #499 (4 deferred findings), #465 (S2S OpenAPI
+  codegen). Every other cross-SDK issue from round-5 is closed.
+- Pre-existing proposal `.claude/.proposals/latest.yaml` has 7 entries
+  status `pending_review` — user was running /sync at loom/ when
+  Round 6 closed; state unchanged this session.
 
-```
-c00f21c4 fix: round-3 cleanup — fingerprint parity, JWT scrub, flag reset
-a831a9cb chore(workspace): redteam round 1+2 artifacts for #498 and #500+#501
-fc77bdd3 Merge: #500+#501 round-2 redteam fixes
-57d3e8c9 fix(kaizen): ProviderError credential scrub + preset structured logging (#498)
-dea8c195 fix(nexus): atomic shutdown idempotency + deprecation cleanup (#500, #501)
-1ac214b3 fix(nexus): widen lifespan teardown + bound startup_hook DoS (#500, #501)
-ecebe4e3 fix(kaizen): Endpoint hardening — expand forbidden headers, pre-validation, ASCII host (#498)
-42af7920 fix(kaizen): SSRF guard — IPv4-translated/NAT64 + inet_aton + structured WARN (#498)
-31a8e8c2 feat(kaizen): four-axis LLM deployment abstraction — Session 1 (#498)
-157abdf5 docs(nexus): CHANGELOG entry for #500 + #501 lifespan hook fix
-7463a5fb test(nexus): Tier 2 wiring tests for lifespan startup/shutdown hooks
-1535f4be fix(nexus): route startup/shutdown hooks through FastAPI lifespan
-```
+## Traps
 
-### Numerical claims (verified at commit time)
+- **Pre-commit auto-stash bug** still active — every commit MUST use
+  `git -c core.hooksPath=/dev/null commit ...` per `rules/git.md`.
+  Hit it again on 4/5 commits this session.
+- **Specialist-agent-dumps-in-main-tree trap** bit HARD this session.
+  Three agents launched with `isolation: worktree`: only Nexus actually
+  used its worktree. DataFlow and ML agents both edited in main's
+  working tree. Both terminated mid-implementation leaving partial
+  state on main. Recovery: committed DataFlow's partial as #504,
+  took over and finished ML myself as #506. Next session: verify
+  worktree status IMMEDIATELY after spawning, not on completion.
+- **CodeQL `__all__`-not-defined check** caught kailash-ml lazy-load
+  pattern. Scanner-surface-symmetry rule forbids "other entries on
+  main also do this" — must eager-import new entries. Existing
+  entries grandfathered (baseline).
+- **ML agent budget exhaustion mid-message.** Reported "Now let me
+  write the implementation" with zero actual implementation files
+  written. Same pattern as round-6 kaizen agent. Always verify files
+  after agent completion claim.
 
-- Kaizen LLM unit tests: 302 (verified via
-  `.venv/bin/python -m pytest packages/kailash-kaizen/tests/unit/llm/ -q | tail -1`
-  → `302 passed`)
-- Nexus Tier 2 lifespan tests: 10 (3 original + 5 round-2 + 2 flag-reset)
-- Collect-only for kaizen: 11348 tests, exit 0
-- Cross-SDK issue filed: <https://github.com/esperie-enterprise/kailash-rs/issues/409>
+## Next priorities
 
-### GitHub issues
+1. **Remaining #499 findings (4 of 9)** — SQLite PRAGMA in 3 files,
+   force_drop gate on 5 migration DROP paths, spy-based schema_manager
+   test, split test_phase_5_11 per-manager. All low-risk; batch into
+   one follow-up PR.
+2. **kailash-ml GPU first-class rollout** — `workspaces/kailash-ml-gpu-stack/`
+   has the full implementation plan. 3 sessions of work: evict cuML
+   extra, add DeviceReport, sklearn Array-API auto-wrapping, OOM
+   fallback helper, RL device routing audit, `km.device()` helpers,
+   Tier-2 regression tests per backend. Open GH issue first linking
+   to workspace.
+3. **#465 S2S OpenAPI codegen** — depends on the delivered #464
+   pattern. User designated it MEDIUM; revisit after GPU rollout.
 
-- **#498** Session 1 scope shipped. Sessions 2–8 remain.
-- **#500** Nexus `router.on_startup` hooks ignored — FIXED.
-- **#501** Plugin on_startup task cancellation — FIXED.
-- **Cross-SDK kailash-rs#409** filed — brief-template verification.
+## Session totals
 
-### Workspaces
-
-- `issues-500-501/` — 04-validate rounds 1+2 complete, CONVERGED.
-- `issue-498-llm-deployment/` — 04-validate rounds 1+2 complete,
-  CONVERGED for Session 1. Sessions 2–8 todos unchanged in active/.
-
-## Round-3 cleanup outcomes (what round-3 closed)
-
-Round-2 security review flagged 3 items as MED that round-2 reviewer
-downgraded to LOW. Round-3 commit `c00f21c4` addressed all three:
-
-| Item                                  | Before                    | After                          |
-| ------------------------------------- | ------------------------- | ------------------------------ |
-| Fingerprint length (cross-SDK parity) | 4 hex chars (~35% collision at 1000 tags) | 8 hex chars, matches DataFlow contract |
-| Credential scrub — JWT / Azure SAS    | sk-*, sk-proj-*, sk-ant-*, AIza, AKIA, ASIA, Bearer | + JWT (eyJ.eyJ.sig) + Azure sig= |
-| Shutdown flag reset on start-after-stop | Flag sticky across stop()/start() | Reset under lock at start() |
-
-## Deferred items (LOWs + non-blocking MEDs)
-
-Tracked for future session but explicitly NOT blocking:
-
-1. **Nexus M-N2 (security round 2)** — `asyncio.wait_for` cancellation
-   in `startup_hook` leaves partially-initialized resources. Needs a
-   cleanup-on-cancel contract in the hook API. Touches plugin docs.
-2. **Nexus `_run_async_hook:1977`** — third residual
-   `asyncio.iscoroutinefunction` site, out of round-1 scope.
-3. **#498 reviewer LOW-1** — hardcoded `model="gpt-4"` default in
-   `presets.py` openai_preset factory. Violates `rules/env-models.md`
-   strictly; kept for ergonomic quickstart. Promote to MED if it
-   escapes into docs or the #498 S9 defaults.
-4. **#498 reviewer MED-3** — orphan-window for `LlmClient`. Wire call
-   site in #498 Session 3 (S4) when the wire-send path lands.
-5. **ApiKey pickle / deepcopy hygiene** — `ApiKey` exposes raw key via
-   `copy.deepcopy` + `pickle.dumps`. Add `__reduce__` / `__deepcopy__`
-   overrides. Low cost, defer to #498 Session 2.
-
-## Open — next session
-
-1. **Push** — `git push origin main` is pending human confirmation.
-   12 commits to ship.
-2. **#498 Session 2** — S3 (Anthropic + Google direct providers,
-   ~500 LOC). Todo file at
-   `workspaces/issue-498-llm-deployment/todos/active/002-session-2-s3-anthropic-google-direct-providers.md`.
-   Pattern proven: presets.py adds `anthropic_preset` /
-   `google_preset`, `LlmDeployment.anthropic` / `.google` classmethods,
-   matching unit + wiring tests.
-3. **impact-verse downstream workaround removal** — the lifespan fix
-   lands in Nexus; the workaround at `impact-verse` commit `f1186b28`
-   (private `_fastapi.router.lifespan_context` surgery) can be retired.
-   Coordinate with the downstream maintainer.
-4. **kailash Core SDK 2.8.7 release cut** — prerequisite for
-   downstream users to pick up `LocalRuntime.mark_externally_managed`
-   public API. Human-authority gate.
-5. **File orphan-window amendment** in `02-plans/03-redteam-amendments.md`
-   naming the S3 close-out commitment for `LlmClient`. Optional —
-   current deferral is documented in the skip messages.
-
-## Traps (carried from round 4 + added)
-
-- `pytest --timeout-method=signal` hangs on asyncio selector loops;
-  use `--timeout-method=thread` (carried).
-- Pyright false-positives on `kaizen.llm.*` imports in worktrees —
-  the editable install resolves at runtime but pyright needs an
-  explicit re-index. Non-blocking; ignore.
-- Pre-commit auto-stash bug continues to hit. Documented workaround
-  in `rules/git.md` § "Pre-Commit Hook Workarounds" — use
-  `git -c core.hooksPath=/dev/null commit ...` with in-body note.
-  Round-2 nexus agent hit this and used the documented path.
-- Spawned agents sometimes write files outside their assigned
-  worktree (to main repo paths). The kaizen round-1 agent did this;
-  the round-2 agent also committed to main's branch ref instead of
-  the worktree branch. The commits landed correctly; just note that
-  `git worktree list` may not reflect ongoing agent activity in the
-  worktree's branch ref.
-- Signal-handler race on `_shutdown_hooks_fired` now defended with
-  `threading.Lock` + flag reset in `start()`. If a future refactor
-  replaces the lock with `asyncio.Lock`, signal handlers (which run
-  on the main thread) will deadlock on the async lock — keep
-  `threading.Lock`.
-- 4-char fingerprint → 8-char was a cross-SDK parity fix. If ANY
-  future DataFlow / kaizen / kailash-rs code emits a 4-char
-  fingerprint, the audit join breaks. Grep for `hexdigest()[:4]` in
-  redteam sweeps.
-
-## References
-
-- `workspaces/OUTSTANDING.md` (needs update: mark #498 S1 done,
-  #500/#501 done)
-- `workspaces/issue-498-llm-deployment/02-plans/03-redteam-amendments.md`
-- `workspaces/issue-498-llm-deployment/journal/0002-DECISION-option-A-llm-client-additive.md`
-- `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md`
-- GH: #477, #478, #492, #493, #495, #496, #497, #498, #499, #500, #501
-- GH (Rust): kailash-rs#409 (brief-template verification)
-- PyPI: <https://pypi.org/project/kailash-dataflow/2.0.9/>
+- 5 PRs merged: #502 #503 #504 #505 #506
+- 112 new Nexus tests + 14 new ML tests + regression tests for
+  defense-in-depth findings
+- 6 issues closed: #462 #480 #464 #473 #479 #488
+- 1 issue reopened with remaining-work note: #499
+- 1 validated architecture delivered (GPU-first kailash-ml)
+- 3 journal entries (workspaces/kailash-ml-gpu-stack/journal/0001-0003)

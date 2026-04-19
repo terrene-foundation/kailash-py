@@ -70,7 +70,31 @@ logger.info("redis.connect", url=redis_url)  # still leaks, still my problem
 
 **Why:** "Same on main" is the institutional ratchet that defers fixes forever. Rule 1 already covers this in spirit; an explicit scanner-surface clause closes the rationalization gap.
 
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+**Second instance — CodeQL `py/modification-of-default-value` via lazy `__getattr__` in `__all__`:**
+
+```python
+# DO — eager-import new `__all__` entries so CodeQL resolves them
+# __init__.py
+from .client import TypedServiceClient  # eager import
+from .decoder import DecoderRegistry
+
+__all__ = ["TypedServiceClient", "DecoderRegistry", ...]
+
+# DO NOT — add to __all__ but resolve only via __getattr__
+# __init__.py
+__all__ = ["TypedServiceClient", "DecoderRegistry", ...]
+
+def __getattr__(name):
+    if name == "TypedServiceClient":
+        from .client import TypedServiceClient
+        return TypedServiceClient
+    # CodeQL: "name in __all__ has no definition at module scope"
+    # → rationalization-blocked: "the existing 8 entries do this too"
+```
+
+**Why:** PR #506 added 8 new `__all__` entries that CodeQL flagged because they were only resolvable via lazy `__getattr__`; existing grandfathered entries used the same pattern. The fix is to eager-import the NEW entries (closing the flag for this PR), not to argue "main does this too." The grandfathered entries remain a separate workstream and are NOT justification for adding more of the same.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12); extended 2026-04-19 with the `__all__` / `__getattr__` variant surfaced by PR #506.
 
 ## Rule 2: No Stubs, Placeholders, or Deferred Implementation
 

@@ -1,0 +1,142 @@
+source_repo: kailash-py
+codify_date: "2026-04-19"
+codify_session: |
+  APPENDED 2026-04-19 — #498 four-axis LLM deployment abstraction (S1–S9)
+  + #462 LlmClient.embed() for OpenAI + Ollama + #480 PG identifier
+  quoting in DataFlowExpress CRUD. Status stays pending_review per
+  rules/artifact-flow.md append-not-overwrite protocol. PRIOR codify
+  2026-04-16: Pre-release sweep — DataFlow __del__ deadlock fix,
+  orphan test sweep (9 files), Kaizen trust test drift realignment,
+  3 institutional learnings codified.
+sdk_version: 2.8.8
+coc_version: 1.0.3
+status: distributed
+review_date: "2026-04-19"
+distributed_date: "2026-04-19"
+review_notes: |
+  2026-04-19 appended entries reviewed at loom 2.8.13 (Gate 1).
+  All 3 entries reclassified global → variant-py. Rationale: kaizen.llm
+  content is Python-only (Pydantic/httpx/WireProtocol enum); Rust
+  equivalent tracked independently in kailash-rs (#406/#393/#394).
+  Added variants/py/skills/04-kaizen/kaizen-llm-deployment.md to
+  variant_only.py in sync-manifest.yaml.
+  Files copied to loom:
+    - variants/py/skills/04-kaizen/kaizen-llm-deployment.md (new)
+    - variants/py/skills/04-kaizen/SKILL.md (modified)
+    - variants/py/agents/frameworks/kaizen-specialist.md (modified)
+  SDK version mismatch: proposal declares 2.8.8, pyproject.toml is 2.8.7
+  — flagged for human (proposal drafted in anticipation of release
+  that hasn't landed yet).
+  Prior 2026-04-16 entries already distributed in loom 2.8.11; not
+  re-reviewed.
+changes:
+  - file: skills/26-eatp-reference/eatp-trust-posture-canonical.md
+    action: created
+    suggested_tier: global
+    reason: |
+      Authoritative reference for the five canonical TrustPosture names
+      (AUTONOMOUS/DELEGATING/SUPERVISED/TOOL/PSEUDO) vs the four
+      backward-compat aliases (DELEGATED/CONTINUOUS_INSIGHT/
+      SHARED_PLANNING/PSEUDO_AGENT). Contents:
+        - autonomy_level table for each canonical posture
+        - legacy-name → canonical equivalent mapping (FULL_AUTONOMY →
+          AUTONOMOUS, HUMAN_DECIDES → TOOL, BLOCKED → PSEUDO, ASSISTED
+          → SUPERVISED) — HUMAN_DECIDES → TOOL is the mapping that keeps
+          getting wrong (mapper's approval_required branch returns TOOL,
+          autonomy_level 2, not PSEUDO)
+        - mapper branch → posture table (from TrustPostureMapper.
+          map_verification_result source)
+        - serialization contract (.value is lowercase string)
+      Evidence: two consecutive session wrapups inverted canonical vs
+      alias; third session propagated the inversion into a kaizen agent
+      brief before source verification caught it. Pure EATP content —
+      should load globally for all Python targets.
+    diff_lines: "+86"
+  - file: skills/26-eatp-reference/SKILL.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Linked eatp-trust-posture-canonical.md with "Load first when
+      touching trust posture tests." Progressive-disclosure entry so
+      SKILL.md surfaces the trust posture reference ahead of quickstart
+      / api-reference when trust tests are the subject.
+    diff_lines: "+1"
+  - file: rules/patterns.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Strengthened § Async Resource Cleanup to address the DataFlow
+      __del__ deadlock pattern fixed in commit 4f5dbe7f. Additions:
+        - MUST NOT call close()/cleanup()/any-logger-touching method
+          from __del__
+        - DO/DO NOT code examples
+        - BLOCKED rationalizations ("we just need to close the
+          connection", "async_safe_run handles the event loop", etc.)
+        - Origin: commit 4f5dbe7f with the deadlock chain — finalizer
+          holds logging root lock → close() → async_safe_run →
+          asyncio.new_event_loop → selector init → logger.debug →
+          blocks on same lock.
+      The deadlock has reappeared in multiple prior sessions ("DataFlow
+      unit suite hangs"). The strengthened rule closes the rationalization
+      gap that allowed the pattern to be reintroduced.
+    diff_lines: "+35"
+  - file: rules/orphan-detection.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Added two MUST rules and extended the Detection Protocol:
+        - Rule 4: API removal MUST sweep tests in the same PR. One
+          orphan test import takes down collection of every test after
+          it. BLOCKED rationalizations include "tests cleaned up in
+          follow-up PR", "integration tier is separate scope."
+        - Rule 5: pytest --collect-only returning 0 is a merge gate.
+          Collection failures are invisible under unit-only CI but
+          become merge-blocking when anyone runs the full suite.
+        - Detection Protocol step 4: run --collect-only across tests/
+          and packages/*/tests/ to catch orphans mechanically.
+      Origin: 9 orphan test files deleted across commits d3e7e0ef +
+      5edc941f, orphaned since the DataFlow 2.0 refactor (53dab715
+      "delete 14,500 LOC" in 2026-03).
+    diff_lines: "+45"
+
+  # ===== APPENDED 2026-04-19 (#498 + #462 + #480 cycle) =====
+  - file: skills/04-kaizen/kaizen-llm-deployment.md
+    action: created
+    suggested_tier: global
+    reason: |
+      Authoritative skill for the kaizen.llm wire layer introduced in
+      #498 (four-axis LlmDeployment abstraction) and extended by #462
+      (LlmClient.embed for OpenAI + Ollama). [Full reason truncated —
+      see archive for complete content.]
+    diff_lines: "+140"
+
+  - file: skills/04-kaizen/SKILL.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Added "LLM Wire Layer (Lower-Level)" section linking
+      kaizen-llm-deployment.md.
+    diff_lines: "+5"
+
+  - file: agents/frameworks/kaizen-specialist.md
+    action: modified
+    suggested_tier: global
+    reason: |
+      Added "LLM Wire Layer (kaizen.llm.LlmClient)" cross-reference.
+    diff_lines: "+4"
+
+audit_summary:
+  commits_this_session: 20
+  tests_green:
+    root_sdk_unit: "3309 passed"
+    dataflow_unit: "3732 passed"
+    nexus_unit: "1551 passed"
+    ml_unit: "803 passed"
+    pact_unit: "1346 passed"
+    kaizen_unit: "8744 passed, 0 failed"
+    pact_integration: "18 passed"
+    ml_integration: "59 passed"
+    collect_only_all_packages: "37201 tests, 0 errors"
+  known_yellow:
+    dataflow_integration: "806 passed, 375 failed (pre-existing API drift from DataFlow 2.0 refactor 53dab715 — separate workstream)"
+    nexus_integration: "256 passed, 20 failed (JWT validator + MCP test setup drift)"
