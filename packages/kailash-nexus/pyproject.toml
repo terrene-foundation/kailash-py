@@ -41,6 +41,10 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov>=4.0",
+    # Imported at module scope by tests/integration/auth/test_sso_integration.py
+    # — required for `pytest --collect-only` to return exit 0
+    # (orphan-detection.md §5 merge gate).
+    "pytest-httpserver>=1.0",
 ]
 
 [tool.pytest.ini_options]
