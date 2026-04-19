@@ -15,8 +15,10 @@ reader per `ml-engines.md` §10.1).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from typing import Any, Mapping, Optional
+
+from kailash_ml._device_report import DeviceReport
 
 __all__ = [
     "TrainingResult",
@@ -85,6 +87,15 @@ class TrainingResult:
     split_info: Optional[Any] = None
     calibration: Optional[Any] = None
     feature_importance: Optional[Mapping[str, float]] = None
+    # --- Per-call device evidence (GPU-first Phase 1) ----------------------
+    # Populated by every family adapter (SklearnTrainable first — see
+    # `workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md` lines
+    # 54-78). Optional at the dataclass level so older callers (and
+    # from_dict payloads that pre-date this field) continue to validate;
+    # new family adapters MUST populate it. XGBoost / LightGBM adapters
+    # populate `.device.fallback_reason="oom"` when they survived a GPU
+    # OOM and retried on CPU (revised-stack.md § "Transparency contract").
+    device: Optional[DeviceReport] = None
 
     def __post_init__(self) -> None:
         # Populated-required-field check (§4.2 MUST 1).
