@@ -28,6 +28,22 @@ from kailash_ml.types import (
     ModelSignature,
 )
 
+# Estimators (#479/#488) — eagerly imported because the module is light
+# (thin wrappers over sklearn which is already a base dep) and because
+# CodeQL flags __all__ entries that are only resolved through the lazy
+# __getattr__ path. Eager import keeps the symbols defined at module
+# scope without meaningful import-time cost.
+from kailash_ml.estimators import (
+    ColumnTransformer,
+    FeatureUnion,
+    Pipeline,
+    StandardScaler,
+    is_registered_estimator,
+    register_estimator,
+    registered_estimators,
+    unregister_estimator,
+)
+
 # ---------------------------------------------------------------------------
 # kailash-ml 2.0 convenience functions (km.train, km.track)
 # ---------------------------------------------------------------------------
@@ -100,16 +116,7 @@ def __getattr__(name: str):  # noqa: N807
         "ModelExplainer": "kailash_ml.engines.model_explainer",
         # Bridge
         "OnnxBridge": "kailash_ml.bridge.onnx_bridge",
-        # Estimators (#479/#488 — sklearn-compatible composites with
-        # explicit register_estimator() for custom classes)
-        "Pipeline": "kailash_ml.estimators",
-        "FeatureUnion": "kailash_ml.estimators",
-        "ColumnTransformer": "kailash_ml.estimators",
-        "StandardScaler": "kailash_ml.estimators",
-        "register_estimator": "kailash_ml.estimators",
-        "unregister_estimator": "kailash_ml.estimators",
-        "is_registered_estimator": "kailash_ml.estimators",
-        "registered_estimators": "kailash_ml.estimators",
+        # Estimators (#479/#488) are eagerly imported above; no lazy entry.
         # Compat
         "MlflowFormatReader": "kailash_ml.compat.mlflow_format",
         "MlflowFormatWriter": "kailash_ml.compat.mlflow_format",
