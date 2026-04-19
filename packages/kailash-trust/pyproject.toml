@@ -24,7 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "kailash>=2.7.0",
+    "kailash>=2.8.7",
 ]
 
 [project.optional-dependencies]

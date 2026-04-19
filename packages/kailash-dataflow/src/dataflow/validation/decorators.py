@@ -31,9 +31,12 @@ threaded); validation reads the list without mutation.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Type, TypeVar
 
 from dataflow.validation.result import ValidationResult
+
+if TYPE_CHECKING:
+    from dataflow.classification.policy import ClassificationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +79,7 @@ def field_validator(
     def _decorator(cls: Type[T]) -> Type[T]:
         # Lazily initialize the validator list. Copy from parent to
         # avoid mutating a shared superclass list.
-        existing: List[_ValidatorEntry] = list(
-            getattr(cls, "__field_validators__", [])
-        )
+        existing: List[_ValidatorEntry] = list(getattr(cls, "__field_validators__", []))
         existing.append((field_name, validator_fn, label))
         cls.__field_validators__ = existing  # type: ignore[attr-defined]
         return cls
@@ -86,20 +87,42 @@ def field_validator(
     return _decorator
 
 
-def validate_model(instance: Any) -> ValidationResult:
+def validate_model(
+    instance: Any,
+    policy: Optional["ClassificationPolicy"] = None,
+    model_name: Optional[str] = None,
+) -> ValidationResult:
     """Run all registered field validators against a model instance.
 
     Collects ALL validation errors (does not fail-fast). Returns a
     ``ValidationResult`` whose ``.valid`` property is ``True`` only
     when every validator passes.
 
+    When ``policy`` and ``model_name`` are provided, validation errors
+    on classified fields are routed through
+    ``dataflow.classification.validation_error.sanitize_validation_error``
+    so the caller-facing error surface never echoes a classified field
+    NAME or raw VALUE back to the caller. ``ValidationResult.classified_field_count``
+    tracks the aggregate for operator alerting. See issue #520 and
+    ``rules/event-payload-classification.md`` Rules 5–7.
+
     Args:
         instance: A DataFlowModel instance (or any object whose class
             has a ``__field_validators__`` attribute).
+        policy: Optional classification policy. When ``None`` the
+            helper is a pass-through and errors contain raw field
+            names / values (backwards-compatible behaviour for
+            unclassified models).
+        model_name: Optional model name used by the sanitiser to look
+            up per-field classification. Required when ``policy`` is
+            supplied; ignored otherwise.
 
     Returns:
         A ``ValidationResult`` aggregating all errors.
     """
+    # Lazy import avoids a cycle with classification.policy.
+    from dataflow.classification.validation_error import sanitize_validation_error
+
     result = ValidationResult()
     validators: List[_ValidatorEntry] = getattr(
         type(instance), "__field_validators__", []
@@ -111,22 +134,39 @@ def validate_model(instance: Any) -> ValidationResult:
             is_valid = validator_fn(value)
         except Exception as exc:
             # Validator raised — treat as validation failure, not crash.
-            logger.warning(
-                "Validator %s raised %s for field %s: %s",
-                label,
-                type(exc).__name__,
-                field_name,
-                exc,
+            # Classified field names stay at DEBUG per
+            # rules/observability.md Rule 8; the WARN-level signal is
+            # carried by the ValidationResult aggregate.
+            logger.debug(
+                "validator.raised",
+                extra={
+                    "validator": label,
+                    "exc_type": type(exc).__name__,
+                    "field": field_name,
+                    "error": str(exc),
+                },
             )
             is_valid = False
 
         if not is_valid:
+            raw_message = (
+                f"Validation failed for field '{field_name}' " f"(validator: {label})"
+            )
+            safe_field, safe_message, safe_value, is_classified = (
+                sanitize_validation_error(
+                    policy=policy,
+                    model_name=model_name or "",
+                    field_name=field_name,
+                    message=raw_message,
+                    value=value,
+                )
+            )
             result.add_error(
-                field_name=field_name,
-                message=f"Validation failed for field '{field_name}' "
-                f"(validator: {label})",
+                field_name=safe_field,
+                message=safe_message,
                 validator=label,
-                value=value,
+                value=safe_value,
+                is_classified=is_classified,
             )
 
     return result

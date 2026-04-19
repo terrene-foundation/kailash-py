@@ -1119,10 +1119,13 @@ class DataFlow(DataFlowEventMixin):
                 max_size=cache_max_size,
             )
 
-            # Create key generator
+            # Create key generator. BP-049 (#520): plumb the classification
+            # policy so classified PKs are hashed before serialisation into
+            # cache keys.
             key_generator = CacheKeyGenerator(
                 prefix=cache_key_prefix,
                 namespace=getattr(self.config, "cache_namespace", None),
+                classification_policy=getattr(self, "_classification_policy", None),
             )
 
             # Create cache invalidator

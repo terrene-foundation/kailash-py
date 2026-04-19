@@ -28,9 +28,9 @@ classifiers = [
 readme = "README.md"
 keywords = ["ml", "machine-learning", "kailash", "automl", "feature-store", "model-registry"]
 dependencies = [
-    "kailash>=2.8.1",
-    "kailash-dataflow>=1.0",
-    "kailash-nexus>=1.0",
+    "kailash>=2.8.7",
+    "kailash-dataflow>=2.0.10",
+    "kailash-nexus>=2.1.0",
     "polars>=1.0",
     "pyarrow>=14.0",
     "numpy>=1.24",
@@ -73,7 +73,7 @@ rl = [
     "gymnasium>=0.29",
 ]
 agents = [
-    "kailash-kaizen>=1.0",
+    "kailash-kaizen>=2.7.5",
 ]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]

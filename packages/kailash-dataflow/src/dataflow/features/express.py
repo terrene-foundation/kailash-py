@@ -55,6 +55,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
+from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.tenant_context import get_current_tenant_id
@@ -140,7 +141,12 @@ class DataFlowExpress:
         else:
             self._cache_manager = None
 
-        self._key_gen = CacheKeyGenerator()
+        # BP-049: plumb the DataFlow classification policy into the cache
+        # key generator so classified PKs are hashed before serialisation
+        # (issue #520). ``self._db`` holds the owning DataFlow instance.
+        self._key_gen = CacheKeyGenerator(
+            classification_policy=getattr(self._db, "_classification_policy", None),
+        )
 
         # Local hit/miss counters for Express-level stats
         self._cache_hits = 0
@@ -270,7 +276,11 @@ class DataFlowExpress:
             setattr(proxy, k, v)
         _Proxy.__field_validators__ = validators
 
-        result = _validate_instance(proxy)
+        # BP-049 (#520): route classified-field validation errors through
+        # the sanitiser so the caller-facing error surface never echoes a
+        # classified field NAME or raw VALUE.
+        policy = getattr(self._db, "_classification_policy", None)
+        result = _validate_instance(proxy, policy=policy, model_name=model)
         if not result.valid:
             error_msgs = "; ".join(e.message for e in result.errors)
             from dataflow.exceptions import DataFlowError
@@ -406,6 +416,46 @@ class DataFlowExpress:
             return False
         return bool(policy.get_model_fields(model))
 
+    def _safe_record_id(self, model: str, id: Any) -> Optional[str]:
+        """Return an event/log/audit-safe ``record_id`` for this model.
+
+        Single-point filter for every PK value that leaves the Express
+        write path into a log line, audit row, trust-plane event, or
+        error-surface string. Classified string PKs come back as
+        ``"sha256:XXXXXXXX"``; integers and unclassified strings pass
+        through as ``str(value)``. Cross-SDK contract matches
+        ``kailash-rs`` BP-048 / BP-049 so a PK hashed in Python and a
+        PK hashed in Rust produce the same fingerprint for forensic
+        correlation.
+
+        Mandated by ``rules/event-payload-classification.md`` Rule 1 and
+        ``rules/dataflow-classification.md``. See issue #520 (BP-049).
+        """
+        policy = getattr(self._db, "_classification_policy", None)
+        return format_record_id_for_event(policy, model, id)
+
+    def _safe_query_params(
+        self, model: str, params: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Return a copy of ``params`` with classified PK values hashed.
+
+        Audit / trust-plane paths take a dict of query parameters
+        (``{"id": id}``, ``{"id": id, "fields": fields}``). This helper
+        hashes the ``id`` slot when the model has a classified PK. Other
+        keys are passed through unchanged; callers that need to redact
+        classified field VALUES inside ``fields`` MUST do so through the
+        classification masking helpers on the read path.
+
+        Mandated by issue #520 (BP-049).
+        """
+        if params is None:
+            return None
+        if "id" not in params:
+            return params
+        safe = dict(params)
+        safe["id"] = self._safe_record_id(model, params["id"])
+        return safe
+
     def _apply_classification_mask_record(self, model: str, record: Any) -> Any:
         """Apply classification masking to a single record if needed.
 
@@ -497,14 +547,15 @@ class DataFlowExpress:
                     except Exception:
                         pass  # Best-effort read-back; original result still valid
 
-            # TSG-201: Emit write event
+            # TSG-201: Emit write event. ``_emit_write_event`` routes
+            # ``record_id`` through ``format_record_id_for_event``
+            # internally (BP-048), so pass the raw PK — double-hashing
+            # would break cross-SDK fingerprint correlation.
             if hasattr(self._db, "_emit_write_event"):
-                record_id = (
-                    str(result.get("id", ""))
-                    if result and isinstance(result, dict)
-                    else None
+                raw_record_id = (
+                    result.get("id") if result and isinstance(result, dict) else None
                 )
-                self._db._emit_write_event(model, "create", record_id=record_id)
+                self._db._emit_write_event(model, "create", record_id=raw_record_id)
 
             await self._trust_record_success(
                 model, "create", plan, rows_affected=1, query_params=data
@@ -568,7 +619,7 @@ class DataFlowExpress:
                     "read",
                     plan,
                     rows_affected=1 if result is not None else 0,
-                    query_params={"id": id},
+                    query_params=self._safe_query_params(model, {"id": id}),
                 )
                 return result
             except Exception as e:
@@ -581,19 +632,23 @@ class DataFlowExpress:
                 ):
                     logger.debug(
                         "express.record_not_found_for_read",
-                        extra={"model": model, "id": id},
+                        extra={"model": model, "id": self._safe_record_id(model, id)},
                     )
                     await self._trust_record_success(
                         model,
                         "read",
                         plan,
                         rows_affected=0,
-                        query_params={"id": id},
+                        query_params=self._safe_query_params(model, {"id": id}),
                     )
                     return None
                 # Re-raise other errors
                 await self._trust_record_failure(
-                    model, "read", plan, e, query_params={"id": id}
+                    model,
+                    "read",
+                    plan,
+                    e,
+                    query_params=self._safe_query_params(model, {"id": id}),
                 )
                 raise
 
@@ -630,23 +685,28 @@ class DataFlowExpress:
                     "update",
                     plan,
                     exc,
-                    query_params={"id": id, "fields": fields},
+                    query_params=self._safe_query_params(
+                        model, {"id": id, "fields": fields}
+                    ),
                 )
                 raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
 
-            # TSG-201: Emit write event
+            # TSG-201: Emit write event. ``_emit_write_event`` hashes
+            # classified PKs internally (BP-048) — pass raw ``id``.
             if hasattr(self._db, "_emit_write_event"):
-                self._db._emit_write_event(model, "update", record_id=str(id))
+                self._db._emit_write_event(model, "update", record_id=id)
 
             await self._trust_record_success(
                 model,
                 "update",
                 plan,
                 rows_affected=1,
-                query_params={"id": id, "fields": fields},
+                query_params=self._safe_query_params(
+                    model, {"id": id, "fields": fields}
+                ),
             )
             # Issue #490: normalize the return to the full record shape
             # (same as read()) and apply read-path redaction. UpdateNode's
@@ -688,16 +748,21 @@ class DataFlowExpress:
                 result = await node.async_run(id=id)
             except Exception as exc:
                 await self._trust_record_failure(
-                    model, "delete", plan, exc, query_params={"id": id}
+                    model,
+                    "delete",
+                    plan,
+                    exc,
+                    query_params=self._safe_query_params(model, {"id": id}),
                 )
                 raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
 
-            # TSG-201: Emit write event
+            # TSG-201: Emit write event. ``_emit_write_event`` hashes
+            # classified PKs internally (BP-048) — pass raw ``id``.
             if hasattr(self._db, "_emit_write_event"):
-                self._db._emit_write_event(model, "delete", record_id=str(id))
+                self._db._emit_write_event(model, "delete", record_id=id)
 
             deleted = (
                 result.get("deleted", False)
@@ -709,7 +774,7 @@ class DataFlowExpress:
                 "delete",
                 plan,
                 rows_affected=1 if deleted else 0,
-                query_params={"id": id},
+                query_params=self._safe_query_params(model, {"id": id}),
             )
             return deleted
 
@@ -1008,14 +1073,13 @@ class DataFlowExpress:
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
 
-            # TSG-201: Emit write event
+            # TSG-201: Emit write event. ``_emit_write_event`` hashes
+            # classified PKs internally (BP-048) — pass raw PK.
             if hasattr(self._db, "_emit_write_event"):
-                record_id = (
-                    str(data.get("id", ""))
-                    if isinstance(data, dict) and "id" in data
-                    else None
+                raw_record_id = (
+                    data.get("id") if isinstance(data, dict) and "id" in data else None
                 )
-                self._db._emit_write_event(model, "upsert", record_id=record_id)
+                self._db._emit_write_event(model, "upsert", record_id=raw_record_id)
 
             # Return the record directly for simpler API.
             # Issue #490: normalize the return to the full record shape
@@ -1083,13 +1147,15 @@ class DataFlowExpress:
             await self._invalidate_model_cache(model)
 
             # TSG-201: Emit write event (upsert_advanced is also an upsert)
+            # ``_emit_write_event`` hashes classified PKs internally
+            # (BP-048) — pass raw PK.
             if hasattr(self._db, "_emit_write_event"):
-                record_id = (
-                    str(create.get("id", ""))
+                raw_record_id = (
+                    create.get("id")
                     if isinstance(create, dict) and "id" in create
                     else None
                 )
-                self._db._emit_write_event(model, "upsert", record_id=record_id)
+                self._db._emit_write_event(model, "upsert", record_id=raw_record_id)
 
             # Issue #490: mutation return MUST apply read-path redaction.
             # See rules/dataflow-classification.md MUST Rule 1. The top-level
