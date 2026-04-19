@@ -70,13 +70,18 @@ class SQLWorkerRegistry:
         """Create the worker registry table if it does not exist.
 
         Safe to call multiple times (idempotent).
+
+        Per ``rules/dataflow-identifier-safety.md`` MUST Rule 1, the
+        table name is quoted via ``dialect.quote_identifier()`` for
+        the DDL interpolation.
         """
         if self._initialized:
             return
 
         _tc = self._conn.dialect.text_column(indexed=True)
+        quoted_table = self._conn.dialect.quote_identifier(self._table)
         await self._conn.execute(
-            f"CREATE TABLE IF NOT EXISTS {self._table} ("
+            f"CREATE TABLE IF NOT EXISTS {quoted_table} ("
             f"worker_id {_tc} PRIMARY KEY, "
             f"queue_name {_tc} NOT NULL, "
             f"status {_tc} NOT NULL DEFAULT 'active', "
