@@ -33,10 +33,50 @@ Created: 2026-01-02
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
 import asyncpg
+
+# Defense-in-depth: validate every dynamic identifier before interpolation
+# (rules/dataflow-identifier-safety.md MUST 1, MUST 5).
+# kailash-core's sibling migrations at src/kailash/trust/migrations/ validate;
+# this module did not — fixed for cross-SDK consistency.
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_COLUMN_TYPE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_]*"  # base type token
+    r"(\s*\(\s*\d+(\s*,\s*\d+)?\s*\))?"  # optional precision/scale
+    r"(\s*\[\s*\])?"  # optional PG array marker
+    r"(\s+DEFAULT\s+\w+)?$"  # optional DEFAULT clause
+)
+
+
+def _validate_identifier(name: str) -> None:
+    """Reject SQL identifiers that fail the allowlist regex.
+
+    Error messages fingerprint the rejected value rather than echoing it
+    verbatim, so an attacker-supplied payload cannot poison the log.
+    """
+    if not isinstance(name, str) or not _IDENTIFIER_RE.match(name):
+        fingerprint = f"{hash(name) & 0xFFFF:04x}" if isinstance(name, str) else "____"
+        raise ValueError(
+            f"Invalid SQL identifier (fingerprint={fingerprint}): "
+            "must match [a-zA-Z_][a-zA-Z0-9_]*"
+        )
+
+
+def _validate_column_type(value: str) -> None:
+    """Reject column-type strings that contain statement-chaining payloads."""
+    if not isinstance(value, str) or not _COLUMN_TYPE_RE.match(value.strip()):
+        fingerprint = (
+            f"{hash(value) & 0xFFFF:04x}" if isinstance(value, str) else "____"
+        )
+        raise ValueError(
+            f"Invalid column type (fingerprint={fingerprint}): "
+            "must be a simple SQL type token"
+        )
+
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +239,8 @@ class EATPMigration:
                 )
 
                 if not column_exists:
+                    _validate_identifier(column_name)
+                    _validate_column_type(column_type)
                     await conn.execute(
                         f"ALTER TABLE delegation_records ADD COLUMN {column_name} {column_type}"
                     )
@@ -267,6 +309,8 @@ class EATPMigration:
                 )
 
                 if not column_exists:
+                    _validate_identifier(column_name)
+                    _validate_column_type(column_type)
                     await conn.execute(
                         f"ALTER TABLE audit_anchors ADD COLUMN {column_name} {column_type}"
                     )
@@ -315,6 +359,9 @@ class EATPMigration:
             )
 
             if not index_exists:
+                _validate_identifier(index_name)
+                _validate_identifier(table_name)
+                _validate_identifier(column_name)
                 await conn.execute(
                     f"CREATE INDEX {index_name} ON {table_name} ({column_name})"
                 )
