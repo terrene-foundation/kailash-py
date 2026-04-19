@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-
 from kailash_mcp.advanced.subscriptions import (
     REDIS_AVAILABLE,
     DistributedSubscriptionManager,
@@ -404,9 +403,15 @@ class TestDistributedSubscriptionManager:
         distributed_manager.redis_client.publish.assert_not_called()
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Timeout issue in CI - needs investigation")
     async def test_instance_monitor_detection(self, distributed_manager):
-        """Test instance monitoring and detection."""
+        """Test instance monitoring and detection.
+
+        `_instance_monitor` is an infinite `while True` loop with
+        `await asyncio.sleep(heartbeat_interval)` — awaiting it directly hangs
+        forever. The fixture sets `heartbeat_interval=0.1`, so we let it run
+        just long enough to complete at least one iteration, then cancel the
+        task and assert the externally-observable effects.
+        """
         # Mock Redis to return instance data
         distributed_manager.redis_client.keys.return_value = [
             "mcp:instances:test_instance_123",  # Self
@@ -440,8 +445,18 @@ class TestDistributedSubscriptionManager:
         with patch.object(
             distributed_manager, "_cleanup_dead_instance"
         ) as mock_cleanup:
-            # Run one iteration of instance monitoring
-            await distributed_manager._instance_monitor()
+            # Launch the infinite monitor loop as a background task. With
+            # heartbeat_interval=0.1s it completes one full iteration within
+            # ~0.3s, then we cancel to break out of the `while True`.
+            monitor_task = asyncio.create_task(distributed_manager._instance_monitor())
+            try:
+                await asyncio.sleep(0.3)
+            finally:
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    pass
 
             # Verify dead instance cleanup was called
             mock_cleanup.assert_called_once_with("other_instance_2")

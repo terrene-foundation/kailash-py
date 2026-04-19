@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Any
 
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode
@@ -245,11 +244,18 @@ class RealisticBatchProcessorNode(CycleAwareNode):
 class TestRealisticCycleScenarios:
     """Integration tests with realistic timing and external-like behavior."""
 
-    @pytest.mark.skip(
-        reason="Flaky test with deliberate failures - timing sensitive in CI"
-    )
     def test_realistic_etl_with_retries(self):
-        """Test ETL pipeline with realistic retry timing and failures."""
+        """Test ETL pipeline with retry semantics, independent of wall-clock time.
+
+        Deterministic via ``random.seed(iteration + retry_count)`` in
+        ``RealisticETLNode``. The previous version asserted
+        ``execution_time < 2.0s``, which fails on loaded CI runners — asserting
+        wall-clock upper-bounds on a machine whose scheduling is shared is
+        correctness-orthogonal and made the test genuinely flaky. We keep only
+        the lower-bound sanity check (work happened) and drop the upper bound;
+        performance SLOs live in dedicated benchmark tests, not correctness
+        cycle tests.
+        """
         workflow = Workflow("realistic-etl", "Realistic ETL Pipeline")
 
         etl_node = RealisticETLNode()
@@ -273,21 +279,16 @@ class TestRealisticCycleScenarios:
             },
         )
 
-        end_time = time.time()
-        execution_time = end_time - start_time
+        execution_time = time.time() - start_time
 
-        # Should succeed eventually
+        # Should succeed eventually (deterministic seeding in the node)
         assert result["etl"]["status"] == "success"
         assert result["etl"]["records_processed"] == 5
 
-        # Should take measurable time due to realistic delays
-        assert execution_time > 0.1  # At least 100ms
-        assert execution_time < 2.0  # But not too long
-
-        # Verify workflow state tracking
-        # Note: LocalRuntime doesn't have get_workflow_state method
-        # workflow_state = runtime.get_workflow_state(workflow.id)
-        # assert "execution_history" in workflow_state
+        # Sanity: work happened (retry_delay=0.05 → 25ms minimum sleep per
+        # iteration × at least one iteration). No upper bound — CI load is
+        # outside this test's correctness contract.
+        assert execution_time > 0.01
 
     def test_realistic_api_polling_with_rate_limits(self):
         """Test API polling with realistic timing and rate limiting."""

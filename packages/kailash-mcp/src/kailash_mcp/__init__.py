@@ -79,7 +79,13 @@ from kailash_mcp.errors import (
     ValidationError,
 )
 
-# OAuth 2.1 Authentication (requires aiohttp + jwt + cryptography)
+# OAuth 2.1 Authentication (requires the [auth-oauth] extra:
+# aiohttp + PyJWT + cryptography). If the extra is not installed, symbols
+# below are absent and the module emits an INFO-level log at import time so
+# operators see the downgrade; accessing a missing OAuth symbol raises a
+# descriptive ImportError via `kailash_mcp.auth.__getattr__` rather than
+# a silent AttributeError (rules/dependencies.md § "Declared = Gated
+# Consistently").
 try:
     from kailash_mcp.auth.oauth import (
         AccessToken,
@@ -98,11 +104,15 @@ try:
         TokenStore,
         TokenType,
     )
-except ImportError:
+except ImportError as _oauth_err:  # pragma: no cover
     import logging as _logging
 
-    _logging.getLogger(__name__).debug(
-        "OAuth module not available -- install with: pip install kailash-mcp[auth-oauth]"
+    _logging.getLogger(__name__).info(
+        "oauth.module_unavailable",
+        extra={
+            "hint": "install with: pip install kailash-mcp[auth-oauth]",
+            "missing": str(_oauth_err),
+        },
     )
 
 # Registry Integration

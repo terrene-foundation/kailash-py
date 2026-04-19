@@ -19,7 +19,6 @@ import time
 
 import pytest
 import pytest_asyncio
-
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -45,22 +44,12 @@ output = {'status': 'completed', 'duration': 0.1}
         )
         return builder.build()
 
-    @pytest.mark.skip(reason="Requires MCP server running to test runtime type")
-    async def test_mcp_channel_uses_async_runtime(self):
-        """
-        TEST: MCP channel should use AsyncLocalRuntime not LocalRuntime.
-
-        PERFORMANCE: Critical for non-blocking MCP operations.
-        """
-        # GIVEN: MCP channel initialized
-        # (Requires actual MCP server/channel)
-
-        # WHEN: Checking runtime type used by MCP channel
-
-        # THEN: Should be AsyncLocalRuntime
-        # Expected: mcp_channel.runtime isinstance AsyncLocalRuntime
-
-        print("⚠️  P0-6.1: MCP async runtime check (requires MCP server)")
+    # Removed: test_mcp_channel_uses_async_runtime — was a
+    # `pytest.mark.skip` stub with no assertions. Per
+    # zero-tolerance.md Rule 2, stub tests are BLOCKED. Real coverage
+    # of "MCP channel uses AsyncLocalRuntime" comes from
+    # test_mcp_channel_runtime_type_verification below when wired to
+    # an actual Nexus fixture (see the full-Nexus integration suite).
 
     @pytest.mark.asyncio
     async def test_async_runtime_executes_concurrently(self, test_workflow):
@@ -134,24 +123,9 @@ output = {'status': 'completed', 'duration': 0.1}
             f"(5×100ms tasks in {elapsed:.3f}s - baseline)"
         )
 
-    @pytest.mark.skip(reason="Requires MCP server for concurrent request testing")
-    async def test_concurrent_mcp_requests_dont_block(self, test_workflow):
-        """
-        TEST: Concurrent MCP requests should execute in parallel.
-
-        PERFORMANCE: Critical MCP performance requirement.
-        """
-        # GIVEN: MCP channel with AsyncLocalRuntime
-
-        # WHEN: Sending 10 concurrent MCP requests (each workflow takes 100ms)
-        start_time = time.time()
-
-        # Simulate concurrent MCP requests
-        # (Requires actual MCP server)
-
-        # THEN: Should complete in ~100ms (concurrent) not ~1000ms (sequential)
-
-        print("⚠️  P0-6.4: Concurrent MCP request test (requires MCP server)")
+    # Removed: test_concurrent_mcp_requests_dont_block — was a
+    # `pytest.mark.skip` stub. No MCP requests are actually sent,
+    # just a print(). BLOCKED per zero-tolerance.md Rule 2.
 
     @pytest.mark.asyncio
     async def test_event_loop_not_blocked_during_async_execution(self, test_workflow):
@@ -355,46 +329,43 @@ class TestAsyncRuntimeCorrectness:
 class TestMCPChannelIntegration:
     """Test MCP channel integration with AsyncLocalRuntime."""
 
-    @pytest.mark.skip(reason="Requires MCP server and Nexus integration")
+    @pytest.mark.asyncio
     async def test_mcp_channel_runtime_type_verification(self):
         """
         TEST: Verify MCP channel actually uses AsyncLocalRuntime.
 
-        CRITICAL: Direct verification of the fix.
+        CRITICAL: Direct verification of the fix. Skip only when the
+        ``nexus`` package is not installed in the current environment
+        (genuine "cannot execute" gate per test-skip-discipline).
         """
-        # GIVEN: Nexus with MCP channel
-        from nexus import Nexus
-
-        nexus = Nexus(
+        # GIVEN: Nexus with MCP channel (requires the optional `nexus` pkg)
+        nexus_module = pytest.importorskip("nexus", reason="requires `nexus` package")
+        nexus = nexus_module.Nexus(
             enable_http_transport=True, auto_discovery=False, enable_durability=False
         )
 
-        # WHEN: Checking MCP channel runtime
-        if hasattr(nexus, "_mcp_channel") and nexus._mcp_channel:
-            runtime = getattr(nexus._mcp_channel, "runtime", None)
-
-            # THEN: Should be AsyncLocalRuntime
-            assert isinstance(runtime, AsyncLocalRuntime), (
-                f"❌ CRITICAL BUG: MCP channel uses {type(runtime).__name__}, "
-                f"expected AsyncLocalRuntime"
+        # WHEN: MCP channel is wired on this Nexus build
+        mcp_channel = getattr(nexus, "_mcp_channel", None)
+        if mcp_channel is None:
+            pytest.skip(
+                "Nexus build does not expose `_mcp_channel` — "
+                "MCP transport not enabled in this environment"
             )
 
-            print("✅ P0-6.10: MCP channel verified to use AsyncLocalRuntime")
-        else:
-            print("⚠️  P0-6.10: MCP channel not available (transport not enabled)")
+        runtime = getattr(mcp_channel, "runtime", None)
 
-    @pytest.mark.skip(reason="Requires full Nexus MCP server running")
-    async def test_mcp_performance_vs_api_channel(self):
-        """
-        TEST: MCP channel performance should be comparable to API channel.
+        # THEN: Runtime MUST be AsyncLocalRuntime. A mismatch is the exact
+        # bug this Tier 2 test exists to catch — never skip-around it.
+        assert isinstance(
+            runtime, AsyncLocalRuntime
+        ), f"MCP channel uses {type(runtime).__name__}, expected AsyncLocalRuntime"
 
-        PERFORMANCE: Verifies 10-100x improvement from async runtime.
-        """
-        # GIVEN: Both MCP and API channels
-        # WHEN: Executing same workflow via both channels
-        # THEN: Performance should be similar (within 2x)
-
-        print("⚠️  P0-6.11: MCP vs API performance comparison (requires full Nexus)")
+    # Removed: test_mcp_performance_vs_api_channel — was a
+    # `pytest.mark.skip` stub. The function performed no MCP vs API
+    # comparison; it only printed a placeholder. BLOCKED per
+    # zero-tolerance.md Rule 2. A real perf comparison belongs in
+    # packages/kailash-nexus/tests/performance/ with both channels
+    # stood up against a shared workflow fixture.
 
 
 if __name__ == "__main__":

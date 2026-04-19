@@ -17,7 +17,6 @@ Tests verify:
 
 import pytest
 import pytest_asyncio
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -76,47 +75,14 @@ class TestUnifiedInputValidation:
 
         print(f"✅ P0-5.1: Dangerous key set defined ({len(dangerous_keys)} keys)")
 
-    @pytest.mark.skip(reason="Requires MCP server running to test actual validation")
-    async def test_mcp_channel_blocks_dangerous_keys(self, runtime, simple_workflow):
-        """
-        TEST: MCP channel should block dangerous keys in input.
-
-        SECURITY: Critical - prevents code injection via MCP.
-        """
-        # GIVEN: MCP channel request with dangerous key
-        dangerous_inputs = {
-            "__import__": "os",
-            "normal_key": "normal_value",
-        }
-
-        # WHEN: Attempting to execute via MCP channel
-        # (This would require actual MCP server integration)
-
-        # THEN: Should reject with clear error
-        # Expected: ValueError or similar with "dangerous" in message
-
-        print("⚠️  P0-5.2: MCP dangerous key blocking (requires MCP server)")
-
-    @pytest.mark.skip(reason="Requires API server running to test actual validation")
-    async def test_api_channel_blocks_dangerous_keys(self, runtime, simple_workflow):
-        """
-        TEST: API channel should block dangerous keys in input.
-
-        SECURITY: Existing protection should remain in place.
-        """
-        # GIVEN: API channel request with dangerous key
-        dangerous_inputs = {
-            "eval": "malicious_code",
-            "data": "normal_data",
-        }
-
-        # WHEN: Attempting to execute via API channel
-        # (This would require actual API server integration)
-
-        # THEN: Should reject with clear error
-        # Expected: 400 Bad Request or similar
-
-        print("⚠️  P0-5.3: API dangerous key blocking (requires API server)")
+    # Removed: test_mcp_channel_blocks_dangerous_keys and
+    # test_api_channel_blocks_dangerous_keys — both were
+    # `pytest.mark.skip` stubs with no assertions (just `print(...)`
+    # strings). Per zero-tolerance.md Rule 2, stub tests are BLOCKED;
+    # per test-skip-discipline, "Requires X server" skips on tests
+    # that never actually exercise X are masks, not gates. When a real
+    # channel validation test is needed it should stand up the actual
+    # MCP/API server fixture and assert on the real reject path.
 
     def test_input_size_validation_threshold(self):
         """
@@ -139,39 +105,12 @@ class TestUnifiedInputValidation:
             f"(common values: {[f'{x // 1_000_000}MB' for x in reasonable_limits]})"
         )
 
-    @pytest.mark.skip(reason="Requires MCP server for size validation")
-    async def test_mcp_channel_validates_input_size(self, runtime, simple_workflow):
-        """
-        TEST: MCP channel should reject oversized inputs.
-
-        SECURITY: Critical - prevents MCP channel DoS.
-        """
-        # GIVEN: Oversized input (e.g., 200MB)
-        oversized_input = {"data": "x" * (200 * 1024 * 1024)}  # 200 MB of data
-
-        # WHEN: Attempting to send via MCP channel
-        # (Requires MCP server integration)
-
-        # THEN: Should reject with clear error about size limit
-
-        print("⚠️  P0-5.5: MCP input size validation (requires MCP server)")
-
-    @pytest.mark.skip(reason="Requires API server for size validation")
-    async def test_api_channel_validates_input_size(self, runtime, simple_workflow):
-        """
-        TEST: API channel should reject oversized inputs.
-
-        SECURITY: Existing protection should remain.
-        """
-        # GIVEN: Oversized input
-        oversized_input = {"data": "x" * (200 * 1024 * 1024)}  # 200 MB
-
-        # WHEN: Attempting to send via API channel
-        # (Requires API server integration)
-
-        # THEN: Should reject with 413 Payload Too Large or similar
-
-        print("⚠️  P0-5.6: API input size validation (requires API server)")
+    # Removed: test_mcp_channel_validates_input_size and
+    # test_api_channel_validates_input_size — both were `pytest.mark.skip`
+    # stubs with no assertions. Same reasoning as the dangerous-key stubs
+    # above: BLOCKED under zero-tolerance.md Rule 2. A real input-size
+    # test needs the actual MCP/API server responding with 413 / channel
+    # error — not a `print()` in a skipped function.
 
 
 class TestInputValidationErrorMessages:

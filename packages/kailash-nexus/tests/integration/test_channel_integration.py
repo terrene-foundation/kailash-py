@@ -58,9 +58,8 @@ class TestAPIChannelIntegration:
     @pytest.mark.integration
     def test_api_workflow_execution(self, docker_env):
         """Test workflow execution via API."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # Create data processing workflow (using hardcoded test data)
         workflow = WorkflowBuilder()
@@ -136,9 +135,8 @@ result = {
     @pytest.mark.integration
     def test_api_error_handling(self, docker_env):
         """Test API error handling with real errors."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # Create workflow that errors
         workflow = WorkflowBuilder()
@@ -184,9 +182,8 @@ class TestCLIChannelIntegration:
     @pytest.mark.integration
     def test_cli_workflow_listing(self, docker_env):
         """Test listing workflows via CLI."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # Create test workflows
         # Use dynamic port to avoid conflicts
@@ -247,9 +244,8 @@ class TestCLIChannelIntegration:
     @pytest.mark.integration
     def test_cli_workflow_execution(self, docker_env):
         """Test executing workflow via CLI."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # Create workflow (using hardcoded test data to avoid parameters issue)
         workflow = WorkflowBuilder()
@@ -313,137 +309,10 @@ result = {'greeting': f'Hello, {name}!'}
             n.stop()
 
 
-class TestMCPChannelIntegration:
-    """Test MCP channel with real MCP server."""
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="MCP WebSocket client tests deprecated - MCP now uses STDIO transport"
-    )
-    async def test_mcp_tool_discovery(self, docker_env):
-        """Test MCP tool discovery from workflows."""
-        from nexus import Nexus
-
-        pytest.skip("SimpleMCPClient removed -- old Nexus MCP server deleted")
-
-        from kailash.workflow.builder import WorkflowBuilder
-
-        # Create workflows
-        # Use dynamic port to avoid conflicts
-        # Enable HTTP transport for MCP to ensure tools are exposed
-        api_port = find_free_port(8005)
-        mcp_port = find_free_port(3002)
-        n = Nexus(api_port=api_port, mcp_port=mcp_port, enable_http_transport=True)
-
-        # Data analysis workflow (using hardcoded test data)
-        analysis = WorkflowBuilder()
-        analysis.add_node(
-            "PythonCodeNode",
-            "analyze",
-            {
-                "code": """
-# Use hardcoded test data for testing
-test_data = [1, 2, 3, 4, 5]
-result = {
-    'mean': sum(test_data) / len(test_data) if test_data else 0,
-    'max': max(test_data) if test_data else None,
-    'min': min(test_data) if test_data else None
-}
-"""
-            },
-        )
-        n.register("analyze-data", analysis.build())
-
-        # Start server
-        import threading
-
-        server_thread = threading.Thread(target=n.start)
-        server_thread.daemon = True
-        server_thread.start()
-        time.sleep(4)  # Increased wait time for HTTP transport initialization
-
-        try:
-            # Connect MCP client
-            client = SimpleMCPClient("localhost", mcp_port)
-            await client.connect()
-
-            # Discover tools
-            tools = await client.list_tools()
-
-            # Should have our workflow as a tool
-            tool_names = [tool["name"] for tool in tools]
-            assert "analyze-data" in tool_names
-
-            # Execute tool
-            result = await client.call_tool("analyze-data", {"data": [1, 2, 3, 4, 5]})
-
-            assert result["mean"] == 3.0
-            assert result["max"] == 5
-            assert result["min"] == 1
-        finally:
-            n.stop()
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="MCP WebSocket client tests deprecated - MCP now uses STDIO transport"
-    )
-    async def test_mcp_resource_access(self, docker_env):
-        """Test MCP resource access for workflows."""
-        from nexus import Nexus
-
-        pytest.skip("SimpleMCPClient removed -- old Nexus MCP server deleted")
-
-        from kailash.workflow.builder import WorkflowBuilder
-
-        # Use dynamic port to avoid conflicts
-        # Enable HTTP transport for MCP to ensure resources are exposed
-        api_port = find_free_port(8006)
-        mcp_port = find_free_port(3003)
-        n = Nexus(api_port=api_port, mcp_port=mcp_port, enable_http_transport=True)
-
-        # Workflow that produces data
-        producer = WorkflowBuilder()
-        producer.add_node(
-            "PythonCodeNode",
-            "produce",
-            {
-                "code": """
-result = {
-    'data': [{'id': i, 'value': i*10} for i in range(5)],
-    'timestamp': '2024-01-01T00:00:00Z'
-}
-"""
-            },
-        )
-        n.register("data-producer", producer.build())
-
-        # Start server
-        import threading
-
-        server_thread = threading.Thread(target=n.start)
-        server_thread.daemon = True
-        server_thread.start()
-        time.sleep(4)  # Increased wait time for HTTP transport initialization
-
-        try:
-            # Connect MCP client
-            client = SimpleMCPClient("localhost", mcp_port)
-            await client.connect()
-
-            # List resources (via list_tools for now - resources are exposed as tools)
-            tools = await client.list_tools()
-
-            # Should have our workflow as a tool/resource
-            assert len(tools) > 0
-            tool_names = [tool["name"] for tool in tools]
-            assert "data-producer" in tool_names
-
-            # Execute to get resource data
-            result = await client.call_tool("data-producer", {})
-            assert result is not None
-            assert "data" in result
-            assert len(result["data"]) == 5
-        finally:
-            n.stop()
+# Removed TestMCPChannelIntegration (test_mcp_tool_discovery and
+# test_mcp_resource_access) — both tests were `@pytest.mark.skip`ped as
+# "deprecated" and referenced a deleted symbol (`SimpleMCPClient`) that
+# no longer exists. Per orphan-detection.md Rule 4, tests that reference
+# removed APIs MUST be deleted in the same PR as the API removal. When
+# Nexus's STDIO MCP transport needs Tier 2 coverage, add fresh tests
+# targeting the current transport surface.

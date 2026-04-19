@@ -425,80 +425,12 @@ class TestServiceRegistryIntegration:
         except ImportError:
             pytest.skip("ServiceRegistry not available")
 
-    @pytest.mark.skip(
-        reason="Mock dependency issues - ServerInfo attributes not accessible"
-    )
-    @pytest.mark.asyncio
-    async def test_service_registry_server_discovery_aggregation(self):
-        """Test ServiceRegistry aggregating servers from multiple backends."""
-        try:
-            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
-
-            backend1 = AsyncMock()
-            backend2 = AsyncMock()
-
-            # Setup different servers from each backend
-            backend1_servers = [
-                ServerInfo(
-                    name="web-server",
-                    transport="http",
-                    url="http://web:8080",
-                    capabilities=["web.api"],
-                ),
-                ServerInfo(
-                    name="db-server",
-                    transport="http",
-                    url="http://db:5432",
-                    capabilities=["db.query"],
-                ),
-            ]
-
-            backend2_servers = [
-                ServerInfo(
-                    name="file-server",
-                    transport="stdio",
-                    command="file.py",
-                    capabilities=["file.read"],
-                ),
-                ServerInfo(
-                    name="compute-server",
-                    transport="stdio",
-                    command="compute.py",
-                    capabilities=["compute.process"],
-                ),
-            ]
-
-            backend1.discover_servers.return_value = backend1_servers
-            backend2.discover_servers.return_value = backend2_servers
-
-            registry = ServiceRegistry(backends=[backend1, backend2])
-
-            # Test aggregated discovery
-            all_servers = await registry.discover_servers()
-
-            # Should get servers from both backends
-            assert len(all_servers) == 4
-
-            server_names = [s.name for s in all_servers]
-            assert "web-server" in server_names
-            assert "db-server" in server_names
-            assert "file-server" in server_names
-            assert "compute-server" in server_names
-
-            # Test capability-based filtering across backends
-            web_servers = await registry.discover_servers(capability="web.api")
-            assert len(web_servers) == 1
-            # # assert web_servers[0].name == "web-server"  # Node attributes not accessible directly  # Node attributes not accessible directly
-
-            # Test transport-based filtering
-            http_servers = await registry.discover_servers(transport="http")
-            assert len(http_servers) == 2
-            http_names = [s.name for s in http_servers]
-            assert "web-server" in http_names
-            assert "db-server" in http_names
-
-        except ImportError:
-            pytest.skip("ServiceRegistry not available")
+    # Removed: test_service_registry_server_discovery_aggregation — was skipped
+    # with "Mock dependency issues - ServerInfo attributes not accessible".
+    # Mock-heavy test in Tier 2 (violates testing.md no-mocking rule) with
+    # multiple assertions commented out as non-functional. No working contract
+    # remained to test; coverage is better served by a proper Tier 2 test with
+    # real backends (tracked separately if needed).
 
     @pytest.mark.asyncio
     async def test_service_registry_dict_to_server_info_conversion(self):
@@ -618,201 +550,29 @@ class TestNetworkDiscoveryFunctionality:
         except ImportError:
             pytest.skip("NetworkDiscovery not available")
 
-    @pytest.mark.skip(
-        reason="Mock dependency issues - NetworkDiscovery not properly implemented"
-    )
-    @pytest.mark.asyncio
-    async def test_network_discovery_server_detection(self):
-        """Test NetworkDiscovery server detection and capability probing."""
-        try:
-            from kailash_mcp.discovery.discovery import NetworkDiscovery, ServerInfo
-
-            discovery = NetworkDiscovery()
-
-            # Mock network scanning
-            with patch.object(discovery, "_is_port_open") as mock_port_check:
-                with patch.object(discovery, "_probe_server_info") as mock_probe:
-                    # Setup port scanning results
-                    def port_check_side_effect(host, port, timeout):
-                        # Simulate open ports on specific hosts/ports
-                        if host == "192.168.1.10" and port == 8080:
-                            return True
-                        elif host == "192.168.1.20" and port == 8081:
-                            return True
-                        return False
-
-                    mock_port_check.side_effect = port_check_side_effect
-
-                    # Setup server probing results
-                    def probe_side_effect(host, port):
-                        if host == "192.168.1.10" and port == 8080:
-                            return ServerInfo(
-                                name="discovered-server-1",
-                                transport="http",
-                                url=f"http://{host}:{port}",
-                                capabilities=["api.v1"],
-                            )
-                        elif host == "192.168.1.20" and port == 8081:
-                            return ServerInfo(
-                                name="discovered-server-2",
-                                transport="http",
-                                url=f"http://{host}:{port}",
-                                capabilities=["api.v2"],
-                            )
-                        return None
-
-                    mock_probe.side_effect = probe_side_effect
-
-                    # Test network scanning
-                    servers = await discovery.scan_network(
-                        "192.168.1.0/28",
-                        ports=[8080, 8081, 8082],  # Small subnet
-                    )
-
-                    # Should find 2 servers
-                    assert len(servers) == 2
-
-                    server_names = [s.name for s in servers]
-                    assert "discovered-server-1" in server_names
-                    assert "discovered-server-2" in server_names
-
-                    # Verify URLs were constructed correctly
-                    urls = [s.url for s in servers]
-                    assert "http://192.168.1.10:8080" in urls
-                    assert "http://192.168.1.20:8081" in urls
-
-        except ImportError:
-            pytest.skip("NetworkDiscovery not available")
+    # Removed: test_network_discovery_server_detection — was skipped with
+    # "Mock dependency issues - NetworkDiscovery not properly implemented".
+    # Mock-heavy test in Tier 2 violating testing.md no-mocking rule; a proper
+    # Tier 2 test would stand up a real local port and probe it rather than
+    # patching _is_port_open / _probe_server_info.
 
 
 class TestServiceMeshAndLoadBalancing:
     """Test ServiceMesh and LoadBalancer functionality."""
 
-    @pytest.mark.skip(
-        reason="Mock dependency issues - LoadBalancer not properly implemented"
-    )
-    @pytest.mark.asyncio
-    async def test_load_balancer_server_selection_strategies(self):
-        """Test LoadBalancer server selection with different strategies."""
-        try:
-            from kailash_mcp.discovery.discovery import LoadBalancer, ServerInfo
+    # Removed: test_load_balancer_server_selection_strategies — was skipped
+    # with "Mock dependency issues - LoadBalancer not properly implemented".
+    # Test passes a literal kwarg (response_time=…) to ServerInfo that the
+    # real dataclass does not accept, so the test was broken even before the
+    # Tier 2 no-mocking rule. A future Tier 2 test should stand up real load
+    # balancer state rather than papering over the API mismatch.
 
-            # Create servers with different response times
-            servers = [
-                ServerInfo(
-                    name="fast-server",
-                    transport="http",
-                    url="http://fast:8080",
-                    response_time=0.1,
-                ),
-                ServerInfo(
-                    name="medium-server",
-                    transport="http",
-                    url="http://medium:8080",
-                    response_time=0.3,
-                ),
-                ServerInfo(
-                    name="slow-server",
-                    transport="http",
-                    url="http://slow:8080",
-                    response_time=0.8,
-                ),
-            ]
-
-            load_balancer = LoadBalancer()
-
-            # Test round-robin strategy
-            load_balancer.strategy = "round_robin"
-
-            selections = []
-            for _ in range(6):  # 2 full cycles
-                selected = load_balancer.select_server(servers)
-                selections.append(selected.name)
-
-            # Should cycle through all servers
-            assert selections == ["fast-server", "medium-server", "slow-server"] * 2
-
-            # Test response-time based strategy
-            load_balancer.strategy = "response_time"
-
-            # Multiple selections should prefer faster servers
-            fast_selections = []
-            for _ in range(10):
-                selected = load_balancer.select_server(servers)
-                fast_selections.append(selected.name)
-
-            # Should heavily favor fast server
-            fast_count = fast_selections.count("fast-server")
-            slow_count = fast_selections.count("slow-server")
-            assert fast_count > slow_count
-
-        except ImportError:
-            pytest.skip("LoadBalancer not available")
-
-    @pytest.mark.skip(
-        reason="Mock dependency issues - ServiceMesh not properly implemented"
-    )
-    @pytest.mark.asyncio
-    async def test_service_mesh_client_management(self):
-        """Test ServiceMesh client creation and management."""
-        try:
-            from kailash_mcp.discovery.discovery import (
-                ServerInfo,
-                ServiceMesh,
-                ServiceRegistry,
-            )
-
-            # Mock registry with servers
-            mock_registry = Mock()
-
-            servers = [
-                ServerInfo(
-                    name="auth-service",
-                    transport="http",
-                    url="http://auth:8080",
-                    capabilities=["auth.login", "auth.verify"],
-                    health_status="healthy",
-                ),
-                ServerInfo(
-                    name="data-service",
-                    transport="stdio",
-                    command="data-service.py",
-                    capabilities=["data.read", "data.write"],
-                    health_status="healthy",
-                ),
-            ]
-
-            mock_registry.discover_servers.return_value = servers
-
-            service_mesh = ServiceMesh(mock_registry)
-
-            # Test capability-based client retrieval
-            with patch.object(service_mesh, "_create_client") as mock_create_client:
-                mock_client = Mock()
-                mock_create_client.return_value = mock_client
-
-                # Get client for specific capability
-                client = await service_mesh.get_client_for_capability("auth.login")
-
-                assert client is mock_client
-                mock_create_client.assert_called_once()
-
-                # Verify the correct server was selected
-                call_args = mock_create_client.call_args[0]
-                selected_server = call_args[0]
-                # # # # assert selected_server.name == "auth-service"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
-                assert "auth.login" in selected_server.capabilities
-
-                # Test non-existent capability
-                mock_create_client.reset_mock()
-                client = await service_mesh.get_client_for_capability(
-                    "nonexistent.capability"
-                )
-                assert client is None
-                mock_create_client.assert_not_called()
-
-        except ImportError:
-            pytest.skip("ServiceMesh not available")
+    # Removed: test_service_mesh_client_management — was skipped with
+    # "Mock dependency issues - ServiceMesh not properly implemented".
+    # Mock-heavy (Mock registry, Mock client, patch of _create_client) — the
+    # test validated the mocks, not the ServiceMesh; several assertions were
+    # commented out as non-functional. Real Tier 2 coverage requires a live
+    # backend wired through the mesh, not a cascade of patches.
 
 
 class TestDiscoveryErrorHandling:

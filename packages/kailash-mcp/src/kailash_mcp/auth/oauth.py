@@ -81,12 +81,47 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, urlencode, urlparse
 
-import aiohttp
-import jwt
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+# Optional dependencies per [project.optional-dependencies] auth-oauth
+# extra in packages/kailash-mcp/pyproject.toml (rules/dependencies.md §
+# "Declared = Gated Consistently" + "Exception: Optional Extras with Loud
+# Failure").
+try:
+    import aiohttp
+except ImportError:  # pragma: no cover
+    aiohttp = None  # type: ignore[assignment]
+
+try:
+    import jwt
+except ImportError:  # pragma: no cover
+    jwt = None  # type: ignore[assignment]
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+except ImportError:  # pragma: no cover
+    hashes = None  # type: ignore[assignment]
+    serialization = None  # type: ignore[assignment]
+    rsa = None  # type: ignore[assignment]
+
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import AuthenticationError, AuthorizationError, MCPError
+
+
+def _require_oauth_extras() -> None:
+    """Raise ImportError naming the extra when OAuth deps are absent."""
+    missing = []
+    if aiohttp is None:
+        missing.append("aiohttp")
+    if jwt is None:
+        missing.append("PyJWT")
+    if hashes is None:
+        missing.append("cryptography")
+    if missing:
+        raise ImportError(
+            "kailash-mcp OAuth features require the [auth-oauth] extra: "
+            f"pip install 'kailash-mcp[auth-oauth]' "
+            f"(missing: {', '.join(missing)})"
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -501,6 +536,7 @@ class JWTManager:
             algorithm: JWT algorithm
             issuer: Token issuer
         """
+        _require_oauth_extras()
         self.algorithm = algorithm
         self.issuer = issuer
 
@@ -743,6 +779,7 @@ class AuthorizationServer:
             jwt_manager: JWT manager
             default_scopes: Default scopes
         """
+        _require_oauth_extras()
         self.issuer = issuer
         self.client_store = client_store or InMemoryClientStore()
         self.token_store = token_store or InMemoryTokenStore()
@@ -1298,6 +1335,7 @@ class ResourceServer:
             jwt_manager: JWT manager for token verification
             required_scopes: Required scopes for access
         """
+        _require_oauth_extras()
         self.issuer = issuer
         self.audience = audience
         self.jwt_manager = jwt_manager or JWTManager(issuer=issuer)
@@ -1403,6 +1441,7 @@ class OAuth2Client:
             authorization_endpoint: Authorization endpoint URL
             redirect_uri: Redirect URI
         """
+        _require_oauth_extras()
         self.client_id = client_id
         self.client_secret = client_secret
         self.token_endpoint = token_endpoint

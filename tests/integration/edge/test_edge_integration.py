@@ -5,7 +5,6 @@ from datetime import datetime
 
 import pytest
 import pytest_asyncio
-
 from kailash.edge.compliance import ComplianceRouter
 from kailash.edge.discovery import EdgeDiscovery, EdgeSelectionStrategy
 from kailash.edge.location import (
@@ -328,148 +327,13 @@ class TestEdgeIntegration:
         assert results["replicated_write"]["key"] == "global_config"
         assert results["sync"]["success"] is True
 
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="EdgeDataNode requires shared storage implementation")
-    async def test_consistency_models(self, edge_infrastructure):
-        """Test different consistency models in practice."""
-        discovery, locations = edge_infrastructure
-
-        # Reset EdgeInfrastructure singleton before test
-        from kailash.workflow.edge_infrastructure import EdgeInfrastructure
-
-        EdgeInfrastructure._instance = None
-
-        # Create edge config for workflows
-        edge_config = {"discovery": {"locations": ["us-east-1", "eu-west-1"]}}
-
-        # Test each consistency model
-        for consistency in ["strong", "eventual", "causal", "bounded_staleness"]:
-            workflow = WorkflowBuilder(edge_config=edge_config)
-
-            workflow.add_node(
-                "EdgeDataNode",
-                f"write_{consistency}",
-                {
-                    "action": "write",
-                    "consistency": consistency,
-                    "replication_factor": 2,
-                },
-            )
-
-            workflow.add_node(
-                "EdgeDataNode",
-                f"read_{consistency}",
-                {"action": "read", "consistency": consistency},
-            )
-
-            # Connect write output to read input
-            workflow.add_connection(
-                f"write_{consistency}", "key", f"read_{consistency}", "key"
-            )
-
-            # Add a small delay for eventual consistency
-            if consistency == "eventual":
-                import asyncio
-
-                await asyncio.sleep(0.1)
-
-            runtime = LocalRuntime()
-            results, run_id = await runtime.execute_async(
-                workflow.build(),
-                parameters={
-                    f"write_{consistency}": {
-                        "key": f"test_{consistency}",
-                        "data": {"consistency": consistency},
-                    }
-                },
-            )
-
-            # All consistency models should work
-            write_result = results[f"write_{consistency}"]
-            read_result = results[f"read_{consistency}"]
-
-            # Debug output
-            if not write_result["success"] or not read_result["success"]:
-                print(
-                    f"Consistency {consistency}: Write: {write_result}, Read: {read_result}"
-                )
-
-            assert write_result["success"] is True
-            # Read might fail because of infrastructure reset between nodes
-            # Just verify the consistency model is accepted
-            assert write_result["consistency"] == consistency
-
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="EdgeStateMachine requires shared lock implementation")
-    async def test_edge_state_lock_coordination(self, edge_infrastructure):
-        """Test distributed locking with edge state machines."""
-        discovery, locations = edge_infrastructure
-
-        # Reset EdgeInfrastructure singleton
-        from kailash.workflow.edge_infrastructure import EdgeInfrastructure
-
-        EdgeInfrastructure._instance = None
-
-        # Create workflow with lock coordination
-        edge_config = {"discovery": {"locations": ["us-east-1"]}}
-        workflow = WorkflowBuilder(edge_config=edge_config)
-
-        # First process acquires lock
-        workflow.add_node(
-            "EdgeStateMachine",
-            "process1",
-            {"state_id": "shared_resource", "operation": "lock"},
-        )
-
-        # Second process tries to acquire same lock (should fail)
-        workflow.add_node(
-            "EdgeStateMachine",
-            "process2",
-            {"state_id": "shared_resource", "operation": "lock"},
-        )
-
-        # First process releases lock
-        workflow.add_node(
-            "EdgeStateMachine",
-            "release",
-            {"state_id": "shared_resource", "operation": "unlock"},
-        )
-
-        # Connect in sequence
-        workflow.add_connection("process1", "success", "process2", "trigger")
-        workflow.add_connection("process2", "success", "release", "trigger")
-
-        # Execute
-        runtime = LocalRuntime()
-        results, run_id = await runtime.execute_async(
-            workflow.build(),
-            parameters={
-                "process1": {
-                    "state_id": "shared_resource",
-                    "lock_name": "critical_section",
-                },
-                "process2": {
-                    "state_id": "shared_resource",
-                    "lock_name": "critical_section",
-                },
-                "release": {
-                    "state_id": "shared_resource",
-                    "lock_name": "critical_section",
-                },
-            },
-        )
-
-        # Debug output
-        print(f"Process1 result: {results['process1']}")
-        print(f"Process2 result: {results['process2']}")
-        print(f"Release result: {results['release']}")
-
-        # Verify lock behavior - all operations should complete even if redirected
-        # The important part is that the workflow executes without errors
-        assert "process1" in results
-        assert "process2" in results
-        assert "release" in results
-        # In a real distributed system, these would coordinate through the edge infrastructure
+    # Removed: test_consistency_models and test_edge_state_lock_coordination —
+    # both were skipped with reasons citing features that do not yet exist
+    # ("EdgeDataNode requires shared storage implementation",
+    # "EdgeStateMachine requires shared lock implementation"). Tests for
+    # unimplemented features are stubs (zero-tolerance.md Rule 2). When
+    # shared-storage / shared-lock ships, add fresh tests targeting the
+    # real implementation rather than resurrecting placeholder assertions.
 
     @pytest.mark.asyncio
     async def test_edge_performance_metrics(self, edge_infrastructure):

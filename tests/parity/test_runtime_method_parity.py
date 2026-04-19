@@ -8,7 +8,6 @@ method in AsyncLocalRuntime (unless explicitly documented as runtime-specific).
 import inspect
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
@@ -213,9 +212,6 @@ class TestUnifiedConditionalNodeSkipping_LocalRuntimeCompatibility:
             f"but found in {method_class}. LocalRuntime should not override this method."
         )
 
-    @pytest.mark.skip(
-        reason="Flaky test with test order dependency - node registry not initialized in full suite. SDK issue, unrelated to DataFlow. Passes individually."
-    )
     def test_localruntime_execution_uses_mixin_method(self):
         """Test LocalRuntime execution calls unified mixin method correctly.
 
@@ -225,6 +221,11 @@ class TestUnifiedConditionalNodeSkipping_LocalRuntimeCompatibility:
         - Workflow with switch executes correctly with conditional skipping
         - This test validates integration between LocalRuntime and mixin
         """
+        # Explicit imports ensure nodes register in the registry before
+        # workflow construction (node registry is import-triggered, not lazy).
+        # Skipping these imports leaves the registry empty in isolated runs.
+        import kailash.nodes.code.python  # noqa: F401 - registers PythonCodeNode
+        import kailash.nodes.logic.operations  # noqa: F401 - registers SwitchNode
         from kailash.workflow.builder import WorkflowBuilder
 
         runtime = LocalRuntime(conditional_execution="skip_branches")

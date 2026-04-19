@@ -17,7 +17,15 @@ import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
-import httpx
+# httpx is declared under `kailash-dataflow[fabric]` — gate the import so a
+# base install without the fabric extra still imports this module (lazy
+# adapter dispatch from `dataflow.core.engine` touches the file even when
+# no REST source is configured). Fail loudly at call time if the extra
+# was not installed; see rules/dependencies.md § "Declared = Gated Consistently".
+try:
+    import httpx  # noqa: F401
+except ImportError:  # pragma: no cover
+    httpx = None  # type: ignore[assignment]
 
 from dataflow.adapters.source_adapter import BaseSourceAdapter
 from dataflow.fabric.config import (
@@ -43,6 +51,11 @@ class RestSourceAdapter(BaseSourceAdapter):
     """
 
     def __init__(self, name: str, config: RestSourceConfig, **kwargs: Any) -> None:
+        if httpx is None:
+            raise ImportError(
+                "RestSourceAdapter requires the [fabric] extra: "
+                "`pip install kailash-dataflow[fabric]`"
+            )
         super().__init__(name=name, **kwargs)
         config.validate()
         self.config = config
