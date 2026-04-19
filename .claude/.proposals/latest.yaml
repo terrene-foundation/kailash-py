@@ -10,9 +10,10 @@ codify_session: |
   MEDIUM findings, fast-patched in round-10 (kailash-dataflow 2.0.12 +
   kailash-ml 0.11.1). This codify captures 6 institutional patterns.
 
-status: reviewed
+status: distributed
 review_date: "2026-04-19"
 review_target_loom_version: "2.8.19"
+distributed_date: "2026-04-19"
 
 changes:
   - id: keyspace-version-bump-invalidation-parity
