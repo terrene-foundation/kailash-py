@@ -55,10 +55,16 @@ class DBEventStoreBackend:
     # Lifecycle
     # ------------------------------------------------------------------
     async def initialize(self) -> None:
-        """Create the events table if it does not exist."""
+        """Create the events table if it does not exist.
+
+        Per ``rules/dataflow-identifier-safety.md`` MUST Rule 1, the
+        table name is quoted via ``dialect.quote_identifier()`` for
+        the DDL interpolation.
+        """
+        quoted_table = self._conn.dialect.quote_identifier(self.TABLE_NAME)
         await self._conn.execute(
             f"""
-            CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
+            CREATE TABLE IF NOT EXISTS {quoted_table} (
                 {self._conn.dialect.auto_id_column()},
                 stream_key {self._conn.dialect.text_column(indexed=True)} NOT NULL,
                 sequence INTEGER NOT NULL,
