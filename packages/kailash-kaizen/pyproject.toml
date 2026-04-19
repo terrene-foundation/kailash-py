@@ -24,7 +24,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "kailash>=2.8.6",
+    "kailash>=2.8.9",
     "kailash-mcp>=0.2.4",
     "pydantic>=2.0.0",
     "typing-extensions>=4.5.0",
