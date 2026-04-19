@@ -506,6 +506,20 @@ class OnnxBridge:
         # size at inference time (onnxruntime session.run).
         dynamic_axes = {"input": {0: "batch_size"}, "output": {0: "batch_size"}}
 
+        # Prefer the new torch.export-based ("dynamo") ONNX exporter when
+        # onnxscript is available. torch 2.11+ made it the default and emits
+        # a DeprecationWarning against the legacy TorchScript-based exporter.
+        # The dynamo exporter requires the optional ``onnxscript`` package
+        # (not a base kailash-ml dep). Fall back to dynamo=False (TorchScript
+        # exporter) when onnxscript is absent — that path still works but is
+        # slated for removal in a future PyTorch release.
+        try:
+            import onnxscript  # noqa: F401
+
+            use_dynamo = True
+        except ImportError:
+            use_dynamo = False
+
         try:
             if output_path is not None:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -518,6 +532,7 @@ class OnnxBridge:
                     dynamic_axes=dynamic_axes,
                     opset_version=17,
                     do_constant_folding=True,
+                    dynamo=use_dynamo,
                 )
                 return output_path.read_bytes()
             else:
@@ -531,6 +546,7 @@ class OnnxBridge:
                     dynamic_axes=dynamic_axes,
                     opset_version=17,
                     do_constant_folding=True,
+                    dynamo=use_dynamo,
                 )
                 return buf.getvalue()
         finally:
@@ -577,58 +593,49 @@ class OnnxBridge:
 
         dynamic_axes = {"input": {0: "batch_size"}, "output": {0: "batch_size"}}
 
+        # We route through torch.onnx.export directly rather than Lightning's
+        # model.to_onnx() wrapper, because Lightning's wrapper does not
+        # forward the ``dynamo`` kwarg consistently across Lightning / torch
+        # versions. Since a LightningModule IS a torch.nn.Module,
+        # torch.onnx.export handles it natively and preserves the same
+        # dynamic_axes / opset / I/O name contract as the torch branch.
         try:
-            # Prefer LightningModule.to_onnx if present — Lightning's wrapper
-            # around torch.onnx.export. Falls back to torch.onnx.export
-            # directly if the model doesn't override it (rare).
-            to_onnx = getattr(model, "to_onnx", None)
+            import onnxscript  # noqa: F401
+
+            use_dynamo = True
+        except ImportError:
+            use_dynamo = False
+
+        try:
             if output_path is not None:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-                if callable(to_onnx):
-                    to_onnx(
-                        str(output_path),
-                        dummy,
-                        export_params=True,
-                        input_names=["input"],
-                        output_names=["output"],
-                        dynamic_axes=dynamic_axes,
-                        opset_version=17,
-                    )
-                else:
-                    torch.onnx.export(
-                        model,
-                        dummy,
-                        str(output_path),
-                        input_names=["input"],
-                        output_names=["output"],
-                        dynamic_axes=dynamic_axes,
-                        opset_version=17,
-                    )
+                torch.onnx.export(
+                    model,
+                    dummy,
+                    str(output_path),
+                    input_names=["input"],
+                    output_names=["output"],
+                    dynamic_axes=dynamic_axes,
+                    opset_version=17,
+                    do_constant_folding=True,
+                    dynamo=use_dynamo,
+                )
                 return output_path.read_bytes()
             else:
                 import io
 
                 buf = io.BytesIO()
-                if callable(to_onnx):
-                    to_onnx(
-                        buf,
-                        dummy,
-                        export_params=True,
-                        input_names=["input"],
-                        output_names=["output"],
-                        dynamic_axes=dynamic_axes,
-                        opset_version=17,
-                    )
-                else:
-                    torch.onnx.export(
-                        model,
-                        dummy,
-                        buf,
-                        input_names=["input"],
-                        output_names=["output"],
-                        dynamic_axes=dynamic_axes,
-                        opset_version=17,
-                    )
+                torch.onnx.export(
+                    model,
+                    dummy,
+                    buf,
+                    input_names=["input"],
+                    output_names=["output"],
+                    dynamic_axes=dynamic_axes,
+                    opset_version=17,
+                    do_constant_folding=True,
+                    dynamo=use_dynamo,
+                )
                 return buf.getvalue()
         finally:
             if was_training:
