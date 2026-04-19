@@ -15,6 +15,20 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Packaging: `kailash-trust` removed — 2026-04-20 (closes #549)
+
+The `kailash-trust` package has been deleted from the monorepo. It was a re-export shim over `kailash.trust` with zero downstream consumers, zero test coverage, and a publication history beginning 2026-04-19. Users should migrate to the canonical path:
+
+```python
+# Before
+from kailash_trust import TrustOperations, GenesisRecord
+
+# After
+from kailash.trust import TrustOperations, GenesisRecord
+```
+
+The `kailash-trust` project on PyPI will be yanked (requires human action at https://pypi.org/manage/project/kailash-trust/releases/). No further `trust-v*` tags will trigger publish workflows.
+
 ### kailash 2.8.9 — 2026-04-20 (hotfix; closes #538)
 
 **Hotfix release.** Cuts the kailash core wheel containing commit `646c3d74` ("fix(nexus): release 2.1.1 — drive on_startup/on_shutdown lists directly (#531)"). Yesterday's release tagged `nexus-v2.1.1` published the kailash-nexus wheel but did NOT publish a new kailash core wheel — even though commit `646c3d74` modifies BOTH `packages/kailash-nexus/...` AND `src/kailash/servers/workflow_server.py` (which is shipped by the kailash core wheel). Result: every `pip install kailash-nexus==2.1.1` pulled `kailash>=2.8.7` (the broken core), and every Nexus 2.1.0/2.1.1 service crashed at uvicorn lifespan with `AttributeError: 'APIRouter' object has no attribute 'startup'`.
