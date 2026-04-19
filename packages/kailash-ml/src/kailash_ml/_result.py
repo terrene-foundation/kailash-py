@@ -88,13 +88,14 @@ class TrainingResult:
     calibration: Optional[Any] = None
     feature_importance: Optional[Mapping[str, float]] = None
     # --- Per-call device evidence (GPU-first Phase 1) ----------------------
-    # Populated by every family adapter (SklearnTrainable first — see
-    # `workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md` lines
-    # 54-78). Optional at the dataclass level so older callers (and
-    # from_dict payloads that pre-date this field) continue to validate;
-    # new family adapters MUST populate it. XGBoost / LightGBM adapters
-    # populate `.device.fallback_reason="oom"` when they survived a GPU
-    # OOM and retried on CPU (revised-stack.md § "Transparency contract").
+    # Populated by every family adapter (sklearn / xgboost / lightgbm /
+    # umap / hdbscan as of Phase 1). Optional at the dataclass level so
+    # older callers (and from_dict payloads that pre-date this field)
+    # continue to validate; new family adapters MUST populate it.
+    # XGBoost / LightGBM adapters populate `.device.fallback_reason="oom"`
+    # when they survived a GPU OOM and retried on CPU; UMAP / HDBSCAN
+    # adapters populate `.device.fallback_reason="cuml_eviction"` per
+    # revised-stack.md § "CRITICAL-1 disposition".
     device: Optional[DeviceReport] = None
 
     def __post_init__(self) -> None:
