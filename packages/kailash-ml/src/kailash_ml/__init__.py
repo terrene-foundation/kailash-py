@@ -184,17 +184,13 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
         _device_override.reset(token)
 
 
-def track(experiment: str, **kwargs):
-    """Async-context experiment tracker: `async with km.track('exp') as t: ...`.
-
-    Phase 6 (Registry + Tracking) implements full body with the MLflow-better
-    contract from `specs/ml-tracking.md`. Until then this raises a typed
-    error naming the phase.
-    """
-    raise NotImplementedError(
-        "km.track — Phase 6 (ExperimentTracker) will implement per "
-        "specs/ml-tracking.md. Use kailash_ml.MLEngine(tracker=...) for DI."
-    )
+# Phase 6 (Registry + Tracking) — ``km.track()`` implementation lives in
+# ``kailash_ml.tracking.runner``. Eager-import the public symbol so it
+# appears in ``kailash_ml.__all__`` per orphan-detection §6 and so
+# ``from kailash_ml import track`` works without a lazy ``__getattr__``
+# hop (the `__all__` / `__getattr__` pattern is a CodeQL trigger per
+# zero-tolerance §1a).
+from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
 
 
 def __getattr__(name: str):  # noqa: N807
