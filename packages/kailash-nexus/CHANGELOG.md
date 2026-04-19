@@ -1,5 +1,11 @@
 # Nexus Changelog
 
+## [2.1.1] - 2026-04-19 — CRITICAL hotfix: lifespan crash on FastAPI router dispatch method (#531, PR #533)
+
+### Fixed
+
+- **CRITICAL: Every production Nexus 2.1.0 service crashed at uvicorn lifespan startup** (#531): `WorkflowServer.__init__` called `app.router.startup()` in the custom FastAPI lifespan, relying on a dispatch method name that does not exist in all FastAPI versions. Production environments with a FastAPI build that exposes `_startup` (not `startup`) raised `AttributeError: 'APIRouter' object has no attribute 'startup'` at lifespan entry — before any request could be served. Fix: iterate `router.on_startup` / `router.on_shutdown` lists directly, awaiting coroutine results in order. This matches what FastAPI's own `_DefaultLifespan` does internally and is stable across all FastAPI versions. Rollback to 2.0.3 (the workaround reporters were using) is no longer needed — upgrade directly to 2.1.1.
+
 ## [2.1.0] - 2026-04-19 — HttpClient + ServiceClient + TypedServiceClient + lifespan hooks (#464 #465 #473 #500 #501)
 
 ### Added
