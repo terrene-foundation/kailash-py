@@ -6,7 +6,10 @@ Generates deterministic cache keys from queries and parameters.
 
 import hashlib
 import json
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+if TYPE_CHECKING:
+    from dataflow.classification.policy import ClassificationPolicy
 
 
 class CacheKeyGenerator:
@@ -16,7 +19,8 @@ class CacheKeyGenerator:
         self,
         prefix: str = "dataflow",
         namespace: Optional[str] = None,
-        version: str = "v1",
+        version: str = "v2",
+        classification_policy: Optional["ClassificationPolicy"] = None,
     ):
         """
         Initialize key generator.
@@ -24,11 +28,54 @@ class CacheKeyGenerator:
         Args:
             prefix: Global prefix for all keys
             namespace: Optional namespace (e.g., tenant ID)
-            version: Cache version for schema changes
+            version: Cache keyspace version. Default is ``"v2"`` (BP-049
+                cross-SDK keyspace; pre-fix ``v1`` entries are orphaned on
+                upgrade and naturally expire). Cross-SDK contract matches
+                ``kailash-rs`` v3.19.0.
+            classification_policy: Optional policy used to hash classified
+                PK values before they enter the key-material hash. When
+                provided, PKs whose model+field pair is classified are
+                routed through ``format_record_id_for_event`` before
+                serialization so the raw value never appears in the JSON
+                that feeds the MD5/SHA-256 digest. See issue #520.
         """
         self.prefix = prefix
         self.namespace = namespace
         self.version = version
+        self._classification_policy = classification_policy
+
+    def _safe_params(self, model_name: str, params: Any) -> Any:
+        """Return a copy of ``params`` with classified PK values hashed.
+
+        Routes ``params["id"]`` (and any ``{"id": ...}`` nested in a
+        filter dict) through ``format_record_id_for_event`` when the
+        classification policy marks the model's PK as classified.
+        Non-dict inputs and dicts without an ``id`` key pass through
+        unchanged. Mirrors the filtering contract of
+        ``kailash-rs`` BP-049.
+        """
+        if self._classification_policy is None or not isinstance(params, dict):
+            return params
+        # Lazy import avoids a cycle with features/express.py.
+        from dataflow.classification.event_payload import (
+            format_record_id_for_event,
+        )
+
+        def _hash_id(mapping: Dict[str, Any]) -> Dict[str, Any]:
+            if "id" not in mapping:
+                return mapping
+            safe = dict(mapping)
+            safe["id"] = format_record_id_for_event(
+                self._classification_policy, model_name, mapping["id"]
+            )
+            return safe
+
+        safe_params = _hash_id(params)
+        # Filter-style params ({"filter": {"id": ...}}) — hash the nested id.
+        if isinstance(safe_params.get("filter"), dict):
+            safe_params = dict(safe_params)
+            safe_params["filter"] = _hash_id(safe_params["filter"])
+        return safe_params
 
     def generate_key(
         self, model_name: str, sql: str, params: List[Any], ttl: Optional[int] = None
@@ -103,16 +150,20 @@ class CacheKeyGenerator:
     ) -> str:
         """Generate cache key for Express operations (no SQL).
 
-        Produces keys like ``dataflow:v1:<tenant>:<model>:<op>:<hash>``
+        Produces keys like ``dataflow:v2:<tenant>:<model>:<op>:<hash>``
         where ``<tenant>`` is only included when a ``tenant_id`` is
         provided (or the generator was constructed with a namespace).
         The trailing segment is a short hash of the serialised *params*.
+        When a ``classification_policy`` was configured and ``params``
+        contains a classified PK under ``id``, the PK is routed through
+        ``format_record_id_for_event`` BEFORE serialisation so the raw
+        value never enters the hash input. See issue #520 (BP-049).
 
-        Shape:
+        Shape (``v2`` keyspace; BP-049 cross-SDK):
 
-        * Without tenant/namespace: ``dataflow:v1:User:list:a1b2c3d4``
-        * With tenant_id: ``dataflow:v1:tenant-a:User:list:a1b2c3d4``
-        * With namespace: ``dataflow:v1:<namespace>:User:list:a1b2c3d4``
+        * Without tenant/namespace: ``dataflow:v2:User:list:a1b2c3d4``
+        * With tenant_id: ``dataflow:v2:tenant-a:User:list:a1b2c3d4``
+        * With namespace: ``dataflow:v2:<namespace>:User:list:a1b2c3d4``
 
         The ``tenant_id`` argument takes precedence over the
         constructor ``namespace`` when both are supplied, so a
@@ -149,7 +200,8 @@ class CacheKeyGenerator:
         parts.append(operation)
 
         if params is not None:
-            param_str = json.dumps(params, sort_keys=True, default=str)
+            safe = self._safe_params(model_name, params)
+            param_str = json.dumps(safe, sort_keys=True, default=str)
             param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]
             parts.append(param_hash)
 

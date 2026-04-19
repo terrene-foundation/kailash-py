@@ -2758,7 +2758,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.8.6"
+version = "2.8.7"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -2989,10 +2989,10 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.0" },
     { name = "gguf", marker = "extra == 'serve'", specifier = ">=0.10" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "kailash", specifier = ">=0.4.0" },
+    { name = "kailash", specifier = ">=2.8.7" },
     { name = "kailash-align", extras = ["rlhf", "eval", "serve", "online"], marker = "extra == 'all'" },
-    { name = "kailash-kaizen", specifier = ">=0.3.0" },
-    { name = "kailash-ml", specifier = ">=0.1.0" },
+    { name = "kailash-kaizen", specifier = ">=2.7.5" },
+    { name = "kailash-ml", specifier = ">=0.10.0" },
     { name = "llama-cpp-python", marker = "extra == 'serve'", specifier = ">=0.3" },
     { name = "lm-eval", marker = "extra == 'eval'", specifier = ">=0.4,<1.0" },
     { name = "peft", specifier = ">=0.10" },
@@ -3009,7 +3009,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.0.8"
+version = "2.0.10"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "aiomysql" },
@@ -3081,7 +3081,7 @@ provides-extras = ["fabric", "cloud", "excel", "parquet", "streaming", "fabric-a
 
 [[package]]
 name = "kailash-kaizen"
-version = "2.7.4"
+version = "2.7.5"
 source = { editable = "packages/kailash-kaizen" }
 dependencies = [
     { name = "aiohttp" },
@@ -3096,6 +3096,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "gitpython" },
     { name = "google-genai" },
+    { name = "httpx" },
     { name = "kailash" },
     { name = "kailash-mcp" },
     { name = "numpy" },
@@ -3125,11 +3126,14 @@ requires-dist = [
     { name = "azure-identity", specifier = ">=1.15.0" },
     { name = "bcrypt", specifier = ">=4.0.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0" },
+    { name = "botocore", marker = "extra == 'bedrock'", specifier = ">=1.34" },
     { name = "cryptography", specifier = ">=41.0.0" },
     { name = "fakeredis", marker = "extra == 'dev'", specifier = ">=2.20.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "gitpython", specifier = ">=3.1.0" },
+    { name = "google-auth", marker = "extra == 'vertex'", specifier = ">=2.0" },
     { name = "google-genai", specifier = ">=1.21.0" },
+    { name = "httpx", specifier = ">=0.25.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12" },
     { name = "kailash", specifier = ">=2.8.6" },
     { name = "kailash-mcp", specifier = ">=0.2.4" },
@@ -3153,11 +3157,11 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.5.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "bedrock", "vertex"]
 
 [[package]]
 name = "kailash-mcp"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "kailash" },
@@ -3192,13 +3196,14 @@ provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server
 
 [[package]]
 name = "kailash-ml"
-version = "0.9.0"
+version = "0.10.0"
 source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "kailash" },
     { name = "kailash-dataflow" },
     { name = "kailash-nexus" },
     { name = "lightgbm" },
+    { name = "lightning" },
     { name = "numpy" },
     { name = "onnxmltools" },
     { name = "onnxruntime" },
@@ -3208,6 +3213,8 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "skl2onnx" },
+    { name = "torch" },
+    { name = "xgboost" },
 ]
 
 [package.optional-dependencies]
@@ -3241,16 +3248,17 @@ requires-dist = [
     { name = "gymnasium", marker = "extra == 'rl'", specifier = ">=0.29" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.98" },
     { name = "imbalanced-learn", marker = "extra == 'imbalance'", specifier = ">=0.12" },
-    { name = "kailash", specifier = ">=2.8.1" },
-    { name = "kailash-dataflow", specifier = ">=1.0" },
-    { name = "kailash-kaizen", marker = "extra == 'agents'", specifier = ">=1.0" },
+    { name = "kailash", specifier = ">=2.8.7" },
+    { name = "kailash-dataflow", specifier = ">=2.0.10" },
+    { name = "kailash-kaizen", marker = "extra == 'agents'", specifier = ">=2.7.5" },
+    { name = "kailash-ml", extras = ["dl"], marker = "extra == 'dl-gpu'" },
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'rl'" },
     { name = "kailash-ml", extras = ["dl", "xgb", "catboost", "stats", "rl", "agents", "hpo", "mlflow", "huggingface", "dashboard", "interop", "imbalance", "explain"], marker = "extra == 'all'" },
     { name = "kailash-ml", extras = ["dl-gpu", "xgb", "catboost", "stats", "rl", "agents", "hpo", "mlflow", "huggingface", "dashboard", "interop", "imbalance", "explain"], marker = "extra == 'all-gpu'" },
-    { name = "kailash-nexus", specifier = ">=1.0" },
+    { name = "kailash-nexus", specifier = ">=2.1.0" },
     { name = "lightgbm", specifier = ">=4.0" },
+    { name = "lightning", specifier = ">=2.2" },
     { name = "lightning", marker = "extra == 'dl'", specifier = ">=2.2" },
-    { name = "lightning", marker = "extra == 'dl-gpu'", specifier = ">=2.2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "onnxmltools", specifier = ">=1.12" },
@@ -3274,23 +3282,20 @@ requires-dist = [
     { name = "starlette", marker = "extra == 'dashboard'", specifier = ">=0.35" },
     { name = "statsmodels", marker = "extra == 'stats'", specifier = ">=0.14" },
     { name = "timm", marker = "extra == 'dl'", specifier = ">=1.0" },
-    { name = "timm", marker = "extra == 'dl-gpu'", specifier = ">=1.0" },
+    { name = "torch", specifier = ">=2.2" },
     { name = "torch", marker = "extra == 'dl'", specifier = ">=2.2" },
-    { name = "torch", marker = "extra == 'dl-gpu'", specifier = ">=2.2" },
     { name = "torchaudio", marker = "extra == 'dl'", specifier = ">=2.2" },
-    { name = "torchaudio", marker = "extra == 'dl-gpu'", specifier = ">=2.2" },
     { name = "torchvision", marker = "extra == 'dl'", specifier = ">=0.17" },
-    { name = "torchvision", marker = "extra == 'dl-gpu'", specifier = ">=0.17" },
     { name = "transformers", marker = "extra == 'dl'", specifier = ">=4.40" },
-    { name = "transformers", marker = "extra == 'dl-gpu'", specifier = ">=4.40" },
     { name = "uvicorn", marker = "extra == 'dashboard'", specifier = ">=0.27" },
+    { name = "xgboost", specifier = ">=2.0" },
     { name = "xgboost", marker = "extra == 'xgb'", specifier = ">=2.0" },
 ]
 provides-extras = ["dl", "dl-gpu", "rl", "agents", "explain", "imbalance", "xgb", "catboost", "stats", "hpo", "mlflow", "huggingface", "dashboard", "interop", "all", "all-gpu", "dev"]
 
 [[package]]
 name = "kailash-nexus"
-version = "2.0.3"
+version = "2.1.0"
 source = { editable = "packages/kailash-nexus" }
 dependencies = [
     { name = "fastapi" },
@@ -3336,8 +3341,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.109" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.98" },
-    { name = "kailash", specifier = ">=2.8.1" },
-    { name = "kailash-kaizen", specifier = ">=2.0.0" },
+    { name = "kailash", specifier = ">=2.8.7" },
+    { name = "kailash-kaizen", specifier = ">=2.7.5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.0" },
     { name = "psycopg-pool", specifier = ">=3.0" },
@@ -3351,7 +3356,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "kaizen-agents"
-version = "0.9.2"
+version = "0.9.3"
 source = { editable = "packages/kaizen-agents" }
 dependencies = [
     { name = "httpx" },
@@ -3367,9 +3372,9 @@ dependencies = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "kailash", specifier = ">=2.8.1" },
-    { name = "kailash-kaizen", specifier = ">=2.3.2" },
-    { name = "kailash-pact", specifier = ">=0.4.1" },
+    { name = "kailash", specifier = ">=2.8.7" },
+    { name = "kailash-kaizen", specifier = ">=2.7.5" },
+    { name = "kailash-pact", specifier = ">=0.8.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "openai", specifier = ">=1.30.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.2.0" },
