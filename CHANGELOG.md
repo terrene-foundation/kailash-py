@@ -15,6 +15,21 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.10 — 2026-04-20 (closes #550)
+
+**Identifier-safety parity with DataFlow.** `kailash.db.dialect` now ships a canonical `quote_identifier(name)` helper on `PostgresDialect` / `MySQLDialect` / `SQLiteDialect` that BOTH validates against the allowlist regex AND wraps in the dialect's quote character. Previously, core DDL paths (notably `ConnectionManager.create_index()` and every `src/kailash/infrastructure/*` bootstrap-table CREATE) validated the identifier via `_validate_identifier` but then interpolated the raw name into DDL — an injection vector per `rules/dataflow-identifier-safety.md` MUST Rule 1 that DataFlow's own `dataflow.adapters.dialect` had already closed.
+
+**What changed:**
+
+- `kailash.db.dialect` adds `IdentifierError` (a `ValueError` subclass) and `quote_identifier` on every dialect. Contract matches DataFlow: PG/SQLite use `"`, MySQL uses backtick; length limits 63 / 64 / 128; error messages never echo the raw input (fingerprint only).
+- `ConnectionManager.create_index()` now quotes `index_name`, `table`, and each column via `dialect.quote_identifier()`.
+- Every `src/kailash/infrastructure/*.py` bootstrap table (`task_queue`, `worker_registry`, `dlq`, `checkpoint_store`, `event_store`, `idempotency_store`, `execution_store`) routes its `TABLE_NAME` / `self._table` through `dialect.quote_identifier()` in the `CREATE TABLE IF NOT EXISTS` DDL. DML sites are unchanged — `_validate_identifier` already vets the identifier at `__init__` per Rule 5 defense-in-depth.
+- `_validate_identifier` is retained for validate-only call sites (upsert SET-clause column interpolation, hardcoded-list defense-in-depth). It now raises `IdentifierError` instead of `ValueError`; existing callers that `except ValueError` continue to work because `IdentifierError` subclasses `ValueError`.
+- `specs/infra-sql.md` updated to document the quote+validate contract.
+- 64 new regression tests — 54 unit (injection payloads, length limits, dialect-appropriate quoting, fingerprint-no-echo across all three dialects) + 10 Tier 2 (real SQLite, `ConnectionManager.create_index()` rejects unsafe identifiers before DDL reaches the driver, DDL-is-quoted reflection).
+
+Closes #550.
+
 ### kailash 2.8.9 — 2026-04-20 (hotfix; closes #538)
 
 **Hotfix release.** Cuts the kailash core wheel containing commit `646c3d74` ("fix(nexus): release 2.1.1 — drive on_startup/on_shutdown lists directly (#531)"). Yesterday's release tagged `nexus-v2.1.1` published the kailash-nexus wheel but did NOT publish a new kailash core wheel — even though commit `646c3d74` modifies BOTH `packages/kailash-nexus/...` AND `src/kailash/servers/workflow_server.py` (which is shipped by the kailash core wheel). Result: every `pip install kailash-nexus==2.1.1` pulled `kailash>=2.8.7` (the broken core), and every Nexus 2.1.0/2.1.1 service crashed at uvicorn lifespan with `AttributeError: 'APIRouter' object has no attribute 'startup'`.
