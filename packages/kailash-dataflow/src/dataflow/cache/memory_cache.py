@@ -189,9 +189,15 @@ class InMemoryCache:
         does NOT affect entries for ``"UserAudit"`` or ``"UserSession"``.
         The key generator produces two formats:
 
-        - Express keys: ``dataflow:v1:{model}:{op}:...``
-        - Express keys with tenant: ``dataflow:v1:{tenant}:{model}:{op}:...``
-        - SQL query keys: ``dataflow:{model}:v1:...``
+        - Express keys: ``dataflow:v*:{model}:{op}:...``
+        - Express keys with tenant: ``dataflow:v*:{tenant}:{model}:{op}:...``
+        - SQL query keys: ``dataflow:{model}:v*:...``
+
+        The ``v*`` wildcard covers legacy v1 keys (pre-BP-049) and current v2
+        keys produced by the default ``CacheKeyGenerator``. Matching is
+        version-agnostic via segment-based string search — ``:{model}:`` as
+        an exact delimiter — so the implementation survives future keyspace
+        bumps without edit (``tenant-isolation.md §3a``).
 
         Matching strategy:
 
