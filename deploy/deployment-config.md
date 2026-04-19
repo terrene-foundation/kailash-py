@@ -22,7 +22,7 @@
 | kailash-kaizen   | `kaizen-v*`        | 2.7.5           |
 | kailash-nexus    | `nexus-v*`         | 2.1.1           |
 | kailash-pact     | `pact-v*`          | 0.8.2           |
-| kailash-ml       | `ml-v*`            | 0.12.0          |
+| kailash-ml       | `ml-v*`            | 0.12.1          |
 | kailash-align    | `align-v*`         | 0.3.2           |
 | kailash-mcp      | `mcp-v*`           | 0.2.5           |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.3           |
