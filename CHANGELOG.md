@@ -13,9 +13,34 @@ The changelog has been reorganized into individual files for better management. 
 - **[sdk-users/6-reference/changelogs/unreleased/](sdk-users/6-reference/changelogs/unreleased/)** - Unreleased changes
 - **[sdk-users/6-reference/changelogs/releases/](sdk-users/6-reference/changelogs/releases/)** - Individual release changelogs
 
-## Unreleased
+## Recent Releases
 
-### kailash-kaizen — #498 LLM Deployment Abstraction (Sessions 1-8 complete)
+### kailash 2.8.7 + kailash-kaizen 2.7.5 + kailash-dataflow 2.0.10 + kailash-nexus 2.1.0 + kailash-ml 0.10.0 + kailash-mcp 0.2.5 — 2026-04-19
+
+#### kailash-kaizen 2.7.5
+
+- **`LlmClient.embed()` for OpenAI + Ollama (#462, PR #502)**: `LlmClient.embed(texts, *, model)` exposes a first-class embedding API on the existing `LlmClient` surface. Supports OpenAI (`text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`) and Ollama (`nomic-embed-text` and any Ollama-hosted embedding model). Returns a `List[List[float]]` consistent with OpenAI's embedding response shape.
+- **LLM endpoint trust migration identifier validation fix (#499, PR #504)**: The trust migration module in `kaizen.llm.migration` used f-string interpolation for identifier names in several log and error message paths, which was flagged as a medium-severity finding in the #499 defense-in-depth audit. All identifier-containing paths now route through `_validate_identifier()` before use.
+
+#### kailash-dataflow 2.0.10
+
+- See `packages/kailash-dataflow/CHANGELOG.md` for full entry.
+
+#### kailash-nexus 2.1.0
+
+- See `packages/kailash-nexus/CHANGELOG.md` for full entry.
+
+#### kailash-ml 0.10.0
+
+- See `packages/kailash-ml/CHANGELOG.md` for full entry.
+
+#### kailash-mcp 0.2.5
+
+- **`oauth.py` optional-extras gating (#514, PR #518)**: `kailash_mcp/auth/oauth.py` had module-level `import aiohttp`, `import jwt`, and `from cryptography...` — all declared as optional under the `[auth-oauth]` extra. These are now wrapped in `try/except ImportError` blocks with a `_require_oauth_extras()` loud-failure helper. The module now imports cleanly on a bare `pip install kailash-mcp` and raises a descriptive `ImportError` naming the required extra when OAuth classes are instantiated without the extra installed. Aligns with `rules/dependencies.md` § "Declared = Gated Consistently".
+
+---
+
+## kailash-kaizen — #498 LLM Deployment Abstraction (Sessions 1-8 complete)
 
 Four-axis LLM deployment abstraction: 24 preset factories spanning direct providers (OpenAI, Anthropic, Google, 13 others), AWS Bedrock (5 families), GCP Vertex (Claude + Gemini), and Azure OpenAI — all with cross-SDK byte-parity to `kailash-rs#406`. Additive API: existing `kaizen.providers.registry` continues to work unchanged (39 consumer files verified via regression test).
 

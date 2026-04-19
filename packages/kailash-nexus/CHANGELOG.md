@@ -1,6 +1,12 @@
 # Nexus Changelog
 
-## [Unreleased]
+## [2.1.0] - 2026-04-19 — HttpClient + ServiceClient + TypedServiceClient + lifespan hooks (#464 #465 #473 #500 #501)
+
+### Added
+
+- **`HttpClient` + `ServiceClient` with SSRF-aware config (#464 #473, PR #505)**: `nexus.HttpClient` is a thin wrapper around `httpx.AsyncClient` with a `HttpClientConfig` that enforces SSRF-aware defaults (no private IP ranges, connection timeouts, redirect limits). `nexus.ServiceClient` builds on `HttpClient` and provides a named-service abstraction with structured error types (`ServiceClientError`, `ServiceClientHttpError`, `ServiceClientHttpStatusError`, `ServiceClientDeserializeError`, `ServiceClientInvalidHeaderError`, `ServiceClientInvalidPathError`).
+- **`TypedServiceClient` wrapper for S2S JSON APIs (#465, PR #507)**: `nexus.TypedServiceClient` adds Pydantic-model-driven request/response serialization on top of `ServiceClient`. Callers declare `RequestModel` and `ResponseModel` types; `TypedServiceClient` validates, serializes, deserializes, and raises typed errors on schema mismatch. Covers the common S2S JSON API pattern without manual `json.loads` / Pydantic `.model_validate`.
+- **`post_webhook` + `probe_remote_health` outbound helpers (PR #509)**: `nexus.post_webhook(url, payload, *, secret)` fires a signed outbound webhook using HMAC-SHA256 over the raw JSON bytes (not re-serialized). `nexus.probe_remote_health(url, *, timeout)` performs a lightweight GET health probe and returns a structured `RemoteHealthResult`.
 
 ### Fixed
 
