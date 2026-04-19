@@ -1,19 +1,38 @@
 # kailash-ml Changelog
 
-## [0.13.0] - 2026-04-20 — ONNX bridge matrix completion (torch / lightning / catboost)
+## [0.13.0] - 2026-04-20 — ONNX bridge matrix completion + km.track + km.doctor
 
-### Added
+Three spec-compliance issues resolved in one minor release: #546 (ONNX matrix), #547 (km.doctor), #548 (km.track Phase 6).
 
-- **`OnnxBridge._export_torch`** — torch.nn.Module -> ONNX via `torch.onnx.export` with opset 17 and `dynamic_axes` on the batch dimension. The exported graph accepts any batch size at `onnxruntime.InferenceSession.run` time. Accepts `np.ndarray`, `polars.DataFrame`, or `torch.Tensor` for `sample_input`; non-tensor inputs are converted to float32 tensors.
-- **`OnnxBridge._export_lightning`** — `LightningModule` -> ONNX. Routes through `model.to_onnx()` (Lightning's wrapper around `torch.onnx.export`) when available, with a direct `torch.onnx.export` fallback. Same opset / dynamic_axes contract as the torch branch.
-- **`OnnxBridge._export_catboost`** — native `model.save_model(path, format="onnx")` branch. Uses `NamedTemporaryFile` round-trip when no `output_path` is supplied (CatBoost has no in-memory buffer API).
-- **`OnnxBridge.export(sample_input=...)` kwarg** — required for torch / lightning exports because `torch.onnx.export` traces the forward pass with a concrete tensor. Tabular branches (sklearn / lightgbm / xgboost / catboost) continue to use `n_features` and ignore this kwarg.
-- **6 Tier 2 ONNX round-trip regression tests** — `tests/integration/test_onnx_roundtrip_{sklearn,xgboost,lightgbm,catboost,torch,lightning}.py`. Each trains a minimal model on a tiny synthetic dataset, exports to ONNX via `OnnxBridge.export`, re-imports via `onnxruntime.InferenceSession`, and asserts prediction parity within `np.allclose(rtol=1e-3, atol=1e-5)` against the native model. XGBoost / LightGBM tests are skipped on darwin-arm + py3.13 per the pre-existing segfault pattern. CatBoost is skipped gracefully when the optional `[catboost]` extra is not installed. The torch test additionally covers dynamic-batch-size inference (trace with batch=1, infer with batch=32). Resolves issue #546 and `specs/ml-engines.md` §6.1 MUST 3.
-- **`_COMPAT_MATRIX` entries for `"torch"`, `"lightning"`, `"catboost"`** — the pre-flight `check_compatibility` call now returns structured compatibility metadata for every framework key that has an implemented export branch.
+### Added — ONNX bridge matrix completion (closes #546)
+
+- **`OnnxBridge._export_torch`** — torch.nn.Module -> ONNX via `torch.onnx.export` with opset 17 and `dynamic_axes` on the batch dimension. Accepts `np.ndarray`, `polars.DataFrame`, or `torch.Tensor` for `sample_input`.
+- **`OnnxBridge._export_lightning`** — `LightningModule` -> ONNX. Routes through `model.to_onnx()` when available, with direct `torch.onnx.export` fallback. Same opset / dynamic_axes contract as torch.
+- **`OnnxBridge._export_catboost`** — native `model.save_model(path, format="onnx")` branch. Uses `NamedTemporaryFile` round-trip when no `output_path` is supplied.
+- **`OnnxBridge.export(sample_input=...)` kwarg** — required for torch / lightning exports (torch.onnx.export traces the forward pass with a concrete tensor). Tabular branches continue to use `n_features`.
+- **6 Tier 2 ONNX round-trip regression tests** at `tests/integration/test_onnx_roundtrip_{sklearn,xgboost,lightgbm,catboost,torch,lightning}.py` — each trains a minimal model, exports via `OnnxBridge.export`, re-imports via `onnxruntime.InferenceSession`, asserts prediction parity within `np.allclose(rtol=1e-3, atol=1e-5)`. XGBoost / LightGBM skip on darwin-arm + py3.13 per pre-existing segfault pattern. CatBoost skips gracefully when the `[catboost]` extra is not installed. Torch additionally covers dynamic-batch-size inference. Resolves `specs/ml-engines.md` §6.1 MUST 3.
+- **`_COMPAT_MATRIX` entries for `"torch"`, `"lightning"`, `"catboost"`**.
+
+### Added — `km.track()` Phase 6 (closes #548)
+
+- **`km.track(experiment, ...) -> AsyncContextManager[ExperimentRun]`** — replaces the previous `NotImplementedError` stub. Async-context entry point per `specs/ml-tracking.md §2.1`; on enter creates a run and auto-sets status `RUNNING`, on exit auto-sets `COMPLETED` / `FAILED` / `KILLED`.
+- **16 auto-capture fields** per `specs/ml-tracking.md §2.4` — `host`, `python_version`, `git_sha`, `git_branch`, `git_dirty`, `wall_clock_start`, `wall_clock_end`, `duration_seconds`, `status`, `tenant_id`, `run_id`, `parent_run_id`, `device_family`, `device_backend`, `device_fallback_reason`, `device_array_api`. Git metadata captured via subprocess with graceful fallback on no-git environments. `tenant_id` resolves from explicit kwarg or `KAILASH_TENANT_ID` env. `parent_run_id` propagates via `contextvars` for nested `km.track()` calls. `device_*` fields populate from the most recent `TrainingResult.device` when a Trainable runs inside the context.
+- **Run-status auto-set** per `specs/ml-tracking.md §2.2` — `COMPLETED` on clean exit, `FAILED` on exception (captures `exc_type.__name__` + traceback), `KILLED` on SIGINT/SIGTERM via `signal.signal` handler installed at `__aenter__` and restored at `__aexit__`.
+- **`SQLiteTrackerBackend`** — default async SQLite backend at `~/.kailash_ml/ml.db` with WAL journal mode. 20-column `experiment_runs` schema. All SQL uses `?` placeholders; identifiers are fixed literals.
+- **9 Tier 2 integration tests** at `tests/integration/test_km_track.py`.
+
+### Added — `km.doctor()` backend diagnostic (closes #547)
+
+- **`km.doctor(require=None, as_json=False) -> int`** — diagnostic probe per `specs/ml-backends.md §7`. Exit codes: `0` all-green, `1` warnings, `2` failures. Probes `cpu`, `cuda`, `mps`, `rocm`.
+- **`--require=<backend>`** — fails-fast with exit 2 when the named backend is absent. CI-lane gate for training-job prerequisites.
+- **`--json`** — structured report per spec §7.2 (`backend`, `status`, `version`, `devices`, `warnings`, `failures`).
+- **`km-doctor` console script** — registered in `[project.scripts]` as `km-doctor = "kailash_ml.doctor:main"`. Operators run `km-doctor --require=cuda` to gate training jobs.
+- **7 Tier 2 integration tests** at `tests/integration/test_km_doctor.py`.
 
 ### Fixed
 
-- **ONNX compatibility matrix orphan (closes spec-compliance gap)** — prior to this release, `_COMPAT_MATRIX` advertised `pytorch` as exportable but `OnnxBridge.export()` fell through to the generic "Export not implemented for framework" skip path for torch / lightning / catboost. The matrix made a promise the dispatch could not keep. Every framework key in the matrix now has an implemented export branch AND a Tier 2 round-trip regression test exercising that branch through `onnxruntime` (the orphan guard per `rules/orphan-detection.md` §2a — crypto-pair round-trip MUST be tested through the facade, generalized to `export` / `import` pairs).
+- **ONNX compatibility matrix orphan** — prior to this release, `_COMPAT_MATRIX` advertised `pytorch` as exportable but `OnnxBridge.export()` fell through to the generic "Export not implemented" skip path for torch / lightning / catboost. Every framework key in the matrix now has an implemented export branch AND a Tier 2 round-trip regression test exercising that branch through `onnxruntime` (orphan guard per `rules/orphan-detection.md` §2a).
+- **`km.track` / `km.doctor` NotImplementedError / missing-symbol orphans** — both spec-documented entry points now ship with real implementations, public-symbol exports in `__all__`, and Tier 2 coverage.
 
 ## [0.12.1] - 2026-04-20 — Predictions.device field + kailash>=2.8.9 floor bump
 
