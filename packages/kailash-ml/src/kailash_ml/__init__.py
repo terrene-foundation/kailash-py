@@ -100,6 +100,16 @@ def __getattr__(name: str):  # noqa: N807
         "ModelExplainer": "kailash_ml.engines.model_explainer",
         # Bridge
         "OnnxBridge": "kailash_ml.bridge.onnx_bridge",
+        # Estimators (#479/#488 — sklearn-compatible composites with
+        # explicit register_estimator() for custom classes)
+        "Pipeline": "kailash_ml.estimators",
+        "FeatureUnion": "kailash_ml.estimators",
+        "ColumnTransformer": "kailash_ml.estimators",
+        "StandardScaler": "kailash_ml.estimators",
+        "register_estimator": "kailash_ml.estimators",
+        "unregister_estimator": "kailash_ml.estimators",
+        "is_registered_estimator": "kailash_ml.estimators",
+        "registered_estimators": "kailash_ml.estimators",
         # Compat
         "MlflowFormatReader": "kailash_ml.compat.mlflow_format",
         "MlflowFormatWriter": "kailash_ml.compat.mlflow_format",
@@ -166,4 +176,13 @@ __all__ = [
     "ExperimentalWarning",
     # Metrics module
     "metrics",
+    # Estimators (#479/#488 — sklearn-compatible composites + registry)
+    "Pipeline",
+    "FeatureUnion",
+    "ColumnTransformer",
+    "StandardScaler",
+    "register_estimator",
+    "unregister_estimator",
+    "is_registered_estimator",
+    "registered_estimators",
 ]
