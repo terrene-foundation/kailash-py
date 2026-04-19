@@ -133,7 +133,7 @@ dev = [
     # production code uses aiohttp/starlette, so this is test-only.
     "websockets>=12.0",
     # Sub-packages required for test collection (pact/mcp tests import these)
-    "kailash-pact>=0.8.1",
+    "kailash-pact>=0.8.2",
     "kailash-mcp>=0.1.0",
 ]
 # Documentation
