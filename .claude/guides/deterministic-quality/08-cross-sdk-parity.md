@@ -131,7 +131,8 @@ Beyond API surface matching, behavioral parity requires cross-SDK test suites:
 # tests/parity/test_product_mode.py
 """
 Cross-SDK behavioral parity test.
-Equivalent test exists in kailash-rs: crates/kailash-dataflow/tests/parity/test_product_mode.rs
+Equivalent test would live at: crates/kailash-dataflow/tests/parity/test_product_mode.rs
+(not yet created on the Rust side — see § "Where It Would Live" above).
 """
 
 @pytest.mark.parity
