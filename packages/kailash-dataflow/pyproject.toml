@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "2.0.10"
+version = "2.0.11"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }

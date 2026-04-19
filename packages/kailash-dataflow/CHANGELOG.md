@@ -1,5 +1,13 @@
 # DataFlow Changelog
 
+## [2.0.11] - 2026-04-19 — BP-049 classified-data leak fixes (#522)
+
+### Security
+
+- **BP-049 NotFound error no longer leaks classified field values (#522)**: `DataFlowExpress.read()` raised `NotFoundError` with the raw record ID in the error message. For models where the PK is a classified field (e.g. email-keyed `Account`), the error message echoed the raw email address to any caller with the right to call `read()` regardless of clearance. Fixed by routing the record_id in `NotFoundError` messages through `format_record_id_for_event` — classified PKs become `sha256:<8hex>` fingerprints.
+- **BP-049 cache key contained raw classified PK (#522)**: Read-path cache keys were constructed as `dataflow:v1:{model}:{record_id}` without sanitizing the `record_id`. Classified string PKs are now hashed before inclusion in the cache key, preventing the raw value from appearing in Redis SCAN output or cache-key logs.
+- **BP-049 validation error message sanitization (#522)**: Field validation errors in `DataFlowExpress` echoed the user-supplied value verbatim in the error string. For classified fields this leaks the value to any log aggregator that captures error messages. Validation errors for classified fields now include a fingerprint only.
+
 ## [2.0.10] - 2026-04-19 — Identifier quoting + defense-in-depth hardening + force_downgrade split (#480 #499 #510)
 
 ### Security
