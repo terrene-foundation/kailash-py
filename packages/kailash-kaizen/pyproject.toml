@@ -73,6 +73,7 @@ dev = [
     "ruff>=0.1.0",
     "fakeredis>=2.20.0",
     "respx>=0.21.0",
+    "pytest-benchmark>=4.0.0",
 ]
 # AWS Bedrock preset (#498 Session 3, S4b-i) -- botocore owns SigV4
 # canonicalization; inlined hmac.new in kaizen.llm.auth.aws is BLOCKED.
@@ -102,6 +103,7 @@ markers = [
     "requires_docker: Tests requiring Docker Model Runner",
     "requires_google: Tests requiring Google Gemini credentials",
     "regression: Regression tests for fixed bugs",
+    "benchmark: Performance benchmark tests (pytest-benchmark)",
 ]
 asyncio_mode = "auto"
 
