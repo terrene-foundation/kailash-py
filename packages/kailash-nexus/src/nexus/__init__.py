@@ -90,6 +90,7 @@ from .service_client import (
     ServiceClientSerializeError,
 )
 from .typed_service_client import Decoder, TypedServiceClient
+from .outbound import post_webhook, probe_remote_health
 from .errors import PermissionError as NexusPermissionError  # deprecated alias
 from .errors import RateLimitError, ServiceUnavailableError
 from .errors import TimeoutError as NexusTimeoutError
@@ -185,4 +186,8 @@ __all__ = [
     # Typed-model service client (issue #465 + cross-SDK kailash-rs#400)
     "TypedServiceClient",
     "Decoder",
+    # Outbound helpers (internal + user-facing producers of HttpClient /
+    # ServiceClient call sites — see nexus/outbound.py)
+    "post_webhook",
+    "probe_remote_health",
 ]

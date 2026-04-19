@@ -62,7 +62,7 @@ def register_estimator(cls: T) -> T:
         _REGISTRY[key] = cls
     logger.debug(
         "kailash_ml.estimators.register",
-        extra={"module": key[0], "qualname": key[1]},
+        extra={"estimator_module": key[0], "estimator_qualname": key[1]},
     )
     return cls
 
@@ -78,7 +78,7 @@ def unregister_estimator(cls: type) -> bool:
     if removed:
         logger.debug(
             "kailash_ml.estimators.unregister",
-            extra={"module": key[0], "qualname": key[1]},
+            extra={"estimator_module": key[0], "estimator_qualname": key[1]},
         )
     return removed
 
