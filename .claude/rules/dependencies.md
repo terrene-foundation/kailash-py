@@ -187,3 +187,42 @@ cargo check --quiet
 ```
 
 Any unmet, missing, or conflicting dependency BLOCKS the gate.
+
+### Phantom Transitive Deps — Resolve Via `uv lock --upgrade`, Not Local Caps
+
+When `pip check` reports a conflict whose root cause is a transitive package that no source file actually imports, the fix MUST be `uv lock --upgrade-package <phantom> <constrained_siblings>` followed by `uv sync` — which drops the unused dep and re-solves. Adding a local `<N` cap on a package this project does not directly import is BLOCKED (see § "No Caps on Transitive Dependencies" above).
+
+```bash
+# DO — diagnose the phantom, upgrade, drop
+$ uv pip check
+The package `grpcio-status` requires protobuf<6.0.dev0, but 6.33.6 is installed
+The package `google-ai-generativelanguage` requires protobuf<6.0.0.dev0, but 6.33.6 is installed
+
+# Trace the source (no src/ imports google.generativeai → phantom):
+$ grep -rln 'import google\.generativeai\|from google\.generativeai' src/ packages/ | head
+# (empty)
+
+$ uv lock --upgrade-package grpcio-status --upgrade-package google-ai-generativelanguage \
+          --upgrade-package google-generativeai --upgrade-package protobuf
+$ uv sync --extra dev  # or whichever extras you use
+$ uv pip check
+Checked 224 packages in 2ms. All installed packages are compatible
+
+# DO NOT — pin the transitive locally
+# pyproject.toml
+dependencies = [
+    ...,
+    "protobuf>=5.26,<6.0",   # capping a package we don't import
+]
+```
+
+**BLOCKED rationalizations:**
+
+- "A local cap is faster than chasing the transitive tree"
+- "Pinning protobuf keeps the tree stable"
+- "We'll drop the cap once upstream catches up"
+- "`uv lock --upgrade` is risky, could break other deps"
+
+**Why:** A local cap on a package this project does not directly import is purely speculative — no code could break if it upgrades, and the cap just blocks every downstream user from getting patches. Phantom-transitive conflicts almost always resolve by dropping the phantom (`uv lock --upgrade` lets the solver drop installs with zero consumers). When upstream actually holds the constraint legitimately, the solver will report that — which is the signal to upgrade THAT package, not to local-cap the transitive. Evidence: PR #530 (2026-04-19) — `google-generativeai 0.8.6` installed but zero imports; `uv lock --upgrade-package` dropped it + two transitive orphans (`google-ai-generativelanguage`, `grpcio-status 1.71.2`); `pip check` became clean without a local cap.
+
+Origin: PR #530 (2026-04-19) — phantom `google-generativeai` held protobuf solver at an old cap.

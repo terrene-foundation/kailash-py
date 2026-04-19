@@ -174,6 +174,42 @@ Values of declared-safe types (`int`, `float`, `bool`, `Decimal`, `datetime`, `d
 
 Origin: GitHub issues #492 (bulk_upsert SQLi via string-escape) + #493 (sanitizer contract drift, 3 pre-existing failing tests). The contract above pins the decision so a future refactor doesn't swing back to quote-escape.
 
+## Multi-Site Kwarg Plumbing
+
+When a security-relevant kwarg (classification policy, tenant scope, clearance context, audit correlation ID) is plumbed through a helper, EVERY call site of that helper MUST be updated in the SAME PR. Updating the "primary" call site and deferring siblings is BLOCKED.
+
+```python
+# DO — grep every caller, update every sibling, same PR
+# Helper added `policy` + `model_name` kwargs for classification sanitisation.
+#
+# $ grep -rn 'validate_model(' src/ packages/
+# packages/kailash-dataflow/src/dataflow/features/express.py:_validate_if_enabled
+# packages/kailash-dataflow/src/dataflow/engine.py::validate_record
+# tests/...  (tests covered separately)
+#
+# Both production call sites get policy+model_name in this PR:
+engine.validate_record(instance) -> validate_model(instance, policy=..., model_name=...)
+express._validate_if_enabled(...) -> validate_model(instance, policy=..., model_name=...)
+
+# DO NOT — update primary site, skip the sibling
+express._validate_if_enabled(...) -> validate_model(instance, policy=..., model_name=...)
+engine.validate_record(instance)  -> validate_model(instance)   # bypasses sanitiser
+# ↑ The unpatched sibling surface still leaks classified field names / values in
+#   error messages; the sanitisation contract is broken on one public entry point.
+```
+
+**BLOCKED rationalizations:**
+
+- "The primary call site is the one users hit 99% of the time"
+- "The sibling is rarely used; we'll patch it in a follow-up"
+- "The helper signature is backwards-compatible, sibling can stay as-is"
+- "Test coverage will catch divergence later"
+- "The kwarg has a safe default — siblings still get baseline behaviour"
+
+**Why:** A helper that takes a security-relevant kwarg has the kwarg precisely because the unqualified call leaks or misbehaves. Leaving any sibling call site on the unqualified signature ships the exact failure mode the kwarg was introduced to fix; the "safe default" is by definition the insecure default (otherwise the kwarg would not exist). The fix is mechanical — `grep -rn 'helper_name(' .` and patch every hit in the same PR. Evidence: BP-049 (2026-04-19) landed `validate_model(policy=..., model_name=...)` in PR #522 but left `DataFlowEngine.validate_record(instance)` unqualified; post-release reviewer caught it; fast-patched in PR #529 (kailash-dataflow 2.0.12).
+
+Origin: PR #522 / PR #529 (2026-04-19) — BP-049 validation sanitiser plumbing missed one sibling.
+
 ## Kailash-Specific Security
 
 - **DataFlow**: Access controls on models, validate at model level, never expose internal IDs

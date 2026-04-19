@@ -110,6 +110,47 @@ Any PR that removes a public symbol (module, class, function, attribute) MUST de
 
 **Why:** Collection failures are invisible in "unit-only CI" setups yet become merge-blocking the moment someone runs the full suite locally. The only way to keep the full suite runnable is to gate every PR on collect-only-green.
 
+### 6. Module-Scope Public Imports Appear In `__all__`
+
+When a symbol is imported at module-scope into a package's `__init__.py` (not behind `_` / not lazy via `__getattr__`), it MUST appear in that module's `__all__` list unless the symbol itself is private (leading underscore). New `__all__` entries MUST land in the same PR as the import. Eagerly-imported-but-absent-from-`__all__` is BLOCKED.
+
+```python
+# DO — every public module-scope import appears in __all__
+# packages/kailash-ml/src/kailash_ml/__init__.py
+from kailash_ml._device_report import (
+    DeviceReport,
+    device_report_from_backend_info,
+)
+
+__all__ = [
+    "__version__",
+    "DeviceReport",
+    "device_report_from_backend_info",
+    ...
+]
+
+# DO NOT — public symbol imported but missing from __all__
+from kailash_ml._device_report import DeviceReport, device_report_from_backend_info
+
+__all__ = [
+    "__version__",
+    # DeviceReport, device_report_from_backend_info → absent
+    # Result: `from kailash_ml import *` drops the advertised public API
+]
+```
+
+**BLOCKED rationalizations:**
+
+- "The symbol is reachable via `kailash_ml.DeviceReport`, that's enough"
+- "Nobody uses `from pkg import *`"
+- "`__all__` is a convention, not a contract"
+- "We'll clean up `__all__` in a follow-up"
+- "The symbol is eagerly imported; the package re-exports it implicitly"
+
+**Why:** `__all__` is the package's public-API contract: documentation generators (Sphinx autodoc), linters, typing tools (`mypy --strict`), and `from pkg import *` consumers all read it as the canonical export list. A symbol that the agent "eagerly imports" but never lists is both advertised (via the import) AND hidden (via `__all__`) — that inconsistency is the exact failure shape the orphan pattern produces on the consumer side. The fix is a one-line addition in the same PR; deferring it means the advertised feature ships broken for every tool that respects `__all__`. Evidence: PR #523 (kailash-ml 0.11.0) eagerly imported `DeviceReport` / `device_report_from_backend_info` / `device` / `use_device` but omitted all four from `__all__`; caught by post-release reviewer; patched in PR #529 (kailash-ml 0.11.1).
+
+Origin: PR #523 / PR #529 (2026-04-19) — GPU-first Phase 1 public API symbols missed from `__all__`.
+
 ## MUST NOT
 
 - Land a `db.X` / `app.X` facade without the production call site in the same PR
