@@ -453,12 +453,8 @@ class TestBatchedMigrationExecutorIntegration:
         assert total_time < 10.0  # Must meet <10s performance target
         print(f"Typical migration completed in {total_time:.2f}s (target: <10s)")
 
-    @pytest.mark.skip(
-        reason="AutoMigrationSystem integration needs refactoring - separate from shared Docker infrastructure work"
-    )
-    @pytest.mark.asyncio
-    async def test_integration_with_auto_migration_system(self, test_suite):
-        """Test integration with existing AutoMigrationSystem."""
-        # Skip this test for now - AutoMigrationSystem has deeper architectural issues
-        # that are separate from the shared Docker infrastructure migration work
-        pass
+    # test_integration_with_auto_migration_system removed 2026-04-19 (#512).
+    # The test body was `pass`. Marked skip with reason
+    # "AutoMigrationSystem integration needs refactoring" — TODO-style
+    # deferral that accumulated no follow-up. Per test-skip-discipline,
+    # prefer delete over silent skip of empty tests.

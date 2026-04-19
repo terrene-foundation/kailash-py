@@ -8,13 +8,13 @@ from datetime import datetime
 import pytest
 import requests
 from fastapi.testclient import TestClient
-
 from kailash.middleware.communication.api_gateway import APIGateway
 from kailash.middleware.core.agent_ui import AgentUIMiddleware
 from kailash.middleware.gateway.checkpoint_manager import CheckpointManager
 from kailash.middleware.gateway.event_store import EventStore
 from kailash.middleware.gateway.storage_backends import RedisEventStorage, RedisStorage
 from kailash.nodes.transform import DataTransformer
+
 from tests.config_unified import POSTGRES_CONFIG, REDIS_CONFIG
 
 
@@ -262,201 +262,12 @@ class TestAPIGatewayDockerIntegration:
         assert checkpoint_stats["save_count"] >= 0
 
 
-@pytest.mark.integration
-@pytest.mark.skip(
-    reason="This test attempts to manage Docker containers dynamically - use existing Docker services instead"
-)
-class TestAPIGatewayDockerCompose:
-    """Test API Gateway with Docker Compose services."""
-
-    @pytest.fixture(scope="class")
-    def docker_compose_services(self):
-        """Start Docker Compose services for comprehensive testing."""
-        import tempfile
-        from pathlib import Path
-
-        # Create temporary compose file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-            compose_content = """
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: gateway_test
-      POSTGRES_USER: gateway_user
-      POSTGRES_PASSWORD: gateway_pass
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gateway_user"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  redis-cache:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-"""
-            f.write(compose_content)
-            compose_file = Path(f.name)
-
-        try:
-            with DockerCompose(
-                str(compose_file.parent), compose_file_name=compose_file.name
-            ) as compose:
-                # Wait for services to be healthy using proper health checks
-                import socket
-                from datetime import datetime
-
-                start_time = datetime.now()
-                services_ready = False
-
-                while (datetime.now() - start_time).total_seconds() < 30.0:
-                    # Check PostgreSQL
-                    postgres_ready = False
-                    try:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(1)
-                        result = sock.connect_ex(("localhost", 5432))
-                        sock.close()
-                        postgres_ready = result == 0
-                    except:
-                        pass
-
-                    # Check Redis
-                    redis_ready = False
-                    try:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(1)
-                        result = sock.connect_ex(("localhost", 6379))
-                        sock.close()
-                        redis_ready = result == 0
-                    except:
-                        pass
-
-                    # Check Redis cache
-                    redis_cache_ready = False
-                    try:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(1)
-                        result = sock.connect_ex(("localhost", 6380))
-                        sock.close()
-                        redis_cache_ready = result == 0
-                    except:
-                        pass
-
-                    if postgres_ready and redis_ready and redis_cache_ready:
-                        services_ready = True
-                        break
-
-                    time.sleep(0.5)
-
-                if not services_ready:
-                    pytest.fail("Docker services failed to start within 30 seconds")
-
-                # Give services a moment to fully initialize after ports are open
-                time.sleep(1)
-
-                yield compose
-        finally:
-            compose_file.unlink()
-
-    def test_full_stack_integration(self, docker_compose_services):
-        """Test full stack integration with Docker Compose."""
-
-        # Create services with Docker Compose backends using unified config
-        checkpoint_storage = RedisStorage(
-            host=REDIS_CONFIG["host"],
-            port=REDIS_CONFIG["port"],
-            db=0,
-        )
-
-        event_storage = RedisEventStorage(
-            host=REDIS_CONFIG["host"],
-            port=REDIS_CONFIG["port"],
-            db=1,
-        )
-
-        checkpoint_manager = CheckpointManager(cloud_storage=checkpoint_storage)
-        event_store = EventStore(storage_backend=event_storage)
-
-        database_url = (
-            f"postgresql://{POSTGRES_CONFIG['user']}:{POSTGRES_CONFIG['password']}"
-            f"@{POSTGRES_CONFIG['host']}:{POSTGRES_CONFIG['port']}/{POSTGRES_CONFIG['database']}"
-        )
-        agent_ui = AgentUIMiddleware(
-            database_url=database_url,
-            enable_sessions=True,
-            enable_analytics=True,
-        )
-
-        gateway = APIGateway(
-            enable_auth=False,
-            enable_docs=True,
-            checkpoint_manager=checkpoint_manager,
-            event_store=event_store,
-            agent_ui=agent_ui,
-        )
-
-        client = TestClient(gateway.app)
-
-        try:
-            # Test health check
-            response = client.get("/health")
-            assert response.status_code == 200
-
-            # Test session operations
-            session_response = client.post(
-                "/api/sessions", json={"user_id": "compose_test"}
-            )
-            assert session_response.status_code == 200
-
-            session_id = session_response.json()["session_id"]
-
-            # Test session retrieval
-            get_response = client.get(f"/api/sessions/{session_id}")
-            assert get_response.status_code == 200
-
-            # Test data transformation
-            transformer = gateway.data_transformer
-            result = transformer.execute(
-                data={"session_id": session_id, "compose_test": True},
-                transformations=["{'verified': True, **data}"],
-            )
-
-            assert result["result"]["compose_test"] is True
-            assert result["result"]["verified"] is True
-
-            # Wait for async processing to complete
-            from datetime import datetime
-
-            start_time = datetime.now()
-            while (datetime.now() - start_time).total_seconds() < 2.0:
-                if gateway.event_store.event_count > 0:
-                    break
-                time.sleep(0.1)
-
-            # Verify services are functioning
-            assert gateway.event_store.event_count >= 0
-            assert gateway.checkpoint_manager.get_stats()["save_count"] >= 0
-
-        finally:
-            # Cleanup
-            asyncio.run(cleanup_services(checkpoint_manager, event_store, agent_ui))
+# Removed TestAPIGatewayDockerCompose — class-level
+# `@pytest.mark.skip` with reason "This test attempts to manage Docker
+# containers dynamically - use existing Docker services instead". The
+# test shell-outs to `DockerCompose(...)` and writes a temp
+# docker-compose.yml, which duplicates the shared tests/utils/test-env
+# infrastructure. The replacement path (use existing Docker services)
+# is the pattern in the adjacent `TestAPIGatewayDockerIntegration`
+# class. Keeping the skipped class encouraged copy-paste of the
+# dynamic-Docker pattern; deleting it leaves only the supported one.

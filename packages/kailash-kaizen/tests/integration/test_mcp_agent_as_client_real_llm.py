@@ -122,101 +122,12 @@ class TestMCPClientAgentRealOpenAI:
         # Log results for inspection
         logger.info(f"OpenAI Task Analysis: {json.dumps(analysis, indent=2)}")
 
-    @pytest.mark.skip(
-        reason="Deprecated: Uses populate_agent_tools() - needs refactor for real JSON-RPC protocol"
-    )
-    def test_openai_tool_schema_parsing(self, openai_agent, mcp_server_info):
-        """Test that real OpenAI LLM can parse MCP tool schemas from real server."""
-        # TODO: Refactor to use BaseAgent.setup_mcp_client() and real JSON-RPC discovery
-        # Deprecated manual tool population - no longer supported
-        # mcp_server_info["populate_agent_tools"](openai_agent)
+    # Removed test_openai_tool_schema_parsing — see rationale for the
+    # ollama variant below: all three tests in this family referenced the
+    # removed `populate_agent_tools()` helper. orphan-detection.md Rule 4.
 
-        # Verify we have tools from the real MCP server
-        assert len(openai_agent.available_tools) > 0, (
-            "Should have tools from real MCP server"
-        )
-
-        # Get first available tool
-        tool_id = list(openai_agent.available_tools.keys())[0]
-        tool_info = openai_agent.available_tools[tool_id]
-
-        logger.info(f"Testing with real MCP tool: {tool_id}")
-        logger.info(f"Tool schema: {tool_info}")
-
-        # Ask LLM to use a real tool - question_answering
-        user_request = "What is the capital of France?"
-
-        # Use the tool invocation logic (which calls the LLM with real tool schema)
-        result = openai_agent.invoke_tool(
-            tool_id=tool_id,
-            user_request=user_request,
-            context="Schema parsing test with real MCP server",
-        )
-
-        # Verify result structure
-        assert isinstance(result, dict)
-        assert "success" in result
-
-        # LLM should have successfully parsed the schema and invoked the tool
-        logger.info(f"OpenAI tool invocation result: {result}")
-
-        # Verify the LLM could interact with the real MCP tool
-        assert "success" in result or "error" in result
-
-    @pytest.mark.skip(
-        reason="Deprecated: Uses populate_agent_tools() - needs refactor for real JSON-RPC protocol"
-    )
-    def test_openai_argument_generation_from_natural_language(
-        self, openai_agent, mcp_server_info
-    ):
-        """Test that real OpenAI LLM can generate tool arguments from natural language."""
-        # TODO: Refactor to use BaseAgent.setup_mcp_client() and real JSON-RPC discovery
-        # Deprecated manual tool population - no longer supported
-        # mcp_server_info["populate_agent_tools"](openai_agent)
-
-        # Verify we have tools from the real MCP server
-        assert len(openai_agent.available_tools) > 0, (
-            "Should have tools from real MCP server"
-        )
-
-        # Create a natural language request that maps to text_analysis tool
-        user_request = "Analyze this text: AI is transforming software development"
-
-        logger.info(
-            f"Available tools from MCP server: {list(openai_agent.available_tools.keys())}"
-        )
-
-        # Try to invoke the text_analysis tool with natural language
-        tool_id = "test-server:text_analysis"  # Our server exposes this tool
-
-        if tool_id in openai_agent.available_tools:
-            result = openai_agent.invoke_tool(
-                tool_id=tool_id,
-                user_request=user_request,
-                context="Natural language to arguments test",
-            )
-
-            # Verify LLM generated proper arguments from natural language
-            assert isinstance(result, dict)
-            logger.info(f"OpenAI argument generation result: {result}")
-
-            # Should have successfully converted natural language to tool arguments
-            assert "success" in result or "error" in result
-        else:
-            # Fallback: analyze task to see if LLM can identify tools
-            analysis = openai_agent.analyze_task(
-                task=user_request, context="Argument generation test"
-            )
-
-            # Verify LLM identified tools
-            assert "required_tools" in analysis
-            logger.info(
-                f"OpenAI identified tools: {analysis.get('required_tools', [])}"
-            )
-
-            # Verify execution plan shows reasoning
-            assert "execution_plan" in analysis
-            assert len(analysis["execution_plan"]) > 10  # Should be descriptive
+    # Removed test_openai_argument_generation_from_natural_language —
+    # see rationale above; referenced removed `populate_agent_tools()`.
 
     def test_openai_end_to_end_mcp_workflow(self, openai_agent):
         """Test complete MCP workflow with real OpenAI LLM."""
@@ -325,34 +236,13 @@ class TestMCPClientAgentRealOllama:
 
         logger.info(f"Ollama Task Analysis: {json.dumps(analysis, indent=2)}")
 
-    @pytest.mark.skip(
-        reason="Deprecated: Uses populate_agent_tools() - needs refactor for real JSON-RPC protocol"
-    )
-    def test_ollama_tool_invocation(self, ollama_agent, mcp_server_info):
-        """Test that Ollama can invoke real MCP tools from server."""
-        # TODO: Refactor to use BaseAgent.setup_mcp_client() and real JSON-RPC discovery
-        # Deprecated manual tool population - no longer supported
-        # mcp_server_info["populate_agent_tools"](ollama_agent)
-
-        # Verify we have tools from the real MCP server
-        assert len(ollama_agent.available_tools) > 0, (
-            "Should have tools from real MCP server"
-        )
-
-        tool_id = list(ollama_agent.available_tools.keys())[0]
-
-        logger.info(f"Ollama invoking real MCP tool: {tool_id}")
-        logger.info(f"Available tools: {list(ollama_agent.available_tools.keys())}")
-
-        result = ollama_agent.invoke_tool(
-            tool_id=tool_id,
-            user_request="What is machine learning?",
-            context="Ollama invocation test with real MCP server",
-        )
-
-        assert isinstance(result, dict)
-        assert "success" in result
-        logger.info(f"Ollama tool invocation result: {result}")
+    # Removed test_ollama_tool_invocation — was `@pytest.mark.skip`ped as
+    # "Deprecated: Uses populate_agent_tools() - needs refactor for real
+    # JSON-RPC protocol". The commented-out call to
+    # `mcp_server_info["populate_agent_tools"]` confirms the test exercises
+    # a removed code path. orphan-detection.md Rule 4: tests referencing
+    # removed APIs MUST be deleted, not kept as deprecated skips. Rewrite
+    # against `BaseAgent.setup_mcp_client()` + real JSON-RPC when needed.
 
 
 # ===================================================================

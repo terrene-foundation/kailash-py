@@ -214,49 +214,14 @@ class TestDataFlowRealDatabase:
         # Should be reasonably fast
         assert duration < 10.0  # Less than 10 seconds for 1000 records
 
-    @pytest.mark.skip(
-        reason="Transaction management needs complex DataFlow context integration"
-    )
-    def test_transaction_management(self, real_dataflow, runtime):
-        """Test transaction management with real database."""
-        workflow = WorkflowBuilder()
-
-        # Start transaction
-        workflow.add_node(
-            "TransactionScopeNode", "start_tx", {"isolation_level": "READ_COMMITTED"}
-        )
-
-        # Create user
-        workflow.add_node(
-            "TestUserCreateNode",
-            "create_user",
-            {"name": "Transaction Test", "email": "tx@example.com", "age": 25},
-        )
-
-        # Create order for user - user_id will come from connection
-        workflow.add_node(
-            "TestOrderCreateNode",
-            "create_order",
-            {
-                "total": 100.00,
-                "items_count": 2,  # Updated to use simplified field
-            },
-        )
-
-        # Commit transaction
-        workflow.add_node("TransactionCommitNode", "commit_tx", {})
-
-        # Connect workflow (from_node, from_output, to_node, to_input)
-        workflow.add_connection("start_tx", "result", "create_user", "input")
-        workflow.add_connection("create_user", "id", "create_order", "user_id")
-        workflow.add_connection("create_order", "result", "commit_tx", "input")
-
-        # Execute
-        results, run_id = runtime.execute(workflow.build())
-
-        # Verify transaction completed - nodes return actual data
-        assert results["create_user"] is not None
-        assert results["create_order"] is not None
+    # test_transaction_management removed 2026-04-19 (#512).
+    # The test was marked `@pytest.mark.skip` with reason
+    # "Transaction management needs complex DataFlow context integration" —
+    # a TODO-style deferral that accumulated no follow-up. Per
+    # test-skip-discipline, a broken-or-deferred test is preferably deleted
+    # rather than left as noise. If transaction-scope workflow coverage is
+    # needed, it belongs in a dedicated workflow-transaction integration
+    # suite, not as an inline skip here.
 
     def test_query_performance(self, real_dataflow, runtime):
         """Test query performance with real database."""
