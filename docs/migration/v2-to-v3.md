@@ -7,19 +7,19 @@ parity with `kailash-rs`, and full PACT governance conformance.
 
 ## Overview of Changes
 
-| Area             | What Changed                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| **MCP**          | Extracted as standalone `kailash-mcp` package; old `kailash.mcp_server` emits deprecation warnings   |
-| **Providers**    | 5,001-line monolith split into per-provider modules under `kaizen.providers`                         |
-| **Trust / PACT** | N4/N5/N6 conformance types added; `kailash-trust-shim` removed; audit/observation/suspension modules |
-| **Envelopes**    | Canonical `ConstraintEnvelope` unified at `kailash.trust.envelope`                                   |
-| **Kaizen**       | `BaseAgent` slimmed (3,698 to 891 LOC); composition wrappers replace extension points                |
-| **Audit**        | Single canonical `AuditStore` with Merkle chain at `kailash.trust.audit_store`                       |
-| **Auth**         | Nexus auth extracted to `kailash.trust.auth.*`                                                       |
-| **ML**           | `DriftMonitor.set_reference()` renamed to `set_reference_data()` (shim removed)                      |
-| **Runtime**      | New `EventLoopWatchdog` and `ProgressUpdate` / `ProgressRegistry`                                    |
-| **Security**     | Credential decode consolidated to `kailash.utils.url_credentials`                                    |
-| **DataFlow**     | Modular architecture; progressive configuration system                                               |
+| Area             | What Changed                                                                                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MCP**          | Extracted as standalone `kailash-mcp` package; old `kailash.mcp_server` emits deprecation warnings                                                                                        |
+| **Providers**    | 5,001-line monolith split into per-provider modules under `kaizen.providers`                                                                                                              |
+| **Trust / PACT** | N4/N5/N6 conformance types added; both `kailash-trust-shim` (v3.0) and `kailash-trust` (2026-04-20) packages removed — use `kailash.trust` directly; audit/observation/suspension modules |
+| **Envelopes**    | Canonical `ConstraintEnvelope` unified at `kailash.trust.envelope`                                                                                                                        |
+| **Kaizen**       | `BaseAgent` slimmed (3,698 to 891 LOC); composition wrappers replace extension points                                                                                                     |
+| **Audit**        | Single canonical `AuditStore` with Merkle chain at `kailash.trust.audit_store`                                                                                                            |
+| **Auth**         | Nexus auth extracted to `kailash.trust.auth.*`                                                                                                                                            |
+| **ML**           | `DriftMonitor.set_reference()` renamed to `set_reference_data()` (shim removed)                                                                                                           |
+| **Runtime**      | New `EventLoopWatchdog` and `ProgressUpdate` / `ProgressRegistry`                                                                                                                         |
+| **Security**     | Credential decode consolidated to `kailash.utils.url_credentials`                                                                                                                         |
+| **DataFlow**     | Modular architecture; progressive configuration system                                                                                                                                    |
 
 ## Backward Compatibility
 
@@ -135,20 +135,22 @@ from kailash import WorkflowGraph
 from kailash.workflow.graph import Workflow
 ```
 
-### kailash-trust-shim (removed entirely)
+### kailash-trust-shim and kailash-trust (both removed)
 
-If any code imports from `kailash_trust_shim`, replace with the canonical
-`kailash.trust` path. The shim package no longer exists.
+Two packages have been removed: the legacy `kailash_trust_shim` (removed in v3.0) and the later re-export package `kailash_trust` (removed 2026-04-20 as a zero-consumer orphan). Both are replaced by the canonical `kailash.trust` path.
 
 ```bash
-# Find stale shim imports
-grep -rn 'from kailash_trust_shim' .
-grep -rn 'import kailash_trust_shim' .
+# Find stale imports from either package
+grep -rn 'from kailash_trust_shim\|from kailash_trust\b' .
+grep -rn 'import kailash_trust_shim\|import kailash_trust\b' .
 
 # Replace with canonical paths
 find . -name "*.py" -exec sed -i.bak \
   -e 's/from kailash_trust_shim/from kailash.trust/g' \
   -e 's/import kailash_trust_shim/import kailash.trust/g' \
+  -e 's/from kailash_trust /from kailash.trust /g' \
+  -e 's/from kailash_trust import/from kailash.trust import/g' \
+  -e 's/import kailash_trust$/import kailash.trust as kailash_trust/g' \
   {} +
 ```
 
@@ -310,6 +312,7 @@ db = DataFlow("postgresql://...", config=production_config(pool_size=20))
 | What                                                                   | Disposition                                                    |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `kailash-trust-shim` package                                           | Removed. Use `kailash.trust` directly.                         |
+| `kailash-trust` package                                                | Removed 2026-04-20. Use `kailash.trust` directly.              |
 | `DriftMonitor.set_reference()`                                         | Removed. Use `set_reference_data()`.                           |
 | `WorkflowGraph` class                                                  | Deprecated alias for `Workflow`. Will be removed in v4.0.      |
 | `BaseAgent` extension points (7 methods)                               | Deprecated. Use composition wrappers. Will be removed in v4.0. |

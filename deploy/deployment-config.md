@@ -26,7 +26,6 @@
 | kailash-align    | `align-v*`         | 0.3.2           |
 | kailash-mcp      | `mcp-v*`           | 0.2.5           |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.3           |
-| kailash-trust    | `trust-v*`         | 0.1.1           |
 
 ## Release Runbook
 
