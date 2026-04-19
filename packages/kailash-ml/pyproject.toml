@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.12.1"
+version = "0.13.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -175,6 +175,19 @@ filterwarnings = [
     # tests. These are by design — the decorator IS the tracking mechanism
     # per zero-tolerance.md Rule 2 iterative-TODOs carve-out.
     "ignore:.*is experimental \\(P2\\)\\..*:UserWarning",
+    # torch 2.11 made the dynamo-based ONNX exporter the default; the
+    # legacy TorchScript-based path is still available via dynamo=False
+    # but emits a DeprecationWarning. OnnxBridge prefers the dynamo path
+    # when the optional ``onnxscript`` package is installed; when it's
+    # absent (as in the base [dev] install), the legacy exporter runs
+    # and this warning fires. Per zero-tolerance.md Rule 1 exceptions:
+    # upstream third-party deprecation with a tracked upstream path
+    # (onnxscript as an install) — filter is scoped to the exact message.
+    "ignore:You are using the legacy TorchScript-based ONNX export.*:DeprecationWarning",
+    # Transitive torch deprecation inside the TorchScript exporter itself
+    # (setup_onnx_logging). Same disposition as the legacy-exporter
+    # deprecation above; resolves together when onnxscript ships as base.
+    "ignore:The feature will be removed. Please remove usage of this function:DeprecationWarning",
 ]
 
 [tool.ruff]
