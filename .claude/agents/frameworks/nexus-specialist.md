@@ -107,6 +107,25 @@ class EventStream(MessageHandler):
                 await conn.send_json(event)
 ```
 
+## Typed Service Client (S2S)
+
+For service-to-service calls where the caller wants structured return types instead of raw JSON, use `kailash.nexus.TypedServiceClient` — a thin wrapper over `ServiceClient` with a pluggable `DecoderRegistry`. Register a decoder per response schema; the wrapper dispatches on the endpoint's declared return type.
+
+```python
+from kailash.nexus import TypedServiceClient, DecoderRegistry
+
+registry = DecoderRegistry()
+registry.register(UserResponse, lambda j: UserResponse(**j))
+registry.register(OrderResponse, lambda j: OrderResponse.model_validate(j))
+
+client = TypedServiceClient(base_url="https://users.internal", decoders=registry)
+user: UserResponse = await client.get("/users/42", response_type=UserResponse)
+# Raw variant still available for untyped endpoints:
+raw = await client.get_raw("/debug/dump")
+```
+
+**Why typed + raw pair**: the `_raw` variants preserve low-level access for migration/debug; per `rules/testing.md` § Delegating Primitives, every variant requires a direct test. See PR #507 for the introduction commit.
+
 ## Transport Layer
 
 Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.base`):

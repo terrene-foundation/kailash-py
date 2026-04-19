@@ -1,91 +1,144 @@
 source_repo: kailash-py
-codify_date: "2026-04-16"
-codify_session: "Pre-release sweep — DataFlow __del__ deadlock fix, orphan test sweep (9 files), Kaizen trust test drift realignment, 3 institutional learnings codified"
+codify_date: "2026-04-19"
+codify_session: |
+  Session 2026-04-19 shipped 7 PRs (#502-#508), ~150 new tests, and
+  validated the GPU-first kailash-ml architecture at
+  workspaces/kailash-ml-gpu-stack/. Session surfaced 5 recurring
+  institutional failure patterns codified below:
+    1. Worktree isolation drift (ml / dataflow / kaizen specialists
+       each drifted back to main checkout at least once).
+    2. Agent budget exhaustion mid-message ("Now let me write X…"
+       with no actual tool call) — 2 occurrences.
+    3. Scanner-surface symmetry variant: CodeQL `__all__` +
+       lazy `__getattr__` (PR #506).
+    4. GPU-first kailash-ml architecture validated at
+       `workspaces/kailash-ml-gpu-stack/` — preserved here so it
+       survives workspace pruning.
+    5. Typed S2S client pattern (TypedServiceClient + DecoderRegistry)
+       introduced in PR #507 — now documented in nexus-specialist.
+  Prior proposal (2026-04-16 + 2026-04-19 append) archived to
+  archive/2026-04-19-kailash-py.yaml per rules/artifact-flow.md
+  "Archive Before Fresh" (status was distributed).
 sdk_version: 2.8.8
 coc_version: 1.0.3
 status: pending_review
+
 changes:
-  - file: skills/26-eatp-reference/eatp-trust-posture-canonical.md
+  - file: rules/worktree-isolation.md
     action: created
     suggested_tier: global
     reason: |
-      Authoritative reference for the five canonical TrustPosture names
-      (AUTONOMOUS/DELEGATING/SUPERVISED/TOOL/PSEUDO) vs the four
-      backward-compat aliases (DELEGATED/CONTINUOUS_INSIGHT/
-      SHARED_PLANNING/PSEUDO_AGENT). Contents:
-        - autonomy_level table for each canonical posture
-        - legacy-name → canonical equivalent mapping (FULL_AUTONOMY →
-          AUTONOMOUS, HUMAN_DECIDES → TOOL, BLOCKED → PSEUDO, ASSISTED
-          → SUPERVISED) — HUMAN_DECIDES → TOOL is the mapping that keeps
-          getting wrong (mapper's approval_required branch returns TOOL,
-          autonomy_level 2, not PSEUDO)
-        - mapper branch → posture table (from TrustPostureMapper.
-          map_verification_result source)
-        - serialization contract (.value is lowercase string)
-      Evidence: two consecutive session wrapups inverted canonical vs
-      alias; third session propagated the inversion into a kaizen agent
-      brief before source verification caught it. Pure EATP content —
-      should load globally for all Python targets.
-    diff_lines: "+86"
-  - file: skills/26-eatp-reference/SKILL.md
+      New rule file codifying the worktree drift and agent-budget-
+      exhaustion patterns. Three MUST rules:
+        - Rule 1: Orchestrator prompts MUST pin the worktree path
+          and include a "STEP 0 — verify isolation" instruction.
+          BLOCKED rationalizations enumerated verbatim ("the
+          isolation flag handles cwd for me", etc).
+        - Rule 2: Specialist agent files MUST include a self-check
+          (git rev-parse --show-toplevel at start) so the pinning
+          contract survives prompt compression.
+        - Rule 3: Parent MUST `ls`/`Read` to verify claimed files
+          exist after agent exit. Addresses budget-exhaustion mid-
+          message ("Now let me write X..." with no tool call).
+      Path-scoped to .claude/agents/**, .claude/commands/**,
+      **/agents/**. Cross-references rules/agents.md worktree
+      directive, zero-tolerance.md Rule 2, testing.md verified-
+      numerical-claims discipline.
+      Evidence: ml-specialist, dataflow-specialist, kaizen-specialist
+      each drifted back to the main tree during PRs #502-#508;
+      kaizen round 6 and ml-specialist round 7 reported completions
+      with no actual file writes.
+    diff_lines: "+127"
+
+  - file: rules/agents.md
     action: modified
     suggested_tier: global
     reason: |
-      Linked eatp-trust-posture-canonical.md with "Load first when
-      touching trust posture tests." Progressive-disclosure entry so
-      SKILL.md surfaces the trust posture reference ahead of quickstart
-      / api-reference when trust tests are the subject.
-    diff_lines: "+1"
-  - file: rules/patterns.md
+      Two additions:
+        - Cross-reference to new rules/worktree-isolation.md beneath
+          the existing "MUST: Worktree Isolation for Compiling
+          Agents" section ("isolation flag is necessary but not
+          sufficient without verification layer").
+        - New "MUST: Verify Agent Deliverables Exist After Exit"
+          section — parent orchestrator MUST ls/Read claimed files
+          before trusting completion. BLOCKED rationalizations
+          include "Now let me write the file..." (with no tool
+          call). Evidence: 2 occurrences this session.
+      Kept the file ≤200 lines (141 total) per rule-authoring
+      meta-rule.
+    diff_lines: "+25"
+
+  - file: rules/zero-tolerance.md
     action: modified
     suggested_tier: global
     reason: |
-      Strengthened § Async Resource Cleanup to address the DataFlow
-      __del__ deadlock pattern fixed in commit 4f5dbe7f. Additions:
-        - MUST NOT call close()/cleanup()/any-logger-touching method
-          from __del__
-        - DO/DO NOT code examples
-        - BLOCKED rationalizations ("we just need to close the
-          connection", "async_safe_run handles the event loop", etc.)
-        - Origin: commit 4f5dbe7f with the deadlock chain — finalizer
-          holds logging root lock → close() → async_safe_run →
-          asyncio.new_event_loop → selector init → logger.debug →
-          blocks on same lock.
-      The deadlock has reappeared in multiple prior sessions ("DataFlow
-      unit suite hangs"). The strengthened rule closes the rationalization
-      gap that allowed the pattern to be reintroduced.
-    diff_lines: "+35"
-  - file: rules/orphan-detection.md
+      Extended Rule 1a (Scanner-Surface Symmetry) with a second
+      concrete DO/DO NOT example covering the CodeQL
+      `py/modification-of-default-value` / `__all__` / lazy
+      `__getattr__` variant surfaced by PR #506:
+        - DO: eager-import new __all__ entries so CodeQL resolves
+          them at module scope.
+        - DO NOT: add to __all__ and resolve only via __getattr__
+          with the rationalization "the existing 8 entries do
+          this too".
+      The fix is to close the flag for this PR's additions;
+      grandfathered entries remain a separate workstream but are
+      NOT justification for adding more of the same.
+      Origin line updated to credit the 2026-04-19 extension.
+    diff_lines: "+23"
+
+  - file: agents/frameworks/nexus-specialist.md
     action: modified
     suggested_tier: global
     reason: |
-      Added two MUST rules and extended the Detection Protocol:
-        - Rule 4: API removal MUST sweep tests in the same PR. One
-          orphan test import takes down collection of every test after
-          it. BLOCKED rationalizations include "tests cleaned up in
-          follow-up PR", "integration tier is separate scope."
-        - Rule 5: pytest --collect-only returning 0 is a merge gate.
-          Collection failures are invisible under unit-only CI but
-          become merge-blocking when anyone runs the full suite.
-        - Detection Protocol step 4: run --collect-only across tests/
-          and packages/*/tests/ to catch orphans mechanically.
-      Origin: 9 orphan test files deleted across commits d3e7e0ef +
-      5edc941f, orphaned since the DataFlow 2.0 refactor (53dab715
-      "delete 14,500 LOC" in 2026-03).
-    diff_lines: "+45"
+      Added "Typed Service Client (S2S)" section documenting
+      kailash.nexus.TypedServiceClient — thin wrapper over
+      ServiceClient with pluggable DecoderRegistry (introduced in
+      PR #507). Code example shows register() decoder, typed get()
+      with response_type, and get_raw() for untyped migration
+      paths. Cross-reference to rules/testing.md § Delegating
+      Primitives (typed/raw variants need direct test coverage
+      per BP-046 pattern).
+      Kept the file ≤400 lines (220 total) per cc-artifacts.md
+      MUST Rule 1 "no knowledge dumps".
+    diff_lines: "+17"
+
+  - file: workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md
+    action: preserved_reference
+    suggested_tier: skip
+    reason: |
+      Reference entry — NOT a sync candidate. The GPU-first
+      kailash-ml architecture validated this session (single
+      torch substrate, detect_backend() single routing point,
+      DeviceReport transparency contract, OOM fallback helper,
+      8 action items for ~3 implementation sessions) lives at
+      workspaces/kailash-ml-gpu-stack/ and would normally be
+      lost at workspace pruning.
+      This proposal entry exists to preserve a pointer to the
+      architecture in the institutional audit trail. The actual
+      content stays in the workspace; next implementation session
+      should open a follow-up GitHub issue referencing this
+      workspace path.
+      Key artifacts at workspaces/kailash-ml-gpu-stack/:
+        - briefs/01-user-constraints.md (user-side requirements)
+        - 01-analysis/ (original research)
+        - 04-validate/01-redteam-round1.md (1 CRITICAL + 5 HIGH)
+        - 04-validate/02-revised-stack.md (converged design)
+        - 04-validate/00-convergence.md (gap summary)
+        - journal/0001..0003 (per-finding RISK / GAP entries)
+      Convergence status: design-complete, implementation-pending
+      (cuML eviction + DeviceReport + sklearn Array API wrap +
+      OOM fallback + RL routing audit + CPU-native UMAP/HDBSCAN
+      + top-level helpers + regression tests).
+    diff_lines: "0 (reference only)"
 
 audit_summary:
-  commits_this_session: 20
-  tests_green:
-    root_sdk_unit: "3309 passed"
-    dataflow_unit: "3732 passed"
-    nexus_unit: "1551 passed"
-    ml_unit: "803 passed"
-    pact_unit: "1346 passed"
-    kaizen_unit: "8744 passed, 0 failed"
-    pact_integration: "18 passed"
-    ml_integration: "59 passed"
-    collect_only_all_packages: "37201 tests, 0 errors"
-  known_yellow:
-    dataflow_integration: "806 passed, 375 failed (pre-existing API drift from DataFlow 2.0 refactor 53dab715 — separate workstream)"
-    nexus_integration: "256 passed, 20 failed (JWT validator + MCP test setup drift)"
+  prs_this_session: 7
+  pr_numbers: "#502, #503, #504, #505, #506, #507, #508"
+  new_tests: "~150"
+  rules_added: 1
+  rules_amended: 2
+  agents_amended: 1
+  workspace_architecture_captured: "kailash-ml-gpu-stack (design-complete)"
+  failure_patterns_codified: 3
+  pattern_references_preserved: 2

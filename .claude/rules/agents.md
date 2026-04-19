@@ -89,6 +89,31 @@ Agent(prompt: "implement feature Y...")  # Blocks waiting for X's build lock
 
 **Why:** Cargo uses an exclusive filesystem lock on `target/`. Two cargo processes in the same directory serialize completely, turning parallel agents into sequential execution. Worktrees give each agent its own `target/` directory.
 
+**See `rules/worktree-isolation.md`** for the orchestrator pinning contract, the specialist self-check, and the post-agent file-existence verification. The `isolation: "worktree"` flag is necessary but not sufficient — without the verification layer, agents drift back to the main checkout silently.
+
+## MUST: Verify Agent Deliverables Exist After Exit
+
+When an agent reports completion of a file-writing task, the parent orchestrator MUST `ls` or `Read` the claimed file before trusting the completion claim. Agent "done" messages are NOT evidence of file creation — budget exhaustion mid-message truncates the final write, and the agent emits "Now let me write X..." with no tool call behind it.
+
+```python
+# DO — verify
+result = Agent(prompt="Write src/feature.py with ...")
+# parent's next step:
+Read("/abs/path/src/feature.py")  # raises if missing → retry
+
+# DO NOT — trust the completion message
+result = Agent(prompt="Write src/feature.py with ...")
+# parent moves on; src/feature.py never existed
+```
+
+**BLOCKED rationalizations:**
+
+- "The agent said 'done', that's good enough"
+- "Verifying every file slows the orchestrator"
+- "Now let me write the file…" (with no subsequent tool call)
+
+**Why:** Session 2026-04-19 logged 2 occurrences (kaizen round 6, ml-specialist round 7) where an agent hit its budget mid-message and reported success with zero files on disk. The `ls` check is O(1) and converts silent no-op into loud retry. See `rules/worktree-isolation.md` MUST Rule 3 for the full protocol.
+
 ## MUST NOT
 
 - Framework work without specialist
