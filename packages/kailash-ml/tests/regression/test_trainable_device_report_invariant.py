@@ -73,6 +73,44 @@ def test_every_return_trainingresult_has_device_kwarg() -> None:
 
 
 @pytest.mark.regression
+def test_all_seven_phase_one_trainables_in_kailash_ml_all() -> None:
+    """specs/ml-engines.md §3.0 — all 7 family adapters MUST be in kailash_ml.__all__.
+
+    Origin: round-3 redteam spec-to-code sweep (2026-04-19) found only 2 of
+    7 Trainables (UMAP + HDBSCAN — the new ones from Shard C) were in
+    kailash_ml.__all__. The 5 pre-existing (Sklearn/XGBoost/LightGBM/
+    Torch/Lightning) were accessible via kailash_ml.trainable but absent
+    from the top-level export — silent spec violation that had been
+    accumulating since 0.10.x. Fixed in 0.12.0.
+    """
+    import kailash_ml
+
+    expected = {
+        "SklearnTrainable",
+        "XGBoostTrainable",
+        "LightGBMTrainable",
+        "TorchTrainable",
+        "LightningTrainable",
+        "UMAPTrainable",
+        "HDBSCANTrainable",
+    }
+    actual = {n for n in kailash_ml.__all__ if n.endswith("Trainable")}
+    missing = expected - actual
+    assert not missing, (
+        f"Per specs/ml-engines.md §3.0, all 7 Phase 1 family adapters MUST "
+        f"be in kailash_ml.__all__. Missing: {sorted(missing)}. "
+        f"Add eager imports to packages/kailash-ml/src/kailash_ml/__init__.py "
+        f"AND list them in __all__ (per orphan-detection §6)."
+    )
+    # Each MUST be reachable as kailash_ml.<X>
+    for name in expected:
+        assert hasattr(kailash_ml, name), (
+            f"{name} is in kailash_ml.__all__ but not on the kailash_ml "
+            f"module — eager import missing in __init__.py"
+        )
+
+
+@pytest.mark.regression
 def test_every_trainable_class_imports_device_report() -> None:
     """trainable.py MUST import DeviceReport at module scope.
 

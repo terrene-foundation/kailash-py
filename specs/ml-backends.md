@@ -17,14 +17,14 @@ This file is the domain truth for compute backend detection, selection, precisio
 
 Six first-class backends. Every engine that places tensors, invokes a Trainer, or serves inference MUST support this matrix. Backends not listed here (IPU, HPU, DirectML, Vulkan) are OUT OF SCOPE for 2.0 and MUST raise `UnsupportedFamily`.
 
-| Backend  | Vendor / line                      | Lightning `accelerator` | torch device string       | Install (PyPI)                                                         | Detection probe                                         | fp32 | fp16 | bf16 | int8 |
-| -------- | ---------------------------------- | ----------------------- | ------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- | ---- | ---- | ---- | ---- |
-| **cpu**  | Any x86_64/ARM64 host              | `"cpu"`                 | `"cpu"`                   | Base `pip install kailash-ml`                                          | Always available                                        | yes  | no*  | no*  | yes  |
-| **cuda** | NVIDIA (A100, H100, L40S, V100, T4, RTX 30xx/40xx) | `"cuda"` (alias `"gpu"`) | `"cuda:{idx}"`           | `pip install kailash-ml[cuda]` (pulls `torch` CUDA wheel from PyPI)    | `torch.cuda.is_available()`                             | yes  | yes  | yes**| yes  |
-| **mps**  | Apple Silicon (M1/M2/M3/M4)        | `"mps"`                 | `"mps"`                   | Base install; `torch` universal2 wheel on Darwin ARM64                 | `torch.backends.mps.is_available()` AND `torch.backends.mps.is_built()` | yes  | yes  | no*** | no**** |
-| **rocm** | AMD Instinct (MI210, MI250, MI300) | `"cuda"` (HIP layer)    | `"cuda:{idx}"` (HIP→CUDA API source-compat) | `pip install kailash-ml[rocm]` (separate torch ROCm wheel index; MUST specify `--index-url https://download.pytorch.org/whl/rocm6.0`) | `torch.version.hip is not None` AND `torch.cuda.is_available()` | yes  | yes  | yes**| yes  |
-| **xpu**  | Intel Data Center GPU Max, Arc     | `"xpu"`                 | `"xpu:{idx}"`             | `pip install kailash-ml[xpu]` (pulls `intel-extension-for-pytorch`)    | `hasattr(torch, "xpu") and torch.xpu.is_available()`    | yes  | yes  | yes** | yes  |
-| **tpu**  | Google TPU v2/v3/v4/v5             | `"tpu"`                 | `xm.xla_device()`         | `pip install kailash-ml[tpu]` (pulls `torch_xla`; Linux only)          | Successful `import torch_xla.core.xla_model as xm` AND non-empty `xm.get_xla_supported_devices()` | yes  | no   | yes  | no   |
+| Backend  | Vendor / line                                      | Lightning `accelerator`  | torch device string                         | Install (PyPI)                                                                                                                        | Detection probe                                                                                   | fp32 | fp16 | bf16     | int8       |
+| -------- | -------------------------------------------------- | ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---- | ---- | -------- | ---------- |
+| **cpu**  | Any x86_64/ARM64 host                              | `"cpu"`                  | `"cpu"`                                     | Base `pip install kailash-ml`                                                                                                         | Always available                                                                                  | yes  | no\* | no\*     | yes        |
+| **cuda** | NVIDIA (A100, H100, L40S, V100, T4, RTX 30xx/40xx) | `"cuda"` (alias `"gpu"`) | `"cuda:{idx}"`                              | `pip install kailash-ml[cuda]` (pulls `torch` CUDA wheel from PyPI)                                                                   | `torch.cuda.is_available()`                                                                       | yes  | yes  | yes\*\*  | yes        |
+| **mps**  | Apple Silicon (M1/M2/M3/M4)                        | `"mps"`                  | `"mps"`                                     | Base install; `torch` universal2 wheel on Darwin ARM64                                                                                | `torch.backends.mps.is_available()` AND `torch.backends.mps.is_built()`                           | yes  | yes  | no\*\*\* | no\*\*\*\* |
+| **rocm** | AMD Instinct (MI210, MI250, MI300)                 | `"cuda"` (HIP layer)     | `"cuda:{idx}"` (HIP→CUDA API source-compat) | `pip install kailash-ml[rocm]` (separate torch ROCm wheel index; MUST specify `--index-url https://download.pytorch.org/whl/rocm6.0`) | `torch.version.hip is not None` AND `torch.cuda.is_available()`                                   | yes  | yes  | yes\*\*  | yes        |
+| **xpu**  | Intel Data Center GPU Max, Arc                     | `"xpu"`                  | `"xpu:{idx}"`                               | `pip install kailash-ml[xpu]` (pulls `intel-extension-for-pytorch`)                                                                   | `hasattr(torch, "xpu") and torch.xpu.is_available()`                                              | yes  | yes  | yes\*\*  | yes        |
+| **tpu**  | Google TPU v2/v3/v4/v5                             | `"tpu"`                  | `xm.xla_device()`                           | `pip install kailash-ml[tpu]` (pulls `torch_xla`; Linux only)                                                                         | Successful `import torch_xla.core.xla_model as xm` AND non-empty `xm.get_xla_supported_devices()` | yes  | no   | yes      | no         |
 
 Notes on the precision matrix:
 
@@ -163,19 +163,19 @@ The resolver MUST return one of Lightning's concrete precision strings — `"32-
 
 Resolution order for `requested == "auto"`:
 
-| Backend  | Device capability     | Returned precision | Rationale                                                      |
-| -------- | --------------------- | ------------------ | -------------------------------------------------------------- |
-| cuda     | CC ≥ 8.0 (A100/H100/L40S/RTX 30+) | `"bf16-mixed"`     | bf16 dynamic range matches fp32; no loss scaling required      |
-| cuda     | CC 7.0–7.5 (V100/T4)  | `"16-mixed"`       | fp16 supported; bf16 is not                                    |
-| cuda     | CC < 7.0 (P100/K80)   | `"32-true"`        | no mixed-precision hardware                                    |
-| mps      | any Apple Silicon     | `"16-mixed"`       | bf16 op coverage incomplete (see § 1 footnote ***)             |
-| rocm     | MI300-class           | `"bf16-mixed"`     | bf16 available on MI300 series                                 |
-| rocm     | MI250-class           | `"16-mixed"`       | bf16 partial on MI250; fp16 is the reliable path               |
-| rocm     | older (MI100)         | `"32-true"`        | no mixed-precision hardware                                    |
-| xpu      | PVC-class             | `"bf16-mixed"`     | Data Center GPU Max supports bf16                              |
-| xpu      | Arc / older           | `"16-mixed"`       | fp16 is the reliable path                                      |
-| tpu      | any                   | `"bf16-true"`      | TPU XLA compiles bf16 natively; mixed-precision not needed     |
-| cpu      | any                   | `"32-true"`        | fp16/bf16 on CPU is slower than fp32                            |
+| Backend | Device capability                 | Returned precision | Rationale                                                  |
+| ------- | --------------------------------- | ------------------ | ---------------------------------------------------------- |
+| cuda    | CC ≥ 8.0 (A100/H100/L40S/RTX 30+) | `"bf16-mixed"`     | bf16 dynamic range matches fp32; no loss scaling required  |
+| cuda    | CC 7.0–7.5 (V100/T4)              | `"16-mixed"`       | fp16 supported; bf16 is not                                |
+| cuda    | CC < 7.0 (P100/K80)               | `"32-true"`        | no mixed-precision hardware                                |
+| mps     | any Apple Silicon                 | `"16-mixed"`       | bf16 op coverage incomplete (see § 1 footnote \*\*\*)      |
+| rocm    | MI300-class                       | `"bf16-mixed"`     | bf16 available on MI300 series                             |
+| rocm    | MI250-class                       | `"16-mixed"`       | bf16 partial on MI250; fp16 is the reliable path           |
+| rocm    | older (MI100)                     | `"32-true"`        | no mixed-precision hardware                                |
+| xpu     | PVC-class                         | `"bf16-mixed"`     | Data Center GPU Max supports bf16                          |
+| xpu     | Arc / older                       | `"16-mixed"`       | fp16 is the reliable path                                  |
+| tpu     | any                               | `"bf16-true"`      | TPU XLA compiles bf16 natively; mixed-precision not needed |
+| cpu     | any                               | `"32-true"`        | fp16/bf16 on CPU is slower than fp32                       |
 
 OPEN QUESTION: the exact MI250 vs MI300 / Arc vs PVC cutoff — MUST be validated against AMD ROCm 6.0 and Intel XPU docs before 2.0 locks. Flag as TODO until hardware CI lane confirms.
 
@@ -276,10 +276,15 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 
 ### 5.1 sklearn
 
-- **Backend support**: CPU only.
-- **TrainingResult.backend**: always `"cpu"`.
-- **Wrapping**: MUST be wrapped as `LightningModule` for metric/callback unification, but the inner `.fit()` runs on CPU regardless of `info.backend`.
-- **If caller specifies `prefer_backend="cuda"`**: MUST log WARN `"sklearn.backend.ignored"` and proceed on CPU; MUST NOT raise. (Rationale: sklearn's CPU-only is not a user error; it is the family's nature.)
+- **Backend support**: Lightning Trainer always runs on CPU; the inner estimator MAY route through the sklearn Array API on a non-CPU device per Phase 1.
+- **TrainingResult.backend** (legacy field): always `"cpu"`.
+- **DeviceReport (`TrainingResult.device`)** populates per the Phase 1 transparency contract:
+  - Allowlisted estimator + non-CPU `info.backend` → engage `sklearn.config_context(array_api_dispatch=True)`, move X/y to a torch tensor on `info.device_string`, log INFO `sklearn.array_api.engaged`. `device.array_api=True`, `device.backend=info.backend`.
+  - Off-allowlist estimator + non-CPU `info.backend` → CPU numpy fallback. Log WARN `sklearn.array_api.offlist`, set `device.fallback_reason="array_api_offlist"`.
+  - Allowlisted estimator + scipy env-var gate (`SCIPY_ARRAY_API` not set before sklearn import) raises `RuntimeError` at `config_context` enter-time → adapter catches the gate error, logs WARN `sklearn.array_api.runtime_unavailable` (with `hint` field naming `SCIPY_ARRAY_API=1`), retries on CPU numpy. `device.fallback_reason="array_api_runtime_unavailable"`. Non-array-api `RuntimeError`s MUST re-raise unchanged.
+- **Phase 1 Array API allowlist** (frozenset of `type(estimator).__name__` matches): `Ridge`, `LogisticRegression`, `LinearRegression`, `LinearDiscriminantAnalysis`, `KMeans`, `PCA`, `StandardScaler`, `MinMaxScaler`. Expansion is a spec amendment, not a code edit.
+- **Wrapping**: MUST be wrapped as `LightningModule` for metric/callback unification (`SklearnLightningAdapter`); the inner `.fit()` runs inside the Array API context when engaged.
+- **If caller specifies `prefer_backend="cuda"` with off-allowlist estimator**: MUST log WARN `"sklearn.array_api.offlist"` and proceed on CPU; MUST NOT raise. (sklearn's CPU-only is not a user error; it is the family's nature for off-allowlist estimators.)
 
 ### 5.2 xgboost
 
@@ -288,6 +293,7 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
   - `info.backend == "cuda"` → pass `device="cuda"`
   - `info.backend == "cpu"` → pass `device="cpu"`
   - `info.backend in {"mps", "rocm", "xpu", "tpu"}` → MUST raise `UnsupportedFamily` naming the backend and the family. MUST NOT silently fall back to CPU.
+- **OOM single-retry fallback (Phase 1)**: A GPU OOM during `trainer.fit` (`_is_gpu_oom_error(exc)` matches `"out of memory"` / `"cuda out of memory"` / `OutOfMemoryError` / `CudaOutOfMemoryError`) MUST be intercepted exactly once. The adapter logs WARN `xgboost.gpu.oom_fallback` with structured fields `{family, requested_backend, fallback_backend, fallback_reason, error_class}`, calls `set_params(device="cpu")`, rebuilds the Lightning Trainer on a CPU TrainingContext, and retries. The returned `TrainingResult.device.backend="cpu"` and `device.fallback_reason="oom"`. Non-OOM exceptions re-raise unchanged. Re-raise also when `ctx.backend == "cpu"` (no fallback target).
 - **ROCm note**: xgboost does not ship a ROCm build as of 2.0.3; `device="cuda"` on a ROCm box raises at runtime. MUST detect this and raise `UnsupportedFamily` before the training call.
 
 ### 5.3 lightgbm
@@ -297,6 +303,7 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
   - `info.backend == "cuda"` → probe lightgbm build; if GPU support present, pass `device_type="gpu"` + `gpu_use_dp=False`. If not, raise `UnsupportedFamily` with the install hint: `pip install lightgbm --config-settings=cmake.define.USE_GPU=1`.
   - `info.backend == "cpu"` → pass `device_type="cpu"`.
   - `info.backend in {"mps", "rocm", "xpu", "tpu"}` → MUST raise `UnsupportedFamily`.
+- **OOM single-retry fallback (Phase 1)**: Same shape as §5.2. WARN log key is `lightgbm.gpu.oom_fallback`. CPU rebuild uses `set_params(device_type="cpu")` (lightgbm idiom, not xgboost's `device=`). `device.fallback_reason="oom"` on the post-fallback `TrainingResult.device`.
 
 ### 5.4 catboost
 
@@ -312,6 +319,21 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 
 - **Backend support**: follows torch's device support — cuda, mps, cpu. TPU/XLA path exists in `torchrl` ≥ 0.5 but is experimental. Default to `"cuda"` / `"mps"` / `"cpu"`; treat `"tpu"`/`"rocm"`/`"xpu"` as OPEN QUESTION and raise `UnsupportedFamily` at 2.0 until validated.
 - **RL Engine wrapping**: RL trainers MUST use Lightning's accelerator for environment-rollout → learner transfers. The inner SB3/torchrl policy MUST be constructed with `device=info.device_string`.
+
+### 5.7 umap-learn (Phase 1)
+
+- **Backend support**: CPU only via the `umap-learn` pip package (base dependency; no `[umap]` extra).
+- **Mapping**:
+  - `info.backend == "cpu"` → standard CPU path. `device.fallback_reason=None`.
+  - `info.backend in {"cuda", "mps", "rocm", "xpu", "tpu"}` → cuML eviction is unconditional (Phase 1 design per `workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md` § "CRITICAL-1 disposition"). The adapter logs INFO `umap.cuml_eviction` (NOT WARN — this is the documented Phase 1 design, not a degraded path), runs on CPU, sets `device.fallback_reason="cuml_eviction"`. MUST NOT raise.
+- **No `[rapids]` extra**: Removed in 0.12.0 per CRITICAL-1 disposition. Users who require cuML on NVIDIA install it themselves and swap it in via `kailash_ml.register_trainable("umap", MyCustomCuMLUMAP)`.
+- **Phase 2 (planned)**: torch-native UMAP across MPS/ROCm/XPU. Spec amendment + new fallback codes (e.g., `oom`) will land with the Phase 2 implementation.
+
+### 5.8 sklearn.cluster.HDBSCAN (Phase 1)
+
+- **Backend support**: CPU only via `sklearn.cluster.HDBSCAN` (sklearn ≥ 1.3 — already required by base `scikit-learn>=1.5` dep).
+- **Mapping**: Same shape as §5.7. INFO log key `hdbscan.cuml_eviction`. `device.fallback_reason="cuml_eviction"` on non-CPU requests.
+- **Phase 3 (planned)**: torch-native HDBSCAN. Same spec-amendment process as UMAP Phase 2.
 
 ---
 
