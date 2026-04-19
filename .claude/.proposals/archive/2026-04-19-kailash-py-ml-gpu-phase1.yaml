@@ -1,0 +1,141 @@
+source_repo: kailash-py
+codify_date: "2026-04-19"
+codify_session: |
+  Session 2026-04-19 ML GPU-first Phase 1 punch list (items 3/4/5/7/8) shipped
+  on feat/ml-gpu-phase1-integration with 13 commits. The implementation used
+  3 parallel ml-specialist agents in worktrees — and surfaced 3 institutional
+  failure modes that this codify captures as rule additions to rules/agents.md.
+
+  Background: ml-specialist Shards A/B/C launched in parallel with
+  isolation="worktree" + absolute-path prompts. Shard A's agent truncated mid-
+  message before committing; the empty worktree was auto-cleaned and ~300 LOC
+  of SklearnTrainable Array-API rewrite was lost. Shard B's agent self-corrected
+  by detecting absolute-path leak to MAIN and rewriting against its worktree.
+  Shard C's agent truncated with uncommitted changes; orchestrator rescued via
+  WIP commit immediately on notification. Subsequent gate-level reviewer
+  APPROVED with minor fixes; /redteam mechanical sweep caught a HIGH spec-
+  compliance gap (TorchTrainable + LightningTrainable returning TrainingResult
+  without device=DeviceReport — 2 of 7 family adapters missed the wire-up
+  even though spec mandates "every fit returns one"). Fix landed inline; AST
+  regression invariant test added.
+
+status: distributed
+review_date: "2026-04-19"
+review_target_loom_version: "2.8.21"
+distributed_date: "2026-04-19"
+distributed_by: "loom /sync Gate 2 → kailash-coc-claude-py 3.5.8 (2026-04-19T23:00Z); template subsequently advanced to 3.5.9 (2026-04-19T23:30Z) on kailash-ml 0.12.0 PyPI catch-up. Verified 2026-04-20 by /redteam full-specs sweep."
+
+changes:
+  - id: worktree-prompts-relative-paths
+    type: rule
+    severity: HIGH
+    target: rules/agents.md
+    section: "MUST: Worktree Prompts Use Relative Paths Only"
+    summary: |
+      Agents launched with isolation="worktree" + prompts referencing
+      absolute paths (/Users/...) silently write to the PARENT checkout
+      instead of their worktree. Empty worktrees auto-clean; the agent's
+      work is lost OR silently appears in main. Existing § "MUST: Worktree
+      Isolation" mentions the verification layer but does not flag the
+      absolute-path foot-gun. New section adds the relative-paths-only
+      directive with BLOCKED rationalizations + DO/DO NOT example.
+    classification_suggestion: global
+    rationale: |
+      The failure mode is language-agnostic (Rust shards in kailash-rs would
+      hit the same write-to-main leak). Cross-SDK-applicable.
+    evidence:
+      session: "2026-04-19"
+      commit_sha: pending
+      occurrences: 2 of 3 parallel shards
+      lost_work_loc: "~300 (Shard A SklearnTrainable Array-API)"
+
+  - id: worktree-agents-commit-incremental
+    type: rule
+    severity: HIGH
+    target: rules/agents.md
+    section: "MUST: Worktree Agents Commit Incremental Progress"
+    summary: |
+      Agents in worktrees that don't `git commit` before exit lose 100% of
+      their output to worktree auto-cleanup. The existing § "MUST: Verify
+      Agent Deliverables" catches silent no-ops AFTER the fact but cannot
+      recover files that were only in a cleaned-up worktree. New section
+      mandates explicit "commit after each milestone" instruction in
+      worktree-agent prompts + orchestrator verification of ≥1 commit on
+      the branch before declaring work landed.
+    classification_suggestion: global
+    rationale: |
+      Same root cause as worktree-prompts-relative-paths but distinct
+      mitigation. Both apply to any language.
+    evidence:
+      session: "2026-04-19"
+      occurrences: 3 of 3 parallel shards truncated; 2 lost work
+      mitigation_proven: Shard B (commit-before-exit emphasis) + Shard C
+        (orchestrator WIP rescue commit)
+
+  - id: reviewer-mechanical-sweep
+    type: rule
+    severity: HIGH
+    target: rules/agents.md
+    section: "MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep"
+    summary: |
+      Gate-level reviewer prompts that only show the diff miss orphans in
+      OLD lines that the spec also touches. New section mandates explicit
+      mechanical sweeps (parity greps, collect-only, pip check, __all__
+      verification) in every reviewer prompt BEFORE LLM judgment. The
+      sweeps catch what's missing from untouched code that the new public
+      surface implicitly required.
+    classification_suggestion: global
+    rationale: |
+      Mechanical sweeps complement (don't replace) LLM judgment review.
+      Cross-SDK-applicable: Rust gate reviewers face the same scope
+      limitation when reviewing diffs.
+    evidence:
+      session: "2026-04-19"
+      finding_caught_by_sweep: |
+        TorchTrainable + LightningTrainable missing device=DeviceReport in
+        return TrainingResult (2 of 7 return sites). Reviewer APPROVED;
+        /redteam parity grep caught it in 4 seconds. Fixed inline at commit
+        1e233dcd with AST regression invariant test.
+
+cross_sdk_parity:
+  - kailash-rs equivalent: |
+      kailash-rs has the SAME parallel-shard / worktree / reviewer patterns.
+      All 3 rule additions apply 1:1. After loom/ Gate-1 review classifies
+      as global, kailash-rs's coc-claude-rs template inherits via /sync.
+
+post_release_followups:
+  - id: predictions-device-field
+    severity: MEDIUM
+    target: kailash-ml 0.12.1
+    summary: |
+      Predictions class missing `device: Optional[DeviceReport]` field;
+      spec mandates "every predict returns one" but only the FIT half of
+      the transparency contract shipped in 0.12.0. Disclosed in CHANGELOG
+      Known Limitations + journal 0005-GAP. ~40 LOC + 150 LOC tests.
+    disposition: RESOLVED 2026-04-20 via PR #542 / kailash-ml 0.12.1.
+
+  - id: rules-agents-md-length
+    severity: LOW
+    target: loom Gate-2
+    summary: |
+      rules/agents.md is now 244 lines — exceeds cc-artifacts.md cap of
+      200. Considered acceptable because the 3 new sections each follow
+      rule-authoring.md meta-rule (MUST + BLOCKED + DO/DO NOT + Why +
+      Origin). Future codify could extract worktree-isolation sections
+      into rules/worktree-isolation.md (already referenced by agents.md
+      §95 as a sibling rule).
+    disposition: PARTIAL — worktree-isolation.md exists; agents.md still
+      carries the 3 worktree subsections. Revisit next codify cycle.
+
+summary_note: |
+  3 rule additions, all HIGH, all targeting rules/agents.md. All 3 follow
+  rule-authoring.md meta-rule (Loud/Linguistic/Layered). Origin: Session
+  2026-04-19 ML GPU-first Phase 1 parallel-shard experiment failure modes.
+  Cross-SDK applicable; classification_suggestion: global for all 3.
+
+  ARCHIVE NOTE (2026-04-20): file previously carried unresolved git merge
+  conflict markers (<<<<<<< Updated upstream vs >>>>>>> Stashed changes) at
+  lines 9, 27, 33 from a stash/pop interaction during the 2026-04-19 session.
+  Distribution was confirmed complete (kailash-coc-claude-py at v3.5.9);
+  conflict resolved to the distributed side and file archived during
+  2026-04-20 /codify cycle.

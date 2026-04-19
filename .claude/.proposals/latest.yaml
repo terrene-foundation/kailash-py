@@ -1,138 +1,211 @@
 source_repo: kailash-py
-codify_date: "2026-04-19"
+codify_date: "2026-04-20"
 codify_session: |
-  Session 2026-04-19 ML GPU-first Phase 1 punch list (items 3/4/5/7/8) shipped
-  on feat/ml-gpu-phase1-integration with 13 commits. The implementation used
-  3 parallel ml-specialist agents in worktrees — and surfaced 3 institutional
-  failure modes that this codify captures as rule additions to rules/agents.md.
+  Session 2026-04-20 outstanding-items + full-specs /redteam cycle.
 
-<<<<<<< Updated upstream
-  Background: ml-specialist Shards A/B/C launched in parallel with
-  isolation="worktree" + absolute-path prompts. Shard A's agent truncated mid-
-  message before committing; the empty worktree was auto-cleaned and ~300 LOC
-  of SklearnTrainable Array-API rewrite was lost. Shard B's agent self-corrected
-  by detecting absolute-path leak to MAIN and rewriting against its worktree.
-  Shard C's agent truncated with uncommitted changes; orchestrator rescued via
-  WIP commit immediately on notification. Subsequent gate-level reviewer
-  APPROVED with minor fixes; /redteam mechanical sweep caught a HIGH spec-
-  compliance gap (TorchTrainable + LightningTrainable returning TrainingResult
-  without device=DeviceReport — 2 of 7 family adapters missed the wire-up
-  even though spec mandates "every fit returns one"). Fix landed inline; AST
-  regression invariant test added.
+  Two back-to-back phases in one session:
+    Phase A — outstanding-items sweep: 8 sibling-package `kailash>=2.8.9`
+      floor bumps on PR #543 (merged as 388f5d2d; issue #541 auto-closed),
+      33 agent worktrees cleaned, loom Gate-2 verified distributed
+      (template kailash-coc-claude-py at v3.5.9 has all 3 rules from the
+      2026-04-19 proposal).
+    Phase B — /redteam scoped to "gaps against full specs": 3 analyst
+      agents delegated in parallel audited 34 spec files. 63 of 76
+      assertions GREEN. 13 HIGH findings surfaced; 2 fixed inline
+      (commit 1313ae56 kaizen pytest-benchmark dep; commit 842ebad4
+      nexus __all__ WebSocket+Webhook transports), 11 deferred to
+      dedicated implementation sessions (km.track Phase 6, ONNX bridge
+      matrix completion, km.doctor, kailash-trust orphan, dialect
+      quote_identifier core/dataflow drift).
+
+  Three new institutional failure modes emerged and are proposed for
+  codification below. All 3 are cross-SDK applicable (Python + Rust).
 
 status: pending_review
 review_date: null
-review_target_loom_version: "2.8.20"
+review_target_loom_version: "2.8.22"
 distributed_date: null
-=======
-status: distributed
-review_date: "2026-04-19"
-review_target_loom_version: "2.8.21"
-distributed_date: "2026-04-19"
-distributed_by: "loom /sync Gate 2 → kailash-coc-claude-py 3.5.8 (2026-04-19T23:00Z); prior cycle was 3.5.7 (loom 2.8.19)"
->>>>>>> Stashed changes
 
 changes:
-  - id: worktree-prompts-relative-paths
+  - id: testing-pytest-plugin-declaration-pair
     type: rule
     severity: HIGH
-    target: rules/agents.md
-    section: "MUST: Worktree Prompts Use Relative Paths Only"
+    target: rules/testing.md
+    section: "MUST: Pytest Plugin + Marker Declaration Pair"
     summary: |
-      Agents launched with isolation="worktree" + prompts referencing
-      absolute paths (/Users/...) silently write to the PARENT checkout
-      instead of their worktree. Empty worktrees auto-clean; the agent's
-      work is lost OR silently appears in main. Existing § "MUST: Worktree
-      Isolation" mentions the verification layer but does not flag the
-      absolute-path foot-gun. New section adds the relative-paths-only
-      directive with BLOCKED rationalizations + DO/DO NOT example.
+      Any test file that uses @pytest.mark.X decorator or an X fixture
+      MUST have the corresponding pytest-X plugin declared in the
+      sub-package's [dev] extras AND register X in the pytest markers
+      config in the same commit. Un-declared plugin usage BLOCKS test
+      collection with "'X' not found in markers configuration option"
+      — identical failure class to the declared=imported rule in
+      dependencies.md but for pytest plugins specifically.
     classification_suggestion: global
     rationale: |
-      The failure mode is language-agnostic (Rust shards in kailash-rs would
-      hit the same write-to-main leak). Cross-SDK-applicable.
+      The failure mode is pytest-specific but language-agnostic within
+      Python. kailash-rs uses cargo test which has its own equivalent
+      pattern (proptest features, tokio-test features) that could hit
+      the same declared-vs-used drift. Cross-SDK applicable.
     evidence:
-      session: "2026-04-19"
-      commit_sha: pending
-      occurrences: 2 of 3 parallel shards
-      lost_work_loc: "~300 (Shard A SklearnTrainable Array-API)"
+      session: "2026-04-20"
+      finding: |
+        `packages/kailash-kaizen/tests/e2e/memory/test_persistent_buffer_e2e.py`
+        used @pytest.mark.benchmark + benchmark fixture from pytest-benchmark;
+        neither the plugin nor the marker was declared anywhere. Collection
+        blocked 11,917 tests until commit 1313ae56 added pytest-benchmark>=4.0.0
+        to kaizen [dev] + registered `benchmark` in markers.
+      additional_context: |
+        The broader pattern: pytest plugins are the invisible middle layer.
+        Sub-package [dev] extras declare them; root pyproject.toml ini_options
+        register their markers. Either layer can silently drift and both
+        must align for collection to pass.
 
-  - id: worktree-agents-commit-incremental
+  - id: orphan-detection-collect-only-per-package-extras
     type: rule
-    severity: HIGH
-    target: rules/agents.md
-    section: "MUST: Worktree Agents Commit Incremental Progress"
+    severity: MEDIUM
+    target: rules/orphan-detection.md
+    section: "§5a: Collect-Only Gate Per Sub-Package With [dev] Extras"
     summary: |
-      Agents in worktrees that don't `git commit` before exit lose 100% of
-      their output to worktree auto-cleanup. The existing § "MUST: Verify
-      Agent Deliverables" catches silent no-ops AFTER the fact but cannot
-      recover files that were only in a cleaned-up worktree. New section
-      mandates explicit "commit after each milestone" instruction in
-      worktree-agent prompts + orchestrator verification of ≥1 commit on
-      the branch before declaring work landed.
+      Existing §5 mandates `pytest --collect-only` as a merge gate but
+      implies a single root-venv invocation across every test directory.
+      Monorepos with sub-package test-only deps (hypothesis in pact,
+      respx in kaizen, pytest-benchmark in kaizen) cannot satisfy that
+      shape — python-environment.md Rule 4 explicitly BLOCKS duplicating
+      sub-package test deps in root [dev]. This proposal clarifies that
+      the gate passes when EITHER (a) the root venv is bootstrapped with
+      every sub-package's [dev] extras (`uv pip install -e packages/X[dev]`)
+      OR (b) collection runs per-package inside the sub-package's own
+      venv. Single combined root-venv invocation is NOT a requirement.
     classification_suggestion: global
     rationale: |
-      Same root cause as worktree-prompts-relative-paths but distinct
-      mitigation. Both apply to any language.
+      Monorepo sub-package test-dep separation is a Python idiom; the
+      equivalent in Rust is workspace-level dev-dependencies per-crate,
+      which cargo already handles cleanly. The rule extension is
+      Python-specific in mechanism but documents a general monorepo
+      principle: collection-gate granularity matches dep-graph granularity.
     evidence:
-      session: "2026-04-19"
-      occurrences: 3 of 3 parallel shards truncated; 2 lost work
-      mitigation_proven: Shard B (commit-before-exit emphasis) + Shard C
-        (orchestrator WIP rescue commit)
+      session: "2026-04-20"
+      finding: |
+        Attempted `pytest --collect-only tests/ packages/*/tests/`
+        from root venv produced ImportPathMismatchError (2 conftest.py
+        both register as `tests.conftest`) + ModuleNotFoundError for
+        hypothesis + respx + pytest-benchmark. Per-package collection
+        against each `packages/X/tests/` directory after installing
+        `packages/X[dev]` extras succeeded for all 9 sub-packages.
 
-  - id: reviewer-mechanical-sweep
+  - id: specs-authority-full-sweep-on-edit
     type: rule
-    severity: HIGH
-    target: rules/agents.md
-    section: "MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep"
+    severity: MEDIUM
+    target: rules/specs-authority.md
+    section: "MUST 5b: Full-Specs Re-Derivation On Edit"
     summary: |
-      Gate-level reviewer prompts that only show the diff miss orphans in
-      OLD lines that the spec also touches. New section mandates explicit
-      mechanical sweeps (parity greps, collect-only, pip check, __all__
-      verification) in every reviewer prompt BEFORE LLM judgment. The
-      sweeps catch what's missing from untouched code that the new public
-      surface implicitly required.
+      Extension of MUST Rule 5 (Spec Files Are Updated at First Instance).
+      Add a sibling clause: every spec edit MUST trigger a re-derivation
+      sweep against the FULL sibling-spec set in the same domain
+      (specs/ml-*.md for ML edits, specs/dataflow-*.md for DataFlow edits,
+      specs/nexus-*.md for Nexus edits), not only the edited file. Three
+      categories of finding only emerge from the full sweep:
+        1. Field-shape divergence — sibling specs reference the changed
+           dataclass differently.
+        2. Downstream consumer drift — specs whose mandates depend on
+           the changed surface are now stale.
+        3. Cross-spec terminology drift — same concept named two ways
+           across files.
     classification_suggestion: global
     rationale: |
-      Mechanical sweeps complement (don't replace) LLM judgment review.
-      Cross-SDK-applicable: Rust gate reviewers face the same scope
-      limitation when reviewing diffs.
+      Cross-SDK: kailash-rs has the same specs/ layout with the same
+      cross-spec drift hazard. The rule is conceptually about spec
+      authoring discipline, not language-specific mechanism.
     evidence:
-      session: "2026-04-19"
-      finding_caught_by_sweep: |
-        TorchTrainable + LightningTrainable missing device=DeviceReport in
-        return TrainingResult (2 of 7 return sites). Reviewer APPROVED;
-        /redteam parity grep caught it in 4 seconds. Fixed inline at commit
-        1e233dcd with AST regression invariant test.
+      session_1: "2026-04-19 (journal 0007)"
+      session_2: "2026-04-20 (journal 0008)"
+      pattern_recurrence: |
+        Round 3 narrow scope ("specs I just edited") produced 14/14 green
+        APPROVE. Round 4 full-specs scope found 9 HIGH findings in the
+        SAME ML domain because ml-tracking §2.2/§2.4 and ml-engines §6.1
+        were never part of Phase 1 scope. The scope-narrowing caused a
+        false-confidence APPROVE. Two sessions now confirm the pattern;
+        rule extension strengthened by reproducibility.
 
 cross_sdk_parity:
   - kailash-rs equivalent: |
-      kailash-rs has the SAME parallel-shard / worktree / reviewer patterns.
-      All 3 rule additions apply 1:1. After loom/ Gate-1 review classifies
-      as global, kailash-rs's coc-claude-rs template inherits via /sync.
+      All 3 rule additions apply to kailash-rs. The pytest-plugin rule
+      generalizes to cargo test feature-flag declaration. The collect-only
+      per-package rule generalizes to cargo workspace test granularity.
+      The full-specs sweep rule applies 1:1. After loom/ Gate-1
+      classification, kailash-rs's coc-claude-rs template inherits via
+      /sync.
 
 post_release_followups:
-  - id: predictions-device-field
-    severity: MEDIUM
-    target: kailash-ml 0.12.1
+  - id: ml-phase-6-implementation
+    severity: HIGH
+    target: future sessions
     summary: |
-      Predictions class missing `device: Optional[DeviceReport]` field;
-      spec mandates "every predict returns one" but only the FIT half of
-      the transparency contract shipped in 0.12.0. Disclosed in CHANGELOG
-      Known Limitations + journal 0005-GAP. ~40 LOC + 150 LOC tests.
+      /redteam surfaced 6 ML findings all gated on Phase 6 implementation:
+      km.track() NotImplementedError, 16 mandatory auto-capture fields
+      (host / python_version / git_sha / device_family / device_fallback_reason
+      / tenant_id / ...), COMPLETED/FAILED/KILLED run-status auto-set.
+      These represent specs/ml-tracking.md §2.2 + §2.4 being authoritative
+      against code that still stubs. Either the spec needs a deviation
+      note per specs-authority §6 OR the code ships. Dedicated /analyze
+      → /todos → /implement cycle required; not fixable in a redteam pass.
 
-  - id: rules-agents-md-length
-    severity: LOW
-    target: loom Gate-2
+  - id: ml-onnx-bridge-matrix-completion
+    severity: HIGH
+    target: future sessions
     summary: |
-      rules/agents.md is now 244 lines — exceeds cc-artifacts.md cap of
-      200. Considered acceptable because the 3 new sections each follow
-      rule-authoring.md meta-rule (MUST + BLOCKED + DO/DO NOT + Why +
-      Origin). Future codify could extract worktree-isolation sections
-      into rules/worktree-isolation.md (already referenced by agents.md
-      §95 as a sibling rule).
+      ONNX bridge declares 6 frameworks, implements 3 (sklearn + lightgbm
+      + xgboost). Missing torch / lightning / catboost branches plus
+      regression tests (test_onnx_roundtrip_{framework}.py). Spec
+      ml-engines.md §6.1 MUST 2 was authored specifically to block the
+      "claims in matrix without implemented branch" anti-pattern the
+      current state matches. Dedicated session required.
+
+  - id: ml-km-doctor-console-script
+    severity: HIGH
+    target: future sessions
+    summary: |
+      specs/ml-backends.md §7 documents 30+ lines of km.doctor / km-doctor
+      contract (exit codes 0/1/2, --json output, --require=<backend>,
+      CI lane requirement). Zero backing code — grep "def doctor\|km.doctor"
+      packages/kailash-ml/src/ returns empty. Dedicated implementation
+      session required.
+
+  - id: kailash-trust-orphan-disposition
+    severity: MEDIUM
+    target: future session
+    summary: |
+      packages/kailash-trust/ is a 104-LOC re-export shim listing 39 symbols
+      from kailash.trust.*. Zero test files, zero production consumer
+      imports through the shim (only docs references). The underlying
+      kailash.trust.* code IS properly tested. Disposition: either (a)
+      add Tier 2 smoke test that round-trips through one manager via
+      the kailash_trust.* namespace, or (b) delete packages/kailash-trust/
+      and direct users to kailash directly. Packaging decision needed.
+
+  - id: dialect-quote-identifier-core-drift
+    severity: MEDIUM
+    target: future session
+    summary: |
+      rules/dataflow-identifier-safety.md MUST Rule 1 mandates
+      dialect.quote_identifier() on every dynamic DDL path. grep
+      "quote_identifier" src/ returns zero matches — helper lives only
+      in packages/kailash-dataflow/src/dataflow/adapters/. Core
+      src/kailash/db/dialect.py has only _validate_identifier
+      (validate-only, no quoting), which the rule explicitly deems
+      insufficient. ConnectionManager.create_index() interpolates
+      identifiers via f-string after validation. Either mirror the
+      DataFlow dialect contract into core OR amend specs/infra-sql.md
+      to document the intentional split.
 
 summary_note: |
-  3 rule additions, all HIGH, all targeting rules/agents.md. All 3 follow
-  rule-authoring.md meta-rule (Loud/Linguistic/Layered). Origin: Session
-  2026-04-19 ML GPU-first Phase 1 parallel-shard experiment failure modes.
-  Cross-SDK applicable; classification_suggestion: global for all 3.
+  3 rule additions (2 HIGH, 1 MEDIUM), all targeting different files:
+  rules/testing.md, rules/orphan-detection.md, rules/specs-authority.md.
+  All 3 follow rule-authoring.md meta-rule (Loud/Linguistic/Layered).
+  Origin: Session 2026-04-20 /redteam full-specs sweep and
+  collection-gate unblock work. Cross-SDK applicable;
+  classification_suggestion: global for all 3.
+
+  Also logged: 5 post-release followups (11 HIGH findings from the
+  same /redteam session that require dedicated implementation
+  sessions, grouped into logical work units).

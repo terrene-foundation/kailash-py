@@ -110,6 +110,37 @@ Any PR that removes a public symbol (module, class, function, attribute) MUST de
 
 **Why:** Collection failures are invisible in "unit-only CI" setups yet become merge-blocking the moment someone runs the full suite locally. The only way to keep the full suite runnable is to gate every PR on collect-only-green.
 
+### 5a. Collect-Only Gate Passes Per-Package, Not Combined Root Invocation
+
+Rule 5 (`collect-only is a merge gate`) MUST NOT be interpreted as mandating a single combined `pytest --collect-only tests/ packages/*/tests/` invocation. Monorepos with sub-package test-only dependencies (e.g. `hypothesis` in pact, `respx` in kaizen) CANNOT pass a combined invocation from the root venv because `python-environment.md` Rule 4 explicitly BLOCKS duplicating sub-package test deps in the root `[dev]` extras. The gate passes when EITHER (a) the root venv is bootstrapped with every sub-package's `[dev]` extras via `uv pip install -e packages/<pkg>[dev]`, OR (b) collection runs per-package inside each sub-package's own venv.
+
+```bash
+# DO — per-package collection with the sub-package's own [dev] extras installed
+uv pip install -e packages/kailash-pact[dev] --python .venv/bin/python
+for pkg in packages/*/tests; do
+  .venv/bin/python -m pytest --collect-only -q "$pkg" --continue-on-collection-errors
+done
+# Each sub-package collects against its own declared test deps; no collision
+# with python-environment.md Rule 4.
+
+# DO NOT — combined invocation from root venv without sub-package extras
+.venv/bin/python -m pytest --collect-only tests/ packages/*/tests/
+# ModuleNotFoundError: hypothesis (pact) + respx (kaizen) + ImportPathMismatchError
+# (two conftest.py both registering as `tests.conftest`) — gate appears red
+# but the root cause is bootstrap, not a real collection error.
+```
+
+**BLOCKED rationalizations:**
+
+- "A single invocation is faster for CI"
+- "We'll duplicate the test deps in root [dev] just for collection"
+- "CI uses a different venv strategy so this doesn't matter locally"
+- "Per-package collection is belt-and-suspenders"
+
+**Why:** `python-environment.md` Rule 4 blocks sub-package test deps (specifically `hypothesis`) from root `[dev]` because `hypothesis` registers as a pytest plugin and triggers a `MemoryError` during AST rewrite on large monorepo suites. Per-package collection granularity matches dep-graph granularity: each sub-package's test contract is validated against its own `[dev]` extras, and the root venv carries only what root tests need. Combined invocation is an optimization, not a requirement; when it collides with Rule 4, per-package is the correct shape.
+
+Origin: Session 2026-04-20 /redteam collection-gate work — combined `pytest --collect-only tests/ packages/*/tests/` from root venv failed with 3 distinct root causes; per-package iteration after installing `packages/<pkg>[dev]` succeeded for all 9 sub-packages. See `workspaces/kailash-ml-gpu-stack/journal/0008-GAP-full-specs-redteam-2026-04-20-findings.md`.
+
 ### 6. Module-Scope Public Imports Appear In `__all__`
 
 When a symbol is imported at module-scope into a package's `__init__.py` (not behind `_` / not lazy via `__getattr__`), it MUST appear in that module's `__all__` list unless the symbol itself is private (leading underscore). New `__all__` entries MUST land in the same PR as the import. Eagerly-imported-but-absent-from-`__all__` is BLOCKED.

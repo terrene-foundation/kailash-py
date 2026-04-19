@@ -239,6 +239,48 @@ def test_create_token():
 
 Origin: PR #466 (2026-04-14) — eliminated 63 unit test warnings across 10 categories. Each pattern above resolves a category that recurred until the rule was added.
 
+### MUST: Pytest Plugin + Marker Declaration Pair
+
+Any test file that uses `@pytest.mark.<X>` or the `<X>` fixture from a pytest plugin MUST declare the plugin in the owning sub-package's `[dev]` extras AND register the marker in that sub-package's pytest `markers` config in the SAME commit. Using a plugin without declaring it OR using a marker without registering it is BLOCKED — collection fails with `"'<X>' not found in markers configuration option"` or `ModuleNotFoundError` and no test in that sub-package can run.
+
+```toml
+# DO — plugin declared in [dev] extras AND marker registered in same pyproject
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0.0",  # declared
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "benchmark: Performance benchmark tests (pytest-benchmark)",  # registered
+]
+```
+
+```python
+# DO — test uses the plugin AFTER declaration + registration landed
+@pytest.mark.benchmark
+def test_write_performance(benchmark):
+    benchmark(lambda: do_work())
+
+# DO NOT — test uses plugin with neither declaration nor marker registration
+@pytest.mark.benchmark   # marker unregistered → collection fails
+def test_write_performance(benchmark):   # benchmark fixture unavailable → ModuleNotFoundError
+    ...
+```
+
+**BLOCKED rationalizations:**
+
+- "The plugin is in CI so local works fine"
+- "pytest accepts unknown markers by default"
+- "We'll register the marker in a follow-up commit"
+- "The fixture is imported lazily so it doesn't matter"
+- "It works in the sub-package venv, root venv is a separate concern"
+
+**Why:** Pytest plugins form a hidden middle layer: declared in sub-package `[dev]` extras, registered in pytest `markers` config, invoked via decorator or fixture. Any one layer missing breaks collection with an unhelpful error and blocks the entire sub-package's test suite. The declared-imported discipline from `dependencies.md` applies 1:1 to pytest plugins; this rule is the pytest-specific binding.
+
+Origin: Session 2026-04-20 /redteam collection-gate sweep — `packages/kailash-kaizen/tests/e2e/memory/test_persistent_buffer_e2e.py` used `@pytest.mark.benchmark` + `benchmark` fixture without declaring `pytest-benchmark`; blocked 11,917 kaizen tests from collection. Fixed commit `1313ae56`. See `workspaces/kailash-ml-gpu-stack/journal/0008-GAP-full-specs-redteam-2026-04-20-findings.md`.
+
 ## 3-Tier Testing
 
 ### Tier 1 (Unit): Mocking allowed, <1s per test

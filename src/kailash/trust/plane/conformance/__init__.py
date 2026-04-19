@@ -46,6 +46,11 @@ class ConformanceLevel(Enum):
 class TestResult(Enum):
     """Result of a single conformance test."""
 
+    # Tell pytest this Enum is NOT a test class — the Test* prefix is semantic
+    # (conformance-test result), and pytest's default python_classes="Test*"
+    # would otherwise try to collect it wherever a test file imports the name.
+    __test__ = False
+
     PASS = "pass"
     FAIL = "fail"
     SKIP = "skip"
