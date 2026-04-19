@@ -83,7 +83,7 @@ dataflow = [
     "kailash-dataflow>=2.0.12",
 ]
 nexus = [
-    "kailash-nexus>=2.1.0",
+    "kailash-nexus>=2.1.1",
 ]
 kaizen = [
     "kailash-kaizen>=2.7.5",
@@ -150,7 +150,7 @@ docs = [
 # Everything (core + all sub-packages with their optional deps)
 all = [
     "kailash-dataflow>=2.0.12",
-    "kailash-nexus>=2.1.0",
+    "kailash-nexus>=2.1.1",
     "kailash-kaizen>=2.7.5",
     "kaizen-agents>=0.9.3",
     "kailash-pact>=0.8.2",
