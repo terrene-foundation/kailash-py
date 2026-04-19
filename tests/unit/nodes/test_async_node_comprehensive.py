@@ -355,20 +355,42 @@ class TestAsyncNodePerformance:
 
     @pytest.mark.asyncio
     async def test_concurrent_execution_performance(self):
-        """Test that concurrent execution is non-blocking."""
-        nodes = [ConcreteTestAsyncNode() for _ in range(10)]
+        """Test that concurrent execution is non-blocking.
+
+        Asserts RELATIVE speedup (concurrent measurably faster than
+        sequential) rather than absolute wall-clock — the absolute
+        `< 0.1s` threshold was flaky on shared CI runners where
+        import + loop-startup overhead could push 10× async-sleep(1ms)
+        calls past 100ms despite async working correctly. The relative
+        check catches the real regression (serialization) without
+        measuring runner load.
+        """
+        # Each node sleeps 1ms. 10 nodes sequentially ≥ 10ms sleep time.
+        # Concurrently ≥ 1ms. We require concurrent to be at least 3×
+        # faster than sequential — a margin that survives runner noise
+        # while still failing loudly if the runtime serializes.
+        nodes_concurrent = [ConcreteTestAsyncNode() for _ in range(10)]
+        nodes_sequential = [ConcreteTestAsyncNode() for _ in range(10)]
 
         import time
 
         start = time.time()
+        results = await asyncio.gather(
+            *[node.execute_async() for node in nodes_concurrent]
+        )
+        concurrent_duration = time.time() - start
 
-        # Execute all concurrently
-        results = await asyncio.gather(*[node.execute_async() for node in nodes])
+        start = time.time()
+        for node in nodes_sequential:
+            await node.execute_async()
+        sequential_duration = time.time() - start
 
-        duration = time.time() - start
-
-        # Should take ~0.01s (one async sleep duration) not ~0.1s (10 sequential sleeps)
-        assert duration < 0.1  # Allow some overhead
+        assert concurrent_duration * 3 < sequential_duration, (
+            f"concurrent execution should be at least 3x faster than "
+            f"sequential; got concurrent={concurrent_duration:.3f}s vs "
+            f"sequential={sequential_duration:.3f}s — async path "
+            f"appears to be serializing."
+        )
         assert len(results) == 10
         assert all(r["result"] == "success" for r in results)
 

@@ -1,6 +1,6 @@
 # Kailash Nexus Specification — Channels & Transports
 
-Version: 2.0.1
+Version: 2.1.1
 Package: `kailash-nexus`
 
 Parent domain: Kailash Nexus (multi-channel workflow platform). This file covers transport system (HTTP/MCP/WebSocket/Webhook), handler registry, channel configuration, CLI channel, service discovery, NexusFile, and input validation. See also `nexus-core.md`, `nexus-auth.md`, and `nexus-services.md`.

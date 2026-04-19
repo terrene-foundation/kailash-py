@@ -1,6 +1,6 @@
 # Kailash Nexus Specification — Authentication & Security
 
-Version: 2.0.1
+Version: 2.1.1
 Package: `kailash-nexus`
 
 Parent domain: Kailash Nexus (multi-channel workflow platform). This file covers JWT authentication, RBAC, CORS configuration, rate limiting, SSO integration, tenant isolation, and audit logging. See also `nexus-core.md`, `nexus-channels.md`, and `nexus-services.md`.

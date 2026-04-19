@@ -135,6 +135,18 @@ dev = [
     # Sub-packages required for test collection (pact/mcp tests import these)
     "kailash-pact>=0.8.2",
     "kailash-mcp>=0.1.0",
+    # psycopg2 is imported at module scope by 3 integration/e2e tests
+    # (test_mcp_resource_flow, test_docker_infrastructure_validation,
+    # test_mcp_subscriptions) — required for `pytest --collect-only`
+    # to return exit 0 (orphan-detection.md §5 merge gate).
+    "psycopg2-binary>=2.9",
+    # pytest-httpserver is imported at module scope by
+    # packages/kailash-nexus/tests/integration/auth/test_sso_integration.py.
+    # Also declared in kailash-nexus's own [dev] extras for standalone
+    # use. Root-level duplication is tolerated (NOT the rule-4
+    # hypothesis case — pytest-httpserver has no AST-rewrite overhead)
+    # because the root venv is where monorepo-wide collect-only runs.
+    "pytest-httpserver>=1.0",
 ]
 # Documentation
 docs = [
