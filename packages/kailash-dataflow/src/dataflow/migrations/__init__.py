@@ -18,6 +18,10 @@ from .auto_migration_system import (
     TableDefinition,
 )
 from .drop_confirmation import DropRefusedError, require_force_drop
+from .drop_confirmation_downgrade import (
+    DowngradeRefusedError,
+    require_force_downgrade,
+)
 from .fk_migration_operations import (
     CompositeFKOperation,
     FKChainUpdateOperation,
@@ -97,7 +101,10 @@ __all__ = [
     "FKChainUpdateOperation",
     "CompositeFKOperation",
     "FKOperationScenario",
-    # Destructive-operation confirmation
+    # Destructive-operation confirmation (primitive DDL layer)
     "DropRefusedError",
     "require_force_drop",
+    # Destructive-downgrade confirmation (migration-orchestrator layer)
+    "DowngradeRefusedError",
+    "require_force_downgrade",
 ]
