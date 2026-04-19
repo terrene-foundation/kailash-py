@@ -94,11 +94,3 @@ class TestMLEngineDeferredBodies:
         assert result.precision == "32-true"
         assert result.metrics  # non-empty dict
         assert result.elapsed_seconds >= 0
-
-    def test_km_track_deferral_names_phase(self):
-        """Top-level `km.track()` MUST raise NotImplementedError naming Phase 6."""
-        from kailash_ml import track
-
-        with pytest.raises(NotImplementedError) as exc_info:
-            track(experiment="x")
-        assert "phase 6" in str(exc_info.value).lower()

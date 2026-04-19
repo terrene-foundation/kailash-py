@@ -184,17 +184,17 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
         _device_override.reset(token)
 
 
-def track(experiment: str, **kwargs):
-    """Async-context experiment tracker: `async with km.track('exp') as t: ...`.
+# Phase 6 (Registry + Tracking) — ``km.track()`` implementation lives in
+# ``kailash_ml.tracking.runner``. Eager-import the public symbol so it
+# appears in ``kailash_ml.__all__`` per orphan-detection §6 and so
+# ``from kailash_ml import track`` works without a lazy ``__getattr__``
+# hop (the `__all__` / `__getattr__` pattern is a CodeQL trigger per
+# zero-tolerance §1a).
+from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
 
-    Phase 6 (Registry + Tracking) implements full body with the MLflow-better
-    contract from `specs/ml-tracking.md`. Until then this raises a typed
-    error naming the phase.
-    """
-    raise NotImplementedError(
-        "km.track — Phase 6 (ExperimentTracker) will implement per "
-        "specs/ml-tracking.md. Use kailash_ml.MLEngine(tracker=...) for DI."
-    )
+# ``km.doctor()`` diagnostic per ``specs/ml-backends.md`` §7. Eager
+# import for the same CodeQL / ``__all__`` reasons as ``track`` above.
+from kailash_ml.doctor import doctor  # noqa: E402
 
 
 def __getattr__(name: str):  # noqa: N807
@@ -265,6 +265,7 @@ __all__ = [
     "HDBSCANTrainable",
     "train",
     "track",
+    "doctor",
     "resolve_torch_wheel",
     # GPU-first Phase 1 public API — device reporting + script-level overrides
     "DeviceReport",
