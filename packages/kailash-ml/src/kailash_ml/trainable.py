@@ -886,6 +886,11 @@ class TorchTrainable:
 
         artifact_uri = _persist_native_artifact(inner, prefix="torch", format="pt")
 
+        # Per revised-stack.md § "Transparency contract": every fit
+        # returns a DeviceReport. Torch is the DL spine — backend
+        # reflects the actually-resolved Lightning accelerator (no
+        # eviction / OOM fallback path here; native multi-backend
+        # support via L.Trainer per ml-backends.md §5.4).
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={"train_loss": module.mean_loss},
@@ -899,6 +904,14 @@ class TorchTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"learning_rate": lr, "max_epochs": max_epochs},
+            device=DeviceReport(
+                family=self.family_name,
+                backend=ctx.backend,
+                device_string=ctx.device_string,
+                precision=ctx.precision,
+                fallback_reason=None,
+                array_api=False,
+            ),
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1020,6 +1033,11 @@ class LightningTrainable:
         if not metrics:
             metrics["train_loss"] = 0.0
 
+        # Per revised-stack.md § "Transparency contract": every fit
+        # returns a DeviceReport. Lightning is the DL spine — backend
+        # reflects the actually-resolved Lightning accelerator (no
+        # eviction / OOM fallback path here; native multi-backend
+        # support via L.Trainer per ml-backends.md §5.5).
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics=metrics,
@@ -1033,6 +1051,14 @@ class LightningTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"max_epochs": max_epochs},
+            device=DeviceReport(
+                family=self.family_name,
+                backend=ctx.backend,
+                device_string=ctx.device_string,
+                precision=ctx.precision,
+                fallback_reason=None,
+                array_api=False,
+            ),
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
