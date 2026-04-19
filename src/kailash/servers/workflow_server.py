@@ -5,6 +5,7 @@ WorkflowAPIGateway with clearer naming and better organization.
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from collections import defaultdict, deque
@@ -220,7 +221,20 @@ class WorkflowServer:
                 extra={"title": title, "version": version},
             )
             try:
-                await app.router.startup()
+                # Iterate `router.on_startup` directly rather than
+                # calling a dispatch method. FastAPI has shipped both
+                # `.startup()` (older) and `._startup()` (newer) over
+                # the years and upgrades flip which one exists; the
+                # on_startup list itself is the only stable surface.
+                # Issue #531: nexus 2.1.0 shipped with `app.router.startup()`
+                # which crashed production FastAPI builds that only
+                # expose `_startup`. Driving the list directly matches
+                # what `_DefaultLifespan` does internally and survives
+                # FastAPI/Starlette version churn.
+                for handler in app.router.on_startup:
+                    result = handler()
+                    if inspect.iscoroutine(result):
+                        await result
                 # Run injected Nexus plugin startup hooks inside uvicorn's
                 # loop so any background tasks they spawn survive (#501).
                 if startup_hook is not None:
@@ -261,7 +275,11 @@ class WorkflowServer:
                             exc_info=True,
                         )
                 try:
-                    await app.router.shutdown()
+                    # Paired with the on_startup iteration above — see #531.
+                    for handler in app.router.on_shutdown:
+                        result = handler()
+                        if inspect.iscoroutine(result):
+                            await result
                 except Exception:
                     logger.warning(
                         "workflow_server.lifespan.router_shutdown_failed",
