@@ -249,6 +249,184 @@ def test_offlist_estimator_fallback_warns(
 
 
 # ---------------------------------------------------------------------------
+# Array-API runtime fallback (scipy SCIPY_ARRAY_API gate trips at runtime)
+# ---------------------------------------------------------------------------
+
+
+def _install_runtime_failing_array_api_trainer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, Any]:
+    """Install fakes such that ``sklearn.config_context`` raises the scipy gate.
+
+    Mirrors `_install_recording_trainer` but swaps `config_context` for
+    one that raises the exact `RuntimeError` shape sklearn emits when
+    ``SCIPY_ARRAY_API=1`` was not set before the scipy/sklearn import:
+    "Scikit-learn array API support was enabled but scipy's own support
+    is not enabled. ..."
+
+    Returns ``{"calls": N, "instances": [trainer1, trainer2],
+    "config_context_calls": [{"array_api_dispatch": True}]}`` — the
+    second trainer is the CPU-numpy retry that the fallback path
+    rebuilds.
+    """
+    import contextlib
+
+    import lightning.pytorch as pl_trainer
+    import sklearn
+    import torch
+
+    state: dict[str, Any] = {"calls": 0, "instances": [], "config_context_calls": []}
+
+    def fit_side_effect(module: Any) -> None:
+        state["calls"] += 1
+        module.on_train_start()
+
+    def fake_trainer_ctor(*args: Any, **kwargs: Any) -> MagicMock:
+        trainer = MagicMock(name=f"Trainer#{len(state['instances']) + 1}")
+        trainer.fit.side_effect = fit_side_effect
+        state["instances"].append(trainer)
+        return trainer
+
+    def fake_as_tensor(arr: Any, device: Any = None, **_: Any) -> Any:
+        return arr
+
+    @contextlib.contextmanager
+    def failing_config_context(**kwargs: Any) -> Any:
+        state["config_context_calls"].append(kwargs)
+        # The exact text sklearn emits when scipy's array_api gate is
+        # not enabled. The substring `array API` (note casing) is
+        # what trainable.py's recovery branch matches against.
+        raise RuntimeError(
+            "Scikit-learn array API support was enabled but scipy's own "
+            "support is not enabled. Please set the SCIPY_ARRAY_API=1 "
+            "environment variable before importing sklearn or scipy."
+        )
+        yield  # unreachable — context manager raises at __enter__
+
+    monkeypatch.setattr(pl_trainer, "Trainer", fake_trainer_ctor)
+    monkeypatch.setattr(torch, "as_tensor", fake_as_tensor)
+    monkeypatch.setattr(sklearn, "config_context", failing_config_context)
+    return state
+
+
+def test_array_api_runtime_unavailable_falls_back_to_cpu_with_warn(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    sample_data: pl.DataFrame,
+    cuda_context: TrainingContext,
+) -> None:
+    """scipy env-var gate → WARN log + CPU retry + DeviceReport reflects fallback.
+
+    Regression guard for revised-stack.md § "Array-API runtime fallback":
+    when ``sklearn.config_context(array_api_dispatch=True)`` raises the
+    SCIPY_ARRAY_API gate ``RuntimeError`` at enter-time, the adapter
+    MUST catch it, emit one WARN
+    ``sklearn.array_api.runtime_unavailable``, rebuild the Lightning
+    Trainer on CPU numpy, and return a TrainingResult whose
+    ``device.fallback_reason == "array_api_runtime_unavailable"`` and
+    ``device.array_api is False``. Non-array-api ``RuntimeError``s MUST
+    re-raise unchanged (see test below).
+    """
+    state = _install_runtime_failing_array_api_trainer(monkeypatch)
+    caplog.set_level(logging.WARNING, logger="kailash_ml.trainable")
+
+    estimator = MagicMock(spec=["fit", "predict", "set_params"])
+    estimator.predict.return_value = [0, 1, 0, 1, 0, 1, 0, 1]
+    type(estimator).__name__ = "LogisticRegression"
+
+    trainable = SklearnTrainable(estimator=estimator, target="target")
+    result = trainable.fit(sample_data, context=cuda_context)
+
+    # config_context was attempted exactly once (the engaged path).
+    assert state["config_context_calls"] == [{"array_api_dispatch": True}]
+    # Two trainer instances: first inside the failing config_context,
+    # second is the CPU numpy retry that the fallback path rebuilds.
+    assert len(state["instances"]) == 2, (
+        f"expected one engaged-attempt trainer + one CPU-retry trainer; "
+        f"got {len(state['instances'])}"
+    )
+    # Only the CPU-retry trainer's fit() actually completed (the first
+    # trainer's fit was inside the config_context that raised).
+    assert state["calls"] == 1
+
+    # WARN log fired exactly once with structured fallback fields.
+    warn_records = [
+        r
+        for r in caplog.records
+        if r.name == "kailash_ml.trainable" and r.levelno == logging.WARNING
+    ]
+    runtime_unavailable = [
+        r
+        for r in warn_records
+        if "sklearn.array_api.runtime_unavailable" in r.getMessage()
+    ]
+    assert len(runtime_unavailable) == 1, (
+        f"expected exactly one sklearn.array_api.runtime_unavailable WARN; "
+        f"got {[r.getMessage() for r in warn_records]}"
+    )
+    rec = runtime_unavailable[0]
+    assert rec.estimator_class == "LogisticRegression"
+    assert rec.requested_backend == "cuda"
+    assert rec.fallback_reason == "array_api_runtime_unavailable"
+    # The hint MUST be grep-able by operators triaging the deployment gap.
+    assert "SCIPY_ARRAY_API=1" in rec.hint
+
+    # DeviceReport reflects the CPU-numpy fallback, not the engaged path.
+    assert result.device is not None
+    assert result.device.array_api is False
+    assert result.device.backend == "cpu"
+    assert result.device.device_string == "cpu"
+    assert result.device.fallback_reason == "array_api_runtime_unavailable"
+    assert result.device.family == "sklearn"
+
+
+def test_non_array_api_runtime_error_re_raises_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+    sample_data: pl.DataFrame,
+    cuda_context: TrainingContext,
+) -> None:
+    """Unrelated RuntimeError inside config_context MUST NOT be swallowed.
+
+    Guards against a future refactor that loosens the substring match
+    (``"array API" not in str(exc) and "array_api" not in str(exc)``)
+    and silently swallows non-gate failures.
+    """
+    import contextlib
+
+    import lightning.pytorch as pl_trainer
+    import sklearn
+    import torch
+
+    def fit_side_effect(module: Any) -> None:
+        module.on_train_start()
+
+    def fake_trainer_ctor(*args: Any, **kwargs: Any) -> MagicMock:
+        trainer = MagicMock(name="Trainer")
+        trainer.fit.side_effect = fit_side_effect
+        return trainer
+
+    def fake_as_tensor(arr: Any, device: Any = None, **_: Any) -> Any:
+        return arr
+
+    @contextlib.contextmanager
+    def unrelated_failing_config_context(**kwargs: Any) -> Any:
+        raise RuntimeError("totally unrelated bug — torch CUDA driver missing")
+        yield  # unreachable
+
+    monkeypatch.setattr(pl_trainer, "Trainer", fake_trainer_ctor)
+    monkeypatch.setattr(torch, "as_tensor", fake_as_tensor)
+    monkeypatch.setattr(sklearn, "config_context", unrelated_failing_config_context)
+
+    estimator = MagicMock(spec=["fit", "predict", "set_params"])
+    estimator.predict.return_value = [0, 1, 0, 1, 0, 1, 0, 1]
+    type(estimator).__name__ = "LogisticRegression"
+
+    trainable = SklearnTrainable(estimator=estimator, target="target")
+    with pytest.raises(RuntimeError, match="totally unrelated bug"):
+        trainable.fit(sample_data, context=cuda_context)
+
+
+# ---------------------------------------------------------------------------
 # CPU request never engages Array API
 # ---------------------------------------------------------------------------
 
