@@ -1,82 +1,82 @@
-# Session Notes — 2026-04-19 (Round 7)
+# Session Notes — 2026-04-19 (Round 7 + Round 8)
 
 ## Where we are
 
-Round 7 closed 6 of 8 outstanding issues in one session. Five PRs
-merged (#502-#506). Kailash-ml now has first-class sklearn-compatible
-composites (`Pipeline` / `FeatureUnion` / `ColumnTransformer` +
-`register_estimator`); Nexus has a typed `HttpClient` + `ServiceClient`
-surface (112 new tests, SSRF-aware by default); DataFlow got 5 of 9
-MED defense-in-depth findings fixed. Also delivered: a validated
-architecture for GPU-first kailash-ml (see workspaces/kailash-ml-gpu-stack/).
+**All 13 open issues resolved + 6 packages released to PyPI in one extended autonomous session.**
 
-## Read first
+Round-7 shipped the 5 initial PRs (#502–#506, closed issues #462 #480 #464 #473 #479 #488 and #499 partial). Round-8 extended with #507 (S2S typed client for #465), #508 (#499 remaining 4 findings), #509 (redteam hotfix), #513 (codify), #515 (#511 Rust citations), #517 (#510 force_downgrade split), #518 (#512+#514 audits), #519 (release bundle). Six PyPI releases via individual tag pushes.
 
-1. `gh pr list --state merged --repo terrene-foundation/kailash-py --limit 8` —
-   Round-6 shipped #502 (embed), #503 (PG quoting). Round-7 shipped
-   #504 (defense-in-depth), #505 (Nexus HttpClient+ServiceClient),
-   #506 (ml Pipeline+register_estimator).
-2. `gh issue list --state open --repo terrene-foundation/kailash-py` —
-   remaining open: #499 (reopened, 4/9 MED findings deferred), #465
-   (OpenAPI-generated S2S client, depends on delivered #464 pattern).
-3. `workspaces/kailash-ml-gpu-stack/04-validate/00-convergence.md` —
-   validated architecture for GPU-first kailash-ml. Ships the redteam
-   findings + revised stack + 8-item implementation punch list.
-4. `workspaces/kailash-ml-gpu-stack/journal/0001-0003-*.md` — three
-   journal-worthy findings from the redteam (cuML eviction, DeviceReport
-   missing, XGBoost OOM silent crash).
+## PyPI release — 2026-04-19
 
-## In-flight state
+| Package | Version | Tag | Workflow |
+|---------|---------|-----|----------|
+| kailash (core) | 2.8.7 | `v2.8.7` | success |
+| kailash-kaizen | 2.7.5 | `kaizen-v2.7.5` | success |
+| kailash-dataflow | 2.0.10 | `dataflow-v2.0.10` | success |
+| kailash-nexus | 2.1.0 | `nexus-v2.1.0` | success |
+| kailash-ml | 0.10.0 | `ml-v0.10.0` | success |
+| kailash-mcp | 0.2.5 | `mcp-v0.2.5` | success |
 
-- `workspaces/OUTSTANDING.md` is STALE (round-5 snapshot). The real
-  current list: #499 (4 deferred findings), #465 (S2S OpenAPI
-  codegen). Every other cross-SDK issue from round-5 is closed.
-- Pre-existing proposal `.claude/.proposals/latest.yaml` has 7 entries
-  status `pending_review` — user was running /sync at loom/ when
-  Round 6 closed; state unchanged this session.
+Tag-triggered publishing path went direct to PyPI + GitHub Release (TestPyPI skipped). All 6 verified live on pypi.org at correct version.
 
-## Traps
+## Shipped this session
 
-- **Pre-commit auto-stash bug** still active — every commit MUST use
-  `git -c core.hooksPath=/dev/null commit ...` per `rules/git.md`.
-  Hit it again on 4/5 commits this session.
-- **Specialist-agent-dumps-in-main-tree trap** bit HARD this session.
-  Three agents launched with `isolation: worktree`: only Nexus actually
-  used its worktree. DataFlow and ML agents both edited in main's
-  working tree. Both terminated mid-implementation leaving partial
-  state on main. Recovery: committed DataFlow's partial as #504,
-  took over and finished ML myself as #506. Next session: verify
-  worktree status IMMEDIATELY after spawning, not on completion.
-- **CodeQL `__all__`-not-defined check** caught kailash-ml lazy-load
-  pattern. Scanner-surface-symmetry rule forbids "other entries on
-  main also do this" — must eager-import new entries. Existing
-  entries grandfathered (baseline).
-- **ML agent budget exhaustion mid-message.** Reported "Now let me
-  write the implementation" with zero actual implementation files
-  written. Same pattern as round-6 kaizen agent. Always verify files
-  after agent completion claim.
+### New features (MINOR bumps)
+- **#462** `LlmClient.embed()` for OpenAI + Ollama (#502)
+- **#464 #473** `kailash.nexus.HttpClient` + `ServiceClient` with SSRF-aware config (#505)
+- **#465** `kailash.nexus.TypedServiceClient` typed wrapper for S2S JSON APIs (#507)
+- **#479 #488** `kailash_ml.Pipeline` + `FeatureUnion` + `ColumnTransformer` + `register_estimator` (#506)
+- `kailash.nexus.post_webhook` + `probe_remote_health` outbound helpers (#509)
 
-## Next priorities
+### Security / defense-in-depth
+- **#480** Express CRUD PG identifier quoting (#503)
+- **#499** 9 MED defense-in-depth findings — all 9 closed across #504 + #508
+- **#510** Split primitive `force_drop` from orchestrator `force_downgrade` + `DowngradeRefusedError` (#517)
 
-1. **Remaining #499 findings (4 of 9)** — SQLite PRAGMA in 3 files,
-   force_drop gate on 5 migration DROP paths, spy-based schema_manager
-   test, split test_phase_5_11 per-manager. All low-risk; batch into
-   one follow-up PR.
-2. **kailash-ml GPU first-class rollout** — `workspaces/kailash-ml-gpu-stack/`
-   has the full implementation plan. 3 sessions of work: evict cuML
-   extra, add DeviceReport, sklearn Array-API auto-wrapping, OOM
-   fallback helper, RL device routing audit, `km.device()` helpers,
-   Tier-2 regression tests per backend. Open GH issue first linking
-   to workspace.
-3. **#465 S2S OpenAPI codegen** — depends on the delivered #464
-   pattern. User designated it MEDIUM; revisit after GPU rollout.
+### Cross-SDK parity audits
+- **#511** Rust symbol citations verified + 5 MISSes fixed in `.claude/guides/` (#515)
+- **#512** test-skip discipline — BLOCKED skips removed or xfail'd; abandoned test files deleted (#518)
+- **#514** Optional-extras module-import gating — kailash-mcp oauth.py try/except + loud-failure helper (#518)
 
-## Session totals
+### Artifacts / codify
+- `rules/worktree-isolation.md` — new rule targeting agent worktree-dump trap
+- `rules/agents.md` — post-agent file-existence verification
+- `rules/zero-tolerance.md` Rule 1a — CodeQL `__all__` + lazy `__getattr__` example
+- `agents/frameworks/nexus-specialist.md` — TypedServiceClient pattern
+- `rules/cross-sdk-inspection.md` MUST Rule 5 — grep-verified Rust symbol citations applied
+- `workspaces/kailash-ml-gpu-stack/` — validated first-class GPU architecture with 8-item Phase 1 punch list (deferred implementation)
 
-- 5 PRs merged: #502 #503 #504 #505 #506
-- 112 new Nexus tests + 14 new ML tests + regression tests for
-  defense-in-depth findings
-- 6 issues closed: #462 #480 #464 #473 #479 #488
-- 1 issue reopened with remaining-work note: #499
-- 1 validated architecture delivered (GPU-first kailash-ml)
-- 3 journal entries (workspaces/kailash-ml-gpu-stack/journal/0001-0003)
+### Dependabot
+- #481–#484 merged (github-actions bumps)
+
+## Read first next session
+
+1. `gh pr list --state merged --repo terrene-foundation/kailash-py --limit 15` — round-7 + round-8 history
+2. `gh issue list --state open --repo terrene-foundation/kailash-py` — only #516 remains (STP dashboard reference, out of kailash-py code scope)
+3. `workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md` — GPU-first kailash-ml architecture ready for Phase 1 implementation
+4. `.claude/.proposals/latest.yaml` — 5 pending_review entries ready for `/sync` at loom/
+
+## Traps + learnings (carried)
+
+- **Worktree-dump trap**: specialist agents with `isolation: worktree` wrote to main's tree 3× this session (ml-specialist #506, dataflow-specialist #508, testing-specialist #518 — the last one's work got bundled into my hotfix commit). Mitigation landed as new `rules/worktree-isolation.md`.
+- **Agent budget exhaustion mid-message**: 2 cases (ml-specialist #506, testing-specialist #518). Verify files exist before trusting completion claim.
+- **CodeQL `__all__` + lazy `__getattr__`**: new CodeQL alerts on __all__ entries only resolved via lazy loading. Fix: eager-import. Now covered in zero-tolerance Rule 1a example.
+- **Pre-commit auto-stash bug**: every commit used `git -c core.hooksPath=/dev/null commit`.
+- **Tag-triggered vs workflow_dispatch publishing**: tag push goes DIRECT to PyPI + GitHub Release. workflow_dispatch triggers TestPyPI-first validation (useful for manual verification but requires trusted publisher config on TestPyPI — kailash-ml hit a 400 on TestPyPI due to project not pre-registered there; NOT a blocker for tag-triggered PyPI publishing).
+
+## Open
+
+- **#516** STP dashboard raw-SQL → DataFlow migration pattern (reference issue; out of kailash-py code scope — user to triage).
+- **kailash-ml GPU first-class** — 8-item Phase 1 action list at `workspaces/kailash-ml-gpu-stack/` ready for next implementation sprint.
+- **kailash-ml TestPyPI trusted-publisher**: register `kailash_ml` as a pending OIDC publisher on test.pypi.org so future workflow_dispatch → TestPyPI attempts succeed. Not blocking PyPI.
+- **kailash-py pyproject extras pins**: audit that all extras pin to now-published versions (2.8.7 / 2.0.10 / etc.) rather than stale baseline.
+
+## Session stats
+
+- 13 issues closed (#462 #464 #465 #473 #479 #480 #488 #499 #510 #511 #512 #514 + #481-#484 dependabot)
+- 1 issue remaining (#516, out-of-scope)
+- 8 feature PRs + 1 release PR merged (#502–#519)
+- 6 PyPI packages published
+- 200+ new tests across the session
+- 3 validated redteam rounds converged to 0 CRITICAL + 0 HIGH before each merge
+- 1 full architectural audit + revised stack delivered (GPU-first kailash-ml)
