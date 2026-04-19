@@ -766,11 +766,18 @@ class PostgreSQLMigrationGenerator:
 
     def _create_table_sql(self, table: TableDefinition) -> str:
         """Generate CREATE TABLE SQL."""
+        # Issue #480: quote table + column identifiers so reserved words
+        # (order, user, desc...) and mixed-case names survive PostgreSQL's
+        # unquoted-identifier lowercasing rule. See
+        # rules/dataflow-identifier-safety.md MUST Rule 1.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("postgresql")
         columns_sql = []
         for column in table.columns:
             columns_sql.append(self._column_definition_sql(column))
 
-        sql = f"CREATE TABLE {table.name} (\n"
+        sql = f"CREATE TABLE {dialect.quote_identifier(table.name)} (\n"
         sql += ",\n".join(f"    {col_sql}" for col_sql in columns_sql)
         sql += "\n);"
 
@@ -778,7 +785,12 @@ class PostgreSQLMigrationGenerator:
 
     def _column_definition_sql(self, column: ColumnDefinition) -> str:
         """Generate column definition SQL."""
-        parts = [column.name, column.type]
+        # Issue #480: quote the column name so reserved-word columns
+        # (order, user, desc, group...) parse correctly on PostgreSQL.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("postgresql")
+        parts = [dialect.quote_identifier(column.name), column.type]
 
         if column.max_length and column.type.upper() in ("VARCHAR", "CHAR"):
             parts[1] = f"{column.type}({column.max_length})"
@@ -1436,11 +1448,15 @@ class SQLiteMigrationGenerator:
 
     def _create_table_sql(self, table: TableDefinition) -> str:
         """Generate CREATE TABLE SQL for SQLite."""
+        # Issue #480: quote identifiers via the dialect helper.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("sqlite")
         columns_sql = []
         for column in table.columns:
             columns_sql.append(self._column_definition_sql(column))
 
-        sql = f"CREATE TABLE {table.name} (\n"
+        sql = f"CREATE TABLE {dialect.quote_identifier(table.name)} (\n"
         sql += ",\n".join(f"    {col_sql}" for col_sql in columns_sql)
         sql += "\n);"
 
@@ -1448,7 +1464,15 @@ class SQLiteMigrationGenerator:
 
     def _column_definition_sql(self, column: ColumnDefinition) -> str:
         """Generate column definition SQL for SQLite."""
-        parts = [column.name, self._map_type_to_sqlite(column.type)]
+        # Issue #480: quote column name so reserved-word columns
+        # (order, user, desc, group...) parse correctly.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect("sqlite")
+        parts = [
+            dialect.quote_identifier(column.name),
+            self._map_type_to_sqlite(column.type),
+        ]
 
         if column.primary_key:
             parts.append("PRIMARY KEY")

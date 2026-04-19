@@ -4855,8 +4855,15 @@ class DataFlow(DataFlowEventMixin):
         python_type = field_info["type"]
         sql_type = self._python_type_to_sql_type(python_type, database_type)
 
+        # Issue #480: quote the column identifier so reserved-word and
+        # mixed-case field names parse correctly. See
+        # rules/dataflow-identifier-safety.md MUST Rule 1.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
+
         # Start building column definition
-        definition_parts = [field_name, sql_type]
+        definition_parts = [dialect.quote_identifier(field_name), sql_type]
 
         # Handle nullable/required
         if field_info.get("required", True):
@@ -4937,8 +4944,20 @@ class DataFlow(DataFlowEventMixin):
                     validation_error="Model has no fields defined (missing type annotations)",
                 )
 
+        # Issue #480: quote table + column identifiers via the dialect
+        # helper so reserved-word and mixed-case field names survive
+        # PostgreSQL's unquoted-identifier lowercasing rule. See
+        # rules/dataflow-identifier-safety.md MUST Rule 1.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
+        quoted_table = dialect.quote_identifier(table_name)
+        quoted_id = dialect.quote_identifier("id")
+        quoted_created_at = dialect.quote_identifier("created_at")
+        quoted_updated_at = dialect.quote_identifier("updated_at")
+
         # Start building CREATE TABLE statement with safety protection
-        sql_parts = [f"CREATE TABLE IF NOT EXISTS {table_name} ("]
+        sql_parts = [f"CREATE TABLE IF NOT EXISTS {quoted_table} ("]
 
         # Check if model has a string ID field
         id_field = fields.get("id", {})
@@ -4948,20 +4967,20 @@ class DataFlow(DataFlowEventMixin):
         if id_type == str:
             # String ID models need user-provided IDs
             if database_type.lower() == "postgresql":
-                sql_parts.append("    id TEXT PRIMARY KEY,")
+                sql_parts.append(f"    {quoted_id} TEXT PRIMARY KEY,")
             elif database_type.lower() == "mysql":
                 # MySQL doesn't allow TEXT as primary key - use VARCHAR(255)
-                sql_parts.append("    id VARCHAR(255) PRIMARY KEY,")
+                sql_parts.append(f"    {quoted_id} VARCHAR(255) PRIMARY KEY,")
             else:  # sqlite
-                sql_parts.append("    id TEXT PRIMARY KEY,")
+                sql_parts.append(f"    {quoted_id} TEXT PRIMARY KEY,")
         else:
             # Integer ID models use auto-increment
             if database_type.lower() == "postgresql":
-                sql_parts.append("    id SERIAL PRIMARY KEY,")
+                sql_parts.append(f"    {quoted_id} SERIAL PRIMARY KEY,")
             elif database_type.lower() == "mysql":
-                sql_parts.append("    id INT AUTO_INCREMENT PRIMARY KEY,")
+                sql_parts.append(f"    {quoted_id} INT AUTO_INCREMENT PRIMARY KEY,")
             else:  # sqlite
-                sql_parts.append("    id INTEGER PRIMARY KEY AUTOINCREMENT,")
+                sql_parts.append(f"    {quoted_id} INTEGER PRIMARY KEY AUTOINCREMENT,")
 
         # Add model fields
         column_definitions = []
@@ -4978,21 +4997,25 @@ class DataFlow(DataFlowEventMixin):
         # Add created_at and updated_at timestamp columns
         if database_type.lower() == "postgresql":
             column_definitions.append(
-                "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                f"    {quoted_created_at} TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
             )
             column_definitions.append(
-                "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                f"    {quoted_updated_at} TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
             )
         elif database_type.lower() == "mysql":
             column_definitions.append(
-                "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                f"    {quoted_created_at} TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
             )
             column_definitions.append(
-                "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+                f"    {quoted_updated_at} TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
             )
         else:  # sqlite
-            column_definitions.append("    created_at TEXT DEFAULT CURRENT_TIMESTAMP")
-            column_definitions.append("    updated_at TEXT DEFAULT CURRENT_TIMESTAMP")
+            column_definitions.append(
+                f"    {quoted_created_at} TEXT DEFAULT CURRENT_TIMESTAMP"
+            )
+            column_definitions.append(
+                f"    {quoted_updated_at} TEXT DEFAULT CURRENT_TIMESTAMP"
+            )
 
         # Join all column definitions
         sql_parts.extend([",\n".join(column_definitions)])
@@ -6909,7 +6932,18 @@ class DataFlow(DataFlowEventMixin):
             # If table inspection fails, use model fields only
             all_columns = field_names
 
-        columns_str = ", ".join(all_columns)
+        # Issue #480: quote every identifier via the dialect helper so
+        # reserved words (order, user, desc, group...) and mixed-case
+        # column names survive PostgreSQL's unquoted-identifier
+        # lowercasing rule. DialectManager also validates identifiers
+        # against the strict allowlist regex — see
+        # rules/dataflow-identifier-safety.md MUST Rule 1.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
+        quoted_table = dialect.quote_identifier(table_name)
+        quoted_id = dialect.quote_identifier("id")
+        columns_str = ", ".join(dialect.quote_identifier(c) for c in all_columns)
 
         # Database-specific parameter placeholders
         if database_type.lower() == "postgresql":
@@ -6923,12 +6957,12 @@ class DataFlow(DataFlowEventMixin):
             filter_placeholder = "?"
 
         return {
-            "select_by_id": f"SELECT {columns_str} FROM {table_name} WHERE id = {id_placeholder}",
-            "select_all": f"SELECT {columns_str} FROM {table_name}",
-            "select_with_filter": f"SELECT {columns_str} FROM {table_name} WHERE {{filter_condition}}",
-            "select_with_pagination": f"SELECT {columns_str} FROM {table_name} ORDER BY id LIMIT {{limit}} OFFSET {{offset}}",
-            "count_all": f"SELECT COUNT(*) FROM {table_name}",
-            "count_with_filter": f"SELECT COUNT(*) FROM {table_name} WHERE {{filter_condition}}",
+            "select_by_id": f"SELECT {columns_str} FROM {quoted_table} WHERE {quoted_id} = {id_placeholder}",
+            "select_all": f"SELECT {columns_str} FROM {quoted_table}",
+            "select_with_filter": f"SELECT {columns_str} FROM {quoted_table} WHERE {{filter_condition}}",
+            "select_with_pagination": f"SELECT {columns_str} FROM {quoted_table} ORDER BY {quoted_id} LIMIT {{limit}} OFFSET {{offset}}",
+            "count_all": f"SELECT COUNT(*) FROM {quoted_table}",
+            "count_with_filter": f"SELECT COUNT(*) FROM {quoted_table} WHERE {{filter_condition}}",
         }
 
     def _generate_update_sql(
@@ -6965,22 +6999,42 @@ class DataFlow(DataFlowEventMixin):
         except Exception:
             has_updated_at = False
 
+        # Issue #480: quote identifiers via the dialect helper so
+        # reserved-word and mixed-case field names survive PostgreSQL's
+        # unquoted-identifier lowercasing rule. See
+        # rules/dataflow-identifier-safety.md MUST Rule 1.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
+        quoted_table = dialect.quote_identifier(table_name)
+        quoted_id = dialect.quote_identifier("id")
+        quoted_updated_at = dialect.quote_identifier("updated_at")
+
         # Database-specific parameter placeholders and SET clauses
         if database_type.lower() == "postgresql":
-            set_clauses = [f"{name} = ${i + 1}" for i, name in enumerate(field_names)]
-            where_clause = f"WHERE id = ${len(field_names) + 1}"
+            set_clauses = [
+                f"{dialect.quote_identifier(name)} = ${i + 1}"
+                for i, name in enumerate(field_names)
+            ]
+            where_clause = f"WHERE {quoted_id} = ${len(field_names) + 1}"
             updated_at_clause = (
-                "updated_at = CURRENT_TIMESTAMP" if has_updated_at else None
+                f"{quoted_updated_at} = CURRENT_TIMESTAMP" if has_updated_at else None
             )
         elif database_type.lower() == "mysql":
-            set_clauses = [f"{name} = %s" for name in field_names]
-            where_clause = "WHERE id = %s"
-            updated_at_clause = "updated_at = NOW()" if has_updated_at else None
-        else:  # sqlite
-            set_clauses = [f"{name} = ?" for name in field_names]
-            where_clause = "WHERE id = ?"
+            set_clauses = [
+                f"{dialect.quote_identifier(name)} = %s" for name in field_names
+            ]
+            where_clause = f"WHERE {quoted_id} = %s"
             updated_at_clause = (
-                "updated_at = CURRENT_TIMESTAMP" if has_updated_at else None
+                f"{quoted_updated_at} = NOW()" if has_updated_at else None
+            )
+        else:  # sqlite
+            set_clauses = [
+                f"{dialect.quote_identifier(name)} = ?" for name in field_names
+            ]
+            where_clause = f"WHERE {quoted_id} = ?"
+            updated_at_clause = (
+                f"{quoted_updated_at} = CURRENT_TIMESTAMP" if has_updated_at else None
             )
 
         # Combine SET clauses (only include updated_at if the column exists)
@@ -6989,7 +7043,7 @@ class DataFlow(DataFlowEventMixin):
             all_set_clauses.append(updated_at_clause)
         set_clause = ", ".join(all_set_clauses)
 
-        sql = f"UPDATE {table_name} SET {set_clause} {where_clause}"
+        sql = f"UPDATE {quoted_table} SET {set_clause} {where_clause}"
 
         # Add RETURNING clause for PostgreSQL to get all fields back
         if database_type.lower() == "postgresql":
@@ -7011,7 +7065,7 @@ class DataFlow(DataFlowEventMixin):
                 # If table inspection fails, use model fields only
                 all_columns = ["id"] + list(fields.keys())
 
-            sql += f" RETURNING {', '.join(all_columns)}"
+            sql += f" RETURNING {', '.join(dialect.quote_identifier(c) for c in all_columns)}"
 
         return sql
 
@@ -7034,6 +7088,13 @@ class DataFlow(DataFlowEventMixin):
             model_name
         )
 
+        # Issue #480: quote identifiers via the dialect helper.
+        from ..adapters.dialect import DialectManager
+
+        dialect = DialectManager.get_dialect(database_type)
+        quoted_table = dialect.quote_identifier(table_name)
+        quoted_id = dialect.quote_identifier("id")
+
         # Database-specific parameter placeholders
         if database_type.lower() == "postgresql":
             id_placeholder = "$1"
@@ -7043,9 +7104,9 @@ class DataFlow(DataFlowEventMixin):
             id_placeholder = "?"
 
         return {
-            "delete_by_id": f"DELETE FROM {table_name} WHERE id = {id_placeholder}",
-            "delete_with_filter": f"DELETE FROM {table_name} WHERE {{filter_condition}}",
-            "delete_all": f"DELETE FROM {table_name}",
+            "delete_by_id": f"DELETE FROM {quoted_table} WHERE {quoted_id} = {id_placeholder}",
+            "delete_with_filter": f"DELETE FROM {quoted_table} WHERE {{filter_condition}}",
+            "delete_all": f"DELETE FROM {quoted_table}",
         }
 
     def _generate_bulk_sql(

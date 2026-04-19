@@ -1451,7 +1451,18 @@ class NodeGenerator:
                         table_name = self.dataflow_instance._get_table_name(
                             self.model_name
                         )
-                        columns = ", ".join(field_names)
+
+                        # Issue #480: quote identifiers via the dialect helper
+                        # so reserved-word and mixed-case field names survive
+                        # PostgreSQL's unquoted-identifier lowercasing rule.
+                        # See rules/dataflow-identifier-safety.md MUST Rule 1.
+                        from ..adapters.dialect import DialectManager
+
+                        dialect = DialectManager.get_dialect(database_type)
+                        quoted_table = dialect.quote_identifier(table_name)
+                        columns = ", ".join(
+                            dialect.quote_identifier(name) for name in field_names
+                        )
 
                         # Database-specific parameter placeholders
                         if database_type.lower() == "postgresql":
@@ -1466,13 +1477,19 @@ class NodeGenerator:
                                 returning_fields.append("created_at")
                             if "updated_at" in model_fields:
                                 returning_fields.append("updated_at")
-                            query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) RETURNING {', '.join(returning_fields)}"
+                            quoted_returning = ", ".join(
+                                dialect.quote_identifier(f) for f in returning_fields
+                            )
+                            query = (
+                                f"INSERT INTO {quoted_table} ({columns}) "
+                                f"VALUES ({placeholders}) RETURNING {quoted_returning}"
+                            )
                         elif database_type.lower() == "mysql":
                             placeholders = ", ".join(["%s"] * len(field_names))
-                            query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+                            query = f"INSERT INTO {quoted_table} ({columns}) VALUES ({placeholders})"
                         else:  # sqlite
                             placeholders = ", ".join(["?"] * len(field_names))
-                            query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+                            query = f"INSERT INTO {quoted_table} ({columns}) VALUES ({placeholders})"
 
                         # ADR-002: Changed from WARNING to DEBUG - SQL generation tracing
                         logger.debug(
@@ -1632,7 +1649,8 @@ class NodeGenerator:
                                 )
                                 if has_timestamps:
                                     readback_query = (
-                                        f"SELECT * FROM {table_name} WHERE id = ?"
+                                        f"SELECT * FROM {quoted_table} "
+                                        f"WHERE {dialect.quote_identifier('id')} = ?"
                                     )
                                     readback_result = await sql_node.async_run(
                                         query=readback_query,
@@ -2274,16 +2292,30 @@ class NodeGenerator:
                         except Exception:
                             has_updated_at = False
 
+                        # Issue #480: quote identifiers via the dialect
+                        # helper so reserved-word and mixed-case field names
+                        # survive PostgreSQL's unquoted-identifier lowercasing
+                        # rule. See rules/dataflow-identifier-safety.md MUST
+                        # Rule 1.
+                        from ..adapters.dialect import DialectManager
+
+                        dialect = DialectManager.get_dialect(database_type)
+                        quoted_table = dialect.quote_identifier(table_name)
+                        quoted_id = dialect.quote_identifier("id")
+                        quoted_updated_at = dialect.quote_identifier("updated_at")
+
                         # Build dynamic UPDATE query for only the fields being updated
                         field_names = list(updates.keys())
                         if database_type.lower() == "postgresql":
                             set_clauses = [
-                                f"{name} = ${i + 1}"
+                                f"{dialect.quote_identifier(name)} = ${i + 1}"
                                 for i, name in enumerate(field_names)
                             ]
-                            where_clause = f"WHERE id = ${len(field_names) + 1}"
+                            where_clause = (
+                                f"WHERE {quoted_id} = ${len(field_names) + 1}"
+                            )
                             updated_at_clause = (
-                                "updated_at = CURRENT_TIMESTAMP"
+                                f"{quoted_updated_at} = CURRENT_TIMESTAMP"
                                 if has_updated_at
                                 else None
                             )
@@ -2316,25 +2348,22 @@ class NodeGenerator:
                             if updated_at_clause:
                                 all_set_clauses.append(updated_at_clause)
 
-                            query = f"UPDATE {table_name} SET {', '.join(all_set_clauses)} {where_clause} RETURNING {', '.join(all_columns)}"
-                        elif database_type.lower() == "mysql":
-                            set_clauses = [f"{name} = %s" for name in field_names]
-                            where_clause = "WHERE id = %s"
-                            updated_at_clause = (
-                                "updated_at = NOW()" if has_updated_at else None
+                            returning_str = ", ".join(
+                                dialect.quote_identifier(c) for c in all_columns
                             )
-
-                            # Build SET clause (only include updated_at if column exists)
-                            all_set_clauses = set_clauses
-                            if updated_at_clause:
-                                all_set_clauses.append(updated_at_clause)
-
-                            query = f"UPDATE {table_name} SET {', '.join(all_set_clauses)} {where_clause}"
-                        else:  # sqlite
-                            set_clauses = [f"{name} = ?" for name in field_names]
-                            where_clause = "WHERE id = ?"
+                            query = (
+                                f"UPDATE {quoted_table} "
+                                f"SET {', '.join(all_set_clauses)} "
+                                f"{where_clause} RETURNING {returning_str}"
+                            )
+                        elif database_type.lower() == "mysql":
+                            set_clauses = [
+                                f"{dialect.quote_identifier(name)} = %s"
+                                for name in field_names
+                            ]
+                            where_clause = f"WHERE {quoted_id} = %s"
                             updated_at_clause = (
-                                "updated_at = CURRENT_TIMESTAMP"
+                                f"{quoted_updated_at} = NOW()"
                                 if has_updated_at
                                 else None
                             )
@@ -2344,7 +2373,25 @@ class NodeGenerator:
                             if updated_at_clause:
                                 all_set_clauses.append(updated_at_clause)
 
-                            query = f"UPDATE {table_name} SET {', '.join(all_set_clauses)} {where_clause}"
+                            query = f"UPDATE {quoted_table} SET {', '.join(all_set_clauses)} {where_clause}"
+                        else:  # sqlite
+                            set_clauses = [
+                                f"{dialect.quote_identifier(name)} = ?"
+                                for name in field_names
+                            ]
+                            where_clause = f"WHERE {quoted_id} = ?"
+                            updated_at_clause = (
+                                f"{quoted_updated_at} = CURRENT_TIMESTAMP"
+                                if has_updated_at
+                                else None
+                            )
+
+                            # Build SET clause (only include updated_at if column exists)
+                            all_set_clauses = set_clauses
+                            if updated_at_clause:
+                                all_set_clauses.append(updated_at_clause)
+
+                            query = f"UPDATE {quoted_table} SET {', '.join(all_set_clauses)} {where_clause}"
 
                         # Prepare parameters: field values first, then ID
                         # BUG #515 FIX: Serialize dict/list values for SQL binding
@@ -2510,14 +2557,21 @@ class NodeGenerator:
                     # Get the table name directly
                     table_name = self.dataflow_instance._get_table_name(self.model_name)
 
+                    # Issue #480: quote identifiers via the dialect helper.
+                    from ..adapters.dialect import DialectManager
+
+                    dialect = DialectManager.get_dialect(database_type)
+                    quoted_table = dialect.quote_identifier(table_name)
+                    quoted_id = dialect.quote_identifier("id")
+
                     # Database-specific DELETE query
                     # PostgreSQL/SQLite support RETURNING, MySQL does not
                     if database_type.lower() == "mysql":
-                        query = f"DELETE FROM {table_name} WHERE id = %s"
+                        query = f"DELETE FROM {quoted_table} WHERE {quoted_id} = %s"
                     elif database_type.lower() == "postgresql":
-                        query = f"DELETE FROM {table_name} WHERE id = $1 RETURNING id"
+                        query = f"DELETE FROM {quoted_table} WHERE {quoted_id} = $1 RETURNING {quoted_id}"
                     else:  # sqlite
-                        query = f"DELETE FROM {table_name} WHERE id = ? RETURNING id"
+                        query = f"DELETE FROM {quoted_table} WHERE {quoted_id} = ? RETURNING {quoted_id}"
 
                     # Debug log
                     import logging
