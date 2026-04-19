@@ -15,6 +15,24 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.8 + kailash-dataflow 2.0.11 + kailash-ml 0.11.0 + kailash-align 0.3.2 + kailash-pact 0.8.2 + kailash-trust 0.1.1 + kaizen-agents 0.9.3 — 2026-04-19
+
+Bundle release: BP-049 classified-data leak security patch (DataFlow) + ML Phase 1 GPU-first foundation. See individual package changelogs for full entries.
+
+#### kailash-dataflow 2.0.11
+
+- **BP-049 security patch**: `NotFoundError` for classified-PK models now echoes a sha256 fingerprint instead of the raw value. Read-path cache keys sanitize classified PKs before inclusion. Validation error messages for classified fields emit a fingerprint only.
+
+#### kailash-ml 0.11.0
+
+- **GPU-first Phase 1**: `DeviceReport`, `km.device()`, `km.use_device()` context manager, and `DeviceNotAvailableError`. Hardware inventory probe covering CUDA, MPS (Apple Silicon), and CPU. See `packages/kailash-ml/CHANGELOG.md` for full entry.
+
+#### kailash 2.8.8 / kailash-align 0.3.2 / kailash-pact 0.8.2 / kailash-trust 0.1.1 / kaizen-agents 0.9.3
+
+- Extras pin tightening: `kailash-dataflow>=2.0.11`, `kailash-ml>=0.11.0`, `kaizen-agents>=0.9.3` to propagate the security fix and new ML API to all downstream installs.
+
+---
+
 ### kailash 2.8.7 + kailash-kaizen 2.7.5 + kailash-dataflow 2.0.10 + kailash-nexus 2.1.0 + kailash-ml 0.10.0 + kailash-mcp 0.2.5 — 2026-04-19
 
 #### kailash-kaizen 2.7.5

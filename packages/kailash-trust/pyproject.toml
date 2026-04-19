@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-trust"
-version = "0.1.0"
+version = "0.1.1"
 description = "Kailash Trust — EATP trust plane integration"
 readme = "README.md"
 license = { text = "Apache-2.0" }
