@@ -22,7 +22,16 @@ from kailash_ml._result import TrainingResult
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
-from kailash_ml.trainable import Trainable
+from kailash_ml.trainable import (
+    HDBSCANTrainable,
+    LightGBMTrainable,
+    LightningTrainable,
+    SklearnTrainable,
+    TorchTrainable,
+    Trainable,
+    UMAPTrainable,
+    XGBoostTrainable,
+)
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -242,6 +251,18 @@ __all__ = [
     "detect_backend",
     "TrainingResult",
     "Trainable",
+    # GPU-first Phase 1 — all 7 family adapters per specs/ml-engines.md §3.0.
+    # Pre-existing 5 (Sklearn/XGBoost/LightGBM/Torch/Lightning) were
+    # accessible via `from kailash_ml.trainable import ...` since 0.10.x
+    # but absent from kailash_ml.__all__ until 0.12.0 — fixed for spec
+    # parity per /redteam round-3 finding HIGH-3.
+    "SklearnTrainable",
+    "XGBoostTrainable",
+    "LightGBMTrainable",
+    "TorchTrainable",
+    "LightningTrainable",
+    "UMAPTrainable",
+    "HDBSCANTrainable",
     "train",
     "track",
     "resolve_torch_wheel",

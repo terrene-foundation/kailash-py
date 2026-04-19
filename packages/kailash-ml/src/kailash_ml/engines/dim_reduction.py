@@ -381,11 +381,16 @@ class DimReductionEngine:
         n_neighbors = kwargs.pop("n_neighbors", min(15, X.shape[0] - 1))
         min_dist = kwargs.pop("min_dist", 0.1)
 
+        # umap-learn warns that `random_state` forces `n_jobs=1`; pre-set
+        # the value so umap's "overridden to 1" UserWarning does not
+        # fire. See umap_.py:1952 (umap-learn 0.5+). Same pattern as
+        # UMAPTrainable in `trainable.py`.
         reducer = umap.UMAP(
             n_components=n_components,
             n_neighbors=n_neighbors,
             min_dist=min_dist,
             random_state=seed,
+            n_jobs=kwargs.pop("n_jobs", 1),
             **kwargs,
         )
         X_transformed = reducer.fit_transform(X)

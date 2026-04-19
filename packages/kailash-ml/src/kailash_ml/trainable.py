@@ -52,6 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover - type-checker only
     import numpy as np  # noqa: F401 — referenced in string annotations
 
 from kailash_ml._device import UnsupportedFamily, detect_backend
+from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
 
 __all__ = [
@@ -65,6 +66,8 @@ __all__ = [
     "LightGBMTrainable",
     "TorchTrainable",
     "LightningTrainable",
+    "UMAPTrainable",
+    "HDBSCANTrainable",
 ]
 
 logger = logging.getLogger(__name__)
@@ -286,6 +289,31 @@ def _artifact_dir() -> Path:
     return root
 
 
+def _is_gpu_oom_error(exc: BaseException) -> bool:
+    """Return True if ``exc`` looks like a GPU out-of-memory error.
+
+    Recognises the common messages across xgboost (``XGBoostError`` with
+    "out of memory"), torch (``torch.cuda.OutOfMemoryError``,
+    ``RuntimeError: CUDA out of memory``), and lightgbm
+    (``LightGBMError`` with OOM text). Per revised-stack.md § "No-config
+    contract" (xgboost / lightgbm rows) this is the signal that triggers
+    the single-retry CPU fallback; any non-OOM exception re-raises
+    unchanged (zero-tolerance.md Rule 3 — no silent swallow).
+    """
+    msg = str(exc).lower()
+    if (
+        "out of memory" in msg
+        or "cuda out of memory" in msg
+        or "cuda error: out of memory" in msg
+        or "oom" in msg
+    ):
+        return True
+    # Typed OOM classes without English messages (torch's
+    # CudaOutOfMemoryError subclasses on some builds expose an empty
+    # args tuple; catch by class name so the detection survives).
+    return type(exc).__name__ in ("OutOfMemoryError", "CudaOutOfMemoryError")
+
+
 # ---------------------------------------------------------------------------
 # Lightning adapter base — sklearn-style single-epoch wrapper
 # ---------------------------------------------------------------------------
@@ -363,17 +391,57 @@ def _make_single_epoch_module(
 
 
 # ---------------------------------------------------------------------------
-# SklearnTrainable (ml-backends.md §5.1 — CPU only)
+# SklearnTrainable (ml-backends.md §5.1 + GPU-first Phase 1 Array-API dispatch)
 # ---------------------------------------------------------------------------
+#
+# Per the revised-stack spec (workspaces/kailash-ml-gpu-stack/04-validate/
+# 02-revised-stack.md lines 84-89), sklearn is CPU-only via the stock numpy
+# path BUT can run on the detected device via scikit-learn's Array API
+# dispatch for a supported subset of estimators. We engage the Array API
+# context when the estimator is on the allowlist AND the caller requested
+# a non-CPU backend. Off-allowlist estimators fall back to CPU numpy and
+# emit `sklearn.array_api.offlist` at WARN with
+# ``fallback_reason="array_api_offlist"`` on the returned ``DeviceReport``.
+#
+# Allowlist membership is matched on ``type(estimator).__name__`` to keep
+# the import surface cheap — pulling in every allowlisted class at module
+# import time would defeat the "light sklearn baseline" Phase 3 decision.
+# The initial set is conservative (scikit-learn 1.5+ Array API dispatch
+# coverage; see the scikit-learn "Array API support" docs). Expansion is a
+# spec-level edit, not a code edit.
+_SKLEARN_ARRAY_API_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "Ridge",
+        "LogisticRegression",
+        "LinearRegression",
+        "LinearDiscriminantAnalysis",
+        "KMeans",
+        "PCA",
+        "StandardScaler",
+        "MinMaxScaler",
+    }
+)
 
 
 class SklearnTrainable:
     """Wraps any sklearn estimator as a Trainable.
 
-    Per `ml-backends.md` §5.1 sklearn is CPU-only; if the Engine resolved
-    a non-CPU accelerator we log a WARN (`sklearn.backend.ignored`) and
-    proceed on CPU. We still route through L.Trainer per `ml-engines.md`
-    §3 MUST 2.
+    Two device paths per revised-stack spec lines 84-89:
+
+    * **On allowlist + non-CPU requested** — engage
+      ``sklearn.config_context(array_api_dispatch=True)`` around the inner
+      estimator fit and move inputs to a torch tensor on
+      ``ctx.device_string``. Emits INFO ``sklearn.array_api.engaged``.
+      ``TrainingResult.device.array_api == True``.
+    * **Off allowlist OR CPU requested** — fall back to CPU numpy as in
+      pre-Phase-1 behavior. When the caller asked for a non-CPU backend
+      that we had to ignore, emit WARN ``sklearn.array_api.offlist``
+      with ``fallback_reason="array_api_offlist"``.
+
+    We still route through L.Trainer per ``ml-engines.md`` §3 MUST 2 for
+    both paths — Lightning is the enforcement point for accelerator /
+    precision resolution, even when the actual fit runs inside the
+    Array API context.
     """
 
     family_name = "sklearn"
@@ -443,11 +511,25 @@ class SklearnTrainable:
     ) -> TrainingResult:
         """Fit the sklearn estimator via a LightningModule wrapper.
 
+        Two device paths per revised-stack spec lines 84-89:
+
+        * **Array API engaged** (on-allowlist + non-CPU requested): wraps
+          the inner estimator fit in
+          ``sklearn.config_context(array_api_dispatch=True)`` and moves
+          X/y to a torch tensor on ``ctx.device_string``. The returned
+          ``TrainingResult.device.array_api`` is True.
+        * **CPU fallback** (off-allowlist, or CPU requested): inner
+          estimator fit runs on numpy as in pre-Phase-1 behavior. When a
+          non-CPU backend was requested but the estimator was
+          off-allowlist we emit WARN ``sklearn.array_api.offlist`` and
+          stamp the ``DeviceReport`` with
+          ``fallback_reason="array_api_offlist"``.
+
         Routes through ``lightning.pytorch.Trainer(accelerator="cpu",
         devices=1, precision="32-true", max_epochs=1)`` per
-        ``ml-engines.md`` §3 MUST 2. sklearn is CPU-only
-        (``ml-backends.md`` §5.1): if the Engine resolved a non-CPU
-        accelerator we log and override to CPU.
+        ``ml-engines.md`` §3 MUST 2 in both paths — Lightning is the
+        enforcement point for accelerator / precision resolution even
+        when the actual fit runs inside an Array API dispatch context.
         """
         if hyperparameters:
             # Apply any HP overrides to the underlying estimator.
@@ -456,15 +538,40 @@ class SklearnTrainable:
                     setattr(self._estimator, k, v)
 
         ctx = _effective_context(context)
-        if ctx.backend != "cpu":
-            logger.warning(
-                "sklearn.backend.ignored",
+        estimator_class = type(self._estimator).__name__
+        on_allowlist = estimator_class in _SKLEARN_ARRAY_API_ALLOWLIST
+        non_cpu_requested = ctx.backend != "cpu"
+        engage_array_api = on_allowlist and non_cpu_requested
+
+        if engage_array_api:
+            # INFO — normal transition: Array API dispatch is the expected
+            # code path for an allowlisted estimator on a detected GPU
+            # backend. No fallback, no degradation.
+            logger.info(
+                "sklearn.array_api.engaged",
                 extra={
-                    "requested_backend": ctx.backend,
                     "family": self.family_name,
-                    "reason": "sklearn is CPU-only per ml-backends.md §5.1",
+                    "estimator_class": estimator_class,
+                    "backend": ctx.backend,
+                    "device_string": ctx.device_string,
                 },
             )
+        elif non_cpu_requested:
+            # WARN — degraded path: caller asked for a GPU but the
+            # estimator is off-allowlist, so we fall back to CPU numpy.
+            logger.warning(
+                "sklearn.array_api.offlist",
+                extra={
+                    "family": self.family_name,
+                    "estimator_class": estimator_class,
+                    "requested_backend": ctx.backend,
+                    "fallback_reason": "array_api_offlist",
+                },
+            )
+
+        # The Lightning Trainer always runs on CPU — Array API is a
+        # data-path dispatch, not a Trainer-accelerator knob. This keeps
+        # the outer loop uniform across all non-DL families.
         cpu_ctx = TrainingContext(
             accelerator="cpu",
             precision="32-true",
@@ -479,10 +586,21 @@ class SklearnTrainable:
         X, y, feature_names = _split_xy(data, self._target)
         self._feature_names = feature_names
         metric_name, metric_fn = _resolve_metric(self._metric_kind, y)
+
+        if engage_array_api:
+            # Move inputs to torch tensors on the resolved device so the
+            # Array API dispatcher routes through torch's backend.
+            import torch  # noqa: PLC0415 — local to GPU path
+
+            X_fit = torch.as_tensor(X, device=ctx.device_string)
+            y_fit = torch.as_tensor(y, device=ctx.device_string)
+        else:
+            X_fit, y_fit = X, y
+
         module = _make_single_epoch_module(
             self._estimator,
-            X,
-            y,
+            X_fit,
+            y_fit,
             metric_name=metric_name,
             metric_fn=metric_fn,
             module_name="SklearnLightningAdapter",
@@ -493,7 +611,51 @@ class SklearnTrainable:
         trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
         trainer = pl_trainer.Trainer(**trainer_kwargs)
         t0 = time.monotonic()
-        trainer.fit(module)
+        # If engage_array_api was True but scipy's Array API support is
+        # not enabled at the env-var level (SCIPY_ARRAY_API=1 before any
+        # scipy/sklearn import), sklearn's config_context raises at
+        # enter-time. We catch that and fall back to the CPU numpy path
+        # with a WARN log so the deployment gap is visible in log
+        # aggregators. This is the documented failure mode of sklearn's
+        # array_api_dispatch — it requires a pre-import env-var switch
+        # that many production images do not yet set by default.
+        array_api_runtime_failed = False
+        if engage_array_api:
+            import sklearn  # noqa: PLC0415 — local to GPU path
+
+            try:
+                with sklearn.config_context(array_api_dispatch=True):
+                    trainer.fit(module)
+            except RuntimeError as exc:
+                # scipy array_api gate — "Scikit-learn array API support
+                # was enabled but scipy's own support is not enabled"
+                if "array API" not in str(exc) and "array_api" not in str(exc):
+                    raise
+                logger.warning(
+                    "sklearn.array_api.runtime_unavailable",
+                    extra={
+                        "family": self.family_name,
+                        "estimator_class": estimator_class,
+                        "requested_backend": ctx.backend,
+                        "fallback_reason": "array_api_runtime_unavailable",
+                        "hint": "set SCIPY_ARRAY_API=1 before any sklearn/scipy import",
+                    },
+                )
+                array_api_runtime_failed = True
+                # Retry CPU numpy path — rebuild module with un-tensor'd
+                # inputs so the estimator sees plain arrays.
+                module = _make_single_epoch_module(
+                    self._estimator,
+                    X,
+                    y,
+                    metric_name=metric_name,
+                    metric_fn=metric_fn,
+                    module_name="SklearnLightningAdapter",
+                )
+                trainer = pl_trainer.Trainer(**trainer_kwargs)
+                trainer.fit(module)
+        else:
+            trainer.fit(module)
         elapsed = time.monotonic() - t0
 
         self._is_fitted = True
@@ -504,6 +666,41 @@ class SklearnTrainable:
         artifact_uri = _persist_native_artifact(
             self._estimator, prefix="sklearn", format="pickle"
         )
+
+        # DeviceReport carries POST-resolution evidence — what actually
+        # ran, not what was requested. Array API path points at the
+        # resolved GPU device; fallback path points at "cpu" with
+        # ``fallback_reason`` set when a non-CPU request was ignored.
+        if engage_array_api and not array_api_runtime_failed:
+            device_report = DeviceReport(
+                family=self.family_name,
+                backend=ctx.backend,
+                device_string=ctx.device_string,
+                precision=ctx.precision,
+                fallback_reason=None,
+                array_api=True,
+            )
+        elif engage_array_api and array_api_runtime_failed:
+            # Array API was ATTEMPTED but scipy's env-var gate blocked
+            # it; we fell back to CPU numpy. Report the failure shape
+            # so operators can grep for the deployment gap.
+            device_report = DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason="array_api_runtime_unavailable",
+                array_api=False,
+            )
+        else:
+            device_report = DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason=("array_api_offlist" if non_cpu_requested else None),
+                array_api=False,
+            )
 
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
@@ -518,6 +715,7 @@ class SklearnTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -688,6 +886,11 @@ class TorchTrainable:
 
         artifact_uri = _persist_native_artifact(inner, prefix="torch", format="pt")
 
+        # Per revised-stack.md § "Transparency contract": every fit
+        # returns a DeviceReport. Torch is the DL spine — backend
+        # reflects the actually-resolved Lightning accelerator (no
+        # eviction / OOM fallback path here; native multi-backend
+        # support via L.Trainer per ml-backends.md §5.4).
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={"train_loss": module.mean_loss},
@@ -701,6 +904,14 @@ class TorchTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"learning_rate": lr, "max_epochs": max_epochs},
+            device=DeviceReport(
+                family=self.family_name,
+                backend=ctx.backend,
+                device_string=ctx.device_string,
+                precision=ctx.precision,
+                fallback_reason=None,
+                array_api=False,
+            ),
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -822,6 +1033,11 @@ class LightningTrainable:
         if not metrics:
             metrics["train_loss"] = 0.0
 
+        # Per revised-stack.md § "Transparency contract": every fit
+        # returns a DeviceReport. Lightning is the DL spine — backend
+        # reflects the actually-resolved Lightning accelerator (no
+        # eviction / OOM fallback path here; native multi-backend
+        # support via L.Trainer per ml-backends.md §5.5).
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics=metrics,
@@ -835,6 +1051,14 @@ class LightningTrainable:
             lightning_trainer_config=trainer_kwargs,
             family=self.family_name,
             hyperparameters={"max_epochs": max_epochs},
+            device=DeviceReport(
+                family=self.family_name,
+                backend=ctx.backend,
+                device_string=ctx.device_string,
+                precision=ctx.precision,
+                fallback_reason=None,
+                array_api=False,
+            ),
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -980,8 +1204,71 @@ class XGBoostTrainable:
 
         trainer_kwargs = _log_backend_selection(ctx, max_epochs=1)
         trainer = pl_trainer.Trainer(**trainer_kwargs)
+
+        # OOM fallback: GPU OOM on the xgboost path MUST degrade to CPU
+        # with a WARN log (revised-stack.md § "No-config contract" — xgboost
+        # row). Non-OOM exceptions re-raise unchanged per zero-tolerance.md
+        # Rule 3 (no silent swallow).
+        fallback_reason: Optional[str] = None
+        effective_ctx = ctx
+        effective_trainer_kwargs = trainer_kwargs
         t0 = time.monotonic()
-        trainer.fit(module)
+        try:
+            trainer.fit(module)
+        except Exception as exc:
+            if ctx.backend == "cpu" or not _is_gpu_oom_error(exc):
+                raise
+            logger.warning(
+                "xgboost.gpu.oom_fallback",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "fallback_backend": "cpu",
+                    "fallback_reason": "oom",
+                    "error_class": type(exc).__name__,
+                },
+            )
+            fallback_reason = "oom"
+            # Re-point the xgboost estimator at CPU before the retry so
+            # the inner fit inside `on_train_start` actually runs on CPU.
+            if hasattr(self._estimator, "set_params"):
+                try:
+                    self._estimator.set_params(device="cpu")
+                except Exception:  # noqa: BLE001
+                    logger.debug(
+                        "xgboost.device.set_failed",
+                        extra={
+                            "xgb_device": "cpu",
+                            "family": self.family_name,
+                        },
+                    )
+            # Rebuild module + Trainer for the retry — L.Trainer is
+            # single-shot, and the first module already exhausted state
+            # when trainer.fit raised.
+            cpu_ctx = TrainingContext(
+                accelerator="cpu",
+                precision="32-true",
+                devices=1,
+                device_string="cpu",
+                backend="cpu",
+                tenant_id=ctx.tenant_id,
+                tracker_run_id=ctx.tracker_run_id,
+                trial_number=ctx.trial_number,
+            )
+            cpu_module = _make_single_epoch_module(
+                self._estimator,
+                X,
+                y,
+                metric_name=metric_name,
+                metric_fn=metric_fn,
+                module_name="XGBoostLightningAdapter",
+            )
+            cpu_trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+            cpu_trainer = pl_trainer.Trainer(**cpu_trainer_kwargs)
+            cpu_trainer.fit(cpu_module)
+            module = cpu_module
+            effective_ctx = cpu_ctx
+            effective_trainer_kwargs = cpu_trainer_kwargs
         elapsed = time.monotonic() - t0
 
         self._is_fitted = True
@@ -991,19 +1278,29 @@ class XGBoostTrainable:
             self._estimator, prefix="xgboost", format="pickle"
         )
 
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend=effective_ctx.backend,
+            device_string=effective_ctx.device_string,
+            precision=effective_ctx.precision,
+            fallback_reason=fallback_reason,
+            array_api=False,
+        )
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={metric_name: module.metric},
-            device_used=ctx.device_string,
-            accelerator=ctx.accelerator,
-            precision=ctx.precision,
+            device_used=effective_ctx.device_string,
+            accelerator=effective_ctx.accelerator,
+            precision=effective_ctx.precision,
             elapsed_seconds=elapsed,
-            tracker_run_id=ctx.tracker_run_id,
-            tenant_id=ctx.tenant_id,
+            tracker_run_id=effective_ctx.tracker_run_id,
+            tenant_id=effective_ctx.tenant_id,
             artifact_uris={"native": artifact_uri},
-            lightning_trainer_config=trainer_kwargs,
+            lightning_trainer_config=effective_trainer_kwargs,
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1159,8 +1456,70 @@ class LightGBMTrainable:
 
         trainer_kwargs = _log_backend_selection(ctx, max_epochs=1)
         trainer = pl_trainer.Trainer(**trainer_kwargs)
+
+        # OOM fallback: lightgbm GPU OOM MUST degrade to CPU with a
+        # WARN log (revised-stack.md § "No-config contract" — lightgbm
+        # row). ctx.backend in {"cuda", "rocm"} is the GPU path; "cpu"
+        # is already at the fallback target and re-raises unchanged
+        # per zero-tolerance.md Rule 3.
+        fallback_reason: Optional[str] = None
+        effective_ctx = ctx
+        effective_trainer_kwargs = trainer_kwargs
         t0 = time.monotonic()
-        trainer.fit(module)
+        try:
+            trainer.fit(module)
+        except Exception as exc:
+            if ctx.backend == "cpu" or not _is_gpu_oom_error(exc):
+                raise
+            logger.warning(
+                "lightgbm.gpu.oom_fallback",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "fallback_backend": "cpu",
+                    "fallback_reason": "oom",
+                    "error_class": type(exc).__name__,
+                },
+            )
+            fallback_reason = "oom"
+            # lightgbm uses `device_type="cpu"` (not `device=`). Re-point
+            # the estimator before the retry; debug-log any set_params
+            # failure (old lightgbm builds).
+            if hasattr(self._estimator, "set_params"):
+                try:
+                    self._estimator.set_params(device_type="cpu")
+                except Exception:  # noqa: BLE001
+                    logger.debug(
+                        "lightgbm.device.set_failed",
+                        extra={
+                            "lgb_device": "cpu",
+                            "family": self.family_name,
+                        },
+                    )
+            cpu_ctx = TrainingContext(
+                accelerator="cpu",
+                precision="32-true",
+                devices=1,
+                device_string="cpu",
+                backend="cpu",
+                tenant_id=ctx.tenant_id,
+                tracker_run_id=ctx.tracker_run_id,
+                trial_number=ctx.trial_number,
+            )
+            cpu_module = _make_single_epoch_module(
+                self._estimator,
+                X,
+                y,
+                metric_name=metric_name,
+                metric_fn=metric_fn,
+                module_name="LightGBMLightningAdapter",
+            )
+            cpu_trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+            cpu_trainer = pl_trainer.Trainer(**cpu_trainer_kwargs)
+            cpu_trainer.fit(cpu_module)
+            module = cpu_module
+            effective_ctx = cpu_ctx
+            effective_trainer_kwargs = cpu_trainer_kwargs
         elapsed = time.monotonic() - t0
 
         self._is_fitted = True
@@ -1170,19 +1529,29 @@ class LightGBMTrainable:
             self._estimator, prefix="lightgbm", format="pickle"
         )
 
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend=effective_ctx.backend,
+            device_string=effective_ctx.device_string,
+            precision=effective_ctx.precision,
+            fallback_reason=fallback_reason,
+            array_api=False,
+        )
+
         return TrainingResult(
             model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
             metrics={metric_name: module.metric},
-            device_used=ctx.device_string,
-            accelerator=ctx.accelerator,
-            precision=ctx.precision,
+            device_used=effective_ctx.device_string,
+            accelerator=effective_ctx.accelerator,
+            precision=effective_ctx.precision,
             elapsed_seconds=elapsed,
-            tracker_run_id=ctx.tracker_run_id,
-            tenant_id=ctx.tenant_id,
+            tracker_run_id=effective_ctx.tracker_run_id,
+            tenant_id=effective_ctx.tenant_id,
             artifact_uris={"native": artifact_uri},
-            lightning_trainer_config=trainer_kwargs,
+            lightning_trainer_config=effective_trainer_kwargs,
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
+            device=device_report,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1195,6 +1564,447 @@ class LightGBMTrainable:
         )
         preds = self._estimator.predict(frame.to_numpy())
         return Predictions(preds, column="prediction")
+
+
+# ---------------------------------------------------------------------------
+# UMAPTrainable (Phase 1 — CPU only via umap-learn; cuML evicted per
+# workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md CRITICAL-1)
+# ---------------------------------------------------------------------------
+
+
+class UMAPTrainable:
+    """Wraps ``umap-learn``'s UMAP as a Trainable.
+
+    Phase 1 ships CPU-only via the ``umap-learn`` pip package. cuML is
+    evicted per the Phase 1 revised-stack decision (NVIDIA-only, fragile
+    wheels, blocks every other GPU backend). Users on NVIDIA accept the
+    slower path; users on every other backend gain a working path. Phase
+    2 adds torch-native UMAP across MPS/ROCm/XPU.
+
+    When ``TrainingContext.backend != "cpu"``, the adapter logs
+    ``umap.cuml_eviction`` at INFO (documented design, not degraded —
+    per ``rules/observability.md`` §3 INFO is the correct level) and
+    runs on CPU. The emitted ``DeviceReport.fallback_reason`` is
+    ``"cuml_eviction"`` so callers can distinguish this from an OOM or
+    driver-missing fallback.
+
+    UMAP is unsupervised: ``target`` is optional; when given, it is
+    split off so downstream pipelines can chain a supervised stage.
+    """
+
+    family_name = "umap"
+    _SUPPORTED_BACKENDS = ("cpu",)  # Phase 1 — CPU only
+
+    def __init__(
+        self,
+        *,
+        target: Optional[str] = None,
+        n_components: int = 2,
+        n_neighbors: int = 15,
+        random_state: int = 42,
+        **kwargs: Any,
+    ) -> None:
+        self._init_kwargs: dict[str, Any] = {
+            "n_components": n_components,
+            "n_neighbors": n_neighbors,
+            "random_state": random_state,
+            # umap-learn warns that `random_state` forces `n_jobs=1`; pre-set
+            # the value so umap's "overridden to 1" UserWarning does not
+            # fire. See umap_.py:1952 (umap-learn 0.5+).
+            "n_jobs": kwargs.pop("n_jobs", 1),
+            **kwargs,
+        }
+        self._target = target
+        self._reducer: Any = None
+        self._is_fitted = False
+        self._last_module: Any = None
+        self._feature_names: tuple[str, ...] = ()
+
+    def to_lightning_module(self) -> Any:
+        if self._last_module is None:
+            raise RuntimeError(
+                "UMAPTrainable.to_lightning_module() called before fit(). "
+                "Call fit(data) first."
+            )
+        return self._last_module
+
+    def get_param_distribution(self) -> HyperparameterSpace:
+        return HyperparameterSpace(
+            params=(
+                HyperparameterRange(name="n_components", kind="int", low=2, high=50),
+                HyperparameterRange(name="n_neighbors", kind="int", low=2, high=200),
+            )
+        )
+
+    def fit(
+        self,
+        data: pl.DataFrame,
+        *,
+        hyperparameters: Optional[Mapping[str, Any]] = None,
+        context: Optional[TrainingContext] = None,
+    ) -> TrainingResult:
+        import lightning.pytorch as pl_trainer
+        import numpy as np
+
+        try:
+            import umap  # umap-learn package
+        except ImportError as exc:  # pragma: no cover - declared base dep
+            raise ImportError(
+                "UMAPTrainable requires the 'umap-learn' package. "
+                "It is a base dependency of kailash-ml; reinstall via "
+                "'uv sync' or 'pip install kailash-ml'."
+            ) from exc
+
+        ctx = _effective_context(context)
+
+        # Phase 1: always CPU (cuML evicted). INFO per observability.md §3.
+        fallback_reason: Optional[str] = None
+        if ctx.backend != "cpu":
+            logger.info(
+                "umap.cuml_eviction",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "actual_backend": "cpu",
+                    "fallback_reason": "cuml_eviction",
+                },
+            )
+            fallback_reason = "cuml_eviction"
+
+        cpu_ctx = TrainingContext(
+            accelerator="cpu",
+            precision="32-true",
+            devices=1,
+            device_string="cpu",
+            backend="cpu",
+            tenant_id=ctx.tenant_id,
+            tracker_run_id=ctx.tracker_run_id,
+            trial_number=ctx.trial_number,
+        )
+
+        params = dict(self._init_kwargs)
+        if hyperparameters:
+            params.update(hyperparameters)
+        self._reducer = umap.UMAP(**params)
+
+        # UMAP is unsupervised — split off target if given, but do not require it.
+        if self._target is not None and self._target in data.columns:
+            X, _y, feature_names = _split_xy(data, self._target)
+            self._feature_names = feature_names
+        else:
+            X = data.to_numpy()
+            self._feature_names = tuple(data.columns)
+
+        X_arr = np.asarray(X)
+
+        # Build a single-epoch LightningModule that fits UMAP in
+        # on_train_start. Same pattern as XGBoost/LightGBM adapters;
+        # _make_single_epoch_module assumes supervised (y+metric), so we
+        # inline a minimal unsupervised adapter here.
+        import torch
+
+        reducer = self._reducer
+
+        class _UMAPLightningAdapter(pl_trainer.LightningModule):
+            def __init__(self) -> None:
+                super().__init__()
+                self._reducer = reducer
+                self._X = X_arr
+                self._fitted = False
+                self._bias = torch.nn.Parameter(torch.zeros(1, requires_grad=True))
+
+            def on_train_start(self) -> None:
+                self._reducer.fit(self._X)
+                self._fitted = True
+
+            def training_step(self, batch: Any, batch_idx: int) -> Any:
+                return self._bias.sum() * 0.0
+
+            def configure_optimizers(self) -> Any:
+                return torch.optim.SGD([self._bias], lr=1e-3)
+
+            def train_dataloader(self) -> Any:
+                ds = torch.utils.data.TensorDataset(
+                    torch.zeros(1, 1),
+                    torch.zeros(1, dtype=torch.long),
+                )
+                return torch.utils.data.DataLoader(ds, batch_size=1)
+
+        module = _UMAPLightningAdapter()
+
+        trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+        trainer = pl_trainer.Trainer(**trainer_kwargs)
+        t0 = time.monotonic()
+        trainer.fit(module)
+        elapsed = time.monotonic() - t0
+
+        self._is_fitted = True
+        self._last_module = module
+
+        artifact_uri = _persist_native_artifact(
+            self._reducer, prefix="umap", format="pickle"
+        )
+
+        return TrainingResult(
+            model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
+            # UMAP is unsupervised; no supervised metric to report. We
+            # emit a placeholder 0.0 so the TrainingResult contract is
+            # satisfied. Downstream metrics (trustworthiness, silhouette
+            # against a target) belong to the engine, not the adapter.
+            metrics={"umap_embedding_components": float(params["n_components"])},
+            device_used=cpu_ctx.device_string,
+            accelerator=cpu_ctx.accelerator,
+            precision=cpu_ctx.precision,
+            elapsed_seconds=elapsed,
+            tracker_run_id=cpu_ctx.tracker_run_id,
+            tenant_id=cpu_ctx.tenant_id,
+            artifact_uris={"native": artifact_uri},
+            lightning_trainer_config=trainer_kwargs,
+            family=self.family_name,
+            hyperparameters=dict(hyperparameters or {}),
+            device=DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason=fallback_reason,
+                array_api=False,
+            ),
+        )
+
+    def predict(self, X: pl.DataFrame) -> Predictions:
+        if not self._is_fitted:
+            raise RuntimeError("UMAPTrainable.predict() called before fit().")
+        # If target was used at fit time, drop it from X if present.
+        if self._target is not None and self._target in X.columns:
+            frame = X.drop(self._target)
+        else:
+            frame = X
+        embedding = self._reducer.transform(frame.to_numpy())
+        return Predictions(embedding, column="embedding")
+
+
+# ---------------------------------------------------------------------------
+# HDBSCANTrainable (Phase 1 — CPU only via sklearn.cluster.HDBSCAN;
+# cuML evicted per revised-stack.md CRITICAL-1)
+# ---------------------------------------------------------------------------
+
+
+class HDBSCANTrainable:
+    """Wraps ``sklearn.cluster.HDBSCAN`` as a Trainable.
+
+    Phase 1 ships CPU-only via sklearn 1.3+'s HDBSCAN (already in our
+    ``scikit-learn>=1.5`` base dep). cuML is evicted per the revised
+    stack decision. Phase 2 adds torch-native HDBSCAN across non-NVIDIA
+    backends.
+
+    Clustering note: HDBSCAN is transductive — ``.fit(X)`` exposes
+    ``labels_`` for the training data, but it has no canonical
+    ``.predict()`` for new points. ``HDBSCANTrainable.predict(X)``
+    re-runs ``.fit_predict(X)`` on ``X``, which clusters the new frame
+    independently. For approximate prediction on new points, fit with
+    ``prediction_data=True`` and use ``hdbscan.approximate_predict``
+    (not wrapped here — belongs in a downstream clustering engine).
+    """
+
+    family_name = "hdbscan"
+    _SUPPORTED_BACKENDS = ("cpu",)  # Phase 1 — CPU only
+
+    def __init__(
+        self,
+        *,
+        target: Optional[str] = None,
+        min_cluster_size: int = 5,
+        min_samples: Optional[int] = None,
+        **kwargs: Any,
+    ) -> None:
+        self._init_kwargs: dict[str, Any] = {
+            "min_cluster_size": min_cluster_size,
+            # sklearn 1.5+ emits a FutureWarning that `copy` defaults are
+            # changing (False → True in sklearn 1.10). Pre-set the 1.10
+            # default so the upgrade is a no-op.
+            "copy": kwargs.pop("copy", True),
+            **kwargs,
+        }
+        if min_samples is not None:
+            self._init_kwargs["min_samples"] = min_samples
+        self._target = target
+        self._clusterer: Any = None
+        self._is_fitted = False
+        self._last_module: Any = None
+        self._feature_names: tuple[str, ...] = ()
+
+    def to_lightning_module(self) -> Any:
+        if self._last_module is None:
+            raise RuntimeError(
+                "HDBSCANTrainable.to_lightning_module() called before fit(). "
+                "Call fit(data) first."
+            )
+        return self._last_module
+
+    def get_param_distribution(self) -> HyperparameterSpace:
+        return HyperparameterSpace(
+            params=(
+                HyperparameterRange(
+                    name="min_cluster_size", kind="int", low=2, high=100
+                ),
+                HyperparameterRange(name="min_samples", kind="int", low=1, high=50),
+            )
+        )
+
+    def fit(
+        self,
+        data: pl.DataFrame,
+        *,
+        hyperparameters: Optional[Mapping[str, Any]] = None,
+        context: Optional[TrainingContext] = None,
+    ) -> TrainingResult:
+        import lightning.pytorch as pl_trainer
+        import numpy as np
+        from sklearn.cluster import HDBSCAN
+
+        ctx = _effective_context(context)
+
+        fallback_reason: Optional[str] = None
+        if ctx.backend != "cpu":
+            logger.info(
+                "hdbscan.cuml_eviction",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "actual_backend": "cpu",
+                    "fallback_reason": "cuml_eviction",
+                },
+            )
+            fallback_reason = "cuml_eviction"
+
+        cpu_ctx = TrainingContext(
+            accelerator="cpu",
+            precision="32-true",
+            devices=1,
+            device_string="cpu",
+            backend="cpu",
+            tenant_id=ctx.tenant_id,
+            tracker_run_id=ctx.tracker_run_id,
+            trial_number=ctx.trial_number,
+        )
+
+        params = dict(self._init_kwargs)
+        if hyperparameters:
+            params.update(hyperparameters)
+        self._clusterer = HDBSCAN(**params)
+
+        # HDBSCAN is unsupervised — split off target if given.
+        if self._target is not None and self._target in data.columns:
+            X, _y, feature_names = _split_xy(data, self._target)
+            self._feature_names = feature_names
+        else:
+            X = data.to_numpy()
+            self._feature_names = tuple(data.columns)
+
+        X_arr = np.asarray(X)
+
+        import torch
+
+        clusterer = self._clusterer
+
+        class _HDBSCANLightningAdapter(pl_trainer.LightningModule):
+            def __init__(self) -> None:
+                super().__init__()
+                self._clusterer = clusterer
+                self._X = X_arr
+                self._fitted = False
+                self._n_clusters = 0
+                self._n_noise = 0
+                self._bias = torch.nn.Parameter(torch.zeros(1, requires_grad=True))
+
+            def on_train_start(self) -> None:
+                self._clusterer.fit(self._X)
+                self._fitted = True
+                labels = self._clusterer.labels_
+                # -1 is the HDBSCAN noise label; positive labels are clusters.
+                unique = set(int(x) for x in labels)
+                self._n_noise = int((labels == -1).sum())
+                self._n_clusters = len(unique - {-1})
+
+            def training_step(self, batch: Any, batch_idx: int) -> Any:
+                return self._bias.sum() * 0.0
+
+            def configure_optimizers(self) -> Any:
+                return torch.optim.SGD([self._bias], lr=1e-3)
+
+            def train_dataloader(self) -> Any:
+                ds = torch.utils.data.TensorDataset(
+                    torch.zeros(1, 1),
+                    torch.zeros(1, dtype=torch.long),
+                )
+                return torch.utils.data.DataLoader(ds, batch_size=1)
+
+            @property
+            def cluster_count(self) -> int:
+                return self._n_clusters
+
+            @property
+            def noise_count(self) -> int:
+                return self._n_noise
+
+        module = _HDBSCANLightningAdapter()
+
+        trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+        trainer = pl_trainer.Trainer(**trainer_kwargs)
+        t0 = time.monotonic()
+        trainer.fit(module)
+        elapsed = time.monotonic() - t0
+
+        self._is_fitted = True
+        self._last_module = module
+
+        artifact_uri = _persist_native_artifact(
+            self._clusterer, prefix="hdbscan", format="pickle"
+        )
+
+        return TrainingResult(
+            model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
+            metrics={
+                "hdbscan_n_clusters": float(module.cluster_count),
+                "hdbscan_n_noise": float(module.noise_count),
+            },
+            device_used=cpu_ctx.device_string,
+            accelerator=cpu_ctx.accelerator,
+            precision=cpu_ctx.precision,
+            elapsed_seconds=elapsed,
+            tracker_run_id=cpu_ctx.tracker_run_id,
+            tenant_id=cpu_ctx.tenant_id,
+            artifact_uris={"native": artifact_uri},
+            lightning_trainer_config=trainer_kwargs,
+            family=self.family_name,
+            hyperparameters=dict(hyperparameters or {}),
+            device=DeviceReport(
+                family=self.family_name,
+                backend="cpu",
+                device_string="cpu",
+                precision="32-true",
+                fallback_reason=fallback_reason,
+                array_api=False,
+            ),
+        )
+
+    def predict(self, X: pl.DataFrame) -> Predictions:
+        if not self._is_fitted:
+            raise RuntimeError("HDBSCANTrainable.predict() called before fit().")
+        # HDBSCAN is transductive. For new data, re-cluster via fit_predict.
+        # See class docstring: for approximate_predict-style behavior on
+        # new points, instantiate sklearn.cluster.HDBSCAN upstream with
+        # appropriate settings — that path belongs in a clustering engine.
+        from sklearn.cluster import HDBSCAN
+
+        if self._target is not None and self._target in X.columns:
+            frame = X.drop(self._target)
+        else:
+            frame = X
+        new_clusterer = HDBSCAN(**self._init_kwargs)
+        labels = new_clusterer.fit_predict(frame.to_numpy())
+        return Predictions(labels, column="cluster_label")
 
 
 # ---------------------------------------------------------------------------

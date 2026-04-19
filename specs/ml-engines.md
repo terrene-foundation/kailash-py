@@ -402,6 +402,22 @@ Every method on `MLEngine` MUST raise a typed exception from `kailash_ml.excepti
 
 Every model family that can be fitted by `MLEngine.fit()` MUST implement the `Trainable` protocol. This protocol is the single place where the Lightning-core invariant is enforced.
 
+### 3.0 Phase 1 Family Roster (kailash-ml ≥ 0.12.0)
+
+The Phase 1 GPU-first roster is fixed at seven public Trainable family adapters, all exported from `kailash_ml.trainable` and listed in `kailash_ml.__all__`:
+
+| Family    | Class                | Backend support                                                         | Notes                                           |
+| --------- | -------------------- | ----------------------------------------------------------------------- | ----------------------------------------------- |
+| sklearn   | `SklearnTrainable`   | CPU + Array API allowlist on non-CPU backends                           | See ml-backends.md §5.1                         |
+| xgboost   | `XGBoostTrainable`   | CPU + CUDA, OOM single-retry to CPU                                     | See ml-backends.md §5.2                         |
+| lightgbm  | `LightGBMTrainable`  | CPU + CUDA/ROCm, OOM single-retry to CPU                                | See ml-backends.md §5.3                         |
+| torch     | `TorchTrainable`     | All 6 (cuda/mps/rocm/xpu/tpu/cpu)                                       | DL spine; native multi-backend                  |
+| lightning | `LightningTrainable` | All 6 (cuda/mps/rocm/xpu/tpu/cpu)                                       | DL spine; native multi-backend                  |
+| umap      | `UMAPTrainable`      | CPU only (Phase 1) — non-CPU requests log `cuml_eviction` and fall back | See ml-backends.md §5.7. Phase 2 → torch-native |
+| hdbscan   | `HDBSCANTrainable`   | CPU only (Phase 1) — non-CPU requests log `cuml_eviction` and fall back | See ml-backends.md §5.8. Phase 3 → torch-native |
+
+Adding a new family is a spec amendment to this table AND a `tests/regression/test_trainable_device_report_invariant.py` AST update to enumerate the new class.
+
 ### 3.1 Protocol Definition
 
 ```python
@@ -542,7 +558,19 @@ class TrainingResult:
     split_info: SplitInfo | None = None   # which split strategy, seed, sizes
     calibration: CalibrationInfo | None = None
     feature_importance: dict[str, float] | None = None
+
+    # GPU-first Phase 1 transparency contract (kailash-ml ≥ 0.12.0)
+    device: DeviceReport | None = None    # per-call evidence; populated by every Phase 1 family
 ```
+
+`DeviceReport` is defined in `kailash_ml._device_report` and carries the post-resolution evidence of what backend / precision / fallback ACTUALLY ran (vs `device_used` which is only the device string). Fields:
+
+- `family: str` — `"sklearn"`, `"xgboost"`, `"torch"`, etc.
+- `backend: str` — concrete value from `_device.KNOWN_BACKENDS` (never `"auto"`)
+- `device_string: str` — torch device string actually used
+- `precision: str` — concrete precision string (never `"auto"`)
+- `fallback_reason: str | None` — `"oom"`, `"cuml_eviction"`, `"array_api_offlist"`, `"array_api_runtime_unavailable"`, `"driver_missing"`, `"unsupported_family"`, or `None`
+- `array_api: bool` — `True` iff sklearn's `config_context(array_api_dispatch=True)` engaged for this call
 
 ### 4.2 MUST Rules
 
@@ -604,6 +632,43 @@ return TrainingResult(..., lightning_trainer_config={"accelerator": "auto"})
 When the Engine's `register()` is called with `format="onnx"` (default) or `format="both"`, the returned `RegisterResult.artifact_uris` MUST contain `"onnx"`. If ONNX export failed, `register()` MUST raise `OnnxExportError` — silently returning without ONNX is BLOCKED.
 
 **Why:** See §6. "ONNX export failed, falling back to pickle" without a raised error is the v0.9.x bug pattern where the compatibility matrix claimed xgboost support but the code had no xgboost branch.
+
+#### 5. Every Phase 1 Family Adapter MUST Populate `device`
+
+Every `Trainable.fit()` implementation MUST construct and attach a `DeviceReport` to the returned `TrainingResult.device` field. The adapter MUST set `fallback_reason` to a machine-parseable string when a non-CPU request was downgraded:
+
+| Family    | Standard `fallback_reason` codes                         |
+| --------- | -------------------------------------------------------- |
+| sklearn   | `"array_api_offlist"`, `"array_api_runtime_unavailable"` |
+| xgboost   | `"oom"`                                                  |
+| lightgbm  | `"oom"`                                                  |
+| torch     | (none — native multi-backend; no fallback path)          |
+| lightning | (none — native multi-backend; no fallback path)          |
+| umap      | `"cuml_eviction"`                                        |
+| hdbscan   | `"cuml_eviction"`                                        |
+
+```python
+# DO — populate device on every return path
+return TrainingResult(
+    ..., device=DeviceReport(
+        family=self.family_name,
+        backend=resolved_backend,
+        device_string=resolved_device_string,
+        precision=resolved_precision,
+        fallback_reason=fallback_reason,  # None when no downgrade
+        array_api=array_api_engaged,
+    ),
+)
+
+# DO NOT — return TrainingResult without device=
+return TrainingResult(...)  # silently leaves device=None — orphan
+```
+
+**Why:** A `TrainingResult.device == None` from a family that the spec covers means callers cannot distinguish actual-CUDA-execution from silent-CPU-fallback. The orphan failure mode of `rules/orphan-detection.md` §1 applies at the field level: the public `DeviceReport` symbol must be wired into the production hot path of every Trainable family. `tests/regression/test_trainable_device_report_invariant.py` enforces this at AST level — every `TrainingResult(...)` constructor in `trainable.py` MUST carry `device=`. Origin: round-3 redteam (2026-04-19) caught TorchTrainable + LightningTrainable returning `TrainingResult` without `device=` even though the Phase 1 punch list assumed they were already wired.
+
+#### 6. `Predictions.device` — Deferred to 0.12.1
+
+The `Predictions` class shipped in 0.12.0 does NOT carry a `device` field. The spec mandate "every predict returns one" applies to the post-fit predict surface and is scheduled for kailash-ml 0.12.1. Callers in 0.12.0 MUST inspect the prior `TrainingResult.device` to determine the device the model was trained on; this is sufficient for the immediate-after-fit case but insufficient for serialized-then-restored model scenarios. Tracked in `workspaces/kailash-ml-gpu-stack/journal/0005-GAP-predictions-device-field-missing.md`.
 
 ---
 
@@ -853,15 +918,15 @@ See §6. Integration tests: `test_onnx_roundtrip_{sklearn,xgboost,lightgbm,catbo
 
 ### 7.2 Claim-to-Test Mapping
 
-| Claim                       | Integration Test File                                                    |
-| --------------------------- | ------------------------------------------------------------------------ |
-| Multi-channel serve         | `tests/integration/test_serve_multichannel.py`                           |
-| Polars-native pipelines     | `tests/integration/test_polars_native_pipeline.py`                       |
+| Claim                       | Integration Test File                                                     |
+| --------------------------- | ------------------------------------------------------------------------- |
+| Multi-channel serve         | `tests/integration/test_serve_multichannel.py`                            |
+| Polars-native pipelines     | `tests/integration/test_polars_native_pipeline.py`                        |
 | ONNX-default artifacts      | `tests/integration/test_onnx_roundtrip_{sklearn,xgboost,lightgbm,...}.py` |
-| Unified ML/DL/RL            | `tests/integration/test_unified_surface.py`                              |
-| Async tracker               | `tests/integration/test_tracker_async.py`                                |
-| Schema evolution            | `tests/integration/test_feature_store_evolve.py`                         |
-| MCP-native experiment query | `tests/integration/test_mcp_experiment_tools.py`                         |
+| Unified ML/DL/RL            | `tests/integration/test_unified_surface.py`                               |
+| Async tracker               | `tests/integration/test_tracker_async.py`                                 |
+| Schema evolution            | `tests/integration/test_feature_store_evolve.py`                          |
+| MCP-native experiment query | `tests/integration/test_mcp_experiment_tools.py`                          |
 
 ---
 
@@ -921,20 +986,20 @@ The legacy namespace MUST NOT be removed in any 2.x release. Removal happens at 
 
 The v0.9.x public symbols that are demoted to `kailash_ml.legacy.*` (and promoted callers MUST migrate to the 2.0 equivalents):
 
-| v0.9.x import                                  | v2.0 equivalent                    |
-| ---------------------------------------------- | ---------------------------------- |
-| `from kailash_ml import AutoMLEngine`          | `engine.compare() → .finalize()`   |
-| `from kailash_ml import TrainingPipeline`      | `engine.fit()`                     |
-| `from kailash_ml import HyperparameterSearch`  | `engine.compare(hp_search="...")`  |
-| `from kailash_ml import EnsembleEngine`        | `kailash_ml.primitives.Ensemble`   |
-| `from kailash_ml import ClusteringEngine`      | `kailash_ml.primitives.Transform`  |
-| `from kailash_ml import AnomalyDetectionEngine`| `kailash_ml.primitives.Transform`  |
-| `from kailash_ml import DimReductionEngine`    | `kailash_ml.primitives.Transform`  |
-| `from kailash_ml import PreprocessingPipeline` | `engine.setup()`                   |
-| `from kailash_ml import DataExplorer`          | `kailash_ml.primitives.Explorer`   |
-| `from kailash_ml import ModelVisualizer`       | `kailash_ml.primitives.Visualizer` |
-| `from kailash_ml import ModelExplainer`        | `kailash_ml.primitives.Explainer`  |
-| `from kailash_ml import FeatureEngineer`       | `kailash_ml.primitives.FeatureGen` |
+| v0.9.x import                                   | v2.0 equivalent                    |
+| ----------------------------------------------- | ---------------------------------- |
+| `from kailash_ml import AutoMLEngine`           | `engine.compare() → .finalize()`   |
+| `from kailash_ml import TrainingPipeline`       | `engine.fit()`                     |
+| `from kailash_ml import HyperparameterSearch`   | `engine.compare(hp_search="...")`  |
+| `from kailash_ml import EnsembleEngine`         | `kailash_ml.primitives.Ensemble`   |
+| `from kailash_ml import ClusteringEngine`       | `kailash_ml.primitives.Transform`  |
+| `from kailash_ml import AnomalyDetectionEngine` | `kailash_ml.primitives.Transform`  |
+| `from kailash_ml import DimReductionEngine`     | `kailash_ml.primitives.Transform`  |
+| `from kailash_ml import PreprocessingPipeline`  | `engine.setup()`                   |
+| `from kailash_ml import DataExplorer`           | `kailash_ml.primitives.Explorer`   |
+| `from kailash_ml import ModelVisualizer`        | `kailash_ml.primitives.Visualizer` |
+| `from kailash_ml import ModelExplainer`         | `kailash_ml.primitives.Explainer`  |
+| `from kailash_ml import FeatureEngineer`        | `kailash_ml.primitives.FeatureGen` |
 
 ### 8.3 Preserved Symbols
 
@@ -1011,14 +1076,14 @@ These clauses MUST be implemented identically in both SDKs:
 
 These clauses MUST be implemented with language-specific substitutions, semantics preserved:
 
-| Clause                  | Python (kailash-py)              | Rust (kailash-rs)                     |
-| ----------------------- | -------------------------------- | ------------------------------------- |
-| §2 Engine facade        | `kailash_ml.Engine`              | `kailash_ml::Engine` struct           |
-| §3 `Trainable` protocol | Python `Protocol` + `@runtime_checkable` | Rust `trait Trainable`        |
-| Lightning Trainer spine | `lightning.pytorch.Trainer`      | `burn::Trainer` or `tch::train::Trainer` |
-| ONNX export             | `skl2onnx` / `onnxmltools` / `torch.onnx.export` | `tract-onnx` / `ort` export |
-| MCP server              | `fastmcp` (Python)               | `mcp-rs` crate                        |
-| Async runtime           | asyncio / async-context-managers | tokio / async-trait                   |
+| Clause                  | Python (kailash-py)                              | Rust (kailash-rs)                        |
+| ----------------------- | ------------------------------------------------ | ---------------------------------------- |
+| §2 Engine facade        | `kailash_ml.Engine`                              | `kailash_ml::Engine` struct              |
+| §3 `Trainable` protocol | Python `Protocol` + `@runtime_checkable`         | Rust `trait Trainable`                   |
+| Lightning Trainer spine | `lightning.pytorch.Trainer`                      | `burn::Trainer` or `tch::train::Trainer` |
+| ONNX export             | `skl2onnx` / `onnxmltools` / `torch.onnx.export` | `tract-onnx` / `ort` export              |
+| MCP server              | `fastmcp` (Python)                               | `mcp-rs` crate                           |
+| Async runtime           | asyncio / async-context-managers                 | tokio / async-trait                      |
 
 ### 10.3 Python-Only Clauses
 
