@@ -67,6 +67,34 @@ async def invalidate_model(self, model: str) -> int:
 
 **Why:** A user invalidating "their" cache should not clear every other tenant's cache. Tenant-scoped invalidation also enables targeted cache busting on tenant-specific events (a single tenant's password rotation, a single tenant's quota change).
 
+### 3a. Keyspace Version Bumps Require Invalidation-Path Sweep
+
+When the default keyspace version emitted by `CacheKeyGenerator` (or equivalent key-constructor) is bumped — e.g. `v1 → v2` for a cross-SDK parity change or a classification-hash format change — EVERY invalidation entry point in the codebase MUST be audited and updated in the same PR. The safest disposition is to match the version segment as a wildcard (`dataflow:v*:*`) so legacy keys AND current keys are swept in one call.
+
+```python
+# DO — version-wildcard sweep, future-proof
+if tenant_id is not None:
+    express_pattern = f"dataflow:v*:{tenant_id}:{model_name}:*"
+else:
+    express_pattern = f"dataflow:v*:{model_name}:*"
+query_pattern = f"dataflow:{model_name}:v*:*"
+
+# DO NOT — version-pinned sweep after the generator bumps
+express_pattern = f"dataflow:v1:{model_name}:*"   # misses every v2 entry
+query_pattern = f"dataflow:{model_name}:v1:*"
+```
+
+**BLOCKED rationalizations:**
+
+- "The invalidation path runs rarely, v1 entries will expire on their own TTL"
+- "We'll update the invalidation in a follow-up PR"
+- "The generator default can be reverted if it causes issues"
+- "Only one adapter pins the old version; the others are fine"
+
+**Why:** A cache keyspace bump is a producer-side change that silently breaks every consumer-side invalidator pinned to the old version. Write-then-invalidate leaves stale entries on the shared backend (Redis, Memcached, etc.) indefinitely; TTL-based eventual-expiry is not a substitute because TTLs are often multi-hour and users observe the stale reads in the meantime. Evidence: kailash-dataflow 2.0.11 shipped with `CacheKeyGenerator` default `v1→v2` but `AsyncRedisCacheAdapter.invalidate_model` left pinned at `v1`; post-release reviewer caught it and it was fast-patched in 2.0.12 via PR #529. Version-wildcard sweeps are the structural defense — the only invalidation code that survives the next keyspace bump unchanged.
+
+Origin: PR #522 / PR #529 (2026-04-19) — BP-049 keyspace bump `v1→v2`; Redis invalidator missed in the producer-side update.
+
 ### 4. Metric Labels Carry Tenant_id (Bounded)
 
 Metrics that count per-tenant operations (`requests_total`, `cache_hits_total`, `errors_total`) MAY include `tenant_id` as a label, BUT label cardinality MUST be bounded. Unbounded `tenant_id` labels in Prometheus produce a metric series per tenant which exhausts memory at scale.

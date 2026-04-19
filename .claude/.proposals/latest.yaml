@@ -1,255 +1,127 @@
 source_repo: kailash-py
 codify_date: "2026-04-19"
 codify_session: |
-  Session 2026-04-19 shipped 9 PRs (#502-#508 + #509 + #515 + #517 +
-  #518 + #519) and released 6 packages to PyPI (kailash 2.8.7,
-  kailash-kaizen 2.7.5, kailash-dataflow 2.0.10, kailash-nexus 2.1.0,
-  kailash-ml 0.10.0, kailash-mcp 0.2.5). Codify captures 9 recurring
-  institutional failure patterns:
-    1. Worktree isolation drift (ml / dataflow / kaizen / testing
-       specialists drifted back to main checkout, 4 occurrences).
-    2. Agent budget exhaustion mid-message ("Now let me write X…"
-       with no actual tool call) — 3 occurrences.
-    3. Scanner-surface symmetry variant: CodeQL `__all__` +
-       lazy `__getattr__` (PR #506 caught by #509 hotfix).
-    4. GPU-first kailash-ml architecture validated at
-       `workspaces/kailash-ml-gpu-stack/` — preserved here so it
-       survives workspace pruning.
-    5. Typed S2S client pattern (TypedServiceClient + DecoderRegistry)
-       introduced in PR #507 — now documented in nexus-specialist.
-    6. LogRecord reserved-attribute collision: `extra={"module": ...}`
-       raises `KeyError: "Attempt to overwrite 'module' in LogRecord"`
-       when mixed with kaizen-configured logging. Non-deterministic;
-       CI masks it via test-file isolation. (PR #506 → #509 hotfix)
-    7. Primitive-vs-orchestrator layer distinction for destructive
-       operations: per-DDL primitive `force_drop=True` + DropRefusedError
-       is DIFFERENT from per-migration orchestrator `force_downgrade=True`
-       + DowngradeRefusedError. Conflating the two inside one helper
-       (#508's `drop_confirmation.py`) required splitting in #517.
-    8. Cross-SDK citation audit pattern: 30 HITs / 5 MISSes across
-       `.claude/guides/deterministic-quality/` — MISSes concentrated in
-       one "aspirational prescriptive" file citing names that would
-       exist if the pattern were adopted. Fix: cite abstract pattern,
-       not literal-but-invented API. (rules/cross-sdk-inspection.md
-       MUST Rule 5 evidence)
-    9. TestPyPI trusted-publisher registration is PER-PACKAGE and
-       distinct from PyPI publisher config. Tag-triggered tag-push
-       releases bypass TestPyPI entirely; `workflow_dispatch` with
-       `publish_to=testpypi` requires the project already be
-       registered as a pending publisher on test.pypi.org (otherwise
-       400 "Non-user identities cannot create new projects").
-       kailash-ml hit this — registration is a one-time UI step per
-       package.
-  Prior proposal (2026-04-16 + 2026-04-19 append) archived to
-  archive/2026-04-19-kailash-py.yaml per rules/artifact-flow.md
-  "Archive Before Fresh" (status was distributed).
-sdk_version: 2.8.8
-coc_version: 1.0.3
+  Session 2026-04-19 rounds 9 + 10 shipped 3 bundle releases to PyPI
+  (kailash 2.8.8, kailash-dataflow 2.0.11 → 2.0.12, kailash-ml 0.11.0 →
+  0.11.1, kailash-align 0.3.2, kailash-pact 0.8.2, kailash-trust 0.1.1,
+  kaizen-agents 0.9.3), merged 9 PRs (#502-#530), and closed 4 cross-SDK
+  tickets (#510, #511, #512, #514) plus #516, #520, #525. Post-release
+  reviewer audit of the round-9 bundle caught 1 CRITICAL + 1 HIGH + 2
+  MEDIUM findings, fast-patched in round-10 (kailash-dataflow 2.0.12 +
+  kailash-ml 0.11.1). This codify captures 6 institutional patterns.
+
 status: pending_review
 
 changes:
-  - file: rules/worktree-isolation.md
-    action: created
-    suggested_tier: global
-    reason: |
-      New rule file codifying the worktree drift and agent-budget-
-      exhaustion patterns. Three MUST rules:
-        - Rule 1: Orchestrator prompts MUST pin the worktree path
-          and include a "STEP 0 — verify isolation" instruction.
-          BLOCKED rationalizations enumerated verbatim ("the
-          isolation flag handles cwd for me", etc).
-        - Rule 2: Specialist agent files MUST include a self-check
-          (git rev-parse --show-toplevel at start) so the pinning
-          contract survives prompt compression.
-        - Rule 3: Parent MUST `ls`/`Read` to verify claimed files
-          exist after agent exit. Addresses budget-exhaustion mid-
-          message ("Now let me write X..." with no tool call).
-      Path-scoped to .claude/agents/**, .claude/commands/**,
-      **/agents/**. Cross-references rules/agents.md worktree
-      directive, zero-tolerance.md Rule 2, testing.md verified-
-      numerical-claims discipline.
-      Evidence: ml-specialist, dataflow-specialist, kaizen-specialist
-      each drifted back to the main tree during PRs #502-#508;
-      kaizen round 6 and ml-specialist round 7 reported completions
-      with no actual file writes.
-    diff_lines: "+127"
+  - id: keyspace-version-bump-invalidation-parity
+    type: rule
+    severity: HIGH
+    target: rules/tenant-isolation.md
+    section: "3a. Keyspace Version Bumps Require Invalidation-Path Sweep"
+    summary: |
+      When CacheKeyGenerator bumps default keyspace version (v1→v2 for
+      BP-049), EVERY invalidation path must be audited in same PR.
+      AsyncRedisCacheAdapter.invalidate_model was left pinned to v1 —
+      write-then-invalidate on Redis silently left v2 entries in place.
+      Fix: wildcard the version segment (dataflow:v*:*) to sweep both
+      legacy and current keyspace.
+    evidence:
+      pre_fix_pr: 522 # bumped v1→v2 in CacheKeyGenerator, left invalidator pinned
+      patch_pr: 529 # wildcard fix + 2 regression tests
+      bug_class: "cache keyspace producer bumps version, consumer-side invalidator left pinned"
+    classification_suggestion: global # applies to any cache-keyspace-versioning SDK work
 
-  - file: rules/agents.md
-    action: modified
-    suggested_tier: global
-    reason: |
-      Two additions:
-        - Cross-reference to new rules/worktree-isolation.md beneath
-          the existing "MUST: Worktree Isolation for Compiling
-          Agents" section ("isolation flag is necessary but not
-          sufficient without verification layer").
-        - New "MUST: Verify Agent Deliverables Exist After Exit"
-          section — parent orchestrator MUST ls/Read claimed files
-          before trusting completion. BLOCKED rationalizations
-          include "Now let me write the file..." (with no tool
-          call). Evidence: 2 occurrences this session.
-      Kept the file ≤200 lines (141 total) per rule-authoring
-      meta-rule.
-    diff_lines: "+25"
+  - id: multi-site-kwarg-plumbing-exhaustive-audit
+    type: rule
+    severity: HIGH
+    target: rules/security.md
+    section: "Multi-Site Kwarg Plumbing"
+    summary: |
+      When a security-relevant kwarg (policy, tenant scope, clearance
+      context, audit correlation) is plumbed through a helper, EVERY
+      call site MUST be updated in same PR. BP-049 added policy +
+      model_name to validate_model; Express site got it, engine site
+      was missed. Reviewer caught post-release; fast-patched.
+    evidence:
+      pre_fix_pr: 522 # plumbed validate_model, missed DataFlowEngine.validate_record
+      patch_pr: 529 # sibling site + regression test
+      bug_class: "security kwarg plumbing incomplete across sibling call sites"
+    classification_suggestion: global
 
-  - file: rules/zero-tolerance.md
-    action: modified
-    suggested_tier: global
-    reason: |
-      Extended Rule 1a (Scanner-Surface Symmetry) with a second
-      concrete DO/DO NOT example covering the CodeQL
-      `py/modification-of-default-value` / `__all__` / lazy
-      `__getattr__` variant surfaced by PR #506:
-        - DO: eager-import new __all__ entries so CodeQL resolves
-          them at module scope.
-        - DO NOT: add to __all__ and resolve only via __getattr__
-          with the rationalization "the existing 8 entries do
-          this too".
-      The fix is to close the flag for this PR's additions;
-      grandfathered entries remain a separate workstream but are
-      NOT justification for adding more of the same.
-      Origin line updated to credit the 2026-04-19 extension.
-    diff_lines: "+23"
+  - id: all-hygiene-module-scope-public-imports
+    type: rule
+    severity: MEDIUM
+    target: rules/orphan-detection.md
+    section: "6. Module-Scope Public Imports Appear In `__all__`"
+    summary: |
+      Every module-scope public import in a package's __init__.py MUST
+      appear in __all__ unless explicitly private. kailash_ml 0.11.0
+      eagerly imported DeviceReport, device_report_from_backend_info,
+      device, use_device but omitted all four from __all__.
+      `from kailash_ml import *` dropped the advertised public API.
+    evidence:
+      pre_fix_pr: 523 # Phase 1 public API symbols added to imports
+      patch_pr: 529 # added to __all__
+      bug_class: "advertised-but-hidden public API via __all__ omission"
+    classification_suggestion: global # __all__ hygiene is universal Python discipline
 
-  - file: agents/frameworks/nexus-specialist.md
-    action: modified
-    suggested_tier: global
-    reason: |
-      Added "Typed Service Client (S2S)" section documenting
-      kailash.nexus.TypedServiceClient — thin wrapper over
-      ServiceClient with pluggable DecoderRegistry (introduced in
-      PR #507). Code example shows register() decoder, typed get()
-      with response_type, and get_raw() for untyped migration
-      paths. Cross-reference to rules/testing.md § Delegating
-      Primitives (typed/raw variants need direct test coverage
-      per BP-046 pattern).
-      Kept the file ≤400 lines (220 total) per cc-artifacts.md
-      MUST Rule 1 "no knowledge dumps".
-    diff_lines: "+17"
+  - id: cross-sdk-structural-api-divergence-disposition
+    type: rule
+    severity: MEDIUM
+    target: rules/cross-sdk-inspection.md
+    section: "3a. Structural API-Divergence Disposition"
+    summary: |
+      When sibling SDK reports a bug at an API surface this SDK doesn't
+      expose (kailash-rs#424 execute_raw(sql, params) vs Python's
+      execute_raw(sql)), disposition MUST include (a) Tier 2 test
+      through sibling binding path (Express bulk_create with shrinking
+      arity), (b) structural invariant test locking the signature so a
+      future refactor toward sibling shape fails loudly.
+    evidence:
+      issue: 525
+      pr: 528
+      bug_class: "cross-SDK structural divergence closed silently without test"
+    classification_suggestion: global
 
-  - file: workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md
-    action: preserved_reference
-    suggested_tier: skip
-    reason: |
-      Reference entry — NOT a sync candidate. The GPU-first
-      kailash-ml architecture validated this session (single
-      torch substrate, detect_backend() single routing point,
-      DeviceReport transparency contract, OOM fallback helper,
-      8 action items for ~3 implementation sessions) lives at
-      workspaces/kailash-ml-gpu-stack/ and would normally be
-      lost at workspace pruning.
-      This proposal entry exists to preserve a pointer to the
-      architecture in the institutional audit trail. The actual
-      content stays in the workspace; next implementation session
-      should open a follow-up GitHub issue referencing this
-      workspace path.
-      Key artifacts at workspaces/kailash-ml-gpu-stack/:
-        - briefs/01-user-constraints.md (user-side requirements)
-        - 01-analysis/ (original research)
-        - 04-validate/01-redteam-round1.md (1 CRITICAL + 5 HIGH)
-        - 04-validate/02-revised-stack.md (converged design)
-        - 04-validate/00-convergence.md (gap summary)
-        - journal/0001..0003 (per-finding RISK / GAP entries)
-      Convergence status: design-complete, implementation-pending
-      (cuML eviction + DeviceReport + sklearn Array API wrap +
-      OOM fallback + RL routing audit + CPU-native UMAP/HDBSCAN
-      + top-level helpers + regression tests).
-    diff_lines: "0 (reference only)"
+  - id: phantom-transitive-deps-uv-lock-upgrade
+    type: rule
+    severity: MEDIUM
+    target: rules/dependencies.md
+    section: "Phantom Transitive Deps — Resolve Via `uv lock --upgrade`, Not Local Caps"
+    summary: |
+      When pip check reports a conflict whose root is an unused
+      transitive dep, fix via uv lock --upgrade-package (lets solver
+      drop orphan) + uv sync. Adding a local cap on a package this
+      project does not import is BLOCKED. google-generativeai 0.8.6
+      installed but zero imports; held protobuf at old cap.
+    evidence:
+      patch_pr: 530
+      bug_class: "phantom transitive orphan constrains solver"
+    classification_suggestion: variant/py # uv-specific tooling; Rust/Ruby equivalents diverge
 
-  - file: rules/observability.md
-    action: amend
-    suggested_tier: global
-    reason: |
-      Add MUST rule §9 (or numbered after existing 8): "Never pass
-      reserved LogRecord attribute names via extra={}". Python's
-      logging.LogRecord reserves: msg, args, module, exc_info,
-      exc_text, stack_info, pathname, filename, name, levelname,
-      levelno, lineno, funcName, created, msecs, relativeCreated,
-      thread, threadName, processName, process. Passing any of
-      these via extra={} raises "KeyError: Attempt to overwrite 'X'
-      in LogRecord" when mixed with certain logging configurations.
-      DO: prefix domain-scoped field names (extra={"estimator_module":
-      X}). DO NOT: extra={"module": X}.
-      Why: Non-deterministic test failures (passed when isolated,
-      failed when mixed with kaizen tests). CI masks the bug.
-      Evidence: PR #506 shipped this bug; caught by round-2 redteam;
-      fixed in #509 hotfix (commit 717516f5).
-      Origin: kailash-py redteam round-2 (2026-04-19).
+  - id: post-release-reviewer-audit-gate
+    type: rule
+    severity: MEDIUM
+    target: rules/agents.md
+    section: "Quality Gates table — After release row"
+    summary: |
+      Add RECOMMENDED gate to run reviewer against the MERGED release
+      commit on main as a follow-up to the /release flow. Catches drift
+      pre-release gates missed (kwarg plumbing gaps, keyspace bumps with
+      missed invalidators). If CRIT/HIGH surfaces, patch same session
+      as x.y.z+1.
+    evidence:
+      round_9_bundle: "round-9 shipped clean pre-release; post-release reviewer found CRIT + HIGH + 2 MED"
+      round_10_patch: "dataflow 2.0.12 + ml 0.11.1 via PR #529 within 20min of round-9 merge"
+      bug_class: "pre-release gate blind spots discovered only post-ship"
+    classification_suggestion: global
 
-  - file: rules/dataflow-identifier-safety.md
-    action: amend
-    suggested_tier: global
-    reason: |
-      Add §4a "Primitive-vs-orchestrator layer distinction for
-      destructive operations". The primitive-layer rule (§4 DROP
-      statements require force_drop=True + raise DropRefusedError)
-      governs per-DDL callers. The NEW orchestrator-layer rule
-      (MigrationManager.apply_downgrade) requires force_downgrade=True
-      + raises DowngradeRefusedError because a downgrade runs
-      MULTIPLE DDL DROPs and needs a distinct refuse signal the caller
-      can catch separately. The two errors MUST NOT be subclasses of
-      each other — they represent different audit trails.
-      DO: per-method disposition ("1 DDL DROP = primitive, multi-DDL
-      sequence = orchestrator"). Existing call sites fixed in #508+#517:
-      VisualMigrationBuilder (primitive), NotNullHandler (primitive),
-      ColumnRemovalManager (orchestrator), RollbackManager (orchestrator),
-      AutoMigrationSystem (orchestrator).
-      Why: Conflating the two inside #508's drop_confirmation.py
-      required splitting in #517 (gh #510). Cross-SDK parity with
-      kailash-rs codify from 2026-04-19.
-      Origin: gh #510 + PR #517.
+summary_note: |
+  All 6 items derive from real failure modes shipped this session and
+  caught either by the post-release reviewer or by direct cross-SDK
+  inspection. Each has a concrete PR reference for loom Gate-1
+  classification. No synthetic patterns.
 
-  - file: rules/testing.md
-    action: amend
-    suggested_tier: global
-    reason: |
-      Add §Test-Skip Triage Decision Tree (implements gh #512 /
-      skills/test-skip-discipline/SKILL.md):
-        - ACCEPTABLE: missing dep, infra unavailable, platform constraint
-          (keep skip with reason naming the constraint)
-        - BORDERLINE: real library limitation documenting known-failing
-          edge case (convert to @pytest.mark.xfail(strict=False) with
-          full reason — preserves test body, flips on fix)
-        - BLOCKED: "TODO", "needs refactoring", "flaky", "times out",
-          empty body — DELETE the test, not silent skip. If the
-          underlying bug matters, file an issue.
-      Applied this session: 1 converted to xfail (real PG ON CONFLICT
-      limitation), 2 deleted (TODO-style), 6 entire abandoned test
-      files deleted (test_migration_path_tester, test_model_registry,
-      test_edge_dataflow_unit, test_dataflow_bug_011_012_unit,
-      test_migration_trigger_system, test_dataflow_postgresql_parameter_conversion).
-      Origin: gh #512 / PR #518.
-
-  - file: rules/deployment.md
-    action: amend
-    suggested_tier: global
-    reason: |
-      Add MUST: "TestPyPI Trusted-Publisher Registration Is Per-Package".
-      Every package published via OIDC trusted-publishing MUST be
-      registered as a pending publisher on BOTH pypi.org AND
-      test.pypi.org separately. Tag-triggered publish (push of
-      `v*` / `<pkg>-v*`) goes direct to PyPI only. workflow_dispatch
-      with `publish_to=testpypi` requires the project to be
-      pre-registered on test.pypi.org (otherwise 400
-      "Non-user identities cannot create new projects"). Field values
-      MUST match exactly: Project name, Owner
-      (terrene-foundation), Repository (kailash-py), Workflow
-      (publish-pypi.yml), Environment (testpypi).
-      DO NOT assume TestPyPI registration carries over from PyPI.
-      Evidence: 2026-04-19 release — kailash-ml PyPI publish succeeded
-      via tag push, TestPyPI workflow_dispatch failed with 400 because
-      kailash_ml project wasn't pre-registered on test.pypi.org.
-      Origin: release round-8 (2026-04-19).
-
-audit_summary:
-  prs_this_session: 9
-  pr_numbers: "#502, #503, #504, #505, #506, #507, #508, #509, #513, #515, #517, #518, #519"
-  new_tests: "~250"
-  rules_added: 1
-  rules_amended: 6 # agents.md, zero-tolerance.md, observability.md, dataflow-identifier-safety.md, testing.md, deployment.md
-  agents_amended: 1 # nexus-specialist.md
-  workspace_architecture_captured: "kailash-ml-gpu-stack (design-complete)"
-  failure_patterns_codified: 5 # worktree drift, agent budget, CodeQL __all__, LogRecord collision, TestPyPI per-package config
-  pattern_references_preserved: 2
-  pypi_packages_released: 6
-  released_versions: "kailash 2.8.7, kaizen 2.7.5, dataflow 2.0.10, nexus 2.1.0, ml 0.10.0, mcp 0.2.5"
+  Distribution path: loom/ Gate-1 review classifies each as global vs
+  variant; Gate-2 distributes via /sync. BUILD repo changes (rule files
+  + proposal) live in this commit; no downstream sync happens from here.
