@@ -277,7 +277,7 @@ Tenant IDs are validated against `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`. Invalid IDs
 
 ### 7.4 Isolation Guarantees
 
-- **Cache keys** include tenant_id dimension: `dataflow:v1:<tenant_id>:<model>:<op>:<hash>`
+- **Cache keys** include tenant_id dimension: `dataflow:v2:<tenant_id>:<model>:<op>:<hash>` (bumped from `v1` in kailash-dataflow 2.0.11 / BP-049; classified PKs pre-hashed via `format_record_id_for_event` before the params hash is computed)
 - **Cache invalidation** is tenant-scoped
 - **Bulk operations** auto-inject `tenant_id` into each record
 - **Audit rows** persist `tenant_id` as a column

@@ -93,7 +93,7 @@ Read a single record by primary key.
 6. Stores result in cache
 7. Returns `None` (not an exception) when record is not found
 
-**Cache key shape:** `dataflow:v1:[tenant_id:]<model>:read:<params_hash>`
+**Cache key shape:** `dataflow:v2:[tenant_id:]<model>:read:<params_hash>` (bumped from `v1` in kailash-dataflow 2.0.11 / BP-049 — classified PKs now pre-hashed before `params_hash` computation)
 
 **Error conditions:**
 

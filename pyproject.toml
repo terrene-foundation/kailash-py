@@ -80,7 +80,7 @@ dependencies = [
 # Pins are MINIMUM compatible versions, not "latest" — bumping to unreleased
 # versions breaks CI which installs from PyPI before the release is published.
 dataflow = [
-    "kailash-dataflow>=2.0.11",
+    "kailash-dataflow>=2.0.12",
 ]
 nexus = [
     "kailash-nexus>=2.1.0",
@@ -93,7 +93,7 @@ pact = [
     "kailash-pact>=0.8.2",
 ]
 ml = [
-    "kailash-ml>=0.11.0",
+    "kailash-ml>=0.11.1",
 ]
 align = [
     "kailash-align>=0.3.2",
@@ -149,12 +149,12 @@ docs = [
 ]
 # Everything (core + all sub-packages with their optional deps)
 all = [
-    "kailash-dataflow>=2.0.11",
+    "kailash-dataflow>=2.0.12",
     "kailash-nexus>=2.1.0",
     "kailash-kaizen>=2.7.5",
     "kaizen-agents>=0.9.3",
     "kailash-pact>=0.8.2",
-    "kailash-ml[all]>=0.11.0",
+    "kailash-ml[all]>=0.11.1",
     "kailash-align[all]>=0.3.2",
 ]
 

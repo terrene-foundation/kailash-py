@@ -351,9 +351,16 @@ class AsyncRedisCacheAdapter:
         The key generator produces three key formats depending on
         whether caching runs in single- or multi-tenant mode:
 
-        - Express keys (single tenant): ``dataflow:v1:{model}:{op}:...``
-        - Express keys (multi-tenant): ``dataflow:v1:{tenant}:{model}:{op}:...``
-        - SQL query keys: ``dataflow:{model}:v1:...``
+        - Express keys (single tenant): ``dataflow:<ver>:{model}:{op}:...``
+        - Express keys (multi-tenant): ``dataflow:<ver>:{tenant}:{model}:{op}:...``
+        - SQL query keys: ``dataflow:{model}:<ver>:...``
+
+        The version segment is matched as a wildcard (``v*``) so that
+        every live keyspace version AND any stale legacy entries are
+        swept in one invalidation. This is required because the
+        default keyspace bumped ``v1 → v2`` in BP-049 (cross-SDK
+        parity with kailash-rs v3.19.0); a version-pinned invalidation
+        would leave v2 entries in place and serve stale reads.
 
         All relevant patterns are scanned so that entries for the model
         are removed regardless of which code path created them.
@@ -375,12 +382,12 @@ class AsyncRedisCacheAdapter:
             >>> deleted = await adapter.invalidate_model("User", tenant_id="acme")
         """
         if tenant_id is not None:
-            express_pattern = f"dataflow:v1:{tenant_id}:{model_name}:*"
+            express_pattern = f"dataflow:v*:{tenant_id}:{model_name}:*"
         else:
-            express_pattern = f"dataflow:v1:{model_name}:*"
-        # SQL query keys: dataflow:{model}:v1:* — no tenant segment in
+            express_pattern = f"dataflow:v*:{model_name}:*"
+        # SQL query keys: dataflow:{model}:v*:* — no tenant segment in
         # the legacy key shape; clearing model-wide is the safe default.
-        query_pattern = f"dataflow:{model_name}:v1:*"
+        query_pattern = f"dataflow:{model_name}:v*:*"
 
         express_count = await self.clear_pattern(express_pattern)
         query_count = await self.clear_pattern(query_pattern)
