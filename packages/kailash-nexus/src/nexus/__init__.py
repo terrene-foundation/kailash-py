@@ -96,7 +96,7 @@ from .errors import RateLimitError, ServiceUnavailableError
 from .errors import TimeoutError as NexusTimeoutError
 from .errors import UnauthorizedError, ValidationError
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __all__ = [
     # Core
     "Nexus",
