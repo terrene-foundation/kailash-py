@@ -35,7 +35,7 @@ from .dependency_analyzer import (
     TriggerDependency,
     ViewDependency,
 )
-from .drop_confirmation import require_force_drop
+from .drop_confirmation_downgrade import require_force_downgrade
 
 # Type alias for any column dependency
 ColumnDependency = Union[
@@ -529,16 +529,20 @@ class ColumnRemovalManager:
         plan: RemovalPlan,
         connection: Optional[asyncpg.Connection] = None,
         *,
-        force_drop: bool = False,
+        force_downgrade: bool = False,
     ) -> RemovalResult:
         """
         Execute safe column removal according to plan.
 
-        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
-        requires explicit ``force_drop=True``. A column removal is
-        irreversible; even with backup stages in the plan, dropped data is
-        restorable only within the backup retention window. The flag forces
-        the caller to acknowledge the action before any DROP statement runs.
+        Per rules/schema-migration.md MUST Rule 7, destructive orchestrator-
+        layer migrations require explicit ``force_downgrade=True``. A column
+        removal replays a multi-statement destructive sequence (savepoint
+        guard, dependency DROPs for triggers/views/constraints/indexes, then
+        the column DROP itself) — this is one **logical downgrade** of a
+        prior column addition, not a single DDL primitive. Even with backup
+        stages in the plan, dropped data is restorable only within the
+        backup retention window. The flag forces the caller to acknowledge
+        the action before any DROP statement runs.
 
         Dry-run plans (``plan.dry_run=True``) are exempt: they roll back to
         the pre-DDL savepoint and leave no persistent change.
@@ -546,19 +550,19 @@ class ColumnRemovalManager:
         Args:
             plan: Validated removal plan
             connection: Database connection (optional)
-            force_drop: Must be True to execute a non-dry-run removal.
+            force_downgrade: Must be True to execute a non-dry-run removal.
 
         Returns:
             RemovalResult with execution details and recovery information
 
         Raises:
-            DropRefusedError: if ``force_drop`` is False and the plan is not
-                a dry run.
+            DowngradeRefusedError: if ``force_downgrade`` is False and the
+                plan is not a dry run.
         """
         if not plan.dry_run:
-            require_force_drop(
+            require_force_downgrade(
                 f"execute_safe_removal(plan={plan.table_name}.{plan.column_name})",
-                force_drop,
+                force_downgrade,
             )
         start_time = datetime.now()
         self.logger.info(

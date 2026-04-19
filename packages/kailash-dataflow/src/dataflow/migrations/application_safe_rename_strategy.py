@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
 
-from .drop_confirmation import require_force_drop
+from .drop_confirmation_downgrade import require_force_downgrade
 from .rename_coordination_engine import (
     CoordinationResult,
     RenameCoordinationEngine,
@@ -511,32 +511,34 @@ class RollbackManager:
         created_objects: List[str],
         connection: Optional[asyncpg.Connection] = None,
         *,
-        force_drop: bool = False,
+        force_downgrade: bool = False,
     ) -> RollbackExecutionResult:
         """
         Execute rollback for failed strategy.
 
-        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
-        requires explicit ``force_drop=True``. Rollback runs DROP TABLE /
-        DROP VIEW against the temp objects created during the failed
-        deployment; accidentally invoking it against wrong objects is
-        unrecoverable.
+        Per rules/schema-migration.md MUST Rule 7, destructive orchestrator-
+        layer migrations require explicit ``force_downgrade=True``. A
+        rollback replays a multi-statement destructive sequence (DROP TABLE
+        / DROP VIEW against every temp object created during the failed
+        deployment) — this is one **logical downgrade** of a failed
+        upgrade, not a single DDL primitive. Accidentally invoking it
+        against wrong objects is unrecoverable.
 
         Args:
             failed_strategy: Strategy that failed
             created_objects: Objects created during failed execution
             connection: Database connection
-            force_drop: Must be True to execute any DROP statements.
+            force_downgrade: Must be True to execute any DROP statements.
 
         Returns:
             RollbackExecutionResult with rollback details
 
         Raises:
-            DropRefusedError: if ``force_drop`` is False.
+            DowngradeRefusedError: if ``force_downgrade`` is False.
         """
-        require_force_drop(
+        require_force_downgrade(
             f"execute_rollback(strategy={failed_strategy.value})",
-            force_drop,
+            force_downgrade,
         )
         if connection is None:
             connection = await self.connection_manager.get_connection()

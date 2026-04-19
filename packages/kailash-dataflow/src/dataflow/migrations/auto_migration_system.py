@@ -32,7 +32,7 @@ from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 # Kailash imports for async workflow pattern
 from kailash.workflow.builder import WorkflowBuilder
 
-from .drop_confirmation import require_force_drop
+from .drop_confirmation_downgrade import require_force_downgrade
 
 logger = logging.getLogger(__name__)
 
@@ -1712,17 +1712,25 @@ class AutoMigrationSystem:
         interactive: bool = True,
         auto_confirm: bool = False,
         *,
-        force_drop: bool = False,
+        force_downgrade: bool = False,
     ) -> Tuple[bool, List[Migration]]:
         """
         Automatically generate and apply migrations to match target schema.
 
-        Per rules/dataflow-identifier-safety.md MUST Rule 4, if the generated
-        migration plan contains any destructive operation (DROP_TABLE,
-        DROP_COLUMN, DROP_INDEX, DROP_CONSTRAINT), ``force_drop=True`` MUST
-        be supplied. The flag is evaluated AFTER the diff is computed so
-        additive migrations (CREATE / ADD) remain ergonomic; destructive
-        migrations require deliberate acknowledgement.
+        Per rules/schema-migration.md MUST Rule 7, if the generated migration
+        plan contains any destructive operation (DROP_TABLE, DROP_COLUMN,
+        DROP_INDEX, DROP_CONSTRAINT), ``force_downgrade=True`` MUST be
+        supplied. This is the orchestrator layer — ``auto_migrate`` replays
+        a multi-statement plan as one **logical migration**; the destructive
+        subset of that plan constitutes a downgrade-equivalent operation
+        (dropping schema elements that previously existed). The primitive
+        layer's ``force_drop`` on individual DDL builders does NOT flow
+        through to this orchestrator-layer gate — each layer requires its
+        own deliberate acknowledgement.
+
+        The flag is evaluated AFTER the diff is computed so additive
+        migrations (CREATE / ADD) remain ergonomic; destructive migrations
+        require deliberate acknowledgement.
 
         ``dry_run=True`` is exempt: the plan is shown but nothing executes.
 
@@ -1731,16 +1739,17 @@ class AutoMigrationSystem:
             dry_run: If True, only show what would be done
             interactive: If True, prompt user for confirmation
             auto_confirm: If True, automatically confirm all changes
-            force_drop: Required (True) when the computed plan contains any
-                DROP_TABLE / DROP_COLUMN / DROP_INDEX / DROP_CONSTRAINT
+            force_downgrade: Required (True) when the computed plan contains
+                any DROP_TABLE / DROP_COLUMN / DROP_INDEX / DROP_CONSTRAINT
                 migration. Default False.
 
         Returns:
             Tuple of (success, list of applied migrations)
 
         Raises:
-            DropRefusedError: if the plan contains destructive migrations
-                and ``force_drop`` is False and ``dry_run`` is False.
+            DowngradeRefusedError: if the plan contains destructive
+                migrations and ``force_downgrade`` is False and ``dry_run``
+                is False.
         """
         logger.info("Starting auto-migration process")
 
@@ -1851,9 +1860,10 @@ class AutoMigrationSystem:
                 self._print_migration_preview(migration)
                 return True, [migration]
 
-            # rules/dataflow-identifier-safety.md MUST Rule 4: if any operation
-            # in the plan is destructive, require force_drop=True. Computed
-            # AFTER the diff so additive migrations stay ergonomic.
+            # rules/schema-migration.md MUST Rule 7: if any operation in the
+            # orchestrator-layer plan is destructive, require
+            # force_downgrade=True. Computed AFTER the diff so additive
+            # migrations stay ergonomic.
             _DESTRUCTIVE_TYPES = {
                 MigrationType.DROP_TABLE,
                 MigrationType.DROP_COLUMN,
@@ -1869,9 +1879,9 @@ class AutoMigrationSystem:
                 op_labels = ", ".join(
                     sorted({op.operation_type.value for op in destructive_ops})
                 )
-                require_force_drop(
+                require_force_downgrade(
                     f"auto_migrate(destructive ops: {op_labels})",
-                    force_drop,
+                    force_downgrade,
                 )
 
             # Apply migration while lock is still held
