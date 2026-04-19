@@ -1,21 +1,45 @@
 source_repo: kailash-py
 codify_date: "2026-04-19"
 codify_session: |
-  Session 2026-04-19 shipped 7 PRs (#502-#508), ~150 new tests, and
-  validated the GPU-first kailash-ml architecture at
-  workspaces/kailash-ml-gpu-stack/. Session surfaced 5 recurring
-  institutional failure patterns codified below:
-    1. Worktree isolation drift (ml / dataflow / kaizen specialists
-       each drifted back to main checkout at least once).
+  Session 2026-04-19 shipped 9 PRs (#502-#508 + #509 + #515 + #517 +
+  #518 + #519) and released 6 packages to PyPI (kailash 2.8.7,
+  kailash-kaizen 2.7.5, kailash-dataflow 2.0.10, kailash-nexus 2.1.0,
+  kailash-ml 0.10.0, kailash-mcp 0.2.5). Codify captures 9 recurring
+  institutional failure patterns:
+    1. Worktree isolation drift (ml / dataflow / kaizen / testing
+       specialists drifted back to main checkout, 4 occurrences).
     2. Agent budget exhaustion mid-message ("Now let me write X…"
-       with no actual tool call) — 2 occurrences.
+       with no actual tool call) — 3 occurrences.
     3. Scanner-surface symmetry variant: CodeQL `__all__` +
-       lazy `__getattr__` (PR #506).
+       lazy `__getattr__` (PR #506 caught by #509 hotfix).
     4. GPU-first kailash-ml architecture validated at
        `workspaces/kailash-ml-gpu-stack/` — preserved here so it
        survives workspace pruning.
     5. Typed S2S client pattern (TypedServiceClient + DecoderRegistry)
        introduced in PR #507 — now documented in nexus-specialist.
+    6. LogRecord reserved-attribute collision: `extra={"module": ...}`
+       raises `KeyError: "Attempt to overwrite 'module' in LogRecord"`
+       when mixed with kaizen-configured logging. Non-deterministic;
+       CI masks it via test-file isolation. (PR #506 → #509 hotfix)
+    7. Primitive-vs-orchestrator layer distinction for destructive
+       operations: per-DDL primitive `force_drop=True` + DropRefusedError
+       is DIFFERENT from per-migration orchestrator `force_downgrade=True`
+       + DowngradeRefusedError. Conflating the two inside one helper
+       (#508's `drop_confirmation.py`) required splitting in #517.
+    8. Cross-SDK citation audit pattern: 30 HITs / 5 MISSes across
+       `.claude/guides/deterministic-quality/` — MISSes concentrated in
+       one "aspirational prescriptive" file citing names that would
+       exist if the pattern were adopted. Fix: cite abstract pattern,
+       not literal-but-invented API. (rules/cross-sdk-inspection.md
+       MUST Rule 5 evidence)
+    9. TestPyPI trusted-publisher registration is PER-PACKAGE and
+       distinct from PyPI publisher config. Tag-triggered tag-push
+       releases bypass TestPyPI entirely; `workflow_dispatch` with
+       `publish_to=testpypi` requires the project already be
+       registered as a pending publisher on test.pypi.org (otherwise
+       400 "Non-user identities cannot create new projects").
+       kailash-ml hit this — registration is a one-time UI step per
+       package.
   Prior proposal (2026-04-16 + 2026-04-19 append) archived to
   archive/2026-04-19-kailash-py.yaml per rules/artifact-flow.md
   "Archive Before Fresh" (status was distributed).
@@ -132,13 +156,100 @@ changes:
       + top-level helpers + regression tests).
     diff_lines: "0 (reference only)"
 
+  - file: rules/observability.md
+    action: amend
+    suggested_tier: global
+    reason: |
+      Add MUST rule §9 (or numbered after existing 8): "Never pass
+      reserved LogRecord attribute names via extra={}". Python's
+      logging.LogRecord reserves: msg, args, module, exc_info,
+      exc_text, stack_info, pathname, filename, name, levelname,
+      levelno, lineno, funcName, created, msecs, relativeCreated,
+      thread, threadName, processName, process. Passing any of
+      these via extra={} raises "KeyError: Attempt to overwrite 'X'
+      in LogRecord" when mixed with certain logging configurations.
+      DO: prefix domain-scoped field names (extra={"estimator_module":
+      X}). DO NOT: extra={"module": X}.
+      Why: Non-deterministic test failures (passed when isolated,
+      failed when mixed with kaizen tests). CI masks the bug.
+      Evidence: PR #506 shipped this bug; caught by round-2 redteam;
+      fixed in #509 hotfix (commit 717516f5).
+      Origin: kailash-py redteam round-2 (2026-04-19).
+
+  - file: rules/dataflow-identifier-safety.md
+    action: amend
+    suggested_tier: global
+    reason: |
+      Add §4a "Primitive-vs-orchestrator layer distinction for
+      destructive operations". The primitive-layer rule (§4 DROP
+      statements require force_drop=True + raise DropRefusedError)
+      governs per-DDL callers. The NEW orchestrator-layer rule
+      (MigrationManager.apply_downgrade) requires force_downgrade=True
+      + raises DowngradeRefusedError because a downgrade runs
+      MULTIPLE DDL DROPs and needs a distinct refuse signal the caller
+      can catch separately. The two errors MUST NOT be subclasses of
+      each other — they represent different audit trails.
+      DO: per-method disposition ("1 DDL DROP = primitive, multi-DDL
+      sequence = orchestrator"). Existing call sites fixed in #508+#517:
+      VisualMigrationBuilder (primitive), NotNullHandler (primitive),
+      ColumnRemovalManager (orchestrator), RollbackManager (orchestrator),
+      AutoMigrationSystem (orchestrator).
+      Why: Conflating the two inside #508's drop_confirmation.py
+      required splitting in #517 (gh #510). Cross-SDK parity with
+      kailash-rs codify from 2026-04-19.
+      Origin: gh #510 + PR #517.
+
+  - file: rules/testing.md
+    action: amend
+    suggested_tier: global
+    reason: |
+      Add §Test-Skip Triage Decision Tree (implements gh #512 /
+      skills/test-skip-discipline/SKILL.md):
+        - ACCEPTABLE: missing dep, infra unavailable, platform constraint
+          (keep skip with reason naming the constraint)
+        - BORDERLINE: real library limitation documenting known-failing
+          edge case (convert to @pytest.mark.xfail(strict=False) with
+          full reason — preserves test body, flips on fix)
+        - BLOCKED: "TODO", "needs refactoring", "flaky", "times out",
+          empty body — DELETE the test, not silent skip. If the
+          underlying bug matters, file an issue.
+      Applied this session: 1 converted to xfail (real PG ON CONFLICT
+      limitation), 2 deleted (TODO-style), 6 entire abandoned test
+      files deleted (test_migration_path_tester, test_model_registry,
+      test_edge_dataflow_unit, test_dataflow_bug_011_012_unit,
+      test_migration_trigger_system, test_dataflow_postgresql_parameter_conversion).
+      Origin: gh #512 / PR #518.
+
+  - file: rules/deployment.md
+    action: amend
+    suggested_tier: global
+    reason: |
+      Add MUST: "TestPyPI Trusted-Publisher Registration Is Per-Package".
+      Every package published via OIDC trusted-publishing MUST be
+      registered as a pending publisher on BOTH pypi.org AND
+      test.pypi.org separately. Tag-triggered publish (push of
+      `v*` / `<pkg>-v*`) goes direct to PyPI only. workflow_dispatch
+      with `publish_to=testpypi` requires the project to be
+      pre-registered on test.pypi.org (otherwise 400
+      "Non-user identities cannot create new projects"). Field values
+      MUST match exactly: Project name, Owner
+      (terrene-foundation), Repository (kailash-py), Workflow
+      (publish-pypi.yml), Environment (testpypi).
+      DO NOT assume TestPyPI registration carries over from PyPI.
+      Evidence: 2026-04-19 release — kailash-ml PyPI publish succeeded
+      via tag push, TestPyPI workflow_dispatch failed with 400 because
+      kailash_ml project wasn't pre-registered on test.pypi.org.
+      Origin: release round-8 (2026-04-19).
+
 audit_summary:
-  prs_this_session: 7
-  pr_numbers: "#502, #503, #504, #505, #506, #507, #508"
-  new_tests: "~150"
+  prs_this_session: 9
+  pr_numbers: "#502, #503, #504, #505, #506, #507, #508, #509, #513, #515, #517, #518, #519"
+  new_tests: "~250"
   rules_added: 1
-  rules_amended: 2
-  agents_amended: 1
+  rules_amended: 6 # agents.md, zero-tolerance.md, observability.md, dataflow-identifier-safety.md, testing.md, deployment.md
+  agents_amended: 1 # nexus-specialist.md
   workspace_architecture_captured: "kailash-ml-gpu-stack (design-complete)"
-  failure_patterns_codified: 3
+  failure_patterns_codified: 5 # worktree drift, agent budget, CodeQL __all__, LogRecord collision, TestPyPI per-package config
   pattern_references_preserved: 2
+  pypi_packages_released: 6
+  released_versions: "kailash 2.8.7, kaizen 2.7.5, dataflow 2.0.10, nexus 2.1.0, ml 0.10.0, mcp 0.2.5"
