@@ -6,6 +6,7 @@ codify_session: |
   3 parallel ml-specialist agents in worktrees — and surfaced 3 institutional
   failure modes that this codify captures as rule additions to rules/agents.md.
 
+<<<<<<< Updated upstream
   Background: ml-specialist Shards A/B/C launched in parallel with
   isolation="worktree" + absolute-path prompts. Shard A's agent truncated mid-
   message before committing; the empty worktree was auto-cleaned and ~300 LOC
@@ -23,6 +24,13 @@ status: pending_review
 review_date: null
 review_target_loom_version: "2.8.20"
 distributed_date: null
+=======
+status: distributed
+review_date: "2026-04-19"
+review_target_loom_version: "2.8.21"
+distributed_date: "2026-04-19"
+distributed_by: "loom /sync Gate 2 → kailash-coc-claude-py 3.5.8 (2026-04-19T23:00Z); prior cycle was 3.5.7 (loom 2.8.19)"
+>>>>>>> Stashed changes
 
 changes:
   - id: worktree-prompts-relative-paths
