@@ -72,6 +72,23 @@ from .errors import (
     NexusError,
     NotFoundError,
 )
+from .http_client import (
+    HttpClient,
+    HttpClientConfig,
+    HttpClientError,
+    HttpResponse,
+    InvalidEndpointError,
+)
+from .service_client import (
+    ServiceClient,
+    ServiceClientDeserializeError,
+    ServiceClientError,
+    ServiceClientHttpError,
+    ServiceClientHttpStatusError,
+    ServiceClientInvalidHeaderError,
+    ServiceClientInvalidPathError,
+    ServiceClientSerializeError,
+)
 from .errors import PermissionError as NexusPermissionError  # deprecated alias
 from .errors import RateLimitError, ServiceUnavailableError
 from .errors import TimeoutError as NexusTimeoutError
@@ -149,4 +166,19 @@ __all__ = [
     "StreamingResponse",
     "WebSocket",
     "WebSocketDisconnect",
+    # Outbound HTTP primitive (issue #464 + cross-SDK kailash-rs#399)
+    "HttpClient",
+    "HttpClientConfig",
+    "HttpClientError",
+    "HttpResponse",
+    "InvalidEndpointError",
+    # Typed service-to-service client (issue #473 + cross-SDK kailash-rs#400)
+    "ServiceClient",
+    "ServiceClientError",
+    "ServiceClientHttpError",
+    "ServiceClientHttpStatusError",
+    "ServiceClientSerializeError",
+    "ServiceClientDeserializeError",
+    "ServiceClientInvalidPathError",
+    "ServiceClientInvalidHeaderError",
 ]
