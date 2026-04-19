@@ -1,7 +1,7 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Wire protocol shapers for every supported LLM deployment (#498 Session 2).
+"""Wire protocol shapers for every supported LLM deployment (#498 Session 2, #462).
 
 A "wire protocol" is the on-the-wire request/response schema a provider
 speaks. Each module in this package owns exactly one provider family's wire
@@ -14,20 +14,27 @@ shape:
   * ``ollama_native`` — Ollama ``/api/chat``
   * ``huggingface_inference`` — HuggingFace Inference API ``/models/{model}``
 
-Every shaper exposes the same two functions:
+Chat shapers expose:
 
-  * ``build_request_payload(request: CompletionRequest) -> dict`` — produce the
-    provider-specific request body.
-  * ``parse_response(payload: dict) -> dict`` — extract a normalized
-    ``{"text", "usage"}`` view from a provider response.
+  * ``build_request_payload(request: CompletionRequest) -> dict``
+  * ``parse_response(payload: dict) -> dict``
 
-Both functions are pure (no I/O). The actual HTTP sender lives in
-``LlmHttpClient`` (Session 3 / S4c); these shapers are consumed by the
-client's serialize / deserialize hooks.
+Embedding shapers (introduced in #462) expose:
+
+  * ``openai_embeddings`` — OpenAI ``/v1/embeddings`` (POST)
+  * ``ollama_embeddings`` — Ollama ``/api/embed`` (POST)
+
+with signatures:
+
+  * ``build_request_payload(texts: list[str], model: str, options: EmbedOptions | None) -> dict``
+  * ``parse_response(payload: dict) -> {"vectors", "model", "usage"}``
+
+All functions are pure (no I/O). The actual HTTP sender lives in
+``LlmHttpClient``; these shapers are consumed by ``LlmClient.embed()``
+and (future) ``LlmClient.complete()``.
 
 Cross-SDK parity: every function's output for a fixed input is
-byte-identical to its Rust counterpart (see
-``tests/cross_sdk_parity/test_wire_payload_matches_rust.py`` in Session 9).
+byte-identical to its Rust counterpart.
 """
 
 from __future__ import annotations
@@ -38,7 +45,9 @@ from kaizen.llm.wire_protocols import (
     google_generate_content,
     huggingface_inference,
     mistral_chat,
+    ollama_embeddings,
     ollama_native,
+    openai_embeddings,
 )
 
 __all__ = [
@@ -47,5 +56,7 @@ __all__ = [
     "google_generate_content",
     "huggingface_inference",
     "mistral_chat",
+    "ollama_embeddings",
     "ollama_native",
+    "openai_embeddings",
 ]
