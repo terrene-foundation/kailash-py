@@ -35,11 +35,23 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    runtime_checkable,
+)
 
 import polars as pl
 
-from kailash_ml._device import BackendInfo, UnsupportedFamily, detect_backend
+if TYPE_CHECKING:  # pragma: no cover - type-checker only
+    import numpy as np  # noqa: F401 — referenced in string annotations
+
+from kailash_ml._device import UnsupportedFamily, detect_backend
 from kailash_ml._result import TrainingResult
 
 __all__ = [
@@ -198,7 +210,6 @@ def _split_xy(
     3 keeps the split local to trainable to avoid a cyclic import during
     initial landing. Phase 4+ may centralize.
     """
-    import numpy as np  # local import — numpy is a base dep
 
     if target not in data.columns:
         raise ValueError(
@@ -561,7 +572,11 @@ class TorchTrainable:
         if model is None:
             raise ValueError("TorchTrainable requires `model: nn.Module`.")
         if loss_fn is None:
-            loss_fn = torch.nn.MSELoss() if task == "regression" else torch.nn.CrossEntropyLoss()
+            loss_fn = (
+                torch.nn.MSELoss()
+                if task == "regression"
+                else torch.nn.CrossEntropyLoss()
+            )
         if optimizer_cls is None:
             optimizer_cls = torch.optim.Adam
         self._model = model
@@ -586,7 +601,9 @@ class TorchTrainable:
     def get_param_distribution(self) -> HyperparameterSpace:
         return HyperparameterSpace(
             params=(
-                HyperparameterRange(name="learning_rate", kind="log_float", low=1e-5, high=1e-1),
+                HyperparameterRange(
+                    name="learning_rate", kind="log_float", low=1e-5, high=1e-1
+                ),
             )
         )
 
@@ -654,7 +671,10 @@ class TorchTrainable:
         # pin_memory only on CUDA / ROCm per ml-backends.md §4.2
         pin = ctx.backend in {"cuda", "rocm"}
         loader = torch.utils.data.DataLoader(
-            ds, batch_size=min(self._batch_size, max(len(X), 1)), shuffle=False, pin_memory=pin
+            ds,
+            batch_size=min(self._batch_size, max(len(X), 1)),
+            shuffle=False,
+            pin_memory=pin,
         )
 
         trainer_kwargs = _log_backend_selection(ctx, max_epochs=max_epochs)
@@ -689,7 +709,11 @@ class TorchTrainable:
 
         if not self._is_fitted:
             raise RuntimeError("TorchTrainable.predict() called before fit().")
-        feature_frame = X.select([c for c in self._feature_names if c in X.columns]) if self._feature_names else X
+        feature_frame = (
+            X.select([c for c in self._feature_names if c in X.columns])
+            if self._feature_names
+            else X
+        )
         X_np = np.asarray(feature_frame.to_numpy(), dtype=np.float32)
         X_t = torch.tensor(X_np)
         self._model.eval()
@@ -765,7 +789,10 @@ class LightningTrainable:
         ds = torch.utils.data.TensorDataset(X_t, y_t)
         pin = ctx.backend in {"cuda", "rocm"}
         loader = torch.utils.data.DataLoader(
-            ds, batch_size=min(self._batch_size, max(len(X), 1)), shuffle=False, pin_memory=pin
+            ds,
+            batch_size=min(self._batch_size, max(len(X), 1)),
+            shuffle=False,
+            pin_memory=pin,
         )
 
         trainer_kwargs = _log_backend_selection(ctx, max_epochs=max_epochs)
@@ -775,7 +802,9 @@ class LightningTrainable:
         elapsed = time.monotonic() - t0
 
         self._is_fitted = True
-        artifact_uri = _persist_native_artifact(self._module, prefix="lightning", format="pt")
+        artifact_uri = _persist_native_artifact(
+            self._module, prefix="lightning", format="pt"
+        )
 
         # Pull a metric off the module if available; otherwise use a
         # placeholder so TrainingResult satisfies its contract.
@@ -814,7 +843,11 @@ class LightningTrainable:
 
         if not self._is_fitted:
             raise RuntimeError("LightningTrainable.predict() called before fit().")
-        feature_frame = X.select([c for c in self._feature_names if c in X.columns]) if self._feature_names else X
+        feature_frame = (
+            X.select([c for c in self._feature_names if c in X.columns])
+            if self._feature_names
+            else X
+        )
         X_np = np.asarray(feature_frame.to_numpy(), dtype=np.float32)
         X_t = torch.tensor(X_np)
         self._module.eval()
@@ -883,7 +916,9 @@ class XGBoostTrainable:
             params=(
                 HyperparameterRange(name="n_estimators", kind="int", low=10, high=500),
                 HyperparameterRange(name="max_depth", kind="int", low=2, high=12),
-                HyperparameterRange(name="learning_rate", kind="log_float", low=1e-3, high=1.0),
+                HyperparameterRange(
+                    name="learning_rate", kind="log_float", low=1e-3, high=1.0
+                ),
             )
         )
 
@@ -974,7 +1009,11 @@ class XGBoostTrainable:
     def predict(self, X: pl.DataFrame) -> Predictions:
         if not self._is_fitted:
             raise RuntimeError("XGBoostTrainable.predict() called before fit().")
-        frame = X.select([c for c in self._feature_names if c in X.columns]) if self._feature_names else X
+        frame = (
+            X.select([c for c in self._feature_names if c in X.columns])
+            if self._feature_names
+            else X
+        )
         preds = self._estimator.predict(frame.to_numpy())
         return Predictions(preds, column="prediction")
 
@@ -1009,11 +1048,21 @@ class LightGBMTrainable:
             import lightgbm as lgb
 
             if task == "classification":
-                defaults = {"n_estimators": 20, "max_depth": 3, "random_state": 42, "verbosity": -1}
+                defaults = {
+                    "n_estimators": 20,
+                    "max_depth": 3,
+                    "random_state": 42,
+                    "verbosity": -1,
+                }
                 defaults.update(kwargs)
                 estimator = lgb.LGBMClassifier(**defaults)
             else:
-                defaults = {"n_estimators": 20, "max_depth": 3, "random_state": 42, "verbosity": -1}
+                defaults = {
+                    "n_estimators": 20,
+                    "max_depth": 3,
+                    "random_state": 42,
+                    "verbosity": -1,
+                }
                 defaults.update(kwargs)
                 estimator = lgb.LGBMRegressor(**defaults)
         self._estimator = estimator
@@ -1036,7 +1085,9 @@ class LightGBMTrainable:
             params=(
                 HyperparameterRange(name="n_estimators", kind="int", low=10, high=500),
                 HyperparameterRange(name="num_leaves", kind="int", low=8, high=255),
-                HyperparameterRange(name="learning_rate", kind="log_float", low=1e-3, high=1.0),
+                HyperparameterRange(
+                    name="learning_rate", kind="log_float", low=1e-3, high=1.0
+                ),
             )
         )
 
@@ -1137,7 +1188,11 @@ class LightGBMTrainable:
     def predict(self, X: pl.DataFrame) -> Predictions:
         if not self._is_fitted:
             raise RuntimeError("LightGBMTrainable.predict() called before fit().")
-        frame = X.select([c for c in self._feature_names if c in X.columns]) if self._feature_names else X
+        frame = (
+            X.select([c for c in self._feature_names if c in X.columns])
+            if self._feature_names
+            else X
+        )
         preds = self._estimator.predict(frame.to_numpy())
         return Predictions(preds, column="prediction")
 
@@ -1198,9 +1253,7 @@ def _resolve_metric(
     )
 
 
-def _persist_native_artifact(
-    obj: Any, *, prefix: str, format: str
-) -> str:
+def _persist_native_artifact(obj: Any, *, prefix: str, format: str) -> str:
     """Persist a fitted estimator / module to a temp file; return URI.
 
     Phase 3 uses a simple temp-dir scheme. Phase 4's ArtifactStore
