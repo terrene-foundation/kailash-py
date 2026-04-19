@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 import traceback
@@ -34,6 +35,37 @@ _DEFAULT_PRAGMAS = {
 }
 
 
+# Defense-in-depth validation for PRAGMA interpolation.
+# PRAGMA names + values cannot be passed as bound parameters (SQLite grammar),
+# so they MUST be validated before f-string interpolation.
+# See rules/dataflow-identifier-safety.md (Finding #3, issue #499).
+_PRAGMA_NAME_REGEX = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+# PRAGMA values are keywords (WAL/NORMAL), integers, or -KB cache sizes.
+# Disallow quotes, semicolons, parens, spaces — everything that enables SQL injection.
+_PRAGMA_VALUE_REGEX = re.compile(r"^-?[a-zA-Z0-9_]+$")
+
+
+def _validate_pragma(name: str, value: str) -> tuple[str, str]:
+    """Validate PRAGMA name + value before interpolation. Raises on invalid input.
+
+    PRAGMA statements don't accept bound parameters, so names/values must be
+    interpolated. This validator is the single enforcement point: strict
+    allowlist regex, typed error on failure, no raw value echoed in message.
+    """
+    if not isinstance(name, str) or not _PRAGMA_NAME_REGEX.match(name):
+        raise ValueError(
+            f"invalid PRAGMA name (fingerprint={hash(str(name)) & 0xFFFF:04x})"
+        )
+    # Always coerce value to str before regex — int/bool values are valid.
+    value_str = str(value)
+    if not _PRAGMA_VALUE_REGEX.match(value_str):
+        raise ValueError(
+            f"invalid PRAGMA value for '{name}' "
+            f"(fingerprint={hash(value_str) & 0xFFFF:04x})"
+        )
+    return name, value_str
+
+
 async def _create_async_connection(
     db_path: str,
     pragmas: Optional[dict[str, str]] = None,
@@ -41,7 +73,8 @@ async def _create_async_connection(
     """Create an aiosqlite connection with PRAGMAs applied."""
     conn = await aiosqlite.connect(db_path)
     for pragma, value in (pragmas or _DEFAULT_PRAGMAS).items():
-        await conn.execute(f"PRAGMA {pragma}={value}")
+        safe_name, safe_value = _validate_pragma(pragma, value)
+        await conn.execute(f"PRAGMA {safe_name}={safe_value}")
     return conn
 
 

@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
 
+from .drop_confirmation import require_force_drop
+
 logger = logging.getLogger(__name__)
 
 
@@ -714,18 +716,36 @@ class NotNullColumnHandler:
                     )
 
     async def rollback_not_null_addition(
-        self, plan: NotNullAdditionPlan, connection: Optional[asyncpg.Connection] = None
+        self,
+        plan: NotNullAdditionPlan,
+        connection: Optional[asyncpg.Connection] = None,
+        *,
+        force_drop: bool = False,
     ) -> AdditionExecutionResult:
         """
         Rollback NOT NULL column addition.
 
+        Per rules/dataflow-identifier-safety.md MUST Rule 4, destructive DDL
+        requires explicit ``force_drop=True``. Rolling back drops the column
+        that was just added — any data written to it between the addition
+        and the rollback is irrecoverable without a separate backup.
+
         Args:
             plan: Original execution plan
             connection: Database connection (optional)
+            force_drop: Must be True to run the DROP COLUMN that the
+                rollback emits.
 
         Returns:
             AdditionExecutionResult with rollback details
+
+        Raises:
+            DropRefusedError: if ``force_drop`` is False.
         """
+        require_force_drop(
+            f"rollback_not_null_addition({plan.table_name}.{plan.column.name})",
+            force_drop,
+        )
         start_time = datetime.now()
         self.logger.warning(
             f"Rolling back NOT NULL addition: {plan.table_name}.{plan.column.name}"
