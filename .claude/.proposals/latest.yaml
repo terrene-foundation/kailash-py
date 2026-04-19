@@ -10,7 +10,9 @@ codify_session: |
   MEDIUM findings, fast-patched in round-10 (kailash-dataflow 2.0.12 +
   kailash-ml 0.11.1). This codify captures 6 institutional patterns.
 
-status: pending_review
+status: reviewed
+review_date: "2026-04-19"
+review_target_loom_version: "2.8.19"
 
 changes:
   - id: keyspace-version-bump-invalidation-parity
@@ -30,6 +32,14 @@ changes:
       patch_pr: 529 # wildcard fix + 2 regression tests
       bug_class: "cache keyspace producer bumps version, consumer-side invalidator left pinned"
     classification_suggestion: global # applies to any cache-keyspace-versioning SDK work
+    review_notes:
+      classification: global
+      action: copy-section-from-BUILD
+      target_loom_path: .claude/rules/tenant-isolation.md
+      loom_section_anchor: "### 3a. Keyspace Version Bumps Require Invalidation-Path Sweep"
+      line_delta: +28
+      cross_sdk_flag: "kailash-rs parallel — if rs CacheKeyGenerator bumps keyspace, same sweep discipline applies"
+      notes: "Pattern is cache-keyspace-versioning generic. Python examples kept; no BUILD-internal path refs leaked."
 
   - id: multi-site-kwarg-plumbing-exhaustive-audit
     type: rule
@@ -47,6 +57,14 @@ changes:
       patch_pr: 529 # sibling site + regression test
       bug_class: "security kwarg plumbing incomplete across sibling call sites"
     classification_suggestion: global
+    review_notes:
+      classification: global
+      action: copy-section-from-BUILD
+      target_loom_path: .claude/rules/security.md
+      loom_section_anchor: "## Multi-Site Kwarg Plumbing"
+      line_delta: +35
+      cross_sdk_flag: "kailash-rs parallel — same grep-every-caller discipline on trust/policy plumbing"
+      notes: "Cross-language applicable. Trimmed example to keep cross-SDK neutral."
 
   - id: all-hygiene-module-scope-public-imports
     type: rule
@@ -64,6 +82,14 @@ changes:
       patch_pr: 529 # added to __all__
       bug_class: "advertised-but-hidden public API via __all__ omission"
     classification_suggestion: global # __all__ hygiene is universal Python discipline
+    review_notes:
+      classification: global
+      action: copy-section-from-BUILD-with-path-adaptation
+      target_loom_path: .claude/rules/orphan-detection.md
+      loom_section_anchor: "### 6. Module-Scope Public Imports Appear In `__all__`"
+      line_delta: +41
+      cross_sdk_flag: "no — Python-specific (`__all__` is Python); Rust has no equivalent (use `pub`/`pub use`). If kailash-rs needs `pub use` hygiene the rule is distinct."
+      notes: "Generalized kailash_ml → pkg placeholder to keep rule cross-package. Python-only pattern; OK as global because py is majority lang + rb variant follows same pattern."
 
   - id: cross-sdk-structural-api-divergence-disposition
     type: rule
@@ -82,6 +108,14 @@ changes:
       pr: 528
       bug_class: "cross-SDK structural divergence closed silently without test"
     classification_suggestion: global
+    review_notes:
+      classification: global
+      action: author-new-section-from-proposal
+      target_loom_path: .claude/rules/cross-sdk-inspection.md
+      loom_section_anchor: "### 3a. Structural API-Divergence Disposition"
+      line_delta: +40
+      cross_sdk_flag: "kailash-rs parallel ticket — extend the sibling pattern bidirectionally when rs#424 closes"
+      notes: "Authored from proposal (no BUILD-side extension yet). Example uses Python-side Express/bulk_create but principle is cross-SDK; cross-sdk-inspection.md is itself a global cross-SDK rule so this placement is correct."
 
   - id: phantom-transitive-deps-uv-lock-upgrade
     type: rule
@@ -98,6 +132,14 @@ changes:
       patch_pr: 530
       bug_class: "phantom transitive orphan constrains solver"
     classification_suggestion: variant/py # uv-specific tooling; Rust/Ruby equivalents diverge
+    review_notes:
+      classification: global
+      action: author-new-section-multi-ecosystem
+      target_loom_path: .claude/rules/dependencies.md
+      loom_section_anchor: "## Phantom Transitive Deps — Resolve Via Lockfile Upgrade, Not Local Caps"
+      line_delta: +30
+      cross_sdk_flag: "Pattern is cross-ecosystem. Title generalized from `uv lock --upgrade` to `Lockfile Upgrade`; examples cover uv + cargo + npm. Kailash-rs should apply same discipline to Cargo.lock phantoms."
+      notes: "Override classification_suggestion=variant/py → global. The pattern (phantom transitive constrains solver, fix via lockfile-level upgrade not manifest cap) generalizes; only the tooling verbs differ. dependencies.md is already multi-language per frontmatter."
 
   - id: post-release-reviewer-audit-gate
     type: rule
@@ -115,10 +157,15 @@ changes:
       round_10_patch: "dataflow 2.0.12 + ml 0.11.1 via PR #529 within 20min of round-9 merge"
       bug_class: "pre-release gate blind spots discovered only post-ship"
     classification_suggestion: global
+    review_notes:
+      classification: global
+      action: extend-existing-table
+      target_loom_path: .claude/rules/agents.md
+      loom_section_anchor: "Quality Gates (MUST — Gate-Level Review) — table row: After release"
+      line_delta: +1 # row added; column widths widened
+      cross_sdk_flag: "kailash-rs parallel — same post-release audit discipline applies"
+      notes: "Copied from BUILD verbatim into Quality Gates table. Pure process rule, no code adaptation needed."
 
-  # --- Appended after initial codify (PR #532) per rules/artifact-flow.md
-  # MUST: Append, Never Overwrite Unprocessed Proposals. New patterns
-  # surfaced in #533 (nexus 2.1.1 hotfix for #531) after codify landed.
   - id: framework-dispatch-method-drift-iterate-the-data
     type: rule
     severity: HIGH
@@ -150,9 +197,17 @@ changes:
         - test_workflow_server_lifespan_runs_on_startup_hooks
         - test_lifespan_fires_handlers_even_when_dispatch_methods_missing
     classification_suggestion: global # applies to any Python framework integration (FastAPI, Starlette, aiohttp, etc.)
+    review_notes:
+      classification: global
+      action: author-new-section-from-proposal-cross-language
+      target_loom_path: .claude/rules/framework-first.md
+      loom_section_anchor: "## Framework Version-Stable Integration — Drive The Data, Not The Dispatch"
+      line_delta: +44
+      cross_sdk_flag: "Pattern is cross-language (FastAPI/Starlette/aiohttp in Python; Axum/actix layers + Rails/Rack middleware analogs). Added Rust DO/DO NOT examples. Kailash-rs nexus-rs binding should mirror the same discipline."
+      notes: "Authored from proposal directly (BUILD has no extension yet). framework-first.md is already dual-path py/rs via frontmatter — global placement correct."
 
 summary_note: |
-  All 6 items derive from real failure modes shipped this session and
+  All 7 items derive from real failure modes shipped this session and
   caught either by the post-release reviewer or by direct cross-SDK
   inspection. Each has a concrete PR reference for loom Gate-1
   classification. No synthetic patterns.
