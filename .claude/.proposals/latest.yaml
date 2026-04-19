@@ -1,218 +1,130 @@
 source_repo: kailash-py
 codify_date: "2026-04-19"
 codify_session: |
-  Session 2026-04-19 rounds 9 + 10 shipped 3 bundle releases to PyPI
-  (kailash 2.8.8, kailash-dataflow 2.0.11 → 2.0.12, kailash-ml 0.11.0 →
-  0.11.1, kailash-align 0.3.2, kailash-pact 0.8.2, kailash-trust 0.1.1,
-  kaizen-agents 0.9.3), merged 9 PRs (#502-#530), and closed 4 cross-SDK
-  tickets (#510, #511, #512, #514) plus #516, #520, #525. Post-release
-  reviewer audit of the round-9 bundle caught 1 CRITICAL + 1 HIGH + 2
-  MEDIUM findings, fast-patched in round-10 (kailash-dataflow 2.0.12 +
-  kailash-ml 0.11.1). This codify captures 6 institutional patterns.
+  Session 2026-04-19 ML GPU-first Phase 1 punch list (items 3/4/5/7/8) shipped
+  on feat/ml-gpu-phase1-integration with 13 commits. The implementation used
+  3 parallel ml-specialist agents in worktrees — and surfaced 3 institutional
+  failure modes that this codify captures as rule additions to rules/agents.md.
 
-status: distributed
-review_date: "2026-04-19"
-review_target_loom_version: "2.8.19"
-distributed_date: "2026-04-19"
+  Background: ml-specialist Shards A/B/C launched in parallel with
+  isolation="worktree" + absolute-path prompts. Shard A's agent truncated mid-
+  message before committing; the empty worktree was auto-cleaned and ~300 LOC
+  of SklearnTrainable Array-API rewrite was lost. Shard B's agent self-corrected
+  by detecting absolute-path leak to MAIN and rewriting against its worktree.
+  Shard C's agent truncated with uncommitted changes; orchestrator rescued via
+  WIP commit immediately on notification. Subsequent gate-level reviewer
+  APPROVED with minor fixes; /redteam mechanical sweep caught a HIGH spec-
+  compliance gap (TorchTrainable + LightningTrainable returning TrainingResult
+  without device=DeviceReport — 2 of 7 family adapters missed the wire-up
+  even though spec mandates "every fit returns one"). Fix landed inline; AST
+  regression invariant test added.
+
+status: pending_review
+review_date: null
+review_target_loom_version: "2.8.20"
+distributed_date: null
 
 changes:
-  - id: keyspace-version-bump-invalidation-parity
+  - id: worktree-prompts-relative-paths
     type: rule
     severity: HIGH
-    target: rules/tenant-isolation.md
-    section: "3a. Keyspace Version Bumps Require Invalidation-Path Sweep"
-    summary: |
-      When CacheKeyGenerator bumps default keyspace version (v1→v2 for
-      BP-049), EVERY invalidation path must be audited in same PR.
-      AsyncRedisCacheAdapter.invalidate_model was left pinned to v1 —
-      write-then-invalidate on Redis silently left v2 entries in place.
-      Fix: wildcard the version segment (dataflow:v*:*) to sweep both
-      legacy and current keyspace.
-    evidence:
-      pre_fix_pr: 522 # bumped v1→v2 in CacheKeyGenerator, left invalidator pinned
-      patch_pr: 529 # wildcard fix + 2 regression tests
-      bug_class: "cache keyspace producer bumps version, consumer-side invalidator left pinned"
-    classification_suggestion: global # applies to any cache-keyspace-versioning SDK work
-    review_notes:
-      classification: global
-      action: copy-section-from-BUILD
-      target_loom_path: .claude/rules/tenant-isolation.md
-      loom_section_anchor: "### 3a. Keyspace Version Bumps Require Invalidation-Path Sweep"
-      line_delta: +28
-      cross_sdk_flag: "kailash-rs parallel — if rs CacheKeyGenerator bumps keyspace, same sweep discipline applies"
-      notes: "Pattern is cache-keyspace-versioning generic. Python examples kept; no BUILD-internal path refs leaked."
-
-  - id: multi-site-kwarg-plumbing-exhaustive-audit
-    type: rule
-    severity: HIGH
-    target: rules/security.md
-    section: "Multi-Site Kwarg Plumbing"
-    summary: |
-      When a security-relevant kwarg (policy, tenant scope, clearance
-      context, audit correlation) is plumbed through a helper, EVERY
-      call site MUST be updated in same PR. BP-049 added policy +
-      model_name to validate_model; Express site got it, engine site
-      was missed. Reviewer caught post-release; fast-patched.
-    evidence:
-      pre_fix_pr: 522 # plumbed validate_model, missed DataFlowEngine.validate_record
-      patch_pr: 529 # sibling site + regression test
-      bug_class: "security kwarg plumbing incomplete across sibling call sites"
-    classification_suggestion: global
-    review_notes:
-      classification: global
-      action: copy-section-from-BUILD
-      target_loom_path: .claude/rules/security.md
-      loom_section_anchor: "## Multi-Site Kwarg Plumbing"
-      line_delta: +35
-      cross_sdk_flag: "kailash-rs parallel — same grep-every-caller discipline on trust/policy plumbing"
-      notes: "Cross-language applicable. Trimmed example to keep cross-SDK neutral."
-
-  - id: all-hygiene-module-scope-public-imports
-    type: rule
-    severity: MEDIUM
-    target: rules/orphan-detection.md
-    section: "6. Module-Scope Public Imports Appear In `__all__`"
-    summary: |
-      Every module-scope public import in a package's __init__.py MUST
-      appear in __all__ unless explicitly private. kailash_ml 0.11.0
-      eagerly imported DeviceReport, device_report_from_backend_info,
-      device, use_device but omitted all four from __all__.
-      `from kailash_ml import *` dropped the advertised public API.
-    evidence:
-      pre_fix_pr: 523 # Phase 1 public API symbols added to imports
-      patch_pr: 529 # added to __all__
-      bug_class: "advertised-but-hidden public API via __all__ omission"
-    classification_suggestion: global # __all__ hygiene is universal Python discipline
-    review_notes:
-      classification: global
-      action: copy-section-from-BUILD-with-path-adaptation
-      target_loom_path: .claude/rules/orphan-detection.md
-      loom_section_anchor: "### 6. Module-Scope Public Imports Appear In `__all__`"
-      line_delta: +41
-      cross_sdk_flag: "no — Python-specific (`__all__` is Python); Rust has no equivalent (use `pub`/`pub use`). If kailash-rs needs `pub use` hygiene the rule is distinct."
-      notes: "Generalized kailash_ml → pkg placeholder to keep rule cross-package. Python-only pattern; OK as global because py is majority lang + rb variant follows same pattern."
-
-  - id: cross-sdk-structural-api-divergence-disposition
-    type: rule
-    severity: MEDIUM
-    target: rules/cross-sdk-inspection.md
-    section: "3a. Structural API-Divergence Disposition"
-    summary: |
-      When sibling SDK reports a bug at an API surface this SDK doesn't
-      expose (kailash-rs#424 execute_raw(sql, params) vs Python's
-      execute_raw(sql)), disposition MUST include (a) Tier 2 test
-      through sibling binding path (Express bulk_create with shrinking
-      arity), (b) structural invariant test locking the signature so a
-      future refactor toward sibling shape fails loudly.
-    evidence:
-      issue: 525
-      pr: 528
-      bug_class: "cross-SDK structural divergence closed silently without test"
-    classification_suggestion: global
-    review_notes:
-      classification: global
-      action: author-new-section-from-proposal
-      target_loom_path: .claude/rules/cross-sdk-inspection.md
-      loom_section_anchor: "### 3a. Structural API-Divergence Disposition"
-      line_delta: +40
-      cross_sdk_flag: "kailash-rs parallel ticket — extend the sibling pattern bidirectionally when rs#424 closes"
-      notes: "Authored from proposal (no BUILD-side extension yet). Example uses Python-side Express/bulk_create but principle is cross-SDK; cross-sdk-inspection.md is itself a global cross-SDK rule so this placement is correct."
-
-  - id: phantom-transitive-deps-uv-lock-upgrade
-    type: rule
-    severity: MEDIUM
-    target: rules/dependencies.md
-    section: "Phantom Transitive Deps — Resolve Via `uv lock --upgrade`, Not Local Caps"
-    summary: |
-      When pip check reports a conflict whose root is an unused
-      transitive dep, fix via uv lock --upgrade-package (lets solver
-      drop orphan) + uv sync. Adding a local cap on a package this
-      project does not import is BLOCKED. google-generativeai 0.8.6
-      installed but zero imports; held protobuf at old cap.
-    evidence:
-      patch_pr: 530
-      bug_class: "phantom transitive orphan constrains solver"
-    classification_suggestion: variant/py # uv-specific tooling; Rust/Ruby equivalents diverge
-    review_notes:
-      classification: global
-      action: author-new-section-multi-ecosystem
-      target_loom_path: .claude/rules/dependencies.md
-      loom_section_anchor: "## Phantom Transitive Deps — Resolve Via Lockfile Upgrade, Not Local Caps"
-      line_delta: +30
-      cross_sdk_flag: "Pattern is cross-ecosystem. Title generalized from `uv lock --upgrade` to `Lockfile Upgrade`; examples cover uv + cargo + npm. Kailash-rs should apply same discipline to Cargo.lock phantoms."
-      notes: "Override classification_suggestion=variant/py → global. The pattern (phantom transitive constrains solver, fix via lockfile-level upgrade not manifest cap) generalizes; only the tooling verbs differ. dependencies.md is already multi-language per frontmatter."
-
-  - id: post-release-reviewer-audit-gate
-    type: rule
-    severity: MEDIUM
     target: rules/agents.md
-    section: "Quality Gates table — After release row"
+    section: "MUST: Worktree Prompts Use Relative Paths Only"
     summary: |
-      Add RECOMMENDED gate to run reviewer against the MERGED release
-      commit on main as a follow-up to the /release flow. Catches drift
-      pre-release gates missed (kwarg plumbing gaps, keyspace bumps with
-      missed invalidators). If CRIT/HIGH surfaces, patch same session
-      as x.y.z+1.
-    evidence:
-      round_9_bundle: "round-9 shipped clean pre-release; post-release reviewer found CRIT + HIGH + 2 MED"
-      round_10_patch: "dataflow 2.0.12 + ml 0.11.1 via PR #529 within 20min of round-9 merge"
-      bug_class: "pre-release gate blind spots discovered only post-ship"
+      Agents launched with isolation="worktree" + prompts referencing
+      absolute paths (/Users/...) silently write to the PARENT checkout
+      instead of their worktree. Empty worktrees auto-clean; the agent's
+      work is lost OR silently appears in main. Existing § "MUST: Worktree
+      Isolation" mentions the verification layer but does not flag the
+      absolute-path foot-gun. New section adds the relative-paths-only
+      directive with BLOCKED rationalizations + DO/DO NOT example.
     classification_suggestion: global
-    review_notes:
-      classification: global
-      action: extend-existing-table
-      target_loom_path: .claude/rules/agents.md
-      loom_section_anchor: "Quality Gates (MUST — Gate-Level Review) — table row: After release"
-      line_delta: +1 # row added; column widths widened
-      cross_sdk_flag: "kailash-rs parallel — same post-release audit discipline applies"
-      notes: "Copied from BUILD verbatim into Quality Gates table. Pure process rule, no code adaptation needed."
+    rationale: |
+      The failure mode is language-agnostic (Rust shards in kailash-rs would
+      hit the same write-to-main leak). Cross-SDK-applicable.
+    evidence:
+      session: "2026-04-19"
+      commit_sha: pending
+      occurrences: 2 of 3 parallel shards
+      lost_work_loc: "~300 (Shard A SklearnTrainable Array-API)"
 
-  - id: framework-dispatch-method-drift-iterate-the-data
+  - id: worktree-agents-commit-incremental
     type: rule
     severity: HIGH
-    target: rules/framework-first.md
-    section: "Framework version-stable integration — drive the data, not the method"
+    target: rules/agents.md
+    section: "MUST: Worktree Agents Commit Incremental Progress"
     summary: |
-      kailash-nexus 2.1.0 shipped calling `app.router.startup()` +
-      `.shutdown()` as if they were stable FastAPI/Starlette coroutines.
-      FastAPI has shipped BOTH `.startup()` AND `._startup()` at
-      different versions; some production FastAPI builds exposed only
-      `_startup`. Every Nexus 2.1.0 service crashed at uvicorn lifespan
-      with AttributeError. Fix (2.1.1): iterate the `on_startup` /
-      `on_shutdown` LIST directly (what FastAPI's own _DefaultLifespan
-      does internally). The list is the stable surface; dispatch method
-      names drift.
-
-      Rule extraction: when integrating with an external framework's
-      lifecycle hook, if both (a) a dispatch method name, and (b) a
-      list/dict of registered handlers are exposed, the data structure
-      is the stable surface across versions. Dispatch method names are
-      subject to underscore-prefix transitions and removal. Drive the
-      data; don't call the dispatch.
+      Agents in worktrees that don't `git commit` before exit lose 100% of
+      their output to worktree auto-cleanup. The existing § "MUST: Verify
+      Agent Deliverables" catches silent no-ops AFTER the fact but cannot
+      recover files that were only in a cleaned-up worktree. New section
+      mandates explicit "commit after each milestone" instruction in
+      worktree-agent prompts + orchestrator verification of ≥1 commit on
+      the branch before declaring work landed.
+    classification_suggestion: global
+    rationale: |
+      Same root cause as worktree-prompts-relative-paths but distinct
+      mitigation. Both apply to any language.
     evidence:
-      issue: 531
-      pre_fix_pr: none # bug shipped in #501 which became nexus 2.1.0
-      patch_pr: 533 # iterate on_startup/on_shutdown lists
-      bug_class: "framework dispatch method name drift across versions"
-      regression_tests:
-        - test_workflow_server_lifespan_runs_on_startup_hooks
-        - test_lifespan_fires_handlers_even_when_dispatch_methods_missing
-    classification_suggestion: global # applies to any Python framework integration (FastAPI, Starlette, aiohttp, etc.)
-    review_notes:
-      classification: global
-      action: author-new-section-from-proposal-cross-language
-      target_loom_path: .claude/rules/framework-first.md
-      loom_section_anchor: "## Framework Version-Stable Integration — Drive The Data, Not The Dispatch"
-      line_delta: +44
-      cross_sdk_flag: "Pattern is cross-language (FastAPI/Starlette/aiohttp in Python; Axum/actix layers + Rails/Rack middleware analogs). Added Rust DO/DO NOT examples. Kailash-rs nexus-rs binding should mirror the same discipline."
-      notes: "Authored from proposal directly (BUILD has no extension yet). framework-first.md is already dual-path py/rs via frontmatter — global placement correct."
+      session: "2026-04-19"
+      occurrences: 3 of 3 parallel shards truncated; 2 lost work
+      mitigation_proven: Shard B (commit-before-exit emphasis) + Shard C
+        (orchestrator WIP rescue commit)
+
+  - id: reviewer-mechanical-sweep
+    type: rule
+    severity: HIGH
+    target: rules/agents.md
+    section: "MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep"
+    summary: |
+      Gate-level reviewer prompts that only show the diff miss orphans in
+      OLD lines that the spec also touches. New section mandates explicit
+      mechanical sweeps (parity greps, collect-only, pip check, __all__
+      verification) in every reviewer prompt BEFORE LLM judgment. The
+      sweeps catch what's missing from untouched code that the new public
+      surface implicitly required.
+    classification_suggestion: global
+    rationale: |
+      Mechanical sweeps complement (don't replace) LLM judgment review.
+      Cross-SDK-applicable: Rust gate reviewers face the same scope
+      limitation when reviewing diffs.
+    evidence:
+      session: "2026-04-19"
+      finding_caught_by_sweep: |
+        TorchTrainable + LightningTrainable missing device=DeviceReport in
+        return TrainingResult (2 of 7 return sites). Reviewer APPROVED;
+        /redteam parity grep caught it in 4 seconds. Fixed inline at commit
+        1e233dcd with AST regression invariant test.
+
+cross_sdk_parity:
+  - kailash-rs equivalent: |
+      kailash-rs has the SAME parallel-shard / worktree / reviewer patterns.
+      All 3 rule additions apply 1:1. After loom/ Gate-1 review classifies
+      as global, kailash-rs's coc-claude-rs template inherits via /sync.
+
+post_release_followups:
+  - id: predictions-device-field
+    severity: MEDIUM
+    target: kailash-ml 0.12.1
+    summary: |
+      Predictions class missing `device: Optional[DeviceReport]` field;
+      spec mandates "every predict returns one" but only the FIT half of
+      the transparency contract shipped in 0.12.0. Disclosed in CHANGELOG
+      Known Limitations + journal 0005-GAP. ~40 LOC + 150 LOC tests.
+
+  - id: rules-agents-md-length
+    severity: LOW
+    target: loom Gate-2
+    summary: |
+      rules/agents.md is now 244 lines — exceeds cc-artifacts.md cap of
+      200. Considered acceptable because the 3 new sections each follow
+      rule-authoring.md meta-rule (MUST + BLOCKED + DO/DO NOT + Why +
+      Origin). Future codify could extract worktree-isolation sections
+      into rules/worktree-isolation.md (already referenced by agents.md
+      §95 as a sibling rule).
 
 summary_note: |
-  All 7 items derive from real failure modes shipped this session and
-  caught either by the post-release reviewer or by direct cross-SDK
-  inspection. Each has a concrete PR reference for loom Gate-1
-  classification. No synthetic patterns.
-
-  Distribution path: loom/ Gate-1 review classifies each as global vs
-  variant; Gate-2 distributes via /sync. BUILD repo changes (rule files
-  + proposal) live in this commit; no downstream sync happens from here.
+  3 rule additions, all HIGH, all targeting rules/agents.md. All 3 follow
+  rule-authoring.md meta-rule (Loud/Linguistic/Layered). Origin: Session
+  2026-04-19 ML GPU-first Phase 1 parallel-shard experiment failure modes.
+  Cross-SDK applicable; classification_suggestion: global for all 3.
