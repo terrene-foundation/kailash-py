@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 from kailash.db.dialect import (
     DatabaseType,
     QueryDialect,
-    _validate_identifier,
     detect_dialect,
 )
 
@@ -99,14 +98,22 @@ class ConnectionManager:
         Uses ``CREATE INDEX IF NOT EXISTS`` on PostgreSQL/SQLite and
         catches duplicate-index errors on MySQL (which does not support
         ``IF NOT EXISTS`` for indexes).
+
+        Per ``rules/dataflow-identifier-safety.md`` MUST Rule 1, every
+        dynamic identifier interpolated into DDL MUST route through
+        ``dialect.quote_identifier()`` — which both validates against
+        the allowlist regex AND wraps in dialect-appropriate quotes.
         """
-        _validate_identifier(index_name)
-        _validate_identifier(table)
-        for col in (c.strip() for c in columns.split(",")):
-            _validate_identifier(col)
+        quoted_index = self.dialect.quote_identifier(index_name)
+        quoted_table = self.dialect.quote_identifier(table)
+        quoted_cols = ", ".join(
+            self.dialect.quote_identifier(c.strip()) for c in columns.split(",")
+        )
         if self.dialect.database_type == DatabaseType.MYSQL:
             try:
-                await self.execute(f"CREATE INDEX {index_name} ON {table}({columns})")
+                await self.execute(
+                    f"CREATE INDEX {quoted_index} ON {quoted_table}({quoted_cols})"
+                )
             except Exception:
                 # MySQL raises error 1061 if index already exists
                 logger.warning(
@@ -116,7 +123,8 @@ class ConnectionManager:
                 )
         else:
             await self.execute(
-                f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({columns})"
+                f"CREATE INDEX IF NOT EXISTS {quoted_index} "
+                f"ON {quoted_table}({quoted_cols})"
             )
 
     # ------------------------------------------------------------------

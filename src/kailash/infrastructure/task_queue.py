@@ -124,13 +124,21 @@ class SQLTaskQueue:
         """Create the task queue table if it does not exist.
 
         Safe to call multiple times (idempotent).
+
+        Per ``rules/dataflow-identifier-safety.md`` MUST Rule 1, the
+        dynamic table name is routed through ``dialect.quote_identifier()``
+        for the DDL interpolation (validates + quotes). DML sites
+        below reuse the validated ``self._table`` as-is since the
+        identifier was already vetted by ``_validate_identifier`` in
+        ``__init__`` (Rule 5 defense-in-depth).
         """
         if self._initialized:
             return
 
         _tc = self._conn.dialect.text_column(indexed=True)
+        quoted_table = self._conn.dialect.quote_identifier(self._table)
         await self._conn.execute(
-            f"CREATE TABLE IF NOT EXISTS {self._table} ("
+            f"CREATE TABLE IF NOT EXISTS {quoted_table} ("
             f"task_id {_tc} PRIMARY KEY, "
             f"queue_name {_tc} NOT NULL DEFAULT 'default', "
             "payload TEXT NOT NULL, "

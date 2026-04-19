@@ -45,21 +45,50 @@ The SDK-wide canonical SQL placeholder is `?` (SQLite style). Every SQL string a
 | PostgreSQL | `$1`, `$2`, ...    | `?` -> `$N` (1-indexed) |
 | MySQL      | `%s`               | `?` -> `%s`             |
 
-### Identifier Validation
+### Identifier Safety
 
-`_validate_identifier(name: str, *, max_length: int = 128) -> None`
+The core SDK ships two paired helpers for identifier safety. Every dynamic-identifier DDL path MUST use `quote_identifier` (validate AND quote); validate-only callers use `_validate_identifier`.
 
-Validates SQL identifiers (table names, column names, index names) against injection. Raises `ValueError` on failure.
+This mirrors the canonical contract established by `dataflow.adapters.dialect` (see `packages/kailash-dataflow/src/dataflow/adapters/dialect.py`) and is mandated by `rules/dataflow-identifier-safety.md` MUST Rules 1-2.
+
+#### `dialect.quote_identifier(name: str) -> str`
+
+Validates AND wraps _name_ in dialect-appropriate identifier quotes. Returns the quoted form suitable for interpolation into DDL.
 
 Contract:
 
-- Input must be a string.
-- Maximum length: 128 characters (default; PostgreSQL limit is 63, MySQL is 64).
+- Input must be a string; non-strings raise `IdentifierError`.
 - Must match regex `^[a-zA-Z_][a-zA-Z0-9_]*$`.
-- Error messages include a fingerprint hash (`hash(name) & 0xFFFF`), not the raw input, to prevent log poisoning.
-- Does NOT attempt to escape -- rejects invalid inputs outright.
+- Length limit: PostgreSQL 63, MySQL 64, SQLite 128.
+- Quote character: `"` for PostgreSQL/SQLite, `` ` `` for MySQL.
+- Raises `IdentifierError` (subclass of `ValueError`) on failure. Error message never echoes the raw identifier — only a fingerprint hash (`hash(name) & 0xFFFF`) is emitted, to prevent log poisoning and stored XSS via error-message paths.
+- MUST NOT attempt to escape embedded quote characters — invalid inputs are rejected outright.
 
-Used by: every `CREATE TABLE`, `CREATE INDEX`, table name constructor, and DDL path in the SDK.
+```python
+from kailash.db.dialect import PostgresDialect
+
+dialect = PostgresDialect()
+quoted = dialect.quote_identifier("users")        # '"users"'
+dialect.quote_identifier('"; DROP TABLE x; --')   # raises IdentifierError
+```
+
+Used by: every `CREATE TABLE`, `CREATE INDEX`, `ALTER TABLE`, `DROP` site that interpolates a dynamic identifier. Specifically, `ConnectionManager.create_index()` and all `src/kailash/infrastructure/*.py` bootstrap-table DDL paths route table / index / column names through `quote_identifier`.
+
+#### `_validate_identifier(name: str, *, max_length: int = 128) -> None`
+
+Validate-only primitive for sites that interpolate an identifier WITHOUT dialect quoting. Raises `IdentifierError` (`ValueError` subclass) on failure. Contract identical to `quote_identifier` (regex, length, fingerprint error message), minus the quoting step.
+
+Used by:
+
+- Upsert column-list interpolation where the SET clause embeds bare column names (`col = EXCLUDED.col`).
+- Hardcoded-identifier defense-in-depth validation at construction time (per `rules/dataflow-identifier-safety.md` Rule 5).
+- Test fixtures.
+
+`_validate_identifier` MUST NOT be used in DDL paths that need quoting — use `quote_identifier` there instead. Per Rule 1, skipping the quote step on a dynamic-identifier DDL is an injection vector even when validation passes.
+
+#### `IdentifierError`
+
+Typed exception raised by `quote_identifier` and `_validate_identifier` when an identifier fails safety validation. Subclasses `ValueError` so existing call sites that catch `ValueError` continue to work. Error messages use a fingerprint hash; they never echo the raw input.
 
 ### JSON Path Validation
 
@@ -583,7 +612,7 @@ All stores and the ConnectionManager follow these error handling patterns:
 
 - `RuntimeError` when `ConnectionManager.execute/fetch/fetchone` is called before `initialize()`.
 - `RuntimeError` from `stamp_schema_version` when the database has a newer schema than the running code (downgrade protection).
-- `ValueError` from `_validate_identifier` when a table name, column name, or index name fails the allowlist regex.
+- `IdentifierError` (a `ValueError` subclass) from `quote_identifier` and `_validate_identifier` when a table name, column name, or index name fails the allowlist regex, length check, or type check. Error messages use a fingerprint hash — the raw identifier is never echoed.
 - `ImportError` with actionable install instructions when a required async driver is missing.
 - `ValueError` from `decode_userinfo_or_raise` when decoded credentials contain null bytes.
 

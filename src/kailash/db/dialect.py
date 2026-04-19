@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DatabaseType",
+    "IdentifierError",
     "QueryDialect",
     "PostgresDialect",
     "MySQLDialect",
@@ -32,6 +33,25 @@ __all__ = [
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
+
+
+class IdentifierError(ValueError):
+    """Raised when a SQL identifier fails safety validation.
+
+    Subclasses ``ValueError`` so existing call sites that catch
+    ``ValueError`` (e.g. `_validate_identifier` raisers) continue to
+    work. Error messages NEVER echo the raw input verbatim — they
+    use a fingerprint hash (`hash(name) & 0xFFFF:04x`) to prevent
+    log poisoning / stored-XSS-via-error-message.
+
+    Per ``rules/dataflow-identifier-safety.md`` MUST Rule 2, the
+    quote-identifier contract requires distinct typed error surfaces
+    so DDL-layer callers can distinguish identifier-validation
+    failures from unrelated ``ValueError`` raises in surrounding
+    code.
+    """
+
+    pass
 
 
 def _identifier_fingerprint(name: object) -> str:
@@ -52,6 +72,19 @@ def _identifier_fingerprint(name: object) -> str:
 def _validate_identifier(name: str, *, max_length: int = 128) -> None:
     """Validate a SQL identifier (table or column name).
 
+    This is the validate-only primitive for sites that interpolate
+    an identifier into SQL WITHOUT wrapping it in dialect quotes —
+    for example, `upsert` column lists where the SET clause embeds
+    bare column names (`col = EXCLUDED.col`), or hardcoded-identifier
+    lists that defense-in-depth validate per
+    ``rules/dataflow-identifier-safety.md`` Rule 5.
+
+    DDL paths that interpolate dynamic identifiers into statements
+    like ``CREATE INDEX``, ``CREATE TABLE``, ``ALTER TABLE``, or
+    ``DROP`` MUST use ``dialect.quote_identifier(name)`` instead —
+    which both validates AND wraps in dialect-appropriate quotes
+    (per ``rules/dataflow-identifier-safety.md`` MUST Rule 1).
+
     Parameters
     ----------
     name
@@ -62,31 +95,74 @@ def _validate_identifier(name: str, *, max_length: int = 128) -> None:
 
     Raises
     ------
-    ValueError
-        If *name* is not a string, exceeds the length limit, or
-        contains characters that could enable SQL injection.
-        Unhashable non-string inputs (``dict``, ``list``, ``set``)
-        raise ``ValueError`` — NOT ``TypeError`` — because the
-        fingerprint helper is safe on unhashable values.
+    IdentifierError
+        (``ValueError`` subclass) if *name* is not a string,
+        exceeds the length limit, or contains characters that
+        could enable SQL injection. Unhashable non-string inputs
+        (``dict``, ``list``, ``set``) raise ``IdentifierError`` —
+        NOT ``TypeError`` — because the fingerprint helper is
+        safe on unhashable values.
     """
     if not isinstance(name, str):
-        raise ValueError(
+        raise IdentifierError(
             f"Invalid SQL identifier "
             f"(fingerprint={_identifier_fingerprint(name)}): "
             f"must be a string, got {type(name).__name__}"
         )
     if len(name) > max_length:
-        raise ValueError(
+        raise IdentifierError(
             f"Invalid SQL identifier "
             f"(fingerprint={_identifier_fingerprint(name)}): "
             f"exceeds {max_length}-char limit (len={len(name)})"
         )
     if not _IDENTIFIER_RE.match(name):
-        raise ValueError(
+        raise IdentifierError(
             f"Invalid SQL identifier "
             f"(fingerprint={_identifier_fingerprint(name)}): "
             "must match [a-zA-Z_][a-zA-Z0-9_]*"
         )
+
+
+def _quote_identifier_impl(
+    name: str,
+    *,
+    max_length: int,
+    quote_char: str,
+) -> str:
+    """Validate *name* against the allowlist regex AND wrap it in
+    *quote_char* for dialect-appropriate identifier quoting.
+
+    Contract per ``rules/dataflow-identifier-safety.md`` MUST Rule 2:
+
+    1. **Validate** against ``^[a-zA-Z_][a-zA-Z0-9_]*$`` (baseline).
+    2. **Reject** — the raise does NOT echo the raw input; only a
+       fingerprint hash is emitted for forensic correlation.
+    3. **Check length** against *max_length* (PG 63 / MySQL 64 /
+       SQLite 128).
+    4. **Quote** with *quote_char* (``"`` for PG/SQLite, ``\u0060``
+       for MySQL).
+    5. **Do NOT escape** embedded quote characters — invalid
+       inputs are rejected outright.
+    """
+    if not isinstance(name, str):
+        raise IdentifierError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={_identifier_fingerprint(name)}): "
+            f"must be a string, got {type(name).__name__}"
+        )
+    if len(name) > max_length:
+        raise IdentifierError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={_identifier_fingerprint(name)}): "
+            f"exceeds {max_length}-char limit (len={len(name)})"
+        )
+    if not _IDENTIFIER_RE.match(name):
+        raise IdentifierError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={_identifier_fingerprint(name)}): "
+            "must match [a-zA-Z_][a-zA-Z0-9_]*"
+        )
+    return f"{quote_char}{name}{quote_char}"
 
 
 def _validate_json_path(path: str) -> None:
@@ -138,6 +214,24 @@ class QueryDialect(ABC):
         PostgreSQL: ``$1``, ``$2``, ...
         MySQL: ``%s``
         SQLite: ``?``
+        """
+
+    @abstractmethod
+    def quote_identifier(self, name: str) -> str:
+        """Validate *name* and return it wrapped in dialect-appropriate
+        identifier quotes.
+
+        This is the canonical helper for every DDL path that
+        interpolates a dynamic identifier — ``CREATE TABLE``,
+        ``CREATE INDEX``, ``ALTER TABLE``, ``DROP`` — per
+        ``rules/dataflow-identifier-safety.md`` MUST Rule 1.
+
+        Contract per MUST Rule 2:
+
+        - PostgreSQL / SQLite: wraps in ``"``; max length 63 / 128.
+        - MySQL: wraps in ``\u0060`` (backtick); max length 64.
+        - Raises :class:`IdentifierError` on invalid input; error
+          message does NOT echo the raw identifier.
         """
 
     def translate_query(self, query: str) -> str:
@@ -284,12 +378,22 @@ class QueryDialect(ABC):
 class PostgresDialect(QueryDialect):
     """PostgreSQL dialect — uses ``$1, $2, ...`` numbered placeholders."""
 
+    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
+    _QUOTE_CHAR = '"'
+
     @property
     def database_type(self) -> DatabaseType:
         return DatabaseType.POSTGRESQL
 
     def placeholder(self, index: int) -> str:
         return f"${index + 1}"
+
+    def quote_identifier(self, name: str) -> str:
+        return _quote_identifier_impl(
+            name,
+            max_length=self._MAX_IDENTIFIER_LENGTH,
+            quote_char=self._QUOTE_CHAR,
+        )
 
     # translate_query inherited from base — replaces ? with $N
 
@@ -351,12 +455,22 @@ class PostgresDialect(QueryDialect):
 class MySQLDialect(QueryDialect):
     """MySQL dialect — uses ``%s`` positional placeholders."""
 
+    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
+    _QUOTE_CHAR = "`"
+
     @property
     def database_type(self) -> DatabaseType:
         return DatabaseType.MYSQL
 
     def placeholder(self, index: int) -> str:
         return "%s"
+
+    def quote_identifier(self, name: str) -> str:
+        return _quote_identifier_impl(
+            name,
+            max_length=self._MAX_IDENTIFIER_LENGTH,
+            quote_char=self._QUOTE_CHAR,
+        )
 
     # translate_query inherited from base — replaces ? with %s
 
@@ -436,12 +550,22 @@ class MySQLDialect(QueryDialect):
 class SQLiteDialect(QueryDialect):
     """SQLite dialect — uses ``?`` positional placeholders (canonical)."""
 
+    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
+    _QUOTE_CHAR = '"'
+
     @property
     def database_type(self) -> DatabaseType:
         return DatabaseType.SQLITE
 
     def placeholder(self, index: int) -> str:
         return "?"
+
+    def quote_identifier(self, name: str) -> str:
+        return _quote_identifier_impl(
+            name,
+            max_length=self._MAX_IDENTIFIER_LENGTH,
+            quote_char=self._QUOTE_CHAR,
+        )
 
     def translate_query(self, query: str) -> str:
         """SQLite uses ``?`` natively — identity translation."""
