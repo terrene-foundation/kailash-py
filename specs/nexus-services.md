@@ -1,6 +1,6 @@
 # Kailash Nexus Specification — Services & Observability
 
-Version: 2.0.1
+Version: 2.1.1
 Package: `kailash-nexus`
 
 Parent domain: Kailash Nexus (multi-channel workflow platform). This file covers the event system, middleware system, Kubernetes probes, OpenAPI generation, metrics, background services, session management, trust integration, performance targets, and event-driven handlers. See also `nexus-core.md`, `nexus-channels.md`, and `nexus-auth.md`.

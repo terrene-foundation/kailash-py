@@ -1,6 +1,6 @@
 # Kailash DataFlow — Models, Classification, Multi-Tenant, Schema Management
 
-Version: 2.0.7
+Version: 2.0.12
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: `@db.model` decorator, field types, primary keys, auto-managed fields, table name mapping, model configuration, build-time validation, field classification/masking/retention, multi-tenant support, schema management (auto-migration, schema cache)

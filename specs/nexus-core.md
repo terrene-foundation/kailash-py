@@ -1,6 +1,6 @@
 # Kailash Nexus Specification — Core
 
-Version: 2.0.1
+Version: 2.1.1
 Package: `kailash-nexus`
 Install: `pip install kailash-nexus`
 
