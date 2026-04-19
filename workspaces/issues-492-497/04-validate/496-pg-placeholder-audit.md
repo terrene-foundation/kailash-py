@@ -31,9 +31,15 @@ Two HIGH-severity identifier-validation gaps (`dataflow-identifier-safety.md` MU
 
 ## Final Verdict
 
-**2-BUGS-FOUND (HIGH severity, identifier-validation class — not the kailash-rs#403 placeholder class)**
+**2-BUGS-FOUND (HIGH severity, identifier-validation class — not the kailash-rs#403 placeholder class) — BOTH RESOLVED (2026-04-19)**
 
-The kailash-rs#403 placeholder-mismatch bug does NOT exist in kailash-py — driver-correct placeholders are used in all parameter-binding sites inspected. However, the audit surfaced two pre-existing HIGH-severity DDL identifier-validation gaps that would survive into a future refactor.
+The kailash-rs#403 placeholder-mismatch bug does NOT exist in kailash-py — driver-correct placeholders are used in all parameter-binding sites inspected. The audit surfaced two pre-existing HIGH-severity DDL identifier-validation gaps that have now been closed.
+
+**Status update (2026-04-19, #499):**
+
+- Finding 1 (`sync_ddl_executor.py:377` PRAGMA) — defense-in-depth `_validate_identifier` applied via merged PR #503 (commit c571ff19).
+- Finding 2 (`engine.py:6242-6266` migration codegen) — `_validate_identifier` wrapped around all four interpolation sites via PR #503 (commit c571ff19).
+- Finding 6 (`engine.py:5120` FK constraint DDL) — all five interpolated identifiers now validated via #499 branch (this session).
 
 ## GH Issues To File (sharded per `autonomous-execution.md`)
 

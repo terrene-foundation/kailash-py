@@ -3753,6 +3753,14 @@ class DataFlow(DataFlowEventMixin):
             for table_row in tables_result:
                 table_name = table_row["name"]
 
+                # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 5):
+                # `table_name` here originates from `sqlite_master.name`, so the
+                # values are controlled by the DB schema. Still validate each
+                # one before interpolating into PRAGMA DDL so a future refactor
+                # that reads table names from a different (user-influenced)
+                # source cannot silently reopen an injection vector.
+                _validate_identifier(table_name)
+
                 # Get columns for this table using PRAGMA table_info
                 columns_query = f"PRAGMA table_info({table_name})"
                 columns_result = await adapter.execute_query(columns_query)
@@ -3772,6 +3780,9 @@ class DataFlow(DataFlowEventMixin):
                     columns.append(column_info)
 
                 # Get foreign keys using PRAGMA foreign_key_list
+                # Defense-in-depth: table_name was validated above, but keep
+                # the call local so the audit reads linearly.
+                _validate_identifier(table_name)
                 fk_query = f"PRAGMA foreign_key_list({table_name})"
                 fk_result = await adapter.execute_query(fk_query)
 
@@ -3798,6 +3809,9 @@ class DataFlow(DataFlowEventMixin):
                     }
 
                 # Get indexes using PRAGMA index_list and index_info
+                # Defense-in-depth: table_name was validated above, but keep
+                # the call local so the audit reads linearly.
+                _validate_identifier(table_name)
                 indexes_query = f"PRAGMA index_list({table_name})"
                 indexes_result = await adapter.execute_query(indexes_query)
 
@@ -5106,6 +5120,19 @@ class DataFlow(DataFlowEventMixin):
                 target_key = rel_info.get("target_key", "id")
 
                 constraint_name = f"fk_{table_name}_{foreign_key}"
+
+                # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 1):
+                # validate every identifier before interpolation into DDL.
+                # `table_name` comes from `_class_name_to_table_name`,
+                # `foreign_key` / `target_table` / `target_key` come from
+                # model-relationship metadata which is model-registry-derived
+                # today but may be caller-influenced after a future refactor.
+                _validate_identifier(table_name)
+                _validate_identifier(constraint_name)
+                _validate_identifier(foreign_key)
+                _validate_identifier(target_table)
+                _validate_identifier(target_key)
+
                 sql = (
                     f"ALTER TABLE {table_name} "
                     f"ADD CONSTRAINT {constraint_name} "

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,25 @@ from kailash.db.dialect import _validate_identifier
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+
+
+# #499 finding 5 — PG/MySQL drivers embed raw column values in DETAIL /
+# Key(...)=(…) clauses. Strip them before any log or return-value echo so
+# PII / SECRET column values cannot leak through the observability layer.
+# The surrounding error text (class of failure, table, constraint name)
+# stays so operators retain triage signal.
+_DETAIL_RE = re.compile(r"DETAIL:[^\n]*", re.IGNORECASE)
+_KEY_VALUES_RE = re.compile(r"Key \(([^)]+)\)=\(([^)]*)\)", re.IGNORECASE)
+
+
+def _sanitize_db_error(msg: str) -> str:
+    """Redact column values from DB driver error messages."""
+    if not isinstance(msg, str):
+        return "<non-string error>"
+    msg = _DETAIL_RE.sub("DETAIL: [REDACTED]", msg)
+    msg = _KEY_VALUES_RE.sub(r"Key (\1)=([REDACTED])", msg)
+    return msg
+
 
 # Allowlist of supported dialects. Unknown values (typos like "postgres",
 # "pg") MUST raise loudly rather than fall through to SQLite REPLACE
@@ -360,7 +380,11 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
                 except Exception as batch_error:
                     # rules/observability.md Rule 7 — bulk partial-failure WARN
                     # MUST include the error message so operators can triage.
-                    err_str = str(batch_error)
+                    # rules/security.md + #499 finding 5: DB drivers often
+                    # embed raw column values in DETAIL clauses (e.g.
+                    # `Key (email)=(alice@example.com) already exists`). Strip
+                    # DETAIL/Key blocks before logging to prevent PII leak.
+                    err_str = _sanitize_db_error(str(batch_error))
                     logger.warning(
                         "bulk_upsert.batch_error: %s",
                         err_str,
