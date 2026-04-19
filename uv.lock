@@ -2758,7 +2758,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.8.7"
+version = "2.8.8"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -2956,7 +2956,7 @@ provides-extras = ["dataflow", "nexus", "kaizen", "pact", "ml", "align", "vault"
 
 [[package]]
 name = "kailash-align"
-version = "0.3.1"
+version = "0.3.2"
 source = { editable = "packages/kailash-align" }
 dependencies = [
     { name = "accelerate" },
@@ -2992,7 +2992,7 @@ requires-dist = [
     { name = "kailash", specifier = ">=2.8.7" },
     { name = "kailash-align", extras = ["rlhf", "eval", "serve", "online"], marker = "extra == 'all'" },
     { name = "kailash-kaizen", specifier = ">=2.7.5" },
-    { name = "kailash-ml", specifier = ">=0.10.0" },
+    { name = "kailash-ml", specifier = ">=0.11.0" },
     { name = "llama-cpp-python", marker = "extra == 'serve'", specifier = ">=0.3" },
     { name = "lm-eval", marker = "extra == 'eval'", specifier = ">=0.4,<1.0" },
     { name = "peft", specifier = ">=0.10" },
@@ -3009,7 +3009,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.0.10"
+version = "2.0.12"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "aiomysql" },
@@ -3196,7 +3196,7 @@ provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server
 
 [[package]]
 name = "kailash-ml"
-version = "0.10.0"
+version = "0.11.1"
 source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "kailash" },
@@ -3249,7 +3249,7 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.98" },
     { name = "imbalanced-learn", marker = "extra == 'imbalance'", specifier = ">=0.12" },
     { name = "kailash", specifier = ">=2.8.7" },
-    { name = "kailash-dataflow", specifier = ">=2.0.10" },
+    { name = "kailash-dataflow", specifier = ">=2.0.11" },
     { name = "kailash-kaizen", marker = "extra == 'agents'", specifier = ">=2.7.5" },
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'dl-gpu'" },
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'rl'" },
@@ -3323,7 +3323,7 @@ provides-extras = ["metrics", "dev"]
 
 [[package]]
 name = "kailash-pact"
-version = "0.8.1"
+version = "0.8.2"
 source = { editable = "packages/kailash-pact" }
 dependencies = [
     { name = "click" },
