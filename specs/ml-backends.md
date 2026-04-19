@@ -338,8 +338,9 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 - **Backend support**: follows torch's device support — cuda, mps, cpu. TPU/XLA path exists in `torchrl` ≥ 0.5 but is experimental. Default to `"cuda"` / `"mps"` / `"cpu"`; treat `"tpu"`/`"rocm"`/`"xpu"` as OPEN QUESTION and raise `UnsupportedFamily` at 2.0 until validated.
 - **RL Engine wrapping**: RL trainers MUST use Lightning's accelerator for environment-rollout → learner transfers. The inner SB3/torchrl policy MUST be constructed with `device=info.device_string`.
 
-### 5.7 umap-learn (Phase 1)
+### 5.7 umap-learn (Phase 1) — `UMAPTrainable`
 
+- **Adapter class**: `kailash_ml.UMAPTrainable` (eagerly exported from `kailash_ml.__all__`; defined in `kailash_ml.trainable`).
 - **Backend support**: CPU only via the `umap-learn` pip package (base dependency; no `[umap]` extra).
 - **Mapping**:
   - `info.backend == "cpu"` → standard CPU path. `device.fallback_reason=None`.
@@ -347,8 +348,9 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 - **No `[rapids]` extra**: Removed in 0.12.0 per CRITICAL-1 disposition. Users who require cuML on NVIDIA install it themselves and swap it in via `kailash_ml.register_trainable("umap", MyCustomCuMLUMAP)`.
 - **Phase 2 (planned)**: torch-native UMAP across MPS/ROCm/XPU. Spec amendment + new fallback codes (e.g., `oom`) will land with the Phase 2 implementation.
 
-### 5.8 sklearn.cluster.HDBSCAN (Phase 1)
+### 5.8 sklearn.cluster.HDBSCAN (Phase 1) — `HDBSCANTrainable`
 
+- **Adapter class**: `kailash_ml.HDBSCANTrainable` (eagerly exported from `kailash_ml.__all__`; defined in `kailash_ml.trainable`).
 - **Backend support**: CPU only via `sklearn.cluster.HDBSCAN` (sklearn ≥ 1.3 — already required by base `scikit-learn>=1.5` dep).
 - **Mapping**: Same shape as §5.7. INFO log key `hdbscan.cuml_eviction`. `device.fallback_reason="cuml_eviction"` on non-CPU requests.
 - **Phase 3 (planned)**: torch-native HDBSCAN. Same spec-amendment process as UMAP Phase 2.
