@@ -15,6 +15,16 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.9 — 2026-04-20 (hotfix; closes #538)
+
+**Hotfix release.** Cuts the kailash core wheel containing commit `646c3d74` ("fix(nexus): release 2.1.1 — drive on_startup/on_shutdown lists directly (#531)"). Yesterday's release tagged `nexus-v2.1.1` published the kailash-nexus wheel but did NOT publish a new kailash core wheel — even though commit `646c3d74` modifies BOTH `packages/kailash-nexus/...` AND `src/kailash/servers/workflow_server.py` (which is shipped by the kailash core wheel). Result: every `pip install kailash-nexus==2.1.1` pulled `kailash>=2.8.7` (the broken core), and every Nexus 2.1.0/2.1.1 service crashed at uvicorn lifespan with `AttributeError: 'APIRouter' object has no attribute 'startup'`.
+
+**Fix shipped in this release**: `src/kailash/servers/workflow_server.py` lifespan now iterates the `on_startup` / `on_shutdown` lists directly instead of calling `app.router.startup()` / `app.router.shutdown()`. Closes #538.
+
+No other changes vs 2.8.8. Pure cross-package release-coordination fix.
+
+**Audit lesson** (codified in `rules/agents.md` MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep): a mechanical sweep on the nexus-v2.1.1 release would have grep-noticed that the diff touched `src/kailash/...` AND flagged that a kailash core release was also required. Future cross-package releases MUST run the parity sweep before tagging.
+
 ### kailash 2.8.8 + kailash-dataflow 2.0.11 + kailash-ml 0.11.0 + kailash-align 0.3.2 + kailash-pact 0.8.2 + kailash-trust 0.1.1 + kaizen-agents 0.9.3 — 2026-04-19
 
 Bundle release: BP-049 classified-data leak security patch (DataFlow) + ML Phase 1 GPU-first foundation. See individual package changelogs for full entries.
