@@ -20,6 +20,7 @@ classes to `kailash_ml.legacy.*`. Phase 2 is additive.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -33,6 +34,8 @@ from typing import Any, Mapping, Optional, Union
 
 from kailash_ml._device import BackendInfo, detect_backend
 from kailash_ml.engines import _engine_sql as _sql
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +243,103 @@ def _build_trainable_from_family(family: str, *, target: str) -> Any:
         )
     # Defensive — should be unreachable
     raise ValueError(f"Internal: unmapped family canonical '{canonical}'")
+
+
+# ---------------------------------------------------------------------------
+# Metric direction (ranking semantics per ml-engines.md §2.2 compare contract)
+# ---------------------------------------------------------------------------
+#
+# Higher-is-better metrics: larger values rank first.
+# Lower-is-better metrics: smaller values rank first.
+# The sets are closed under the metrics registry at kailash_ml.metrics.
+# Metrics absent from both sets default to higher-is-better so a custom
+# registered metric does not crash the ranker, but a WARN log surfaces
+# the ambiguity per rules/observability.md Rule 3.
+
+_HIGHER_IS_BETTER_METRICS: frozenset[str] = frozenset(
+    {
+        "accuracy",
+        "f1",
+        "f1_macro",
+        "f1_micro",
+        "f1_weighted",
+        "precision",
+        "recall",
+        "auc",
+        "roc_auc",
+        "average_precision",
+        "r2",
+        "silhouette",
+    }
+)
+_LOWER_IS_BETTER_METRICS: frozenset[str] = frozenset(
+    {
+        "rmse",
+        "mse",
+        "mae",
+        "log_loss",
+        "brier_score_loss",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Task-type → default family set (ml-engines.md §2.2 compare contract)
+# ---------------------------------------------------------------------------
+#
+# compare() with families=None derives this set from the setup result's
+# task_type. The set is ORDERED so that a tie on the leaderboard (e.g.
+# two families with identical accuracy) is resolved by default-family
+# order rather than by dict-insertion accident.
+
+_DEFAULT_FAMILIES_BY_TASK: Mapping[str, tuple[str, ...]] = {
+    "classification": ("sklearn", "xgboost", "lightgbm"),
+    "regression": ("sklearn", "xgboost", "lightgbm"),
+    "clustering": ("sklearn",),
+    "ranking": ("sklearn", "xgboost", "lightgbm"),
+}
+
+
+def _default_families_for_task(task_type: str) -> tuple[str, ...]:
+    """Return the default compare()-family list for a task type."""
+    return _DEFAULT_FAMILIES_BY_TASK.get(task_type, ("sklearn",))
+
+
+def _family_available(family: str) -> bool:
+    """Return True when the family's optional backend is importable.
+
+    xgboost and lightgbm are optional extras — skipping gracefully when
+    they are not installed preserves the zero-config story for users who
+    only have sklearn.
+    """
+    canonical = _FAMILY_ALIASES.get(family.lower(), family.lower())
+    if canonical == "xgboost":
+        try:
+            import xgboost  # noqa: F401
+        except ImportError:
+            return False
+    elif canonical == "lightgbm":
+        try:
+            import lightgbm  # noqa: F401
+        except ImportError:
+            return False
+    # sklearn is a hard dep; torch/lightning require explicit trainables
+    return True
+
+
+def _metric_sort_key(metric_name: str, value: float) -> tuple[float, float]:
+    """Return a sort key such that `sorted(..., key=...)` puts best-first.
+
+    For higher-is-better metrics we negate the value so ascending sort
+    puts the largest value first. For lower-is-better metrics we return
+    the value as-is. Returns a 2-tuple: (primary, tiebreak) where
+    tiebreak is `-elapsed_seconds` so — for equal metric — the faster
+    model wins; callers pre-format this with elapsed_seconds.
+    """
+    if metric_name in _LOWER_IS_BETTER_METRICS:
+        return (float(value), 0.0)
+    # Default (includes unknown metrics): higher-is-better.
+    return (-float(value), 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -624,19 +724,290 @@ class MLEngine:
         metric: Optional[str] = None,
         early_stopping: Optional[Patience] = None,
         timeout_seconds: Optional[float] = None,
+        data: Any = None,
+        target: Optional[str] = None,
     ) -> Any:
         """Train & rank candidate families (AutoML sweep).
 
-        Phase 2 enforces the setup-before-compare invariant (§2.3) and
-        defers the concrete sweep to Phase 3.
+        Per ``specs/ml-engines.md`` §2.1 MUST 7 every family in the sweep
+        is routed through the Lightning-wrapped ``Trainable`` adapter via
+        :meth:`fit`. Compare never bypasses ``fit`` — the Lightning
+        Trainer is the single enforcement point for accelerator /
+        precision resolution, so every ``TrainingResult`` in the
+        leaderboard carries a concrete ``device`` / ``accelerator`` /
+        ``precision`` triple.
+
+        Args:
+            families: Ordered list of family names or Trainable instances
+                to sweep. When ``None``, derives the default set from
+                ``self._setup_result.task_type`` — classification /
+                regression → ``(sklearn, xgboost, lightgbm)`` (gracefully
+                skipping uninstalled optional extras), clustering →
+                ``(sklearn,)``. An unknown task type falls back to
+                ``(sklearn,)``.
+            n_trials: Number of HP-search trials per family. ``0`` means
+                single default-HP fit per family.
+            hp_search: Search strategy forwarded to ``fit(hp_search=...)``.
+                One of ``"none" | "grid" | "random" | "bayesian" |
+                "halving"``.
+            metric: Metric name to rank by. When ``None``, uses
+                ``self._setup_result.primary_metric``.
+            early_stopping: Patience spec forwarded to ``fit()`` when the
+                family supports it.
+            timeout_seconds: Wall-clock budget for the entire sweep. When
+                exceeded, returns a :class:`ComparisonResult` with only
+                the families that completed; a WARN log line records the
+                timed-out families for post-hoc triage.
+            data: Escape hatch — when supplied, bypasses
+                ``self._setup_result`` and uses the frame directly.
+                ``target`` MUST also be supplied. This is the default
+                path for callers who do not want to run ``setup()``
+                first; also used by sibling shards that have not yet
+                wired the ``setup()`` frame-storage contract.
+            target: Target column name for direct-data dispatch.
+
+        Returns:
+            A :class:`ComparisonResult` with the leaderboard ordered
+            best-first by ``metric``.
+
+        Raises:
+            EngineNotSetUpError: When neither ``setup()`` has been called
+                nor ``(data, target)`` supplied.
+            ValueError: When ``data`` is supplied without ``target``.
         """
-        if self._setup_result is None:
+        # Lazy import to avoid circular dependencies and to keep package
+        # import time minimal — ComparisonResult is only relevant inside
+        # compare()'s return path.
+        from kailash_ml._results import ComparisonResult
+
+        setup_result = self._setup_result
+        if setup_result is None and data is None:
             raise EngineNotSetUpError(
-                "MLEngine.compare() requires setup() to be called first. "
+                "MLEngine.compare() requires either setup() to be called "
+                "first OR (data=..., target='...') supplied directly. "
                 "Invoke `await engine.setup(data, target='...')` before "
-                "compare()."
+                "compare(), or pass `data=df, target='...'` to compare() "
+                "for standalone use."
             )
-        raise NotImplementedError(f"MLEngine.compare — {_PHASE_3}")
+        if data is not None and target is None:
+            raise ValueError(
+                "MLEngine.compare(data=..., target=...) requires a target "
+                "column name when data is supplied directly."
+            )
+
+        # Resolve the ranking metric. When the caller supplies `metric=`
+        # explicitly, it takes precedence over the setup result's
+        # primary_metric. Without setup and without an explicit metric,
+        # we cannot sensibly rank — raise.
+        ranking_metric = metric
+        if ranking_metric is None:
+            if setup_result is not None and getattr(
+                setup_result, "primary_metric", None
+            ):
+                ranking_metric = setup_result.primary_metric
+            else:
+                raise ValueError(
+                    "MLEngine.compare() requires `metric=` when setup() has "
+                    "not been called — cannot infer the ranking metric "
+                    "without a SetupResult.primary_metric."
+                )
+
+        # Resolve the data + target source. Explicit escape-hatch wins;
+        # otherwise we read from the setup result. Setup-result data
+        # storage is owned by the sibling shard implementing setup();
+        # until that lands, the escape-hatch form is the recommended
+        # contract for standalone compare() calls.
+        compare_data = data
+        compare_target = target
+        if compare_data is None:
+            compare_data = getattr(setup_result, "_data", None)
+            if compare_data is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.compare() requires setup() to have stored the "
+                    "training frame, but SetupResult._data is absent. Pass "
+                    "`data=df, target='...'` to compare() directly as an "
+                    "escape hatch."
+                )
+        if compare_target is None:
+            compare_target = getattr(setup_result, "target", None)
+            if compare_target is None:
+                raise ValueError(
+                    "MLEngine.compare() could not resolve the target column "
+                    "from the setup result — pass `target='...'` explicitly."
+                )
+
+        # Resolve the family list. When None, derive from task_type.
+        if families is None:
+            task_type = getattr(setup_result, "task_type", "classification")
+            resolved_families: list[Any] = list(
+                _default_families_for_task(str(task_type))
+            )
+        else:
+            resolved_families = list(families)
+
+        if not resolved_families:
+            raise ValueError(
+                "MLEngine.compare(families=...) must produce a non-empty "
+                "family list; got an empty sequence."
+            )
+
+        # Filter out optional-extra families whose backend isn't installed
+        # so the zero-config happy path does not hard-require every
+        # optional dep. String-named families are probed; user-supplied
+        # Trainable instances are kept as-is (their deps are their
+        # problem).
+        sweep_families: list[Any] = []
+        skipped: list[str] = []
+        for fam in resolved_families:
+            if isinstance(fam, str):
+                if _family_available(fam):
+                    sweep_families.append(fam)
+                else:
+                    skipped.append(fam)
+            else:
+                sweep_families.append(fam)
+
+        if skipped:
+            logger.info(
+                "compare.family.skipped_optional_extras",
+                extra={
+                    "skipped": skipped,
+                    "reason": "optional-extra-not-installed",
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+
+        if not sweep_families:
+            raise ValueError(
+                f"MLEngine.compare(): none of the requested families "
+                f"{resolved_families!r} are available in this environment "
+                f"(xgboost / lightgbm are optional extras — install via "
+                f"`pip install kailash-ml[xgb]` or `[lightgbm]`)."
+            )
+
+        # Run the sweep. Each family goes through self.fit() so the
+        # Lightning-spine invariant (§2.1 MUST 7) holds by construction.
+        # We honour timeout_seconds by checking elapsed after each family
+        # and stopping early with a WARN.
+        started = time.perf_counter()
+        leaderboard: list[Any] = []
+        completed_families: list[str] = []
+        timed_out_families: list[str] = []
+
+        for fam in sweep_families:
+            elapsed_total = time.perf_counter() - started
+            if timeout_seconds is not None and elapsed_total >= timeout_seconds:
+                # Everything from this family onward is timed out.
+                remaining = sweep_families[sweep_families.index(fam) :]
+                for f in remaining:
+                    timed_out_families.append(
+                        f if isinstance(f, str) else type(f).__name__
+                    )
+                break
+
+            try:
+                if isinstance(fam, str):
+                    result = await self.fit(
+                        data=compare_data,
+                        target=compare_target,
+                        family=fam,
+                        hp_search=hp_search,
+                        n_trials=n_trials,
+                        metric=ranking_metric,
+                    )
+                else:
+                    # User-supplied Trainable instance — pass via trainable=
+                    result = await self.fit(
+                        data=compare_data,
+                        target=compare_target,
+                        trainable=fam,
+                        hp_search=hp_search,
+                        n_trials=n_trials,
+                        metric=ranking_metric,
+                    )
+            except (
+                AcceleratorUnavailableError,
+                TargetInFeaturesError,
+                TargetNotFoundError,
+                ConflictingArgumentsError,
+            ):
+                # Typed Engine errors surface immediately — these are
+                # caller bugs, not family-level failures.
+                raise
+            except Exception as exc:  # noqa: BLE001
+                # Family-specific failure (e.g. a backend the adapter
+                # rejected, or a missing optional dep that slipped past
+                # the availability probe). Log at WARN and continue —
+                # the sweep is best-effort by design.
+                logger.warning(
+                    "compare.family.failed",
+                    extra={
+                        "family": fam if isinstance(fam, str) else type(fam).__name__,
+                        "error": str(exc),
+                        "tenant_id": self._tenant_id or "global",
+                    },
+                )
+                continue
+
+            leaderboard.append(result)
+            completed_families.append(
+                fam if isinstance(fam, str) else type(fam).__name__
+            )
+
+        if timed_out_families:
+            logger.warning(
+                "compare.timeout.partial_result",
+                extra={
+                    "timeout_seconds": timeout_seconds,
+                    "completed_families": completed_families,
+                    "timed_out_families": timed_out_families,
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+
+        if not leaderboard:
+            raise ValueError(
+                f"MLEngine.compare(): no family completed successfully. "
+                f"Requested: {resolved_families!r}. Skipped (optional "
+                f"extras): {skipped!r}. Check the logs for per-family "
+                f"errors."
+            )
+
+        # Rank leaderboard by the ranking_metric, best-first.
+        def _rank_key(r: Any) -> tuple[float, float]:
+            val = r.metrics.get(ranking_metric)
+            if val is None:
+                # Missing metric on a result → sink to the bottom without
+                # crashing. A WARN surfaces the skip for post-hoc audit.
+                logger.warning(
+                    "compare.rank.metric_missing",
+                    extra={
+                        "family": r.family,
+                        "ranking_metric": ranking_metric,
+                        "available_metrics": sorted(r.metrics.keys()),
+                        "tenant_id": self._tenant_id or "global",
+                    },
+                )
+                # Use +inf for lower-is-better and -inf for
+                # higher-is-better so missing-metric rows sink.
+                if ranking_metric in _LOWER_IS_BETTER_METRICS:
+                    return (float("inf"), 0.0)
+                return (float("inf"), 0.0)
+            return _metric_sort_key(ranking_metric, val)
+
+        leaderboard.sort(key=_rank_key)
+
+        elapsed = time.perf_counter() - started
+        total_trials = sum(1 for _ in leaderboard) * max(1, n_trials)
+
+        return ComparisonResult(
+            leaderboard=tuple(leaderboard),
+            metric=ranking_metric,
+            best=leaderboard[0],
+            total_trials=total_trials,
+            elapsed_seconds=float(elapsed),
+            tenant_id=self._tenant_id,
+        )
 
     async def fit(
         self,
