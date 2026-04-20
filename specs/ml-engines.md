@@ -1125,7 +1125,27 @@ Every reference below points to another spec or rule that this spec depends on b
 
 ## 12. Spec Conformance Checklist
 
-This checklist is the structural gate for kailash-ml 2.0.0 release. Every item MUST pass before tagging.
+This checklist is the structural gate for kailash-ml **2.0.0** release. Every item MUST pass before tagging 2.0.0. Pre-2.0 releases satisfy the subset listed in §12.1 (Current Phase Status) and MUST NOT regress any already-green item.
+
+### 12.1 Current Phase Status (updated 2026-04-20 — kailash-ml 0.14.0)
+
+Pre-2.0 releases implement the phased punch list from the §9 redesign proposal. The §12 bottom-of-list "zero `NotImplementedError`" and "zero `TODO|FIXME`" gates are explicitly deferred to 2.0.0 — today's allowed deferrals are enumerated below with their phase marker. Any `NotImplementedError` in `packages/kailash-ml/src/kailash_ml/` NOT on this list is a HIGH finding.
+
+| Method / surface    | File:line       | Phase   | Tracking                                                                 |
+| ------------------- | --------------- | ------- | ------------------------------------------------------------------------ |
+| `MLEngine.setup`    | `engine.py:434` | Phase 3 | `_PHASE_3` marker — "Trainable adapters + Lightning Trainer integration" |
+| `MLEngine.compare`  | `engine.py:457` | Phase 3 | `_PHASE_3`                                                               |
+| `MLEngine.finalize` | `engine.py:581` | Phase 3 | `_PHASE_3`                                                               |
+| `MLEngine.predict`  | `engine.py:567` | Phase 4 | `_PHASE_4` — "inference path + ONNX export"                              |
+| `MLEngine.evaluate` | `engine.py:600` | Phase 4 | `_PHASE_4`                                                               |
+| `MLEngine.register` | `engine.py:626` | Phase 4 | `_PHASE_4`                                                               |
+| `MLEngine.serve`    | `engine.py:654` | Phase 5 | `_PHASE_5` — "InferenceServer + multi-channel serving"                   |
+
+All seven entries satisfy `rules/zero-tolerance.md` §2 Exception 2 ("iterative TODOs permitted when actively tracked"): each has a named phase marker, a documented body, and a dedicated upcoming session per the §9 redesign proposal.
+
+**Rule interaction:** `rules/orphan-detection.md` §4a mandates that the session implementing any of the seven stubs MUST sweep the paired deferral test in the same commit (evidence: kailash-ml 0.13.0 `test_km_track_deferral_names_phase` incident).
+
+### 12.2 2.0.0 Gate Items
 
 - [ ] `kailash_ml.Engine()` constructs successfully with zero arguments on macOS (MPS), Linux (CUDA + CPU), and Windows (CPU)
 - [ ] `MLEngine` public surface is exactly eight methods (`setup`, `compare`, `fit`, `predict`, `finalize`, `evaluate`, `register`, `serve`)
@@ -1141,9 +1161,10 @@ This checklist is the structural gate for kailash-ml 2.0.0 release. Every item M
 - [ ] Every legacy import emits `DeprecationWarning` on first use
 - [ ] Integration tests in §7.2 all pass on CPU; GPU-gated tests (`pytest.mark.gpu_*`) pass on CI GPU runners
 - [ ] Cross-SDK: kailash-rs can load an ONNX artifact produced by kailash-py for at least one model per matrix key
-- [ ] `rg 'raise NotImplementedError' src/kailash_ml/` returns zero matches
-- [ ] `rg 'TODO|FIXME|XXX|HACK' src/kailash_ml/` returns zero matches
+- [ ] `rg 'raise NotImplementedError' packages/kailash-ml/src/kailash_ml/` returns zero matches (Phase 3/4/5 stubs must all be implemented)
+- [ ] `rg 'TODO|FIXME|XXX|HACK' packages/kailash-ml/src/kailash_ml/` returns zero matches
 - [ ] Every `§7` competitive-delta claim has an integration test of the name listed in §7.2
+- [ ] §12.1 table is empty (every Phase 3/4/5 row resolved)
 
 ---
 
