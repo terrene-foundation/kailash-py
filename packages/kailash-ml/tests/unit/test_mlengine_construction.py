@@ -64,17 +64,34 @@ class TestMLEngineMethodSurface:
 
 
 class TestMLEngineDeferredBodies:
-    """Phase 2 scaffold pattern — methods raise NotImplementedError with phase pointer."""
+    """Remaining deferral sweep — only the 5 sibling-shard methods still defer.
+
+    Shard-A (setup + register) has been un-stubbed per specs/ml-engines.md
+    §2.1 MUST 6 / §6. The earlier ``test_async_method_deferral_is_typed_error``
+    that asserted ``pytest.raises(NotImplementedError)`` against ``setup()``
+    was deleted in the same commit per rules/orphan-detection.md §4a.
+    """
 
     @pytest.mark.asyncio
-    async def test_async_method_deferral_is_typed_error(self):
-        """A deferred async method MUST raise NotImplementedError (not AttributeError)."""
+    async def test_setup_returns_typed_result_on_minimal_input(self):
+        """Shard-A: setup() returns a populated SetupResult (replaces the
+        deferral test that asserted NotImplementedError).
+        """
+        import polars as pl
+        from kailash_ml import SetupResult
+
         engine = MLEngine()
-        with pytest.raises(NotImplementedError) as exc_info:
-            await engine.setup(data=None, target="x")
-        # The message SHOULD name the phase so the next session knows what to finish
-        msg = str(exc_info.value).lower()
-        assert "phase" in msg or "mlengine" in msg
+        df = pl.DataFrame({"x1": list(range(20)), "y": [i % 2 for i in range(20)]})
+        result = await engine.setup(df, target="y")
+        assert isinstance(result, SetupResult)
+        assert result.target == "y"
+        assert result.task_type == "classification"
+        assert result.feature_columns == ("x1",)
+        assert result.train_size + result.test_size == 20
+        assert result.tenant_id is None  # engine has no tenant_id
+        # Idempotency (§2.1 MUST 6) — second call returns the same hash
+        result2 = await engine.setup(df, target="y")
+        assert result2.schema_hash == result.schema_hash
 
     def test_km_train_three_line_hello_world_works(self):
         """Top-level `km.train(df, target='y')` runs end-to-end per spec §5.1."""
