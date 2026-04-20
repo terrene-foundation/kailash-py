@@ -27,6 +27,7 @@ import re
 import sqlite3
 import stat
 import threading
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -62,28 +63,33 @@ class BudgetStoreError(TrustError):
 # ---------------------------------------------------------------------------
 
 
-class BudgetStore:
-    """Protocol for budget persistence backends.
+class BudgetStore(ABC):
+    """Abstract base for budget persistence backends.
 
-    Implementations must provide:
+    Subclasses must implement all three methods below. Instantiating
+    ``BudgetStore()`` directly raises ``TypeError``; subclasses that omit
+    an implementation raise ``TypeError`` at construction time (fail-fast)
+    rather than ``AttributeError`` at call time (fail-late).
+
+    Required methods:
     - ``get_snapshot(tracker_id)`` -> ``Optional[BudgetSnapshot]``
     - ``save_snapshot(tracker_id, snapshot)`` -> ``None``
     - ``get_transaction_log(tracker_id, limit=100)`` -> ``List[Dict]``
     """
 
+    @abstractmethod
     def get_snapshot(self, tracker_id: str) -> Optional[BudgetSnapshot]:
         """Load a previously saved snapshot, or None if not found."""
-        raise NotImplementedError
 
+    @abstractmethod
     def save_snapshot(self, tracker_id: str, snapshot: BudgetSnapshot) -> None:
         """Persist a budget snapshot (upsert)."""
-        raise NotImplementedError
 
+    @abstractmethod
     def get_transaction_log(
         self, tracker_id: str, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """Return the most recent transaction log entries."""
-        raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
