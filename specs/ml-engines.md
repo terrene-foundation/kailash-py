@@ -1127,36 +1127,31 @@ Every reference below points to another spec or rule that this spec depends on b
 
 This checklist is the structural gate for kailash-ml **2.0.0** release. Every item MUST pass before tagging 2.0.0. Pre-2.0 releases satisfy the subset listed in §12.1 (Current Phase Status) and MUST NOT regress any already-green item.
 
-### 12.1 Current Phase Status (updated 2026-04-20 — kailash-ml 0.14.0)
+### 12.1 Current Phase Status (updated 2026-04-20 — kailash-ml 0.15.0)
 
-Pre-2.0 releases implement the phased punch list from the §9 redesign proposal. The §12 bottom-of-list "zero `NotImplementedError`" and "zero `TODO|FIXME`" gates are explicitly deferred to 2.0.0 — today's allowed deferrals are enumerated below with their phase marker. Any `NotImplementedError` in `packages/kailash-ml/src/kailash_ml/` NOT on this list is a HIGH finding.
+Phase 3/4/5 complete as of kailash-ml 0.15.0 (PRs #561/#562/#563, release #565). All seven `MLEngine` method bodies ship production implementations. Only two documented deferrals remain inside `packages/kailash-ml/src/kailash_ml/`:
 
-| Method / surface    | File:line       | Phase   | Tracking                                                                 |
-| ------------------- | --------------- | ------- | ------------------------------------------------------------------------ |
-| `MLEngine.setup`    | `engine.py:434` | Phase 3 | `_PHASE_3` marker — "Trainable adapters + Lightning Trainer integration" |
-| `MLEngine.compare`  | `engine.py:457` | Phase 3 | `_PHASE_3`                                                               |
-| `MLEngine.finalize` | `engine.py:581` | Phase 3 | `_PHASE_3`                                                               |
-| `MLEngine.predict`  | `engine.py:567` | Phase 4 | `_PHASE_4` — "inference path + ONNX export"                              |
-| `MLEngine.evaluate` | `engine.py:600` | Phase 4 | `_PHASE_4`                                                               |
-| `MLEngine.register` | `engine.py:626` | Phase 4 | `_PHASE_4`                                                               |
-| `MLEngine.serve`    | `engine.py:654` | Phase 5 | `_PHASE_5` — "InferenceServer + multi-channel serving"                   |
+| Deferral                             | File:line         | Scope          | Tracking                                                                                                                                     |
+| ------------------------------------ | ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setup(split_strategy != "holdout")` | `engine.py:~599`  | Phase 3.1      | kfold / stratified_kfold / walk_forward — journaled at `workspaces/kailash-ml-gpu-stack/journal/.pending/`                                   |
+| `serve(channels=["grpc"])`           | `engine.py:~2359` | `[grpc]` extra | Loud-failure pattern per `rules/dependencies.md` § Exception — requires `pip install kailash-ml[grpc]`; full gRPC channel tracked for 0.15.1 |
 
-All seven entries satisfy `rules/zero-tolerance.md` §2 Exception 2 ("iterative TODOs permitted when actively tracked"): each has a named phase marker, a documented body, and a dedicated upcoming session per the §9 redesign proposal.
+Any `NotImplementedError` in `packages/kailash-ml/src/kailash_ml/` NOT on this list is a HIGH finding.
 
-**Rule interaction:** `rules/orphan-detection.md` §4a mandates that the session implementing any of the seven stubs MUST sweep the paired deferral test in the same commit (evidence: kailash-ml 0.13.0 `test_km_track_deferral_names_phase` incident).
+**Rule interaction:** `rules/orphan-detection.md` §4a mandates that the session implementing any remaining stub (e.g. the Phase 3.1 split strategies) MUST sweep the paired deferral test in the same commit (evidence: kailash-ml 0.13.0 `test_km_track_deferral_names_phase` incident; validated again in 0.15.0 when Shard A swept `test_async_method_deferral_is_typed_error` in `dc2a6a8e`).
 
 ### 12.2 2.0.0 Gate Items
 
 - [ ] `kailash_ml.Engine()` constructs successfully with zero arguments on macOS (MPS), Linux (CUDA + CPU), and Windows (CPU)
-- [ ] `MLEngine` public surface is exactly eight methods (`setup`, `compare`, `fit`, `predict`, `finalize`, `evaluate`, `register`, `serve`)
-- [ ] Every `MLEngine` method returns a named dataclass (no raw dicts)
+- [x] `MLEngine` public surface is exactly eight methods (`setup`, `compare`, `fit`, `predict`, `finalize`, `evaluate`, `register`, `serve`) — kailash-ml 0.15.0
+- [x] Every `MLEngine` method returns a named dataclass (no raw dicts) — seven result dataclasses in `kailash_ml._results` + `TrainingResult` in `_result.py` (kailash-ml 0.15.0)
 - [ ] `Trainable` protocol has `LightningModule` adapters for sklearn, xgboost, lightgbm, catboost, torch, lightning
 - [ ] `training_pipeline.py` has zero fit loops outside `L.Trainer(**ctx_kwargs).fit(module, loader)`
-- [ ] `TrainingResult` dataclass has all ten required fields
-- [ ] `rg '"default"' src/` returns zero matches in cache key construction
+- [x] `TrainingResult` dataclass has all ten required fields — kailash-ml 0.12.0
+- [x] `rg '"default"' src/` returns zero matches in cache key construction — `SENTINEL_GLOBAL_TENANT="global"` used throughout (kailash-ml 0.15.0)
 - [ ] Every Primitive constructor accepts `tenant_id`
 - [ ] ONNX compatibility matrix entries all have round-trip tests passing
-- [ ] `register(format="onnx")` raises `OnnxExportError` on failure (no silent pickle fallback)
+- [x] `register(format="onnx")` raises `OnnxExportError` on failure (no silent pickle fallback) — kailash-ml 0.15.0, engine.py:2785
 - [ ] `kailash_ml.legacy.*` covers every demoted v0.9.x public symbol
 - [ ] Every legacy import emits `DeprecationWarning` on first use
 - [ ] Integration tests in §7.2 all pass on CPU; GPU-gated tests (`pytest.mark.gpu_*`) pass on CI GPU runners
