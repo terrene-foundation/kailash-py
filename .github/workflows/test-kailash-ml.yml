@@ -115,14 +115,28 @@ jobs:
       - name: Coverage
         if: matrix.python-version == '3.12'
         run: |
+          # Coverage must install the [dl] extra AND run tests/integration/
+          # — the unit tests use `pytest.importorskip("torch")`, so without
+          # torch installed they SKIP silently and dl.py (596 stmts) drops
+          # coverage to ~23%. The integration tests exercise the real torch
+          # surface and are the only place dl.py / every plot_* / grad_cam /
+          # lr_range_test / diagnose_* path actually runs.
+          #
+          # Also install the root `kailash` package editable from the local
+          # tree — `kailash.diagnostics.protocols` (PR #570) has not been
+          # released to PyPI yet, so a transitive `kailash>=2.8.9` resolve
+          # from PyPI would miss the module the integration tests import.
+          uv pip install -e "." --python .venv/bin/python
+          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
           uv pip install pytest-cov --python .venv/bin/python
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/unit/ \
+            packages/kailash-ml/tests/integration/ \
             -m 'not (slow or gpu or bench)' \
             --cov=packages/kailash-ml/src/kailash_ml \
             --cov-report=term-missing \
             --cov-fail-under=60 \
-            -q --timeout=30
+            -q --timeout=60
 
   test-dl:
     name: Deep Learning

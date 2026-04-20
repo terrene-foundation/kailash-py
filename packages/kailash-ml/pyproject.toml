@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.15.2"
+version = "0.16.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -64,6 +64,11 @@ dl = [
     "torchaudio>=2.2",
     "timm>=1.0",
     "transformers>=4.40",
+    # Plotly is ALSO pinned here so the kailash_ml.diagnostics.DLDiagnostics
+    # plot_*() methods install cleanly under `pip install kailash-ml[dl]`
+    # regardless of any future decision to demote plotly from base deps.
+    # See specs/ml-diagnostics.md § "Extras gating".
+    "plotly>=5.18",
 ]
 # Back-compat alias: [dl-gpu] used to duplicate every [dl] entry + add
 # onnxruntime-gpu. As of 0.9.1 it extends [dl] instead, so the deep-learning
