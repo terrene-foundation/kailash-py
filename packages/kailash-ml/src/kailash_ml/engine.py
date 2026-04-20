@@ -1965,9 +1965,11 @@ class MLEngine:
 
         # Bind channels one at a time; on failure, tear down every successful
         # bind (§2.1 MUST 10: no partial ServeResult).
-        bindings: dict[str, _ServeBinding] = {}
+        bindings: dict[str, "_ServeBinding"] = {}
+        current_channel: Optional[str] = None
         try:
             for channel in ordered_channels:
+                current_channel = channel
                 if channel == "rest":
                     binding = await self._bind_rest(
                         name, resolved_version, autoscale=autoscale, options=options
@@ -2000,7 +2002,7 @@ class MLEngine:
                 "engine.serve.partial_failure",
                 extra={
                     "model_uri": model_uri,
-                    "failed_channel": channel,
+                    "failed_channel": current_channel,
                     "bound_before_failure": list(bindings.keys()),
                     "error": str(exc),
                 },
@@ -2794,3 +2796,187 @@ class MLEngine:
             onnx_bytes = output_path.read_bytes()
         uri = await artifact_store.save(name, version, onnx_bytes, "model.onnx")
         return uri
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers — predict()/serve() plumbing
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _ServeBinding:
+    """Record of a single channel bind in an active serve() session.
+
+    Holds the canonical URI the channel advertises + an invocation callback +
+    a shutdown callback. Stored on the engine in ``self._active_serves`` so
+    subsequent ``predict(channel="rest"|"mcp")`` calls can look up the
+    binding and round-trip through it. The shutdown callback is used by the
+    partial-failure rollback path to tear down channels bound earlier in a
+    failing ``serve()`` call.
+    """
+
+    channel: str
+    uri: str
+    invoke: Any  # async callable: (payload, *, tenant_id) -> Any
+    shutdown: Any  # async callable: () -> None
+
+
+async def _noop_shutdown() -> None:
+    """Default shutdown for in-process bindings — nothing to release.
+
+    Real-process bindings (subprocess MCP server, live Nexus HTTP server)
+    override this with a real cleanup coroutine.
+    """
+    return None
+
+
+def _parse_model_uri(uri: str) -> tuple[str, Optional[int]]:
+    """Parse ``models://<name>[/v<version>]`` or a bare name into (name, ver).
+
+    ``version`` is ``None`` when the caller supplied only a model name (i.e.
+    ``engine.predict("UserChurn", …)`` to use the latest registered version).
+    Raises ``ValueError`` on malformed URIs so callers see a typed failure
+    rather than a silent latest-version fetch against the wrong name.
+    """
+    if not uri:
+        raise ValueError("model reference must be a non-empty string")
+    scheme_prefix = "models://"
+    if uri.startswith(scheme_prefix):
+        rest = uri[len(scheme_prefix) :]
+    else:
+        rest = uri
+    if "/" in rest:
+        name, version_part = rest.rsplit("/", 1)
+        if version_part.startswith("v") and version_part[1:].isdigit():
+            return name, int(version_part[1:])
+        # Non-version suffix — treat whole thing as the name.
+        return rest, None
+    return rest, None
+
+
+def _features_to_payload(features: Any) -> Mapping[str, Any]:
+    """Normalize features input into a mapping suitable for binding.invoke.
+
+    Accepts:
+      * ``dict`` — passed through as-is (single-record inference).
+      * polars DataFrame — converts to ``{"records": [...]}`` dict for batch.
+      * list of dicts — wraps into ``{"records": [...]}``.
+
+    Anything else raises ``TypeError`` so the caller sees the shape mismatch
+    loudly instead of a silent empty-payload prediction.
+    """
+    if isinstance(features, Mapping):
+        return dict(features)
+    # polars / pandas DataFrame
+    if hasattr(features, "to_dicts") and callable(features.to_dicts):
+        try:
+            return {"records": features.to_dicts()}
+        except Exception:
+            pass
+    if hasattr(features, "to_dict") and callable(features.to_dict):
+        try:
+            return {"records": features.to_dict(as_series=False)}
+        except TypeError:
+            return {"records": features.to_dict()}
+    if isinstance(features, list):
+        return {"records": features}
+    raise TypeError(
+        f"predict(features=...) must be a dict, list of dicts, or DataFrame; "
+        f"got {type(features).__name__}."
+    )
+
+
+def _row_count_of(predictions: Any) -> int:
+    """Return the row count of an inference output for log observability.
+
+    Single-record dict → 1. List → len. polars Series/DataFrame → height.
+    Anything unknown → 0. Defensive — never raises, since this feeds a log
+    line, not a control-flow decision.
+    """
+    if predictions is None:
+        return 0
+    if isinstance(predictions, Mapping):
+        records = predictions.get("predictions") or predictions.get("records")
+        if isinstance(records, list):
+            return len(records)
+        return 1
+    if isinstance(predictions, list):
+        return len(predictions)
+    height = getattr(predictions, "height", None)
+    if isinstance(height, int):
+        return height
+    try:
+        return len(predictions)
+    except TypeError:
+        return 0
+
+
+def _run_onnx_inference(onnx_bytes: bytes, features: Any) -> Mapping[str, Any]:
+    """Run in-process ONNX inference against the serialized model.
+
+    Loads an ``onnxruntime.InferenceSession`` on every call — acceptable
+    because ``InferenceServer`` already provides cached live inference, and
+    ``MLEngine.predict(channel="direct")`` is the lightweight entry point
+    for one-off predictions / test harness use. Returns a normalized shape
+    ``{"predictions": [...], "framework": "onnx"}``.
+    """
+    import numpy as np
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(onnx_bytes)
+    input_meta = session.get_inputs()[0]
+    input_name = input_meta.name
+
+    payload = _features_to_payload(features)
+    records = payload.get("records")
+    if records is None:
+        # Single-record dict; order by the input signature when available.
+        values = [float(v) for v in payload.values()]
+        arr = np.asarray([values], dtype=np.float32)
+    else:
+        rows = [[float(v) for v in rec.values()] for rec in records]
+        arr = np.asarray(rows, dtype=np.float32)
+
+    outputs = session.run(None, {input_name: arr})
+    preds = outputs[0]
+    preds_list = preds.tolist() if hasattr(preds, "tolist") else list(preds)
+    return {"predictions": preds_list, "framework": "onnx"}
+
+
+def _run_native_inference(
+    pickle_bytes: Optional[bytes], features: Any
+) -> Mapping[str, Any]:
+    """Run in-process native inference against a pickled sklearn/lgb model.
+
+    SECURITY: pickle.loads executes arbitrary code. Only used when the
+    caller has already confirmed the model was registered through the
+    framework's own registry (and therefore trusted). Same constraint as
+    ``ModelRegistry._attempt_onnx_export`` which also unpickles the
+    artifact.
+    """
+    if pickle_bytes is None:
+        raise RuntimeError(
+            "native inference requested but no model.pkl bytes supplied; "
+            "registry may be missing the artifact"
+        )
+    import pickle as _pickle
+
+    import numpy as np
+
+    # Trusted framework-registered artifact; see ModelRegistry security note.
+    model = _pickle.loads(pickle_bytes)
+
+    payload = _features_to_payload(features)
+    records = payload.get("records")
+    if records is None:
+        values = [float(v) for v in payload.values()]
+        arr = np.asarray([values], dtype=np.float64)
+    else:
+        rows = [[float(v) for v in rec.values()] for rec in records]
+        arr = np.asarray(rows, dtype=np.float64)
+
+    predictions = model.predict(arr)
+    preds_list = (
+        predictions.tolist() if hasattr(predictions, "tolist") else list(predictions)
+    )
+    return {"predictions": preds_list, "framework": "native"}
