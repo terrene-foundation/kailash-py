@@ -950,7 +950,7 @@ class MLEngine:
             logger.exception(
                 "engine.register.error",
                 extra={
-                    "name": model_name,
+                    "model_name": model_name,
                     "tenant_id": self._tenant_id,
                     "error": str(exc),
                 },
@@ -978,7 +978,7 @@ class MLEngine:
                 logger.warning(
                     "engine.register.audit_write_failed",
                     extra={
-                        "name": model_name,
+                        "model_name": model_name,
                         "tenant_id": self._tenant_id,
                     },
                 )
@@ -998,10 +998,10 @@ class MLEngine:
         logger.info(
             "engine.register.ok",
             extra={
-                "name": model_name,
-                "version": version,
+                "model_name": model_name,
+                "model_version": version,
                 "stage": stage,
-                "format": format,
+                "output_format": format,
                 "tenant_id": self._tenant_id,
                 "duration_ms": duration_ms,
             },
@@ -1395,7 +1395,7 @@ class MLEngine:
                 logger.warning(
                     "engine.register.onnx_partial_failure",
                     extra={
-                        "name": name,
+                        "model_name": name,
                         "framework": framework,
                         "cause": cause,
                     },
