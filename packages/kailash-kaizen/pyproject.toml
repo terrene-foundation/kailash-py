@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.8.0"
+version = "2.9.0"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -94,6 +94,24 @@ vertex = [
 interpretability = [
     "transformers>=4.40,<5.0",
     "sae-lens>=3.0",
+]
+# LLM-as-judge surface: LLMDiagnostics + LLMJudge + wrapper judges
+# (#567 PR#5 of 7). Bundles algorithmic metrics (ROUGE/BLEU/BERTScore)
+# for parity with MLFP's LLMDiagnostics.evaluate_* API. LLM calls route
+# through kaizen_agents.Delegate (framework-first); this extra covers
+# the optional algorithmic + structural-similarity deps.
+judges = [
+    "bert-score>=0.3.13",
+    "rouge-score>=0.1.2",
+    "sacrebleu>=2.4",
+]
+# Pure-algorithmic NLP metrics (no LLM, no cost surface). Split from
+# [judges] so users who only want grep-able reference comparisons don't
+# pay for the full judge runtime.
+evaluation = [
+    "rouge-score>=0.1.2",
+    "sacrebleu>=2.4",
+    "bert-score>=0.3.13",
 ]
 
 [project.urls]
