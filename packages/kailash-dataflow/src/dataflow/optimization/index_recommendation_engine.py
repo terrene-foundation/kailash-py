@@ -20,10 +20,36 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from ..adapters.dialect import DialectManager
 from .sql_query_optimizer import OptimizedQuery, SQLDialect
 from .workflow_analyzer import OptimizationOpportunity, PatternType, WorkflowNode
 
 logger = logging.getLogger(__name__)
+
+# Per rules/dataflow-identifier-safety.md MUST Rule 5, advisory DDL
+# strings returned to users MUST have identifiers validated before
+# interpolation. We use quote_identifier so the emitted CREATE INDEX
+# strings are both safe AND directly executable by the operator. One
+# dialect helper per backend.
+_DIALECT_BY_SQLDIALECT = {
+    SQLDialect.POSTGRESQL: DialectManager.get_dialect("postgresql"),
+    SQLDialect.MYSQL: DialectManager.get_dialect("mysql"),
+    SQLDialect.SQLITE: DialectManager.get_dialect("sqlite"),
+}
+
+
+def _quote_for(dialect: SQLDialect, name: str) -> str:
+    """Quote *name* for *dialect*; fall back to PostgreSQL quoting.
+
+    Per rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
+    DDL identifier MUST route through quote_identifier() — advisory
+    strings are no exception (Rule 5). The fallback handles callers
+    that pass a SQLDialect value we do not have a helper for.
+    """
+    helper = _DIALECT_BY_SQLDIALECT.get(
+        dialect, _DIALECT_BY_SQLDIALECT[SQLDialect.POSTGRESQL]
+    )
+    return helper.quote_identifier(name)
 
 
 class IndexType(Enum):
@@ -1025,37 +1051,63 @@ class IndexRecommendationEngine:
     def _generate_create_statement(
         self, table: str, columns: List[str], index_type: IndexType
     ) -> str:
-        """Generate CREATE INDEX statement."""
+        """Generate CREATE INDEX statement.
+
+        Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5,
+        every dynamic identifier in an advisory DDL string MUST route
+        through quote_identifier before interpolation. This emits a
+        directly-executable, injection-safe CREATE INDEX.
+        """
+        # Validate + quote table and every column. The unquoted
+        # index name (validated via quote_identifier) is embedded in
+        # the quoted output.
+        table_q = _quote_for(self.dialect, table)
+        columns_q = [_quote_for(self.dialect, c) for c in columns]
+        columns_str = ", ".join(columns_q)
         index_name = f"idx_{table}_{'_'.join(columns)}"
-        columns_str = ", ".join(columns)
+        index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL:
             if index_type == IndexType.GIN:
-                return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} USING gin ({columns_str});"
+                return f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} USING gin ({columns_str});"
             elif index_type == IndexType.GIST:
-                return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} USING gist ({columns_str});"
+                return f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} USING gist ({columns_str});"
             else:
-                return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} ({columns_str});"
+                return (
+                    f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} ({columns_str});"
+                )
 
         elif self.dialect == SQLDialect.MYSQL:
-            return f"CREATE INDEX {index_name} ON {table} ({columns_str});"
+            return f"CREATE INDEX {index_q} ON {table_q} ({columns_str});"
 
         elif self.dialect == SQLDialect.SQLITE:
-            return f"CREATE INDEX {index_name} ON {table} ({columns_str});"
+            return f"CREATE INDEX {index_q} ON {table_q} ({columns_str});"
 
         else:
-            return f"CREATE INDEX {index_name} ON {table} ({columns_str});"
+            return f"CREATE INDEX {index_q} ON {table_q} ({columns_str});"
 
     def _generate_partial_index_statement(
         self, table: str, column: str, selectivity: float
     ) -> str:
-        """Generate partial index CREATE statement."""
+        """Generate partial index CREATE statement.
+
+        Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5,
+        every dynamic identifier MUST route through quote_identifier
+        before interpolation.
+        """
+        # Validate + quote. index_name is built from the raw values
+        # that already passed quote_identifier validation in the two
+        # calls below (they raise before we reach index_name
+        # construction if invalid).
+        table_q = _quote_for(self.dialect, table)
+        column_q = _quote_for(self.dialect, column)
         index_name = f"idx_{table}_{column}_partial"
+        index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL:
             # Example partial condition - would need real data analysis
-            condition = f"{column} IS NOT NULL AND {column} != ''"
-            return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} ({column}) WHERE {condition};"
+            condition = f"{column_q} IS NOT NULL AND {column_q} != ''"
+            return f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} ({column_q}) WHERE {condition};"
 
         # Fallback to regular index for databases that don't support partial indexes
         return self._generate_create_statement(table, [column], IndexType.BTREE)
@@ -1063,13 +1115,22 @@ class IndexRecommendationEngine:
     def _generate_covering_index_statement(
         self, table: str, index_columns: List[str], include_columns: List[str]
     ) -> str:
-        """Generate covering index CREATE statement."""
+        """Generate covering index CREATE statement.
+
+        Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5,
+        every dynamic identifier MUST route through quote_identifier
+        before interpolation.
+        """
+        table_q = _quote_for(self.dialect, table)
+        index_cols_q = [_quote_for(self.dialect, c) for c in index_columns]
+        index_cols_str = ", ".join(index_cols_q)
         index_name = f"idx_{table}_{'_'.join(index_columns)}_covering"
-        index_cols_str = ", ".join(index_columns)
+        index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL and include_columns:
-            include_cols_str = ", ".join(include_columns)
-            return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} ({index_cols_str}) INCLUDE ({include_cols_str});"
+            include_cols_q = [_quote_for(self.dialect, c) for c in include_columns]
+            include_cols_str = ", ".join(include_cols_q)
+            return f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} ({index_cols_str}) INCLUDE ({include_cols_str});"
 
         # Fallback to composite index
         all_columns = index_columns + include_columns
