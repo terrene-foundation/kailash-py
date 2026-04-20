@@ -11,7 +11,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-
 from kailash_ml.engines._feature_sql import (
     create_feature_table,
     create_metadata_table,
@@ -27,12 +26,27 @@ from kailash_ml.engines._feature_sql import (
 
 @pytest.fixture
 def conn():
-    """Mock ConnectionManager with transaction support."""
+    """Mock ConnectionManager with transaction support.
+
+    Per L1 migration (kailash-ml 0.15.2), `_feature_sql` now calls
+    `conn.dialect.quote_identifier(name)` directly — so the fixture's
+    `dialect` MUST be a REAL `SQLiteDialect` instance (not an
+    AsyncMock auto-attribute), otherwise the identifier validation
+    path returns coroutines and the tests pass or fail for the
+    wrong reason.
+    """
+    from kailash.db.dialect import SQLiteDialect
+
     mock = AsyncMock()
     mock.execute = AsyncMock()
     mock.fetchone = AsyncMock(return_value=None)
     mock.fetch = AsyncMock(return_value=[])
     mock.create_index = AsyncMock()
+    # Real dialect: validates identifiers + quotes them; raises
+    # IdentifierError (subclass of ValueError) on bad input, which is
+    # what the TestIdentifierValidation class asserts via
+    # pytest.raises(ValueError).
+    mock.dialect = SQLiteDialect()
 
     # Transaction context manager mock
     tx_mock = AsyncMock()

@@ -7,9 +7,12 @@ lives here.  The engine itself contains zero raw SQL -- it delegates
 every database operation through the functions in this module.
 
 Rules applied:
-  - ``infrastructure-sql.md``: ``_validate_identifier()`` on every
-    interpolated identifier, ``?`` canonical placeholders, transactions
-    for multi-statement operations.
+  - ``dataflow-identifier-safety.md`` MUST Rule 1: every DDL /
+    CREATE INDEX / ALTER TABLE / SELECT that interpolates a dynamic
+    identifier routes through ``conn.dialect.quote_identifier(...)``
+    which BOTH validates AND quotes (single enforcement point).
+  - ``infrastructure-sql.md``: ``?`` canonical placeholders,
+    transactions for multi-statement operations.
   - ``R2-12``: single auditable SQL touchpoint.
 """
 from __future__ import annotations
@@ -21,7 +24,6 @@ from datetime import datetime
 from typing import Any
 
 from kailash.db.connection import ConnectionManager
-from kailash.db.dialect import _validate_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -69,27 +71,43 @@ async def create_feature_table(
     feature_columns:
         List of ``(column_name, sql_type)`` pairs.
     """
-    _validate_identifier(table_name)
-    _validate_identifier(entity_id_column)
-    if timestamp_column is not None:
-        _validate_identifier(timestamp_column)
+    # Route every dynamic identifier through the dialect's
+    # quote_identifier which validates (allowlist regex + length) AND
+    # quotes in a dialect-appropriate way. Per
+    # ``dataflow-identifier-safety.md`` MUST Rule 1, single-enforcement
+    # point avoids drift between validator-only call sites and quoted
+    # interpolation sites.
+    quoted_table = conn.dialect.quote_identifier(table_name)
+    quoted_entity = conn.dialect.quote_identifier(entity_id_column)
+    quoted_timestamp = (
+        conn.dialect.quote_identifier(timestamp_column)
+        if timestamp_column is not None
+        else None
+    )
+    quoted_features: list[tuple[str, str]] = []
     for col_name, sql_type in feature_columns:
-        _validate_identifier(col_name)
         _validate_sql_type(sql_type)
+        quoted_features.append((conn.dialect.quote_identifier(col_name), sql_type))
 
-    col_defs = [f"{entity_id_column} TEXT NOT NULL"]
-    if timestamp_column is not None:
-        col_defs.append(f"{timestamp_column} TEXT NOT NULL")
-    for col_name, sql_type in feature_columns:
-        col_defs.append(f"{col_name} {sql_type}")
+    col_defs = [f"{quoted_entity} TEXT NOT NULL"]
+    if quoted_timestamp is not None:
+        col_defs.append(f"{quoted_timestamp} TEXT NOT NULL")
+    for quoted_col, sql_type in quoted_features:
+        col_defs.append(f"{quoted_col} {sql_type}")
     col_defs.append("created_at TEXT NOT NULL")
 
     cols_sql = ", ".join(col_defs)
-    await conn.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({cols_sql})")
+    await conn.execute(f"CREATE TABLE IF NOT EXISTS {quoted_table} ({cols_sql})")
 
-    # Index for point-in-time lookups
+    # Index for point-in-time lookups. ``conn.create_index`` itself
+    # routes the identifiers through ``dialect.quote_identifier`` (see
+    # ``kailash.db.connection.ConnectionManager.create_index``) so the
+    # raw-string arguments here are validated AND quoted inside the
+    # helper. The ``idx_name`` literal is a single-source fingerprint
+    # of table + entity column; both components already passed
+    # quote_identifier above, so an injection in either would have
+    # raised before we reach this line.
     idx_name = f"idx_{table_name}_{entity_id_column}_created_at"
-    _validate_identifier(idx_name)
     await conn.create_index(idx_name, table_name, f"{entity_id_column}, created_at")
 
 
@@ -122,26 +140,24 @@ async def get_features_latest(
     timestamp_column: str | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve the latest feature row per entity (no time constraint)."""
-    _validate_identifier(table_name)
-    _validate_identifier(entity_id_column)
-    for name in feature_names:
-        _validate_identifier(name)
+    q_table = conn.dialect.quote_identifier(table_name)
+    q_entity = conn.dialect.quote_identifier(entity_id_column)
+    q_features = [conn.dialect.quote_identifier(name) for name in feature_names]
 
-    time_col = "created_at"
+    q_time = conn.dialect.quote_identifier("created_at")
     if timestamp_column is not None:
-        _validate_identifier(timestamp_column)
-        time_col = timestamp_column
+        q_time = conn.dialect.quote_identifier(timestamp_column)
 
-    cols = ", ".join(feature_names)
+    cols = ", ".join(q_features)
     placeholders = ", ".join("?" for _ in entity_ids)
 
     sql = (
-        f"SELECT {entity_id_column}, {cols} "
+        f"SELECT {q_entity}, {cols} "
         f"FROM ("
-        f"  SELECT {entity_id_column}, {cols},"
-        f"    ROW_NUMBER() OVER (PARTITION BY {entity_id_column} ORDER BY {time_col} DESC) AS rn"
-        f"  FROM {table_name}"
-        f"  WHERE {entity_id_column} IN ({placeholders})"
+        f"  SELECT {q_entity}, {cols},"
+        f"    ROW_NUMBER() OVER (PARTITION BY {q_entity} ORDER BY {q_time} DESC) AS rn"
+        f"  FROM {q_table}"
+        f"  WHERE {q_entity} IN ({placeholders})"
         f") sub WHERE rn = 1"
     )
     return await conn.fetch(sql, *entity_ids)
@@ -162,26 +178,24 @@ async def get_features_as_of(
     column), the filter and ordering use that column.  Otherwise
     ``created_at`` (ingestion time) is used.
     """
-    _validate_identifier(table_name)
-    _validate_identifier(entity_id_column)
-    for name in feature_names:
-        _validate_identifier(name)
+    q_table = conn.dialect.quote_identifier(table_name)
+    q_entity = conn.dialect.quote_identifier(entity_id_column)
+    q_features = [conn.dialect.quote_identifier(name) for name in feature_names]
 
-    time_col = "created_at"
+    q_time = conn.dialect.quote_identifier("created_at")
     if timestamp_column is not None:
-        _validate_identifier(timestamp_column)
-        time_col = timestamp_column
+        q_time = conn.dialect.quote_identifier(timestamp_column)
 
-    cols = ", ".join(feature_names)
+    cols = ", ".join(q_features)
     placeholders = ", ".join("?" for _ in entity_ids)
 
     sql = (
-        f"SELECT {entity_id_column}, {cols} "
+        f"SELECT {q_entity}, {cols} "
         f"FROM ("
-        f"  SELECT {entity_id_column}, {cols},"
-        f"    ROW_NUMBER() OVER (PARTITION BY {entity_id_column} ORDER BY {time_col} DESC) AS rn"
-        f"  FROM {table_name}"
-        f"  WHERE {entity_id_column} IN ({placeholders}) AND {time_col} <= ?"
+        f"  SELECT {q_entity}, {cols},"
+        f"    ROW_NUMBER() OVER (PARTITION BY {q_entity} ORDER BY {q_time} DESC) AS rn"
+        f"  FROM {q_table}"
+        f"  WHERE {q_entity} IN ({placeholders}) AND {q_time} <= ?"
         f") sub WHERE rn = 1"
     )
     return await conn.fetch(sql, *entity_ids, as_of.isoformat())
@@ -197,22 +211,20 @@ async def get_features_range(
     timestamp_column: str | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve all feature rows within [start, end] time window."""
-    _validate_identifier(table_name)
-    _validate_identifier(entity_id_column)
-    for name in feature_names:
-        _validate_identifier(name)
+    q_table = conn.dialect.quote_identifier(table_name)
+    q_entity = conn.dialect.quote_identifier(entity_id_column)
+    q_features = [conn.dialect.quote_identifier(name) for name in feature_names]
 
-    time_col = "created_at"
+    q_time = conn.dialect.quote_identifier("created_at")
     if timestamp_column is not None:
-        _validate_identifier(timestamp_column)
-        time_col = timestamp_column
+        q_time = conn.dialect.quote_identifier(timestamp_column)
 
-    cols = ", ".join(feature_names)
+    cols = ", ".join(q_features)
     sql = (
-        f"SELECT {entity_id_column}, {cols}, {time_col} "
-        f"FROM {table_name} "
-        f"WHERE {time_col} >= ? AND {time_col} <= ? "
-        f"ORDER BY {time_col}"
+        f"SELECT {q_entity}, {cols}, {q_time} "
+        f"FROM {q_table} "
+        f"WHERE {q_time} >= ? AND {q_time} <= ? "
+        f"ORDER BY {q_time}"
     )
     return await conn.fetch(sql, start.isoformat(), end.isoformat())
 
@@ -232,16 +244,15 @@ async def upsert_batch(
 
     Uses a transaction for atomicity.
     """
-    _validate_identifier(table_name)
-    for col in all_columns:
-        _validate_identifier(col)
+    q_table = conn.dialect.quote_identifier(table_name)
+    q_columns = [conn.dialect.quote_identifier(col) for col in all_columns]
 
     if not records:
         return
 
-    col_list = ", ".join(all_columns)
+    col_list = ", ".join(q_columns)
     placeholders = ", ".join("?" for _ in all_columns)
-    insert_sql = f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"
+    insert_sql = f"INSERT INTO {q_table} ({col_list}) VALUES ({placeholders})"
 
     async with conn.transaction() as tx:
         for record in records:
