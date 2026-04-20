@@ -692,20 +692,40 @@ class SqliteAuditStore:
         pool: Any,
         table_name: str = _TABLE_NAME,
     ) -> None:
-        # Validate table name to prevent SQL injection
-        import re
+        # Validate table name through the canonical dialect helper so
+        # the DDL interpolation in initialize() below routes through
+        # quote_identifier(), which BOTH validates the name against the
+        # allowlist regex AND quotes it. Per
+        # rules/dataflow-identifier-safety.md MUST Rule 1, every DDL
+        # path that interpolates a dynamic identifier MUST go through
+        # quote_identifier(); the constructor-side _validate_identifier
+        # is defense-in-depth per MUST Rule 5 so constructing the store
+        # with an invalid name raises before any DDL runs.
+        from kailash.db.dialect import _validate_identifier
 
-        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
-            raise ValueError(f"Invalid table name: {table_name!r}")
+        _validate_identifier(table_name)
         self._pool = pool
         self._table_name = table_name
 
     async def initialize(self) -> None:
         """Create the audit events table if it does not exist."""
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, route
+        # every dynamic DDL identifier through dialect.quote_identifier().
+        # SqliteAuditStore only ever runs against the SQLite pool, so we
+        # use SQLiteDialect directly. quote_identifier() BOTH validates
+        # AND wraps the name in dialect-appropriate quotes.
+        from kailash.db.dialect import SQLiteDialect
+
+        dialect = SQLiteDialect()
+        table = dialect.quote_identifier(self._table_name)
+        idx_actor = dialect.quote_identifier(f"idx_{self._table_name}_actor")
+        idx_action = dialect.quote_identifier(f"idx_{self._table_name}_action")
+        idx_timestamp = dialect.quote_identifier(f"idx_{self._table_name}_timestamp")
+
         async with self._pool.acquire_write() as conn:
             await conn.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {self._table_name} (
+                CREATE TABLE IF NOT EXISTS {table} (
                     event_id TEXT PRIMARY KEY,
                     timestamp TEXT NOT NULL,
                     actor TEXT NOT NULL,
@@ -723,20 +743,20 @@ class SqliteAuditStore:
             # Index for common query patterns
             await conn.execute(
                 f"""
-                CREATE INDEX IF NOT EXISTS idx_{self._table_name}_actor
-                ON {self._table_name} (actor)
+                CREATE INDEX IF NOT EXISTS {idx_actor}
+                ON {table} (actor)
                 """
             )
             await conn.execute(
                 f"""
-                CREATE INDEX IF NOT EXISTS idx_{self._table_name}_action
-                ON {self._table_name} (action)
+                CREATE INDEX IF NOT EXISTS {idx_action}
+                ON {table} (action)
                 """
             )
             await conn.execute(
                 f"""
-                CREATE INDEX IF NOT EXISTS idx_{self._table_name}_timestamp
-                ON {self._table_name} (timestamp)
+                CREATE INDEX IF NOT EXISTS {idx_timestamp}
+                ON {table} (timestamp)
                 """
             )
             await conn.commit()
