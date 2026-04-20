@@ -1,5 +1,22 @@
 # kailash-align Changelog
 
+## [0.4.0] - 2026-04-20
+
+### Added
+
+- **AlignmentDiagnostics adapter** (issue #567, PR#3 of 7): concrete Align adapter satisfying `kailash.diagnostics.protocols.Diagnostic` (landed PR#0/#570). Observes LLM fine-tuning runs via three primary readings:
+  - `evaluate_pair(base_logprobs, tuned_logprobs, preferences)` — closed-form KL(base || tuned), reward-margin, pairwise win-rate
+  - `track_training(metrics_iterable)` — bounded-memory deque ingestion of `{step, reward, kl, loss, ...}` dicts from `AlignmentPipeline.metrics_stream()` or equivalent
+  - `detect_reward_hacking(threshold=2.5)` — flags the canonical signature of sudden reward spike co-occurring with a KL blow-up
+- `report()` returns structured dict with severity-tagged findings; never raises on empty state
+- `plot_*()` methods return plotly Figures via `_require_plotly()` loud-fail helper
+- `*_df()` accessors return polars DataFrames
+- Closed-form KL primary path (numpy); `trl` statistical helpers used as an optimization when available
+
+### Attribution
+
+- Portions originated from MLFP (Apache-2.0) and re-authored for the Kailash ecosystem — see `specs/alignment-diagnostics.md` § "Attribution" for the full donation history.
+
 ## [0.2.0] - 2026-04-02
 
 ### Fixed

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-align"
-version = "0.3.2"
+version = "0.4.0"
 description = "LLM fine-tuning and alignment framework for the Kailash platform"
 readme = "README.md"
 license = "Apache-2.0"
@@ -79,6 +79,7 @@ asyncio_mode = "auto"
 timeout = 30
 markers = [
     "unit: Unit tests (no I/O, no network)",
+    "integration: Tier 2 integration tests (real infrastructure, no mocks)",
     "gpu: Tests requiring GPU (slow, skipped by default)",
 ]
 
