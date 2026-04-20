@@ -259,6 +259,13 @@ def _compute_chain_hash(records: List[Dict[str, Any]]) -> List[str]:
 
     Each hash includes the previous hash, creating a tamper-evident chain.
     Uses the redacted data so witnesses can verify chain integrity.
+
+    Canonicalization (cross-SDK contract — see ``trust/pact/audit.py``
+    and kailash-rs#449): compact separators ``(",", ":")`` and
+    ``ensure_ascii=True`` so Python's ``json.dumps`` output matches
+    Rust's ``serde_json::to_string(&BTreeMap)`` byte-for-byte. Any
+    downstream verifier (same SDK or sibling) recomputes the same
+    hash from the same logical input.
     """
     hashes: List[str] = []
     prev_hash = GENESIS_HASH
@@ -267,6 +274,8 @@ def _compute_chain_hash(records: List[Dict[str, Any]]) -> List[str]:
         payload = json.dumps(
             {"previous_hash": prev_hash, "record": record},
             sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
             default=str,
         )
         current_hash = hashlib.sha256(payload.encode()).hexdigest()
@@ -317,7 +326,9 @@ def export_for_witness(
     if witness_id:
         metadata["witness_id"] = witness_id
 
-    # Sign the package
+    # Sign the package — compact JSON matches the _compute_chain_hash
+    # canonicalization contract so a cross-SDK verifier can round-trip
+    # the signed payload byte-for-byte (kailash-rs#449).
     sign_payload = json.dumps(
         {
             "chain_hashes": chain_hashes,
@@ -325,6 +336,9 @@ def export_for_witness(
             "record_count": len(redacted_records),
         },
         sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        default=str,
     )
     signature = sign(sign_payload, signing_key)
 
@@ -358,7 +372,7 @@ def verify_witness_export(
     total_disclosed = 0
     total_redacted = 0
 
-    # 1. Verify signature
+    # 1. Verify signature — MUST mirror export_for_witness canonicalization.
     sign_payload = json.dumps(
         {
             "chain_hashes": export.chain_hashes,
@@ -366,6 +380,9 @@ def verify_witness_export(
             "record_count": len(export.records),
         },
         sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        default=str,
     )
 
     try:
@@ -376,11 +393,21 @@ def verify_witness_export(
         signature_valid = False
         errors.append(f"Signature verification failed: {e}")
 
-    # 2. Verify hash chain
+    # 2. Verify hash chain — compact canonicalization matches _compute_chain_hash.
     recomputed_hashes = _compute_chain_hash([r.data for r in export.records])
     chain_valid = hmac_mod.compare_digest(
-        json.dumps(recomputed_hashes, sort_keys=True),
-        json.dumps(export.chain_hashes, sort_keys=True),
+        json.dumps(
+            recomputed_hashes,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ),
+        json.dumps(
+            export.chain_hashes,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ),
     )
     if not chain_valid:
         errors.append(

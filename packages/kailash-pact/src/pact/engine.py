@@ -347,6 +347,15 @@ class PactEngine:
             "governance_verified", {"level": verdict.level, "allowed": verdict.allowed}
         )
 
+        # Extract envelope_id for per-envelope cost rollups. The verdict's
+        # effective_envelope_snapshot carries the resolved envelope at
+        # verification time; its "id" field (when populated) is the
+        # envelope identifier per ConstraintEnvelopeConfig.
+        envelope_snapshot = verdict_dict.get("effective_envelope_snapshot") or {}
+        submission_envelope_id = (
+            envelope_snapshot.get("id") if isinstance(envelope_snapshot, dict) else None
+        )
+
         # --- SHADOW mode: log verdict but never block ---
         if self._enforcement_mode == EnforcementMode.SHADOW:
             shadow_verdict = {**verdict_dict, "shadow": True}
@@ -377,6 +386,7 @@ class PactEngine:
                 shadow=True,
                 budget_allocated=budget,
                 audit_trail=audit_trail,
+                envelope_id=submission_envelope_id,
             )
 
         # --- ENFORCE mode: verdicts are binding ---
@@ -412,6 +422,7 @@ class PactEngine:
             shadow=False,
             budget_allocated=budget,
             audit_trail=audit_trail,
+            envelope_id=submission_envelope_id,
         )
 
     def submit_sync(
@@ -519,6 +530,7 @@ class PactEngine:
         shadow: bool,
         budget_allocated: float | None = None,
         audit_trail: list[dict[str, Any]] | None = None,
+        envelope_id: str | None = None,
     ) -> WorkResult:
         """Execute work through the supervisor (Execution Plane).
 
@@ -533,6 +545,10 @@ class PactEngine:
             shadow: True if running in shadow mode.
             budget_allocated: Budget ceiling for this submission.
             audit_trail: Accumulated audit trail entries.
+            envelope_id: Governance envelope resolved for this submission
+                (from the verdict's ``effective_envelope_snapshot``). Passed
+                to the cost tracker so per-envelope consumption rollups work
+                out-of-box. DISABLED mode passes ``None`` (no verdict).
 
         Returns:
             A WorkResult with execution outcome.
@@ -592,6 +608,7 @@ class PactEngine:
                 self._costs.record(
                     cost_usd,
                     f"submit: {objective[:80]}",
+                    envelope_id=envelope_id,
                     agent_id=role,
                 )
 

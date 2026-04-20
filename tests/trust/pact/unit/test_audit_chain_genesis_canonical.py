@@ -177,18 +177,9 @@ class TestMultiAnchorChainRoundTrip:
             metadata={"pact_action": "envelope_created"},
             timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC),
         )
-
-        # Forge the content_hash using the LEGACY sentinel string.
-        import hashlib
-        import json
-
-        legacy_content = (
-            f"{anchor.anchor_id}:{anchor.sequence}:genesis:"
-            f"{anchor.agent_id}:{anchor.action}:{anchor.verification_level.value}:"
-            f"{anchor.envelope_id}:{anchor.result}:{anchor.timestamp.isoformat()}"
-        )
-        legacy_content += ":" + json.dumps(anchor.metadata, sort_keys=True, default=str)
-        anchor.content_hash = hashlib.sha256(legacy_content.encode()).hexdigest()
+        # Seal using the legacy compute (single source of truth for the
+        # pre-migration form — exported on AuditAnchor for this exact purpose).
+        anchor.content_hash = anchor._compute_hash_legacy()
 
         # verify_integrity recomputes against the NEW sentinel and mismatches.
         assert anchor.is_sealed
@@ -196,3 +187,54 @@ class TestMultiAnchorChainRoundTrip:
             "A legacy-rooted anchor must fail verification under the new sentinel. "
             "If this passes, the breaking-change semantics regressed."
         )
+
+
+class TestChainIntegrityDisambiguation:
+    """verify_chain_integrity emits a DISTINCT error for legacy-rooted chains
+    (pre-2026-04-20) vs actual tampering. Operators reading the forensic
+    message must not misread a legacy chain as an incident.
+    """
+
+    def test_chain_integrity_distinguishes_legacy_from_tampering(self) -> None:
+        # Build a chain the LEGACY code path would have produced.
+        chain = AuditChain("chain-legacy-001")
+        legacy_anchor = AuditAnchor(
+            anchor_id="chain-legacy-001-0",
+            sequence=0,
+            previous_hash=None,
+            agent_id="agent-legacy",
+            action="envelope_created",
+            verification_level=VerificationLevel.AUTO_APPROVED,
+            envelope_id="env-legacy",
+            result="success",
+            metadata={"pact_action": "envelope_created"},
+            timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC),
+        )
+        legacy_anchor.content_hash = legacy_anchor._compute_hash_legacy()
+        chain.anchors.append(legacy_anchor)
+
+        is_valid, errors = chain.verify_chain_integrity()
+        assert not is_valid
+        assert len(errors) >= 1
+        error = errors[0]
+        # Must clearly say legacy — not "tampered".
+        assert "legacy genesis sentinel" in error
+        assert "kailash-rs#449" in error
+        assert "Re-seal required" in error
+        assert "NOT tampering" in error
+        assert "(tampered?)" not in error
+
+    def test_chain_integrity_still_flags_real_tampering(self) -> None:
+        """Real tampering (neither new nor legacy form) still produces the
+        (tampered?) message — disambiguation only triggers on legacy match.
+        """
+        chain = AuditChain("chain-tamper-001")
+        chain.append("agent-0", "envelope_created", VerificationLevel.AUTO_APPROVED)
+        # Tamper: set a hash that matches neither current nor legacy compute.
+        chain.anchors[0].content_hash = "deadbeef" * 8
+
+        is_valid, errors = chain.verify_chain_integrity()
+        assert not is_valid
+        assert any("(tampered?)" in e for e in errors)
+        # Must NOT claim legacy sentinel.
+        assert not any("legacy genesis sentinel" in e for e in errors)

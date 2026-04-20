@@ -74,7 +74,11 @@ class CostTracker:
                 rollups (see future ``consumption_report(envelope_id=...)``).
             agent_id: Optional agent or D/T/R role address for per-agent
                 rollups. In PACT usage this is typically the submitting
-                role's address (e.g. ``"D1-R1-D2-R2"``).
+                role's address (e.g. ``"D1-R1-D2-R2"``). The forthcoming
+                ``consumption_report(agent_id=...)`` filter expects the
+                same convention — a D/T/R role string, NOT a kaizen-agents
+                agent UUID. Consumers filtering by UUID will get zero rows
+                from a PactEngine-populated tracker.
 
         Raises:
             ValueError: If amount is NaN, Inf, or negative.
@@ -99,6 +103,11 @@ class CostTracker:
                 }
             )
 
+        # DEBUG-level per observability.md Rule 8: envelope_id and agent_id
+        # are operational identifiers (envelope UUIDs / D/T/R role addresses).
+        # Operators SHOULD NOT encode human names or tenant PII into role
+        # address segments — if that convention is ever broken, this line
+        # must re-verify that it stays at DEBUG and never upgrades to WARN.
         logger.debug(
             "CostTracker: recorded $%.4f (%s) envelope=%s agent=%s total=$%.4f",
             amount,
