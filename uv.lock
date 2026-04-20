@@ -2758,7 +2758,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.8.10"
+version = "2.8.11"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -3166,7 +3166,7 @@ provides-extras = ["dev", "bedrock", "vertex"]
 
 [[package]]
 name = "kailash-mcp"
-version = "0.2.5"
+version = "0.2.7"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "kailash" },
@@ -3201,7 +3201,7 @@ provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server
 
 [[package]]
 name = "kailash-ml"
-version = "0.13.0"
+version = "0.17.0"
 source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "kailash" },
@@ -3233,6 +3233,7 @@ all = [
     { name = "lightning" },
     { name = "optuna" },
     { name = "pandas" },
+    { name = "plotly" },
     { name = "pyyaml" },
     { name = "shap" },
     { name = "stable-baselines3" },
@@ -3251,6 +3252,7 @@ all = [
 requires-dist = [
     { name = "catboost", marker = "extra == 'catboost'", specifier = ">=1.2" },
     { name = "datasets", marker = "extra == 'huggingface'", specifier = ">=2.0" },
+    { name = "datasets", marker = "extra == 'rag'", specifier = ">=2.0" },
     { name = "gymnasium", marker = "extra == 'rl'", specifier = ">=0.29" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.98" },
     { name = "imbalanced-learn", marker = "extra == 'imbalance'", specifier = ">=0.12" },
@@ -3273,12 +3275,14 @@ requires-dist = [
     { name = "optuna", marker = "extra == 'hpo'", specifier = ">=3.0" },
     { name = "pandas", marker = "extra == 'interop'", specifier = ">=2.0" },
     { name = "plotly", specifier = ">=5.18" },
+    { name = "plotly", marker = "extra == 'dl'", specifier = ">=5.18" },
     { name = "polars", specifier = ">=1.0" },
     { name = "pyarrow", specifier = ">=14.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "pyyaml", marker = "extra == 'mlflow'", specifier = ">=6.0" },
+    { name = "ragas", marker = "extra == 'rag'", specifier = ">=0.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3" },
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "scipy", specifier = ">=1.11" },
@@ -3293,12 +3297,13 @@ requires-dist = [
     { name = "torchaudio", marker = "extra == 'dl'", specifier = ">=2.2" },
     { name = "torchvision", marker = "extra == 'dl'", specifier = ">=0.17" },
     { name = "transformers", marker = "extra == 'dl'", specifier = ">=4.40" },
+    { name = "trulens-eval", marker = "extra == 'rag'", specifier = ">=0.20" },
     { name = "umap-learn", specifier = ">=0.5" },
     { name = "uvicorn", marker = "extra == 'dashboard'", specifier = ">=0.27" },
     { name = "xgboost", specifier = ">=2.0" },
     { name = "xgboost", marker = "extra == 'xgb'", specifier = ">=2.0" },
 ]
-provides-extras = ["dl", "dl-gpu", "rl", "agents", "explain", "imbalance", "xgb", "catboost", "stats", "hpo", "mlflow", "huggingface", "dashboard", "interop", "all", "all-gpu", "dev"]
+provides-extras = ["dl", "dl-gpu", "rl", "agents", "explain", "imbalance", "rag", "xgb", "catboost", "stats", "hpo", "mlflow", "huggingface", "dashboard", "interop", "all", "all-gpu", "dev"]
 
 [[package]]
 name = "kailash-nexus"
