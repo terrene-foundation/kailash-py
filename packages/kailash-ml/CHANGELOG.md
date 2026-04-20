@@ -1,5 +1,42 @@
 # kailash-ml Changelog
 
+## [0.15.0] - 2026-04-20 — MLEngine Phase 3/4/5 complete (specs/ml-engines.md §12.1)
+
+Closes the full Phase 3/4/5 punch list from `specs/ml-engines.md §12.1`. All eight documented `MLEngine` methods (`setup`, `compare`, `fit`, `predict`, `finalize`, `evaluate`, `register`, `serve`) now have production implementations. Landed via four parallel worktree shards (PRs #561/#562/#563/#564) + prep commit (7 frozen result dataclasses in `_results.py`).
+
+### Added — Phase 3 (`setup` + `compare` + `finalize`)
+
+- **`MLEngine.setup()`** (PR #561): polars-native data profiling, `schema_hash` idempotency key per §2.1 MUST 6, task-type inference (classification/regression), deterministic holdout split, FeatureStore schema registration with tenant_id persistence. Phase 3.1 (kfold/stratified/walk_forward split strategies) deferred with a loud `NotImplementedError` naming the follow-up.
+- **`MLEngine.compare()`** (PR #562): multi-family Lightning sweep. Every family routed through `self.fit()` so Lightning-as-spine holds by construction per §2.1 MUST 7. Default family set derived from task_type (sklearn/xgboost/lightgbm for classification/regression). Best-first leaderboard via `_HIGHER_IS_BETTER_METRICS` / `_LOWER_IS_BETTER_METRICS` sets. Partial-result on timeout + structured WARN log. `ComparisonResult.tenant_id` propagates from engine, every inner `TrainingResult` echoes tenant_id.
+- **`MLEngine.finalize()`** (PR #562): retrain on train+holdout (`full_fit=True`) or re-wrap without retrain (`full_fit=False`). Accepts either a `TrainingResult` or a `models://name/v<N>` URI string.
+
+### Added — Phase 4 (`predict` + `evaluate` + `register`)
+
+- **`MLEngine.predict()`** (PR #563): registry hydration + three-channel dispatch (`direct` = in-process onnxruntime, `rest` = Nexus-bound endpoint, `mcp` = stdio transport). Typed `TenantRequiredError` when engine tenant_id does not match the registered model's tenant_id. `ModelNotFoundError` with actionable message when rest/mcp channels are requested without prior `serve()`. Structured entry/exit logs per `rules/observability.md`.
+- **`MLEngine.evaluate()`** (PR #562): three modes (holdout/shadow/live). Holdout = offline scoring with default metric set from task_type. Shadow = score + audit as `shadow_evaluate` without drift-monitor update. Live = score + audit as `evaluate` AND update DriftMonitor. Typed `TargetNotFoundError` when target column missing from data.
+- **`MLEngine.register()`** (PR #561): 6-framework ONNX-default export via existing `OnnxBridge` (sklearn/xgboost/lightgbm/catboost/torch/lightning). Typed `OnnxExportError` on default-path failure — silent pickle fallback BLOCKED per §4.2 MUST 4. Tenant-aware `(tenant_id, name, version)` primary key on `_kml_model_versions`. `§5.2` audit row written even on failure.
+
+### Added — Phase 5 (`serve`)
+
+- **`MLEngine.serve()`** (PR #563): REST + MCP + gRPC multi-channel bind from a single call per §2.1 MUST 10. REST channel via Nexus, MCP channel via kailash-mcp stdio transport. Per-channel URIs returned in `ServeResult.uris`. Partial-failure rollback — if MCP bind fails after REST bind succeeds, REST is shut down and a typed error is raised (no partial `ServeResult`). Tenant-id propagated to each channel's auth context. gRPC channel requires the `[grpc]` optional extra (loud-failure pattern per `rules/dependencies.md` § Exception).
+
+### Added — new infrastructure
+
+- **7 frozen result dataclasses** in `kailash_ml._results` (`SetupResult`, `ComparisonResult`, `PredictionResult`, `RegisterResult`, `EvaluationResult`, `ServeResult`, `FinalizeResult`). Field shapes are a contract — shards imported them rather than redefining, preventing the parallel-ownership race `rules/agents.md` § "Parallel-Worktree Package Ownership Coordination" documents.
+- **`kailash_ml.engines._engine_sql`** (PR #561): identifier-validated DDL helper module for MLEngine auxiliary tables (`_kml_engine_versions`, `_kml_engine_audit`) per `rules/dataflow-identifier-safety.md`.
+- **22 new Tier 2 integration test files** across four shards, covering idempotency, tenant propagation, ONNX matrix, export-failure → typed-error path, multi-family compare, shadow/live evaluate modes, direct/rest/mcp predict channels, multi-channel serve, partial-failure rollback, REST tenant-isolation.
+
+### Known deferrals (intentional)
+
+- **`split_strategy != "holdout"` in `setup()`**: kfold / stratified_kfold / walk_forward raise `NotImplementedError` naming Phase 3.1 as the follow-up. Tracked at `workspaces/kailash-ml-gpu-stack/journal/.pending/`.
+- **`serve(channels=["grpc"])`**: requires `pip install kailash-ml[grpc]`. Loud-failure `NotImplementedError` naming the extra per `rules/dependencies.md` § Exception.
+- **`PredictionResult.device`**: nullable; populated in kailash-ml 0.12.1+ only after fit → immediate-predict. Restored-from-registry predictions carry `None` until 0.15.1 per `specs/ml-engines.md §4.2 MUST 6`.
+
+### Changed
+
+- `kailash_ml.__all__` now exports the 7 new result dataclasses (eager-imported per `rules/orphan-detection.md` §6).
+- `MLEngine.engine.py` grew from 676 LOC → ~1800 LOC; helpers split across `_engine_sql.py` (267 LOC) + module-level serve/predict plumbing.
+
 ## [0.14.0] - 2026-04-20 — km.doctor + km.track spec completion (ml-backends.md §7, ml-tracking.md §2.4)
 
 Closes the two HIGH findings from the 2026-04-20 /redteam audit: km.doctor shipped 4 of 14 spec items (§7) and km.track persisted 10 of 17 auto-capture fields (§2.4). Both surfaces now ship the full spec-mandated coverage.
