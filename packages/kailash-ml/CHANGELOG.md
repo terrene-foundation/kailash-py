@@ -1,5 +1,17 @@
 # kailash-ml Changelog
 
+## [0.15.1] - 2026-04-20 — post-release audit hotfix (tenant-isolation + spec sync)
+
+Post-release `/redteam` audit of 0.15.0 (security-reviewer + reviewer + gold-standards-validator) surfaced one HIGH security finding and one HIGH spec-staleness finding. Both fixed in this patch.
+
+### Fixed
+
+- **Cross-tenant bypass in `_check_tenant_match`** (security-reviewer HIGH-1): `MLEngine._check_tenant_match` silently permitted an unscoped engine (`tenant_id=None`) to load a tenant-scoped model. Per `specs/ml-engines.md §5.1 MUST 3` and `rules/tenant-isolation.md` Rule 2 ("Missing tenant_id Is a Typed Error"), the unscoped-engine branch against a tenant-scoped model MUST raise `TenantRequiredError`, not pass silently. Fix: the check now raises with an actionable message naming `MLEngine(tenant_id=...)` as the fix. Regression test at `tests/regression/test_tenant_isolation_unscoped_engine.py` (5 cases) locks all four combinations of (engine tenant ∈ {None, "acme"}) × (model tenant ∈ {None, "acme"}).
+
+### Changed
+
+- **`specs/ml-engines.md §12.1` updated** (reviewer HIGH-1 / gold-standards MED-1): Phase status table now reflects shipped state — header bumped to "kailash-ml 0.15.0", 7-row Phase 3/4/5 table replaced with the 2 remaining intentional deferrals (non-holdout split strategies + grpc extras-guard). §12.2 2.0.0 gate items now marked `[x]` for the five satisfied by 0.15.0 (8-method surface, typed dataclass returns, TrainingResult 10-field contract, cache-key "default" forbidden, OnnxExportError on failure).
+
 ## [0.15.0] - 2026-04-20 — MLEngine Phase 3/4/5 complete (specs/ml-engines.md §12.1)
 
 Closes the full Phase 3/4/5 punch list from `specs/ml-engines.md §12.1`. All eight documented `MLEngine` methods (`setup`, `compare`, `fit`, `predict`, `finalize`, `evaluate`, `register`, `serve`) now have production implementations. Landed via four parallel worktree shards (PRs #561/#562/#563/#564) + prep commit (7 frozen result dataclasses in `_results.py`).

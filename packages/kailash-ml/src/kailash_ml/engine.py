@@ -2130,10 +2130,24 @@ class MLEngine:
     def _check_tenant_match(self, model_tenant: Optional[str], model_name: str) -> None:
         """Enforce §5.1 MUST 3 — refuse cross-tenant access.
 
-        If the registered model carries a ``tenant_id`` AND the engine has
-        a ``tenant_id``, they MUST match. If either is None, we let it pass
-        (single-tenant mode / pre-shard-A rows).
+        Contract:
+        - model_tenant is None AND engine tenant is None → pass (single-tenant deployment)
+        - model_tenant is not None AND engine tenant is None → RAISE (unscoped engine
+          cannot access a tenant-scoped model; this is the silent-fallback bypass that
+          `tenant-isolation.md` Rule 2 BLOCKS)
+        - model_tenant is None AND engine tenant is not None → pass (multi-tenant engine
+          accessing a pre-multi-tenant model; rare, will disappear once all rows are
+          backfilled)
+        - both set, equal → pass
+        - both set, different → RAISE (cross-tenant access)
         """
+        if model_tenant is not None and self._tenant_id is None:
+            raise TenantRequiredError(
+                f"Model '{model_name}' belongs to tenant {model_tenant!r} but "
+                f"MLEngine was constructed without a tenant_id. Construct via "
+                f"MLEngine(tenant_id={model_tenant!r}) to access tenant-scoped models "
+                f"(specs/ml-engines.md §5.1 MUST 3, rules/tenant-isolation.md Rule 2)."
+            )
         if (
             model_tenant is not None
             and self._tenant_id is not None
