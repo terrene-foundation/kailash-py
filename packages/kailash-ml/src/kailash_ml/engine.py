@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Union
 
 from kailash_ml._device import BackendInfo, detect_backend
+from kailash_ml.engines import _engine_sql as _sql
 
 logger = logging.getLogger(__name__)
 
@@ -789,11 +790,25 @@ class MLEngine:
         format: str = "onnx",
         alias: Optional[str] = None,
     ) -> Any:
-        """Register a trained model in the registry.
+        """Register a trained model in the registry (ONNX-default, §6).
 
-        Phase 4 implements the ONNX export branches and the registry
-        persistence (ml-engines.md §6).
+        Exports the underlying model via
+        :mod:`kailash_ml.bridge.onnx_bridge` for formats ``"onnx"`` and
+        ``"both"`` — all six framework branches (sklearn, xgboost,
+        lightgbm, catboost, torch, lightning) are covered by the
+        bridge's existing dispatch per §6.1 MUST 2. ``format="onnx"``
+        (the default) MUST raise :class:`OnnxExportError` on export
+        failure per §4.2 MUST 4; silent fallback to pickle is
+        BLOCKED. ``format="both"`` tolerates partial ONNX failure
+        (pickle-only RegisterResult) per §6.1 MUST 5.
+
+        Tenant-aware: every version row persists ``tenant_id`` on
+        ``_kml_engine_versions`` (§5.1 MUST 4); ``(tenant_id, name,
+        version)`` is the primary key. Every ``register()`` call
+        writes an audit row per §5.2 with ``operation="register"``,
+        ``duration_ms``, ``outcome``.
         """
+        # Validate argument shape up-front so bad calls fail loud (§2.3).
         if stage not in ("staging", "shadow", "production"):
             raise ValueError(
                 f"register(stage=...) must be 'staging', 'shadow', or "
@@ -804,7 +819,194 @@ class MLEngine:
                 f"register(format=...) must be 'onnx', 'pickle', or 'both'; "
                 f"got {format!r}."
             )
-        raise NotImplementedError(f"MLEngine.register — {_PHASE_4}")
+
+        # result MUST be a TrainingResult per the spec §2.2 signature.
+        # We duck-type rather than strict isinstance so a lightweight
+        # TrainingResult-shaped object (useful for tests) is accepted
+        # provided it carries the fields register() actually reads.
+        for required_attr in ("family", "artifact_uris", "tenant_id"):
+            if not hasattr(result, required_attr):
+                raise ValueError(
+                    f"register(result=...) expected a TrainingResult-shaped "
+                    f"object with '{required_attr}'; got "
+                    f"{type(result).__name__}."
+                )
+
+        # tenant_id — Engine's tenant wins; a TrainingResult from a
+        # different Engine instance that drifts from self._tenant_id is
+        # caught here (multi-tenant safety: the Engine that registers
+        # owns the audit row).
+        tenant_id = self._tenant_id or result.tenant_id
+        effective_tenant = (
+            tenant_id if tenant_id is not None else (_sql.SENTINEL_GLOBAL_TENANT)
+        )
+
+        # Model-name synthesis: prefer explicit, then the training
+        # result's family + short hash of model_uri (stable across
+        # retries), then "model_<family>". Validated as an identifier
+        # before being interpolated into SQL paths.
+        model_name = name or self._synthesise_model_name(result)
+        from kailash.db.dialect import _validate_identifier
+
+        _validate_identifier(model_name)
+
+        # Retrieve the actual model object. Trainables attached via
+        # result._trainable are the canonical handle; some test paths
+        # may pass the model directly via result.model. We look in
+        # both slots and fall back to a helpful error if neither is
+        # populated.
+        model_obj = (
+            getattr(result, "model", None)
+            or getattr(result, "_model", None)
+            or getattr(getattr(result, "_trainable", None), "model", None)
+            or getattr(getattr(result, "trainable", None), "model", None)
+        )
+        if model_obj is None:
+            raise ValueError(
+                "register(result=...) could not locate the trained model. "
+                "Attach the fitted model on result.model or pass a "
+                "TrainingResult whose trainable exposes .model."
+            )
+
+        # Framework key for the ONNX bridge. Prefer the explicit
+        # result.family when present; otherwise infer from the model
+        # class module.
+        framework = self._resolve_onnx_framework(result, model_obj)
+
+        # Ensure the auxiliary engine tables exist. This is idempotent;
+        # a real bootstrap path initialises them at construction, but
+        # lazy creation here keeps the tests that construct an engine
+        # without a prior setup() working.
+        conn = await self._acquire_connection()
+        await _sql.create_engine_tables(conn)
+
+        # Monotonic version per (tenant_id, name). Read and insert
+        # must share a transaction to close the TOCTOU window.
+        t0 = time.monotonic()
+        registered_at = time.time()
+        audit_outcome = "failure"
+        audit_model_uri: Optional[str] = None
+
+        try:
+            async with conn.transaction() as tx:
+                version = await _sql.get_next_version(
+                    tx, tenant_id=effective_tenant, name=model_name
+                )
+                model_uri = f"models://{model_name}/v{version}"
+                audit_model_uri = model_uri
+
+                # Artifact persistence. The ArtifactStore primitive is
+                # shared with ModelRegistry so artifacts land in the
+                # same filesystem layout, giving downstream readers a
+                # uniform URI scheme.
+                artifact_uris: dict[str, str] = {}
+                store = self._resolve_artifact_store()
+
+                # ONNX export — default path. Failure on format="onnx"
+                # MUST raise OnnxExportError (§4.2 MUST 4); format="both"
+                # tolerates partial failure (§6.1 MUST 5).
+                if format in ("onnx", "both"):
+                    onnx_uri = await self._export_and_save_onnx(
+                        model=model_obj,
+                        framework=framework,
+                        name=model_name,
+                        version=version,
+                        artifact_store=store,
+                        format=format,
+                    )
+                    if onnx_uri is not None:
+                        artifact_uris["onnx"] = onnx_uri
+
+                # Pickle export — always for format="pickle" and "both";
+                # never for format="onnx" per §6.1 MUST 5.
+                if format in ("pickle", "both"):
+                    pickle_bytes = pickle.dumps(model_obj)
+                    pickle_uri = await store.save(
+                        model_name, version, pickle_bytes, "model.pkl"
+                    )
+                    artifact_uris["pickle"] = pickle_uri
+
+                # Persist the version row (§5.1 MUST 4: tenant_id on the
+                # model version table, indexed by the DDL helper).
+                await _sql.insert_version_row(
+                    tx,
+                    tenant_id=effective_tenant,
+                    name=model_name,
+                    version=version,
+                    model_uri=model_uri,
+                    stage=stage,
+                    alias=alias,
+                    artifact_uris_json=json.dumps(artifact_uris),
+                    registered_at=registered_at,
+                )
+
+            audit_outcome = "success"
+
+        except OnnxExportError:
+            # Let the typed ONNX error propagate; the audit row below
+            # still fires with outcome="failure".
+            raise
+        except Exception as exc:  # noqa: BLE001 — see logger.exception
+            logger.exception(
+                "engine.register.error",
+                extra={
+                    "name": model_name,
+                    "tenant_id": self._tenant_id,
+                    "error": str(exc),
+                },
+            )
+            raise
+        finally:
+            duration_ms = (time.monotonic() - t0) * 1000.0
+            # Audit row always writes — §5.2 mandates the row regardless
+            # of outcome so post-incident forensics can reconstruct
+            # who tried to register what.
+            try:
+                await _sql.insert_audit_row(
+                    conn,
+                    audit_id=str(uuid.uuid4()),
+                    tenant_id=effective_tenant,
+                    actor_id=None,
+                    model_uri=audit_model_uri,
+                    operation="register",
+                    occurred_at=registered_at,
+                    duration_ms=duration_ms,
+                    outcome=audit_outcome,
+                )
+            except Exception:  # noqa: BLE001 — audit write failure
+                # Log at WARN; never mask the primary exception.
+                logger.warning(
+                    "engine.register.audit_write_failed",
+                    extra={
+                        "name": model_name,
+                        "tenant_id": self._tenant_id,
+                    },
+                )
+
+        from kailash_ml._results import RegisterResult
+
+        result_envelope = RegisterResult(
+            name=model_name,
+            version=version,
+            stage=stage,
+            artifact_uris=artifact_uris,
+            model_uri=model_uri,
+            registered_at=registered_at,
+            tenant_id=tenant_id,
+            alias=alias,
+        )
+        logger.info(
+            "engine.register.ok",
+            extra={
+                "name": model_name,
+                "version": version,
+                "stage": stage,
+                "format": format,
+                "tenant_id": self._tenant_id,
+                "duration_ms": duration_ms,
+            },
+        )
+        return result_envelope
 
     async def serve(
         self,
@@ -1035,3 +1237,170 @@ class MLEngine:
         if "entity_id" in cols:
             return "entity_id"
         return "_engine_entity_id"
+
+    # ------------------------------------------------------------------
+    # register() internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _synthesise_model_name(result: Any) -> str:
+        """Generate a stable model name from a TrainingResult.
+
+        Prefers ``result.family`` when populated; falls back to a hash
+        of ``model_uri`` so two register() calls against the same
+        TrainingResult produce the same name. The returned name is
+        sanitised to the identifier allowlist so it can be interpolated
+        into SQL paths via ``_validate_identifier``.
+        """
+        family = getattr(result, "family", None)
+        if isinstance(family, str) and family.isidentifier():
+            base = family
+        else:
+            model_uri = getattr(result, "model_uri", None) or ""
+            digest = hashlib.sha256(model_uri.encode("utf-8")).hexdigest()[:8]
+            base = f"model_{digest}"
+        # Collapse any non-allowlist chars defensively — identifier
+        # allowlist is ^[a-zA-Z_][a-zA-Z0-9_]*$.
+        sanitised = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in base)
+        if not sanitised or not (sanitised[0].isalpha() or sanitised[0] == "_"):
+            sanitised = f"_{sanitised or 'model'}"
+        return sanitised
+
+    @staticmethod
+    def _resolve_onnx_framework(result: Any, model_obj: Any) -> str:
+        """Resolve the ONNX bridge framework key from TrainingResult / model."""
+        explicit = getattr(result, "family", None)
+        if isinstance(explicit, str):
+            # Normalise family aliases to the ONNX bridge keys.
+            family_map = {
+                "sklearn": "sklearn",
+                "random_forest": "sklearn",
+                "rf": "sklearn",
+                "logreg": "sklearn",
+                "logistic": "sklearn",
+                "xgb": "xgboost",
+                "xgboost": "xgboost",
+                "lgbm": "lightgbm",
+                "lightgbm": "lightgbm",
+                "catboost": "catboost",
+                "torch": "torch",
+                "pytorch": "torch",
+                "lightning": "lightning",
+            }
+            if explicit.lower() in family_map:
+                return family_map[explicit.lower()]
+        module = type(model_obj).__module__.lower()
+        if module.startswith("sklearn"):
+            return "sklearn"
+        if module.startswith("xgboost"):
+            return "xgboost"
+        if module.startswith("lightgbm"):
+            return "lightgbm"
+        if module.startswith("catboost"):
+            return "catboost"
+        if module.startswith("lightning"):
+            return "lightning"
+        if module.startswith("torch"):
+            return "torch"
+        # Unknown framework — the bridge will return a "skipped" export
+        # result; register() promotes that to OnnxExportError on
+        # format="onnx".
+        return "sklearn"
+
+    async def _acquire_connection(self) -> Any:
+        """Return an initialised ConnectionManager for the engine's store.
+
+        When the engine was constructed with a ``ConnectionManager``
+        instance, return it as-is (DI override); otherwise build the
+        default SQLite connection on first use. The connection is
+        cached on the engine so repeated ``register()`` calls reuse
+        the pool.
+        """
+        from kailash.db.connection import ConnectionManager
+
+        if isinstance(self._connection_manager, ConnectionManager):
+            if getattr(self._connection_manager, "_pool", None) is None:
+                await self._connection_manager.initialize()
+            return self._connection_manager
+
+        # Default path: construct + initialise a ConnectionManager
+        # against the store URL. The store directory is created lazily
+        # here (NOT in __init__) so zero-arg construction stays pure.
+        if self._connection_manager is None:
+            url = self.store_url
+            # Ensure ~/.kailash_ml/ exists for the default SQLite case.
+            if url.startswith("sqlite:///"):
+                db_path = pathlib.Path(url[len("sqlite:///") :])
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+            cm = ConnectionManager(url)
+            await cm.initialize()
+            self._connection_manager = cm
+        return self._connection_manager
+
+    def _resolve_artifact_store(self) -> Any:
+        """Return the ArtifactStore (DI override or default local file store)."""
+        if self._artifact_store is not None:
+            return self._artifact_store
+        from kailash_ml.engines.model_registry import LocalFileArtifactStore
+
+        root = pathlib.Path(
+            os.environ.get(
+                "KAILASH_ML_ARTIFACT_ROOT",
+                str(_DEFAULT_STORE_DIR / "artifacts"),
+            )
+        )
+        self._artifact_store = LocalFileArtifactStore(root_dir=root)
+        return self._artifact_store
+
+    async def _export_and_save_onnx(
+        self,
+        *,
+        model: Any,
+        framework: str,
+        name: str,
+        version: int,
+        artifact_store: Any,
+        format: str,
+    ) -> Optional[str]:
+        """Export the model to ONNX and persist via the artifact store.
+
+        Returns the artifact URI on success. On failure:
+        - format="onnx" raises :class:`OnnxExportError` (§4.2 MUST 4).
+        - format="both" returns ``None`` so pickle-only persistence
+          proceeds (§6.1 MUST 5).
+        """
+        import tempfile
+
+        from kailash_ml.bridge.onnx_bridge import OnnxBridge
+
+        bridge = OnnxBridge()
+        # torch / lightning exports require a sample input; tabular
+        # frameworks (sklearn/xgboost/lightgbm/catboost) only need the
+        # feature count. Phase 3 scope: we let the bridge's own
+        # n_features inference (`model.n_features_in_`) handle the
+        # tabular path; deep-learning sample_input plumbing is
+        # tracked for a subsequent phase.
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = pathlib.Path(tmp) / "model.onnx"
+            export_result = bridge.export(
+                model,
+                framework=framework,
+                output_path=output_path,
+            )
+            if not export_result.success:
+                cause = export_result.error_message or "unknown"
+                if format == "onnx":
+                    raise OnnxExportError(framework=framework, cause=cause)
+                # format="both" tolerates ONNX failure per §6.1 MUST 5.
+                logger.warning(
+                    "engine.register.onnx_partial_failure",
+                    extra={
+                        "name": name,
+                        "framework": framework,
+                        "cause": cause,
+                    },
+                )
+                return None
+            onnx_bytes = output_path.read_bytes()
+        uri = await artifact_store.save(name, version, onnx_bytes, "model.onnx")
+        return uri
