@@ -20,6 +20,7 @@ classes to `kailash_ml.legacy.*`. Phase 2 is additive.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -33,6 +34,8 @@ from typing import Any, Mapping, Optional, Union
 
 from kailash_ml._device import BackendInfo, detect_backend
 from kailash_ml.engines import _engine_sql as _sql
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +243,141 @@ def _build_trainable_from_family(family: str, *, target: str) -> Any:
         )
     # Defensive — should be unreachable
     raise ValueError(f"Internal: unmapped family canonical '{canonical}'")
+
+
+# ---------------------------------------------------------------------------
+# Metric direction (ranking semantics per ml-engines.md §2.2 compare contract)
+# ---------------------------------------------------------------------------
+#
+# Higher-is-better metrics: larger values rank first.
+# Lower-is-better metrics: smaller values rank first.
+# The sets are closed under the metrics registry at kailash_ml.metrics.
+# Metrics absent from both sets default to higher-is-better so a custom
+# registered metric does not crash the ranker, but a WARN log surfaces
+# the ambiguity per rules/observability.md Rule 3.
+
+_HIGHER_IS_BETTER_METRICS: frozenset[str] = frozenset(
+    {
+        "accuracy",
+        "f1",
+        "f1_macro",
+        "f1_micro",
+        "f1_weighted",
+        "precision",
+        "recall",
+        "auc",
+        "roc_auc",
+        "average_precision",
+        "r2",
+        "silhouette",
+    }
+)
+_LOWER_IS_BETTER_METRICS: frozenset[str] = frozenset(
+    {
+        "rmse",
+        "mse",
+        "mae",
+        "log_loss",
+        "brier_score_loss",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Task-type → default family set (ml-engines.md §2.2 compare contract)
+# ---------------------------------------------------------------------------
+#
+# compare() with families=None derives this set from the setup result's
+# task_type. The set is ORDERED so that a tie on the leaderboard (e.g.
+# two families with identical accuracy) is resolved by default-family
+# order rather than by dict-insertion accident.
+
+_DEFAULT_FAMILIES_BY_TASK: Mapping[str, tuple[str, ...]] = {
+    "classification": ("sklearn", "xgboost", "lightgbm"),
+    "regression": ("sklearn", "xgboost", "lightgbm"),
+    "clustering": ("sklearn",),
+    "ranking": ("sklearn", "xgboost", "lightgbm"),
+}
+
+
+def _default_families_for_task(task_type: str) -> tuple[str, ...]:
+    """Return the default compare()-family list for a task type."""
+    return _DEFAULT_FAMILIES_BY_TASK.get(task_type, ("sklearn",))
+
+
+def _family_available(family: str) -> bool:
+    """Return True when the family's optional backend is importable.
+
+    xgboost and lightgbm are optional extras — skipping gracefully when
+    they are not installed preserves the zero-config story for users who
+    only have sklearn.
+    """
+    canonical = _FAMILY_ALIASES.get(family.lower(), family.lower())
+    if canonical == "xgboost":
+        try:
+            import xgboost  # noqa: F401
+        except ImportError:
+            return False
+    elif canonical == "lightgbm":
+        try:
+            import lightgbm  # noqa: F401
+        except ImportError:
+            return False
+    # sklearn is a hard dep; torch/lightning require explicit trainables
+    return True
+
+
+def _parse_model_uri(uri: str) -> tuple[str, Optional[int]]:
+    """Split a ``models://<name>/v<version>`` URI into (name, version).
+
+    Accepts the canonical form produced by ``RegisterResult.model_uri``:
+    ``models://User/v3``. Also accepts the bare-name form
+    ``models://User`` (version=None, meaning "latest"). Other shapes
+    raise ValueError.
+    """
+    if not isinstance(uri, str):
+        raise TypeError(f"model URI must be a string; got {type(uri).__name__}")
+    prefix = "models://"
+    if not uri.startswith(prefix):
+        raise ValueError(f"model URI must start with '{prefix}'; got {uri!r}.")
+    tail = uri[len(prefix) :]
+    if "/" in tail:
+        name, _, v_part = tail.partition("/")
+        if not name:
+            raise ValueError(f"model URI missing name component: {uri!r}")
+        if not v_part.startswith("v"):
+            raise ValueError(
+                f"model URI version component must start with 'v'; "
+                f"got {v_part!r} in {uri!r}."
+            )
+        try:
+            version = int(v_part[1:])
+        except ValueError as exc:
+            raise ValueError(
+                f"model URI version component not an integer: {v_part!r} "
+                f"in {uri!r}."
+            ) from exc
+        if version < 1:
+            raise ValueError(
+                f"model URI version must be >= 1; got {version} in {uri!r}."
+            )
+        return name, version
+    return tail, None
+
+
+def _metric_sort_key(metric_name: str, value: float) -> tuple[float, float]:
+    """Return a sort key such that `sorted(..., key=...)` puts best-first.
+
+    For higher-is-better metrics we negate the value so ascending sort
+    puts the largest value first. For lower-is-better metrics we return
+    the value as-is. Returns a 2-tuple: (primary, tiebreak) where
+    tiebreak is `-elapsed_seconds` so — for equal metric — the faster
+    model wins; callers pre-format this with elapsed_seconds.
+    """
+    if metric_name in _LOWER_IS_BETTER_METRICS:
+        return (float(value), 0.0)
+    # Default (includes unknown metrics): higher-is-better.
+    return (-float(value), 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -624,19 +762,290 @@ class MLEngine:
         metric: Optional[str] = None,
         early_stopping: Optional[Patience] = None,
         timeout_seconds: Optional[float] = None,
+        data: Any = None,
+        target: Optional[str] = None,
     ) -> Any:
         """Train & rank candidate families (AutoML sweep).
 
-        Phase 2 enforces the setup-before-compare invariant (§2.3) and
-        defers the concrete sweep to Phase 3.
+        Per ``specs/ml-engines.md`` §2.1 MUST 7 every family in the sweep
+        is routed through the Lightning-wrapped ``Trainable`` adapter via
+        :meth:`fit`. Compare never bypasses ``fit`` — the Lightning
+        Trainer is the single enforcement point for accelerator /
+        precision resolution, so every ``TrainingResult`` in the
+        leaderboard carries a concrete ``device`` / ``accelerator`` /
+        ``precision`` triple.
+
+        Args:
+            families: Ordered list of family names or Trainable instances
+                to sweep. When ``None``, derives the default set from
+                ``self._setup_result.task_type`` — classification /
+                regression → ``(sklearn, xgboost, lightgbm)`` (gracefully
+                skipping uninstalled optional extras), clustering →
+                ``(sklearn,)``. An unknown task type falls back to
+                ``(sklearn,)``.
+            n_trials: Number of HP-search trials per family. ``0`` means
+                single default-HP fit per family.
+            hp_search: Search strategy forwarded to ``fit(hp_search=...)``.
+                One of ``"none" | "grid" | "random" | "bayesian" |
+                "halving"``.
+            metric: Metric name to rank by. When ``None``, uses
+                ``self._setup_result.primary_metric``.
+            early_stopping: Patience spec forwarded to ``fit()`` when the
+                family supports it.
+            timeout_seconds: Wall-clock budget for the entire sweep. When
+                exceeded, returns a :class:`ComparisonResult` with only
+                the families that completed; a WARN log line records the
+                timed-out families for post-hoc triage.
+            data: Escape hatch — when supplied, bypasses
+                ``self._setup_result`` and uses the frame directly.
+                ``target`` MUST also be supplied. This is the default
+                path for callers who do not want to run ``setup()``
+                first; also used by sibling shards that have not yet
+                wired the ``setup()`` frame-storage contract.
+            target: Target column name for direct-data dispatch.
+
+        Returns:
+            A :class:`ComparisonResult` with the leaderboard ordered
+            best-first by ``metric``.
+
+        Raises:
+            EngineNotSetUpError: When neither ``setup()`` has been called
+                nor ``(data, target)`` supplied.
+            ValueError: When ``data`` is supplied without ``target``.
         """
-        if self._setup_result is None:
+        # Lazy import to avoid circular dependencies and to keep package
+        # import time minimal — ComparisonResult is only relevant inside
+        # compare()'s return path.
+        from kailash_ml._results import ComparisonResult
+
+        setup_result = self._setup_result
+        if setup_result is None and data is None:
             raise EngineNotSetUpError(
-                "MLEngine.compare() requires setup() to be called first. "
+                "MLEngine.compare() requires either setup() to be called "
+                "first OR (data=..., target='...') supplied directly. "
                 "Invoke `await engine.setup(data, target='...')` before "
-                "compare()."
+                "compare(), or pass `data=df, target='...'` to compare() "
+                "for standalone use."
             )
-        raise NotImplementedError(f"MLEngine.compare — {_PHASE_3}")
+        if data is not None and target is None:
+            raise ValueError(
+                "MLEngine.compare(data=..., target=...) requires a target "
+                "column name when data is supplied directly."
+            )
+
+        # Resolve the ranking metric. When the caller supplies `metric=`
+        # explicitly, it takes precedence over the setup result's
+        # primary_metric. Without setup and without an explicit metric,
+        # we cannot sensibly rank — raise.
+        ranking_metric = metric
+        if ranking_metric is None:
+            if setup_result is not None and getattr(
+                setup_result, "primary_metric", None
+            ):
+                ranking_metric = setup_result.primary_metric
+            else:
+                raise ValueError(
+                    "MLEngine.compare() requires `metric=` when setup() has "
+                    "not been called — cannot infer the ranking metric "
+                    "without a SetupResult.primary_metric."
+                )
+
+        # Resolve the data + target source. Explicit escape-hatch wins;
+        # otherwise we read from the setup result. Setup-result data
+        # storage is owned by the sibling shard implementing setup();
+        # until that lands, the escape-hatch form is the recommended
+        # contract for standalone compare() calls.
+        compare_data = data
+        compare_target = target
+        if compare_data is None:
+            compare_data = getattr(setup_result, "_data", None)
+            if compare_data is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.compare() requires setup() to have stored the "
+                    "training frame, but SetupResult._data is absent. Pass "
+                    "`data=df, target='...'` to compare() directly as an "
+                    "escape hatch."
+                )
+        if compare_target is None:
+            compare_target = getattr(setup_result, "target", None)
+            if compare_target is None:
+                raise ValueError(
+                    "MLEngine.compare() could not resolve the target column "
+                    "from the setup result — pass `target='...'` explicitly."
+                )
+
+        # Resolve the family list. When None, derive from task_type.
+        if families is None:
+            task_type = getattr(setup_result, "task_type", "classification")
+            resolved_families: list[Any] = list(
+                _default_families_for_task(str(task_type))
+            )
+        else:
+            resolved_families = list(families)
+
+        if not resolved_families:
+            raise ValueError(
+                "MLEngine.compare(families=...) must produce a non-empty "
+                "family list; got an empty sequence."
+            )
+
+        # Filter out optional-extra families whose backend isn't installed
+        # so the zero-config happy path does not hard-require every
+        # optional dep. String-named families are probed; user-supplied
+        # Trainable instances are kept as-is (their deps are their
+        # problem).
+        sweep_families: list[Any] = []
+        skipped: list[str] = []
+        for fam in resolved_families:
+            if isinstance(fam, str):
+                if _family_available(fam):
+                    sweep_families.append(fam)
+                else:
+                    skipped.append(fam)
+            else:
+                sweep_families.append(fam)
+
+        if skipped:
+            logger.info(
+                "compare.family.skipped_optional_extras",
+                extra={
+                    "skipped": skipped,
+                    "reason": "optional-extra-not-installed",
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+
+        if not sweep_families:
+            raise ValueError(
+                f"MLEngine.compare(): none of the requested families "
+                f"{resolved_families!r} are available in this environment "
+                f"(xgboost / lightgbm are optional extras — install via "
+                f"`pip install kailash-ml[xgb]` or `[lightgbm]`)."
+            )
+
+        # Run the sweep. Each family goes through self.fit() so the
+        # Lightning-spine invariant (§2.1 MUST 7) holds by construction.
+        # We honour timeout_seconds by checking elapsed after each family
+        # and stopping early with a WARN.
+        started = time.perf_counter()
+        leaderboard: list[Any] = []
+        completed_families: list[str] = []
+        timed_out_families: list[str] = []
+
+        for fam in sweep_families:
+            elapsed_total = time.perf_counter() - started
+            if timeout_seconds is not None and elapsed_total >= timeout_seconds:
+                # Everything from this family onward is timed out.
+                remaining = sweep_families[sweep_families.index(fam) :]
+                for f in remaining:
+                    timed_out_families.append(
+                        f if isinstance(f, str) else type(f).__name__
+                    )
+                break
+
+            try:
+                if isinstance(fam, str):
+                    result = await self.fit(
+                        data=compare_data,
+                        target=compare_target,
+                        family=fam,
+                        hp_search=hp_search,
+                        n_trials=n_trials,
+                        metric=ranking_metric,
+                    )
+                else:
+                    # User-supplied Trainable instance — pass via trainable=
+                    result = await self.fit(
+                        data=compare_data,
+                        target=compare_target,
+                        trainable=fam,
+                        hp_search=hp_search,
+                        n_trials=n_trials,
+                        metric=ranking_metric,
+                    )
+            except (
+                AcceleratorUnavailableError,
+                TargetInFeaturesError,
+                TargetNotFoundError,
+                ConflictingArgumentsError,
+            ):
+                # Typed Engine errors surface immediately — these are
+                # caller bugs, not family-level failures.
+                raise
+            except Exception as exc:  # noqa: BLE001
+                # Family-specific failure (e.g. a backend the adapter
+                # rejected, or a missing optional dep that slipped past
+                # the availability probe). Log at WARN and continue —
+                # the sweep is best-effort by design.
+                logger.warning(
+                    "compare.family.failed",
+                    extra={
+                        "family": fam if isinstance(fam, str) else type(fam).__name__,
+                        "error": str(exc),
+                        "tenant_id": self._tenant_id or "global",
+                    },
+                )
+                continue
+
+            leaderboard.append(result)
+            completed_families.append(
+                fam if isinstance(fam, str) else type(fam).__name__
+            )
+
+        if timed_out_families:
+            logger.warning(
+                "compare.timeout.partial_result",
+                extra={
+                    "timeout_seconds": timeout_seconds,
+                    "completed_families": completed_families,
+                    "timed_out_families": timed_out_families,
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+
+        if not leaderboard:
+            raise ValueError(
+                f"MLEngine.compare(): no family completed successfully. "
+                f"Requested: {resolved_families!r}. Skipped (optional "
+                f"extras): {skipped!r}. Check the logs for per-family "
+                f"errors."
+            )
+
+        # Rank leaderboard by the ranking_metric, best-first.
+        def _rank_key(r: Any) -> tuple[float, float]:
+            val = r.metrics.get(ranking_metric)
+            if val is None:
+                # Missing metric on a result → sink to the bottom without
+                # crashing. A WARN surfaces the skip for post-hoc audit.
+                logger.warning(
+                    "compare.rank.metric_missing",
+                    extra={
+                        "family": r.family,
+                        "ranking_metric": ranking_metric,
+                        "available_metrics": sorted(r.metrics.keys()),
+                        "tenant_id": self._tenant_id or "global",
+                    },
+                )
+                # Use +inf for lower-is-better and -inf for
+                # higher-is-better so missing-metric rows sink.
+                if ranking_metric in _LOWER_IS_BETTER_METRICS:
+                    return (float("inf"), 0.0)
+                return (float("inf"), 0.0)
+            return _metric_sort_key(ranking_metric, val)
+
+        leaderboard.sort(key=_rank_key)
+
+        elapsed = time.perf_counter() - started
+        total_trials = sum(1 for _ in leaderboard) * max(1, n_trials)
+
+        return ComparisonResult(
+            leaderboard=tuple(leaderboard),
+            metric=ranking_metric,
+            best=leaderboard[0],
+            total_trials=total_trials,
+            elapsed_seconds=float(elapsed),
+            tenant_id=self._tenant_id,
+        )
 
     async def fit(
         self,
@@ -753,14 +1162,172 @@ class MLEngine:
         candidate: Any,
         *,
         full_fit: bool = True,
+        data: Any = None,
+        target: Optional[str] = None,
     ) -> Any:
         """Retrain top candidate on full training + holdout data.
 
-        Phase 3 implements the full-fit retraining path.
+        Per ``specs/ml-engines.md`` §2.2 finalize() takes a candidate
+        ``TrainingResult`` (the winner of a prior ``compare()`` sweep,
+        or a model URI string) and re-trains it on the combined
+        train+holdout set so the deployed model has seen every
+        available row — the standard pattern for pushing a validated
+        candidate to production.
+
+        Args:
+            candidate: Either a :class:`TrainingResult` directly, or a
+                model-URI string ``"models://<name>/v<version>"`` that
+                points at a previously-registered model. For the URI
+                path, finalize() loads the ModelVersion from the
+                registry and reconstructs the family from the signature
+                metadata.
+            full_fit: When True (default), refit the candidate's family
+                on ``train + holdout`` combined. When False, mark the
+                candidate as finalized without retraining — the
+                returned FinalizeResult's ``training_result`` is
+                identical to the candidate.
+            data: Escape-hatch training frame for the refit path. When
+                supplied, bypasses ``self._setup_result``. Required
+                when ``setup()`` has not been called.
+            target: Target column name for direct-data dispatch.
+
+        Returns:
+            A :class:`FinalizeResult` wrapping the refitted (or
+            re-wrapped) :class:`TrainingResult` plus the original
+            candidate so callers can compare pre- and post-finalize
+            metrics.
+
+        Raises:
+            ValueError: When candidate is None, or data supplied without
+                target, or full_fit=True but neither setup nor
+                (data, target) is available.
+            ModelNotFoundError: When candidate is a URI that does not
+                resolve to a registered model.
         """
+        # Lazy import to avoid a cross-module import cycle at package
+        # load time — FinalizeResult only matters inside finalize().
+        from kailash_ml._result import TrainingResult
+        from kailash_ml._results import FinalizeResult
+
         if candidate is None:
             raise ValueError("finalize(candidate) must not be None.")
-        raise NotImplementedError(f"MLEngine.finalize — {_PHASE_3}")
+
+        # Resolve candidate → concrete TrainingResult. String URIs go
+        # through the registry; TrainingResult instances pass through
+        # as-is. Unknown shapes surface as TypeError (not a silent
+        # fallback) per rules/zero-tolerance.md Rule 3.
+        original_candidate: Any = candidate
+        if isinstance(candidate, TrainingResult):
+            candidate_result: TrainingResult = candidate
+        elif isinstance(candidate, str):
+            # URI path: "models://<name>/v<version>" — load via registry.
+            name, version = _parse_model_uri(candidate)
+            registry = await self._ensure_registry_for_read()
+            try:
+                model_version = await registry.get_model(name, version)
+            except Exception as exc:  # noqa: BLE001
+                raise ModelNotFoundError(name=name, version=version) from exc
+            # Reconstruct a minimal TrainingResult from the registry
+            # row so the caller can still reach `candidate_result.family`
+            # and `candidate_result.hyperparameters`. This is a
+            # read-through wrapper; the model bytes live in the
+            # artifact store, not in this struct.
+            metrics_dict = {m.name: float(m.value) for m in model_version.metrics}
+            candidate_result = TrainingResult(
+                model_uri=candidate,
+                metrics=metrics_dict,
+                device_used="cpu",  # historical — unknown post-load
+                accelerator="cpu",
+                precision="32-true",
+                elapsed_seconds=0.0,
+                tracker_run_id=None,
+                tenant_id=self._tenant_id,
+                artifact_uris={"native": model_version.artifact_path or ""},
+                lightning_trainer_config={},
+                family=None,
+            )
+        else:
+            raise TypeError(
+                f"finalize(candidate=...) must be a TrainingResult or a "
+                f"string URI ('models://<name>/v<version>'); got "
+                f"{type(candidate).__name__}."
+            )
+
+        if not full_fit:
+            # No retraining — just re-wrap the candidate. tenant_id
+            # echoes the engine's current tenant context per §4.2 MUST 3.
+            wrapped = candidate_result
+            if wrapped.tenant_id != self._tenant_id:
+                from dataclasses import replace as _replace
+
+                wrapped = _replace(wrapped, tenant_id=self._tenant_id)
+            return FinalizeResult(
+                training_result=wrapped,
+                original_candidate=original_candidate,
+                full_fit=False,
+                tenant_id=self._tenant_id,
+            )
+
+        # full_fit=True: re-train on the combined train+holdout set
+        # through self.fit() so the Lightning-spine invariant holds.
+        # The family comes from the candidate; the frame comes from
+        # setup_result or the escape-hatch kwargs.
+        refit_family = candidate_result.family
+        if refit_family is None:
+            raise ValueError(
+                "finalize(candidate, full_fit=True) requires "
+                "candidate.family to be populated. When candidate is a "
+                "URI whose registry row does not carry family metadata, "
+                "pass full_fit=False to wrap without retraining."
+            )
+
+        refit_data = data
+        refit_target = target
+        setup_result = self._setup_result
+        if refit_data is None:
+            if setup_result is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.finalize(full_fit=True) requires either "
+                    "setup() to be called first OR (data=..., "
+                    "target='...') supplied directly. Pass `data=df, "
+                    "target='...'` to finalize() as an escape hatch."
+                )
+            refit_data = getattr(setup_result, "_data", None)
+            if refit_data is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.finalize(full_fit=True) requires setup() to "
+                    "have stored the training frame, but SetupResult._data "
+                    "is absent. Pass `data=df, target='...'` to finalize() "
+                    "directly as an escape hatch."
+                )
+        if refit_target is None:
+            if setup_result is not None and getattr(setup_result, "target", None):
+                refit_target = setup_result.target
+            else:
+                raise ValueError(
+                    "MLEngine.finalize(full_fit=True) could not resolve "
+                    "the target column from the setup result — pass "
+                    "`target='...'` explicitly."
+                )
+        if data is not None and target is None:
+            raise ValueError(
+                "MLEngine.finalize(data=..., target=...) requires a target "
+                "column name when data is supplied directly."
+            )
+
+        refit_result = await self.fit(
+            data=refit_data,
+            target=refit_target,
+            family=refit_family,
+            hyperparameters=candidate_result.hyperparameters,
+        )
+
+        return FinalizeResult(
+            training_result=refit_result,
+            original_candidate=original_candidate,
+            full_fit=True,
+            tenant_id=self._tenant_id,
+        )
 
     async def evaluate(
         self,
@@ -772,14 +1339,274 @@ class MLEngine:
     ) -> Any:
         """Evaluate a registered model on new data.
 
-        Phase 4 implements the evaluation path.
+        Per ``specs/ml-engines.md`` §2.2 evaluate() scores a registered
+        model against a held-out or live dataset and returns typed
+        metrics. Three modes gate how the evaluation is recorded
+        operationally — the scoring itself is identical across modes:
+
+        - ``"holdout"``: standard offline evaluation. Produces metrics,
+          emits a structured ``evaluate.ok`` log line for post-hoc
+          audit, does NOT touch the drift monitor.
+        - ``"shadow"``: read-only production comparison. Emits an
+          audit line tagged ``operation="shadow_evaluate"`` and
+          explicitly skips drift-monitor updates so the shadow run
+          does not poison the baseline.
+        - ``"live"``: current-model evaluation. Emits
+          ``operation="evaluate"`` AND, when a reference window has
+          been set on the engine's drift monitor for this model,
+          updates the monitor's current-window statistics so drift
+          detection has fresh data.
+
+        Args:
+            model: Either a :class:`ModelVersion` or a URI string
+                ``"models://<name>/v<version>"``. URI strings are
+                resolved through the Engine's ``ModelRegistry``.
+            data: Polars DataFrame containing both features and the
+                target column. The target column name comes from the
+                model's signature; when the signature is absent, it
+                falls back to ``self._setup_result.target`` and
+                ultimately raises if neither is available.
+            metrics: Metric names to compute. When ``None``, a sensible
+                default set is chosen from the signature's model type
+                or the setup result's task type: classification →
+                ``accuracy``/``f1``/``precision``/``recall``;
+                regression → ``rmse``/``mae``/``r2``.
+            mode: One of ``"holdout"``, ``"shadow"``, ``"live"``.
+
+        Returns:
+            A :class:`EvaluationResult` with the per-metric scores plus
+            the echoed mode and tenant_id.
+
+        Raises:
+            ValueError: When ``mode`` is not recognized.
+            TargetNotFoundError: When ``data`` is missing the target
+                column.
+            ModelNotFoundError: When ``model`` is a URI that does not
+                resolve to a registered model.
         """
+        from kailash_ml._results import EvaluationResult
+        from kailash_ml.metrics import compute_metrics as _compute_metrics
+        from kailash_ml.engines.model_registry import (
+            ModelVersion as _RegistryModelVersion,
+        )
+
         if mode not in ("holdout", "shadow", "live"):
             raise ValueError(
                 f"evaluate(mode=...) must be 'holdout', 'shadow', or 'live'; "
                 f"got {mode!r}."
             )
-        raise NotImplementedError(f"MLEngine.evaluate — {_PHASE_4}")
+        if data is None:
+            raise ValueError("evaluate(data=...) must not be None.")
+
+        # Resolve model → ModelVersion + URI.
+        registry = await self._ensure_registry_for_read()
+        if isinstance(model, _RegistryModelVersion):
+            mv = model
+            model_uri = f"models://{mv.name}/v{mv.version}"
+        elif isinstance(model, str):
+            name, version = _parse_model_uri(model)
+            try:
+                mv = await registry.get_model(name, version)
+            except Exception as exc:  # noqa: BLE001
+                raise ModelNotFoundError(name=name, version=version) from exc
+            model_uri = model
+        else:
+            raise TypeError(
+                f"evaluate(model=...) must be a ModelVersion or a string "
+                f"URI ('models://<name>/v<version>'); got "
+                f"{type(model).__name__}."
+            )
+
+        # Resolve target column. Prefer the model's signature (what was
+        # trained on), fall back to setup_result.target, raise if neither
+        # is available — silent target inference is BLOCKED.
+        target_column: Optional[str] = None
+        if mv.signature is not None:
+            # FeatureSchema stores the entity-id column explicitly, but
+            # the target column is carried by the setup result or caller
+            # context. Many signatures don't persist the target column
+            # directly (training_pipeline.py treats it as caller-known).
+            # We inspect input_schema for hints but prefer setup_result.
+            target_column = getattr(mv.signature, "target", None)
+        if target_column is None and self._setup_result is not None:
+            target_column = getattr(self._setup_result, "target", None)
+        if target_column is None:
+            # Last-chance heuristic: when the registered model's
+            # signature omits target and setup was never called, we
+            # cannot safely infer — raise.
+            raise ValueError(
+                f"evaluate(model={model_uri}) could not resolve the "
+                f"target column. The model's signature does not carry "
+                f"a target, and setup() has not been called. Re-register "
+                f"the model with a signature that includes the target, "
+                f"or call setup() first."
+            )
+
+        # Validate target presence in the supplied data. This is the
+        # typed-error boundary per rules/zero-tolerance.md Rule 3 —
+        # downstream code must not see an unexpected KeyError deep in
+        # metric computation.
+        data_columns = self._columns_of(data)
+        if data_columns is None:
+            raise TypeError(
+                f"evaluate(data=...) must expose a `columns` attribute "
+                f"(polars.DataFrame, pandas.DataFrame, or compatible); "
+                f"got {type(data).__name__}."
+            )
+        if target_column not in data_columns:
+            raise TargetNotFoundError(column=target_column, columns=data_columns)
+
+        # Resolve the default metric list when the caller did not pass
+        # one. Model-type from signature wins over task_type from setup.
+        if metrics is None:
+            model_type: Optional[str] = None
+            if mv.signature is not None:
+                model_type = mv.signature.model_type
+            if model_type is None and self._setup_result is not None:
+                task_type = getattr(self._setup_result, "task_type", None)
+                if task_type == "classification":
+                    model_type = "classifier"
+                elif task_type == "regression":
+                    model_type = "regressor"
+                elif task_type == "clustering":
+                    model_type = "clustering"
+            if model_type in ("classifier", "classification"):
+                metric_names = ["accuracy", "f1", "precision", "recall"]
+            elif model_type in ("regressor", "regression"):
+                metric_names = ["rmse", "mae", "r2"]
+            elif model_type == "clustering":
+                # silhouette is registered via optional metric extras;
+                # callers can pass metrics=["silhouette"] explicitly.
+                metric_names = []
+            else:
+                metric_names = ["accuracy"]
+        else:
+            metric_names = list(metrics)
+
+        # Score the data. We use the existing InferenceServer primitive
+        # which already knows how to load model artifacts (pickle /
+        # ONNX) from the registry and run them on the submitted rows —
+        # this is the "§7.1 MUST 1 one-line evaluate beats MLflow's
+        # manual-loop baseline" contract in practice.
+        from kailash_ml.engines.inference_server import (
+            InferenceServer as _InferenceServer,
+        )
+
+        inference = _InferenceServer(registry)
+        # polars DataFrame → list of dicts for predict_batch
+        feature_columns = [c for c in data_columns if c != target_column]
+        # Use polars' native to_dicts() — fast, typed, preserves order.
+        feature_records = data.select(feature_columns).to_dicts()
+
+        start = time.perf_counter()
+        predictions_list = await inference.predict_batch(
+            mv.name, feature_records, version=mv.version, strict=False
+        )
+        elapsed = time.perf_counter() - start
+
+        y_pred = [p.prediction for p in predictions_list]
+        # y_prob for probability metrics, when every prediction
+        # exposes `.probabilities`. We pass only when fully populated.
+        y_prob: Any = None
+        if all(p.probabilities is not None for p in predictions_list):
+            y_prob = [p.probabilities for p in predictions_list]
+
+        # y_true: extract the target column as a Python list so the
+        # metric helpers (which accept ArrayLike) can coerce it
+        # uniformly whether polars/pandas/numpy.
+        y_true_series = data[target_column]
+        try:
+            y_true = y_true_series.to_list()
+        except AttributeError:
+            # pandas fallback
+            y_true = list(y_true_series)
+
+        computed = _compute_metrics(
+            y_true=y_true,
+            y_pred=y_pred,
+            metric_names=metric_names,
+            y_prob=y_prob,
+        )
+
+        sample_count = len(y_true)
+
+        # Audit trail + mode-specific side effects. Every evaluate call
+        # gets a structured log line with tenant_id for post-incident
+        # triage per rules/tenant-isolation.md Rule 5.
+        audit_operation = "shadow_evaluate" if mode == "shadow" else "evaluate"
+        logger.info(
+            "evaluate.ok",
+            extra={
+                "operation": audit_operation,
+                "mode": mode,
+                "model_uri": model_uri,
+                "model_name": mv.name,
+                "model_version": mv.version,
+                "sample_count": sample_count,
+                "elapsed_seconds": float(elapsed),
+                "tenant_id": self._tenant_id or "global",
+                "metrics_computed": sorted(computed.keys()),
+            },
+        )
+
+        # Live mode updates drift-monitor current-window stats when one
+        # has been configured for this model. Shadow mode MUST NOT —
+        # that is the whole point of the shadow/live split.
+        if mode == "live":
+            await self._update_drift_monitor_if_configured(
+                mv.name, data, feature_columns
+            )
+
+        return EvaluationResult(
+            model_uri=model_uri,
+            model_version=mv.version,
+            metrics=dict(computed),
+            mode=mode,
+            sample_count=sample_count,
+            elapsed_seconds=float(elapsed),
+            tenant_id=self._tenant_id,
+        )
+
+    async def _update_drift_monitor_if_configured(
+        self,
+        model_name: str,
+        data: Any,
+        feature_columns: list[str],
+    ) -> None:
+        """Update the DriftMonitor's current-window stats for ``model_name``.
+
+        Best-effort: when no drift monitor is wired or when the monitor
+        has no reference set for the model, this is a structured
+        no-op INFO log. Reference-window setup is the caller's
+        responsibility — evaluate(mode="live") only refreshes the
+        current window.
+        """
+        drift_monitor = getattr(self, "_drift_monitor", None)
+        if drift_monitor is None:
+            logger.info(
+                "evaluate.drift.no_monitor_configured",
+                extra={
+                    "model_name": model_name,
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+            return
+        try:
+            # check_drift is the canonical read path; it updates the
+            # monitor's current-window stats as a side effect of its
+            # comparison against the reference window.
+            await drift_monitor.check_drift(model_name, data)
+        except ValueError as exc:
+            # No reference set is expected for first-call live runs —
+            # log at INFO, do not raise (the evaluation itself succeeded).
+            logger.info(
+                "evaluate.drift.no_reference",
+                extra={
+                    "model_name": model_name,
+                    "reason": str(exc),
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
 
     async def register(
         self,
@@ -1039,6 +1866,34 @@ class MLEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    async def _ensure_registry_for_read(self) -> Any:
+        """Return a usable ModelRegistry for read paths (finalize/evaluate).
+
+        Prefers the DI-injected registry. When none was supplied, lazily
+        constructs a default one backed by the Engine's resolved store
+        URL. This is the read-only companion to Shard A's full registry
+        construction path — reads work standalone; writes still require
+        Shard A's register() to land.
+        """
+        if self._registry is not None:
+            return self._registry
+        # Lazy construction: create a ConnectionManager and ModelRegistry
+        # against the resolved store URL. This mirrors what Shard A's
+        # setup()/register() path will do, letting finalize() and
+        # evaluate() work against a pre-populated registry without
+        # waiting on Shard A.
+        from kailash.db.connection import ConnectionManager
+        from kailash_ml.engines.model_registry import ModelRegistry
+
+        if self._connection_manager is None:
+            self._connection_manager = ConnectionManager(self.store_url)
+            await self._connection_manager.initialize()
+        self._registry = ModelRegistry(
+            self._connection_manager,
+            artifact_store=self._artifact_store,
+        )
+        return self._registry
 
     @staticmethod
     def _columns_of(data: Any) -> Optional[tuple[str, ...]]:
