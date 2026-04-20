@@ -5,6 +5,22 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] — 2026-04-20 — InterpretabilityDiagnostics adapter for open-weight LLM analysis (#567 PR#4 of 7)
+
+### Added
+
+- **`kaizen.interpretability.InterpretabilityDiagnostics` adapter (#567 PR#4 of 7)**: post-hoc interpretability session for local open-weight language models (Llama / Gemma / Phi / Mistral). Satisfies the cross-SDK `kailash.diagnostics.protocols.Diagnostic` Protocol (`run_id` + `__enter__` + `__exit__` + `report()`), so `isinstance(diag, Diagnostic)` holds at runtime for downstream telemetry pipelines. Four analyses expose attention heatmaps (plotly), logit-lens top-`k` predictions per layer (polars DataFrame), scikit-learn linear probes on last-token hidden states, and optional Gemma-Scope SAE feature activations via `sae-lens`. Every per-analysis buffer uses `deque(maxlen=window)` for bounded-memory discipline; `close()` on context exit releases the model and clears CUDA / MPS caches.
+- **New `[interpretability]` extra**: `transformers>=4.40,<5.0` + `sae-lens>=3.0`. Plotting methods raise a loud `ImportError` naming the extra if plotly / matplotlib is absent per `rules/dependencies.md` "Optional Extras with Loud Failure". Base-install construction + API-only refusal paths run without the extra installed.
+- **`kaizen.interpretability` facade module**: public surface `from kaizen.interpretability import InterpretabilityDiagnostics`. Tier 2 wiring test asserts facade import per `rules/orphan-detection.md` §1.
+- **`specs/kaizen-interpretability.md`** — new spec file documenting Protocol conformance contract, public API, VRAM / memory budget guidance, 6 security threats with mitigations, Tier 1 + Tier 2 testing contract, MLFP attribution history. Referenced from `specs/_index.md`.
+
+### Security
+
+- **Local-files-only default** — `from_pretrained(local_files_only=True)` is the default so a diagnostic call NEVER silently downloads multi-GB weights over the network. Operators pass `allow_download=True` explicitly to opt in.
+- **No hardcoded HF token** — auth token read from `HF_TOKEN` / `HUGGINGFACE_TOKEN` env vars via `os.environ.get` only.
+- **API-only refusal** — `gpt-*` / `o1-*` / `o3-*` / `o4-*` / `claude-*` / `gemini-*` / `deepseek-*` model prefixes are refused with a canonical `{"mode": "not_applicable"}` payload rather than fabricating interpretability readings. Honest failure per `rules/zero-tolerance.md` Rule 2.
+- **No raw prompt text in logs** — structured logs carry `interp_run_id` correlation IDs only; `interp_*`-prefixed fields avoid the LogRecord attribute-collision hazard documented in `rules/observability.md` MUST Rule 9.
+
 ## [2.7.5] - 2026-04-19 — LlmClient.embed() + trust migration fix + Python 3.14 compatibility (#462 #499 #477)
 
 ### Added
