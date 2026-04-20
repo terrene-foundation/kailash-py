@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.16.0"
+version = "0.17.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -89,6 +89,15 @@ agents = [
 ]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
+# RAG evaluation backends for kailash_ml.diagnostics.RAGDiagnostics.
+# Without [rag], evaluate() falls back to a pluggable JudgeCallable +
+# deterministic heuristic; ragas_scores() / trulens_scores() raise
+# ImportError naming this extra per rules/dependencies.md.
+rag = [
+    "ragas>=0.1",
+    "trulens-eval>=0.20",
+    "datasets>=2.0",
+]
 # xgboost is a base dependency as of 0.9.1 -- it ships with CUDA built in
 # (xgboost>=2.0) and falls back to CPU automatically. The [xgb] alias remains
 # for backward-compat with any pre-existing `pip install kailash-ml[xgb]`
