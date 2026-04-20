@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.7.5"
+version = "2.8.0"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -85,6 +85,15 @@ bedrock = [
 # is BLOCKED by zero-tolerance Rule 4.
 vertex = [
     "google-auth>=2.0",
+]
+# Open-weight LLM interpretability diagnostics (#567 PR#4 of 7).
+# InterpretabilityDiagnostics uses transformers for AutoModel+tokenizer,
+# sae-lens for pre-trained Gemma-Scope SAE features. Plotting methods
+# also require plotly + matplotlib which are installed via these two
+# anchor deps' transitive trees.
+interpretability = [
+    "transformers>=4.40,<5.0",
+    "sae-lens>=3.0",
 ]
 
 [project.urls]
