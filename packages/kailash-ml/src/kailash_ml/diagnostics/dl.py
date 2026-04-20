@@ -50,16 +50,13 @@ import math
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
 import polars as pl
 
 if TYPE_CHECKING:  # pragma: no cover — typing-only imports
-    import plotly.graph_objects as go_types
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader
+    import plotly.graph_objects as go_types  # noqa: F401 — used in docstring examples
 
 logger = logging.getLogger(__name__)
 
@@ -794,9 +791,14 @@ class DLDiagnostics:
             val_x = []
             for ep in epochs["epoch"].to_list():
                 ep_batches = batches.filter(pl.col("epoch") == ep)
-                val_x.append(
-                    int(ep_batches["batch"].max()) if ep_batches.height else ep
-                )
+                # polars .max() can return None even on a non-empty frame
+                # (all-null column). Coalesce to the epoch index so the x-axis
+                # never receives None.
+                # The `batch` column is populated exclusively by _batch_idx (int);
+                # cast() is the narrow that polars' PythonLiteral union-return
+                # can't express at the type level.
+                max_batch = ep_batches["batch"].max() if ep_batches.height else None
+                val_x.append(int(cast(int, max_batch)) if max_batch is not None else ep)
             fig.add_trace(
                 go.Scatter(
                     x=val_x,
@@ -1181,7 +1183,7 @@ class DLDiagnostics:
             ValueError: If ``layer_name`` is not found in the model.
             RuntimeError: If the layer is unreachable from the forward path.
         """
-        torch, nn = _require_torch()
+        torch, _ = _require_torch()
         target_module: Optional[Any] = None
         for name, module in self.model.named_modules():
             if name == layer_name:
@@ -1326,8 +1328,11 @@ class DLDiagnostics:
             )
 
         torch, _ = _require_torch()
+        # Resolve to a concrete class so Pyright narrows out None before the
+        # call site at `optimizer_cls(model.parameters(), ...)` below.
         if optimizer_cls is None:
             optimizer_cls = torch.optim.SGD
+        assert optimizer_cls is not None  # narrowed for the type checker
 
         import copy as _copy
 
