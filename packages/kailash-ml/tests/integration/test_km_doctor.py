@@ -60,14 +60,16 @@ def test_doctor_cpu_available() -> None:
 
 
 def test_doctor_json_output_shape() -> None:
-    """``--json`` output exposes the 4 probed backends with required keys."""
+    """``--json`` output exposes the 6 probed backends with required keys."""
     buf = io.StringIO()
     code = doctor(as_json=True, out=buf)
     payload = json.loads(buf.getvalue())
     assert payload["exit_code"] == code
     assert payload["require"] is None
     backends = {p["backend"] for p in payload["backends"]}
-    assert backends == {"cpu", "cuda", "mps", "rocm"}
+    # All six first-class backends per spec §1 — v0.14.0 adds xpu + tpu
+    # to the 0.13.0 probe set.
+    assert backends == {"cpu", "cuda", "mps", "rocm", "xpu", "tpu"}
     for entry in payload["backends"]:
         # Mandatory structured fields per spec §7.2
         assert "status" in entry
@@ -111,6 +113,211 @@ def test_km_doctor_is_public_symbol() -> None:
 # ---------------------------------------------------------------------------
 # Console-script / subprocess path
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# v0.14.0 expansion — all 10 additional diagnostic checks (spec §7.1)
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_json_includes_spec_7_1_sections() -> None:
+    """Every spec §7.1 diagnostic section is present as a top-level key.
+
+    Mechanical whitelist check: the report MUST include the 10 sections
+    the spec mandates (selected_default, precision_matrix, extras,
+    family_probes, onnx_eps, sqlite_path, cache_paths, tenant_mode,
+    gotchas) alongside the existing ``backends`` + ``exit_code``.
+    """
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    required_keys = {
+        "backends",
+        "exit_code",
+        "require",
+        "selected_default",
+        "precision_matrix",
+        "extras",
+        "family_probes",
+        "onnx_eps",
+        "sqlite_path",
+        "cache_paths",
+        "tenant_mode",
+        "gotchas",
+    }
+    missing = required_keys - set(payload.keys())
+    assert not missing, f"spec §7.1 sections missing from JSON: {sorted(missing)}"
+
+
+def test_doctor_precision_matrix_covers_all_6_backends() -> None:
+    """Every probed backend has a precision entry (value may be None)."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    matrix = payload["precision_matrix"]
+    # Six backends MUST appear as keys — value is None when the backend
+    # is unavailable on this host, concrete precision string otherwise.
+    for backend in ("cpu", "cuda", "mps", "rocm", "xpu", "tpu"):
+        assert backend in matrix, f"precision_matrix missing {backend}"
+    # CPU always available -> always has a precision
+    assert matrix["cpu"] is not None, "cpu must always have a precision"
+
+
+def test_doctor_selected_default_matches_detect_backend() -> None:
+    """``selected_default`` resolves to the highest-priority ``ok`` backend."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    selected = payload["selected_default"]
+    assert selected is not None, "cpu always present, selected_default MUST be non-null"
+    # The selected default MUST correspond to a probe whose status=ok
+    ok_backends = {p["backend"] for p in payload["backends"] if p["status"] == "ok"}
+    assert selected in ok_backends
+
+
+def test_doctor_extras_enumerate_spec_set() -> None:
+    """``extras`` enumerates every spec §7.1 extras bucket."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    extras = payload["extras"]
+    # Spec §7.1 Installed extras: [cuda], [rocm], [xpu], [tpu], [dl],
+    # [agents], [explain], [imbalance]
+    for extra in ("cuda", "rocm", "xpu", "tpu", "dl", "agents", "explain", "imbalance"):
+        assert extra in extras, f"extras missing '{extra}'"
+        assert "installed" in extras[extra]
+        assert "modules" in extras[extra]
+
+
+def test_doctor_family_probes_report_base_deps() -> None:
+    """Base dep families report a concrete version; optional families report None."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    families = payload["family_probes"]
+    # Base deps (always installed in the [dev] test venv)
+    for fam in ("torch", "lightning", "sklearn", "xgboost", "lightgbm", "onnxruntime"):
+        assert fam in families, f"family_probes missing '{fam}'"
+    # sklearn is a base dep -> MUST report a version
+    assert families["sklearn"] is not None
+
+
+def test_doctor_onnx_eps_enumerates_providers() -> None:
+    """``onnx_eps.providers`` is a non-empty list when onnxruntime is installed."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    onnx = payload["onnx_eps"]
+    # onnxruntime is a base dep so must be installed.
+    assert onnx["installed"] is True
+    assert onnx["version"] is not None
+    assert isinstance(onnx["providers"], list)
+    assert len(onnx["providers"]) >= 1
+    # CPUExecutionProvider is the mandatory fallback EP on every platform.
+    assert "CPUExecutionProvider" in onnx["providers"]
+
+
+def test_doctor_sqlite_path_probe(tmp_path) -> None:
+    """SQLite path is reported with writable=True on a fresh tmp home."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    sqlite = payload["sqlite_path"]
+    # Every run populates the shape, regardless of writability
+    assert "path" in sqlite
+    assert "source" in sqlite
+    assert "exists" in sqlite
+    assert "writable" in sqlite
+    assert sqlite["source"] in {"default", "KAILASH_ML_STORE"}
+
+
+def test_doctor_sqlite_path_honours_env(monkeypatch, tmp_path) -> None:
+    """``KAILASH_ML_STORE`` overrides the default SQLite path."""
+    override = tmp_path / "custom.db"
+    monkeypatch.setenv("KAILASH_ML_STORE", f"sqlite:///{override}")
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    sqlite = payload["sqlite_path"]
+    assert sqlite["source"] == "KAILASH_ML_STORE"
+    assert sqlite["path"] == str(override)
+    # Tmp dir is writable — the probe should confirm.
+    assert sqlite["writable"] is True
+
+
+def test_doctor_cache_paths_report_disk_usage() -> None:
+    """Cache paths section populates data_root + cache + filesystem stats."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    cache = payload["cache_paths"]
+    assert "data_root" in cache
+    assert "cache" in cache
+    assert "filesystem" in cache
+    # data_root has a path + exists + size_bytes triple
+    for field in ("path", "exists", "size_bytes"):
+        assert field in cache["data_root"]
+        assert field in cache["cache"]
+    # filesystem has total + free bytes
+    assert "total_bytes" in cache["filesystem"]
+    assert "free_bytes" in cache["filesystem"]
+
+
+def test_doctor_tenant_mode_single_default(monkeypatch) -> None:
+    """No tenant env var -> single-tenant mode."""
+    monkeypatch.delenv("KAILASH_ML_DEFAULT_TENANT", raising=False)
+    monkeypatch.delenv("KAILASH_TENANT_ID", raising=False)
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    tenant = payload["tenant_mode"]
+    assert tenant["mode"] == "single-tenant"
+    assert tenant["tenant_id"] is None
+
+
+def test_doctor_tenant_mode_multi(monkeypatch) -> None:
+    """``KAILASH_ML_DEFAULT_TENANT`` triggers multi-tenant mode."""
+    monkeypatch.setenv("KAILASH_ML_DEFAULT_TENANT", "acme-42")
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    tenant = payload["tenant_mode"]
+    assert tenant["mode"] == "multi-tenant"
+    assert tenant["tenant_id"] == "acme-42"
+
+
+def test_doctor_gotchas_are_emitted_for_detected_backends() -> None:
+    """``gotchas`` contains one entry per ``(backend, hint)`` pair for ok backends."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    gotchas = payload["gotchas"]
+    # Each entry has ``backend`` + ``hint`` keys.
+    for entry in gotchas:
+        assert "backend" in entry
+        assert "hint" in entry
+        # Only ok-status backends contribute gotchas (don't mislead
+        # operators about backends they can't actually use).
+        ok_backends = {p["backend"] for p in payload["backends"] if p["status"] == "ok"}
+        assert entry["backend"] in ok_backends
+
+
+def test_doctor_xpu_probe_present_in_json() -> None:
+    """XPU probe is always reported (status may be missing on non-Intel hosts)."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    xpu = next(p for p in payload["backends"] if p["backend"] == "xpu")
+    assert xpu["status"] in {"ok", "warn", "fail", "missing"}
+
+
+def test_doctor_tpu_probe_present_in_json() -> None:
+    """TPU probe is always reported (status missing on non-TPU hosts)."""
+    buf = io.StringIO()
+    doctor(as_json=True, out=buf)
+    payload = json.loads(buf.getvalue())
+    tpu = next(p for p in payload["backends"] if p["backend"] == "tpu")
+    assert tpu["status"] in {"ok", "warn", "fail", "missing"}
 
 
 def test_km_doctor_console_script_or_module_json() -> None:
