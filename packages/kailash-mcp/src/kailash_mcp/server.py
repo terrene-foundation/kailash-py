@@ -64,6 +64,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
+from kailash_mcp.advanced.features import ElicitationSystem
 from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
@@ -566,6 +567,93 @@ class MCPServer:
 
         # Transport instance (for WebSocket and other transports)
         self._transport = None
+
+        # ElicitationSystem — server-to-client interactive-input subsystem
+        # (MCP 2025-06-18 elicitation/create). Constructed without a bound
+        # send-callable; the send-half is bound via `_bind_elicitation_transport`
+        # when the transport is established. Exposed as a public attribute
+        # so tools can call `server.elicitation_system.request_input(...)`.
+        # This is the production call site required by
+        # rules/orphan-detection.md §1 for the ElicitationSystem manager.
+        self.elicitation_system: ElicitationSystem = ElicitationSystem()
+
+    def _bind_elicitation_transport(self) -> None:
+        """Bind the active transport's send-callable to the elicitation system.
+
+        Called from transport-startup paths (`_run_websocket` etc.) once
+        `self._transport` has been established. Idempotent — safe to call
+        multiple times if the transport reconnects.
+        """
+        if self._transport is None:
+            return
+        send_message = getattr(self._transport, "send_message", None)
+        if send_message is None or not callable(send_message):
+            logger.warning(
+                "elicitation.transport.unavailable",
+                extra={"transport_type": type(self._transport).__name__},
+            )
+            return
+        self.elicitation_system.bind_transport(send_message)
+        logger.info(
+            "elicitation.transport.bound",
+            extra={"transport_type": type(self._transport).__name__},
+        )
+
+    async def _route_server_initiated_response(
+        self, request_id: Any, message: Dict[str, Any]
+    ) -> bool:
+        """Route an inbound JSON-RPC response to its originating pending request.
+
+        Server-initiated JSON-RPC requests (elicitation/create today;
+        sampling/createMessage in the future) expect a matching response
+        from the client. This method inspects `self.elicitation_system._pending_requests`
+        and other pending-request registries, routing the response to the
+        appropriate subsystem.
+
+        Args:
+            request_id: `id` field of the inbound response.
+            message: Full inbound message dict (with `result` or `error`).
+
+        Returns:
+            True when a matching pending request existed and was resolved.
+            False when no pending request matched — caller should fall
+            through to the regular request dispatch.
+        """
+        rid = str(request_id)
+
+        # Check pending elicitation requests
+        if rid in self.elicitation_system._pending_requests:
+            if "error" in message:
+                # Treat as cancellation with the error message as reason
+                err = message.get("error", {})
+                reason = (
+                    err.get("message", "client error")
+                    if isinstance(err, dict)
+                    else "client error"
+                )
+                await self.elicitation_system.cancel_request(rid, reason=reason)
+                return True
+            result = message.get("result", {})
+            # MCP 2025-06-18 ElicitResult: { action: "accept"|"decline"|"cancel", content?: {...} }
+            if isinstance(result, dict):
+                action = result.get("action", "accept")
+                if action == "accept":
+                    content = result.get("content")
+                    # If no content envelope, fall back to treating the whole
+                    # result as the payload (older client shape).
+                    payload = content if content is not None else result
+                    await self.elicitation_system.provide_input(rid, payload)
+                    return True
+                # decline / cancel
+                await self.elicitation_system.cancel_request(
+                    rid, reason=f"client action={action}"
+                )
+                return True
+            # Non-dict result — deliver as-is
+            await self.elicitation_system.provide_input(rid, result)
+            return True
+
+        return False
 
     def _init_mcp(self):
         """Initialize FastMCP server."""
@@ -1694,6 +1782,12 @@ class MCPServer:
                 f"WebSocket server started on {self.websocket_host}:{self.websocket_port}"
             )
 
+            # Bind the transport's send-callable to the elicitation system
+            # so tools that call `server.elicitation_system.request_input(...)`
+            # can actually dispatch elicitation/create requests through the
+            # active client transport.
+            self._bind_elicitation_transport()
+
             # Set up subscription notification callback
             if self.subscription_manager:
                 await self.subscription_manager.initialize()
@@ -1727,6 +1821,27 @@ class MCPServer:
 
             # Log request
             logger.debug(f"WebSocket request from {client_id}: {method}")
+
+            # Route inbound JSON-RPC responses (no `method` field, have `id`
+            # and either `result` or `error`) to any pending server-initiated
+            # request. This covers elicitation/create responses per MCP
+            # 2025-06-18 and is the production call site required by
+            # rules/orphan-detection.md §1 for ElicitationSystem.
+            if (
+                not method
+                and request_id is not None
+                and (
+                    "result" in decompressed_request or "error" in decompressed_request
+                )
+            ):
+                handled = await self._route_server_initiated_response(
+                    request_id, decompressed_request
+                )
+                if handled:
+                    # Response routed to originating pending request; no
+                    # further handler response needed (this is the client
+                    # replying to US, not a client-initiated request).
+                    return {}
 
             # Route to appropriate handler
             if method == "initialize":
