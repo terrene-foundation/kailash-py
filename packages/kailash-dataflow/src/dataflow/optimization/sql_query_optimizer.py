@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from ..adapters.dialect import DialectManager
 from .workflow_analyzer import OptimizationOpportunity, PatternType, WorkflowNode
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,28 @@ class SQLDialect(Enum):
     MYSQL = "mysql"
     SQLITE = "sqlite"
     MSSQL = "mssql"
+
+
+# Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5, every
+# dynamic identifier in an advisory DDL string MUST route through
+# quote_identifier. MSSQL has no canonical helper yet in this SDK;
+# fall through to PostgreSQL quoting (double-quoted identifiers) as a
+# safe default.
+def _quote_for(dialect: "SQLDialect", name: str) -> str:
+    """Quote *name* for *dialect* with validation.
+
+    The emitted advisory string is both safe (validated against the
+    allowlist regex before interpolation) and directly executable
+    by the operator.
+    """
+    if dialect == SQLDialect.MYSQL:
+        helper = DialectManager.get_dialect("mysql")
+    elif dialect == SQLDialect.SQLITE:
+        helper = DialectManager.get_dialect("sqlite")
+    else:
+        # POSTGRESQL + MSSQL (MSSQL uses "" identifiers like PG)
+        helper = DialectManager.get_dialect("postgresql")
+    return helper.quote_identifier(name)
 
 
 @dataclass
@@ -356,26 +379,36 @@ SELECT * FROM (
         left_key = join_conditions.get("left_key", "join_key")
         right_key = join_conditions.get("right_key", "join_key")
 
+        # Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5,
+        # every dynamic identifier in an advisory DDL string MUST
+        # route through quote_identifier before interpolation.
+        table1_q = _quote_for(self.dialect, table1)
+        table2_q = _quote_for(self.dialect, table2)
+        left_key_q = _quote_for(self.dialect, left_key)
+        right_key_q = _quote_for(self.dialect, right_key)
+        idx1_q = _quote_for(self.dialect, f"idx_{table1}_{left_key}")
+        idx2_q = _quote_for(self.dialect, f"idx_{table2}_{right_key}")
+
         # Generate optimized join with proper indexing strategy
         optimized_sql = f"""
 -- Optimized join pattern with proper indexing
 -- Original nodes: {", ".join(opportunity.nodes_involved)}
 SELECT t1.*, t2.*
-FROM {table1} t1
-INNER JOIN {table2} t2 ON t1.{left_key} = t2.{right_key}
+FROM {table1_q} t1
+INNER JOIN {table2_q} t2 ON t1.{left_key_q} = t2.{right_key_q}
 WHERE t1.indexed_column = $1
   AND t2.indexed_column = $2;
 
 -- Recommended indexes:
--- CREATE INDEX {"CONCURRENTLY " if self.dialect == SQLDialect.POSTGRESQL else ""}idx_{table1}_{left_key} ON {table1}({left_key});
--- CREATE INDEX {"CONCURRENTLY " if self.dialect == SQLDialect.POSTGRESQL else ""}idx_{table2}_{right_key} ON {table2}({right_key});
+-- CREATE INDEX {"CONCURRENTLY " if self.dialect == SQLDialect.POSTGRESQL else ""}{idx1_q} ON {table1_q}({left_key_q});
+-- CREATE INDEX {"CONCURRENTLY " if self.dialect == SQLDialect.POSTGRESQL else ""}{idx2_q} ON {table2_q}({right_key_q});
         """.strip()
 
         # Generate proper index suggestions
         index_type = "CONCURRENTLY" if self.dialect == SQLDialect.POSTGRESQL else ""
         required_indexes = [
-            f"CREATE INDEX {index_type} idx_{table1}_{left_key} ON {table1}({left_key})".strip(),
-            f"CREATE INDEX {index_type} idx_{table2}_{right_key} ON {table2}({right_key})".strip(),
+            f"CREATE INDEX {index_type} {idx1_q} ON {table1_q}({left_key_q})".strip(),
+            f"CREATE INDEX {index_type} {idx2_q} ON {table2_q}({right_key_q})".strip(),
         ]
 
         return OptimizedQuery(
@@ -560,20 +593,36 @@ WHERE t1.indexed_column = $1
             # Use CONCURRENTLY for PostgreSQL, regular for others
             index_type = "CONCURRENTLY" if self.dialect == SQLDialect.POSTGRESQL else ""
 
+            # Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5:
+            # validate + quote every dynamic identifier before f-string interpolation.
+            primary_q = _quote_for(self.dialect, primary_table)
+            secondary_q = _quote_for(self.dialect, secondary_table)
+            left_q = _quote_for(self.dialect, left_key)
+            right_q = _quote_for(self.dialect, right_key)
+            idx_primary_q = _quote_for(self.dialect, f"idx_{primary_table}_{left_key}")
+            idx_secondary_q = _quote_for(
+                self.dialect, f"idx_{secondary_table}_{right_key}"
+            )
+
             indexes.append(
-                f"CREATE INDEX {index_type} idx_{primary_table}_{left_key} ON {primary_table}({left_key})".strip()
+                f"CREATE INDEX {index_type} {idx_primary_q} ON {primary_q}({left_q})".strip()
             )
             indexes.append(
-                f"CREATE INDEX {index_type} idx_{secondary_table}_{right_key} ON {secondary_table}({right_key})".strip()
+                f"CREATE INDEX {index_type} {idx_secondary_q} ON {secondary_q}({right_q})".strip()
             )
 
         group_by_fields = aggregate_info.get("group_by", [])
         if group_by_fields and tables:
             table = tables[0]
-            index_fields = ", ".join(group_by_fields)
             index_type = "CONCURRENTLY" if self.dialect == SQLDialect.POSTGRESQL else ""
+
+            table_q = _quote_for(self.dialect, table)
+            idx_group_q = _quote_for(self.dialect, f"idx_{table}_group_by")
+            index_cols_q = ", ".join(
+                _quote_for(self.dialect, f) for f in group_by_fields
+            )
             indexes.append(
-                f"CREATE INDEX {index_type} idx_{table}_group_by ON {table}({index_fields})".strip()
+                f"CREATE INDEX {index_type} {idx_group_q} ON {table_q}({index_cols_q})".strip()
             )
 
         return indexes

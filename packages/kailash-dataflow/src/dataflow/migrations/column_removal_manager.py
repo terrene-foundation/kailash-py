@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import asyncpg
 
+from ..adapters.dialect import DialectManager
 from .dependency_analyzer import (
     ConstraintDependency,
     DependencyAnalyzer,
@@ -36,6 +37,13 @@ from .dependency_analyzer import (
     ViewDependency,
 )
 from .drop_confirmation_downgrade import require_force_downgrade
+
+# Per rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
+# DDL identifier MUST route through dialect.quote_identifier() before
+# being interpolated into SQL. This module only runs against
+# PostgreSQL (asyncpg.Connection), so we bind the dialect at import
+# time to keep call sites terse.
+_DIALECT = DialectManager.get_dialect("postgresql")
 
 # Type alias for any column dependency
 ColumnDependency = Union[
@@ -220,26 +228,36 @@ class ColumnOnlyBackupHandler(BackupHandler):
             # Fallback to ctid if no primary key
             pk_column_names = ["ctid"]
 
-        # Create backup table
-        pk_cols = ", ".join(pk_column_names)
+        # Create backup table — per rules/dataflow-identifier-safety.md
+        # MUST Rule 1, every dynamic DDL identifier MUST route through
+        # quote_identifier before interpolation. ctid is a PostgreSQL
+        # system pseudo-column; pass it through unchanged because the
+        # allowlist regex already accepts it.
+        backup_q = _DIALECT.quote_identifier(backup_table)
+        table_q = _DIALECT.quote_identifier(table_name)
+        column_q = _DIALECT.quote_identifier(column_name)
+        pk_cols = ", ".join(_DIALECT.quote_identifier(pk) for pk in pk_column_names)
         backup_query = f"""
-        CREATE TABLE {backup_table} AS
-        SELECT {pk_cols}, {column_name}
-        FROM {table_name}
-        WHERE {column_name} IS NOT NULL
+        CREATE TABLE {backup_q} AS
+        SELECT {pk_cols}, {column_q}
+        FROM {table_q}
+        WHERE {column_q} IS NOT NULL
         """
 
         await connection.execute(backup_query)
 
         # Get backup size
-        backup_size = await connection.fetchval(f"SELECT COUNT(*) FROM {backup_table}")
+        backup_size = await connection.fetchval(f"SELECT COUNT(*) FROM {backup_q}")
 
         return BackupInfo(
             strategy=BackupStrategy.COLUMN_ONLY,
             backup_location=backup_table,
             backup_size=backup_size,
             created_at=datetime.now(),
-            verification_query=f"SELECT COUNT(*) FROM {backup_table}",
+            # verification_query is executed by callers — identifier was
+            # already validated by quote_identifier above; the quoted
+            # form is directly executable.
+            verification_query=f"SELECT COUNT(*) FROM {backup_q}",
         )
 
     async def restore_backup(
@@ -256,9 +274,11 @@ class ColumnOnlyBackupHandler(BackupHandler):
     ) -> bool:
         """Clean up backup table."""
         try:
-            await connection.execute(
-                f"DROP TABLE IF EXISTS {backup_info.backup_location}"
-            )
+            # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+            # every dynamic DDL identifier MUST route through
+            # quote_identifier before interpolation.
+            backup_q = _DIALECT.quote_identifier(backup_info.backup_location)
+            await connection.execute(f"DROP TABLE IF EXISTS {backup_q}")
             return True
         except Exception as e:
             logger.error(
@@ -277,20 +297,26 @@ class TableSnapshotBackupHandler(BackupHandler):
         """Create full table backup."""
         backup_table = f"{table_name}_backup_{int(datetime.now().timestamp())}"
 
-        # Create full table backup
-        await connection.execute(
-            f"CREATE TABLE {backup_table} AS SELECT * FROM {table_name}"
-        )
+        # Create full table backup — per
+        # rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
+        # DDL identifier MUST route through quote_identifier before
+        # interpolation.
+        backup_q = _DIALECT.quote_identifier(backup_table)
+        table_q = _DIALECT.quote_identifier(table_name)
+        await connection.execute(f"CREATE TABLE {backup_q} AS SELECT * FROM {table_q}")
 
         # Get backup size
-        backup_size = await connection.fetchval(f"SELECT COUNT(*) FROM {backup_table}")
+        backup_size = await connection.fetchval(f"SELECT COUNT(*) FROM {backup_q}")
 
         return BackupInfo(
             strategy=BackupStrategy.TABLE_SNAPSHOT,
             backup_location=backup_table,
             backup_size=backup_size,
             created_at=datetime.now(),
-            verification_query=f"SELECT COUNT(*) FROM {backup_table}",
+            # verification_query is executed by callers — identifier was
+            # already validated by quote_identifier above; the quoted
+            # form is directly executable.
+            verification_query=f"SELECT COUNT(*) FROM {backup_q}",
         )
 
     async def restore_backup(
@@ -307,9 +333,11 @@ class TableSnapshotBackupHandler(BackupHandler):
     ) -> bool:
         """Clean up backup table."""
         try:
-            await connection.execute(
-                f"DROP TABLE IF EXISTS {backup_info.backup_location}"
-            )
+            # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+            # every dynamic DDL identifier MUST route through
+            # quote_identifier before interpolation.
+            backup_q = _DIALECT.quote_identifier(backup_info.backup_location)
+            await connection.execute(f"DROP TABLE IF EXISTS {backup_q}")
             return True
         except Exception as e:
             logger.error(
@@ -850,17 +878,21 @@ class ColumnRemovalManager:
             if dep.dependency_type in [DependencyType.TRIGGER, DependencyType.VIEW]
         ]
 
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier.
+        table_q = _DIALECT.quote_identifier(plan.table_name)
+
         for dep in dependent_objects:
             try:
                 if dep.dependency_type == DependencyType.TRIGGER:
+                    trigger_q = _DIALECT.quote_identifier(dep.trigger_name)
                     await connection.execute(
-                        f"DROP TRIGGER IF EXISTS {dep.trigger_name} ON {plan.table_name}"
+                        f"DROP TRIGGER IF EXISTS {trigger_q} ON {table_q}"
                     )
                     objects_affected.append(f"trigger:{dep.trigger_name}")
                 elif dep.dependency_type == DependencyType.VIEW:
-                    await connection.execute(
-                        f"DROP VIEW IF EXISTS {dep.view_name} CASCADE"
-                    )
+                    view_q = _DIALECT.quote_identifier(dep.view_name)
+                    await connection.execute(f"DROP VIEW IF EXISTS {view_q} CASCADE")
                     objects_affected.append(f"view:{dep.view_name}")
                     warnings.append(
                         f"View {dep.view_name} dropped - may affect other queries"
@@ -898,6 +930,10 @@ class ColumnRemovalManager:
             in [DependencyType.FOREIGN_KEY, DependencyType.CONSTRAINT]
         ]
 
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier.
+        table_q = _DIALECT.quote_identifier(plan.table_name)
+
         for dep in constraints:
             try:
                 if dep.dependency_type == DependencyType.FOREIGN_KEY:
@@ -908,8 +944,9 @@ class ColumnRemovalManager:
                         or dep.source_table == plan.table_name
                     ):
                         # Outgoing FK - safe to drop
+                        constraint_q = _DIALECT.quote_identifier(dep.constraint_name)
                         await connection.execute(
-                            f"ALTER TABLE {plan.table_name} DROP CONSTRAINT IF EXISTS {dep.constraint_name}"
+                            f"ALTER TABLE {table_q} DROP CONSTRAINT IF EXISTS {constraint_q}"
                         )
                         objects_affected.append(f"fk_constraint:{dep.constraint_name}")
                     else:
@@ -920,8 +957,9 @@ class ColumnRemovalManager:
                         )
 
                 elif dep.dependency_type == DependencyType.CONSTRAINT:
+                    constraint_q = _DIALECT.quote_identifier(dep.constraint_name)
                     await connection.execute(
-                        f"ALTER TABLE {plan.table_name} DROP CONSTRAINT IF EXISTS {dep.constraint_name}"
+                        f"ALTER TABLE {table_q} DROP CONSTRAINT IF EXISTS {constraint_q}"
                     )
                     objects_affected.append(f"check_constraint:{dep.constraint_name}")
 
@@ -962,13 +1000,17 @@ class ColumnRemovalManager:
                     else details.get("is_single_column", False)
                 )
 
+                # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+                # every dynamic DDL identifier MUST route through
+                # quote_identifier before interpolation.
+                index_q = _DIALECT.quote_identifier(dep.index_name)
                 if is_single_column:
                     # Single column index - safe to drop
-                    await connection.execute(f"DROP INDEX IF EXISTS {dep.index_name}")
+                    await connection.execute(f"DROP INDEX IF EXISTS {index_q}")
                     objects_affected.append(f"index:{dep.index_name}")
                 else:
                     # Multi-column index - dropping might affect performance
-                    await connection.execute(f"DROP INDEX IF EXISTS {dep.index_name}")
+                    await connection.execute(f"DROP INDEX IF EXISTS {index_q}")
                     objects_affected.append(f"composite_index:{dep.index_name}")
                     warnings.append(
                         f"Dropped composite index {dep.index_name} - may affect query performance"
@@ -993,9 +1035,13 @@ class ColumnRemovalManager:
         stage_start = datetime.now()
 
         try:
-            # Drop the column
+            # Drop the column — per rules/dataflow-identifier-safety.md
+            # MUST Rule 1, every dynamic DDL identifier MUST route
+            # through quote_identifier before interpolation.
+            table_q = _DIALECT.quote_identifier(plan.table_name)
+            column_q = _DIALECT.quote_identifier(plan.column_name)
             await connection.execute(
-                f"ALTER TABLE {plan.table_name} DROP COLUMN IF EXISTS {plan.column_name}"
+                f"ALTER TABLE {table_q} DROP COLUMN IF EXISTS {column_q}"
             )
 
             return RemovalStageResult(

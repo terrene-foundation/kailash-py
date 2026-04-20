@@ -19,7 +19,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from .index_recommendation_engine import IndexPriority, IndexRecommendation, IndexType
+from .index_recommendation_engine import (
+    IndexPriority,
+    IndexRecommendation,
+    IndexType,
+    _quote_for,
+)
 from .sql_query_optimizer import OptimizedQuery, SQLDialect
 
 logger = logging.getLogger(__name__)
@@ -619,17 +624,27 @@ class QueryPlanAnalyzer:
     def _generate_index_statement(
         self, table: str, columns: List[str], index_type: IndexType
     ) -> str:
-        """Generate CREATE INDEX statement."""
+        """Generate CREATE INDEX statement.
+
+        Per rules/dataflow-identifier-safety.md MUST Rules 1 + 5,
+        every dynamic identifier in an advisory DDL string MUST route
+        through quote_identifier before interpolation.
+        """
+        table_q = _quote_for(self.dialect, table)
+        columns_q = [_quote_for(self.dialect, c) for c in columns]
+        columns_str = ", ".join(columns_q)
         index_name = f"idx_{table}_{'_'.join(columns)}"
-        columns_str = ", ".join(columns)
+        index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL:
             if index_type == IndexType.HASH:
-                return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} USING hash ({columns_str});"
+                return f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} USING hash ({columns_str});"
             else:
-                return f"CREATE INDEX CONCURRENTLY {index_name} ON {table} ({columns_str});"
+                return (
+                    f"CREATE INDEX CONCURRENTLY {index_q} ON {table_q} ({columns_str});"
+                )
         else:
-            return f"CREATE INDEX {index_name} ON {table} ({columns_str});"
+            return f"CREATE INDEX {index_q} ON {table_q} ({columns_str});"
 
     def _estimate_performance_gain(self, bottleneck_type: BottleneckType) -> float:
         """Estimate performance gain for addressing a bottleneck type."""
