@@ -217,6 +217,50 @@ result = Agent(prompt="Write src/feature.py with ...")
 
 **Why:** Session 2026-04-19 logged 2 occurrences (kaizen round 6, ml-specialist round 7) where an agent hit its budget mid-message and reported success with zero files on disk. The `ls` check is O(1) and converts silent no-op into loud retry. See `rules/worktree-isolation.md` MUST Rule 3 for the full protocol.
 
+## MUST: Parallel-Worktree Package Ownership Coordination
+
+When launching two or more parallel agents whose worktrees touch the SAME sub-package (same `packages/X/`), the orchestrator MUST designate ONE agent as the **version owner** for that package AND tell every other agent explicitly: "do NOT edit `packages/X/pyproject.toml`, `packages/X/src/X/__init__.py::__version__`, or `packages/X/CHANGELOG.md`". The final integration step belongs to the orchestrator, not to any agent.
+
+```python
+# DO — explicit ownership in the prompts
+Agent(  # version owner for kailash-ml
+    isolation="worktree",
+    prompt="""...resolve #546 ONNX matrix...
+    Version bump + CHANGELOG:
+    - packages/kailash-ml/pyproject.toml → 0.13.0
+    - packages/kailash-ml/src/kailash_ml/__init__.py::__version__
+    - packages/kailash-ml/CHANGELOG.md — add 0.13.0 entry""",
+)
+Agent(  # sibling, explicitly excluded from version bump
+    isolation="worktree",
+    prompt="""...resolve #547+#548 km.doctor + km.track...
+    COORDINATION NOTE: A parallel agent is bumping this package to
+    0.13.0. You MUST NOT edit packages/kailash-ml/pyproject.toml,
+    packages/kailash-ml/src/kailash_ml/__init__.py::__version__, or
+    packages/kailash-ml/CHANGELOG.md. Just deliver the functionality.""",
+)
+
+# DO NOT — silent parallel ownership, both agents touch pyproject.toml
+Agent(isolation="worktree", prompt="...resolve #546... bump to 0.13.0")
+Agent(isolation="worktree", prompt="...resolve #547+#548... bump to 0.13.0")
+# ↑ Both agents race to write the same pyproject.toml version field and
+#   the same CHANGELOG header; the merge-step hits a version conflict
+#   that the orchestrator resolves by picking one side — abandoning the
+#   other agent's CHANGELOG prose.
+```
+
+**BLOCKED rationalizations:**
+
+- "Both agents are smart enough to see the existing version"
+- "We'll resolve the conflict at merge time"
+- "The CHANGELOG entries are for different issues, they'll concat cleanly"
+- "Git's three-way merge handles this"
+- "Each agent owns a section of the CHANGELOG"
+
+**Why:** Parallel worktree agents see the same base SHA; each independently bumps `version = "0.12.1"` → `version = "0.13.0"` and writes a top-level `## [0.13.0]` CHANGELOG entry. At merge time git sees two "newest" versions of the same line and the orchestrator picks one — discarding the other agent's changelog prose silently. The integration-step post-hoc stitching is O(manual-labor); pre-declared ownership is O(one-line-in-prompt). Evidence: Session 2026-04-20 — three parallel worktree agents resolved #546/#547+#548/#550 cleanly because Agent 1 owned kailash-ml pyproject.toml, Agent 2 was explicitly excluded from it (delivered only code + tests), and Agent 3 owned core kailash/ (different package, no overlap). Without the exclusion clause, Agents 1 and 2 would have raced on `packages/kailash-ml/pyproject.toml` and `CHANGELOG.md`.
+
+Origin: Session 2026-04-20 kailash-ml 0.13.0 + kailash 2.8.10 parallel-release cycle (PRs #552, #553). Coordination worked because Agent 2's prompt included the exclusion clause verbatim.
+
 ## MUST NOT
 
 - Framework work without specialist

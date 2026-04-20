@@ -95,6 +95,37 @@ Any PR that removes a public symbol (module, class, function, attribute) MUST de
 
 **Why:** Test files that fail at collection block the ENTIRE suite from running, not just themselves. One orphan test import takes down the 100 tests collected after it. Evidence: kailash-py commits `d3e7e0ef` + `5edc941f` deleted 9 orphan test files left behind by the DataFlow 2.0 refactor (`53dab715`) — integration collection had been failing since that refactor landed, but nobody noticed because the collection error was buried in the middle of a log.
 
+### 4a. Stub Implementation MUST Sweep Deferral Tests In Same Commit
+
+The mirror of Rule 4. Any PR that _implements_ a previously-deferred stub — replacing `NotImplementedError` / `raise NotImplementedError("Phase N — will implement")` / empty-body placeholder with a real implementation — MUST delete or rewrite every test that asserts the deferred behavior in the same commit. Scaffold-era tests like `test_foo_deferral_names_phase` that `pytest.raises(NotImplementedError)` on the now-implemented symbol flip from pass to fail the moment the implementation lands, and block the implementation's release CI.
+
+```python
+# DO — implementation + deferral-test sweep in one commit
+# git show <sha>:
+# M  src/pkg/tracking.py  (replaces NotImplementedError with real impl)
+# D  tests/unit/test_pkg_deferred_bodies.py::test_track_deferral_names_phase
+# A  tests/integration/test_pkg_tracking.py  (real coverage)
+
+# DO NOT — implement the symbol, leave the deferral test
+# git show <sha>:
+# M  src/pkg/tracking.py  (replaces NotImplementedError)
+# (tests/unit/test_pkg_deferred_bodies.py::test_track_deferral_names_phase
+#  still calls pkg.tracking.track() inside pytest.raises(NotImplementedError);
+#  CI fails with "DID NOT RAISE NotImplementedError" on every Python matrix job)
+```
+
+**BLOCKED rationalizations:**
+
+- "The deferral test was a scaffold; CI will surface it and we'll fix it then"
+- "The new test covers it; the old one is obviously obsolete"
+- "I'll clean up the scaffold tests in a follow-up"
+- "The deferral test is in a different file, out of scope"
+- "The Phase N naming means the test self-documents as obsolete"
+
+**Why:** CI-late discovery of the orphan deferral test blocks the release PR's matrix run, forcing an extra commit and an extra CI cycle at the worst possible moment (release gate). The implementation-author is uniquely positioned to spot the paired deferral test — they know exactly which symbol they un-deferred. A simple `grep -rln 'NotImplementedError.*<symbol>\|<symbol>.*deferral' tests/` at implementation time catches it in O(seconds); a CI re-run costs O(minutes) plus an extra reviewer cycle. Evidence: Session 2026-04-20 — kailash-ml 0.13.0 release (PR #552) landed real `km.track()` implementation (#548); `tests/unit/test_mlengine_construction.py::test_km_track_deferral_names_phase` was left behind and blocked CI on every Python 3.10/3.11/3.12/3.13/3.14 base job until the deferral test was deleted in a follow-up commit on the release branch.
+
+Origin: Session 2026-04-20 — kailash-ml 0.13.0 release CI surfaced the deferral-test orphan as a 5-job CI failure; fixed in release/kailash-ml-0.13.0 commit `ef8751c5`.
+
 ### 5. Collect-Only Is A Merge Gate
 
 `pytest --collect-only` across every test directory MUST return exit 0 before any PR merges. A collection error is a blocker in the same class as a test failure, regardless of which test file contains the error.
