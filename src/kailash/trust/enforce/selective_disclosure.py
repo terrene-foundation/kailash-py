@@ -19,8 +19,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from kailash.trust.audit_store import AuditRecord
-from kailash.trust.signing.crypto import sign, verify_signature
+from kailash.trust.pact.audit import GENESIS_HASH
 from kailash.trust.reasoning.traces import ConfidentialityLevel
+from kailash.trust.signing.crypto import sign, verify_signature
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +261,7 @@ def _compute_chain_hash(records: List[Dict[str, Any]]) -> List[str]:
     Uses the redacted data so witnesses can verify chain integrity.
     """
     hashes: List[str] = []
-    prev_hash = "genesis"
+    prev_hash = GENESIS_HASH
 
     for record in records:
         payload = json.dumps(

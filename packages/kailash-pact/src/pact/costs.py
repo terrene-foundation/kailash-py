@@ -57,12 +57,24 @@ class CostTracker:
         self._history: deque[dict[str, Any]] = deque(maxlen=10000)
         self._lock = threading.Lock()
 
-    def record(self, amount: float, description: str = "") -> None:
+    def record(
+        self,
+        amount: float,
+        description: str = "",
+        *,
+        envelope_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> None:
         """Record a cost against the budget. Thread-safe.
 
         Args:
             amount: Cost in USD (must be finite and non-negative).
             description: Human-readable description of what incurred the cost.
+            envelope_id: Optional governance envelope ID for per-envelope
+                rollups (see future ``consumption_report(envelope_id=...)``).
+            agent_id: Optional agent or D/T/R role address for per-agent
+                rollups. In PACT usage this is typically the submitting
+                role's address (e.g. ``"D1-R1-D2-R2"``).
 
         Raises:
             ValueError: If amount is NaN, Inf, or negative.
@@ -82,13 +94,17 @@ class CostTracker:
                     "description": description,
                     "timestamp": datetime.now(UTC).isoformat(),
                     "cumulative": self._spent,
+                    "envelope_id": envelope_id,
+                    "agent_id": agent_id,
                 }
             )
 
         logger.debug(
-            "CostTracker: recorded $%.4f (%s), total=$%.4f",
+            "CostTracker: recorded $%.4f (%s) envelope=%s agent=%s total=$%.4f",
             amount,
             description or "unnamed",
+            envelope_id or "-",
+            agent_id or "-",
             self._spent,
         )
 

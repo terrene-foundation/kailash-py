@@ -30,7 +30,23 @@ from kailash.trust.pact.config import VerificationLevel
 
 logger = logging.getLogger(__name__)
 
+GENESIS_HASH = "0" * 64
+"""Canonical genesis sentinel for audit-chain fingerprints.
+
+Used as `previous_hash` when hashing the first entry in any audit chain.
+MUST match across all Kailash SDKs (Python + Rust) per EATP D6 and the
+cross-SDK fingerprint contract — see `rules/event-payload-classification.md`
+MUST Rule 2. Matches existing blockchain convention (bitcoin, ethereum) and
+shares the byte shape of a real SHA-256 hex digest so verifiers need no
+option/enum branching.
+
+Change history:
+    2026-04-20: replaced the prior ``'genesis'`` literal. Breaking change —
+    existing chains rooted at ``'genesis'`` will no longer verify.
+"""
+
 __all__ = [
+    "GENESIS_HASH",
     "PactAuditAction",
     "create_pact_audit_details",
     "AuditAnchor",
@@ -177,14 +193,32 @@ class AuditAnchor:
         self.content_hash = content_hash
 
     def compute_hash(self) -> str:
-        """Compute the content hash for this anchor."""
+        """Compute the content hash for this anchor.
+
+        Canonical input format (cross-SDK contract, see kailash-rs#449 §2):
+
+            {anchor_id}:{sequence}:{previous_hash}:{agent_id}:{action}:
+            {verification_level}:{envelope_id_or_empty}:{result}:
+            {iso8601_utc_with_+00:00}[:{metadata_json_sorted_compact}]
+
+        Metadata MUST use compact separators (``","``, ``":"``) and
+        ASCII-escaped strings so Python's output matches Rust's
+        ``serde_json::to_string(&BTreeMap)`` byte-for-byte. Empty metadata
+        omits the suffix entirely (no trailing ``:``).
+        """
         content = (
-            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or 'genesis'}:"
+            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
             f"{self.agent_id}:{self.action}:{self.verification_level.value}:"
             f"{self.envelope_id or ''}:{self.result}:{self.timestamp.isoformat()}"
         )
         if self.metadata:
-            meta_str = json.dumps(self.metadata, sort_keys=True, default=str)
+            meta_str = json.dumps(
+                self.metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+                ensure_ascii=True,
+            )
             content += f":{meta_str}"
         return hashlib.sha256(content.encode()).hexdigest()
 

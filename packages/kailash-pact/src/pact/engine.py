@@ -32,7 +32,7 @@ from typing import Any, Protocol, runtime_checkable
 from pact.costs import CostTracker
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
 from pact.events import EventBus
-from pact.work import WorkResult, WorkSubmission
+from pact.work import WorkResult
 
 logger = logging.getLogger(__name__)
 
@@ -589,7 +589,11 @@ class PactEngine:
                 )
                 cost_usd = 0.0
             if cost_usd > 0:
-                self._costs.record(cost_usd, f"submit: {objective[:80]}")
+                self._costs.record(
+                    cost_usd,
+                    f"submit: {objective[:80]}",
+                    agent_id=role,
+                )
 
             _audit(
                 "execution_completed",
@@ -827,7 +831,6 @@ class PactEngine:
         """
         from kailash.trust.pact.engine import GovernanceEngine
         from kailash.trust.pact.yaml_loader import load_org_yaml
-        from kailash.trust.pact.config import OrgDefinition
 
         if isinstance(org, (str, Path)):
             # Load from YAML file
@@ -899,8 +902,8 @@ def _org_def_from_dict(data: dict[str, Any]) -> Any:
     Raises:
         ValueError: If required fields are missing.
     """
-    from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
     from kailash.trust.pact.compilation import RoleDefinition
+    from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
     if "org_id" not in data:
         raise ValueError("org dict must contain 'org_id'")
