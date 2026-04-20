@@ -131,8 +131,11 @@ def test_m1_onnx_partial_failure_warn_omits_raw_cause_and_name(
     )
     assert isinstance(warn.model_name_fingerprint, str)
     assert (
-        len(warn.model_name_fingerprint) == 4
-    ), f"Fingerprint is not 4 hex chars: {warn.model_name_fingerprint!r}"
+        len(warn.model_name_fingerprint) == 8
+    ), f"Fingerprint is not 8 hex chars (SHA-256): {warn.model_name_fingerprint!r}"
+    assert all(
+        c in "0123456789abcdef" for c in warn.model_name_fingerprint
+    ), f"Fingerprint contains non-hex char: {warn.model_name_fingerprint!r}"
 
     # Assert 4: a sibling DEBUG record carries the raw cause + raw
     # model_name for investigation.

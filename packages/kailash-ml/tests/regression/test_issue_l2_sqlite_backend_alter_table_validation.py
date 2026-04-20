@@ -87,8 +87,14 @@ def test_l2_sqlite_backend_imports_validator() -> None:
     import ast
     from pathlib import Path
 
-    # Path relative to repo root (pytest cwd).
-    src = Path("packages/kailash-ml/src/kailash_ml/tracking/sqlite_backend.py")
+    # Path relative to this test file (robust against cwd / worktree / main).
+    src = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "kailash_ml"
+        / "tracking"
+        / "sqlite_backend.py"
+    )
     assert src.exists(), f"sqlite_backend.py moved — update this test. Expected: {src}"
 
     tree = ast.parse(src.read_text())

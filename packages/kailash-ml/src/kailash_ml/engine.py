@@ -37,6 +37,25 @@ from kailash_ml.engines import _engine_sql as _sql
 
 logger = logging.getLogger(__name__)
 
+
+def _hash_model_name(model_name: str) -> str:
+    """Return an 8-hex SHA-256 fingerprint of ``model_name`` per
+    ``rules/observability.md`` §8 + ``rules/event-payload-classification.md``
+    §2 — the canonical cross-SDK log-surface fingerprint for
+    schema-revealing identifiers.
+
+    The SHA-256 slice is deterministic across processes (unlike
+    Python's builtin ``hash()`` which is PYTHONHASHSEED-randomized)
+    and matches the 8-hex width used by ``format_record_id_for_event``
+    so a single raw ``model_name`` produces the same fingerprint in
+    every log aggregator and across SDK boundaries.
+
+    Callers emit the fingerprint at INFO/WARN/ERROR; the raw
+    ``model_name`` stays at DEBUG (or is omitted entirely) per §8.
+    """
+    return hashlib.sha256(model_name.encode("utf-8")).hexdigest()[:8]
+
+
 __all__ = [
     "MLEngine",
     "Patience",
@@ -1603,19 +1622,28 @@ class MLEngine:
         # gets a structured log line with tenant_id for post-incident
         # triage per rules/tenant-isolation.md Rule 5.
         audit_operation = "shadow_evaluate" if mode == "shadow" else "evaluate"
+        # Per ``rules/observability.md`` §8: schema-revealing names
+        # (model_name) MUST be hashed or DEBUG-gated at INFO/WARN/ERROR.
+        # Operational signal (model_uri, model_version) is sufficient for
+        # dashboards; operators who need the raw name enable DEBUG.
+        _mv_name_fp = _hash_model_name(mv.name)
         logger.info(
             "evaluate.ok",
             extra={
                 "operation": audit_operation,
                 "mode": mode,
                 "model_uri": model_uri,
-                "model_name": mv.name,
+                "model_name_fingerprint": _mv_name_fp,
                 "model_version": mv.version,
                 "sample_count": sample_count,
                 "elapsed_seconds": float(elapsed),
                 "tenant_id": self._tenant_id or "global",
                 "metrics_computed": sorted(computed.keys()),
             },
+        )
+        logger.debug(
+            "evaluate.ok.detail",
+            extra={"model_name": mv.name, "model_uri": model_uri},
         )
 
         # Live mode updates drift-monitor current-window stats when one
@@ -1655,9 +1683,13 @@ class MLEngine:
             logger.info(
                 "evaluate.drift.no_monitor_configured",
                 extra={
-                    "model_name": model_name,
+                    "model_name_fingerprint": _hash_model_name(model_name),
                     "tenant_id": self._tenant_id or "global",
                 },
+            )
+            logger.debug(
+                "evaluate.drift.no_monitor_configured.detail",
+                extra={"model_name": model_name},
             )
             return
         try:
@@ -1671,10 +1703,14 @@ class MLEngine:
             logger.info(
                 "evaluate.drift.no_reference",
                 extra={
-                    "model_name": model_name,
+                    "model_name_fingerprint": _hash_model_name(model_name),
                     "reason": str(exc),
                     "tenant_id": self._tenant_id or "global",
                 },
+            )
+            logger.debug(
+                "evaluate.drift.no_reference.detail",
+                extra={"model_name": model_name},
             )
 
     async def register(
@@ -1843,13 +1879,19 @@ class MLEngine:
             # still fires with outcome="failure".
             raise
         except Exception as exc:  # noqa: BLE001 — see logger.exception
+            # observability.md §8: schema-revealing `model_name` stays
+            # at DEBUG; the ERROR line carries fingerprint + tenant_id.
             logger.exception(
                 "engine.register.error",
                 extra={
-                    "model_name": model_name,
+                    "model_name_fingerprint": _hash_model_name(model_name),
                     "tenant_id": self._tenant_id,
                     "error": str(exc),
                 },
+            )
+            logger.debug(
+                "engine.register.error.detail",
+                extra={"model_name": model_name},
             )
             raise
         finally:
@@ -1876,7 +1918,7 @@ class MLEngine:
                 # hashed at WARN. Emit a hashed fingerprint at WARN so the
                 # audit failure surfaces operationally, and keep the raw
                 # model_name at DEBUG for investigation.
-                model_name_fingerprint = f"{hash(model_name) & 0xFFFF:04x}"
+                model_name_fingerprint = _hash_model_name(model_name)
                 logger.warning(
                     "engine.register.audit_write_failed",
                     extra={
@@ -1907,13 +1949,17 @@ class MLEngine:
         logger.info(
             "engine.register.ok",
             extra={
-                "model_name": model_name,
+                "model_name_fingerprint": _hash_model_name(model_name),
                 "model_version": version,
                 "stage": stage,
                 "output_format": format,
                 "tenant_id": self._tenant_id,
                 "duration_ms": duration_ms,
             },
+        )
+        logger.debug(
+            "engine.register.ok.detail",
+            extra={"model_name": model_name, "model_version": version},
         )
         return result_envelope
 
@@ -2817,7 +2863,7 @@ class MLEngine:
                 # fingerprint + the framework token so the operational
                 # signal surfaces without leaking the model name or the
                 # raw exception string into log aggregators.
-                name_fingerprint = f"{hash(name) & 0xFFFF:04x}"
+                name_fingerprint = _hash_model_name(name)
                 logger.warning(
                     "engine.register.onnx_partial_failure",
                     extra={

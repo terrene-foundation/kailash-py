@@ -1,53 +1,68 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Regression: M2 — model_name at WARN in engine.py MUST be hashed.
+"""Regression: M2 — model_name at INFO/WARN/ERROR in engine.py MUST be hashed.
 
-Origin: 2026-04-20 late-session audit finding M2 — WARN-level log
-sites in ``engine.py`` carried the raw ``model_name`` as a structured
-field. Per ``rules/observability.md`` §8, schema-revealing identifiers
-like model names MUST be logged at DEBUG or hashed when emitted at
-WARN.
+Origin: 2026-04-20 late-session audit finding M2 — log sites in
+``engine.py`` at INFO / WARN / ERROR level carried the raw
+``model_name`` as a structured field. Per ``rules/observability.md``
+§8, schema-revealing identifiers like model names MUST stay at DEBUG
+or be hashed when emitted at any level above DEBUG (rule text:
+"MUST be logged at DEBUG level — not WARN or INFO").
 
-This file provides two complementary guards:
+The canonical fingerprint format per ``rules/event-payload-classification.md``
+MUST Rule 2 is **8 hex chars of SHA-256** (NOT Python's built-in
+``hash()`` — that's PYTHONHASHSEED-randomized and differs per process,
+which defeats cross-process log-aggregator correlation).
 
-1. **Behavioural** — exercises the
+This file provides three complementary guards:
+
+1. **Behavioural WARN** — exercises the
    ``engine.register.onnx_partial_failure`` WARN path end-to-end and
    asserts the hashed partition (WARN carries
    ``model_name_fingerprint``; DEBUG sibling carries raw
-   ``model_name``). This is the same site covered at higher resolution
-   by ``test_issue_m1_onnx_cause_hygiene.py`` — kept here as a
-   parity check so a future refactor that reverts the M1 fix also
-   fails this M2 test.
+   ``model_name``).
 
-2. **Structural invariant** — an AST walk over ``engine.py`` that
-   locates every ``logger.warning(...)`` call site and asserts: if the
-   WARN site's ``extra`` payload references ``model_name`` or
-   ``self._tenant_id``, it MUST also emit
-   ``model_name_fingerprint``. This is the invariant guard per
-   ``rules/refactor-invariants.md`` — without it, a future session
-   that adds a new WARN site embedding raw ``model_name`` ships a
-   silent regression.
+2. **AST invariant across ALL log levels** — walks every
+   ``logger.info`` / ``logger.warning`` / ``logger.error`` /
+   ``logger.exception`` / ``logger.critical`` call in ``engine.py``.
+   If the ``extra={}`` payload references ``model_name``, the test
+   FAILS — the rule permits ``model_name`` only at ``logger.debug``.
+
+3. **Sibling DEBUG guard** — every non-DEBUG site emitting
+   ``model_name_fingerprint`` MUST have a sibling ``logger.debug``
+   call with ``model_name`` in the same function so operators can
+   recover the raw name at investigation time.
+
+4. **Fingerprint format invariant** — the canonical fingerprint is
+   8 lowercase hex chars computed via SHA-256 (NOT Python's
+   ``hash()``), matching ``rules/event-payload-classification.md`` §2.
 
 The structural guard is permitted alongside the behavioural guard per
 ``rules/testing.md`` § "MUST: Behavioral Regression Tests Over
 Source-Grep" — source-grep is BLOCKED as the SOLE assertion; combined
 with the behavioural test above, the AST invariant is the structural
-companion that catches new WARN sites the behavioural test can't
-reach without full ``register()`` fixtures.
+companion that catches new INFO/WARN/ERROR sites the behavioural
+test can't reach without full ``register()`` fixtures.
 """
 from __future__ import annotations
 
 import ast
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+# Canonical fingerprint per rules/observability.md §8 +
+# rules/event-payload-classification.md §2 — 8 hex chars of SHA-256.
+_NON_DEBUG_LEVELS = {"info", "warning", "error", "exception", "critical"}
+
 
 def _expected_fingerprint(name: str) -> str:
-    return f"{hash(name) & 0xFFFF:04x}"
+    """Compute the canonical 8-hex SHA-256 fingerprint."""
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +75,7 @@ def test_m2_onnx_partial_failure_warn_hashes_model_name(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """WARN site at ``engine.register.onnx_partial_failure`` uses fingerprint."""
+    """WARN site at ``engine.register.onnx_partial_failure`` uses SHA-256 fingerprint."""
     from kailash_ml.bridge import onnx_bridge as onnx_bridge_module
 
     class _FailedResult:
@@ -102,7 +117,7 @@ def test_m2_onnx_partial_failure_warn_hashes_model_name(
     assert len(warn_records) == 1
     warn = warn_records[0]
 
-    # 1. Fingerprint present + matches canonical form
+    # 1. Fingerprint present + matches canonical SHA-256 8-hex form
     assert getattr(warn, "model_name_fingerprint", None) == _expected_fingerprint(
         sentinel
     )
@@ -123,7 +138,7 @@ def test_m2_onnx_partial_failure_warn_hashes_model_name(
 
 
 # ---------------------------------------------------------------------------
-# Structural guard — AST invariant across every logger.warning in engine.py
+# Structural guard — AST invariant across every non-DEBUG logger call
 # ---------------------------------------------------------------------------
 
 
@@ -133,11 +148,7 @@ _ENGINE_PY_PATH = (
 
 
 def _keys_in_extra(call: ast.Call) -> set[str]:
-    """Return the set of string keys in the ``extra=`` kwarg dict of a Call.
-
-    Returns an empty set if the call has no ``extra=`` kwarg or the kwarg
-    is not a literal dict.
-    """
+    """Return the set of string keys in the ``extra=`` kwarg dict of a Call."""
     for kw in call.keywords:
         if kw.arg != "extra":
             continue
@@ -151,102 +162,98 @@ def _keys_in_extra(call: ast.Call) -> set[str]:
     return set()
 
 
-def _iter_logger_warning_calls(tree: ast.AST) -> list[ast.Call]:
-    """Yield every ``logger.warning(...)`` call node in the AST."""
-    out: list[ast.Call] = []
+def _iter_non_debug_logger_calls(tree: ast.AST) -> list[tuple[str, ast.Call]]:
+    """Yield every ``logger.<level>(...)`` call where level ∈ non-DEBUG set.
+
+    Returns tuples of ``(level, call_node)``. ``logger.debug`` is excluded
+    per rule §8 — DEBUG is the one safe level for raw model_name.
+    """
+    out: list[tuple[str, ast.Call]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
         if not isinstance(func, ast.Attribute):
             continue
-        if func.attr != "warning":
+        if func.attr not in _NON_DEBUG_LEVELS:
             continue
         value = func.value
         if isinstance(value, ast.Name) and value.id == "logger":
-            out.append(node)
+            out.append((func.attr, node))
     return out
 
 
 @pytest.mark.regression
-def test_m2_ast_invariant_warn_sites_with_model_name_emit_fingerprint() -> None:
-    """Every ``logger.warning`` in engine.py that carries model_name also emits fingerprint.
+def test_m2_ast_invariant_non_debug_sites_never_emit_raw_model_name() -> None:
+    """NO ``logger.{info,warning,error,exception,critical}`` in engine.py emits raw model_name.
 
-    AST invariant guard: walks every ``logger.warning(...)`` call site
-    in ``engine.py``. If the ``extra={}`` payload has a ``model_name``
-    key, it MUST also have a ``model_name_fingerprint`` key (or the
-    ``model_name`` key MUST be absent and only fingerprint present).
+    AST invariant guard covering every non-DEBUG log level. If any
+    ``extra={}`` payload carries the string key ``model_name``, the
+    test FAILS. Per ``rules/observability.md`` §8 rule text: "MUST be
+    logged at DEBUG level — not WARN or INFO". ERROR / EXCEPTION /
+    CRITICAL levels are a fortiori also blocked.
 
-    The rule per ``rules/observability.md`` §8 is: model_name at WARN
-    leaks schema metadata to log aggregators. The fix is either (a)
-    drop model_name from the WARN entirely and keep the fingerprint,
-    or (b) emit both at WARN if the fingerprint-only form is too
-    opaque for operators — the field set becomes `{fingerprint,
-    tenant_id}` not `{model_name, tenant_id}`.
-
-    This test enforces option (a): `model_name` MUST NOT appear in any
-    WARN payload under engine.py. The M1 + behavioural M2 tests above
-    prove the fix WORKS end-to-end for the two sites that exist today;
-    this AST guard prevents NEW sites from slipping through.
+    The M1 + behavioural M2 tests above prove the fix WORKS end-to-end
+    for the WARN site at ``engine.register.onnx_partial_failure``; this
+    AST guard prevents NEW non-DEBUG sites at any level from slipping
+    through.
     """
     assert _ENGINE_PY_PATH.is_file(), f"engine.py not found at {_ENGINE_PY_PATH}"
     tree = ast.parse(_ENGINE_PY_PATH.read_text())
 
     violations: list[str] = []
     checked = 0
-    for call in _iter_logger_warning_calls(tree):
+    for level, call in _iter_non_debug_logger_calls(tree):
         extra_keys = _keys_in_extra(call)
         if "model_name" in extra_keys:
             checked += 1
             violations.append(
-                f"engine.py:{call.lineno} — logger.warning(...) emits "
+                f"engine.py:{call.lineno} — logger.{level}(...) emits "
                 f"'model_name' in extra={{}}; per observability §8 this "
-                f"MUST move to DEBUG or be replaced by "
+                f"MUST move to logger.debug OR be replaced by "
                 f"'model_name_fingerprint'. extra keys: {sorted(extra_keys)}"
             )
 
     assert (
         not violations
-    ), "Found WARN-level log sites that leak raw model_name:\n  " + "\n  ".join(
+    ), "Found non-DEBUG log sites that leak raw model_name:\n  " + "\n  ".join(
         violations
     )
 
 
 @pytest.mark.regression
 def test_m2_ast_invariant_fingerprint_sites_have_debug_sibling() -> None:
-    """Every WARN site emitting ``model_name_fingerprint`` has a DEBUG sibling.
+    """Every non-DEBUG site emitting ``model_name_fingerprint`` has a DEBUG sibling.
 
-    The partition contract is: WARN carries the fingerprint for the
-    operational signal; DEBUG carries the raw model_name for
-    investigation. A fingerprint WARN with no DEBUG sibling means
-    operators cannot recover the model_name even when they enable
-    DEBUG — the audit trail is broken.
+    The partition contract is: INFO/WARN/ERROR carries the fingerprint
+    for the operational signal; DEBUG carries the raw model_name for
+    investigation. A fingerprint non-DEBUG site with no DEBUG sibling
+    means operators cannot recover the model_name even when they
+    enable DEBUG — the audit trail is broken.
 
-    This guard iterates every WARN site emitting
+    This guard iterates every non-DEBUG site emitting
     ``model_name_fingerprint`` and asserts a matching
     ``logger.debug(<event>.detail, ...)`` appears within the same
-    function (simple proximity check — not a strict order/control-flow
-    analysis; sufficient for the current two sites).
+    function.
     """
     assert _ENGINE_PY_PATH.is_file()
     tree = ast.parse(_ENGINE_PY_PATH.read_text())
 
-    # Map each function's events to (event, level, line).
-    # Walk each FunctionDef / AsyncFunctionDef and collect
-    # logger.warning + logger.debug event strings inside it.
-    warn_events: list[tuple[str, int, str]] = []  # (event, lineno, func_name)
-    debug_events: list[tuple[str, int, str]] = []
+    non_debug_events: list[tuple[str, int, str, str]] = (
+        []
+    )  # (event, lineno, func, level)
+    debug_events: list[tuple[str, int, str]] = []  # (event, lineno, func)
 
     for func in ast.walk(tree):
         if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        for call in _iter_logger_warning_calls(func):
+        for level, call in _iter_non_debug_logger_calls(func):
             if "model_name_fingerprint" not in _keys_in_extra(call):
                 continue
             if not call.args or not isinstance(call.args[0], ast.Constant):
                 continue
             event = call.args[0].value
-            warn_events.append((event, call.lineno, func.name))
+            non_debug_events.append((event, call.lineno, func.name, level))
 
         for node in ast.walk(func):
             if not isinstance(node, ast.Call):
@@ -262,37 +269,102 @@ def test_m2_ast_invariant_fingerprint_sites_have_debug_sibling() -> None:
             debug_events.append((event, node.lineno, func.name))
 
     missing_debug_sibling: list[str] = []
-    for warn_event, warn_line, warn_func in warn_events:
-        expected_detail = f"{warn_event}.detail"
+    for evt, lineno, func_name, level in non_debug_events:
+        expected_detail = f"{evt}.detail"
         found = any(
-            dbg_event == expected_detail and dbg_func == warn_func
+            dbg_event == expected_detail and dbg_func == func_name
             for dbg_event, _dbg_line, dbg_func in debug_events
         )
         if not found:
             missing_debug_sibling.append(
-                f"engine.py:{warn_line} func={warn_func!r} — WARN "
-                f"'{warn_event}' has no DEBUG sibling '{expected_detail}'"
+                f"engine.py:{lineno} func={func_name!r} level={level} — "
+                f"'{evt}' has no DEBUG sibling '{expected_detail}'"
             )
 
     assert not missing_debug_sibling, (
-        "WARN sites with model_name_fingerprint but no DEBUG sibling "
+        "Non-DEBUG sites with model_name_fingerprint but no DEBUG sibling "
         "(operators cannot recover the raw model_name even at DEBUG):\n  "
         + "\n  ".join(missing_debug_sibling)
     )
-    # Sanity: this codebase MUST have at least one such WARN site —
+    # Sanity: this codebase MUST have at least one such site —
     # otherwise the invariant guard is vacuously true.
-    assert warn_events, (
-        "No WARN sites with model_name_fingerprint found in engine.py — "
+    assert non_debug_events, (
+        "No non-DEBUG sites with model_name_fingerprint found in engine.py — "
         "either the fingerprint fix was reverted or the file path is wrong."
     )
 
 
 @pytest.mark.regression
-def test_m2_fingerprint_format_is_4_hex_chars() -> None:
-    """The canonical fingerprint is 4 lowercase hex chars (``{hash & 0xFFFF:04x}``)."""
+def test_m2_fingerprint_format_is_8_hex_sha256() -> None:
+    """The canonical fingerprint is 8 lowercase hex chars of SHA-256.
+
+    Per ``rules/event-payload-classification.md`` §2 the cross-SDK
+    contract is ``sha256:XXXXXXXX`` (prefix + 8 hex). For log-surface
+    hygiene per ``rules/observability.md`` §8, the bare 8-hex form is
+    used (no prefix — the field name already carries ``_fingerprint``
+    suffix as the type signal).
+
+    Python's built-in ``hash()`` is PYTHONHASHSEED-randomized — the
+    same raw ``model_name`` produces different fingerprints across
+    processes, which defeats cross-process log aggregator correlation.
+    SHA-256 is deterministic across processes AND cross-SDK.
+    """
+    # 1. Format is 8 lowercase hex chars
     for name in ("a", "short", "a-very-long-model-name-indeed", "unicode-café"):
         fp = _expected_fingerprint(name)
-        assert len(fp) == 4
+        assert len(fp) == 8, f"fingerprint({name!r}) = {fp!r} (expected 8 chars)"
         assert all(
             c in "0123456789abcdef" for c in fp
         ), f"non-hex char in fingerprint({name!r}) = {fp!r}"
+
+    # 2. Deterministic: same input → same output across calls.
+    assert _expected_fingerprint("foo") == _expected_fingerprint("foo")
+    # 3. Matches the helper in engine.py (stable contract).
+    from kailash_ml.engine import _hash_model_name
+
+    assert _hash_model_name("foo") == _expected_fingerprint("foo")
+    assert _hash_model_name("my-private-credit-model") == _expected_fingerprint(
+        "my-private-credit-model"
+    )
+
+
+@pytest.mark.regression
+def test_m2_all_seven_non_debug_sites_in_engine_carry_fingerprint() -> None:
+    """Seven distinct engine.py sites MUST emit model_name_fingerprint.
+
+    Documented scope of the M2 fix — a future refactor that removes
+    any of these sites (or stops hashing) fails here loudly. Sites:
+
+    - evaluate.ok                           (INFO)
+    - evaluate.drift.no_monitor_configured  (INFO)
+    - evaluate.drift.no_reference           (INFO)
+    - engine.register.error                 (ERROR via logger.exception)
+    - engine.register.ok                    (INFO)
+    - engine.register.audit_write_failed    (WARN)
+    - engine.register.onnx_partial_failure  (WARN)
+    """
+    assert _ENGINE_PY_PATH.is_file()
+    tree = ast.parse(_ENGINE_PY_PATH.read_text())
+
+    events_with_fingerprint: set[str] = set()
+    for _level, call in _iter_non_debug_logger_calls(tree):
+        if "model_name_fingerprint" not in _keys_in_extra(call):
+            continue
+        if not call.args or not isinstance(call.args[0], ast.Constant):
+            continue
+        events_with_fingerprint.add(call.args[0].value)
+
+    expected_events = {
+        "evaluate.ok",
+        "evaluate.drift.no_monitor_configured",
+        "evaluate.drift.no_reference",
+        "engine.register.error",
+        "engine.register.ok",
+        "engine.register.audit_write_failed",
+        "engine.register.onnx_partial_failure",
+    }
+    missing = expected_events - events_with_fingerprint
+    assert not missing, (
+        f"Expected fingerprint-emitting events missing from engine.py: "
+        f"{sorted(missing)}. Found: {sorted(events_with_fingerprint)}"
+    )
