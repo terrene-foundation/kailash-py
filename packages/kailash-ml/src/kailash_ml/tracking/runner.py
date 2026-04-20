@@ -7,7 +7,13 @@ clauses for the Phase 6 tracker entry point:
 
 - §2.1 construction via ``async with km.track(...) as run:``
 - §2.2 auto-set status: RUNNING / COMPLETED / FAILED / KILLED
-- §2.4 16 mandatory auto-capture fields on run start
+- §2.4 17 mandatory auto-capture fields on run start
+
+As of kailash-ml 0.14.0 the auto-capture surface expands from 10 to
+17 fields (adding ``kailash_ml_version`` / ``lightning_version`` /
+``torch_version`` / ``cuda_version`` / ``device_used`` /
+``accelerator`` / ``precision``) so every run carries the full
+reproducibility envelope §2.4 mandates.
 
 This module is async-first and does NOT depend on the 1.x
 ``kailash_ml.engines.experiment_tracker.ExperimentTracker`` — the
@@ -16,11 +22,9 @@ older engine is preserved for back-compat; new callers use
 """
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import logging
 import os
-import platform
 import signal
 import socket
 import subprocess
@@ -149,6 +153,56 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _capture_versions() -> dict[str, Optional[str]]:
+    """Return the four library/runtime versions per ``ml-tracking.md`` §2.4.
+
+    - ``kailash_ml_version`` — always ``kailash_ml.__version__`` (package is
+      imported by definition here).
+    - ``torch_version`` — ``torch.__version__`` when torch importable, else None.
+    - ``cuda_version`` — ``torch.version.cuda`` when torch importable AND CUDA
+      is reported; None otherwise (includes MPS/CPU-only hosts).
+    - ``lightning_version`` — ``lightning.__version__`` when lightning is
+      importable, else None.
+
+    Every probe is wrapped separately so a partial stack (torch without
+    CUDA, lightning missing) still yields as many fields as possible.
+    """
+    # kailash_ml — always present at this point (we're inside its package).
+    try:
+        from kailash_ml import __version__ as kml_version  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 — probe must not raise
+        kml_version = None
+
+    torch_version: Optional[str] = None
+    cuda_version: Optional[str] = None
+    try:
+        import torch  # noqa: PLC0415
+
+        torch_version = getattr(torch, "__version__", None)
+        cuda_version = getattr(getattr(torch, "version", None), "cuda", None)
+    except ImportError:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("tracking.torch.probe_failed", extra={"error": str(exc)})
+
+    lightning_version: Optional[str] = None
+    try:
+        import lightning  # noqa: PLC0415
+
+        lightning_version = getattr(lightning, "__version__", None)
+    except ImportError:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("tracking.lightning.probe_failed", extra={"error": str(exc)})
+
+    return {
+        "kailash_ml_version": kml_version,
+        "torch_version": torch_version,
+        "cuda_version": cuda_version,
+        "lightning_version": lightning_version,
+    }
+
+
 # ---------------------------------------------------------------------------
 # ExperimentRun — the async context manager yielded by km.track()
 # ---------------------------------------------------------------------------
@@ -198,6 +252,25 @@ class ExperimentRun:
         self._device_backend: Optional[str] = None
         self._device_fallback_reason: Optional[str] = None
         self._device_array_api: Optional[bool] = None
+        # Top-level TrainingResult mirrors — populated by
+        # attach_training_result when the caller wires a Trainable. The
+        # field names mirror TrainingResult's own surface per
+        # ``specs/ml-tracking.md`` §2.4 — ``device_used`` / ``accelerator``
+        # / ``precision`` live here alongside the ``device.*`` DeviceReport
+        # fields so both surfaces persist and a stale-read never conflates
+        # them.
+        self._device_used: Optional[str] = None
+        self._accelerator: Optional[str] = None
+        self._precision: Optional[str] = None
+        # Library/runtime versions — captured eagerly at construction
+        # because they are process-wide constants. Probed at
+        # ``__aenter__`` because construction order vs import order is
+        # not guaranteed; deferring until the context opens gives
+        # torch/lightning their best chance of being importable.
+        self._kailash_ml_version: Optional[str] = None
+        self._lightning_version: Optional[str] = None
+        self._torch_version: Optional[str] = None
+        self._cuda_version: Optional[str] = None
         # Wall-clock fields populated at __aenter__ / __aexit__.
         self._wall_clock_start: Optional[datetime] = None
         self._wall_clock_end: Optional[datetime] = None
@@ -247,6 +320,16 @@ class ExperimentRun:
             # backend so the tracker row is not empty.
             self._device_backend = result.device_used
             self._device_family = result.family
+        # Top-level TrainingResult fields — always populate when
+        # non-empty (spec §2.4 rows 11-13: ``device_used`` /
+        # ``accelerator`` / ``precision`` come from TrainingResult's
+        # own fields, not the DeviceReport envelope).
+        if result.device_used:
+            self._device_used = result.device_used
+        if result.accelerator:
+            self._accelerator = result.accelerator
+        if result.precision:
+            self._precision = result.precision
 
     # ------------------------------------------------------------------
     # Lifecycle: async context manager
@@ -261,6 +344,13 @@ class ExperimentRun:
             if parent is not None:
                 self.parent_run_id = parent.run_id
 
+        # Library/runtime version probes (spec §2.4 rows 5-8).
+        versions = _capture_versions()
+        self._kailash_ml_version = versions["kailash_ml_version"]
+        self._lightning_version = versions["lightning_version"]
+        self._torch_version = versions["torch_version"]
+        self._cuda_version = versions["cuda_version"]
+
         row = {
             "run_id": self.run_id,
             "experiment": self.experiment,
@@ -268,6 +358,10 @@ class ExperimentRun:
             "status": RunStatus.RUNNING,
             "host": socket.gethostname(),
             "python_version": sys.version.split()[0],
+            "kailash_ml_version": self._kailash_ml_version,
+            "lightning_version": self._lightning_version,
+            "torch_version": self._torch_version,
+            "cuda_version": self._cuda_version,
             "git_sha": sha,
             "git_branch": branch,
             "git_dirty": dirty,
@@ -275,6 +369,9 @@ class ExperimentRun:
             "wall_clock_end": None,
             "duration_seconds": None,
             "tenant_id": self.tenant_id,
+            "device_used": self._device_used,
+            "accelerator": self._accelerator,
+            "precision": self._precision,
             "device_family": self._device_family,
             "device_backend": self._device_backend,
             "device_fallback_reason": self._device_fallback_reason,
@@ -375,6 +472,9 @@ class ExperimentRun:
                 "status": status,
                 "wall_clock_end": self._wall_clock_end.isoformat(),
                 "duration_seconds": duration,
+                "device_used": self._device_used,
+                "accelerator": self._accelerator,
+                "precision": self._precision,
                 "device_family": self._device_family,
                 "device_backend": self._device_backend,
                 "device_fallback_reason": self._device_fallback_reason,
