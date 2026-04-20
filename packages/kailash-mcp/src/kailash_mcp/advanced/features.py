@@ -854,6 +854,7 @@ class ElicitationSystem:
 
         raise NotImplementedError(
             "Elicitation request sending requires MCP client transport integration. "
+            "See #556 — tracked for completion. "
             "Provide a concrete implementation that sends the request via the MCP protocol."
         )
 

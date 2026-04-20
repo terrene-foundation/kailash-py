@@ -210,12 +210,7 @@ register_preset("openai", openai_preset)
 
 
 def _attach_openai_classmethod() -> None:
-    """Wire `openai_preset` onto `LlmDeployment.openai`.
-
-    The LlmDeployment class already declares stubs for every other preset
-    (they raise NotImplementedError with the session marker). Session 1
-    replaces the `openai` entry only; subsequent sessions add their own.
-    """
+    """Wire `openai_preset` onto `LlmDeployment.openai`."""
 
     @classmethod  # type: ignore[misc]
     def openai(cls, api_key: str, model: str, **kwargs: Any) -> LlmDeployment:
