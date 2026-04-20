@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS experiment_runs (
     status                   TEXT NOT NULL,
     host                     TEXT,
     python_version           TEXT,
+    kailash_ml_version       TEXT,
+    lightning_version        TEXT,
+    torch_version            TEXT,
+    cuda_version             TEXT,
     git_sha                  TEXT,
     git_branch               TEXT,
     git_dirty                INTEGER,
@@ -45,6 +49,9 @@ CREATE TABLE IF NOT EXISTS experiment_runs (
     wall_clock_end           TEXT,
     duration_seconds         REAL,
     tenant_id                TEXT,
+    device_used              TEXT,
+    accelerator              TEXT,
+    precision                TEXT,
     device_family            TEXT,
     device_backend           TEXT,
     device_fallback_reason   TEXT,
@@ -59,6 +66,22 @@ _INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_experiment_runs_experiment
     ON experiment_runs (experiment);
 """
+
+# Pre-0.14 databases carried a narrower schema. On first access we probe
+# ``PRAGMA table_info`` and ALTER TABLE any missing columns so existing
+# ``~/.kailash_ml/ml.db`` files keep working after the 0.14 schema
+# expansion. Column names MUST match the 0.14 schema exactly; the list
+# is hardcoded so the migration cannot inject an identifier from user
+# input (``rules/dataflow-identifier-safety.md`` §5).
+_COLUMNS_ADDED_IN_0_14: tuple[tuple[str, str], ...] = (
+    ("kailash_ml_version", "TEXT"),
+    ("lightning_version", "TEXT"),
+    ("torch_version", "TEXT"),
+    ("cuda_version", "TEXT"),
+    ("device_used", "TEXT"),
+    ("accelerator", "TEXT"),
+    ("precision", "TEXT"),
+)
 
 
 class SQLiteTrackerBackend:
@@ -100,7 +123,15 @@ class SQLiteTrackerBackend:
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Create the schema if absent. Idempotent."""
+        """Create the schema if absent. Idempotent.
+
+        Also migrates pre-0.14 databases by adding any columns that
+        landed in 0.14 (seven additional reproducibility fields —
+        ``kailash_ml_version``, ``lightning_version``, ``torch_version``,
+        ``cuda_version``, ``device_used``, ``accelerator``, ``precision``).
+        The migration is additive (ALTER TABLE ADD COLUMN) so existing
+        rows stay readable; new columns default to SQL NULL.
+        """
         if self._initialized:
             return
 
@@ -108,6 +139,16 @@ class SQLiteTrackerBackend:
             with self._conn_lock:
                 self._conn.execute(_SCHEMA_SQL)
                 self._conn.execute(_INDEX_SQL)
+                # Detect pre-0.14 databases and add missing columns.
+                cur = self._conn.execute("PRAGMA table_info(experiment_runs)")
+                existing = {row[1] for row in cur.fetchall()}
+                for name, sql_type in _COLUMNS_ADDED_IN_0_14:
+                    if name not in existing:
+                        # Identifier hardcoded; SQL type pinned to
+                        # ``TEXT`` per §5 of dataflow-identifier-safety.
+                        self._conn.execute(
+                            f"ALTER TABLE experiment_runs ADD COLUMN {name} {sql_type}"
+                        )
 
         await asyncio.to_thread(_init)
         self._initialized = True
@@ -136,12 +177,14 @@ class SQLiteTrackerBackend:
         sql = (
             "INSERT INTO experiment_runs ("
             "run_id, experiment, parent_run_id, status, host, python_version, "
+            "kailash_ml_version, lightning_version, torch_version, cuda_version, "
             "git_sha, git_branch, git_dirty, wall_clock_start, wall_clock_end, "
-            "duration_seconds, tenant_id, device_family, device_backend, "
-            "device_fallback_reason, device_array_api, params, error_type, "
-            "error_message"
+            "duration_seconds, tenant_id, device_used, accelerator, precision, "
+            "device_family, device_backend, device_fallback_reason, "
+            "device_array_api, params, error_type, error_message"
             ") VALUES ("
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+            "?, ?, ?, ?, ?, ?, ?"
             ")"
         )
         values = (
@@ -151,6 +194,10 @@ class SQLiteTrackerBackend:
             row["status"],
             row.get("host"),
             row.get("python_version"),
+            row.get("kailash_ml_version"),
+            row.get("lightning_version"),
+            row.get("torch_version"),
+            row.get("cuda_version"),
             row.get("git_sha"),
             row.get("git_branch"),
             _bool_to_int(row.get("git_dirty")),
@@ -158,6 +205,9 @@ class SQLiteTrackerBackend:
             row.get("wall_clock_end"),
             row.get("duration_seconds"),
             row.get("tenant_id"),
+            row.get("device_used"),
+            row.get("accelerator"),
+            row.get("precision"),
             row.get("device_family"),
             row.get("device_backend"),
             row.get("device_fallback_reason"),
@@ -275,6 +325,10 @@ _COLUMNS = (
     "status",
     "host",
     "python_version",
+    "kailash_ml_version",
+    "lightning_version",
+    "torch_version",
+    "cuda_version",
     "git_sha",
     "git_branch",
     "git_dirty",
@@ -282,6 +336,9 @@ _COLUMNS = (
     "wall_clock_end",
     "duration_seconds",
     "tenant_id",
+    "device_used",
+    "accelerator",
+    "precision",
     "device_family",
     "device_backend",
     "device_fallback_reason",

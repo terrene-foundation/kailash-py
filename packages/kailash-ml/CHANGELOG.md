@@ -1,5 +1,37 @@
 # kailash-ml Changelog
 
+## [0.14.0] - 2026-04-20 — km.doctor + km.track spec completion (ml-backends.md §7, ml-tracking.md §2.4)
+
+Closes the two HIGH findings from the 2026-04-20 /redteam audit: km.doctor shipped 4 of 14 spec items (§7) and km.track persisted 10 of 17 auto-capture fields (§2.4). Both surfaces now ship the full spec-mandated coverage.
+
+### Added — `km.doctor` full §7.1 diagnostic surface (closes #547 follow-up)
+
+- **XPU + TPU probes** — `km.doctor()` now probes all six first-class backends per `specs/ml-backends.md` §1 (adds `xpu` via native `torch.xpu` at torch ≥ 2.5, and `tpu` via `torch_xla`). Status `"missing"` on non-Intel / non-TPU hosts.
+- **`precision_matrix`** — per-backend auto-selected precision via `kailash_ml._device.detect_backend` + `resolve_precision`. Matches the concrete precision strings the training pipeline would pass to `L.Trainer(precision=...)`.
+- **`extras`** — installed status for `[cuda]`, `[rocm]`, `[xpu]`, `[tpu]`, `[dl]`, `[agents]`, `[explain]`, `[imbalance]` with per-module version probing so "why is this extra missing?" is answerable without shelling out to pip.
+- **`family_probes`** — `torch`, `lightning`, `sklearn`, `xgboost`, `lightgbm`, `catboost`, `onnxruntime`, `onnxruntime-gpu` each report installed version or `"not installed"`. `onnxruntime-gpu` uses `importlib.metadata.version` so it distinguishes CPU vs GPU wheel.
+- **`onnx_eps`** — enumerates `onnxruntime.get_available_providers()` (CoreML / CUDA / CPU / Azure EPs) when onnxruntime is importable.
+- **`sqlite_path`** — default `~/.kailash_ml/ml.db` (or `KAILASH_ML_STORE` override) with writability probe via a throwaway `.km-doctor-probe.sqlite` file; never touches a live ml.db.
+- **`cache_paths`** — data_root + cache directories with recursive byte size AND filesystem total/free via `shutil.disk_usage`.
+- **`tenant_mode`** — single-tenant vs multi-tenant, derived from `KAILASH_ML_DEFAULT_TENANT` (primary) with `KAILASH_TENANT_ID` fallback.
+- **`gotchas`** — `specs/ml-backends.md` §1.1 entries surfaced per detected `status=ok` backend so operators see backend-specific caveats (MPS CPU fallback, XLA 30s compile pause, CUDA_VISIBLE_DEVICES hint, etc.).
+- **`selected_default`** — the backend `detect_backend(None)` would return, derived from priority walk over ok-status probes.
+- **14 additional Tier 2 tests** at `tests/integration/test_km_doctor.py` verifying every new JSON section has the spec-required shape.
+
+### Added — `km.track` auto-capture completes §2.4 17-field envelope (closes #548 follow-up)
+
+- **7 new persisted columns** added to `experiment_runs`: `kailash_ml_version`, `lightning_version`, `torch_version`, `cuda_version`, `device_used`, `accelerator`, `precision`. Every `km.track()` run now persists the full reproducibility envelope `specs/ml-tracking.md` §2.4 mandates.
+- **`_capture_versions()` helper** — probes `kailash_ml.__version__` (always), `torch.__version__` + `torch.version.cuda` (when importable), `lightning.__version__` (when importable). Each probe is wrapped separately so a partial stack still yields as many fields as possible.
+- **`ExperimentRun.attach_training_result`** extended to mirror `TrainingResult.device_used` / `.accelerator` / `.precision` (top-level reproducibility fields) in addition to the existing `device.*` `DeviceReport` envelope. Never stores `"auto"` — fields pass through as concrete strings.
+- **Additive schema migration** — `initialize()` now probes `PRAGMA table_info(experiment_runs)` and runs `ALTER TABLE ADD COLUMN` for each 0.14 column missing from pre-0.14 databases. Existing `~/.kailash_ml/ml.db` files keep working; historical rows carry SQL `NULL` for the new fields.
+- **2 new Tier 2 tests** at `tests/integration/test_km_track.py`:
+  - `test_km_track_all_17_auto_capture_fields_present` — mechanical whitelist check that every §2.4 field is a persisted column.
+  - Extended trainable-integration test to assert `row["device_used"] == result.device_used`, `row["accelerator"] == result.accelerator`, `row["precision"] == result.precision` with the explicit "never `auto`" guard.
+
+### Fixed
+
+- **Partial-implementation orphans** — both km.doctor (`10/14` checks) and km.track (`10/17` fields) shipped as partial MVPs in 0.13.0. 0.14.0 closes each to the full spec-mandated surface; no deferred sub-items remain.
+
 ## [0.13.0] - 2026-04-20 — ONNX bridge matrix completion + km.track + km.doctor
 
 Three spec-compliance issues resolved in one minor release: #546 (ONNX matrix), #547 (km.doctor), #548 (km.track Phase 6).

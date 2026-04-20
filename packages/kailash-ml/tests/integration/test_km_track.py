@@ -17,27 +17,12 @@ the row through the backend's public API. This matches
 from __future__ import annotations
 
 import asyncio
-import os
 import signal
-import tempfile
-import threading
-import time
 from pathlib import Path
-from typing import Any
 
 import polars as pl
 import pytest
-
-import kailash_ml as km
-from kailash_ml._device_report import DeviceReport
-from kailash_ml._result import TrainingResult
-from kailash_ml.tracking import (
-    ExperimentRun,
-    RunStatus,
-    SQLiteTrackerBackend,
-    track,
-)
-
+from kailash_ml.tracking import RunStatus, SQLiteTrackerBackend, track
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -68,7 +53,7 @@ async def backend(tmp_path: Path) -> SQLiteTrackerBackend:
 
 
 async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
-    """The 16 auto-capture fields survive a write/read round trip."""
+    """The 17 auto-capture fields survive a write/read round trip."""
     async with track("round-trip-exp", backend=backend, lr=0.01, depth=5) as run:
         await run.log_param("batch_size", 128)
         run_id = run.run_id
@@ -77,12 +62,20 @@ async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
     row = await backend.get_run(run_id)
     assert row is not None, "run should be persisted after context exit"
 
-    # 16 auto-capture fields (spec §2.4)
+    # 17 auto-capture fields (spec §2.4)
     assert row["run_id"] == run_id
     assert row["experiment"] == experiment
     assert row["status"] == RunStatus.COMPLETED
     assert row["host"] is not None and row["host"] != ""
     assert row["python_version"].startswith("3.")
+    # Library/runtime versions (spec §2.4 rows 5-8) — kailash_ml always
+    # populated; torch / lightning populated when importable (they are
+    # base deps so always True in this test's venv). cuda_version is
+    # None on non-CUDA hosts.
+    assert row["kailash_ml_version"] is not None and row["kailash_ml_version"] != ""
+    assert row["torch_version"] is not None and row["torch_version"].startswith("2.")
+    assert row["lightning_version"] is not None
+    assert "cuda_version" in row
     # git fields — tolerate absence in CI / non-git checkouts
     assert "git_sha" in row
     assert "git_branch" in row
@@ -95,6 +88,9 @@ async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
     # parent_run_id explicitly None for a top-level run
     assert row["parent_run_id"] is None
     # device fields None until attach_training_result is called
+    assert row["device_used"] is None
+    assert row["accelerator"] is None
+    assert row["precision"] is None
     assert row["device_family"] is None
     assert row["device_backend"] is None
     assert row["device_fallback_reason"] is None
@@ -102,6 +98,52 @@ async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
 
     # Params preserved through round trip
     assert row["params"] == {"lr": 0.01, "depth": 5, "batch_size": 128}
+
+
+async def test_km_track_all_17_auto_capture_fields_present(
+    backend: SQLiteTrackerBackend,
+) -> None:
+    """Explicit whitelist check: every spec §2.4 field column exists.
+
+    Mechanical AST-style assertion — iterate the spec's 17-field list
+    and assert each is a persisted column on the row. Catches a future
+    refactor that silently drops a column (e.g. during the 0.14 → 1.0
+    schema bump).
+    """
+    expected_fields = {
+        # From spec §2.4 table, plus the core run_id/experiment/status
+        # keys that are part of the same surface.
+        "run_id",
+        "experiment",
+        "status",
+        "parent_run_id",
+        "tenant_id",
+        "host",
+        "python_version",
+        "kailash_ml_version",
+        "lightning_version",
+        "torch_version",
+        "cuda_version",
+        "git_sha",
+        "git_branch",
+        "git_dirty",
+        "wall_clock_start",
+        "wall_clock_end",
+        "duration_seconds",
+        "device_used",
+        "accelerator",
+        "precision",
+        "device_family",
+        "device_backend",
+        "device_fallback_reason",
+        "device_array_api",
+    }
+    async with track("all-fields-exp", backend=backend) as run:
+        run_id = run.run_id
+    row = await backend.get_run(run_id)
+    assert row is not None
+    missing = expected_fields - set(row.keys())
+    assert not missing, f"spec §2.4 fields not persisted: {sorted(missing)}"
 
 
 # ---------------------------------------------------------------------------
@@ -276,3 +318,14 @@ async def test_km_track_integrates_trainable_device_report(
     # device_array_api is a bool: True when Array API engaged, False
     # otherwise. The sklearn adapter populates it deterministically.
     assert row["device_array_api"] in {True, False}
+    # Top-level TrainingResult mirrors (spec §2.4 rows 11-13) — every
+    # trainable adapter populates these as concrete strings (never
+    # "auto"). device_used is the torch device string; accelerator is
+    # the Lightning accelerator label; precision is the concrete
+    # Lightning precision.
+    assert row["device_used"] == result.device_used
+    assert row["accelerator"] == result.accelerator
+    assert row["precision"] == result.precision
+    assert row["device_used"] and row["device_used"] != "auto"
+    assert row["accelerator"] and row["accelerator"] != "auto"
+    assert row["precision"] and row["precision"] != "auto"
