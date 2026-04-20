@@ -1,337 +1,96 @@
 source_repo: kailash-py
 codify_date: "2026-04-20"
 codify_session: |
-  Session 2026-04-20 outstanding-items + full-specs /redteam cycle.
+  Session 2026-04-20 evening — dialect-safety sweep + ML spec completion +
+  3 MED cleanups (PRs #557, #558, #559, #560).
 
-  Two back-to-back phases in one session:
-    Phase A — outstanding-items sweep: 8 sibling-package `kailash>=2.8.9`
-      floor bumps on PR #543 (merged as 388f5d2d; issue #541 auto-closed),
-      33 agent worktrees cleaned, loom Gate-2 verified distributed
-      (template kailash-coc-claude-py at v3.5.9 has all 3 rules from the
-      2026-04-19 proposal).
-    Phase B — /redteam scoped to "gaps against full specs": 3 analyst
-      agents delegated in parallel audited 34 spec files. 63 of 76
-      assertions GREEN. 13 HIGH findings surfaced; 2 fixed inline
-      (commit 1313ae56 kaizen pytest-benchmark dep; commit 842ebad4
-      nexus __all__ WebSocket+Webhook transports), 11 deferred to
-      dedicated implementation sessions (km.track Phase 6, ONNX bridge
-      matrix completion, km.doctor, kailash-trust orphan, dialect
-      quote_identifier core/dataflow drift).
+  All 10 findings from the morning /redteam (6 HIGH + 4 MED) resolved.
+  kailash 2.8.11 (#557), kailash-ml 0.14.0 (#558), MED cleanups (#559),
+  and a spec amendment clarifying ml-engines §12 as 2.0.0-scoped (#560).
 
-  Three new institutional failure modes emerged and are proposed for
-  codification below. All 3 are cross-SDK applicable (Python + Rust).
+  One new institutional failure mode emerged during CI:
+    - The Shard A agent changed `audit_store.py` to raise
+      `IdentifierError` instead of the legacy `ValueError("Invalid table
+      name")`. The paired test
+      `tests/trust/unit/test_sqlite_audit_store.py::test_invalid_table_name_rejected`
+      still asserted `pytest.raises(ValueError, match="Invalid table name")`.
+      CI caught this across 7 matrix jobs (Python 3.12/3.13/3.14 on ubuntu
+      + Python 3.11/3.12/3.13/3.14 on windows). Fixed in commit `d78ee329`.
+
+  Existing `orphan-detection.md §4a` covers the same class of failure for
+  `NotImplementedError` → real-impl transitions. This session's evidence
+  extends the pattern to any error-contract refactor — when a fix changes
+  the exception TYPE raised by a public API (not just converting a stub),
+  the paired pytest.raises(...) tests MUST sweep in the same commit.
 
 status: pending_review
 review_date: null
-review_target_loom_version: "2.8.22"
+review_target_loom_version: null
 distributed_date: null
 
 changes:
-  - id: testing-pytest-plugin-declaration-pair
+  - id: orphan-detection-error-contract-refactor-sweep
     type: rule
-    severity: HIGH
-    target: rules/testing.md
-    section: "MUST: Pytest Plugin + Marker Declaration Pair"
+    severity: MEDIUM
+    target: rules/orphan-detection.md
+    section: "§4b: Error-Contract Refactor MUST Sweep Paired Tests In Same Commit"
     summary: |
-      Any test file that uses @pytest.mark.X decorator or an X fixture
-      MUST have the corresponding pytest-X plugin declared in the
-      sub-package's [dev] extras AND register X in the pytest markers
-      config in the same commit. Un-declared plugin usage BLOCKS test
-      collection with "'X' not found in markers configuration option"
-      — identical failure class to the declared=imported rule in
-      dependencies.md but for pytest plugins specifically.
+      Extension of §4a beyond NotImplementedError → real-impl. When a fix
+      changes the exception TYPE raised by a public API (e.g. ValueError
+      → IdentifierError, KeyError → TypedNotFoundError), the paired
+      pytest.raises(OldType, ...) tests MUST be updated in the same
+      commit. The grep is mechanical:
+
+        grep -rln "pytest.raises(<OldType>.*<old_message>" tests/
+
+      Any match whose code-under-test is what the fix modifies MUST
+      update to assert the new contract.
     classification_suggestion: global
     rationale: |
-      The failure mode is pytest-specific but language-agnostic within
-      Python. kailash-rs uses cargo test which has its own equivalent
-      pattern (proptest features, tokio-test features) that could hit
-      the same declared-vs-used drift. Cross-SDK applicable.
+      Cross-SDK applicable. Rust's `Result<_, OldError>` → `Result<_, NewError>`
+      refactors produce the same failure — tests using `.unwrap_err()` or
+      `assert_matches!(err, OldError::...)` fail identically when the error
+      type changes. The rule is mechanism-agnostic; the grep syntax differs
+      but the contract is identical.
     evidence:
-      session: "2026-04-20"
+      session: "2026-04-20 evening (dialect-safety sweep)"
       finding: |
-        `packages/kailash-kaizen/tests/e2e/memory/test_persistent_buffer_e2e.py`
-        used @pytest.mark.benchmark + benchmark fixture from pytest-benchmark;
-        neither the plugin nor the marker was declared anywhere. Collection
-        blocked 11,917 tests until commit 1313ae56 added pytest-benchmark>=4.0.0
-        to kaizen [dev] + registered `benchmark` in markers.
+        Shard A converted `src/kailash/trust/audit_store.py` to raise
+        `IdentifierError` (from `kailash.db.dialect`) on invalid table
+        names instead of the legacy `ValueError("Invalid table name")`.
+        The paired test at
+        `tests/trust/unit/test_sqlite_audit_store.py::TestSqliteAuditStoreInit::test_invalid_table_name_rejected`
+        still matched the old error type + message. PR #557 CI caught
+        this on 7 matrix jobs.
+
+        Root cause: the agent's prompt emphasized adding regression tests
+        for injection payloads (which landed correctly in a NEW test file)
+        but didn't include the mechanical sweep for EXISTING tests that
+        assert the old error contract. Fix commit: `d78ee329`.
+
+      grep_command: |
+        grep -rln 'pytest.raises.*Invalid table name' tests/
+        # Output BEFORE fix:
+        # tests/trust/unit/test_sqlite_audit_store.py
+
       additional_context: |
-        The broader pattern: pytest plugins are the invisible middle layer.
-        Sub-package [dev] extras declare them; root pyproject.toml ini_options
-        register their markers. Either layer can silently drift and both
-        must align for collection to pass.
-
-  - id: orphan-detection-collect-only-per-package-extras
-    type: rule
-    severity: MEDIUM
-    target: rules/orphan-detection.md
-    section: "§5a: Collect-Only Gate Per Sub-Package With [dev] Extras"
-    summary: |
-      Existing §5 mandates `pytest --collect-only` as a merge gate but
-      implies a single root-venv invocation across every test directory.
-      Monorepos with sub-package test-only deps (hypothesis in pact,
-      respx in kaizen, pytest-benchmark in kaizen) cannot satisfy that
-      shape — python-environment.md Rule 4 explicitly BLOCKS duplicating
-      sub-package test deps in root [dev]. This proposal clarifies that
-      the gate passes when EITHER (a) the root venv is bootstrapped with
-      every sub-package's [dev] extras (`uv pip install -e packages/X[dev]`)
-      OR (b) collection runs per-package inside the sub-package's own
-      venv. Single combined root-venv invocation is NOT a requirement.
-    classification_suggestion: global
-    rationale: |
-      Monorepo sub-package test-dep separation is a Python idiom; the
-      equivalent in Rust is workspace-level dev-dependencies per-crate,
-      which cargo already handles cleanly. The rule extension is
-      Python-specific in mechanism but documents a general monorepo
-      principle: collection-gate granularity matches dep-graph granularity.
-    evidence:
-      session: "2026-04-20"
-      finding: |
-        Attempted `pytest --collect-only tests/ packages/*/tests/`
-        from root venv produced ImportPathMismatchError (2 conftest.py
-        both register as `tests.conftest`) + ModuleNotFoundError for
-        hypothesis + respx + pytest-benchmark. Per-package collection
-        against each `packages/X/tests/` directory after installing
-        `packages/X[dev]` extras succeeded for all 9 sub-packages.
-
-  - id: specs-authority-full-sweep-on-edit
-    type: rule
-    severity: MEDIUM
-    target: rules/specs-authority.md
-    section: "MUST 5b: Full-Specs Re-Derivation On Edit"
-    summary: |
-      Extension of MUST Rule 5 (Spec Files Are Updated at First Instance).
-      Add a sibling clause: every spec edit MUST trigger a re-derivation
-      sweep against the FULL sibling-spec set in the same domain
-      (specs/ml-*.md for ML edits, specs/dataflow-*.md for DataFlow edits,
-      specs/nexus-*.md for Nexus edits), not only the edited file. Three
-      categories of finding only emerge from the full sweep:
-        1. Field-shape divergence — sibling specs reference the changed
-           dataclass differently.
-        2. Downstream consumer drift — specs whose mandates depend on
-           the changed surface are now stale.
-        3. Cross-spec terminology drift — same concept named two ways
-           across files.
-    classification_suggestion: global
-    rationale: |
-      Cross-SDK: kailash-rs has the same specs/ layout with the same
-      cross-spec drift hazard. The rule is conceptually about spec
-      authoring discipline, not language-specific mechanism.
-    evidence:
-      session_1: "2026-04-19 (journal 0007)"
-      session_2: "2026-04-20 (journal 0008)"
-      pattern_recurrence: |
-        Round 3 narrow scope ("specs I just edited") produced 14/14 green
-        APPROVE. Round 4 full-specs scope found 9 HIGH findings in the
-        SAME ML domain because ml-tracking §2.2/§2.4 and ml-engines §6.1
-        were never part of Phase 1 scope. The scope-narrowing caused a
-        false-confidence APPROVE. Two sessions now confirm the pattern;
-        rule extension strengthened by reproducibility.
-
-cross_sdk_parity:
-  - kailash-rs equivalent: |
-      All 3 rule additions apply to kailash-rs. The pytest-plugin rule
-      generalizes to cargo test feature-flag declaration. The collect-only
-      per-package rule generalizes to cargo workspace test granularity.
-      The full-specs sweep rule applies 1:1. After loom/ Gate-1
-      classification, kailash-rs's coc-claude-rs template inherits via
-      /sync.
-
-post_release_followups:
-  - id: ml-phase-6-implementation
-    severity: HIGH
-    target: future sessions
-    summary: |
-      /redteam surfaced 6 ML findings all gated on Phase 6 implementation:
-      km.track() NotImplementedError, 16 mandatory auto-capture fields
-      (host / python_version / git_sha / device_family / device_fallback_reason
-      / tenant_id / ...), COMPLETED/FAILED/KILLED run-status auto-set.
-      These represent specs/ml-tracking.md §2.2 + §2.4 being authoritative
-      against code that still stubs. Either the spec needs a deviation
-      note per specs-authority §6 OR the code ships. Dedicated /analyze
-      → /todos → /implement cycle required; not fixable in a redteam pass.
-
-  - id: ml-onnx-bridge-matrix-completion
-    severity: HIGH
-    target: future sessions
-    summary: |
-      ONNX bridge declares 6 frameworks, implements 3 (sklearn + lightgbm
-      + xgboost). Missing torch / lightning / catboost branches plus
-      regression tests (test_onnx_roundtrip_{framework}.py). Spec
-      ml-engines.md §6.1 MUST 2 was authored specifically to block the
-      "claims in matrix without implemented branch" anti-pattern the
-      current state matches. Dedicated session required.
-
-  - id: ml-km-doctor-console-script
-    severity: HIGH
-    target: future sessions
-    summary: |
-      specs/ml-backends.md §7 documents 30+ lines of km.doctor / km-doctor
-      contract (exit codes 0/1/2, --json output, --require=<backend>,
-      CI lane requirement). Zero backing code — grep "def doctor\|km.doctor"
-      packages/kailash-ml/src/ returns empty. Dedicated implementation
-      session required.
-
-  - id: kailash-trust-orphan-disposition
-    severity: MEDIUM
-    target: future session
-    summary: |
-      packages/kailash-trust/ is a 104-LOC re-export shim listing 39 symbols
-      from kailash.trust.*. Zero test files, zero production consumer
-      imports through the shim (only docs references). The underlying
-      kailash.trust.* code IS properly tested. Disposition: either (a)
-      add Tier 2 smoke test that round-trips through one manager via
-      the kailash_trust.* namespace, or (b) delete packages/kailash-trust/
-      and direct users to kailash directly. Packaging decision needed.
-
-  - id: dialect-quote-identifier-core-drift
-    severity: MEDIUM
-    target: future session
-    summary: |
-      rules/dataflow-identifier-safety.md MUST Rule 1 mandates
-      dialect.quote_identifier() on every dynamic DDL path. grep
-      "quote_identifier" src/ returns zero matches — helper lives only
-      in packages/kailash-dataflow/src/dataflow/adapters/. Core
-      src/kailash/db/dialect.py has only _validate_identifier
-      (validate-only, no quoting), which the rule explicitly deems
-      insufficient. ConnectionManager.create_index() interpolates
-      identifiers via f-string after validation. Either mirror the
-      DataFlow dialect contract into core OR amend specs/infra-sql.md
-      to document the intentional split.
-
-  - id: orphan-detection-stub-implementation-sweeps-deferral-tests
-    type: rule
-    severity: MEDIUM
-    target: rules/orphan-detection.md
-    section: "§4a: Stub Implementation MUST Sweep Deferral Tests In Same Commit"
-    summary: |
-      The mirror of existing §4 (API removal sweeps tests). When an
-      agent implements what was a NotImplementedError stub (Phase N
-      scaffold), the scaffold-era test that asserts
-      pytest.raises(NotImplementedError) flips from pass to fail the
-      moment the implementation lands — blocking the release PR's CI.
-      The implementation-author is uniquely positioned to grep for the
-      paired deferral test and delete it in the same commit. Adds the
-      DO/DO NOT pattern, BLOCKED rationalizations, and evidence from
-      the 2026-04-20 kailash-ml 0.13.0 release where
-      test_km_track_deferral_names_phase blocked 5 matrix jobs until
-      a follow-up commit removed it.
-    classification_suggestion: global
-    rationale: |
-      Cross-SDK applicable: Rust has the same pattern via
-      `todo!()` / `unimplemented!()` macros that scaffold-era tests
-      may assert-on with `should_panic`. The mirror-of-§4 framing
-      makes the rule symmetric: both api-removal and api-implementation
-      require a paired-test sweep in the same commit.
-    evidence:
-      session: "2026-04-20"
-      finding: |
-        kailash-ml 0.13.0 (PR #552, merge commit 767c9103) bundled
-        three spec-compliance closures (#546 ONNX matrix, #547
-        km.doctor, #548 km.track Phase 6). The km.track Phase 6
-        implementation replaced
-        `src/kailash_ml/__init__.py::track() -> raise NotImplementedError`
-        with a real async context manager. The scaffold test at
-        `packages/kailash-ml/tests/unit/test_mlengine_construction.py
-        ::TestMLEngineDeferredBodies::test_km_track_deferral_names_phase`
-        continued to call `track()` inside
-        `pytest.raises(NotImplementedError)`. CI surfaced this as
-        "DID NOT RAISE <class 'NotImplementedError'>" failing
-        across Base (Python 3.10/3.11/3.12/3.13/3.14) — 5 matrix jobs
-        red simultaneously. Fix: release/kailash-ml-0.13.0 commit
-        `ef8751c5` deleted the deferral test.
-      remediation: |
-        Implementation-author grep at implementation time:
-        `grep -rln 'NotImplementedError.*<symbol>\|<symbol>.*deferral' tests/`
-        costs ~1 second; catches the orphan before CI even starts.
-
-  - id: agents-parallel-worktree-package-ownership
-    type: rule
-    severity: MEDIUM
-    target: rules/agents.md
-    section: "§: MUST Parallel-Worktree Package Ownership Coordination"
-    summary: |
-      When launching parallel worktree agents that touch the SAME
-      sub-package, the orchestrator MUST designate ONE agent as
-      version-owner (pyproject.toml + __init__.py::__version__ +
-      CHANGELOG) and tell every sibling agent explicitly NOT to edit
-      those files. Without the exclusion clause, agents race on the
-      same version bump and CHANGELOG header; the merge picks one
-      side and silently discards the other agent's CHANGELOG prose.
-      Adds DO/DO NOT with verbatim prompt fragments, BLOCKED
-      rationalizations, and the 2026-04-20 three-agent-parallel
-      success case as positive evidence.
-    classification_suggestion: global
-    rationale: |
-      Cross-SDK applicable: Rust has the same pattern with
-      `Cargo.toml [package] version` and per-crate CHANGELOG files.
-      The ownership contract is a multi-agent coordination primitive
-      independent of the build system — applies to any parallel
-      worktree setup where N agents produce commits into a single
-      release surface.
-    evidence:
-      session: "2026-04-20"
-      finding: |
-        Three parallel worktree agents resolved issues #546
-        (ONNX matrix), #547+#548 (km.doctor + km.track), and #550
-        (quote_identifier) in one session. kailash-ml 0.13.0 release:
-        Agent 1 was explicitly designated version-owner for
-        packages/kailash-ml/pyproject.toml +
-        __init__.py::__version__ + CHANGELOG.md. Agent 2's prompt
-        included the verbatim exclusion: "COORDINATION NOTE: A
-        parallel agent is resolving #546 (ONNX bridge matrix) in
-        another worktree and will ALSO bump version to 0.13.0 +
-        write CHANGELOG. To avoid merge conflicts, you (this agent)
-        MUST NOT edit packages/kailash-ml/pyproject.toml,
-        packages/kailash-ml/src/kailash_ml/__init__.py::__version__,
-        or packages/kailash-ml/CHANGELOG.md." Agent 3 worked on a
-        different package (core kailash/, 2.8.10). Result: merge
-        integration was mechanical — one CHANGELOG conflict on the
-        root file (trivial resolution), zero conflicts on package
-        pyproject.toml or package CHANGELOG. Integration step added
-        km-doctor console script + expanded CHANGELOG (which Agent 1
-        correctly seeded with ONNX entries only) to cover all three
-        issues.
-      counterfactual: |
-        Without the exclusion clause, Agent 2 would have independently
-        bumped 0.12.1 → 0.13.0 and written its own top-level
-        `## [0.13.0]` CHANGELOG entry. At merge time git would have
-        picked one agent's version field (arbitrary) and one agent's
-        CHANGELOG header (arbitrary), silently dropping the other's
-        prose. The cost of the exclusion clause is one sentence per
-        sibling prompt; the cost of the collision is manual CHANGELOG
-        reconciliation + risk of dropped coverage notes.
-
-  release_completion_update: |
-    All 5 post-release followups logged in the initial proposal
-    (ml-phase-6-implementation, ml-onnx-bridge-matrix-completion,
-    ml-km-doctor-console-script, kailash-trust-orphan-disposition,
-    dialect-quote-identifier-core-drift) are now COMPLETE as of
-    session 2026-04-20 (same day as the /redteam sweep that surfaced
-    them). Merged PRs: #551 (kailash-trust delete), #552
-    (kailash-ml 0.13.0 bundling #546+#547+#548), #553 (kailash 2.8.10
-    for #550). Published tags: v2.8.10, ml-v0.13.0. PyPI yank of
-    kailash-trust==0.1.1 completed by human maintainer.
-    These items can be marked done in loom's Gate-1 review.
+        This is the specific sub-pattern of `security.md § Multi-Site
+        Kwarg Plumbing` for error-contract changes. The kwarg-plumbing
+        rule covers "when you change the signature, grep every caller";
+        this proposal covers "when you change the error type, grep every
+        pytest.raises". Same mechanism, different surface.
 
 summary_note: |
-  5 rule additions + 5 completed implementation followups. Rule
-  additions: rules/testing.md (pytest plugin+marker pair),
-  rules/orphan-detection.md (§5a collect-only per-package AND §4a
-  stub-implementation sweeps deferral tests), rules/specs-authority.md
-  (full sweep on edit), rules/agents.md (parallel-worktree package
-  ownership). All 5 follow rule-authoring.md meta-rule
-  (Loud/Linguistic/Layered). Classification_suggestion: global for
-  all 5. Cross-SDK applicable in mechanism; Python-specific evidence
-  but the underlying patterns apply to Rust equivalents
-  (cargo features, per-crate CHANGELOG, todo!() scaffolds).
+  1 rule extension (MED) — orphan-detection §4b mirrors §4a for
+  error-contract refactors on non-stub APIs. Same
+  rule-authoring.md meta-rule (Loud/Linguistic/Layered), grep-based
+  mechanical sweep, cross-SDK applicable in mechanism.
 
-  Implementation followups (all now COMPLETE): km.track Phase 6,
-  ONNX bridge matrix, km.doctor + km-doctor console script,
-  kailash-trust package deletion + PyPI yank, core quote_identifier
-  port. See release_completion_update for merge commits and tags.
+  Classification suggestion: global.
 
-  Pre-existing: orphan-detection.md and agents.md now exceed the
-  200-line cap in rule-authoring.md MUST Rule (orphan-detection: 240,
-  agents: 288). Session 2026-04-20 notes already flagged this; future
-  codify cycle should extract reference material from both files into
-  guides or skills. Not blocking this proposal.
+  Session artifacts:
+  - PR #557 (kailash 2.8.11 dialect-safety sweep — MERGED after CI fix)
+  - PR #558 (kailash-ml 0.14.0 km.doctor + km.track — MERGED)
+  - PR #559 (3 MED cleanups — MERGED)
+  - PR #560 (ml-engines §12 spec amendment — MERGED)
+  - Issue #556 (MCP elicitation sender half — filed)
