@@ -1339,14 +1339,274 @@ class MLEngine:
     ) -> Any:
         """Evaluate a registered model on new data.
 
-        Phase 4 implements the evaluation path.
+        Per ``specs/ml-engines.md`` §2.2 evaluate() scores a registered
+        model against a held-out or live dataset and returns typed
+        metrics. Three modes gate how the evaluation is recorded
+        operationally — the scoring itself is identical across modes:
+
+        - ``"holdout"``: standard offline evaluation. Produces metrics,
+          emits a structured ``evaluate.ok`` log line for post-hoc
+          audit, does NOT touch the drift monitor.
+        - ``"shadow"``: read-only production comparison. Emits an
+          audit line tagged ``operation="shadow_evaluate"`` and
+          explicitly skips drift-monitor updates so the shadow run
+          does not poison the baseline.
+        - ``"live"``: current-model evaluation. Emits
+          ``operation="evaluate"`` AND, when a reference window has
+          been set on the engine's drift monitor for this model,
+          updates the monitor's current-window statistics so drift
+          detection has fresh data.
+
+        Args:
+            model: Either a :class:`ModelVersion` or a URI string
+                ``"models://<name>/v<version>"``. URI strings are
+                resolved through the Engine's ``ModelRegistry``.
+            data: Polars DataFrame containing both features and the
+                target column. The target column name comes from the
+                model's signature; when the signature is absent, it
+                falls back to ``self._setup_result.target`` and
+                ultimately raises if neither is available.
+            metrics: Metric names to compute. When ``None``, a sensible
+                default set is chosen from the signature's model type
+                or the setup result's task type: classification →
+                ``accuracy``/``f1``/``precision``/``recall``;
+                regression → ``rmse``/``mae``/``r2``.
+            mode: One of ``"holdout"``, ``"shadow"``, ``"live"``.
+
+        Returns:
+            A :class:`EvaluationResult` with the per-metric scores plus
+            the echoed mode and tenant_id.
+
+        Raises:
+            ValueError: When ``mode`` is not recognized.
+            TargetNotFoundError: When ``data`` is missing the target
+                column.
+            ModelNotFoundError: When ``model`` is a URI that does not
+                resolve to a registered model.
         """
+        from kailash_ml._results import EvaluationResult
+        from kailash_ml.metrics import compute_metrics as _compute_metrics
+        from kailash_ml.engines.model_registry import (
+            ModelVersion as _RegistryModelVersion,
+        )
+
         if mode not in ("holdout", "shadow", "live"):
             raise ValueError(
                 f"evaluate(mode=...) must be 'holdout', 'shadow', or 'live'; "
                 f"got {mode!r}."
             )
-        raise NotImplementedError(f"MLEngine.evaluate — {_PHASE_4}")
+        if data is None:
+            raise ValueError("evaluate(data=...) must not be None.")
+
+        # Resolve model → ModelVersion + URI.
+        registry = await self._ensure_registry_for_read()
+        if isinstance(model, _RegistryModelVersion):
+            mv = model
+            model_uri = f"models://{mv.name}/v{mv.version}"
+        elif isinstance(model, str):
+            name, version = _parse_model_uri(model)
+            try:
+                mv = await registry.get_model(name, version)
+            except Exception as exc:  # noqa: BLE001
+                raise ModelNotFoundError(name=name, version=version) from exc
+            model_uri = model
+        else:
+            raise TypeError(
+                f"evaluate(model=...) must be a ModelVersion or a string "
+                f"URI ('models://<name>/v<version>'); got "
+                f"{type(model).__name__}."
+            )
+
+        # Resolve target column. Prefer the model's signature (what was
+        # trained on), fall back to setup_result.target, raise if neither
+        # is available — silent target inference is BLOCKED.
+        target_column: Optional[str] = None
+        if mv.signature is not None:
+            # FeatureSchema stores the entity-id column explicitly, but
+            # the target column is carried by the setup result or caller
+            # context. Many signatures don't persist the target column
+            # directly (training_pipeline.py treats it as caller-known).
+            # We inspect input_schema for hints but prefer setup_result.
+            target_column = getattr(mv.signature, "target", None)
+        if target_column is None and self._setup_result is not None:
+            target_column = getattr(self._setup_result, "target", None)
+        if target_column is None:
+            # Last-chance heuristic: when the registered model's
+            # signature omits target and setup was never called, we
+            # cannot safely infer — raise.
+            raise ValueError(
+                f"evaluate(model={model_uri}) could not resolve the "
+                f"target column. The model's signature does not carry "
+                f"a target, and setup() has not been called. Re-register "
+                f"the model with a signature that includes the target, "
+                f"or call setup() first."
+            )
+
+        # Validate target presence in the supplied data. This is the
+        # typed-error boundary per rules/zero-tolerance.md Rule 3 —
+        # downstream code must not see an unexpected KeyError deep in
+        # metric computation.
+        data_columns = self._columns_of(data)
+        if data_columns is None:
+            raise TypeError(
+                f"evaluate(data=...) must expose a `columns` attribute "
+                f"(polars.DataFrame, pandas.DataFrame, or compatible); "
+                f"got {type(data).__name__}."
+            )
+        if target_column not in data_columns:
+            raise TargetNotFoundError(column=target_column, columns=data_columns)
+
+        # Resolve the default metric list when the caller did not pass
+        # one. Model-type from signature wins over task_type from setup.
+        if metrics is None:
+            model_type: Optional[str] = None
+            if mv.signature is not None:
+                model_type = mv.signature.model_type
+            if model_type is None and self._setup_result is not None:
+                task_type = getattr(self._setup_result, "task_type", None)
+                if task_type == "classification":
+                    model_type = "classifier"
+                elif task_type == "regression":
+                    model_type = "regressor"
+                elif task_type == "clustering":
+                    model_type = "clustering"
+            if model_type in ("classifier", "classification"):
+                metric_names = ["accuracy", "f1", "precision", "recall"]
+            elif model_type in ("regressor", "regression"):
+                metric_names = ["rmse", "mae", "r2"]
+            elif model_type == "clustering":
+                # silhouette is registered via optional metric extras;
+                # callers can pass metrics=["silhouette"] explicitly.
+                metric_names = []
+            else:
+                metric_names = ["accuracy"]
+        else:
+            metric_names = list(metrics)
+
+        # Score the data. We use the existing InferenceServer primitive
+        # which already knows how to load model artifacts (pickle /
+        # ONNX) from the registry and run them on the submitted rows —
+        # this is the "§7.1 MUST 1 one-line evaluate beats MLflow's
+        # manual-loop baseline" contract in practice.
+        from kailash_ml.engines.inference_server import (
+            InferenceServer as _InferenceServer,
+        )
+
+        inference = _InferenceServer(registry)
+        # polars DataFrame → list of dicts for predict_batch
+        feature_columns = [c for c in data_columns if c != target_column]
+        # Use polars' native to_dicts() — fast, typed, preserves order.
+        feature_records = data.select(feature_columns).to_dicts()
+
+        start = time.perf_counter()
+        predictions_list = await inference.predict_batch(
+            mv.name, feature_records, version=mv.version, strict=False
+        )
+        elapsed = time.perf_counter() - start
+
+        y_pred = [p.prediction for p in predictions_list]
+        # y_prob for probability metrics, when every prediction
+        # exposes `.probabilities`. We pass only when fully populated.
+        y_prob: Any = None
+        if all(p.probabilities is not None for p in predictions_list):
+            y_prob = [p.probabilities for p in predictions_list]
+
+        # y_true: extract the target column as a Python list so the
+        # metric helpers (which accept ArrayLike) can coerce it
+        # uniformly whether polars/pandas/numpy.
+        y_true_series = data[target_column]
+        try:
+            y_true = y_true_series.to_list()
+        except AttributeError:
+            # pandas fallback
+            y_true = list(y_true_series)
+
+        computed = _compute_metrics(
+            y_true=y_true,
+            y_pred=y_pred,
+            metric_names=metric_names,
+            y_prob=y_prob,
+        )
+
+        sample_count = len(y_true)
+
+        # Audit trail + mode-specific side effects. Every evaluate call
+        # gets a structured log line with tenant_id for post-incident
+        # triage per rules/tenant-isolation.md Rule 5.
+        audit_operation = "shadow_evaluate" if mode == "shadow" else "evaluate"
+        logger.info(
+            "evaluate.ok",
+            extra={
+                "operation": audit_operation,
+                "mode": mode,
+                "model_uri": model_uri,
+                "model_name": mv.name,
+                "model_version": mv.version,
+                "sample_count": sample_count,
+                "elapsed_seconds": float(elapsed),
+                "tenant_id": self._tenant_id or "global",
+                "metrics_computed": sorted(computed.keys()),
+            },
+        )
+
+        # Live mode updates drift-monitor current-window stats when one
+        # has been configured for this model. Shadow mode MUST NOT —
+        # that is the whole point of the shadow/live split.
+        if mode == "live":
+            await self._update_drift_monitor_if_configured(
+                mv.name, data, feature_columns
+            )
+
+        return EvaluationResult(
+            model_uri=model_uri,
+            model_version=mv.version,
+            metrics=dict(computed),
+            mode=mode,
+            sample_count=sample_count,
+            elapsed_seconds=float(elapsed),
+            tenant_id=self._tenant_id,
+        )
+
+    async def _update_drift_monitor_if_configured(
+        self,
+        model_name: str,
+        data: Any,
+        feature_columns: list[str],
+    ) -> None:
+        """Update the DriftMonitor's current-window stats for ``model_name``.
+
+        Best-effort: when no drift monitor is wired or when the monitor
+        has no reference set for the model, this is a structured
+        no-op INFO log. Reference-window setup is the caller's
+        responsibility — evaluate(mode="live") only refreshes the
+        current window.
+        """
+        drift_monitor = getattr(self, "_drift_monitor", None)
+        if drift_monitor is None:
+            logger.info(
+                "evaluate.drift.no_monitor_configured",
+                extra={
+                    "model_name": model_name,
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
+            return
+        try:
+            # check_drift is the canonical read path; it updates the
+            # monitor's current-window stats as a side effect of its
+            # comparison against the reference window.
+            await drift_monitor.check_drift(model_name, data)
+        except ValueError as exc:
+            # No reference set is expected for first-call live runs —
+            # log at INFO, do not raise (the evaluation itself succeeded).
+            logger.info(
+                "evaluate.drift.no_reference",
+                extra={
+                    "model_name": model_name,
+                    "reason": str(exc),
+                    "tenant_id": self._tenant_id or "global",
+                },
+            )
 
     async def register(
         self,
