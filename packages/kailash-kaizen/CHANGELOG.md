@@ -5,6 +5,30 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] — 2026-04-20 — LLMDiagnostics + JudgeCallable → kaizen.judges + kaizen.evaluation split (#567 PR#5 of 7)
+
+### Added
+
+- **`kaizen.judges.LLMJudge`** — concrete Kaizen-side implementation of the cross-SDK `kailash.diagnostics.protocols.JudgeCallable` Protocol (async `__call__(JudgeInput) -> JudgeResult`). Wraps `kaizen_agents.Delegate` so every LLM call routes through the framework's cost tracker + env-sourced model resolution per `rules/framework-first.md` + `rules/env-models.md`. Raw `openai.chat.completions.create` / `litellm.completion` are BLOCKED (`rules/zero-tolerance.md` Rule 4). Structured `Signature(InputField/OutputField)` drives scoring — no regex on LLM output per `rules/agent-reasoning.md` MUST Rule 3.
+- **`kaizen.judges.LLMDiagnostics`** — context-managed Diagnostic session satisfying `kailash.diagnostics.protocols.Diagnostic`. Aggregates `llm_as_judge()` / `faithfulness()` / `self_consistency()` / `refusal_calibrator()` into a single `report()` dict with severity banding, polars DataFrame accessors (`judge_df` / `faithfulness_df`), and plotly dashboard (`plot_output_dashboard()`).
+- **`kaizen.judges.FaithfulnessJudge`**, **`kaizen.judges.SelfConsistencyJudge`**, **`kaizen.judges.RefusalCalibrator`** — rubric-bound judge wrappers. `SelfConsistencyJudge` shares one `CostTracker` across N independent scorings and surfaces variance statistics (`SelfConsistencyReport`).
+- **`kaizen.judges.JudgeBudgetExhaustedError`** — typed error when the judge's integer-microdollar `budget_cap` is hit mid-evaluation. Position-swap bias mitigation plus budget enforcement are routed through a shared `CostTracker` per `rules/tenant-isolation.md` when a `tenant_id` is present.
+- **`kaizen.evaluation.ROUGE`**, **`kaizen.evaluation.BLEU`**, **`kaizen.evaluation.BERTScore`** — pure-algorithmic NLP metrics as a **separate namespace** from `kaizen.judges`. Split intentional: judges carry LLM / cost / budget surface; evaluation is lightweight string math. Each metric raises a loud, actionable `ImportError` naming the `[evaluation]` extra if the underlying library is absent per `rules/dependencies.md` "Optional Extras with Loud Failure".
+- **New `[judges]` extra**: `bert-score>=0.3.13` + `rouge-score>=0.1.2` + `sacrebleu>=2.4`. Covers the judge runtime's algorithmic fallbacks.
+- **New `[evaluation]` extra**: same deps, narrower scope — for users who only want reference-comparison metrics without the judge / cost / budget surface.
+- **`specs/kaizen-judges.md`** and **`specs/kaizen-evaluation.md`** — new spec files documenting Protocol conformance contract, public API, cost-budget discipline, position-swap bias mitigation mechanics, security threats, Tier 1 + Tier 2 testing contract, MLFP attribution history. Both referenced from `specs/_index.md`.
+
+### Security
+
+- **No raw openai / litellm imports in `kaizen.judges` / `kaizen.evaluation`** — every LLM call routes through `kaizen_agents.Delegate`.
+- **No regex on LLM output for winner selection** — judge verdicts come from structured `OutputField` parsing via Signature. `_parse_score` regex heuristics from the MLFP donor source were replaced with Signature-based extraction.
+- **Budget tracking in integer microdollars** — `CostTracker` is the single source of truth; raw USD floats are not accumulated. Cross-SDK parity with `pact.costs.CostTracker`.
+- **Typed error on budget exhaustion** — `JudgeBudgetExhaustedError` is raised loud per `rules/zero-tolerance.md` Rule 3 rather than silently returning partial-result dicts that look successful.
+
+### Attribution
+
+- Portions of `LLMJudge` / `LLMDiagnostics` / `FaithfulnessJudge` / `SelfConsistencyJudge` / `RefusalCalibrator` originated in the MLFP diagnostics helpers (`shared/mlfp06/diagnostics/output.py` + `_judges.py`, Apache 2.0) and were re-authored for the Kailash ecosystem with medical-metaphor cleanup, framework-first routing through Delegate, structured Signature scoring, and `run_id` correlation. MLFP donation history recorded in the root `NOTICE` file per Apache-2.0 §4(d) (blocker B4 shipped in #569).
+
 ## [2.8.0] — 2026-04-20 — InterpretabilityDiagnostics adapter for open-weight LLM analysis (#567 PR#4 of 7)
 
 ### Added
