@@ -1428,43 +1428,53 @@ class DLDiagnostics:
 
         safe_lr = min_loss_lr / safety_divisor
 
-        go = _require_plotly()
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=lrs,
-                y=losses,
-                mode="lines",
-                name="raw loss",
-                line=dict(color="lightgray"),
+        # Per specs/ml-diagnostics.md §4.2 — lr_range_test's expensive
+        # LR sweep runs without plotly; only figure construction requires
+        # the [dl] extra. If plotly is missing the caller still gets the
+        # safe_lr / min_loss_lr / divergence_lr scalars and the raw
+        # `lrs` / `losses` series for custom plotting.
+        fig: Any = None
+        try:
+            go = _require_plotly()
+        except ImportError:
+            logger.debug("dldiagnostics.lr_range_test.figure_skipped_plotly_missing")
+        else:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=lrs,
+                    y=losses,
+                    mode="lines",
+                    name="raw loss",
+                    line=dict(color="lightgray"),
+                )
             )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=lrs,
-                y=losses_smooth,
-                mode="lines",
-                name="smoothed",
-                line=dict(color="#0D9488", width=2),
+            fig.add_trace(
+                go.Scatter(
+                    x=lrs,
+                    y=losses_smooth,
+                    mode="lines",
+                    name="smoothed",
+                    line=dict(color="#0D9488", width=2),
+                )
             )
-        )
-        fig.add_vline(
-            x=safe_lr,
-            line=dict(color="#22C55E", dash="dash"),
-            annotation_text=f"safe_lr = {safe_lr:.2e}",
-        )
-        fig.add_vline(
-            x=min_loss_lr,
-            line=dict(color="#F59E0B", dash="dot"),
-            annotation_text=f"min_loss_lr = {min_loss_lr:.2e}",
-        )
-        fig.update_layout(
-            title="LR Range Test (smoothed) - use safe_lr, not min_loss_lr",
-            xaxis_title="learning rate",
-            yaxis_title="loss",
-            xaxis_type="log",
-            template="plotly_white",
-        )
+            fig.add_vline(
+                x=safe_lr,
+                line=dict(color="#22C55E", dash="dash"),
+                annotation_text=f"safe_lr = {safe_lr:.2e}",
+            )
+            fig.add_vline(
+                x=min_loss_lr,
+                line=dict(color="#F59E0B", dash="dot"),
+                annotation_text=f"min_loss_lr = {min_loss_lr:.2e}",
+            )
+            fig.update_layout(
+                title="LR Range Test (smoothed) - use safe_lr, not min_loss_lr",
+                xaxis_title="learning rate",
+                yaxis_title="loss",
+                xaxis_type="log",
+                template="plotly_white",
+            )
         logger.info(
             "dldiagnostics.lr_range_test.ok",
             extra={
@@ -1855,7 +1865,11 @@ def diagnose_classifier(
     Returns:
         ``(diag, findings)``
     """
-    torch, _ = _require_torch()
+    # `import torch.nn.functional` below raises ImportError with a
+    # descriptive message if the [dl] extra is absent; the nested
+    # run_diagnostic_checkpoint call routes through _require_torch()
+    # for the DLDiagnostics constructor, so the loud-fail contract is
+    # preserved without an unused torch local here.
     import torch.nn.functional as F  # noqa: PLC0415
 
     def _cls_loss(m: Any, batch: Any) -> Any:
@@ -1899,7 +1913,11 @@ def diagnose_regressor(
     Returns:
         ``(diag, findings)``
     """
-    torch, _ = _require_torch()
+    # `import torch.nn.functional` below raises ImportError with a
+    # descriptive message if the [dl] extra is absent; the nested
+    # run_diagnostic_checkpoint call routes through _require_torch()
+    # for the DLDiagnostics constructor, so the loud-fail contract is
+    # preserved without an unused torch local here.
     import torch.nn.functional as F  # noqa: PLC0415
 
     def _reg_loss(m: Any, batch: Any) -> Any:
