@@ -72,7 +72,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import jsonschema
@@ -80,6 +80,11 @@ from kailash_mcp.errors import MCPError, MCPErrorCode, ValidationError
 from kailash_mcp.protocol.protocol import ProgressToken, get_protocol_manager
 
 logger = logging.getLogger(__name__)
+
+# Type alias for the send-callable injected into ElicitationSystem.
+# A SendFn takes a JSON-RPC message dict and returns an awaitable that completes
+# once the message has been pushed through the underlying transport.
+SendFn = Callable[[Dict[str, Any]], Awaitable[None]]
 
 
 class ContentType(Enum):
@@ -754,12 +759,69 @@ class StreamingHandler:
 
 
 class ElicitationSystem:
-    """Interactive user input collection system."""
+    """Interactive user input collection system (MCP elicitation/create).
 
-    def __init__(self):
-        """Initialize elicitation system."""
+    Implements the MCP 2025-06-18 `elicitation/create` server-to-client request.
+    The system is split into two halves, both wired into the framework's hot
+    path per rules/orphan-detection.md §1:
+
+    - **Send half** (`_send_elicitation_request`): serializes an
+      `elicitation/create` JSON-RPC request and pushes it through an injected
+      send-callable bound to the active client transport.
+    - **Receive half** (`provide_input` / `cancel_request`): invoked by the
+      MCPServer's dispatch loop when an inbound `elicitation/response` with a
+      matching request_id arrives from the client.
+
+    Construction:
+
+        >>> from typing import Awaitable, Callable
+        >>> # Option A: pass send-callable at construction time
+        >>> system = ElicitationSystem(send=transport.send_message)
+        >>> # Option B: bind after construction (transport attaches later)
+        >>> system = ElicitationSystem()
+        >>> system.bind_transport(transport.send_message)
+
+    When `send is None`, the system is receive-only: `provide_input()` still
+    works (useful for in-process tests), but `request_input()` raises
+    `MCPError(INVALID_REQUEST)` with actionable guidance naming
+    `bind_transport`.
+
+    See specs/mcp-server.md §4.9 for the full contract.
+    """
+
+    def __init__(self, send: Optional[SendFn] = None):
+        """Initialize elicitation system.
+
+        Args:
+            send: Optional transport send-callable. When provided, the system
+                can issue `elicitation/create` requests. When None, the system
+                is receive-only — `request_input()` raises MCPError until
+                `bind_transport()` is called.
+        """
+        self._send: Optional[SendFn] = send
         self._pending_requests: Dict[str, Dict[str, Any]] = {}
         self._response_callbacks: Dict[str, Callable] = {}
+        self._cancel_callbacks: Dict[str, Callable] = {}
+
+    def bind_transport(self, send: SendFn) -> None:
+        """Bind a transport send-callable after construction.
+
+        Idempotent: a second call replaces the prior send-fn (used when a
+        transport reconnects). Does not affect pending requests.
+
+        Args:
+            send: Awaitable callable that accepts a JSON-RPC message dict and
+                pushes it through the underlying transport.
+        """
+        self._send = send
+        logger.debug(
+            "elicitation.transport.bound",
+            extra={"has_send": True},
+        )
+
+    def has_transport(self) -> bool:
+        """Return True when a send-callable has been bound."""
+        return self._send is not None
 
     async def request_input(
         self,
@@ -767,96 +829,261 @@ class ElicitationSystem:
         input_schema: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = 300.0,
     ) -> Any:
-        """Request input from user with schema validation.
+        """Request input from the connected client.
+
+        Emits an MCP `elicitation/create` JSON-RPC request, awaits the
+        matching `elicitation/response`, validates against `input_schema`,
+        and returns the validated payload.
 
         Args:
-            prompt: Input prompt for user
-            input_schema: JSON Schema for input validation
-            timeout: Request timeout in seconds
+            prompt: Prompt shown to the user by the client.
+            input_schema: Optional JSON Schema (Draft 7) for response
+                validation. When None, defaults to `{"type": "string"}` on the
+                wire (per MCP spec: `requestedSchema` is required in the
+                outbound message).
+            timeout: Seconds to wait for the response. When None, waits
+                indefinitely.
 
         Returns:
-            User input
-        """
-        request_id = str(uuid.uuid4())
+            The validated response payload from the client.
 
-        # Store request
+        Raises:
+            MCPError(INVALID_REQUEST): No send-transport is bound.
+            MCPError(REQUEST_TIMEOUT): Client did not respond within `timeout`.
+            MCPError(REQUEST_CANCELLED): Client returned a `decline` or
+                `cancel` action.
+            ValidationError: Response failed `input_schema` validation.
+        """
+        if self._send is None:
+            raise MCPError(
+                "ElicitationSystem has no send transport bound. Construct via "
+                "ElicitationSystem(send=transport.send_message) or call "
+                "system.bind_transport(transport.send_message) before "
+                "request_input(). See specs/mcp-server.md §4.9.",
+                error_code=MCPErrorCode.INVALID_REQUEST,
+            )
+
+        request_id = str(uuid.uuid4())
+        start_ts = time.monotonic()
+        logger.info(
+            "elicitation.request.start",
+            extra={
+                "elicitation_request_id": request_id,
+                "has_schema": input_schema is not None,
+                "timeout": timeout,
+            },
+        )
+
+        # Store request metadata
         self._pending_requests[request_id] = {
             "prompt": prompt,
             "schema": input_schema,
             "timestamp": time.time(),
         }
 
-        # Create future for response
-        response_future = asyncio.Future()
-        self._response_callbacks[request_id] = lambda data: response_future.set_result(
-            data
+        # Create futures for response / cancellation
+        response_future: "asyncio.Future[Any]" = asyncio.Future()
+        self._response_callbacks[request_id] = lambda data: (
+            response_future.set_result(data) if not response_future.done() else None
+        )
+        self._cancel_callbacks[request_id] = lambda reason: (
+            response_future.set_exception(
+                MCPError(
+                    f"Client cancelled elicitation request: {reason}",
+                    error_code=MCPErrorCode.REQUEST_CANCELLED,
+                )
+            )
+            if not response_future.done()
+            else None
         )
 
         try:
-            # Send elicitation request (would be sent to client in real implementation)
+            # Dispatch the elicitation/create request through the bound transport
             await self._send_elicitation_request(request_id, prompt, input_schema)
 
-            # Wait for response
+            # Wait for the matching response (or cancel / timeout)
             if timeout:
                 response = await asyncio.wait_for(response_future, timeout=timeout)
             else:
                 response = await response_future
 
-            # Validate response
+            # Validate the response against the declared schema. MUST happen
+            # BEFORE returning to the calling tool — skipping validation lets
+            # client-supplied payloads reach downstream tools as trusted input.
             if input_schema:
                 validator = SchemaValidator(input_schema)
                 validator.validate(response)
 
+            elapsed_ms = (time.monotonic() - start_ts) * 1000
+            logger.info(
+                "elicitation.request.ok",
+                extra={
+                    "elicitation_request_id": request_id,
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
             return response
 
         except asyncio.TimeoutError:
-            raise MCPError(
-                "Input request timed out", error_code=MCPErrorCode.REQUEST_TIMEOUT
+            elapsed_ms = (time.monotonic() - start_ts) * 1000
+            logger.warning(
+                "elicitation.request.timeout",
+                extra={
+                    "elicitation_request_id": request_id,
+                    "elapsed_ms": elapsed_ms,
+                    "timeout": timeout,
+                },
             )
+            raise MCPError(
+                f"Elicitation request {request_id} timed out after {timeout}s",
+                error_code=MCPErrorCode.REQUEST_TIMEOUT,
+            )
+        except MCPError:
+            elapsed_ms = (time.monotonic() - start_ts) * 1000
+            logger.warning(
+                "elicitation.request.error",
+                extra={
+                    "elicitation_request_id": request_id,
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
+            raise
         finally:
-            # Clean up
             self._pending_requests.pop(request_id, None)
             self._response_callbacks.pop(request_id, None)
+            self._cancel_callbacks.pop(request_id, None)
 
     async def provide_input(self, request_id: str, input_data: Any) -> bool:
-        """Provide input for pending request.
+        """Deliver an `accept`-action response to a pending elicitation.
+
+        Invoked by the MCPServer dispatch loop when an inbound
+        `elicitation/response` (action == "accept") with matching request_id
+        arrives from the client. Schema validation is intentionally NOT done
+        here — it happens in `request_input()` after the response future
+        resolves, so validation is a single-point concern.
 
         Args:
-            request_id: Request ID
-            input_data: User input data
+            request_id: Request ID from the client's response (matches the
+                `id` field of the original elicitation/create request).
+            input_data: The `content` payload from the client's ElicitResult.
 
         Returns:
-            True if input was accepted
+            True if a matching pending request existed and the callback was
+            invoked. False when the request_id is unknown (e.g., late
+            response arriving after timeout cleanup).
         """
         if request_id not in self._pending_requests:
+            logger.debug(
+                "elicitation.response.unknown",
+                extra={"elicitation_request_id": request_id},
+            )
             return False
 
         callback = self._response_callbacks.get(request_id)
         if callback:
             callback(input_data)
+            logger.debug(
+                "elicitation.response.delivered",
+                extra={"elicitation_request_id": request_id},
+            )
+            return True
+
+        return False
+
+    async def cancel_request(
+        self, request_id: str, reason: str = "client cancelled"
+    ) -> bool:
+        """Cancel a pending elicitation.
+
+        Invoked by the MCPServer dispatch loop when the client's
+        `elicitation/response` carries action "decline" or "cancel", OR when
+        the transport disconnects with pending elicitations. The calling
+        `request_input()` coroutine will raise
+        `MCPError(REQUEST_CANCELLED)`.
+
+        Args:
+            request_id: Request ID to cancel.
+            reason: Short reason string propagated into the raised MCPError.
+
+        Returns:
+            True if a matching pending request existed and was cancelled.
+            False when the request_id is unknown.
+        """
+        if request_id not in self._pending_requests:
+            return False
+
+        callback = self._cancel_callbacks.get(request_id)
+        if callback:
+            callback(reason)
+            logger.info(
+                "elicitation.response.cancelled",
+                extra={
+                    "elicitation_request_id": request_id,
+                    "reason": reason,
+                },
+            )
             return True
 
         return False
 
     async def _send_elicitation_request(
-        self, request_id: str, prompt: str, schema: Optional[Dict[str, Any]]
+        self,
+        request_id: str,
+        prompt: str,
+        schema: Optional[Dict[str, Any]],
     ) -> None:
-        """Send elicitation request to client.
+        """Serialize and dispatch an MCP elicitation/create request.
+
+        Builds a JSON-RPC 2.0 message per MCP 2025-06-18 and pushes it
+        through the bound send-callable. The client responds asynchronously
+        via the MCP transport's normal receive loop; the server's dispatch
+        layer routes the inbound `elicitation/response` back into
+        `provide_input()` or `cancel_request()`.
 
         Args:
-            request_id: Request ID
-            prompt: Input prompt
-            schema: Input schema
-        """
-        # In a real implementation, this would send the request to the MCP client
-        # via the MCP protocol transport layer.
-        logger.info(f"Elicitation request {request_id}: {prompt}")
+            request_id: Unique request ID (also used as the JSON-RPC `id`).
+            prompt: Prompt string shown to the user.
+            schema: Optional JSON Schema for the response. When None, the
+                outbound `requestedSchema` defaults to
+                `{"type": "string"}` per MCP spec requirement.
 
-        raise NotImplementedError(
-            "Elicitation request sending requires MCP client transport integration. "
-            "See #556 — tracked for completion. "
-            "Provide a concrete implementation that sends the request via the MCP protocol."
+        Raises:
+            MCPError(INVALID_REQUEST): No send-callable is bound. Callers
+                should normally hit this via `request_input()` which checks
+                the transport first; the check is duplicated here as
+                defense-in-depth against callers that invoke the private
+                method directly.
+        """
+        if self._send is None:
+            raise MCPError(
+                "ElicitationSystem has no send transport bound. Call "
+                "system.bind_transport(transport.send_message) before "
+                "invoking _send_elicitation_request(). See "
+                "specs/mcp-server.md §4.9.",
+                error_code=MCPErrorCode.INVALID_REQUEST,
+            )
+
+        requested_schema = schema if schema is not None else {"type": "string"}
+        message: Dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "elicitation/create",
+            "params": {
+                "requestId": request_id,
+                "message": prompt,
+                "requestedSchema": requested_schema,
+            },
+        }
+
+        logger.info(
+            "elicitation.send",
+            extra={
+                "elicitation_request_id": request_id,
+                "has_schema": schema is not None,
+                "mode": "real",
+            },
         )
+        await self._send(message)
 
 
 class ProgressReporter:
