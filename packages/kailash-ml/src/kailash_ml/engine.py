@@ -20,7 +20,6 @@ classes to `kailash_ml.legacy.*`. Phase 2 is additive.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -1455,10 +1454,10 @@ class MLEngine:
                 resolve to a registered model.
         """
         from kailash_ml._results import EvaluationResult
-        from kailash_ml.metrics import compute_metrics as _compute_metrics
         from kailash_ml.engines.model_registry import (
             ModelVersion as _RegistryModelVersion,
         )
+        from kailash_ml.metrics import compute_metrics as _compute_metrics
 
         if mode not in ("holdout", "shadow", "live"):
             raise ValueError(
@@ -1513,7 +1512,7 @@ class MLEngine:
             )
 
         # Validate target presence in the supplied data. This is the
-        # typed-error boundary per rules/zero-tolerance.md Rule 3 —
+        # explicit error boundary per rules/zero-tolerance.md Rule 3 --
         # downstream code must not see an unexpected KeyError deep in
         # metric computation.
         data_columns = self._columns_of(data)
@@ -1872,8 +1871,21 @@ class MLEngine:
                 )
             except Exception:  # noqa: BLE001 — audit write failure
                 # Log at WARN; never mask the primary exception.
+                # Per ``rules/observability.md`` §8: model_name is a
+                # schema-revealing identifier and MUST stay at DEBUG or be
+                # hashed at WARN. Emit a hashed fingerprint at WARN so the
+                # audit failure surfaces operationally, and keep the raw
+                # model_name at DEBUG for investigation.
+                model_name_fingerprint = f"{hash(model_name) & 0xFFFF:04x}"
                 logger.warning(
                     "engine.register.audit_write_failed",
+                    extra={
+                        "model_name_fingerprint": model_name_fingerprint,
+                        "tenant_id": self._tenant_id,
+                    },
+                )
+                logger.debug(
+                    "engine.register.audit_write_failed.detail",
                     extra={
                         "model_name": model_name,
                         "tenant_id": self._tenant_id,
@@ -2049,9 +2061,9 @@ class MLEngine:
         """
         if self._registry is not None:
             return self._registry
-        from kailash.db.connection import ConnectionManager
-
         from kailash_ml.engines.model_registry import ModelRegistry
+
+        from kailash.db.connection import ConnectionManager
 
         if self._connection_manager is None:
             conn = ConnectionManager(self.store_url)
@@ -2434,8 +2446,9 @@ class MLEngine:
         # setup()/register() path will do, letting finalize() and
         # evaluate() work against a pre-populated registry without
         # waiting on Shard A.
-        from kailash.db.connection import ConnectionManager
         from kailash_ml.engines.model_registry import ModelRegistry
+
+        from kailash.db.connection import ConnectionManager
 
         if self._connection_manager is None:
             self._connection_manager = ConnectionManager(self.store_url)
@@ -2798,8 +2811,22 @@ class MLEngine:
                 if format == "onnx":
                     raise OnnxExportError(framework=framework, cause=cause)
                 # format="both" tolerates ONNX failure per §6.1 MUST 5.
+                # Per ``rules/observability.md`` §8: schema-revealing field
+                # names (model_name) and exception chain text (cause) stay
+                # at DEBUG. The WARN summary carries only a hashed
+                # fingerprint + the framework token so the operational
+                # signal surfaces without leaking the model name or the
+                # raw exception string into log aggregators.
+                name_fingerprint = f"{hash(name) & 0xFFFF:04x}"
                 logger.warning(
                     "engine.register.onnx_partial_failure",
+                    extra={
+                        "model_name_fingerprint": name_fingerprint,
+                        "framework": framework,
+                    },
+                )
+                logger.debug(
+                    "engine.register.onnx_partial_failure.detail",
                     extra={
                         "model_name": name,
                         "framework": framework,
