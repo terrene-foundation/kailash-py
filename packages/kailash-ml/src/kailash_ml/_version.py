@@ -1,4 +1,4 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 """Version for kailash-ml package."""
-__version__ = "0.14.0"
+__version__ = "0.15.0"
