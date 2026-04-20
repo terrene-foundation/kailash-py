@@ -1,5 +1,52 @@
 # PACT Changelog
 
+## [0.9.0] - 2026-04-20
+
+### Added
+
+- **Absorbed governance capabilities (#567 PR#7 of 7)** — REJECTS the MLFP
+  `GovernanceDiagnostics` parallel facade (716 LOC) and ABSORBS four
+  capabilities as first-class methods on existing PACT classes:
+  - `PactEngine.verify_audit_chain(...) -> ChainVerificationResult` —
+    verifies audit chain integrity within tenant / sequence / time
+    filters. Acquires `self._submit_lock` before reading. NEVER raises
+    on chain break (fail-closed per PACT MUST Rule 4); returns
+    `is_valid=False` with `first_break_reason` + `first_break_sequence`.
+  - `PactEngine.envelope_snapshot(...) -> EnvelopeSnapshot` — returns a
+    frozen point-in-time envelope snapshot by either `envelope_id` or
+    `role_address`. Acquires the engine's thread lock via
+    `GovernanceEngine.compute_envelope`.
+  - `PactEngine.iter_audit_anchors(...) -> Iterator[AuditAnchor]` —
+    yields persisted audit anchors filtered by tenant / time / limit.
+    Reuses the canonical `kailash.trust.pact.audit.AuditAnchor` (no
+    redefinition).
+  - `CostTracker.consumption_report(...) -> ConsumptionReport` —
+    aggregates `CostTracker._history` with filters, returning totals in
+    microdollars (USD × 1_000_000) for integer-math financial safety.
+    Acquires `self._lock` during aggregation.
+  - `pact.governance.testing.run_negative_drills(engine, drills, *,
+stop_at_first_failure=False)` — test-only batch runner for negative
+    governance probes. Fail-CLOSED: a drill passes ONLY when it raises
+    `GovernanceHeldError`. A drill that returns normally or raises any
+    other exception counts as FAILED.
+
+- **Frozen result dataclasses** in `pact.governance.results`:
+  `ChainVerificationResult`, `EnvelopeSnapshot`, `ConsumptionReport`,
+  `NegativeDrillResult`. All `frozen=True` per PACT MUST Rule 1. Also
+  re-exported at the package top-level (`from pact import
+ChainVerificationResult`).
+
+### Security
+
+- All new engine / tracker methods acquire `self._submit_lock` (async)
+  or `self._lock` (thread) before reading shared state — no bypasses.
+- No new raw SQL; all persistence reads go through existing PACT
+  surfaces.
+- Rejects MLFP's 3 MUST violations: no chain-race (PR#7 holds the
+  submit lock); no non-frozen GovernanceContext exposure (results are
+  frozen dataclasses, engine handle stays private); no fail-open drills
+  (runner treats exceptions as failures, not passes).
+
 ## [0.6.0] - 2026-04-02
 
 ### Fixed

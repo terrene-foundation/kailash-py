@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.8.2"
+__version__ = "0.9.0"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
@@ -125,6 +125,14 @@ from pact.enforcement import EnforcementMode, validate_enforcement_mode
 # --- PactEngine (Dual Plane bridge) ---
 from pact.engine import PactEngine
 from pact.events import EventBus
+
+# --- Absorbed governance capability results (PR#7, issue #567) ---
+from pact.governance.results import (
+    ChainVerificationResult,
+    ConsumptionReport,
+    EnvelopeSnapshot,
+    NegativeDrillResult,
+)
 
 # --- Testing utilities (stays in kailash-pact) ---
 from pact.governance.testing import MockGovernedAgent
@@ -266,6 +274,11 @@ __all__ = [
     "WorkSubmission",
     "CostTracker",
     "EventBus",
+    # Absorbed governance capability results (PR#7, issue #567)
+    "ChainVerificationResult",
+    "ConsumptionReport",
+    "EnvelopeSnapshot",
+    "NegativeDrillResult",
     # MCP governance
     "DefaultPolicy",
     "GovernanceDecision",
