@@ -1,10 +1,8 @@
 # Orphan Detection Rules
 
-A class that no production code calls is a lie. Beautifully implemented orphans accumulate when a feature is built top-down — model + facade + accessor get checked in, the public API documents them, downstream consumers import them — but the wiring from the product's hot path to the new class never lands. The orphan keeps passing unit tests against itself, the product keeps shipping, and the security/audit/governance promise the orphan was supposed to deliver never executes once.
+A class that no production code calls is a lie. Beautifully implemented orphans accumulate when a feature is built top-down — model + facade + accessor ship, downstream consumers import them — but the framework's hot path never invokes them. Unit tests pass against the orphan in isolation; the security/audit/governance promise the orphan was supposed to deliver never executes once.
 
-This is the failure mode kailash-py Phase 5.11 surfaced: 2,407 LOC of trust integration code (`TrustAwareQueryExecutor`, `DataFlowAuditStore`, `TenantTrustManager`) was instantiated and exposed as `db.trust_executor` / `db.audit_store` / `db.trust_manager`, four downstream workspaces imported the classes, and zero production code paths invoked any method on them. Operators believed the trust plane was running for an unknown period; it was not.
-
-The rule below prevents this by requiring every facade-shaped class on a public API to have a verifiable consumer in the production hot path within a bounded number of commits.
+Extended evidence, detection playbooks, and historical post-mortems live in `skills/16-validation-patterns/orphan-audit-playbook.md`. This file holds the load-bearing MUST clauses.
 
 ## MUST Rules
 
@@ -19,11 +17,10 @@ class DataFlow:
     def trust_executor(self) -> TrustAwareQueryExecutor:
         return self._trust_executor
 
-# packages/kailash-dataflow/src/dataflow/features/express.py
+# In the framework's hot path:
 class DataFlowExpress:
     async def list(self, model, ...):
         plan = await self._db.trust_executor.check_read_access(...)  # ← real call site
-        ...
 
 # DO NOT — facade ships, no call site, downstream consumers import the orphan
 class DataFlow:
@@ -33,7 +30,7 @@ class DataFlow:
 # (no call site exists in any framework hot path; trust executor is dead code)
 ```
 
-**Why:** Downstream consumers see the public attribute, build their security model around the class's documented behavior, and ship features that silently bypass the protection because the framework never invokes the class on the actual data path.
+**Why:** Downstream consumers see the public attribute, build their security model around the documented behavior, and ship features that silently bypass the protection because the framework never invokes the class on the actual data path. See Phase 5.11 post-mortem in the playbook skill (2,407 LOC of trust integration never executed once).
 
 ### 2. Every Wired Manager Has a Tier 2 Integration Test
 
@@ -44,11 +41,6 @@ Once a manager is wired into the production hot path, its end-to-end behavior MU
 @pytest.mark.integration
 async def test_trust_executor_redacts_in_express_read(test_suite):
     db = DataFlow(test_suite.config.url)
-    @db.model
-    class Document:
-        title: str
-        body: str
-    set_clearance(PUBLIC)
     rows = await db.express.list("Document")
     assert all(row["body"] == "[REDACTED]" for row in rows)
 
@@ -56,31 +48,33 @@ async def test_trust_executor_redacts_in_express_read(test_suite):
 def test_trust_executor_returns_redacted_plan():
     executor = TrustAwareQueryExecutor(...)
     plan = executor.check_read_access(...)
-    assert plan.redact_columns == {"body"}
 # ↑ proves the executor can redact, NOT that the framework calls it
 ```
 
 **Why:** Unit tests prove the orphan implements its API. Integration tests prove the framework actually calls the orphan.
 
+#### 2a. Crypto-Pair Round-Trip Through Facade
+
+Paired crypto operations (`encrypt`/`decrypt`, `sign`/`verify`, `seal`/`unseal`) MUST have a Tier 2 test that round-trips through the facade: call one half, feed its output to the other, assert equality. Isolated unit tests per half can drift silently (e.g. encrypt uses GCM while decrypt uses CBC) with both passing. See `skills/16-validation-patterns/orphan-audit-playbook.md` § 2a for the full failure pattern.
+
+**Why:** Crypto pairs are the manager-pattern at a smaller scale — each half is a dependency of the other, invisible to isolated tests.
+
 ### 3. Removed = Deleted, Not Deprecated
 
-If a manager is found to be an orphan and the team decides not to wire it, it MUST be deleted from the public surface in the same PR — not marked deprecated, not left behind a feature flag, not commented out. Orphans-with-warnings still mislead downstream consumers about the framework's contract.
+If a manager is found to be an orphan and the team decides not to wire it, it MUST be deleted from the public surface in the same PR — not marked deprecated, not left behind a feature flag, not commented out.
 
 **Why:** Deprecation banners are easy to miss; consumers continue importing the symbol and silently shipping insecure code. Deletion is the only signal that survives a `pip install kailash --upgrade`.
 
 ### 4. API Removal MUST Sweep Tests In The Same PR
 
-Any PR that removes a public symbol (module, class, function, attribute) MUST delete or port the tests that import it, in the same commit. Test files that reference the removed symbol become orphans — they fail at `pytest --collect-only` with `ModuleNotFoundError` / `ImportError`, which blocks every subsequent test run.
+Any PR that removes a public symbol MUST delete or port the tests that import it, in the same commit. Test files that reference the removed symbol fail at `pytest --collect-only` with `ModuleNotFoundError`, blocking every subsequent test run.
 
 ```python
 # DO — remove the API and its tests in one commit
-# git show <sha>:
 # D  src/pkg/legacy_module.py
 # D  tests/integration/test_legacy_module.py
-# D  tests/e2e/test_legacy_module_e2e.py
 
 # DO NOT — remove the API, leave the tests
-# git show <sha>:
 # D  src/pkg/legacy_module.py
 # (test files still import pkg.legacy_module, collection fails on next run)
 ```
@@ -90,45 +84,41 @@ Any PR that removes a public symbol (module, class, function, attribute) MUST de
 - "The tests will be cleaned up in a follow-up PR"
 - "CI doesn't run those tests anyway"
 - "The tests are obsolete; they don't need to move"
-- "Integration tier is separate scope"
 - "`pytest --collect-only` isn't part of CI"
 
-**Why:** Test files that fail at collection block the ENTIRE suite from running, not just themselves. One orphan test import takes down the 100 tests collected after it. Evidence: kailash-py commits `d3e7e0ef` + `5edc941f` deleted 9 orphan test files left behind by the DataFlow 2.0 refactor (`53dab715`) — integration collection had been failing since that refactor landed, but nobody noticed because the collection error was buried in the middle of a log.
+**Why:** Test files that fail at collection block the ENTIRE suite, not just themselves. One orphan import takes down the 100 tests collected after it.
+
+Origin: kailash-py commits `d3e7e0ef` + `5edc941f` — 9 orphan test files left by DataFlow 2.0 refactor silently broke integration collection.
 
 ### 4a. Stub Implementation MUST Sweep Deferral Tests In Same Commit
 
-The mirror of Rule 4. Any PR that _implements_ a previously-deferred stub — replacing `NotImplementedError` / `raise NotImplementedError("Phase N — will implement")` / empty-body placeholder with a real implementation — MUST delete or rewrite every test that asserts the deferred behavior in the same commit. Scaffold-era tests like `test_foo_deferral_names_phase` that `pytest.raises(NotImplementedError)` on the now-implemented symbol flip from pass to fail the moment the implementation lands, and block the implementation's release CI.
+Mirror of Rule 4. Any PR that _implements_ a previously-deferred stub — replacing `NotImplementedError` / `raise NotImplementedError("Phase N — will implement")` with a real implementation — MUST delete or rewrite every test that asserts the deferred behavior in the same commit. Scaffold-era tests like `test_foo_deferral_names_phase` that `pytest.raises(NotImplementedError)` on the now-implemented symbol flip from pass to fail and block release CI.
 
 ```python
 # DO — implementation + deferral-test sweep in one commit
-# git show <sha>:
 # M  src/pkg/tracking.py  (replaces NotImplementedError with real impl)
 # D  tests/unit/test_pkg_deferred_bodies.py::test_track_deferral_names_phase
 # A  tests/integration/test_pkg_tracking.py  (real coverage)
 
 # DO NOT — implement the symbol, leave the deferral test
-# git show <sha>:
-# M  src/pkg/tracking.py  (replaces NotImplementedError)
-# (tests/unit/test_pkg_deferred_bodies.py::test_track_deferral_names_phase
-#  still calls pkg.tracking.track() inside pytest.raises(NotImplementedError);
-#  CI fails with "DID NOT RAISE NotImplementedError" on every Python matrix job)
+# M  src/pkg/tracking.py
+# (tests/unit/test_pkg_deferred_bodies.py still calls track() inside
+#  pytest.raises(NotImplementedError); CI fails "DID NOT RAISE" on every matrix job)
 ```
 
 **BLOCKED rationalizations:**
 
 - "The deferral test was a scaffold; CI will surface it and we'll fix it then"
-- "The new test covers it; the old one is obviously obsolete"
 - "I'll clean up the scaffold tests in a follow-up"
-- "The deferral test is in a different file, out of scope"
 - "The Phase N naming means the test self-documents as obsolete"
 
-**Why:** CI-late discovery of the orphan deferral test blocks the release PR's matrix run, forcing an extra commit and an extra CI cycle at the worst possible moment (release gate). The implementation-author is uniquely positioned to spot the paired deferral test — they know exactly which symbol they un-deferred. A simple `grep -rln 'NotImplementedError.*<symbol>\|<symbol>.*deferral' tests/` at implementation time catches it in O(seconds); a CI re-run costs O(minutes) plus an extra reviewer cycle. Evidence: Session 2026-04-20 — kailash-ml 0.13.0 release (PR #552) landed real `km.track()` implementation (#548); `tests/unit/test_mlengine_construction.py::test_km_track_deferral_names_phase` was left behind and blocked CI on every Python 3.10/3.11/3.12/3.13/3.14 base job until the deferral test was deleted in a follow-up commit on the release branch.
+**Why:** CI-late discovery blocks the release PR's matrix run at the worst possible moment. A `grep -rln 'NotImplementedError.*<symbol>' tests/` at implementation time catches it in O(seconds); a CI re-run costs O(minutes) plus an extra reviewer cycle.
 
-Origin: Session 2026-04-20 — kailash-ml 0.13.0 release CI surfaced the deferral-test orphan as a 5-job CI failure; fixed in release/kailash-ml-0.13.0 commit `ef8751c5`.
+Origin: Session 2026-04-20 kailash-ml 0.13.0 release (PR #552). See `skills/16-validation-patterns/orphan-audit-playbook.md` § 4a for the full 5-matrix-job CI failure.
 
 ### 5. Collect-Only Is A Merge Gate
 
-`pytest --collect-only` across every test directory MUST return exit 0 before any PR merges. A collection error is a blocker in the same class as a test failure, regardless of which test file contains the error.
+`pytest --collect-only` across every test directory MUST return exit 0 before any PR merges. A collection error is a blocker in the same class as a test failure.
 
 ```bash
 # DO — gate in CI, pre-commit, or /redteam
@@ -136,92 +126,60 @@ Origin: Session 2026-04-20 — kailash-ml 0.13.0 release CI surfaced the deferra
 # exit 0 required
 
 # DO NOT — "we only run unit tests in CI, integration is manual"
-# (unit tests pass, integration collection is silently red for months)
 ```
 
-**Why:** Collection failures are invisible in "unit-only CI" setups yet become merge-blocking the moment someone runs the full suite locally. The only way to keep the full suite runnable is to gate every PR on collect-only-green.
+**Why:** Collection failures are invisible in "unit-only CI" setups yet become merge-blocking the moment someone runs the full suite locally.
 
-### 5a. Collect-Only Gate Passes Per-Package, Not Combined Root Invocation
+#### 5a. Per-Package Collection In Monorepos With Sub-Package Test Deps
 
-Rule 5 (`collect-only is a merge gate`) MUST NOT be interpreted as mandating a single combined `pytest --collect-only tests/ packages/*/tests/` invocation. Monorepos with sub-package test-only dependencies (e.g. `hypothesis` in pact, `respx` in kaizen) CANNOT pass a combined invocation from the root venv because `python-environment.md` Rule 4 explicitly BLOCKS duplicating sub-package test deps in the root `[dev]` extras. The gate passes when EITHER (a) the root venv is bootstrapped with every sub-package's `[dev]` extras via `uv pip install -e packages/<pkg>[dev]`, OR (b) collection runs per-package inside each sub-package's own venv.
-
-```bash
-# DO — per-package collection with the sub-package's own [dev] extras installed
-uv pip install -e packages/kailash-pact[dev] --python .venv/bin/python
-for pkg in packages/*/tests; do
-  .venv/bin/python -m pytest --collect-only -q "$pkg" --continue-on-collection-errors
-done
-# Each sub-package collects against its own declared test deps; no collision
-# with python-environment.md Rule 4.
-
-# DO NOT — combined invocation from root venv without sub-package extras
-.venv/bin/python -m pytest --collect-only tests/ packages/*/tests/
-# ModuleNotFoundError: hypothesis (pact) + respx (kaizen) + ImportPathMismatchError
-# (two conftest.py both registering as `tests.conftest`) — gate appears red
-# but the root cause is bootstrap, not a real collection error.
-```
+Rule 5 MUST NOT be interpreted as mandating a single combined root-venv invocation. Monorepos with sub-package test-only deps (e.g. `hypothesis` in pact, `respx` in kaizen) CANNOT pass a combined invocation because `python-environment.md` Rule 4 blocks duplicating sub-package test deps in root `[dev]`. The gate passes per-package after installing each sub-package's `[dev]` extras. See `skills/16-validation-patterns/orphan-audit-playbook.md` § "Sub-Package Collection-Gate Patterns" for the full iteration script.
 
 **BLOCKED rationalizations:**
 
 - "A single invocation is faster for CI"
 - "We'll duplicate the test deps in root [dev] just for collection"
-- "CI uses a different venv strategy so this doesn't matter locally"
 - "Per-package collection is belt-and-suspenders"
 
-**Why:** `python-environment.md` Rule 4 blocks sub-package test deps (specifically `hypothesis`) from root `[dev]` because `hypothesis` registers as a pytest plugin and triggers a `MemoryError` during AST rewrite on large monorepo suites. Per-package collection granularity matches dep-graph granularity: each sub-package's test contract is validated against its own `[dev]` extras, and the root venv carries only what root tests need. Combined invocation is an optimization, not a requirement; when it collides with Rule 4, per-package is the correct shape.
+**Why:** `python-environment.md` Rule 4 blocks sub-package test deps from root `[dev]` because plugins like `hypothesis` register as pytest plugins and trigger `MemoryError` during AST rewrite. Per-package collection granularity matches dep-graph granularity.
 
-Origin: Session 2026-04-20 /redteam collection-gate work — combined `pytest --collect-only tests/ packages/*/tests/` from root venv failed with 3 distinct root causes; per-package iteration after installing `packages/<pkg>[dev]` succeeded for all 9 sub-packages. See `workspaces/kailash-ml-gpu-stack/journal/0008-GAP-full-specs-redteam-2026-04-20-findings.md`.
+Origin: Session 2026-04-20 /redteam collection-gate work.
 
 ### 6. Module-Scope Public Imports Appear In `__all__`
 
-When a symbol is imported at module-scope into a package's `__init__.py` (not behind `_` / not lazy via `__getattr__`), it MUST appear in that module's `__all__` list unless the symbol itself is private (leading underscore). New `__all__` entries MUST land in the same PR as the import. Eagerly-imported-but-absent-from-`__all__` is BLOCKED.
+When a symbol is imported at module-scope into a package's `__init__.py` (not behind `_` / not lazy via `__getattr__`), it MUST appear in that module's `__all__` list unless the symbol is private. New `__all__` entries MUST land in the same PR as the import. Eagerly-imported-but-absent-from-`__all__` is BLOCKED.
 
 ```python
 # DO — every public module-scope import appears in __all__
-# packages/kailash-ml/src/kailash_ml/__init__.py
-from kailash_ml._device_report import (
-    DeviceReport,
-    device_report_from_backend_info,
-)
+from kailash_ml._device_report import DeviceReport, device_report_from_backend_info
 
-__all__ = [
-    "__version__",
-    "DeviceReport",
-    "device_report_from_backend_info",
-    ...
-]
+__all__ = ["__version__", "DeviceReport", "device_report_from_backend_info", ...]
 
 # DO NOT — public symbol imported but missing from __all__
 from kailash_ml._device_report import DeviceReport, device_report_from_backend_info
 
-__all__ = [
-    "__version__",
-    # DeviceReport, device_report_from_backend_info → absent
-    # Result: `from kailash_ml import *` drops the advertised public API
-]
+__all__ = ["__version__", ...]  # DeviceReport absent
+# Result: `from kailash_ml import *` drops the advertised public API
 ```
 
 **BLOCKED rationalizations:**
 
-- "The symbol is reachable via `kailash_ml.DeviceReport`, that's enough"
+- "The symbol is reachable via `pkg.X`, that's enough"
 - "Nobody uses `from pkg import *`"
 - "`__all__` is a convention, not a contract"
-- "We'll clean up `__all__` in a follow-up"
-- "The symbol is eagerly imported; the package re-exports it implicitly"
 
-**Why:** `__all__` is the package's public-API contract: documentation generators (Sphinx autodoc), linters, typing tools (`mypy --strict`), and `from pkg import *` consumers all read it as the canonical export list. A symbol that the agent "eagerly imports" but never lists is both advertised (via the import) AND hidden (via `__all__`) — that inconsistency is the exact failure shape the orphan pattern produces on the consumer side. The fix is a one-line addition in the same PR; deferring it means the advertised feature ships broken for every tool that respects `__all__`. Evidence: PR #523 (kailash-ml 0.11.0) eagerly imported `DeviceReport` / `device_report_from_backend_info` / `device` / `use_device` but omitted all four from `__all__`; caught by post-release reviewer; patched in PR #529 (kailash-ml 0.11.1).
+**Why:** `__all__` is the package's public-API contract: Sphinx autodoc, linters, `mypy --strict`, and `from pkg import *` all read it as the canonical export list. A symbol that's eagerly imported but absent is both advertised (via import) AND hidden (via `__all__`) — the exact inconsistency the orphan pattern produces.
 
-Origin: PR #523 / PR #529 (2026-04-19) — GPU-first Phase 1 public API symbols missed from `__all__`.
+Origin: PR #523 / PR #529 (2026-04-19) — kailash-ml 0.11.0 eagerly imported 4 DeviceReport symbols but omitted all from `__all__`; patched in 0.11.1.
 
 ## MUST NOT
 
 - Land a `db.X` / `app.X` facade without the production call site in the same PR
 
-**Why:** The PR review is the only structural gate that catches orphans before they ship; allowing the gate to bypass means the orphan is in production by the next release.
+**Why:** The PR review is the only structural gate that catches orphans before they ship.
 
-- Skip the consumer check on the grounds that "downstream consumers will use it"
+- Skip the consumer check on grounds that "downstream consumers will use it"
 
-**Why:** Downstream consumers using a class is not the same as the framework using it. The framework's hot path is the security boundary; downstream consumers are clients of that boundary, not enforcers of it.
+**Why:** Downstream consumers using a class is NOT the same as the framework using it. The framework's hot path is the security boundary.
 
 - Mark a wired manager as "fully tested" based on Tier 1 unit tests alone
 
@@ -229,12 +187,4 @@ Origin: PR #523 / PR #529 (2026-04-19) — GPU-first Phase 1 public API symbols 
 
 ## Detection Protocol
 
-When auditing for orphans, run this protocol against every class exposed on the public surface:
-
-1. **Surface scan** — list every property, method, and attribute on the framework's top-level class that returns a `*Manager` / `*Executor` / `*Store` / `*Registry` / `*Engine` / `*Service`.
-2. **Hot-path grep** — for each candidate, grep the framework's source (NOT tests, NOT downstream consumers) for calls into the class's methods. Zero matches in the hot path = orphan.
-3. **Tier 2 grep** — for each non-orphan, grep `tests/integration/` and `tests/e2e/` for the class name. Zero matches = unverified wiring.
-4. **Collect-only sweep** — run `.venv/bin/python -m pytest --collect-only tests/ packages/*/tests/`. Every `ERROR <path>` / `ModuleNotFoundError` / `ImportError` at collection is a test-orphan. Disposition: delete the orphan test file (if the API is gone) or port its imports (if the API moved).
-5. **Disposition** — every orphan and every unverified wiring MUST be either fixed (wire + test) or deleted (remove from public surface).
-
-This protocol runs as part of `/redteam` and `/codify`.
+The 5-step `/redteam` audit procedure lives in `skills/16-validation-patterns/orphan-audit-playbook.md` § "Detection Protocol". Runs as part of `/redteam` and `/codify`.
