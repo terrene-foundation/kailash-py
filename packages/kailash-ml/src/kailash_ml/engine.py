@@ -842,10 +842,7 @@ class MLEngine:
     def _columns_of(data: Any) -> Optional[tuple[str, ...]]:
         """Return column names of a polars / pandas / generic DataFrame.
 
-        None when the value isn't a recognized frame-shape object (the
-        Phase 3 schema inference will handle arbitrary inputs; Phase 2
-        restricts itself to the subset needed to validate target
-        semantics).
+        None when the value isn't a recognized frame-shape object.
         """
         cols = getattr(data, "columns", None)
         if cols is None:
@@ -854,3 +851,187 @@ class MLEngine:
             return tuple(str(c) for c in cols)
         except TypeError:
             return None
+
+    # ------------------------------------------------------------------
+    # setup() / register() internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _to_polars_dataframe(data: Any) -> Any:
+        """Coerce supported input shapes to a polars DataFrame.
+
+        Accepts ``pl.DataFrame``, ``pl.LazyFrame``, ``pandas.DataFrame``,
+        and list-of-dict / dict-of-list records. Per §7.1 MUST 2 the
+        Engine is polars-native; pandas is converted at the boundary.
+        """
+        import polars as pl
+
+        if isinstance(data, pl.DataFrame):
+            return data
+        if isinstance(data, pl.LazyFrame):
+            return data.collect()
+
+        # pandas DataFrame detection without importing pandas
+        # unconditionally (pandas is optional at the engine boundary).
+        pd_mod = type(data).__module__
+        if pd_mod.startswith("pandas."):
+            try:
+                return pl.from_pandas(data)
+            except Exception as exc:
+                raise ValueError(
+                    f"setup(data=...) pandas-to-polars conversion failed: {exc}. "
+                    f"Convert to polars.DataFrame before calling setup()."
+                ) from exc
+
+        if isinstance(data, (list, tuple)) and data and isinstance(data[0], dict):
+            return pl.from_dicts(list(data))
+        if isinstance(data, dict):
+            return pl.DataFrame(data)
+
+        raise ValueError(
+            f"setup(data=...) expected polars.DataFrame, polars.LazyFrame, "
+            f"pandas.DataFrame, or list[dict]; got {type(data).__name__}."
+        )
+
+    @staticmethod
+    def _resolve_feature_store_name(feature_store: Any) -> str:
+        """Resolve the feature-store name for the idempotency key.
+
+        When a ``FeatureStore`` instance is passed, use its ``table_prefix``
+        so two calls against the same store produce the same hash. When a
+        string is passed, use it directly. Otherwise use the stable
+        default ``"engine_default"``.
+        """
+        if feature_store is None:
+            return "engine_default"
+        if isinstance(feature_store, str):
+            return feature_store
+        prefix = getattr(feature_store, "_table_prefix", None)
+        if isinstance(prefix, str) and prefix:
+            return prefix.rstrip("_")
+        name = getattr(feature_store, "name", None)
+        if isinstance(name, str) and name:
+            return name
+        return f"fs_{type(feature_store).__name__.lower()}"
+
+    @staticmethod
+    def _compute_schema_hash(
+        *,
+        df: Any,
+        target: str,
+        ignore: list[str],
+        feature_store_name: str,
+    ) -> str:
+        """Deterministic schema hash per §2.1 MUST 6.
+
+        Inputs are canonicalised: columns are sorted, dtypes mapped to
+        stable strings, row count quantised to the whole integer. The
+        hash covers ``(sorted_columns + dtypes, row_count, target,
+        sorted(ignore), feature_store_name)`` so permutations of the
+        same DataFrame produce the same hash.
+        """
+        cols_sorted = sorted(str(c) for c in df.columns)
+        dtypes_map = {str(c): str(df.schema[c]) for c in df.columns}
+        dtypes_sorted = [(c, dtypes_map[c]) for c in cols_sorted]
+        canonical = {
+            "columns": dtypes_sorted,
+            "row_count": int(df.height),
+            "target": target,
+            "ignore": sorted(list(ignore)),
+            "feature_store": feature_store_name,
+        }
+        canonical_bytes = json.dumps(canonical, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(canonical_bytes).hexdigest()[:16]
+
+    @staticmethod
+    def _infer_task_type(df: Any, target: str) -> str:
+        """Infer classification/regression from the target column.
+
+        - Boolean / categorical / Utf8 / low-cardinality integers (<=10
+          distinct values) → classification.
+        - Floating-point → regression.
+        - Everything else → classification (integer labels commonly).
+        """
+        import polars as pl
+
+        dtype = df.schema[target]
+        if dtype in (pl.Boolean, pl.Utf8, pl.Categorical):
+            return "classification"
+        if dtype.is_float():
+            return "regression"
+        if dtype.is_integer():
+            # Low-cardinality integer target → classification;
+            # high-cardinality integer target → regression.
+            distinct = int(df[target].n_unique())
+            if distinct <= 10:
+                return "classification"
+            return "regression"
+        # Unknown dtype — default to classification so at least the
+        # sklearn path works without raising.
+        return "classification"
+
+    @staticmethod
+    def _build_schema_info(
+        df: Any,
+        feature_cols: tuple[str, ...],
+        target: str,
+    ) -> Mapping[str, Any]:
+        """Build the extended schema_info mapping (SetupResult).
+
+        Contains one entry per feature column with canonical dtype +
+        null count. The mapping is pickle-safe and JSON-safe so the
+        result can be persisted by the tracker without further
+        conversion.
+        """
+        import polars as pl
+
+        def _polars_to_feature_dtype(dt: Any) -> str:
+            # Map polars dtypes to the FeatureField dtype vocabulary
+            # used by FeatureStore's sql.dtype_to_sql() mapping.
+            if dt == pl.Boolean:
+                return "bool"
+            if dt == pl.Utf8:
+                return "utf8"
+            if dt == pl.Categorical:
+                return "categorical"
+            if dt.is_integer():
+                return "int64"
+            if dt.is_float():
+                return "float64"
+            if dt.is_temporal():
+                return "datetime"
+            return "utf8"
+
+        columns_info: dict[str, Any] = {}
+        for col in feature_cols:
+            polars_dtype = df.schema[col]
+            columns_info[col] = {
+                "dtype": _polars_to_feature_dtype(polars_dtype),
+                "polars_dtype": str(polars_dtype),
+                "nullable": int(df[col].null_count()) > 0,
+                "null_count": int(df[col].null_count()),
+            }
+        return {
+            "columns": columns_info,
+            "target": target,
+            "target_dtype": str(df.schema[target]),
+            "row_count": int(df.height),
+        }
+
+    @staticmethod
+    def _infer_entity_id_column(df: Any) -> str:
+        """Return a stable entity-id column name.
+
+        Prefer a column literally named ``"id"`` when present; otherwise
+        synthesise a pseudo-entity column name. The Phase 3 scope does
+        not require true entity resolution — setup() only needs a
+        consistent name for the FeatureStore schema row. Downstream
+        fit() paths ignore the entity column entirely for in-memory
+        training.
+        """
+        cols = [str(c) for c in df.columns]
+        if "id" in cols:
+            return "id"
+        if "entity_id" in cols:
+            return "entity_id"
+        return "_engine_entity_id"
