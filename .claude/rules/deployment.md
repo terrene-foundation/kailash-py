@@ -34,6 +34,43 @@ python -m venv /tmp/verify --clear
 
 **Exception**: Patch releases may skip TestPyPI with explicit human approval.
 
+## MUST: Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules
+
+Every sibling-package CI job (under `.github/workflows/test-kailash-*.yml`) that installs its sub-package MUST prepend `uv pip install -e "."` when the sub-package imports ANY module from `src/kailash/` that has not yet been released to PyPI. The sub-package's own declared dep on `kailash>=X.Y.Z` resolves from PyPI and MISSES the new module.
+
+```yaml
+# DO — root kailash editable FIRST, sub-package SECOND
+- name: Install kailash-<subpkg>[dev]
+  run: |
+    uv venv .venv
+    # Install root kailash editable so kailash.<new_module> resolves —
+    # the new module is not yet on PyPI; transitive resolve would miss it.
+    uv pip install -e "." --python .venv/bin/python
+    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
+
+# DO NOT — only sub-package, missing root editable
+- name: Install kailash-<subpkg>[dev]
+  run: |
+    uv venv .venv
+    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
+
+# → pip fetches kailash>=X.Y.Z from PyPI (old version)
+# → pytest collection fails: ModuleNotFoundError: No module named 'kailash.<new_module>'
+# → every matrix job in every sibling package fails identically
+```
+
+**BLOCKED rationalizations:**
+
+- "The sub-package declares kailash>=X.Y.Z, so the dep resolves"
+- "This CI job passed last release, no need to update"
+- "The new module will be on PyPI by the time CI runs"
+- "Adding the root install is redundant with the declared dep"
+- "Only the Coverage job needs this; other jobs don't import the new module"
+
+**Why:** Sub-package `[dev]` extras resolve against PyPI, NOT against the local editable tree. Every `uv pip install -e "packages/..."` block MUST be preceded by `uv pip install -e "."` whenever the sub-package imports from a core module that has not been released to PyPI. Silent "works" on other branches is false — the failing branch is the one that actually exercises the new module.
+
+Origin: Session 2026-04-20 (issue #567 PR#577). PR#570 landed `kailash.diagnostics.protocols` in `src/kailash/`; sub-package CI for #574/#575/#576 all failed at collection with `ModuleNotFoundError: No module named 'kailash.diagnostics'` until PR#577 extended the root-editable install to Base/DL/RL/Unit/Inter-Package jobs across `test-kailash-ml.yml` + `test-kailash-align.yml`.
+
 ## Publishing Rules
 
 - Proprietary packages: wheels only (`twine upload dist/*.whl`), never sdist
