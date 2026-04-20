@@ -81,12 +81,21 @@ class TestSqliteAuditStoreInit:
 
     @pytest.mark.asyncio
     async def test_invalid_table_name_rejected(self):
-        """Table names with SQL injection characters must be rejected."""
+        """Table names with SQL injection characters must be rejected.
+
+        2.8.11 routed audit_store DDL through dialect.quote_identifier which
+        raises IdentifierError ("Invalid SQL identifier") per
+        dataflow-identifier-safety.md §2. The legacy ValueError(
+        "Invalid table name") path is gone; IdentifierError is now the
+        locked contract.
+        """
+        from kailash.db.dialect import IdentifierError
+
         uri = _unique_memory_uri()
         config = SQLitePoolConfig(db_path=uri, uri=True)
         pool = AsyncSQLitePool(config)
         await pool.initialize()
-        with pytest.raises(ValueError, match="Invalid table name"):
+        with pytest.raises(IdentifierError, match="Invalid SQL identifier"):
             SqliteAuditStore(pool, table_name="drop table; --")
         await pool.close()
 
