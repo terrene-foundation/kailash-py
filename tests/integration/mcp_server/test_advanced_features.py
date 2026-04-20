@@ -7,7 +7,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash_mcp.advanced.features import (
     BinaryResourceHandler,
     CancellationContext,
@@ -663,82 +662,97 @@ class TestStreamingHandler:
 
 
 class TestElicitationSystem:
-    """Test interactive user input system."""
+    """Test interactive user input system.
 
-    def setup_method(self):
-        """Set up test environment."""
-        self.elicitation = ElicitationSystem()
+    These tests exercise ElicitationSystem through an in-process
+    send/receive pair: a fake async send-callable captures the outbound
+    MCP `elicitation/create` message AND (in tests that need a response)
+    drives `provide_input` back into the system, round-tripping the
+    request just like the MCPServer dispatch layer would.
+
+    The in-process-pair pattern replaces the previous auto-response
+    mock that patched `_send_elicitation_request` — that pattern was
+    legacy scaffolding pre-dating the #556 design decision to inject a
+    send-callable at construction.
+    """
 
     @pytest.mark.asyncio
-    async def test_request_input_with_test_prompt(self):
-        """Test requesting input with test prompt (auto-response)."""
-        # The implementation auto-responds to prompts starting with "test"
-        result = await self.elicitation.request_input("test: What is your name?")
+    async def test_request_input_unbound_transport_raises_typed_error(self):
+        """With no send bound, request_input raises MCPError(INVALID_REQUEST).
 
-        assert result == "test response"
+        Regression guard for the un-stub: the old implementation raised
+        NotImplementedError, which is BLOCKED by rules/zero-tolerance.md
+        Rule 2. The new contract is a typed MCPError whose message names
+        bind_transport so the caller has an actionable fix.
+        """
+        system = ElicitationSystem()  # no send bound
 
-    @pytest.mark.asyncio
-    async def test_request_input_timeout(self):
-        """Test input request timeout."""
         with pytest.raises(MCPError) as exc_info:
-            await self.elicitation.request_input(
+            await system.request_input("Anything?")
+
+        assert exc_info.value.error_code == MCPErrorCode.INVALID_REQUEST
+        assert "bind_transport" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_request_input_timeout_with_silent_send(self):
+        """With a send that never triggers a response, request_input times out."""
+        captured_messages = []
+
+        async def silent_send(message):
+            captured_messages.append(message)
+            # deliberately never call provide_input
+
+        system = ElicitationSystem(send=silent_send)
+
+        with pytest.raises(MCPError) as exc_info:
+            await system.request_input(
                 "Enter something:",
-                timeout=0.1,  # Very short timeout
+                timeout=0.1,
             )
 
         assert exc_info.value.error_code == MCPErrorCode.REQUEST_TIMEOUT
+        assert len(captured_messages) == 1
+        assert captured_messages[0]["method"] == "elicitation/create"
 
     @pytest.mark.asyncio
     async def test_provide_input_manually(self):
-        """Test providing input manually."""
+        """In-process pair: provide_input round-trips an outbound request."""
+        system = ElicitationSystem()
 
-        # Start a request in background
-        async def background_request():
-            return await self.elicitation.request_input(
-                "Manual input test", timeout=1.0
-            )
+        async def responder_send(message):
+            # Schedule the provide_input on the next event-loop tick so the
+            # caller of request_input has a chance to install its future.
+            async def later():
+                await asyncio.sleep(0)
+                await system.provide_input(message["id"], "manual response")
 
-        task = asyncio.create_task(background_request())
+            asyncio.create_task(later())
 
-        # Give it a moment to start
-        await asyncio.sleep(0.1)
-
-        # Find the pending request and provide input
-        if self.elicitation._pending_requests:
-            request_id = list(self.elicitation._pending_requests.keys())[0]
-            success = await self.elicitation.provide_input(
-                request_id, "manual response"
-            )
-            assert success is True
-
-        result = await task
+        system.bind_transport(responder_send)
+        result = await system.request_input("Manual input test", timeout=1.0)
         assert result == "manual response"
 
     @pytest.mark.asyncio
     async def test_request_input_with_schema_validation(self):
-        """Test input request with schema validation."""
+        """Schema validation runs BEFORE returning to caller."""
         schema = {
             "type": "object",
             "properties": {"age": {"type": "integer", "minimum": 0}},
             "required": ["age"],
         }
 
-        # Mock valid input
-        with patch.object(self.elicitation, "_send_elicitation_request"):
+        async def valid_responder(message):
+            async def later():
+                await asyncio.sleep(0)
+                await self_elicitation.provide_input(message["id"], {"age": 25})
 
-            async def provide_valid_input():
-                await asyncio.sleep(0.1)
-                request_id = list(self.elicitation._pending_requests.keys())[0]
-                await self.elicitation.provide_input(request_id, {"age": 25})
+            asyncio.create_task(later())
 
-            task = asyncio.create_task(provide_valid_input())
-
-            result = await self.elicitation.request_input(
-                "Enter your age:", input_schema=schema, timeout=1.0
-            )
-
-            await task
-            assert result["age"] == 25
+        self_elicitation = ElicitationSystem(send=valid_responder)
+        result = await self_elicitation.request_input(
+            "Enter your age:", input_schema=schema, timeout=1.0
+        )
+        assert result["age"] == 25
 
 
 class TestProgressReporter:

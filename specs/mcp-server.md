@@ -529,7 +529,111 @@ if ctx.is_cancelled():
 
 ### 4.9 ElicitationSystem
 
-Interactive user input system for tools that need to ask the user questions during execution.
+Interactive user input system for server-side tools that need to ask the connected client (and, by extension, the end-user) a question mid-execution. Implements the MCP 2025-06-18 `elicitation/create` server-to-client request. The system is split into two halves that are both wired into the framework hot path:
+
+1. **Send half** — `_send_elicitation_request()` serializes an MCP `elicitation/create` JSON-RPC request and pushes it through an injected send-callable bound to the active client transport.
+2. **Receive half** — `provide_input(request_id, input_data)` is invoked by the server's dispatch loop when an inbound `elicitation/response` (or a JSON-RPC response whose `id` matches a pending elicitation) arrives from the client.
+
+#### Construction
+
+```python
+from typing import Awaitable, Callable, Optional
+
+SendFn = Callable[[dict], Awaitable[None]]
+
+# Option A — pass the send-callable at construction time
+system = ElicitationSystem(send=transport.send_message)
+
+# Option B — bind after construction (when transport attaches later)
+system = ElicitationSystem()
+system.bind_transport(transport.send_message)
+```
+
+`bind_transport()` is idempotent; calling it a second time replaces the prior send-fn (used when a transport reconnects).
+
+When `send is None`, the system is **receive-only**: `provide_input()` still works (useful for in-process tests that pre-populate responses), but `request_input()` raises `MCPError(INVALID_REQUEST)` with actionable guidance naming `bind_transport`.
+
+#### `request_input(prompt, input_schema=None, timeout=300.0)`
+
+Sends an elicitation request, waits for the response, validates against the optional JSON Schema, and returns the validated payload.
+
+1. Generates a fresh `request_id` (UUIDv4).
+2. Records the request in `_pending_requests` and installs a response future in `_response_callbacks`.
+3. Emits structured log `elicitation.request.start` with `request_id`, `has_schema`, `timeout`.
+4. Calls `_send_elicitation_request(request_id, prompt, schema)` — raises `MCPError(INVALID_REQUEST, "ElicitationSystem has no send transport bound...")` if no send-callable is bound.
+5. Awaits the response future with `asyncio.wait_for(timeout)`.
+6. Validates response against `input_schema` via `SchemaValidator` (Draft 7). A validation failure raises `ValidationError`, not silent return of invalid data.
+7. On timeout: raises `MCPError(REQUEST_TIMEOUT)` with the correlation `request_id`.
+8. Cleans up `_pending_requests` and `_response_callbacks` in a `finally` block regardless of outcome.
+9. Emits `elicitation.request.ok` (or `elicitation.request.error`) with `request_id`, `elapsed_ms`.
+
+#### `provide_input(request_id, input_data)`
+
+Called by the MCPServer dispatch layer when an inbound elicitation response arrives. Returns `True` if a matching pending request existed and the callback was invoked, `False` otherwise.
+
+- Does NOT validate `input_data` against the schema — validation happens in `request_input()` after the response future resolves (single validation point).
+- Unknown `request_id` → `False`; the caller logs a `elicitation.response.unknown` WARN but does not error.
+
+#### JSON-RPC Wire Shape
+
+Outbound (server → client):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "<request_id>",
+  "method": "elicitation/create",
+  "params": {
+    "requestId": "<request_id>",
+    "message": "<prompt>",
+    "requestedSchema": { "type": "string" }
+  }
+}
+```
+
+`requestedSchema` defaults to `{"type": "string"}` when the caller passes `input_schema=None`. The MCP specification requires `requestedSchema` to be present.
+
+Inbound (client → server) — the server's dispatch loop routes the response content into `provide_input(request_id, content)`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "<request_id>",
+  "result": {
+    "action": "accept",
+    "content": { "age": 25 }
+  }
+}
+```
+
+Per MCP 2025-06-18, `action` is one of `accept`, `decline`, or `cancel`. `content` is only meaningful for `accept`. A decline/cancel should be surfaced to the calling tool as a distinct value (or exception) — the current implementation treats any non-accept response as cancellation by raising `MCPError(REQUEST_CANCELLED)` to the tool caller.
+
+#### Server Dispatch Wiring
+
+The `MCPServer` constructor creates an `ElicitationSystem` instance and exposes it as `server.elicitation_system`. When the server's active transport is established, `server._bind_elicitation_transport()` calls `self.elicitation_system.bind_transport(transport.send_message)`. The dispatch loop (`_handle_websocket_message` and equivalents) routes inbound messages whose `id` matches a pending elicitation (via `server.elicitation_system._pending_requests`) into `provide_input()`.
+
+This wiring is the production call site required by `rules/orphan-detection.md` §1. Without it, `ElicitationSystem` would be a facade without a real consumer.
+
+#### Error Semantics
+
+| Condition                                        | Raised exception  | Error code          |
+| ------------------------------------------------ | ----------------- | ------------------- |
+| `request_input()` called with no transport bound | `MCPError`        | `INVALID_REQUEST`   |
+| Response timeout                                 | `MCPError`        | `REQUEST_TIMEOUT`   |
+| Schema validation failure on response            | `ValidationError` | (propagated)        |
+| Client declined / cancelled                      | `MCPError`        | `REQUEST_CANCELLED` |
+
+#### Security
+
+- Responses MUST be validated against `input_schema` before being returned to the calling tool. Skipping validation is BLOCKED — an unvalidated client response can carry prompt-injection-adjacent payloads that downstream tools consume as trusted input.
+- The `input_schema` defaults to `{"type": "string"}` when omitted; callers SHOULD supply a tight schema whenever the prompt asks for structured data.
+- Logs use structured fields (`request_id`, `has_schema`, `elapsed_ms`); raw prompt text is NOT logged at INFO (may contain sensitive context from the calling tool). Emit the prompt at DEBUG only if operator explicitly enables it.
+
+#### Reference
+
+- MCP specification 2025-06-18 `elicitation/create` feature: server-to-client request, client returns `ElicitResult { action, content? }`.
+- Implementation: `packages/kailash-mcp/src/kailash_mcp/advanced/features.py::ElicitationSystem`.
+- Tier 2 integration tests: `tests/integration/mcp_server/test_elicitation_integration.py`.
 
 ### 4.10 Resource Subscriptions
 
