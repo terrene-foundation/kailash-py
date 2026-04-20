@@ -1,5 +1,52 @@
 # kailash-ml Changelog
 
+## [0.16.0] - 2026-04-20 — DLDiagnostics adapter for the cross-SDK Diagnostic Protocol
+
+PR#1 of 7 for the MLFP diagnostics donation plan (kailash-py #567). Lands the first concrete `Diagnostic` Protocol adapter in the kailash-ml surface, providing a drop-in training-loop diagnostic session for any `torch.nn.Module`.
+
+### Added
+
+- **`kailash_ml.diagnostics.DLDiagnostics`** — context-manager adapter for PyTorch training diagnostics. Satisfies `kailash.diagnostics.protocols.Diagnostic` at runtime (`@runtime_checkable` Protocol with `run_id` + `__enter__` + `__exit__` + `report()`). Installs forward/backward hooks on a user-supplied `nn.Module` to collect:
+  - per-batch **gradient flow**: L2 norm, per-element RMS (scale-invariant), and update-ratio (`‖∇W‖ / ‖W‖`).
+  - per-batch **activation statistics**: mean/std/min/max + activation-type-aware `inactivity_fraction` (ReLU family: `|x| < 1e-6`; Tanh: `|x| > 0.99`; Sigmoid: dual-tail saturation).
+  - per-batch **dead-neuron tracking** with memory-bounded rolling-window counts.
+  - per-batch scalars (`loss`, `lr`) and per-epoch summaries (`train_loss`, `val_loss`, arbitrary extras).
+  - `report()` returns a dict keyed by `run_id` with `gradient_flow` / `dead_neurons` / `loss_trend` findings, each a `{severity, message}` pair. Severities: `HEALTHY` / `WARNING` / `CRITICAL` / `UNKNOWN`.
+  - All DataFrame accessors (`gradients_df`, `activations_df`, `dead_neurons_df`, `batches_df`, `epochs_df`) return `polars.DataFrame`.
+- **`kailash_ml.diagnostics.run_diagnostic_checkpoint` / `diagnose_classifier` / `diagnose_regressor`** — module-level helpers that attach every instrument and run a short read-only diagnostic pass on a trained model; optional epoch-level history replay for viewers to see the real training trajectory.
+- **`DLDiagnostics.lr_range_test`** static method — Leslie Smith learning-rate range test with fastai-style EMA smoothing (beta=0.98). Returns BOTH `safe_lr` (steepest-descent LR / 10, the recommended optimizer setting) AND `min_loss_lr` (edge of instability). Model weights are restored on exit so calling the test is non-destructive.
+- **`DLDiagnostics.grad_cam`** — Grad-CAM heatmap for explaining classifier predictions from a named conv layer; preserves the model's train/eval state across the call.
+- **`specs/ml-diagnostics.md`** — new spec documenting the full `DLDiagnostics` public API, protocol conformance, extras-gating contract, and the MLFP donation attribution (Apache 2.0). Registered in `specs/_index.md`.
+
+### Changed
+
+- **`[dl]` extras pin `plotly>=5.18`** — plotly is currently in base deps so the pin is redundant today, but `DLDiagnostics.plot_*()` methods route through a `_require_plotly()` helper that raises `ImportError` naming `pip install kailash-ml[dl]` when the extra is absent. The duplication future-proofs the contract for the eventual demotion of plotly from base (per SYNTHESIS-proposal "Plotly blast radius" mitigation).
+
+### Porting notes (MLFP donation cleanup)
+
+The 1,679-LOC MLFP `DLDiagnostics` helper was re-authored into `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py` with the full cleanup burden the SYNTHESIS plan called for:
+
+- Medical metaphors (stethoscope / blood-test / x-ray / prescription / flight-recorder / ecg) stripped from every docstring, method name, log field, print line, and plot title.
+- `plotly` + `plotly.subplots` imported lazily inside each `plot_*` method body via `_require_plotly()`; `report()` and every `*_df()` accessor work on the base install with zero plotly dependency.
+- Device resolution routes through `kailash_ml._device.detect_backend()` (the package's canonical single-point resolver per `specs/ml-backends.md §2`) rather than MLFP's `shared.kailash_helpers.get_device` import (which does not exist in this tree).
+- `run_id` is a documented UUID4-defaulted instance attribute (optional kwarg) so `isinstance(diag, Diagnostic)` holds at runtime.
+- Structured log fields carry a `dl_` prefix to avoid collision with `LogRecord` reserved attribute names (`module`, `args`, `msg`, etc.) per `rules/observability.md` MUST Rule 9.
+
+### Tests
+
+- `packages/kailash-ml/tests/integration/test_dl_diagnostics_wiring.py` — Tier 2 wiring tests against real torch: Protocol conformance (`isinstance(diag, Diagnostic)`), real 3-batch training step records gradient + activation + dead-neuron data, `run_id` correlation across record → report.
+- `packages/kailash-ml/tests/unit/test_dl_diagnostics_unit.py` — Tier 1 unit tests: `__init__` validation (type, threshold range, window floor, empty `run_id`), `run_id` auto-generation uniqueness, `plot_*` methods raise `ImportError` naming `[dl]` when plotly is absent.
+
+### Cross-SDK alignment
+
+- Python surface: `kailash_ml.diagnostics.DLDiagnostics` — lands in this release.
+- Rust surface: no planned kailash-rs equivalent; DL diagnostics are Python-native (torch hook API has no stable Rust binding). The `Diagnostic` Protocol itself is documented cross-SDK in `schemas/trace-event.v1.json` + `src/kailash/diagnostics/protocols.py`.
+
+### Related
+
+- [issue kailash-py#567](https://github.com/terrene-foundation/kailash-py/issues/567) — MLFP diagnostics donation (PR#1 of 7).
+- `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` — approved architecture (Option E: protocols + adapters + engine-extension + GovernanceDiagnostics reject).
+
 ## [0.15.2] - 2026-04-20 — bundled audit-finding hotfix (log hygiene + identifier safety)
 
 Resolves four deferred audit findings from the 2026-04-20 late-session `/redteam` that were intentionally held over for next-session disposition per `workspaces/kailash-ml-gpu-stack/.session-notes`. All four live in `kailash-ml/` and ship in this one bundled patch.
