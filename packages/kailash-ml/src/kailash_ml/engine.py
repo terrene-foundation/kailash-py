@@ -20,12 +20,20 @@ classes to `kailash_ml.legacy.*`. Phase 2 is additive.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import os
 import pathlib
+import pickle
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Union
 
 from kailash_ml._device import BackendInfo, detect_backend
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "MLEngine",
@@ -410,28 +418,201 @@ class MLEngine:
     ) -> Any:
         """Profile data, infer schema, detect task type, split train/test.
 
-        Phase 2 validates the target-column invariants (§2.3 table) and
-        defers the concrete schema + split work to Phase 3.
+        Per ``specs/ml-engines.md`` §2.1 MUST 6, ``setup()`` is
+        idempotent: two calls with identical
+        ``(df_fingerprint, target, ignore, feature_store_name)``
+        produce the same ``schema_hash`` and the same ``split_seed``.
+        The ``schema_hash`` doubles as the canonical cache/registry key
+        for every downstream ``fit()`` / ``compare()`` / ``finalize()``
+        reachable from this Engine instance.
+
+        Split strategies: Phase 3 implements ``"holdout"``; other
+        strategies (``"kfold"``, ``"stratified_kfold"``,
+        ``"walk_forward"``) raise a typed
+        :class:`NotImplementedError` naming the deferring phase so a
+        future session can complete them without reading the body.
+        See the phase 3.1 gap journal for the deferred roadmap.
         """
+        # Validate target argument shape before touching data so bad
+        # calls fail loud and fast (§2.3).
         if not isinstance(target, str) or not target:
             raise ValueError("setup(target=...) must be a non-empty string.")
 
-        # Validate target presence / target-not-in-features (§2.3).
-        columns = self._columns_of(data)
-        if columns is not None:
-            if target not in columns:
-                raise TargetNotFoundError(column=target, columns=columns)
-            feature_cols = tuple(
-                c
-                for c in columns
-                if c != target and (ignore is None or c not in ignore)
+        if split_strategy not in (
+            "holdout",
+            "kfold",
+            "stratified_kfold",
+            "walk_forward",
+        ):
+            raise ValueError(
+                f"setup(split_strategy=...) must be 'holdout', 'kfold', "
+                f"'stratified_kfold', or 'walk_forward'; got {split_strategy!r}."
             )
-            if target in feature_cols:
-                # Defensive — should be impossible given the filter
-                # above, but catch it explicitly per §2.3 semantics.
-                raise TargetInFeaturesError(column=target)
+        if not isinstance(test_size, (int, float)) or not (0 < float(test_size) < 1):
+            raise ValueError(
+                f"setup(test_size=...) must be a float in (0, 1); got {test_size!r}."
+            )
 
-        raise NotImplementedError(f"MLEngine.setup — {_PHASE_3}")
+        # Phase 3 implements holdout end-to-end; the other three
+        # strategies raise a typed deferral until Phase 3.1 lands. We
+        # check this BEFORE touching the DataFrame so unsupported
+        # strategies fail without side-effects.
+        if split_strategy != "holdout":
+            raise NotImplementedError(
+                f"split_strategy={split_strategy!r} — Phase 3 implements "
+                f"'holdout' end-to-end; stratified/kfold/walk_forward are "
+                f"tracked for Phase 3.1."
+            )
+
+        # Normalize polars-LazyFrame → DataFrame at the boundary so the
+        # rest of setup works against a materialized frame (§7.1 MUST 2
+        # — pandas is accepted via interop conversion; polars is native).
+        df = self._to_polars_dataframe(data)
+
+        # Validate target presence / target-not-in-features (§2.3).
+        columns = tuple(str(c) for c in df.columns)
+        if target not in columns:
+            raise TargetNotFoundError(column=target, columns=columns)
+
+        ignore_list = sorted(set(ignore or []))
+        feature_cols = tuple(c for c in columns if c != target and c not in ignore_list)
+        if target in feature_cols:
+            # Defensive — should be impossible given the filter above.
+            raise TargetInFeaturesError(column=target)
+        if not feature_cols:
+            raise ValueError(
+                f"setup(target={target!r}, ignore={ignore!r}) leaves zero "
+                f"feature columns. At least one feature is required."
+            )
+
+        # Resolve the feature store name so the idempotency key is
+        # deterministic across runs. When the caller supplies a
+        # FeatureStore object, we use its table prefix; when they pass
+        # a string, we use it directly; default is "engine_default".
+        fs_name = self._resolve_feature_store_name(feature_store)
+
+        # Compute the schema hash per §2.1 MUST 6. The inputs are
+        # canonicalised (sorted columns, sorted dtypes, sorted ignore)
+        # so permutations of the same DataFrame produce the same hash.
+        schema_hash = self._compute_schema_hash(
+            df=df,
+            target=target,
+            ignore=ignore_list,
+            feature_store_name=fs_name,
+        )
+
+        # Infer task type from target dtype + cardinality.
+        task_type = self._infer_task_type(df, target)
+        primary_metric = {
+            "classification": "accuracy",
+            "regression": "rmse",
+            "clustering": "silhouette",
+        }.get(task_type, "accuracy")
+
+        # Deterministic split per holdout strategy. We materialise sizes
+        # at setup() time so the SetupResult records EXACTLY what the
+        # downstream fit() will see.
+        n_total = int(df.height)
+        if n_total < 2:
+            raise ValueError(
+                f"setup() requires at least 2 rows to split; got {n_total}."
+            )
+        n_test = max(1, int(round(n_total * float(test_size))))
+        if n_test >= n_total:
+            n_test = n_total - 1
+        n_train = n_total - n_test
+
+        # Build the SetupResult (imported here to avoid circular imports
+        # at module load — _results is a lightweight module but we keep
+        # the import local for symmetry with the trainable.fit() path).
+        from kailash_ml._results import SetupResult
+
+        # Build the schema_info dict with concrete dtype + null-count
+        # per column (Phase 3 extended profile per §2.2 SetupResult).
+        schema_info = self._build_schema_info(df, feature_cols, target)
+
+        result = SetupResult(
+            schema_hash=schema_hash,
+            task_type=task_type,
+            target=target,
+            feature_columns=feature_cols,
+            ignored_columns=tuple(ignore_list),
+            split_strategy=split_strategy,
+            split_seed=seed,
+            train_size=n_train,
+            test_size=n_test,
+            primary_metric=primary_metric,
+            tenant_id=self._tenant_id,
+            feature_store_name=fs_name,
+            schema_info=schema_info,
+        )
+
+        # Idempotency (§2.1 MUST 6). Store the result on the engine so
+        # subsequent fit()/compare()/finalize() see the same split. If
+        # setup() was already called with the same schema_hash for this
+        # Engine instance, we return the cached result unchanged — no
+        # duplicate FeatureSchema registration, no new split seed.
+        cached = self._setup_result
+        if isinstance(cached, SetupResult) and cached.schema_hash == schema_hash:
+            logger.info(
+                "setup.idempotent_hit",
+                extra={
+                    "schema_hash": schema_hash,
+                    "tenant_id": self._tenant_id,
+                },
+            )
+            return cached
+
+        # Register the feature schema in the FeatureStore when one is
+        # available. When no feature_store was injected AND no default
+        # store is wired yet, we keep the SetupResult on the engine but
+        # do not raise — the Engine still works for the in-memory path
+        # fit() currently supports.
+        fs_impl = feature_store or self._feature_store
+        if fs_impl is not None and hasattr(fs_impl, "register_features"):
+            try:
+                from kailash_ml.types import FeatureField, FeatureSchema
+
+                schema = FeatureSchema(
+                    name=fs_name,
+                    features=[
+                        FeatureField(
+                            name=col,
+                            dtype=schema_info["columns"][col]["dtype"],
+                            nullable=bool(schema_info["columns"][col]["nullable"]),
+                        )
+                        for col in feature_cols
+                    ],
+                    entity_id_column=self._infer_entity_id_column(df),
+                )
+                await fs_impl.register_features(schema)
+            except Exception as exc:
+                # Re-register with the same hash is a no-op in the store;
+                # re-register with a different hash surfaces as ValueError
+                # — we let it propagate so drift is loud.
+                if isinstance(exc, ValueError):
+                    raise
+                logger.warning(
+                    "setup.feature_store_register_failed",
+                    extra={
+                        "schema_hash": schema_hash,
+                        "tenant_id": self._tenant_id,
+                        "error": str(exc),
+                    },
+                )
+
+        self._setup_result = result
+        logger.info(
+            "setup.complete",
+            extra={
+                "schema_hash": schema_hash,
+                "task_type": task_type,
+                "train_size": n_train,
+                "test_size": n_test,
+                "tenant_id": self._tenant_id,
+            },
+        )
+        return result
 
     async def compare(
         self,
