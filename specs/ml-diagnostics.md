@@ -1,11 +1,11 @@
-# Kailash ML Diagnostics — Training-Loop Diagnostics Adapters
+# Kailash ML Diagnostics — Training-Loop + Evaluation Diagnostics Adapters
 
-Version: 0.16.0
+Version: 0.17.0
 Package: `kailash-ml`
-Parent domain: ML Lifecycle (`ml-engines.md` covers training; `ml-tracking.md` covers run history; `ml-backends.md` covers device resolution). This spec covers the polars-native, Protocol-backed diagnostic adapters that instrument training loops.
-Scope authority: `kailash_ml.diagnostics.DLDiagnostics` and its module-level helpers; the conformance contract against `kailash.diagnostics.protocols.Diagnostic`; the extras-gating contract for plotting surfaces.
+Parent domain: ML Lifecycle (`ml-engines.md` covers training; `ml-tracking.md` covers run history; `ml-backends.md` covers device resolution). This spec covers the polars-native, Protocol-backed diagnostic adapters that instrument training loops AND retrieval-augmented-generation evaluation.
+Scope authority: `kailash_ml.diagnostics.DLDiagnostics`, `kailash_ml.diagnostics.RAGDiagnostics` and their module-level helpers; the conformance contract against `kailash.diagnostics.protocols.Diagnostic`; the extras-gating contract for plotting surfaces and RAG backends.
 
-Status: LIVE — landed in kailash-ml 0.16.0 (2026-04-20). PR#1 of 7 for the MLFP diagnostics donation plan tracked in kailash-py issue #567. See `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` for the full 7-PR sequence.
+Status: LIVE — `DLDiagnostics` landed in 0.16.0, `RAGDiagnostics` in 0.17.0 (both 2026-04-20). PR#1–PR#2 of 7 for the MLFP diagnostics donation plan tracked in kailash-py issue #567. See `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` for the full 7-PR sequence.
 
 Origin: Originally contributed from MLFP module `mlfp05/diagnostics.py` (Apache-2.0). Re-authored for the Kailash ecosystem with medical metaphors stripped, plotly moved to the `[dl]` extra, and device resolution routed through the `kailash_ml._device` single-point resolver.
 
@@ -351,6 +351,216 @@ Attribution is carried in each file's copyright header + module docstring + this
 
 ## 10. Change Log
 
-| Version | Date       | Change                                                                                                    |
-| ------- | ---------- | --------------------------------------------------------------------------------------------------------- |
-| 0.16.0  | 2026-04-20 | Spec authored alongside the `DLDiagnostics` port from MLFP. First Diagnostic adapter lands in kailash-ml. |
+| Version | Date       | Change                                                                                                                        |
+| ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0.16.0  | 2026-04-20 | Spec authored alongside the `DLDiagnostics` port from MLFP. First Diagnostic adapter lands in kailash-ml.                     |
+| 0.17.0  | 2026-04-20 | `RAGDiagnostics` section added (§11) alongside the MLFP Lens 3 port. Second Diagnostic adapter lands. `[rag]` optional extra. |
+
+---
+
+## 11. `RAGDiagnostics` Public API (0.17.0+)
+
+### 11.1 Scope
+
+`kailash_ml.diagnostics.RAGDiagnostics` is the retrieval-augmented-generation evaluation adapter. It scores a batch of `(query, retrieved_contexts, answer, retrieved_ids, ground_truth_ids)` tuples using:
+
+- **IR metrics** — `recall@k`, `precision@k`, `reciprocal_rank` (MRR), `ndcg@k`. Pure-Python, deterministic, no LLM cost.
+- **Faithfulness** — how grounded the answer is in the retrieved context. Sourced from `ragas` when installed, otherwise from a caller-supplied `JudgeCallable`, otherwise from a deterministic token-overlap heuristic.
+- **Context utilisation** — fraction of answer tokens traceable to retrieved context. Token-overlap heuristic (fast, local, deterministic).
+- **Retriever leaderboards** — side-by-side comparison of N retrievers on the same eval set.
+
+### 11.2 Protocol Conformance Contract (same as §2)
+
+`RAGDiagnostics` satisfies `kailash.diagnostics.protocols.Diagnostic` at runtime — `isinstance(rag, Diagnostic)` returns `True`. The Tier 2 wiring test (`tests/integration/test_rag_diagnostics_wiring.py::test_rag_diagnostics_satisfies_diagnostic_protocol`) asserts this explicitly.
+
+### 11.3 Construction
+
+```python
+from kailash_ml.diagnostics import RAGDiagnostics
+
+RAGDiagnostics(
+    *,
+    judge: Optional[JudgeCallable] = None,    # see kailash.diagnostics.protocols.JudgeCallable
+    max_history: int = 1024,                   # deque(maxlen=N) — bounded memory
+    max_leaderboard_history: int = 256,
+    sensitive: bool = False,                   # redact query bodies in metrics_df
+    run_id: Optional[str] = None,              # UUID4 hex if omitted
+)
+```
+
+**Raises:**
+
+- `ValueError` if `max_history < 1`, `max_leaderboard_history < 1`, or `run_id == ""`.
+- `TypeError` if `judge` is not `None` and does not conform to `JudgeCallable` at runtime.
+
+### 11.4 Core Methods
+
+| Method                                                                                                | Purpose                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evaluate(queries, retrieved_contexts, answers, *, ground_truth_ids, retrieved_ids, k=5, sub_run_id)` | Score a batch end-to-end. Returns polars DataFrame with one row per query and columns `idx, recall_at_k, precision_at_k, context_utilisation, faithfulness, k, mode`. |
+| `compare_retrievers(retrievers, eval_set, *, k=5, sub_run_id)`                                        | Leaderboard over multiple retrievers. Returns polars DataFrame sorted by MRR descending.                                                                              |
+| `recall_at_k(retrieved_ids, relevant_ids, *, k=5)`                                                    | Standalone IR metric: `\|retrieved ∩ relevant\| / \|relevant\|`.                                                                                                      |
+| `precision_at_k(retrieved_ids, relevant_ids, *, k=5)`                                                 | Standalone IR metric: `\|retrieved ∩ relevant\| / \|retrieved\|`.                                                                                                     |
+| `reciprocal_rank(retrieved_ids, relevant_ids)`                                                        | Standalone IR metric: `1/rank` of first relevant doc, `0` if none.                                                                                                    |
+| `ndcg_at_k(retrieved_ids, relevant_ids, *, k=5)`                                                      | Standalone IR metric: binary-relevance normalised DCG.                                                                                                                |
+| `context_utilisation(answer, contexts)`                                                               | Token-overlap heuristic, deterministic.                                                                                                                               |
+| `ragas_scores(queries, retrieved_contexts, answers, *, ground_truth_ids)`                             | Run full RAGAS evaluation. **Requires `[rag]` extra**; raises `ImportError` when absent.                                                                              |
+| `trulens_scores(queries, retrieved_contexts, answers)`                                                | Run trulens-eval auxiliary metrics. **Requires `[rag]` extra**; raises `ImportError` when absent.                                                                     |
+
+### 11.5 Evaluation Mode Selection
+
+`RAGDiagnostics.evaluate()` chooses its faithfulness backend automatically:
+
+1. **`ragas`** — if installed (via `[rag]`), its `faithfulness` + `context_precision` metrics are used. Mode flag: `"ragas"`.
+2. **`JudgeCallable`** — if `ragas` is absent AND the constructor received a `judge=...`, faithfulness routes through `JudgeCallable.__call__`. Mode flag: `"judge"` on success, `"judge_error"` on fallback to the heuristic.
+3. **Metrics-only** — if `ragas` is absent AND no judge is configured, faithfulness defaults to the context-utilisation heuristic. Mode flag: `"metrics_only"`.
+
+Every fallback is logged at WARN per `rules/dependencies.md` "Optional Extras with Loud Failure" so operators can see which backend produced each score.
+
+### 11.6 DataFrame Accessors (polars-native)
+
+| Method             | Columns (ordered)                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `metrics_df()`     | `query_preview, recall_at_k, precision_at_k, context_utilisation, faithfulness, k, mode` |
+| `leaderboard_df()` | `retriever, recall_at_k, precision_at_k, mrr, ndcg_at_k, n, k`                           |
+
+Empty-state DataFrames have the correct schema with zero rows — safe to pass to downstream consumers that branch on `df.height`. `query_preview` is `"<redacted>"` when the session was constructed with `sensitive=True`.
+
+### 11.7 `report()` — Diagnostic Protocol Contract
+
+Returns a dict with this exact structure:
+
+```python
+{
+    "run_id": str,
+    "evaluations": int,                # count of evaluate() samples captured
+    "retriever_comparisons": int,       # count of compare_retrievers() aggregates
+    "retrieval": {"severity": Severity, "message": str,
+                  "mean_recall_at_k": float, "mean_precision_at_k": float},
+    "faithfulness": {"severity": Severity, "message": str, "mean_faithfulness": float},
+    "context_utilisation": {"severity": Severity, "message": str, "mean_context_utilisation": float},
+    "retriever_leaderboard": {"severity": Severity, "top": str | None,
+                              "top_mrr": float, "top_ndcg_at_k": float, "message": str},
+}
+```
+
+Where `Severity = Literal["HEALTHY", "WARNING", "CRITICAL", "UNKNOWN"]`. `UNKNOWN` is returned when the relevant history is empty.
+
+Severity thresholds:
+
+- **`retrieval = CRITICAL`** — mean recall@k < 0.3.
+- **`retrieval = WARNING`** — 0.3 <= mean recall@k < 0.5.
+- **`faithfulness = CRITICAL`** — mean faithfulness < 0.5.
+- **`faithfulness = WARNING`** — 0.5 <= mean faithfulness < 0.7.
+- **`context_utilisation = WARNING`** — mean utilisation < 0.3.
+
+### 11.8 Plotting Methods (require `kailash-ml[dl]`)
+
+| Method                         | Purpose                                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------------------- |
+| `plot_recall_curve()`          | Recall@k per query across captured evaluations.                                         |
+| `plot_faithfulness_scatter()`  | Faithfulness vs context-utilisation scatter.                                            |
+| `plot_retriever_leaderboard()` | Bar chart of retriever MRR + nDCG@k across compared retrievers.                         |
+| `plot_rag_dashboard()`         | 2×2 subplot dashboard: recall curve, context-util histogram, faithfulness scatter, MRR. |
+
+All route through `_require_plotly()` → `ImportError("pip install kailash-ml[dl]")` when plotly is absent.
+
+### 11.9 Extras Gating
+
+| Surface                                        | Base install | `[dl]` | `[rag]` |
+| ---------------------------------------------- | :----------: | :----: | :-----: |
+| `RAGDiagnostics.__init__`                      |      ✅      |   ✅   |   ✅    |
+| IR metric helpers + `context_utilisation`      |      ✅      |   ✅   |   ✅    |
+| `evaluate()` (metrics-only mode, no judge)     |      ✅      |   ✅   |   ✅    |
+| `evaluate()` (with `JudgeCallable`)            |      ✅      |   ✅   |   ✅    |
+| `evaluate()` (ragas-backed faithfulness)       |      ❌      |   ❌   |   ✅    |
+| `metrics_df()`, `leaderboard_df()`, `report()` |      ✅      |   ✅   |   ✅    |
+| `ragas_scores()`                               |      ❌      |   ❌   |   ✅    |
+| `trulens_scores()`                             |      ❌      |   ❌   |   ✅    |
+| `plot_*()`                                     |      ❌      |   ✅   |   ❌    |
+| `plot_rag_dashboard()`                         |      ❌      |   ✅   |   ❌    |
+
+The `[rag]` extra pins `ragas>=0.1`, `trulens-eval>=0.20`, `datasets>=2.0`. `[rag]` and `[dl]` compose orthogonally — a caller wanting ragas-backed scoring plus plotting installs `pip install kailash-ml[dl,rag]`.
+
+### 11.10 Security Threats
+
+| Threat                                                    | Mitigation                                                                                                                                                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Raw PII in query_preview column**                       | `sensitive=True` replaces query body with `"<redacted>"` in `metrics_df()`. Raw query fingerprinted via `sha256:<8-hex>` per `rules/event-payload-classification.md` §2.                                                    |
+| **Unbounded memory growth on streaming eval loops**       | `deque(maxlen=max_history)` + `deque(maxlen=max_leaderboard_history)`. Both bounds validated at `__init__` (must be `>= 1`).                                                                                                |
+| **Raw `openai.*` LLM call bypassing cost governance**     | All judge calls route through `kailash.diagnostics.protocols.JudgeCallable`. Caller supplies a cost-aware implementation. Raw OpenAI calls are `rules/framework-first.md` violations.                                       |
+| **Silent fallback masks backend degradation**             | Every fallback path (`ragas_unavailable`, `ragas_error`, `judge_error`, `trulens_unavailable`, `trulens_no_provider`) emits a WARN log per `rules/dependencies.md`. Mode flag in `metrics_df` surfaces per-row degradation. |
+| **JudgeCallable raises uncontrolled exception mid-batch** | `_judge_faithfulness()` catches `Exception`, logs at WARN, and falls back to the deterministic heuristic with `mode="judge_error"`. The batch continues; the row preserves a numeric score.                                 |
+| **Non-finite judge score corrupts DataFrame**             | `_judge_faithfulness()` guards `not math.isfinite(score)` → WARN + heuristic fallback, same as exception path.                                                                                                              |
+
+### 11.11 Observability
+
+Every `RAGDiagnostics` method emits structured logs with the `rag_run_id` correlation field. Structured-field kwargs carry a `rag_` prefix to avoid `LogRecord` reserved-name collisions per `rules/observability.md` MUST Rule 9.
+
+| Event                                     | Level | When                                                             |
+| ----------------------------------------- | ----- | ---------------------------------------------------------------- |
+| `ragdiagnostics.init`                     | INFO  | Session constructor completes.                                   |
+| `ragdiagnostics.exit`                     | INFO  | Context-manager `__exit__` runs.                                 |
+| `ragdiagnostics.evaluate.start`           | INFO  | `evaluate()` begins.                                             |
+| `ragdiagnostics.evaluate.ok`              | INFO  | `evaluate()` completes with mean metrics.                        |
+| `ragdiagnostics.compare_retrievers.start` | INFO  | `compare_retrievers()` begins.                                   |
+| `ragdiagnostics.compare_retrievers.ok`    | INFO  | Leaderboard built with top retriever name.                       |
+| `ragdiagnostics.report`                   | INFO  | `report()` completes with summary of severities.                 |
+| `ragdiagnostics.ragas_unavailable`        | WARN  | `ragas` import failed; adapter falls back to judge/heuristic.    |
+| `ragdiagnostics.ragas_error`              | WARN  | `ragas` internal error during evaluate.                          |
+| `ragdiagnostics.trulens_unavailable`      | WARN  | `trulens-eval` import failed.                                    |
+| `ragdiagnostics.trulens_no_provider`      | WARN  | trulens installed but no Provider configured.                    |
+| `ragdiagnostics.judge_error`              | WARN  | JudgeCallable raised; fallback to heuristic.                     |
+| `ragdiagnostics.judge_nonfinite_score`    | WARN  | Judge returned `None` / `NaN` / `Inf`; fallback to heuristic.    |
+| `ragdiagnostics.judge_ok`                 | INFO  | Judge returned a finite score; includes `rag_cost_microdollars`. |
+
+### 11.12 Test Contract
+
+#### Tier 1 (Unit) — `tests/unit/test_rag_diagnostics_unit.py` (43 tests)
+
+- `__init__` validation: empty `run_id`, zero `max_history`, zero `max_leaderboard_history`, non-`JudgeCallable` `judge`.
+- Protocol conformance: `isinstance(rag, Diagnostic)`.
+- IR metric math on known-answer fixtures (recall@k, precision@k, MRR, nDCG@k boundary cases).
+- `evaluate()` input validation (empty queries, mismatched lengths, `k < 1`).
+- Metrics-only mode end-to-end (no judge, no ragas).
+- Bounded memory: `deque(maxlen=N)` FIFO eviction.
+- `compare_retrievers()` input validation + leaderboard math.
+- `report()` empty + CRITICAL severity paths.
+- `metrics_df()` / `leaderboard_df()` empty-state schema.
+- Plotly extras-gating loud-fail (`plot_recall_curve`, `plot_faithfulness_scatter`, `plot_retriever_leaderboard`, `plot_rag_dashboard`).
+- ragas / trulens extras-gating loud-fail (`ragas_scores`, `trulens_scores`).
+- Deterministic `context_utilisation` heuristic.
+- JudgeCallable dispatch via a minimal in-process fake judge.
+- Judge error fallback to heuristic with `mode="judge_error"`.
+
+#### Tier 2 (Integration) — `tests/integration/test_rag_diagnostics_wiring.py` (13 tests)
+
+Per `rules/orphan-detection.md` §1 + `rules/facade-manager-detection.md` Rule 2:
+
+- Imports through `kailash_ml.diagnostics` facade (NOT the concrete module path).
+- `isinstance(rag, Diagnostic)` holds at runtime.
+- `_ScriptedJudge` (in-process real) satisfies `JudgeCallable` at runtime.
+- End-to-end `evaluate()` with real Protocol dispatch across 3 queries.
+- Metrics-only mode end-to-end (no judge).
+- `run_id` propagates from constructor → `report()['run_id']`.
+- `compare_retrievers()` produces MRR-sorted leaderboard across 3 retrievers.
+- `sensitive=True` redacts `query_preview` AND keeps raw PII out of `repr(row)`.
+- `__exit__` returns `None` and does not swallow exceptions.
+
+### 11.13 Attribution
+
+Originally contributed from MLFP `shared/mlfp06/diagnostics/retrieval.py` (Apache-2.0, 705 LOC). The Kailash port (`packages/kailash-ml/src/kailash_ml/diagnostics/rag.py`):
+
+- Strips medical metaphors (no "Endoscope", no "Prescription Pad") from every docstring, method name, plot title, and log event.
+- Routes all LLM-as-judge calls through `kailash.diagnostics.protocols.JudgeCallable` — no bespoke `JudgeCallable` wrapper around Kaizen `Delegate`; no raw `openai.*`.
+- Replaces unbounded `list[dict]` storage with `collections.deque(maxlen=N)` for bounded memory on streaming eval loops.
+- Adds `run_id` for Diagnostic Protocol conformance.
+- `ragas` / `trulens-eval` / `datasets` imports wrapped with loud-fail contract per `rules/dependencies.md`.
+
+Attribution is carried in each file's copyright header + module docstring + this spec. Cross-reference: kailash-py issue #567 (PR#2 of 7).
+
+### 11.14 Cross-SDK Alignment
+
+- **Python surface**: `kailash_ml.diagnostics.RAGDiagnostics` — lands in kailash-ml 0.17.0.
+- **Rust surface**: No planned kailash-rs equivalent. RAG evaluation depends on `ragas` / `trulens-eval`, neither of which has a stable Rust binding. Cross-SDK agreement is at the Protocol level (`kailash.diagnostics.protocols.Diagnostic` + `JudgeCallable` + `schemas/trace-event.v1.json`), not at this concrete adapter.
+- Future PRs #3–#7 (AlignmentDiagnostics, InterpretabilityDiagnostics, LLMDiagnostics, AgentDiagnostics, GovernanceEngine extensions) follow the same pattern: each adapter conforms to `Diagnostic`, each lives under a domain-specific optional extra, each ships with facade-import Tier 2 tests.

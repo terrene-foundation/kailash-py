@@ -1,5 +1,48 @@
 # kailash-ml Changelog
 
+## [0.17.0] - 2026-04-20 — RAGDiagnostics adapter for retrieval + generation evaluation
+
+PR#2 of 7 for the MLFP diagnostics donation plan (kailash-py #567). Lands the second concrete `Diagnostic` Protocol adapter, extending `DLDiagnostics` (0.16.0) with retrieval-augmented-generation evaluation: IR metrics, LLM-as-judge faithfulness, retriever leaderboards, and an extras-gated ragas / trulens-eval backend.
+
+### Added
+
+- **`kailash_ml.diagnostics.RAGDiagnostics`** — context-manager adapter for retrieval + generation evaluation. Satisfies `kailash.diagnostics.protocols.Diagnostic` at runtime (`@runtime_checkable` Protocol with `run_id` + `__enter__` + `__exit__` + `report()`). Provides:
+  - **IR metrics**: `recall@k`, `precision@k`, `reciprocal_rank` (MRR), `ndcg@k` — all pure-Python deterministic helpers with no LLM cost.
+  - **`evaluate()`** — end-to-end scoring over a batch of `(query, retrieved_contexts, answer, retrieved_ids, ground_truth_ids)` tuples. Returns a `polars.DataFrame` with one row per query and columns `idx, recall_at_k, precision_at_k, context_utilisation, faithfulness, k, mode`. Automatically selects backend: `ragas` (when `[rag]` installed) → configured `JudgeCallable` → deterministic `metrics_only` fallback.
+  - **`compare_retrievers()`** — leaderboard over N retrievers on the same eval set. Returns a MRR-sorted polars DataFrame with `retriever, recall_at_k, precision_at_k, mrr, ndcg_at_k, n, k`.
+  - **`report()`** — structured dict keyed by `run_id` with `retrieval` / `faithfulness` / `context_utilisation` / `retriever_leaderboard` findings, each a `{severity, message, ...}` triple. Severities: `HEALTHY` / `WARNING` / `CRITICAL` / `UNKNOWN`.
+  - **DataFrame accessors** (`metrics_df`, `leaderboard_df`) return `polars.DataFrame` on the base install (no plotly needed).
+  - **Plot methods** (`plot_recall_curve`, `plot_faithfulness_scatter`, `plot_retriever_leaderboard`, `plot_rag_dashboard`) return `plotly.graph_objects.Figure`; require `pip install kailash-ml[dl]`.
+  - **Bounded memory** via `deque(maxlen=N)` on `max_history` / `max_leaderboard_history` kwargs — streaming RAG eval loops stay under fixed memory.
+  - **Sensitive mode** — `sensitive=True` replaces query bodies with `"<redacted>"` in the DataFrame and fingerprints raw queries via `sha256:<8-hex>` per the cross-SDK event-payload-classification contract.
+- **`[rag]` optional extra** — `ragas>=0.1`, `trulens-eval>=0.20`, `datasets>=2.0`. Without `[rag]`, `RAGDiagnostics.evaluate()` falls back to the configured `JudgeCallable` + deterministic heuristic (logged at WARN per `rules/dependencies.md`). `RAGDiagnostics.ragas_scores()` and `RAGDiagnostics.trulens_scores()` raise `ImportError` naming the `[rag]` extra when the backend is absent.
+- **`specs/ml-diagnostics.md`** — appended `§11. RAGDiagnostics` section documenting the full public API, Protocol conformance, extras-gating contract, observability events, test discipline, and MLFP donation attribution.
+
+### Changed
+
+- **`kailash_ml.diagnostics.__init__`** — `RAGDiagnostics` exported through the package facade. Package docstring expanded to document both `DLDiagnostics` and `RAGDiagnostics` usage patterns + the `[dl]` / `[rag]` extras gating.
+
+### Porting notes (MLFP donation cleanup)
+
+The MLFP `Lens 3 — Retrieval Diagnostics (the Endoscope)` (`shared/mlfp06/diagnostics/retrieval.py`, 705 LOC) was re-authored into `packages/kailash-ml/src/kailash_ml/diagnostics/rag.py`:
+
+- Medical metaphors (endoscope / prescription pad) stripped from every docstring, plot title, and log field.
+- All LLM-as-judge calls routed through `kailash.diagnostics.protocols.JudgeCallable` — no raw `openai.*` per `rules/framework-first.md`. Callers supply their judge via constructor kwarg; MLFP's bespoke `JudgeCallable` wrapper (which instantiated a Kaizen `Delegate` internally) is replaced with the cross-SDK Protocol contract.
+- Bounded-memory `deque(maxlen=N)` storage replaces MLFP's unbounded `list[dict]` so streaming evaluation loops cannot grow without limit (see rules/patterns.md analysis §1.4).
+- `ragas` and `trulens-eval` import sites wrapped with `try/except ImportError` + loud-fail contract per `rules/dependencies.md` "Optional Extras with Loud Failure".
+- Structured log fields carry `rag_` prefix to avoid `LogRecord` reserved-attribute collisions per `rules/observability.md` MUST Rule 9.
+- `run_id` is a UUID4-defaulted public attribute so `isinstance(rag, Diagnostic)` holds at runtime.
+- Sensitive-mode query bodies are hashed via `sha256:<8-hex>` matching the cross-SDK `format_record_id_for_event` fingerprint contract from `rules/event-payload-classification.md`.
+
+### Tests
+
+- `packages/kailash-ml/tests/unit/test_rag_diagnostics_unit.py` — Tier 1 unit tests (43 tests, <1s). Covers input validation, Protocol `isinstance` check, IR-metric math on known-answer fixtures, evaluate() end-to-end in metrics-only mode, bounded-memory eviction, compare_retrievers leaderboard math, report() empty + CRITICAL severity paths, plotly / ragas / trulens extras-gating loud-fail, and JudgeCallable dispatch + error-fallback paths.
+- `packages/kailash-ml/tests/integration/test_rag_diagnostics_wiring.py` — Tier 2 wiring tests (13 tests). Imports through `kailash_ml.diagnostics` facade per `rules/orphan-detection.md` §1. Uses in-process `_ScriptedJudge` conforming to `JudgeCallable` (no mocks per `rules/testing.md`). Asserts `isinstance(rag, Diagnostic)`, end-to-end `evaluate()` with real Protocol dispatch across 3 queries, `run_id` propagation, leaderboard MRR ordering, sensitive-mode redaction, and `__exit__` non-swallowing semantics.
+
+### Cross-SDK alignment
+
+The `JudgeCallable` + `JudgeInput` + `JudgeResult` data contract used here is defined in `src/kailash/diagnostics/protocols.py` (PR#0, kailash 2.8.10). Python and Rust SDKs implement independently with matching semantics per EATP D6. No planned kailash-rs equivalent of `RAGDiagnostics` itself (RAG evaluation depends on `ragas` / `trulens-eval`, neither of which has a stable Rust binding); cross-SDK agreement is at the Protocol level, not the adapter.
+
 ## [0.16.0] - 2026-04-20 — DLDiagnostics adapter for the cross-SDK Diagnostic Protocol
 
 PR#1 of 7 for the MLFP diagnostics donation plan (kailash-py #567). Lands the first concrete `Diagnostic` Protocol adapter in the kailash-ml surface, providing a drop-in training-loop diagnostic session for any `torch.nn.Module`.
