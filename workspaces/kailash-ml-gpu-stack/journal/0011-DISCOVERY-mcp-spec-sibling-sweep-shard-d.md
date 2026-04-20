@@ -65,3 +65,11 @@ Continue with implementation (Shard D steps 2-5). No sibling-spec edits required
 
 Rule reference: `rules/specs-authority.md` MUST Rule 5b — full-sibling-spec re-derivation triggered by every spec edit.
 Cross-SDK: kailash-rs equivalent not yet inspected (tracked as Step 6 of Shard D).
+
+## For Discussion
+
+1. **Counterfactual**: If this sibling-sweep had been skipped (narrow-scope, "only the file I edited"), and a future session added an `elicitation/create` handler to `mcp-client.md` using different terminology — e.g. `interactive_request` instead of `request_input` — when would the terminology collision surface, and what would the cost of retroactive normalization be?
+
+2. **Data-referenced**: The grep against `mcp-client.md` + `mcp-auth.md` returned 0 matches for `elicit|Elicit|interactive|request_input|elicitation/create`. Does a zero-finding sweep constitute evidence that the expanded surface is well-isolated, or does it merely indicate that existing specs were written before MCP 2025-06-18 elicitation was defined (i.e., the silence is an artifact of spec age, not architectural separation)?
+
+3. **Scope**: The sweep covered only `specs/mcp-*.md`. `specs/ml-engines.md` references `MCPServer` in its serving section (§6 series). Should the sibling-spec sweep rule extend to cross-domain specs that reference the edited package, or does that broaden the scope to the point where every spec edit triggers a full-corpus sweep?
