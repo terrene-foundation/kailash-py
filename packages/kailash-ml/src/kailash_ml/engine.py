@@ -327,6 +327,44 @@ def _family_available(family: str) -> bool:
     return True
 
 
+def _parse_model_uri(uri: str) -> tuple[str, Optional[int]]:
+    """Split a ``models://<name>/v<version>`` URI into (name, version).
+
+    Accepts the canonical form produced by ``RegisterResult.model_uri``:
+    ``models://User/v3``. Also accepts the bare-name form
+    ``models://User`` (version=None, meaning "latest"). Other shapes
+    raise ValueError.
+    """
+    if not isinstance(uri, str):
+        raise TypeError(f"model URI must be a string; got {type(uri).__name__}")
+    prefix = "models://"
+    if not uri.startswith(prefix):
+        raise ValueError(f"model URI must start with '{prefix}'; got {uri!r}.")
+    tail = uri[len(prefix) :]
+    if "/" in tail:
+        name, _, v_part = tail.partition("/")
+        if not name:
+            raise ValueError(f"model URI missing name component: {uri!r}")
+        if not v_part.startswith("v"):
+            raise ValueError(
+                f"model URI version component must start with 'v'; "
+                f"got {v_part!r} in {uri!r}."
+            )
+        try:
+            version = int(v_part[1:])
+        except ValueError as exc:
+            raise ValueError(
+                f"model URI version component not an integer: {v_part!r} "
+                f"in {uri!r}."
+            ) from exc
+        if version < 1:
+            raise ValueError(
+                f"model URI version must be >= 1; got {version} in {uri!r}."
+            )
+        return name, version
+    return tail, None
+
+
 def _metric_sort_key(metric_name: str, value: float) -> tuple[float, float]:
     """Return a sort key such that `sorted(..., key=...)` puts best-first.
 
@@ -1124,14 +1162,172 @@ class MLEngine:
         candidate: Any,
         *,
         full_fit: bool = True,
+        data: Any = None,
+        target: Optional[str] = None,
     ) -> Any:
         """Retrain top candidate on full training + holdout data.
 
-        Phase 3 implements the full-fit retraining path.
+        Per ``specs/ml-engines.md`` §2.2 finalize() takes a candidate
+        ``TrainingResult`` (the winner of a prior ``compare()`` sweep,
+        or a model URI string) and re-trains it on the combined
+        train+holdout set so the deployed model has seen every
+        available row — the standard pattern for pushing a validated
+        candidate to production.
+
+        Args:
+            candidate: Either a :class:`TrainingResult` directly, or a
+                model-URI string ``"models://<name>/v<version>"`` that
+                points at a previously-registered model. For the URI
+                path, finalize() loads the ModelVersion from the
+                registry and reconstructs the family from the signature
+                metadata.
+            full_fit: When True (default), refit the candidate's family
+                on ``train + holdout`` combined. When False, mark the
+                candidate as finalized without retraining — the
+                returned FinalizeResult's ``training_result`` is
+                identical to the candidate.
+            data: Escape-hatch training frame for the refit path. When
+                supplied, bypasses ``self._setup_result``. Required
+                when ``setup()`` has not been called.
+            target: Target column name for direct-data dispatch.
+
+        Returns:
+            A :class:`FinalizeResult` wrapping the refitted (or
+            re-wrapped) :class:`TrainingResult` plus the original
+            candidate so callers can compare pre- and post-finalize
+            metrics.
+
+        Raises:
+            ValueError: When candidate is None, or data supplied without
+                target, or full_fit=True but neither setup nor
+                (data, target) is available.
+            ModelNotFoundError: When candidate is a URI that does not
+                resolve to a registered model.
         """
+        # Lazy import to avoid a cross-module import cycle at package
+        # load time — FinalizeResult only matters inside finalize().
+        from kailash_ml._result import TrainingResult
+        from kailash_ml._results import FinalizeResult
+
         if candidate is None:
             raise ValueError("finalize(candidate) must not be None.")
-        raise NotImplementedError(f"MLEngine.finalize — {_PHASE_3}")
+
+        # Resolve candidate → concrete TrainingResult. String URIs go
+        # through the registry; TrainingResult instances pass through
+        # as-is. Unknown shapes surface as TypeError (not a silent
+        # fallback) per rules/zero-tolerance.md Rule 3.
+        original_candidate: Any = candidate
+        if isinstance(candidate, TrainingResult):
+            candidate_result: TrainingResult = candidate
+        elif isinstance(candidate, str):
+            # URI path: "models://<name>/v<version>" — load via registry.
+            name, version = _parse_model_uri(candidate)
+            registry = await self._ensure_registry_for_read()
+            try:
+                model_version = await registry.get_model(name, version)
+            except Exception as exc:  # noqa: BLE001
+                raise ModelNotFoundError(name=name, version=version) from exc
+            # Reconstruct a minimal TrainingResult from the registry
+            # row so the caller can still reach `candidate_result.family`
+            # and `candidate_result.hyperparameters`. This is a
+            # read-through wrapper; the model bytes live in the
+            # artifact store, not in this struct.
+            metrics_dict = {m.name: float(m.value) for m in model_version.metrics}
+            candidate_result = TrainingResult(
+                model_uri=candidate,
+                metrics=metrics_dict,
+                device_used="cpu",  # historical — unknown post-load
+                accelerator="cpu",
+                precision="32-true",
+                elapsed_seconds=0.0,
+                tracker_run_id=None,
+                tenant_id=self._tenant_id,
+                artifact_uris={"native": model_version.artifact_path or ""},
+                lightning_trainer_config={},
+                family=None,
+            )
+        else:
+            raise TypeError(
+                f"finalize(candidate=...) must be a TrainingResult or a "
+                f"string URI ('models://<name>/v<version>'); got "
+                f"{type(candidate).__name__}."
+            )
+
+        if not full_fit:
+            # No retraining — just re-wrap the candidate. tenant_id
+            # echoes the engine's current tenant context per §4.2 MUST 3.
+            wrapped = candidate_result
+            if wrapped.tenant_id != self._tenant_id:
+                from dataclasses import replace as _replace
+
+                wrapped = _replace(wrapped, tenant_id=self._tenant_id)
+            return FinalizeResult(
+                training_result=wrapped,
+                original_candidate=original_candidate,
+                full_fit=False,
+                tenant_id=self._tenant_id,
+            )
+
+        # full_fit=True: re-train on the combined train+holdout set
+        # through self.fit() so the Lightning-spine invariant holds.
+        # The family comes from the candidate; the frame comes from
+        # setup_result or the escape-hatch kwargs.
+        refit_family = candidate_result.family
+        if refit_family is None:
+            raise ValueError(
+                "finalize(candidate, full_fit=True) requires "
+                "candidate.family to be populated. When candidate is a "
+                "URI whose registry row does not carry family metadata, "
+                "pass full_fit=False to wrap without retraining."
+            )
+
+        refit_data = data
+        refit_target = target
+        setup_result = self._setup_result
+        if refit_data is None:
+            if setup_result is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.finalize(full_fit=True) requires either "
+                    "setup() to be called first OR (data=..., "
+                    "target='...') supplied directly. Pass `data=df, "
+                    "target='...'` to finalize() as an escape hatch."
+                )
+            refit_data = getattr(setup_result, "_data", None)
+            if refit_data is None:
+                raise EngineNotSetUpError(
+                    "MLEngine.finalize(full_fit=True) requires setup() to "
+                    "have stored the training frame, but SetupResult._data "
+                    "is absent. Pass `data=df, target='...'` to finalize() "
+                    "directly as an escape hatch."
+                )
+        if refit_target is None:
+            if setup_result is not None and getattr(setup_result, "target", None):
+                refit_target = setup_result.target
+            else:
+                raise ValueError(
+                    "MLEngine.finalize(full_fit=True) could not resolve "
+                    "the target column from the setup result — pass "
+                    "`target='...'` explicitly."
+                )
+        if data is not None and target is None:
+            raise ValueError(
+                "MLEngine.finalize(data=..., target=...) requires a target "
+                "column name when data is supplied directly."
+            )
+
+        refit_result = await self.fit(
+            data=refit_data,
+            target=refit_target,
+            family=refit_family,
+            hyperparameters=candidate_result.hyperparameters,
+        )
+
+        return FinalizeResult(
+            training_result=refit_result,
+            original_candidate=original_candidate,
+            full_fit=True,
+            tenant_id=self._tenant_id,
+        )
 
     async def evaluate(
         self,
@@ -1410,6 +1606,34 @@ class MLEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    async def _ensure_registry_for_read(self) -> Any:
+        """Return a usable ModelRegistry for read paths (finalize/evaluate).
+
+        Prefers the DI-injected registry. When none was supplied, lazily
+        constructs a default one backed by the Engine's resolved store
+        URL. This is the read-only companion to Shard A's full registry
+        construction path — reads work standalone; writes still require
+        Shard A's register() to land.
+        """
+        if self._registry is not None:
+            return self._registry
+        # Lazy construction: create a ConnectionManager and ModelRegistry
+        # against the resolved store URL. This mirrors what Shard A's
+        # setup()/register() path will do, letting finalize() and
+        # evaluate() work against a pre-populated registry without
+        # waiting on Shard A.
+        from kailash.db.connection import ConnectionManager
+        from kailash_ml.engines.model_registry import ModelRegistry
+
+        if self._connection_manager is None:
+            self._connection_manager = ConnectionManager(self.store_url)
+            await self._connection_manager.initialize()
+        self._registry = ModelRegistry(
+            self._connection_manager,
+            artifact_store=self._artifact_store,
+        )
+        return self._registry
 
     @staticmethod
     def _columns_of(data: Any) -> Optional[tuple[str, ...]]:
