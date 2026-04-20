@@ -20,9 +20,17 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
 
+from ..adapters.dialect import DialectManager
 from .drop_confirmation import require_force_drop
 
 logger = logging.getLogger(__name__)
+
+# Per rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
+# DDL identifier MUST route through dialect.quote_identifier() before
+# being interpolated into SQL. This module only runs against
+# PostgreSQL (asyncpg.Connection), so we bind the dialect at import
+# time to keep call sites terse.
+_DIALECT = DialectManager.get_dialect("postgresql")
 
 
 class DefaultValueType(Enum):
@@ -755,16 +763,21 @@ class NotNullColumnHandler:
             connection = await self._get_connection()
 
         try:
-            # Drop the column if it exists
+            # Drop the column if it exists — per
+            # rules/dataflow-identifier-safety.md MUST Rule 1, every
+            # dynamic DDL identifier MUST route through quote_identifier
+            # before interpolation.
+            table_q = _DIALECT.quote_identifier(plan.table_name)
+            column_q = _DIALECT.quote_identifier(plan.column.name)
             column_exists = await self._check_column_exists(
                 plan.table_name, plan.column.name, connection
             )
             if column_exists:
                 await connection.execute(
-                    f"ALTER TABLE {plan.table_name} DROP COLUMN IF EXISTS {plan.column.name}"
+                    f"ALTER TABLE {table_q} DROP COLUMN IF EXISTS {column_q}"
                 )
                 affected_rows = await connection.fetchval(
-                    f"SELECT COUNT(*) FROM {plan.table_name}"
+                    f"SELECT COUNT(*) FROM {table_q}"
                 )
             else:
                 affected_rows = 0
@@ -899,9 +912,15 @@ class NotNullColumnHandler:
         self, plan: NotNullAdditionPlan, connection: asyncpg.Connection
     ) -> Dict[str, Any]:
         """Generate rollback plan for the addition."""
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, advisory
+        # DDL strings (which the caller may execute) MUST quote the
+        # identifier. quote_identifier validates + quotes so the string
+        # is both safe and directly executable.
+        table_q = _DIALECT.quote_identifier(plan.table_name)
+        column_q = _DIALECT.quote_identifier(plan.column.name)
         return {
             "strategy": "drop_column",
-            "sql": f"ALTER TABLE {plan.table_name} DROP COLUMN IF EXISTS {plan.column.name}",
+            "sql": f"ALTER TABLE {table_q} DROP COLUMN IF EXISTS {column_q}",
             "estimated_time": 0.1,  # Very fast operation
             "requires_transaction": True,
         }
@@ -988,10 +1007,18 @@ class NotNullColumnHandler:
         strategy = self.strategies[plan.column.default_type]
         default_expr = strategy.generate_default_expression(plan.column)
 
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier
+        # before interpolation. data_type and default_expr are SQL
+        # fragments (not identifiers) and are validated separately by
+        # the strategy layer.
+        table_q = _DIALECT.quote_identifier(plan.table_name)
+        column_q = _DIALECT.quote_identifier(plan.column.name)
+
         # Build ALTER TABLE statement
         sql = f"""
-        ALTER TABLE {plan.table_name}
-        ADD COLUMN {plan.column.name} {plan.column.data_type}
+        ALTER TABLE {table_q}
+        ADD COLUMN {column_q} {plan.column.data_type}
         NOT NULL DEFAULT {default_expr}
         """
 
@@ -999,9 +1026,7 @@ class NotNullColumnHandler:
         await connection.execute(sql)
 
         # Get affected row count
-        affected_rows = await connection.fetchval(
-            f"SELECT COUNT(*) FROM {plan.table_name}"
-        )
+        affected_rows = await connection.fetchval(f"SELECT COUNT(*) FROM {table_q}")
 
         return AdditionExecutionResult(
             result=AdditionResult.SUCCESS,
@@ -1016,6 +1041,14 @@ class NotNullColumnHandler:
         strategy = self.strategies[plan.column.default_type]
         default_expr = strategy.generate_default_expression(plan.column)
 
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier
+        # before interpolation. data_type and default_expr are SQL
+        # fragments (not identifiers) and are validated separately by
+        # the strategy layer.
+        table_q = _DIALECT.quote_identifier(plan.table_name)
+        column_q = _DIALECT.quote_identifier(plan.column.name)
+
         # Check if this is a computed expression that references columns
         # PostgreSQL doesn't allow column references in DEFAULT expressions
         is_computed_with_column_refs = (
@@ -1027,16 +1060,16 @@ class NotNullColumnHandler:
             # Step 1: Add nullable column WITHOUT default (PostgreSQL limitation)
             await connection.execute(
                 f"""
-                ALTER TABLE {plan.table_name}
-                ADD COLUMN {plan.column.name} {plan.column.data_type}
+                ALTER TABLE {table_q}
+                ADD COLUMN {column_q} {plan.column.data_type}
             """
             )
         else:
             # Step 1: Add nullable column with default (works for static/function defaults)
             await connection.execute(
                 f"""
-                ALTER TABLE {plan.table_name}
-                ADD COLUMN {plan.column.name} {plan.column.data_type}
+                ALTER TABLE {table_q}
+                ADD COLUMN {column_q} {plan.column.data_type}
                 DEFAULT {default_expr}
             """
             )
@@ -1053,14 +1086,14 @@ class NotNullColumnHandler:
             updated_rows = await connection.fetch(
                 f"""
                 WITH batch AS (
-                    SELECT ctid FROM {plan.table_name}
-                    WHERE {plan.column.name} IS NULL
+                    SELECT ctid FROM {table_q}
+                    WHERE {column_q} IS NULL
                     LIMIT {batch_size}
                 )
-                UPDATE {plan.table_name}
-                SET {plan.column.name} = {default_expr}
+                UPDATE {table_q}
+                SET {column_q} = {default_expr}
                 FROM batch
-                WHERE {plan.table_name}.ctid = batch.ctid
+                WHERE {table_q}.ctid = batch.ctid
                 RETURNING 1
             """
             )
@@ -1077,8 +1110,8 @@ class NotNullColumnHandler:
         # Step 3: Add NOT NULL constraint
         await connection.execute(
             f"""
-            ALTER TABLE {plan.table_name}
-            ALTER COLUMN {plan.column.name} SET NOT NULL
+            ALTER TABLE {table_q}
+            ALTER COLUMN {column_q} SET NOT NULL
         """
         )
 
@@ -1086,8 +1119,8 @@ class NotNullColumnHandler:
         if not is_computed_with_column_refs:
             await connection.execute(
                 f"""
-                ALTER TABLE {plan.table_name}
-                ALTER COLUMN {plan.column.name} SET DEFAULT {default_expr}
+                ALTER TABLE {table_q}
+                ALTER COLUMN {column_q} SET DEFAULT {default_expr}
             """
             )
 

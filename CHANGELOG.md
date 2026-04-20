@@ -15,6 +15,12 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.11 — 2026-04-20 — dialect-safety sweep
+
+**Post-2.8.10 follow-up.** 2.8.10 shipped `quote_identifier` into the core dialect layer, but `/redteam` found 40+ DDL sites across `src/kailash/trust/audit_store.py`, DataFlow migrations (`application_safe_rename_strategy`, `column_removal_manager`, `not_null_handler`), DataFlow optimization (`index_recommendation_engine`, `query_plan_analyzer`, `sql_query_optimizer`), and the migration generator (`src/kailash/utils/migrations/generator.py`) that were still interpolating dynamic identifiers via raw f-string. 2.8.11 routes every remaining dynamic DDL identifier through `dialect.quote_identifier()` or `_validate_identifier()` and adds 20 regression tests (4 audit_store + 10 migrations + 6 optimization advisories) covering PostgreSQL / MySQL / SQLite payloads.
+
+No API surface changes. Pure hardening per `rules/dataflow-identifier-safety.md` MUST Rules 1 + 5.
+
 ### kailash 2.8.10 — 2026-04-20 (closes #550)
 
 **Identifier-safety parity with DataFlow.** `kailash.db.dialect` now ships a canonical `quote_identifier(name)` helper on `PostgresDialect` / `MySQLDialect` / `SQLiteDialect` that BOTH validates against the allowlist regex AND wraps in the dialect's quote character. Previously, core DDL paths (notably `ConnectionManager.create_index()` and every `src/kailash/infrastructure/*` bootstrap-table CREATE) validated the identifier via `_validate_identifier` but then interpolated the raw name into DDL — an injection vector per `rules/dataflow-identifier-safety.md` MUST Rule 1 that DataFlow's own `dataflow.adapters.dialect` had already closed.
