@@ -19,6 +19,15 @@ from kailash_ml._device_report import (
 )
 from kailash_ml._gpu_setup import resolve_torch_wheel
 from kailash_ml._result import TrainingResult
+from kailash_ml._results import (
+    ComparisonResult,
+    EvaluationResult,
+    FinalizeResult,
+    PredictionResult,
+    RegisterResult,
+    ServeResult,
+    SetupResult,
+)
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
@@ -250,6 +259,17 @@ __all__ = [
     "BackendInfo",
     "detect_backend",
     "TrainingResult",
+    # MLEngine Phase 3/4/5 result dataclasses (§2.1 MUST 4 — typed dataclass per method).
+    # Fields are frozen contract per specs/ml-engines.md §4 precedent; shards
+    # implementing setup/compare/finalize/evaluate/register/predict/serve import
+    # these types rather than redefining them.
+    "SetupResult",
+    "ComparisonResult",
+    "PredictionResult",
+    "RegisterResult",
+    "EvaluationResult",
+    "ServeResult",
+    "FinalizeResult",
     "Trainable",
     # GPU-first Phase 1 — all 7 family adapters per specs/ml-engines.md §3.0.
     # Pre-existing 5 (Sklearn/XGBoost/LightGBM/Torch/Lightning) were
