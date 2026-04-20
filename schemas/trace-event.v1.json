@@ -79,7 +79,7 @@
     },
     "tenant_id": {
       "type": ["string", "null"],
-      "description": "Optional tenant identifier for multi-tenant isolation. When populated, downstream sinks SHOULD partition storage/metrics by tenant. See `rules/tenant-isolation.md`."
+      "description": "Optional tenant identifier for multi-tenant isolation. When populated, downstream sinks MUST partition storage, metrics, and audit rows by tenant (see `rules/tenant-isolation.md` \u00a7\u00a74\u20135). `null` is permitted only for single-tenant deployments where tenant isolation does not apply."
     },
     "envelope_id": {
       "type": ["string", "null"],

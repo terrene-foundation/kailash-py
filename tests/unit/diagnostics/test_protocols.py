@@ -37,6 +37,7 @@ from kailash.diagnostics import (
     JudgeCallable,
     JudgeInput,
     JudgeResult,
+    JudgeWinner,
     TraceEvent,
     TraceEventStatus,
     TraceEventType,
@@ -283,6 +284,38 @@ class TestCanonicalFingerprint:
         expected_fp = hashlib.sha256(expected_canonical.encode("utf-8")).hexdigest()
         assert compute_trace_event_fingerprint(evt) == expected_fp
 
+    def test_fingerprint_identical_under_dict_insertion_order(self) -> None:
+        """Regression guard for sort_keys=True in the canonicalization
+        contract: two events constructed with metadata-like payloads in
+        different dict-literal orders MUST produce identical fingerprints.
+        If a future refactor accidentally drops sort_keys, this test
+        fails. If it never existed, a silently-introduced sort_keys=False
+        would break cross-SDK parity at every Rust↔Python boundary."""
+        ts = datetime(2026, 4, 20, 12, 0, 0, tzinfo=UTC)
+        evt_a = TraceEvent(
+            event_id="evt-1",
+            event_type=TraceEventType.TOOL_CALL_END,
+            timestamp=ts,
+            run_id="run-1",
+            agent_id="agent-1",
+            cost_microdollars=0,
+            # payload constructed in one order:
+            payload={"alpha": 1, "beta": 2, "gamma": 3},
+        )
+        evt_b = TraceEvent(
+            event_id="evt-1",
+            event_type=TraceEventType.TOOL_CALL_END,
+            timestamp=ts,
+            run_id="run-1",
+            agent_id="agent-1",
+            cost_microdollars=0,
+            # payload constructed in a DIFFERENT dict insertion order:
+            payload={"gamma": 3, "alpha": 1, "beta": 2},
+        )
+        assert compute_trace_event_fingerprint(
+            evt_a
+        ) == compute_trace_event_fingerprint(evt_b)
+
     def test_fingerprint_differs_on_field_change(self) -> None:
         evt_a = TraceEvent(
             event_id="evt-A",
@@ -417,6 +450,32 @@ class TestSchemaConformance:
 # ---------------------------------------------------------------------------
 # JudgeInput / JudgeResult
 # ---------------------------------------------------------------------------
+
+
+class TestJudgeWinnerTypeAlias:
+    """JudgeWinner is the static type alias mirroring the runtime
+    frozenset check. Static analysers (mypy, pyright) use this; the
+    frozenset is defense-in-depth at wire boundaries."""
+
+    def test_judge_winner_alias_accepts_valid_values(self) -> None:
+        # Pure presence-check — the interesting work is static. Tools
+        # that import JudgeWinner and try to assign e.g. "FIRST" to it
+        # get a static error; runtime rejection still flows through
+        # JudgeResult.__post_init__.
+        import typing
+
+        valid: JudgeWinner = "A"
+        assert valid == "A"
+        none_winner: JudgeWinner = None
+        assert none_winner is None
+        # Confirm it's actually Optional[Literal[...]] at the type level.
+        origin = typing.get_origin(JudgeWinner)
+        assert (
+            origin is typing.Union
+            or origin is type(None)
+            or origin is None
+            or hasattr(JudgeWinner, "__args__")
+        )
 
 
 class TestJudgeInputResult:

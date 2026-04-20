@@ -30,10 +30,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Literal, Optional, Protocol, runtime_checkable
 
 logger_name = __name__  # deliberately NOT binding a logger at module scope —
 # zero-side-effect import is the contract for a protocol-only module.
@@ -43,11 +43,19 @@ __all__ = [
     "JudgeCallable",
     "JudgeInput",
     "JudgeResult",
+    "JudgeWinner",
     "TraceEvent",
     "TraceEventType",
     "TraceEventStatus",
     "compute_trace_event_fingerprint",
 ]
+
+
+# Type alias for the structured judge verdict. Idiomatic Python 3.11+ form
+# that gives mypy / pyright static enforcement alongside the runtime
+# frozenset check in ``JudgeResult.__post_init__``. The Rust equivalent
+# is ``enum Winner { A, B, Tie }`` + ``Option<Winner>`` on the field.
+JudgeWinner = Optional[Literal["A", "B", "tie"]]
 
 
 # ---------------------------------------------------------------------------
@@ -106,10 +114,25 @@ class TraceEvent:
             float-accumulation drift across emitters (cross-SDK aligned
             with ``kaizen.cost.tracker`` + kailash-rs#38).
 
-    Optional fields are ``None``-defaulted. ``payload_hash`` uses the
-    ``"sha256:<8-hex>"`` format mandated by
-    ``rules/event-payload-classification.md`` §2 when the payload holds
-    classified values; otherwise may be ``None``.
+    Optional fields are ``None``-defaulted:
+
+      - ``tenant_id`` — when populated, downstream sinks MUST partition
+        storage, metrics, and audit rows by tenant (see
+        ``rules/tenant-isolation.md`` §§4–5). ``None`` is permitted only
+        for single-tenant deployments where tenant isolation does not
+        apply.
+      - ``payload`` — emitters MUST apply
+        ``rules/event-payload-classification.md`` rules before populating
+        this field: classified string PKs hash to ``payload_hash``
+        (below) and are EXCLUDED from ``payload``. This is an emitter
+        responsibility (not a runtime guard the Protocol enforces); the
+        Protocol only defines the field shape.
+      - ``payload_hash`` — ``"sha256:<8-hex>"`` format mandated by
+        ``rules/event-payload-classification.md`` §2 when the payload
+        holds classified values; otherwise ``None``. Eight hex chars
+        (32 bits of entropy) is the cross-SDK contract: sufficient for
+        forensic correlation across event + log + DB audit streams,
+        insufficient for rainbow-table reversal of typical PK strings.
 
     Frozen to prevent post-emission mutation (which would invalidate any
     fingerprint already computed).
@@ -138,9 +161,12 @@ class TraceEvent:
     duration_ms: Optional[float] = None
     status: Optional[TraceEventStatus] = None
 
-    # Optional payload (kept opaque — schema validation is up to the
-    # adapter; event-payload-classification applies if classified values
-    # would be emitted)
+    # Optional payload. Emitters MUST apply
+    # rules/event-payload-classification.md rules before populating —
+    # classified string PKs hash to payload_hash (``sha256:<8-hex>``) and
+    # are EXCLUDED from payload. Schema validation of payload contents is
+    # the adapter's responsibility; the Protocol defines only the field
+    # shape.
     payload_hash: Optional[str] = None
     payload: Optional[dict] = None
 
@@ -310,19 +336,22 @@ class JudgeResult:
     """
 
     score: Optional[float]
-    winner: Optional[str]  # "A" | "B" | "tie" | None
+    winner: JudgeWinner  # "A" | "B" | "tie" | None
     reasoning: Optional[str]
     judge_model: str
     cost_microdollars: int
     prompt_tokens: int
     completion_tokens: int
 
+    # Runtime defense-in-depth alongside the static ``JudgeWinner`` type
+    # alias. Kept explicit so a wire-boundary ``from_dict`` rejects
+    # unknown strings loudly.
     _VALID_WINNERS = frozenset({"A", "B", "tie", None})
 
     def __post_init__(self) -> None:
         if self.winner not in self._VALID_WINNERS:
             raise ValueError(
-                f"JudgeResult.winner must be one of {'A', 'B', 'tie', None}, "
+                "JudgeResult.winner must be one of ('A', 'B', 'tie', None), "
                 f"got {self.winner!r}."
             )
         for name, value in (
@@ -401,15 +430,3 @@ class Diagnostic(Protocol):
     def __enter__(self) -> "Diagnostic": ...
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Optional[bool]: ...
     def report(self) -> dict[str, Any]: ...
-
-
-# ---------------------------------------------------------------------------
-# Internal-only re-export guard for ``field`` (kept importable by adapters
-# that build subclasses using the ``field(default_factory=...)`` pattern)
-# ---------------------------------------------------------------------------
-
-# Re-export ``field`` from dataclasses so adapters can `from
-# kailash.diagnostics.protocols import field` if they prefer to keep
-# their dataclass construction co-located with the protocols. Adapters
-# MAY also import directly from ``dataclasses``.
-__all__ += ["field"]
