@@ -23,6 +23,8 @@ import threading
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
+from kailash.db.dialect import _validate_identifier
+
 __all__ = ["SQLiteTrackerBackend"]
 
 
@@ -144,8 +146,13 @@ class SQLiteTrackerBackend:
                 existing = {row[1] for row in cur.fetchall()}
                 for name, sql_type in _COLUMNS_ADDED_IN_0_14:
                     if name not in existing:
-                        # Identifier hardcoded; SQL type pinned to
-                        # ``TEXT`` per §5 of dataflow-identifier-safety.
+                        # Defense-in-depth validation per
+                        # ``rules/dataflow-identifier-safety.md`` §5 —
+                        # hardcoded lists MUST still validate so the
+                        # check survives any future refactor that makes
+                        # the list dynamic. ``sql_type`` is pinned to
+                        # ``TEXT`` in the literal below.
+                        _validate_identifier(name)
                         self._conn.execute(
                             f"ALTER TABLE experiment_runs ADD COLUMN {name} {sql_type}"
                         )
