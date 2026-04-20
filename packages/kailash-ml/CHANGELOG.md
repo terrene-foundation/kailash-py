@@ -1,5 +1,16 @@
 # kailash-ml Changelog
 
+## [0.15.2] - 2026-04-20 — bundled audit-finding hotfix (log hygiene + identifier safety)
+
+Resolves four deferred audit findings from the 2026-04-20 late-session `/redteam` that were intentionally held over for next-session disposition per `workspaces/kailash-ml-gpu-stack/.session-notes`. All four live in `kailash-ml/` and ship in this one bundled patch.
+
+### Fixed
+
+- **M1 — `engine.py:2787-2794` WARN log leaked raw onnx-export `cause` string** (post-release security-reviewer MED-1): the WARN-level log emitted the full chained exception message verbatim, which could contain ONNX framework internals and schema-revealing strings. Per `rules/observability.md` §8 (schema-revealing field names at DEBUG or hashed), the raw `cause` now logs at DEBUG and the WARN emits a 4-hex fingerprint (`fingerprint(cause) & 0xFFFF:04x`) suitable for correlation without leaking content. Regression: `tests/regression/test_issue_m1_onnx_cause_hygiene.py`.
+- **M2 — `model_name` at WARN across 6 `engine.py` log sites** (post-release security-reviewer MED-2): the `model_name` field (a schema-revealing identifier) appeared unhashed at WARN in six log sites. Each site now hashes `model_name` via `fingerprint(model_name) & 0xFFFF:04x` before emitting at WARN; DEBUG-level diagnostics retain the raw value for authorized investigation windows. Regression: `tests/regression/test_issue_m2_model_name_hygiene.py`.
+- **L1 — `engines/_feature_sql.py` used `_validate_identifier` instead of canonical `quote_identifier` at 5 DDL sites** (post-release gold-standards LOW-1): per `rules/dataflow-identifier-safety.md` MUST Rule 1, every dynamic DDL identifier MUST route through `dialect.quote_identifier()` (which BOTH validates AND quotes), not `_validate_identifier()` (which validates only). Migrated five sites: `create_feature_table` (CREATE TABLE + CREATE INDEX), `get_features_latest` (SELECT + ROW_NUMBER), `get_features_as_of`, `get_features_range`, and `upsert_batch`. Regression: `tests/regression/test_issue_l1_feature_sql_quote_identifier.py`.
+- **L2 — `tracking/sqlite_backend.py:150` ALTER TABLE hardcoded list missing `_validate_identifier`** (post-release gold-standards LOW-2): the `_COLUMNS_ADDED_IN_0_14` hardcoded list was interpolated into `f"ALTER TABLE experiment_runs ADD COLUMN {name} {sql_type}"` without routing through `_validate_identifier`. Per `rules/dataflow-identifier-safety.md` MUST Rule 5 (Hardcoded Identifier Lists MUST Still Validate), "the list is hardcoded" is BLOCKED as a rationalization — the validation call is a permanent marker of intent that survives any future refactor that makes the list dynamic. The loop now calls `_validate_identifier(name)` before interpolation. Regression: `tests/regression/test_issue_l2_sqlite_backend_alter_table_validation.py`.
+
 ## [0.15.1] - 2026-04-20 — post-release audit hotfix (tenant-isolation + spec sync)
 
 Post-release `/redteam` audit of 0.15.0 (security-reviewer + reviewer + gold-standards-validator) surfaced one HIGH security finding and one HIGH spec-staleness finding. Both fixed in this patch.
