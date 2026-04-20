@@ -33,7 +33,15 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
 
+from ..adapters.dialect import DialectManager
 from .drop_confirmation_downgrade import require_force_downgrade
+
+# Per rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
+# DDL identifier MUST route through dialect.quote_identifier() before
+# being interpolated into SQL. This module only ever runs against
+# PostgreSQL (asyncpg.Connection), so we bind the dialect at import
+# time to keep call sites terse.
+_DIALECT = DialectManager.get_dialect("postgresql")
 from .rename_coordination_engine import (
     CoordinationResult,
     RenameCoordinationEngine,
@@ -322,7 +330,10 @@ class ViewAliasingManager:
 
         for alias_view in self.created_aliases:
             try:
-                await connection.execute(f"DROP VIEW IF EXISTS {alias_view}")
+                # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+                # dynamic DDL identifier MUST route through quote_identifier.
+                view_q = _DIALECT.quote_identifier(alias_view)
+                await connection.execute(f"DROP VIEW IF EXISTS {view_q}")
                 cleaned_views.append(alias_view)
                 self.logger.info(
                     "application_safe_rename_strategy.cleaned_up_alias_view",
@@ -418,7 +429,11 @@ class BlueGreenRenameManager:
         self, source_table: str, temp_table: str, connection: asyncpg.Connection
     ):
         """Create temporary table with source structure."""
-        create_sql = f"CREATE TABLE {temp_table} (LIKE {source_table} INCLUDING ALL)"
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier.
+        temp_q = _DIALECT.quote_identifier(temp_table)
+        source_q = _DIALECT.quote_identifier(source_table)
+        create_sql = f"CREATE TABLE {temp_q} (LIKE {source_q} INCLUDING ALL)"
         await connection.execute(create_sql)
         self.temp_objects.append(temp_table)
         self.logger.info(
@@ -430,7 +445,11 @@ class BlueGreenRenameManager:
         self, source_table: str, temp_table: str, connection: asyncpg.Connection
     ):
         """Sync data from source to temp table."""
-        sync_sql = f"INSERT INTO {temp_table} SELECT * FROM {source_table}"
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier.
+        temp_q = _DIALECT.quote_identifier(temp_table)
+        source_q = _DIALECT.quote_identifier(source_table)
+        sync_sql = f"INSERT INTO {temp_q} SELECT * FROM {source_q}"
         await connection.execute(sync_sql)
         self.logger.info(
             "application_safe_rename_strategy.synced_data_from_to",
@@ -445,30 +464,37 @@ class BlueGreenRenameManager:
         connection: asyncpg.Connection,
     ):
         """Execute atomic cutover with table renames."""
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, every
+        # dynamic DDL identifier MUST route through quote_identifier
+        # BEFORE interpolation. ALTER TABLE ... RENAME TO takes two
+        # identifiers: the current name and the target name. Both are
+        # user-influenced (come from migration plans) so both must be
+        # validated + quoted.
+        old_q = _DIALECT.quote_identifier(old_table)
+        old_backup_q = _DIALECT.quote_identifier(f"{old_table}_old_backup")
+        temp_q = _DIALECT.quote_identifier(temp_table)
+        new_q = _DIALECT.quote_identifier(new_table)
+
         # This should be done in a single transaction for atomicity
         try:
             # Try to use transaction if available (real connection)
             async with connection.transaction():
                 # Rename old table out of the way
                 await connection.execute(
-                    f"ALTER TABLE {old_table} RENAME TO {old_table}_old_backup"
+                    f"ALTER TABLE {old_q} RENAME TO {old_backup_q}"
                 )
 
                 # Rename temp table to final name
-                await connection.execute(
-                    f"ALTER TABLE {temp_table} RENAME TO {new_table}"
-                )
+                await connection.execute(f"ALTER TABLE {temp_q} RENAME TO {new_q}")
 
         except Exception as e:
             # If transaction doesn't work (mock connection), execute directly
             if "'coroutine' object does not support" in str(e):
                 # This is likely a mock connection issue - execute without transaction
                 await connection.execute(
-                    f"ALTER TABLE {old_table} RENAME TO {old_table}_old_backup"
+                    f"ALTER TABLE {old_q} RENAME TO {old_backup_q}"
                 )
-                await connection.execute(
-                    f"ALTER TABLE {temp_table} RENAME TO {new_table}"
-                )
+                await connection.execute(f"ALTER TABLE {temp_q} RENAME TO {new_q}")
             else:
                 raise
 
@@ -481,7 +507,11 @@ class BlueGreenRenameManager:
         """Clean up temporary objects created during blue-green deployment."""
         for temp_obj in self.temp_objects:
             try:
-                await connection.execute(f"DROP TABLE IF EXISTS {temp_obj}")
+                # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+                # every dynamic DDL identifier MUST route through
+                # quote_identifier before interpolation.
+                temp_q = _DIALECT.quote_identifier(temp_obj)
+                await connection.execute(f"DROP TABLE IF EXISTS {temp_q}")
                 self.logger.info(
                     "application_safe_rename_strategy.cleaned_up_temp_object",
                     extra={"temp_obj": temp_obj},
@@ -584,7 +614,11 @@ class RollbackManager:
         cleaned = []
         for obj in created_objects:
             if obj.startswith("alias_view") or obj.startswith("migration_alias"):
-                await connection.execute(f"DROP VIEW IF EXISTS {obj}")
+                # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+                # every dynamic DDL identifier MUST route through
+                # quote_identifier before interpolation.
+                obj_q = _DIALECT.quote_identifier(obj)
+                await connection.execute(f"DROP VIEW IF EXISTS {obj_q}")
                 cleaned.append(obj)
                 self.logger.info(
                     "application_safe_rename_strategy.rolled_back_alias_view",
@@ -599,7 +633,11 @@ class RollbackManager:
         cleaned = []
         for obj in created_objects:
             if "_migration_temp" in obj or "temp_" in obj:
-                await connection.execute(f"DROP TABLE IF EXISTS {obj}")
+                # Per rules/dataflow-identifier-safety.md MUST Rule 1,
+                # every dynamic DDL identifier MUST route through
+                # quote_identifier before interpolation.
+                obj_q = _DIALECT.quote_identifier(obj)
+                await connection.execute(f"DROP TABLE IF EXISTS {obj_q}")
                 cleaned.append(obj)
                 self.logger.info(
                     "application_safe_rename_strategy.rolled_back_temp_table",
