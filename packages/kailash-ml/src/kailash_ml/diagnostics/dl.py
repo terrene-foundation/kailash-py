@@ -139,9 +139,15 @@ def _resolve_device() -> Any:
     except Exception:  # noqa: BLE001 — defensive fallback
         # If the resolver itself fails (e.g. a probe explodes on a
         # partially-installed extension), default to CPU rather than
-        # crashing diagnostic-session construction. The exception is
-        # intentionally not logged at WARN because the CPU fallback is
-        # a safe, documented behaviour of the resolver boundary.
+        # crashing diagnostic-session construction. DEBUG level because
+        # the CPU fallback is a safe, documented behaviour of the
+        # resolver boundary — but forensic grep ("dldiagnostics.device_resolver_failed")
+        # MUST be possible so operators can distinguish a silent
+        # downgrade from a deliberate CPU run.
+        logger.debug(
+            "dldiagnostics.device_resolver_failed",
+            exc_info=True,
+        )
         return torch.device("cpu")
 
 
