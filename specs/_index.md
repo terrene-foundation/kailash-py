@@ -75,10 +75,11 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Alignment (LLM Fine-Tuning)
 
-| File                                           | Description                                                                  |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| [alignment-training.md](alignment-training.md) | AlignmentPipeline, training methods (SFT/DPO/KTO/ORPO/GRPO/RLOO), rewards    |
-| [alignment-serving.md](alignment-serving.md)   | Adapter merging, model serving (GGUF/Ollama/vLLM), evaluation, Kaizen bridge |
+| File                                                 | Description                                                                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [alignment-training.md](alignment-training.md)       | AlignmentPipeline, training methods (SFT/DPO/KTO/ORPO/GRPO/RLOO), rewards                                                                                    |
+| [alignment-serving.md](alignment-serving.md)         | Adapter merging, model serving (GGUF/Ollama/vLLM), evaluation, Kaizen bridge                                                                                 |
+| [alignment-diagnostics.md](alignment-diagnostics.md) | **AlignmentDiagnostics adapter** (cross-SDK Diagnostic Protocol), KL/reward-margin/win-rate, bounded training-metric ingestion, reward-hacking signal (PR#3) |
 
 ## MCP (Model Context Protocol)
 

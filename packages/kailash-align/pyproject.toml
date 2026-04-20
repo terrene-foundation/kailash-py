@@ -79,6 +79,7 @@ asyncio_mode = "auto"
 timeout = 30
 markers = [
     "unit: Unit tests (no I/O, no network)",
+    "integration: Tier 2 integration tests (real infrastructure, no mocks)",
     "gpu: Tests requiring GPU (slow, skipped by default)",
 ]
 
