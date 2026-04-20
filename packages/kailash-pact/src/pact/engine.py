@@ -1124,7 +1124,16 @@ class PactEngine:
 
         # --- by role_address (thread-safe: compute_envelope acquires lock) ---
         assert role_address is not None  # type-narrowing for mypy
-        envelope = self._governance.compute_envelope(role_address)
+        try:
+            envelope = self._governance.compute_envelope(role_address)
+        except Exception as exc:
+            # AddressError / lookup failures map to LookupError for the
+            # caller — PACT MUST Rule 4 fail-closed (no info leak of
+            # the internal addressing subsystem).
+            raise LookupError(
+                f"envelope_snapshot: no envelope resolved for role_address={role_address!r} "
+                f"({type(exc).__name__})"
+            ) from exc
         if envelope is None:
             raise LookupError(
                 f"envelope_snapshot: no envelope resolved for role_address={role_address!r}"
