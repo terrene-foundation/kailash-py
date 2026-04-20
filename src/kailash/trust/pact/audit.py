@@ -30,7 +30,23 @@ from kailash.trust.pact.config import VerificationLevel
 
 logger = logging.getLogger(__name__)
 
+GENESIS_HASH = "0" * 64
+"""Canonical genesis sentinel for audit-chain fingerprints.
+
+Used as `previous_hash` when hashing the first entry in any audit chain.
+MUST match across all Kailash SDKs (Python + Rust) per EATP D6 and the
+cross-SDK fingerprint contract — see `rules/event-payload-classification.md`
+MUST Rule 2. Matches existing blockchain convention (bitcoin, ethereum) and
+shares the byte shape of a real SHA-256 hex digest so verifiers need no
+option/enum branching.
+
+Change history:
+    2026-04-20: replaced the prior ``'genesis'`` literal. Breaking change —
+    existing chains rooted at ``'genesis'`` will no longer verify.
+"""
+
 __all__ = [
+    "GENESIS_HASH",
     "PactAuditAction",
     "create_pact_audit_details",
     "AuditAnchor",
@@ -177,14 +193,32 @@ class AuditAnchor:
         self.content_hash = content_hash
 
     def compute_hash(self) -> str:
-        """Compute the content hash for this anchor."""
+        """Compute the content hash for this anchor.
+
+        Canonical input format (cross-SDK contract, see kailash-rs#449 §2):
+
+            {anchor_id}:{sequence}:{previous_hash}:{agent_id}:{action}:
+            {verification_level}:{envelope_id_or_empty}:{result}:
+            {iso8601_utc_with_+00:00}[:{metadata_json_sorted_compact}]
+
+        Metadata MUST use compact separators (``","``, ``":"``) and
+        ASCII-escaped strings so Python's output matches Rust's
+        ``serde_json::to_string(&BTreeMap)`` byte-for-byte. Empty metadata
+        omits the suffix entirely (no trailing ``:``).
+        """
         content = (
-            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or 'genesis'}:"
+            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or GENESIS_HASH}:"
             f"{self.agent_id}:{self.action}:{self.verification_level.value}:"
             f"{self.envelope_id or ''}:{self.result}:{self.timestamp.isoformat()}"
         )
         if self.metadata:
-            meta_str = json.dumps(self.metadata, sort_keys=True, default=str)
+            meta_str = json.dumps(
+                self.metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+                ensure_ascii=True,
+            )
             content += f":{meta_str}"
         return hashlib.sha256(content.encode()).hexdigest()
 
@@ -201,6 +235,29 @@ class AuditAnchor:
         if not self.is_sealed:
             return False
         return hmac_mod.compare_digest(self.content_hash, self.compute_hash())
+
+    def _compute_hash_legacy(self) -> str:
+        """Recompute the content hash under the pre-2026-04-20 contract.
+
+        Used ONLY for forensic disambiguation in ``verify_chain_integrity``
+        to distinguish legacy-rooted chains (pre-GENESIS_HASH migration)
+        from real tampering. Legacy form: ``'genesis'`` literal as the
+        first-anchor sentinel AND default ``json.dumps`` separators (with
+        spaces) for metadata canonicalization.
+
+        An anchor whose stored ``content_hash`` matches this legacy form
+        is a pre-migration chain that requires re-sealing, NOT a tampered
+        record.
+        """
+        content = (
+            f"{self.anchor_id}:{self.sequence}:{self.previous_hash or 'genesis'}:"
+            f"{self.agent_id}:{self.action}:{self.verification_level.value}:"
+            f"{self.envelope_id or ''}:{self.result}:{self.timestamp.isoformat()}"
+        )
+        if self.metadata:
+            meta_str = json.dumps(self.metadata, sort_keys=True, default=str)
+            content += f":{meta_str}"
+        return hashlib.sha256(content.encode()).hexdigest()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -336,7 +393,21 @@ class AuditChain:
                 )
 
             if not anchor.verify_integrity():
-                errors.append(f"Anchor {i}: content hash mismatch (tampered?)")
+                # Distinguish legacy-sentinel chains (pre-2026-04-20 migration)
+                # from real tampering. An anchor whose stored content_hash
+                # matches the legacy compute is a pre-migration chain that
+                # requires re-seal, not a forensic incident.
+                if anchor.is_sealed and hmac_mod.compare_digest(
+                    anchor.content_hash, anchor._compute_hash_legacy()
+                ):
+                    errors.append(
+                        f"Anchor {i}: legacy genesis sentinel detected — chain "
+                        f"pre-dates 2026-04-20 canonical alignment (kailash-rs#449). "
+                        f"Re-seal required: re-invoke AuditAnchor.seal() across every "
+                        f"anchor in the chain. This is NOT tampering."
+                    )
+                else:
+                    errors.append(f"Anchor {i}: content hash mismatch (tampered?)")
 
             if i == 0:
                 if anchor.previous_hash is not None:

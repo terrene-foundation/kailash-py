@@ -20,3 +20,19 @@ Contribution(s) with the Work.
 
 Third-party components included in this distribution may be subject to
 separate license terms as noted in their respective license files.
+
+ATTRIBUTION:
+
+Portions of the diagnostics helpers in kailash_ml.diagnostics,
+kaizen.interpretability, kaizen.observability, kaizen.judges,
+kaizen.evaluation, and kailash_align.diagnostics are derived from
+Terrene Foundation's ML Foundations for Professionals (MLFP) course
+materials (https://github.com/terrene-foundation/mlfp), upstreamed
+per kailash-py issue #567 under Apache License 2.0.
+
+Original authorship and copyright remain with Terrene Foundation.
+The upstreamed code has been adapted for production SDK use: medical-
+instrument metaphors removed, third-party tracing exporters replaced
+with the in-tree TraceExporter protocol, and score-parsing regexes
+replaced with structured Kaizen Signatures per the Foundation's
+LLM-first agent-reasoning rule.

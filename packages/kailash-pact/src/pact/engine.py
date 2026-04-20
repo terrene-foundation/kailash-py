@@ -32,7 +32,7 @@ from typing import Any, Protocol, runtime_checkable
 from pact.costs import CostTracker
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
 from pact.events import EventBus
-from pact.work import WorkResult, WorkSubmission
+from pact.work import WorkResult
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +347,15 @@ class PactEngine:
             "governance_verified", {"level": verdict.level, "allowed": verdict.allowed}
         )
 
+        # Extract envelope_id for per-envelope cost rollups. The verdict's
+        # effective_envelope_snapshot carries the resolved envelope at
+        # verification time; its "id" field (when populated) is the
+        # envelope identifier per ConstraintEnvelopeConfig.
+        envelope_snapshot = verdict_dict.get("effective_envelope_snapshot") or {}
+        submission_envelope_id = (
+            envelope_snapshot.get("id") if isinstance(envelope_snapshot, dict) else None
+        )
+
         # --- SHADOW mode: log verdict but never block ---
         if self._enforcement_mode == EnforcementMode.SHADOW:
             shadow_verdict = {**verdict_dict, "shadow": True}
@@ -377,6 +386,7 @@ class PactEngine:
                 shadow=True,
                 budget_allocated=budget,
                 audit_trail=audit_trail,
+                envelope_id=submission_envelope_id,
             )
 
         # --- ENFORCE mode: verdicts are binding ---
@@ -412,6 +422,7 @@ class PactEngine:
             shadow=False,
             budget_allocated=budget,
             audit_trail=audit_trail,
+            envelope_id=submission_envelope_id,
         )
 
     def submit_sync(
@@ -519,6 +530,7 @@ class PactEngine:
         shadow: bool,
         budget_allocated: float | None = None,
         audit_trail: list[dict[str, Any]] | None = None,
+        envelope_id: str | None = None,
     ) -> WorkResult:
         """Execute work through the supervisor (Execution Plane).
 
@@ -533,6 +545,10 @@ class PactEngine:
             shadow: True if running in shadow mode.
             budget_allocated: Budget ceiling for this submission.
             audit_trail: Accumulated audit trail entries.
+            envelope_id: Governance envelope resolved for this submission
+                (from the verdict's ``effective_envelope_snapshot``). Passed
+                to the cost tracker so per-envelope consumption rollups work
+                out-of-box. DISABLED mode passes ``None`` (no verdict).
 
         Returns:
             A WorkResult with execution outcome.
@@ -589,7 +605,12 @@ class PactEngine:
                 )
                 cost_usd = 0.0
             if cost_usd > 0:
-                self._costs.record(cost_usd, f"submit: {objective[:80]}")
+                self._costs.record(
+                    cost_usd,
+                    f"submit: {objective[:80]}",
+                    envelope_id=envelope_id,
+                    agent_id=role,
+                )
 
             _audit(
                 "execution_completed",
@@ -827,7 +848,6 @@ class PactEngine:
         """
         from kailash.trust.pact.engine import GovernanceEngine
         from kailash.trust.pact.yaml_loader import load_org_yaml
-        from kailash.trust.pact.config import OrgDefinition
 
         if isinstance(org, (str, Path)):
             # Load from YAML file
@@ -899,8 +919,8 @@ def _org_def_from_dict(data: dict[str, Any]) -> Any:
     Raises:
         ValueError: If required fields are missing.
     """
-    from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
     from kailash.trust.pact.compilation import RoleDefinition
+    from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
     if "org_id" not in data:
         raise ValueError("org dict must contain 'org_id'")
