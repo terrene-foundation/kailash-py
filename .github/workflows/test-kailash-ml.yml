@@ -98,6 +98,10 @@ jobs:
       - name: Install kailash-ml[dev]
         run: |
           uv venv .venv
+          # Install root kailash editable — kailash.diagnostics.protocols
+          # (PR #570) is not yet on PyPI, so a transitive resolve would miss
+          # the module that PR#2+ (issue #567) diagnostics adapters import.
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
 
       - name: Lint (ruff)
@@ -160,6 +164,7 @@ jobs:
       - name: Install kailash-ml[dl,dev]
         run: |
           uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
 
       - name: Test DL
@@ -192,6 +197,7 @@ jobs:
       - name: Install kailash-ml[rl,dev]
         run: |
           uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[rl,dev]" --python .venv/bin/python
 
       - name: Test RL

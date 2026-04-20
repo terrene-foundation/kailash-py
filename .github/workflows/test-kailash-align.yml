@@ -93,6 +93,9 @@ jobs:
       - name: Install kailash-align[dev]
         run: |
           uv venv .venv
+          # Install root kailash first so kailash.diagnostics.protocols resolves
+          # (not yet on PyPI; PR#2-#4 of issue #567 depend on it)
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
 
       - name: Lint (ruff)
@@ -140,6 +143,7 @@ jobs:
       - name: Install kailash-align[dev,rlhf]
         run: |
           uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev,rlhf]" --python .venv/bin/python
 
       - name: Test GPU
@@ -169,6 +173,7 @@ jobs:
       - name: Install dev kailash-ml + kailash-align
         run: |
           uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
 
