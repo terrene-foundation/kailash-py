@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terrene.foundation/schemas/trace-event.v1.json",
+  "title": "TraceEvent",
+  "description": "Cross-SDK contract for one event in an agent, tool, or LLM execution trace. The Terrene Foundation's language-neutral source of truth for `kailash.diagnostics.TraceEvent` (Python) and kailash-rs `trace_event::TraceEvent` (Rust).\n\nThis schema is referenced verbatim by both SDKs. Changes to the contract require cross-SDK coordination before landing in either repo per `rules/eatp.md` \u00a7 Cross-SDK Alignment and `rules/cross-sdk-inspection.md` MUST Rule 3.",
+  "type": "object",
+  "version": "1.0.0",
+  "canonicalization": {
+    "json_serialization": "sort_keys=true, separators=(',', ':'), ensure_ascii=true, default=str (Python) / serde_json::to_string(&BTreeMap) (Rust)",
+    "timestamp_format": "RFC 3339 with explicit +00:00 UTC offset; never Z",
+    "fingerprint_algorithm": "SHA-256 of the UTF-8 bytes of the canonical JSON, hex-encoded lowercase",
+    "comparison": "hmac.compare_digest (Python) / subtle::ConstantTimeEq (Rust). Never == on hex digests (timing side-channel).",
+    "cross_sdk_note": "Python and Rust MUST produce byte-identical canonical JSON and byte-identical SHA-256 fingerprints for the same logical input. Paired with `schemas/audit-anchor.v1.json` (kailash-rs#449) — same canonicalization contract."
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "run_id",
+    "agent_id",
+    "cost_microdollars"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this event (UUID or equivalent)."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "agent.run.start",
+        "agent.run.end",
+        "agent.step",
+        "tool.call.start",
+        "tool.call.end",
+        "llm.call.start",
+        "llm.call.end",
+        "judge.verdict",
+        "loop.suspected",
+        "budget.exceeded",
+        "error"
+      ],
+      "description": "Enumerated event type. New values require cross-SDK coordination before landing in either SDK."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+      "description": "RFC 3339 timestamp with explicit +00:00 UTC offset. Z-form is BLOCKED to keep the byte-level form stable across SDKs."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Correlation identifier for the enclosing agent/tool run. Every event in one run shares the same run_id."
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the agent that emitted the event. In PACT-native usage this is a D/T/R role address (e.g. 'D1-R1-D2-R2'); in kaizen-agents-native usage this is an agent UUID."
+    },
+    "cost_microdollars": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cost of the operation in integer microdollars (1 USD = 1_000_000 microdollars). Integer-only to prevent float-accumulation drift across emitters. Cross-SDK aligned with `kaizen.cost.tracker` + kailash-rs#38."
+    },
+    "parent_event_id": {
+      "type": ["string", "null"],
+      "description": "Optional parent event for nested spans. Used to reconstruct the event tree (e.g. llm.call.end under agent.step under agent.run.start)."
+    },
+    "trace_id": {
+      "type": ["string", "null"],
+      "description": "Optional OpenTelemetry trace identifier. Allows correlation with external OTel-aware observability backends."
+    },
+    "span_id": {
+      "type": ["string", "null"],
+      "description": "Optional OpenTelemetry span identifier paired with trace_id."
+    },
+    "tenant_id": {
+      "type": ["string", "null"],
+      "description": "Optional tenant identifier for multi-tenant isolation. When populated, downstream sinks MUST partition storage, metrics, and audit rows by tenant (see `rules/tenant-isolation.md` \u00a7\u00a74\u20135). `null` is permitted only for single-tenant deployments where tenant isolation does not apply."
+    },
+    "envelope_id": {
+      "type": ["string", "null"],
+      "description": "Optional PACT governance envelope identifier. Enables per-envelope consumption rollups in downstream diagnostics (pairs with `CostTracker.record(envelope_id=...)`)."
+    },
+    "tool_name": {
+      "type": ["string", "null"],
+      "description": "For tool.call.start / tool.call.end events: the invoked tool's identifier."
+    },
+    "llm_model": {
+      "type": ["string", "null"],
+      "description": "For llm.call.start / llm.call.end events: the model identifier (e.g. 'claude-opus-4-7'). Never hardcode — read from .env per `rules/env-models.md`."
+    },
+    "prompt_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Token count for the prompt side of an LLM call. Null for non-LLM events."
+    },
+    "completion_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Token count for the completion side of an LLM call. Null for non-LLM events."
+    },
+    "duration_ms": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Wall-clock duration of the operation in milliseconds. Present on *.end events; null on *.start events."
+    },
+    "status": {
+      "type": ["string", "null"],
+      "enum": ["ok", "error", "cancelled", null],
+      "description": "Terminal status of the operation. Present on *.end events; null on *.start events."
+    },
+    "payload_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{8}$",
+      "description": "SHA-256 fingerprint of the raw payload when the payload contains classified values. Format: 'sha256:<8 hex chars>'. See `rules/event-payload-classification.md` \u00a72 — the 8-hex-char length is the cross-SDK contract for forensic correlation without rainbow-table reversibility."
+    },
+    "payload": {
+      "type": ["object", "null"],
+      "description": "Optional opaque payload. Emitters MUST apply `rules/event-payload-classification.md` rules before populating this field — classified string PKs hash to `payload_hash` (above) and are EXCLUDED from `payload`. Schema validation of payload contents is the adapter's responsibility, not the core protocol's."
+    }
+  },
+  "$defs": {
+    "example_llm_call_end": {
+      "event_id": "evt-2026-04-20-abc123",
+      "event_type": "llm.call.end",
+      "timestamp": "2026-04-20T12:00:00+00:00",
+      "run_id": "run-xyz-789",
+      "agent_id": "D1-R1-D2-R2",
+      "cost_microdollars": 1500,
+      "parent_event_id": "evt-2026-04-20-abc100",
+      "trace_id": null,
+      "span_id": null,
+      "tenant_id": "tenant-acme",
+      "envelope_id": "env-prod-001",
+      "tool_name": null,
+      "llm_model": "claude-opus-4-7",
+      "prompt_tokens": 120,
+      "completion_tokens": 340,
+      "duration_ms": 2145.0,
+      "status": "ok",
+      "payload_hash": null,
+      "payload": null
+    },
+    "example_tool_call_end_with_classified_payload": {
+      "event_id": "evt-2026-04-20-def456",
+      "event_type": "tool.call.end",
+      "timestamp": "2026-04-20T12:00:01+00:00",
+      "run_id": "run-xyz-789",
+      "agent_id": "D1-R1-D2-R2",
+      "cost_microdollars": 0,
+      "parent_event_id": "evt-2026-04-20-abc100",
+      "trace_id": null,
+      "span_id": null,
+      "tenant_id": "tenant-acme",
+      "envelope_id": "env-prod-001",
+      "tool_name": "get_customer_record",
+      "llm_model": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "duration_ms": 42.5,
+      "status": "ok",
+      "payload_hash": "sha256:a1b2c3d4",
+      "payload": null
+    }
+  }
+}
