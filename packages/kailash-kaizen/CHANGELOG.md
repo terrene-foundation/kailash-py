@@ -5,6 +5,17 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1] — 2026-04-21 — Security patch on kaizen.observability (PR #587 security-reviewer feedback)
+
+### Security
+
+- **C2 (HIGH) — Tier 2 security coverage added.** Three new assertions in the AgentDiagnostics wiring test exercise classified-PK redaction via `payload_hash`, tenant-id scrub on WARN+ log records, and vendor-SDK brand non-leakage in serialized TraceEvent output. Closes `rules/testing.md` audit-mode MUST "Verify security mitigations have tests" for the spec's § Security Threats subsection.
+- **H1 (HIGH) — Tenant-id hashed before INFO / WARN emission.** Raw `tenant_id` on WARN+ log lines bled schema-level identifiers into broader-audience log aggregators (Datadog, Splunk, CloudWatch). All five `TraceExporter` log sites plus the two `AgentDiagnostics` log sites now route `tenant_id` through a new `_hash_tenant_id()` helper producing the cross-SDK `sha256:<8-hex>` prefix form (same contract as `payload_hash` per `rules/event-payload-classification.md` §2). Forensic correlation across Python + Rust streams remains stable; log-aggregator enumeration of tenant IDs is no longer possible. Enforces `rules/observability.md` §8 + `rules/tenant-isolation.md` §4.
+- **H2 (HIGH) — `JsonlSink` path resolve + `O_NOFOLLOW` symlink refusal.** The original `JsonlSink.__init__` used `Path(path)` verbatim without resolving traversal or applying `O_NOFOLLOW`, so an attacker-planted symlink at the destination silently redirected the trace stream. Fix: `__init__` resolves via `expanduser().resolve(strict=False)` (normalizes `..` segments); `__call__` opens via `os.open(str(path), O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW, 0o600)` on POSIX — symlink at destination raises `OSError` instead of being followed. File-mode bits are `0o600` (owner-only). `mode` validation rejects anything but `"a"` or `"w"`. Docstring documents that callers MUST pre-validate tenant-derived paths against an allowlist. Four regression tests at `tests/regression/test_jsonl_sink_path_safety.py`.
+- **M1 (MED) — Async sink tasks retained against GC.** `TraceExporter._run_async` used `loop.create_task(awaitable)` without retaining the Task; GC firing mid-coroutine silently cancelled the sink write and lost the trace event. Fix: new `self._pending_tasks: set[asyncio.Task]` on `__init__`; every scheduled task is added + a done-callback discards on completion (bounded retention = "currently in-flight tasks only"). New `async aclose()` awaits outstanding tasks via `asyncio.gather(return_exceptions=True)`; exceptions are WARN-logged not propagated. Three Tier 1 tests cover retention, exception tolerance, and empty-exporter fast path.
+
+No changes to the public API shape beyond the additive `TraceExporter.aclose()` method; the existing `export()` / `export_async()` / sink signatures are unchanged. No breaking changes for consumers.
+
 ## [2.10.0] — 2026-04-21 — AgentDiagnostics + TraceExporter → kaizen.observability (#567 PR#6 of 7)
 
 ### Added
