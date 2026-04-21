@@ -1,11 +1,99 @@
 ---
 name: kailash-ml
-description: "Kailash ML — MANDATORY for ALL ML training/inference/feature work. 13 engines (FeatureStore, ModelRegistry, TrainingPipeline, DriftMonitor, AutoML, HyperparameterSearch, Ensemble, etc.), polars-native, ONNX serving, agent-augmented search. Use proactively when work touches feature stores, training pipelines, inference servers, drift detection, ensembles, or 'just a quick sklearn pipeline'. Raw sklearn, pytorch, numpy, pandas training loops BLOCKED."
+description: "Kailash ML 1.0.0 — MANDATORY for ALL ML training/inference/feature/drift/AutoML/RL work. Engine-first km.* surface (train/register/serve/track/diagnose/watch/dashboard/seed/reproduce/resume/lineage/rl_train/engine_info/list_engines/autolog) + 18 engines. Raw sklearn / pytorch / numpy training loops BLOCKED."
 ---
 
-# Kailash ML — Classical & Deep Learning Lifecycle
+# Kailash ML 1.0.0 — Classical / Deep Learning / RL Lifecycle
 
-Production ML lifecycle framework built on Kailash Core SDK — polars-native engines, schema-driven pipelines, agent-augmented AutoML, and cross-language ONNX serving.
+Production ML lifecycle framework built on Kailash Core SDK — engine-first `km.*` verb surface, 18-engine discovery registry, polars-native, ONNX-default serialisation, Agent Tool Discovery for Kaizen integration, wave-released with 6 sibling packages.
+
+## 1.0.0 Engine-First Surface (Canonical)
+
+Single entry: `import kailash_ml as km`. Zero-arg construction. 14 lifecycle verbs + 2 discovery verbs grouped in `__all__`:
+
+```python
+import kailash_ml as km
+
+async with km.track("demo") as run:                        # Group 1 lifecycle
+    result = await km.train(df, target="y")                # Group 1 lifecycle
+    registered = await km.register(result, name="demo")    # Group 1 lifecycle
+server = await km.serve("demo@production")                 # Group 1 lifecycle
+# $ kailash-ml-dashboard  (separate shell)                 # Group 1 lifecycle
+
+km.diagnose(model)                                         # Group 1 — DLDiagnostics / RAGDiagnostics / RLDiagnostics
+km.watch(model, reference_df)                              # Group 1 — DriftMonitor
+km.seed(42); await km.reproduce(run_id)                    # Group 1 — reproducibility
+await km.resume(run_id)                                    # Group 1 — checkpoint resume
+graph = await km.lineage("demo@v1", tenant_id=None)        # Group 1 — LineageGraph; ambient tenant via get_current_tenant_id()
+await km.rl_train(env, policy)                             # Group 1 — RL
+km.autolog()                                               # Group 1 — sklearn/lgb/Lightning/torch auto-logging
+
+info = km.engine_info("TrainingPipeline")                  # Group 6 Engine Discovery (agents MUST use this, not imports)
+engines = km.list_engines()                                # Group 6 — 18-engine catalog per §E1.1
+```
+
+**Quick Start fingerprint** (pinned, regression-tested via `ml-engines-v2 §16.3`):
+`c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00`
+
+## 21 Canonical Specs
+
+Authoritative domain truth lives in `specs/`. Read the spec before touching the code:
+
+### Engine Core (4)
+
+- `specs/ml-engines-v2.md` — MLEngine 1.0.0, 8-method MLEngine surface (per Decision 8 Lightning lock-in), `TrainingResult` + `DeviceReport`, `km.*` wrappers, canonical README Quick Start (§16 fingerprint contract).
+- `specs/ml-engines-v2-addendum.md` — 18-engine catalog (§E1.1), classical-ML surface, `EngineInfo` / `MethodSignature` / `ParamSpec` / `ClearanceRequirement` frozen dataclasses (§E11.1), `LineageGraph` + `LineageNode` + `LineageEdge` (§E10), Pydantic-to-DataFrame adapter.
+- `specs/ml-backends.md` — 6 first-class backends (cpu/cuda/mps/rocm/xpu/tpu), `detect_backend()`, precision auto, Lightning integration, hardware-gated CI, `backend-compat-matrix.yaml` data.
+- `specs/ml-diagnostics.md` — DLDiagnostics cross-SDK Diagnostic Protocol, torch-hook instrumentation, plotly gated by `[dl]` extra.
+
+### Experiment / Registry / Serving (4)
+
+- `specs/ml-tracking.md` — ExperimentTracker async-context ambient-run scope, nested runs, auto-logging, GDPR erasure, MLflow import bridge, `ExperimentTracker.create()` factory, `get_current_run()` contextvar accessor.
+- `specs/ml-registry.md` — ModelRegistry lifecycle (staging → shadow → production → archived), `RegisterResult.artifact_uris: dict[str, str]` (§7.1 canonical), §7.1.1 v1.x `@property` back-compat shim, §7.1.2 Single-Format-Per-Row DDL Invariant, §5.6 ONNX export probe.
+- `specs/ml-serving.md` — InferenceServer + ServeHandle, REST + MCP channels, §4.1 batch padding, §5.2 streaming backpressure, §2.5.3 pickle-fallback gate.
+- `specs/ml-autolog.md` — sklearn / lightgbm / PyTorch Lightning / torch loop auto-logging, DDP rank-0-only (Decision 4), metric namespace discipline.
+
+### AutoML / Drift / Feature Store / Dashboard (4)
+
+- `specs/ml-automl.md` — AutoMLEngine agent-infused (grid/random/bayesian/successive-halving) + cost budget + human-approval gate + PACT envelope.
+- `specs/ml-drift.md` — DriftMonitor (KS / chi2 / PSI / Jensen-Shannon), scheduled monitoring, retraining hooks.
+- `specs/ml-feature-store.md` — Polars-native FeatureStore on ConnectionManager, point-in-time queries, schema enforcement.
+- `specs/ml-dashboard.md` — MLDashboard CLI + `km.dashboard()` launcher + Streamlit panels.
+
+### Reinforcement Learning (3)
+
+- `specs/ml-rl-core.md` — RLTrainer + registries + `km.rl_train()` (Stable-Baselines3 + Gymnasium).
+- `specs/ml-rl-algorithms.md` — PPO / SAC / DQN / A2C / TD3 / DDPG / MaskablePPO / Decision Transformer catalog.
+- `specs/ml-rl-align-unification.md` — kailash-ml.rl ↔ kailash-align trajectory bridge (GRPO / RLOO / PPO-LM).
+
+### Integrations (6)
+
+- `specs/kailash-core-ml-integration.md`, `specs/dataflow-ml-integration.md`, `specs/nexus-ml-integration.md`, `specs/kaizen-ml-integration.md`, `specs/align-ml-integration.md`, `specs/pact-ml-integration.md`.
+
+## 14 Approved Decisions (pinned 2026-04-21)
+
+1. Status vocabulary — `FINISHED` only; hard-migrate legacy SUCCESS/COMPLETED at install.
+2. GDPR erasure — audit rows IMMUTABLE with sha256 fingerprints.
+3. Cross-SDK Rust enum parity — `{RUNNING, FINISHED, FAILED, KILLED}` byte-identical.
+4. DDP/FSDP/DeepSpeed — rank-0-only hardcoded via `torch.distributed.get_rank() == 0`.
+5. XPU dual-path — `torch.xpu` native-first + `intel_extension_for_pytorch` fallback.
+6. GPU architecture cutoff — `backend-compat-matrix.yaml` as data; `km.doctor` reads it.
+7. CI runner — CPU + MPS BLOCKING now; CUDA BLOCKING when self-hosted lands.
+8. Lightning hard lock-in — raw loops raise `UnsupportedTrainerError`; no escape hatch.
+9. Rust ExperimentTracker — explicit `start_run()`/`end_run()` (AsyncDrop not stable).
+10. Single canonical spec per domain; Rust overlays via `loom/.claude/variants/rs/`.
+11. Legacy namespace sunset — at 3.0; 2.x DeprecationWarning; 1.x back-compat shim.
+12. Cross-tenant admin export — `MultiTenantOpError` in 1.0.0; PACT-gated post-1.0.
+13. Extras naming — hyphens across all specs (`[rl-offline]`, `[autolog-lightning]`, `[feature-store]`).
+14. Package version at merge — kailash-ml 1.0.0 MAJOR (breaking-change list in spec body).
+
+## 1.0.0 Wave Release (7 packages atomic)
+
+- `kailash 2.9.0` (ml extras alias) + `kailash-pact 0.10.0` (ml_context + ClearanceRequirement) + `kailash-nexus 2.2.0` (ml-endpoints mount) + `kailash-kaizen 2.12.0` (§2.4 Agent Tool Discovery + SQLiteSink) + `kailash-align 0.5.0` (ml-unification) + `kailash-dataflow 2.1.0` (TrainingContext + lineage_dataset_hash) + `kailash-ml 1.0.0`.
+
+---
+
+**Legacy v0.x material below retained as internal-implementation reference only. The canonical user surface is the engine-first `km.*` verbs above; the spec files under `specs/ml-*.md` are the authority.**
 
 ## Install Matrix
 
@@ -324,5 +412,5 @@ When writing or reviewing kailash-ml engine code, verify:
 - [03-nexus](../03-nexus/SKILL.md) — Multi-channel deployment (InferenceServer)
 - [04-kaizen](../04-kaizen/SKILL.md) — AI agent framework (ML agents)
 - [35-kailash-align](../35-kailash-align/SKILL.md) — LLM fine-tuning and alignment
-</content>
-</invoke>
+  </content>
+  </invoke>

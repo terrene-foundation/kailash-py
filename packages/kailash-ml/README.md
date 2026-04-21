@@ -55,70 +55,31 @@ pip install kailash-ml[dev]       # pytest, hypothesis, mypy, ruff
 
 ## Quick Start
 
+`df` below is any `polars.DataFrame` whose columns include a target you want to predict (supply the column name via `target="..."`).
+
+Install with `pip install kailash-ml`. The following block is executed by CI against a real DataFrame and is the canonical Quick Start for the 1.0.0 release. Every line is load-bearing — do NOT abbreviate it in copy-paste examples on external sites.
+
 ```python
-import polars as pl
-from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.feature_store import FeatureStore
-from kailash_ml.engines.model_registry import ModelRegistry, LocalFileArtifactStore
-from kailash_ml.engines.training_pipeline import TrainingPipeline, ModelSpec, EvalSpec
-from kailash_ml.engines.inference_server import InferenceServer
-from kailash_ml.types import FeatureSchema, FeatureField
-
-
-async def main():
-    # 1. Connect to a database
-    conn = ConnectionManager("sqlite:///ml.db")
-    await conn.initialize()
-
-    # 2. Set up engines
-    feature_store = FeatureStore(conn)
-    await feature_store.initialize()
-
-    registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifacts"))
-    await registry.initialize()
-
-    pipeline = TrainingPipeline(feature_store=feature_store, model_registry=registry)
-
-    # 3. Define your feature schema
-    schema = FeatureSchema(
-        name="customer_churn",
-        features=[
-            FeatureField(name="age", dtype="float64"),
-            FeatureField(name="tenure_months", dtype="float64"),
-            FeatureField(name="monthly_spend", dtype="float64"),
-        ],
-        entity_id_column="customer_id",
-    )
-
-    # 4. Prepare data as a polars DataFrame
-    data = pl.DataFrame({
-        "customer_id": ["c1", "c2", "c3", "c4", "c5"],
-        "age": [25.0, 35.0, 45.0, 55.0, 30.0],
-        "tenure_months": [12.0, 24.0, 36.0, 48.0, 6.0],
-        "monthly_spend": [50.0, 75.0, 100.0, 125.0, 40.0],
-        "churned": [0, 1, 0, 0, 1],
-    })
-
-    # 5. Train a model
-    result = await pipeline.train(
-        data=data,
-        schema=schema,
-        model_spec=ModelSpec(
-            model_class="sklearn.ensemble.RandomForestClassifier",
-            hyperparameters={"n_estimators": 100, "max_depth": 5},
-            framework="sklearn",
-        ),
-        eval_spec=EvalSpec(metrics=["accuracy", "f1"]),
-        model_name="churn_predictor",
-    )
-    print(f"Accuracy: {result.metrics['accuracy']:.2f}")
-    print(f"Model version: {result.model_version}")
-
-    # 6. Serve predictions
-    server = InferenceServer(model_registry=registry)
-    predictions = await server.predict("churn_predictor", data)
-    print(predictions.predictions)
+import kailash_ml as km
+async with km.track("demo") as run:
+    result = await km.train(df, target="y")
+    registered = await km.register(result, name="demo")
+server = await km.serve("demo@production")
+# $ kailash-ml-dashboard  (separate shell)
 ```
+
+### What this does
+
+Each line maps to a single deliberate effect:
+
+- **`import kailash_ml as km`** — imports the package. Every public entry point is a `km.*` function; there are no constructors to wire in the Quick Start (see `specs/ml-engines-v2.md §2.1 MUST 1`, zero-arg construction).
+- **`async with km.track("demo") as run:`** — opens an ambient `ExperimentRun` context named `"demo"`. Every `km.train(...)` / `km.register(...)` / checkpoint / metric emitted inside the block is auto-attached to this run (`specs/ml-tracking.md §2.4`). The run finalises (status, end time, artifact manifest) on context exit.
+- **`result = await km.train(df, target="y")`** — picks the best model family for the target's dtype and row count, trains it on the chosen backend (CPU / CUDA / MPS / ROCm / XPU / TPU auto-detected per `specs/ml-backends.md`), and returns a `TrainingResult` with populated `metrics` and `device: DeviceReport` (`specs/ml-engines-v2.md §4.2 MUST 1`).
+- **`registered = await km.register(result, name="demo")`** — creates a new `ModelVersion` under the logical name `"demo"` (auto-bumped version number), serialises the trained artefact as ONNX by default (`specs/ml-engines-v2.md §2.1 MUST 9`), and returns a `RegisterResult` with `artifact_uris` pointing at the framework-agnostic ONNX + native format pair.
+- **`server = await km.serve("demo@production")`** — resolves the `"demo"` model's `production` alias to its current version, spins up a local in-process inference server exposing REST (default) and MCP channels, and returns a `ServeHandle` with `.uris["rest"]`, `.stop()`, and `.status` (`specs/ml-serving.md §2.2`).
+- **`# $ kailash-ml-dashboard  (separate shell)`** — invites the reader to launch the optional ML dashboard CLI from a second shell. The dashboard is a non-blocking visualisation surface for runs, models, and serving handles (`specs/ml-dashboard.md`). The comment is retained verbatim because the Quick Start's 5-to-10-line budget (`specs/ml-engines-v2.md §16.2 MUST 1`) accommodates exactly this one-line operational pointer, and newbies otherwise never discover the dashboard exists.
+
+For the full engine surface, multi-tenancy, checkpoint / resume, RL, AutoML, drift monitoring, and production deployment patterns, see the full spec set under `specs/ml-*.md`. The canonical Quick Start is intentionally narrow — it demonstrates the zero-ceremony promise of the 1.0.0 Engine and nothing beyond that.
 
 ---
 
