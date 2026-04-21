@@ -47,8 +47,8 @@ async def test_tracker_persists_run_to_sqlite_file(tmp_path: Path) -> None:
         ).fetchall()
     assert len(rows) == 1
     assert rows[0][0] == "fraud-v3"
-    # Exit was clean → COMPLETED (runner.RunStatus).
-    assert rows[0][2] == "COMPLETED"
+    # Exit was clean → FINISHED (spec §3.2; W11 renamed from COMPLETED).
+    assert rows[0][2] == "FINISHED"
 
 
 @pytest.mark.integration

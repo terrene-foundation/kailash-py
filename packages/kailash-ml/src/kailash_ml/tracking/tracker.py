@@ -171,23 +171,160 @@ class ExperimentTracker:
         propagation land exactly once — ``ExperimentRun`` is
         polymorphic across backends per §2.4 invariant 5 (it does NOT
         hold a tracker reference).
+
+        W11: ``parent_run_id`` is now passed through to the runner
+        (spec §3.1 MUST honor every keyword argument) rather than
+        being ignored in favour of ambient contextvar.
         """
         resolved_tenant = (
             tenant_id if tenant_id is not None else self._default_tenant_id
         )
-        # ``runner.track`` supports ``parent_run_id`` via the ambient
-        # contextvar only; explicit parent_run_id is threaded through
-        # its `**params` bag for now. Matching the spec's public
-        # signature when the runner itself gains the kwarg is tracked
-        # under W11 (run-lifecycle overhaul).
         async with _track_async(
             experiment,
             backend=self._backend,
             tenant_id=resolved_tenant,
+            parent_run_id=parent_run_id,
             store=self._store_url if self._backend is None else None,
             **params,
         ) as run:
             yield run
+
+    # ------------------------------------------------------------------
+    # Non-context-manager lifecycle — spec §11.2 MCP contract parity.
+    #
+    # W11 Decision 9 parity path: some callers (MCP server tools, RL
+    # orchestrators, script-style usage) need explicit start/end
+    # without the ``async with`` block. These methods return a
+    # standalone :class:`ExperimentRun` that the caller MUST finalise
+    # via :meth:`end_run`. The context-manager path remains the
+    # recommended idiom — this pair is the interoperability surface
+    # for API consumers that cannot use ``async with``.
+    # ------------------------------------------------------------------
+
+    async def start_run(
+        self,
+        experiment: str,
+        *,
+        tenant_id: Optional[str] = None,
+        parent_run_id: Optional[str] = None,
+        **params: Any,
+    ) -> ExperimentRun:
+        """Start a run without an ``async with`` block.
+
+        Parity with spec §11.2 MCP tool signature
+        ``start_run(experiment, tenant_id, parent_run_id, tags) -> run_id``.
+        Returns the full :class:`ExperimentRun` so callers can later
+        call :meth:`end_run` with the same object (no secondary lookup
+        against the store).
+
+        The caller MUST pair every ``start_run`` with exactly one
+        ``end_run`` — orphaned runs stay in ``RUNNING`` status forever
+        (spec §3.2 invariant 4 — ``finished_at`` must always populate
+        on any exit path). If you can use ``async with tracker.track(...)``
+        instead, prefer that; the context-manager path has automatic
+        cleanup + signal handling and never leaves a RUNNING row.
+
+        Args:
+            experiment: Run grouping key.
+            tenant_id: Tenant override; falls back to engine default
+                when omitted.
+            parent_run_id: Explicit parent id. When omitted, resolves
+                to the ambient run via
+                :func:`kailash_ml.tracking.get_current_run`.
+            **params: Initial params logged on run start.
+
+        Returns:
+            An :class:`ExperimentRun` ready for :meth:`end_run`.
+        """
+        resolved_tenant = (
+            tenant_id if tenant_id is not None else self._default_tenant_id
+        )
+        if self._backend is None:
+            # Lazy-construct a backend on the resolved SQLite path so
+            # the pair matches the context-manager path's defaults.
+            self._backend = SQLiteTrackerBackend(
+                _sqlite_path_for(self.store_url) or ":memory:"
+            )
+        # Resolve parent per spec §3.4 — explicit wins over ambient.
+        from kailash_ml.tracking.runner import _current_run  # noqa: PLC0415
+
+        resolved_parent: Optional[str]
+        if parent_run_id is not None and parent_run_id != "":
+            resolved_parent = parent_run_id
+        else:
+            ambient = _current_run.get()
+            resolved_parent = ambient.run_id if ambient is not None else None
+
+        run = ExperimentRun(
+            experiment=experiment,
+            backend=self._backend,
+            params=params,
+            tenant_id=resolved_tenant,
+            parent_run_id=resolved_parent,
+        )
+        # Use the ExperimentRun's async-context machinery to insert the
+        # row + register for signal handling. We do NOT hold the
+        # context open — the caller ends the run explicitly via
+        # :meth:`end_run`. We therefore synthesise __aenter__ directly
+        # without the ``async with`` block.
+        await run.__aenter__()
+        return run
+
+    async def end_run(
+        self,
+        run: ExperimentRun,
+        *,
+        status: str = "FINISHED",
+        error: Optional[BaseException] = None,
+    ) -> None:
+        """Finalise a run previously started with :meth:`start_run`.
+
+        The ``status`` kwarg MUST be one of
+        ``{"FINISHED", "FAILED", "KILLED"}`` per spec §3.2 / §3.5.
+        Legacy ``"COMPLETED"`` is BLOCKED — callers migrating from 0.x
+        MUST rename at the call site.
+
+        Args:
+            run: The :class:`ExperimentRun` returned from
+                :meth:`start_run`.
+            status: Terminal status — ``"FINISHED"`` for clean exit,
+                ``"FAILED"`` when an exception handled out-of-band,
+                ``"KILLED"`` when the caller received a signal.
+            error: Optional exception associated with ``FAILED``
+                terminations. Stored as ``error_type`` / ``error_message``
+                in the row.
+        """
+        from kailash_ml.tracking.runner import _ALLOWED_STATUSES  # noqa: PLC0415
+
+        if status not in _ALLOWED_STATUSES or status == "RUNNING":
+            raise ValueError(
+                f"end_run status {status!r} is not a valid terminal status; "
+                f"allowed: FINISHED / FAILED / KILLED (spec ml-tracking.md §3.2)."
+            )
+        exc_type = type(error) if error is not None else None
+        if status == "FAILED" and exc_type is None:
+            # Caller claimed FAILED but passed no exception — still
+            # synthesise a minimal one so __aexit__'s FAILED branch
+            # records an error_type of something useful.
+            class _EndRunFailed(Exception):
+                pass
+
+            error = _EndRunFailed("end_run called with status=FAILED")
+            exc_type = type(error)
+        if status == "KILLED":
+            # Ensure __aexit__ takes the KILLED branch even without an
+            # actual signal having fired — `_killed` is the load-bearing
+            # flag inside the run.
+            run._killed = True
+            if run._killed_reason is None:
+                run._killed_reason = "end_run.explicit"
+            exc_type = KeyboardInterrupt if exc_type is None else exc_type
+            error = (
+                error
+                if error is not None
+                else KeyboardInterrupt("end_run(status=KILLED)")
+            )
+        await run.__aexit__(exc_type, error, None)
 
     async def close(self) -> None:
         """Release any backend resources owned by this tracker."""

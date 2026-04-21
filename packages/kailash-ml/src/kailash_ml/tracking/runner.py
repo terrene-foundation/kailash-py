@@ -2,26 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """``km.track()`` async-context entry point.
 
-Implements ``specs/ml-tracking.md`` §2.1-§2.4 — the three mandatory
-clauses for the Phase 6 tracker entry point:
+Implements ``specs/ml-tracking.md`` §2.1-§2.4 + §3 — the mandatory
+clauses for the 1.0.0 tracker entry point:
 
 - §2.1 construction via ``async with km.track(...) as run:``
-- §2.2 auto-set status: RUNNING / COMPLETED / FAILED / KILLED
 - §2.4 17 mandatory auto-capture fields on run start
+- §3.2 status transitions: RUNNING → {FINISHED, FAILED, KILLED}
+- §3.3 SIGINT/SIGTERM handling — idempotent across nested runs
+- §3.4 nested runs via ambient contextvar OR explicit parent_run_id
+- §3.5 4-member enum byte-identical with kailash-rs (Decision 3)
 
-As of kailash-ml 0.14.0 the auto-capture surface expands from 10 to
-17 fields (adding ``kailash_ml_version`` / ``lightning_version`` /
-``torch_version`` / ``cuda_version`` / ``device_used`` /
-``accelerator`` / ``precision``) so every run carries the full
-reproducibility envelope §2.4 mandates.
-
-This module is async-first and does NOT depend on the 1.x
+This module is async-first and does NOT depend on the 0.x
 ``kailash_ml.engines.experiment_tracker.ExperimentTracker`` — the
 older engine is preserved for back-compat; new callers use
 ``km.track()`` which gives a drastically smaller surface.
 """
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import logging
 import os
@@ -29,6 +27,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
@@ -55,19 +54,30 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-#: Runtime statuses recorded per ``specs/ml-tracking.md`` §2.2.
+#: Runtime statuses recorded per ``specs/ml-tracking.md`` §3.2 + §3.5.
 class RunStatus:
-    """String constants for the four run statuses per spec §2.2.
+    """String constants for the four run statuses per spec §3.2.
 
     Kept as module-level constants (not an Enum) so the on-disk
-    representation in the SQLite backend matches the public vocabulary
-    exactly without any ``.value`` unwrapping.
+    representation matches the public vocabulary exactly without any
+    ``.value`` unwrapping. The 4-member set
+    ``{RUNNING, FINISHED, FAILED, KILLED}`` is byte-identical with
+    kailash-rs ``RunStatus`` per Decision 3 (§3.5). Legacy values
+    ``COMPLETED`` / ``SUCCESS`` / ``SUCCEEDED`` / ``CANCELLED`` /
+    ``DONE`` are BLOCKED — legacy 0.x rows are hard-coerced to
+    ``FINISHED`` by the ``1_0_0_rename_status`` numbered migration.
     """
 
     RUNNING = "RUNNING"
-    COMPLETED = "COMPLETED"
+    FINISHED = "FINISHED"
     FAILED = "FAILED"
     KILLED = "KILLED"
+
+
+#: The only valid on-disk status values — used by asserts + tests.
+_ALLOWED_STATUSES = frozenset(
+    {RunStatus.RUNNING, RunStatus.FINISHED, RunStatus.FAILED, RunStatus.KILLED}
+)
 
 
 _DEFAULT_TRACKER_DIR = Path.home() / ".kailash_ml"
@@ -84,6 +94,145 @@ _DEFAULT_TRACKER_DB = _DEFAULT_TRACKER_DIR / "ml.db"
 _current_run: contextvars.ContextVar[Optional["ExperimentRun"]] = (
     contextvars.ContextVar("kailash_ml_current_run", default=None)
 )
+
+
+# ---------------------------------------------------------------------------
+# Process-wide signal-handler coordination (spec §3.3)
+# ---------------------------------------------------------------------------
+#
+# Spec §3.3 requires SIGINT/SIGTERM handling to be idempotent across
+# nested runs. Installing the handler in every ``__aenter__`` would
+# overwrite an outer handler with an inner one — the inner ``__aexit__``
+# then restores the outer's copy, the outer's later ``__aexit__``
+# restores whatever the inner thought was installed before it, and
+# any user-level handler that predated the outermost run is lost.
+#
+# The defense: install the handler EXACTLY ONCE (at the first run's
+# enter), track every currently-RUNNING run in a process-wide list,
+# and restore the pre-enter handler when the last run exits. On a
+# signal, we iterate the whole list and mark every active run as
+# KILLED with ``killed_reason="signal.SIGINT"`` / ``"signal.SIGTERM"``
+# before re-raising ``KeyboardInterrupt`` so the ``async with`` blocks
+# unwind via normal exception machinery.
+
+_signal_lock = threading.Lock()
+#: Runs currently inside an ``async with km.track(...)`` block — append
+#: on ``__aenter__``, remove on ``__aexit__``. Process-wide; module-
+#: level so a single signal handler can see every outstanding run
+#: regardless of which coroutine scheduled it.
+_active_runs: list["ExperimentRun"] = []
+_prev_sigint_handler: Any = None
+_prev_sigterm_handler: Any = None
+_sigint_installed: bool = False
+_sigterm_installed: bool = False
+
+
+def _process_kill_signal(signum: int, frame: Any) -> None:
+    """Module-level signal handler.
+
+    Marks every currently-active ``ExperimentRun`` as killed, records
+    the signal name on each, and raises ``KeyboardInterrupt`` so the
+    enclosing ``async with km.track(...)`` block unwinds. The reason
+    string shape (``"signal.SIGINT"`` / ``"signal.SIGTERM"``) is fixed
+    per spec §3.3 so alerting pipelines can filter on it.
+    """
+    sigint = signal.SIGINT
+    sigterm = getattr(signal, "SIGTERM", None)
+    reason: str
+    if signum == sigint:
+        reason = "signal.SIGINT"
+    elif sigterm is not None and signum == sigterm:
+        reason = "signal.SIGTERM"
+    else:
+        reason = f"signal.{signum}"
+    with _signal_lock:
+        for run in _active_runs:
+            run._killed = True
+            if run._killed_reason is None:
+                run._killed_reason = reason
+    raise KeyboardInterrupt()
+
+
+def _install_signal_handlers_if_needed() -> None:
+    """Install SIGINT + SIGTERM handlers idempotently.
+
+    Only runs on the main thread (CPython restricts ``signal.signal``).
+    On every subsequent call, checks the module-level ``_sigint_installed``
+    / ``_sigterm_installed`` flags so nested runs do NOT re-install over
+    our own handler — this is the install-once invariant of §3.3.
+    """
+    if not _threading_is_main():
+        return
+    global _prev_sigint_handler, _prev_sigterm_handler
+    global _sigint_installed, _sigterm_installed
+    with _signal_lock:
+        if not _sigint_installed:
+            try:
+                _prev_sigint_handler = signal.signal(
+                    signal.SIGINT, _process_kill_signal
+                )
+                _sigint_installed = True
+            except (ValueError, OSError) as exc:
+                logger.debug(
+                    "tracking.signal.install_failed_sigint",
+                    extra={"error": str(exc)},
+                )
+                _prev_sigint_handler = None
+        sigterm = getattr(signal, "SIGTERM", None)
+        if sigterm is not None and not _sigterm_installed:
+            try:
+                _prev_sigterm_handler = signal.signal(sigterm, _process_kill_signal)
+                _sigterm_installed = True
+            except (ValueError, OSError) as exc:
+                logger.debug(
+                    "tracking.signal.install_failed_sigterm",
+                    extra={"error": str(exc)},
+                )
+                _prev_sigterm_handler = None
+
+
+def _restore_signal_handlers_if_last() -> None:
+    """Restore the pre-first-run handlers when no runs remain active."""
+    if not _threading_is_main():
+        return
+    global _prev_sigint_handler, _prev_sigterm_handler
+    global _sigint_installed, _sigterm_installed
+    with _signal_lock:
+        if _active_runs:
+            return  # another run still pending — keep handler installed
+        if _sigint_installed:
+            try:
+                signal.signal(
+                    signal.SIGINT,
+                    (
+                        _prev_sigint_handler
+                        if _prev_sigint_handler is not None
+                        else signal.SIG_DFL
+                    ),
+                )
+            except (ValueError, OSError):
+                pass
+            _sigint_installed = False
+            _prev_sigint_handler = None
+        sigterm = getattr(signal, "SIGTERM", None)
+        if sigterm is not None and _sigterm_installed:
+            try:
+                signal.signal(
+                    sigterm,
+                    (
+                        _prev_sigterm_handler
+                        if _prev_sigterm_handler is not None
+                        else signal.SIG_DFL
+                    ),
+                )
+            except (ValueError, OSError):
+                pass
+            _sigterm_installed = False
+            _prev_sigterm_handler = None
+
+
+def _threading_is_main() -> bool:
+    return threading.current_thread() is threading.main_thread()
 
 
 def _resolve_tenant_id(explicit: Optional[str]) -> Optional[str]:
@@ -274,10 +423,12 @@ class ExperimentRun:
         # Wall-clock fields populated at __aenter__ / __aexit__.
         self._wall_clock_start: Optional[datetime] = None
         self._wall_clock_end: Optional[datetime] = None
-        # Signal-handling state
-        self._prev_sigint_handler: Any = None
-        self._prev_sigterm_handler: Any = None
+        # Signal-handling state — set from the module-level handler
+        # when a SIGINT / SIGTERM fires during an active run. Per spec
+        # §3.3 the reason string shape is fixed so alerting pipelines
+        # can filter on it.
         self._killed = False
+        self._killed_reason: Optional[str] = None
         # Contextvar token for parent-run propagation
         self._ctx_token: Any = None
 
@@ -385,39 +536,13 @@ class ExperimentRun:
         # Bind contextvar so nested km.track() calls link properly.
         self._ctx_token = _current_run.set(self)
 
-        # Install SIGINT / SIGTERM handlers for the KILLED status
-        # transition. Signal handlers can only be installed on the
-        # main thread in CPython — guard so worker-thread use does not
-        # raise ``ValueError: signal only works in main thread``.
-        if threading_is_main():
-            try:
-                self._prev_sigint_handler = signal.signal(
-                    signal.SIGINT, self._on_kill_signal
-                )
-            except (ValueError, OSError) as exc:
-                # Rare — e.g. running inside a subinterpreter where
-                # signal installation is not permitted. Log and
-                # continue; the block still records FAILED via the
-                # exception path if the interrupt surfaces as
-                # KeyboardInterrupt.
-                logger.debug(
-                    "tracking.signal.install_failed_sigint", extra={"error": str(exc)}
-                )
-                self._prev_sigint_handler = None
-            # SIGTERM is POSIX-only — guard for Windows where some
-            # SIG_* constants are not present.
-            sigterm = getattr(signal, "SIGTERM", None)
-            if sigterm is not None:
-                try:
-                    self._prev_sigterm_handler = signal.signal(
-                        sigterm, self._on_kill_signal
-                    )
-                except (ValueError, OSError) as exc:
-                    logger.debug(
-                        "tracking.signal.install_failed_sigterm",
-                        extra={"error": str(exc)},
-                    )
-                    self._prev_sigterm_handler = None
+        # Register with the process-level active-run list and install
+        # signal handlers exactly once per process. Nested runs see
+        # the handler already installed and skip re-installation — this
+        # is the idempotence invariant of spec §3.3 / W11 invariant 5.
+        with _signal_lock:
+            _active_runs.append(self)
+        _install_signal_handlers_if_needed()
         return self
 
     async def __aexit__(
@@ -426,20 +551,18 @@ class ExperimentRun:
         exc_val: Optional[BaseException],
         exc_tb: Any,
     ) -> None:
-        # Restore signal handlers first so finalisation never runs
-        # with our handler still installed.
-        if threading_is_main():
-            if self._prev_sigint_handler is not None:
-                try:
-                    signal.signal(signal.SIGINT, self._prev_sigint_handler)
-                except (ValueError, OSError):
-                    pass
-            sigterm = getattr(signal, "SIGTERM", None)
-            if sigterm is not None and self._prev_sigterm_handler is not None:
-                try:
-                    signal.signal(sigterm, self._prev_sigterm_handler)
-                except (ValueError, OSError):
-                    pass
+        # Pop self from the active-run list BEFORE restoring handlers
+        # so the restore check "is the list empty" sees the right state.
+        with _signal_lock:
+            try:
+                _active_runs.remove(self)
+            except ValueError:
+                # Defensive — should never happen because __aenter__
+                # appends unconditionally, but a partially-initialised
+                # run (insert_run failed before append) would miss it.
+                pass
+        _restore_signal_handlers_if_last()
+
         # Release contextvar binding
         if self._ctx_token is not None:
             _current_run.reset(self._ctx_token)
@@ -451,15 +574,34 @@ class ExperimentRun:
             0.0, (self._wall_clock_end - self._wall_clock_start).total_seconds()
         )
 
+        # Status transition per spec §3.2:
+        #   no exception   → FINISHED
+        #   CancelledError → KILLED (async equivalent of signal)
+        #   _killed flag   → KILLED (SIGINT/SIGTERM fired while inside)
+        #   KeyboardInterrupt → KILLED (signal propagated as KI)
+        #   any other      → FAILED (exception re-raised)
         if exc_type is None:
-            status = RunStatus.COMPLETED
+            status = RunStatus.FINISHED
             err_type: Optional[str] = None
             err_msg: Optional[str] = None
-        elif self._killed or exc_type is KeyboardInterrupt:
+        elif (
+            self._killed
+            or exc_type is KeyboardInterrupt
+            or (exc_type is not None and issubclass(exc_type, asyncio.CancelledError))
+        ):
             status = RunStatus.KILLED
+            if exc_type is asyncio.CancelledError and self._killed_reason is None:
+                self._killed_reason = "asyncio.CancelledError"
+            elif self._killed_reason is None:
+                # KeyboardInterrupt without a signal handler firing is
+                # indistinguishable from SIGINT at this layer — record
+                # the best-effort reason rather than leaving None.
+                self._killed_reason = "signal.SIGINT"
             err_type = exc_type.__name__ if exc_type else "KeyboardInterrupt"
             err_msg = (
-                _short_traceback(exc_val) if exc_val is not None else "interrupted"
+                _short_traceback(exc_val)
+                if exc_val is not None
+                else self._killed_reason
             )
         else:
             status = RunStatus.FAILED
@@ -484,23 +626,8 @@ class ExperimentRun:
                 "error_message": err_msg,
             },
         )
-        # Do NOT suppress exceptions (spec §2.2) — return None / falsy.
+        # Do NOT suppress exceptions (spec §3.2) — return None / falsy.
         return None
-
-    def _on_kill_signal(self, signum: int, frame: Any) -> None:
-        """Signal handler — mark the run KILLED and re-raise KeyboardInterrupt.
-
-        Installed for SIGINT / SIGTERM on ``__aenter__``. We flip the
-        ``_killed`` flag so ``__aexit__`` records ``KILLED`` status
-        regardless of how the exception surfaces, then raise
-        ``KeyboardInterrupt`` so the ``async with`` block unwinds
-        cleanly.
-        """
-        self._killed = True
-        # Chain to previous SIGINT handler when one existed — some
-        # runtimes (pytest-timeout, asyncio) rely on default SIGINT
-        # semantics.
-        raise KeyboardInterrupt()
 
 
 # ---------------------------------------------------------------------------
@@ -514,6 +641,7 @@ async def track(
     *,
     backend: Optional[SQLiteTrackerBackend] = None,
     tenant_id: Optional[str] = None,
+    parent_run_id: Optional[str] = None,
     store: Optional[str] = None,
     **params: Any,
 ) -> AsyncIterator[ExperimentRun]:
@@ -526,14 +654,14 @@ async def track(
             # train ...
             await run.log_param("batch_size", 64)
 
-    Per ``specs/ml-tracking.md`` §2.2 the context manager auto-sets
+    Per ``specs/ml-tracking.md`` §3.2 the context manager auto-sets
     status on exit:
 
-    - ``COMPLETED`` on clean exit
+    - ``FINISHED`` on clean exit
     - ``FAILED`` on exception (exception re-raised)
-    - ``KILLED`` on SIGINT / SIGTERM
+    - ``KILLED`` on SIGINT / SIGTERM / :class:`asyncio.CancelledError`
 
-    And per §2.4 auto-captures the 16 mandatory fields on run start.
+    And per §2.4 auto-captures the 17 mandatory fields on run start.
 
     Args:
         experiment: Experiment name (user-chosen grouping key).
@@ -543,6 +671,11 @@ async def track(
         tenant_id: Optional tenant id. If omitted, falls back to the
             ``KAILASH_TENANT_ID`` env var; if still absent, runs as
             single-tenant.
+        parent_run_id: Explicit parent run id (spec §3.1 MUST honor).
+            When omitted, the ambient run from
+            :func:`kailash_ml.tracking.get_current_run` is used so
+            nested ``async with km.track(...)`` calls link
+            automatically (§3.4).
         store: Override the default SQLite path. Accepts either a raw
             path (``"/tmp/ml.db"``), ``":memory:"``, or a
             ``sqlite:///...`` URI. Ignored when ``backend`` is given.
@@ -553,20 +686,28 @@ async def track(
         backend = SQLiteTrackerBackend(_resolve_store_path(store))
         owns_backend = True
     resolved_tenant = _resolve_tenant_id(tenant_id)
-    parent = _current_run.get()
-    parent_run_id = parent.run_id if parent is not None else None
+    # Explicit parent_run_id wins per spec §3.4; fall back to the
+    # ambient contextvar so sibling specs' example
+    # ``async with km.track("sweep") as parent: async with km.track("trial")``
+    # picks up the outer run without plumbing.
+    resolved_parent: Optional[str]
+    if parent_run_id is not None and parent_run_id != "":
+        resolved_parent = parent_run_id
+    else:
+        parent = _current_run.get()
+        resolved_parent = parent.run_id if parent is not None else None
     run = ExperimentRun(
         experiment=experiment,
         backend=backend,
         params=params,
         tenant_id=resolved_tenant,
-        parent_run_id=parent_run_id,
+        parent_run_id=resolved_parent,
     )
     try:
         async with run as entered:
             yield entered
     finally:
-        if owns_backend:
+        if owns_backend and backend is not None:
             await backend.close()
 
 
@@ -586,17 +727,6 @@ def _resolve_store_path(store: Optional[str]) -> str:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-def threading_is_main() -> bool:
-    """Return True iff the current thread is the main thread.
-
-    Signal installation is main-thread-only in CPython; call this
-    before ``signal.signal(...)``.
-    """
-    import threading
-
-    return threading.current_thread() is threading.main_thread()
 
 
 def _short_traceback(exc: Optional[BaseException]) -> str:

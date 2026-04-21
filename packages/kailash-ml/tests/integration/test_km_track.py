@@ -6,7 +6,8 @@ Exercise the real SQLite backend on disk (no mocks) to validate:
 
 - Round-trip of the 16 auto-capture fields per ``specs/ml-tracking.md``
   §2.4.
-- Status auto-set per §2.2 (COMPLETED / FAILED / KILLED).
+- Status auto-set per §3.2 (FINISHED / FAILED / KILLED) — W11 renamed
+  from legacy COMPLETED per Decision 3 (4-member enum parity with kailash-rs).
 - Trainable-integration wiring — device fields populated from a real
   ``TrainingResult.device`` (:class:`DeviceReport`).
 
@@ -65,7 +66,7 @@ async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
     # 17 auto-capture fields (spec §2.4)
     assert row["run_id"] == run_id
     assert row["experiment"] == experiment
-    assert row["status"] == RunStatus.COMPLETED
+    assert row["status"] == RunStatus.FINISHED
     assert row["host"] is not None and row["host"] != ""
     assert row["python_version"].startswith("3.")
     # Library/runtime versions (spec §2.4 rows 5-8) — kailash_ml always
@@ -152,12 +153,17 @@ async def test_km_track_all_17_auto_capture_fields_present(
 
 
 async def test_km_track_status_completed(backend: SQLiteTrackerBackend) -> None:
-    """Clean exit -> status=COMPLETED, no error fields."""
+    """Clean exit -> status=FINISHED, no error fields.
+
+    W11 renamed the terminal status from legacy ``COMPLETED`` to
+    ``FINISHED`` per spec §3.2 / Decision 3. Test function name kept
+    for git-blame continuity; assertion is on the 1.0.0 vocabulary.
+    """
     async with track("status-completed", backend=backend) as run:
         run_id = run.run_id
 
     row = await backend.get_run(run_id)
-    assert row["status"] == RunStatus.COMPLETED
+    assert row["status"] == RunStatus.FINISHED
     assert row["error_type"] is None
     assert row["error_message"] is None
 
@@ -204,21 +210,22 @@ async def test_km_track_status_killed(backend: SQLiteTrackerBackend) -> None:
 async def test_km_track_status_killed_via_signal_handler(
     backend: SQLiteTrackerBackend,
 ) -> None:
-    """The installed SIGINT handler flips the ``_killed`` flag.
+    """The process-level SIGINT handler flips every active ``_killed`` flag.
 
-    Direct unit-level exercise of :meth:`ExperimentRun._on_kill_signal`
-    — proves the handler is wired to the `_killed` flag and raises
-    ``KeyboardInterrupt``. Complements the status test above; keeps
-    real signal delivery out of the pytest main loop where it would
-    collide with pytest's own handlers.
+    Spec §3.3 / W11 — the handler lives at module scope
+    (:func:`kailash_ml.tracking.runner._process_kill_signal`) so a
+    single signal can kill every currently-RUNNING run. Exercise it
+    directly to avoid racing against pytest's own SIGINT handling.
     """
+    from kailash_ml.tracking.runner import _process_kill_signal
+
     run_id: str | None = None
     with pytest.raises(KeyboardInterrupt):
         async with track("killed-via-handler", backend=backend) as run:
             run_id = run.run_id
-            # The SIGINT handler we install ends up calling
-            # _on_kill_signal(signum, frame) — exercise it directly.
-            run._on_kill_signal(signal.SIGINT, None)
+            # Synthesise SIGINT delivery via the module-level handler —
+            # this is the exact code path CPython invokes on real signal.
+            _process_kill_signal(signal.SIGINT, None)
 
     assert run_id is not None
     row = await backend.get_run(run_id)
