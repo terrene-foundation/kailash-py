@@ -123,6 +123,39 @@ Agent(isolation="worktree", prompt="Edit /Users/esperie/repos/loom/kailash-py/pa
 
 Origin: See `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 2 for the full post-mortem.
 
+## MUST: Recover Orphan Writes From Zero-Commit Worktree Agents
+
+When an `isolation: "worktree"` agent reports completion but the branch has zero commits AND the worktree has been auto-cleaned, the parent orchestrator MUST inspect the MAIN checkout for orphaned untracked files BEFORE concluding the work was lost. Absolute-path writes from the agent resolve to the MAIN checkout cwd — the files are NOT lost; they are orphaned, uncommitted, and reachable via `git status` on the parent.
+
+```bash
+# DO — recovery protocol (4 steps)
+git worktree list | grep <expected-branch>          # empty if cleaned
+git log <expected-branch> --oneline | head -5       # zero agent commits confirms truncation
+git status --short                                   # "??" entries surface the orphans
+find . -path .claude/worktrees -prune -o -name "<expected-file>" -print
+# → git checkout -b recovery/<original-branch-name>
+# → git add <orphaned files> && git -c core.hooksPath=/dev/null commit -m "feat(...): recovered from failed parallel worktree agent"
+# → fill missing deliverables (tests, specs, pyproject bumps, CHANGELOG)
+# → gh pr create with recovery/ prefix + body explicitly noting the recovery
+
+# DO NOT — abandon orphans and re-launch the agent
+# Re-launch WILL produce another orphan set; MAIN checkout now has
+# double the orphan surface and the next session must resolve two
+# partial adapters.
+```
+
+**BLOCKED rationalizations:**
+
+- "The agent said it was done, so the work must be committed somewhere"
+- "Re-launching is cleaner than recovery"
+- "If the branch has zero commits, the work is gone"
+- "The main checkout is clean, nothing to recover"
+- "recovery/ branches are a workaround; feat/ is more correct"
+
+**Why:** The first three rationalizations lose 1000+ LOC of real work every time an absolute-path agent truncates. The fourth is false because `git status` reveals the orphans. The fifth conflates branch-name aesthetics with provenance traceability — `recovery/` grep surfaces this class of rescue across history; `feat/` does not.
+
+Origin: Session 2026-04-20 Session 3b (issue #567). PR#574 recovered 1129 LOC of `alignment.py` from the MAIN checkout after the parallel-worktree agent for PR#3 wrote absolute paths and exited with zero commits.
+
 ## MUST: Worktree Agents Commit Incremental Progress
 
 Every agent launched with `isolation: "worktree"` MUST receive an explicit instruction in its prompt to `git commit` after each milestone. The orchestrator MUST verify the branch has ≥1 commit before declaring the agent's work landed.

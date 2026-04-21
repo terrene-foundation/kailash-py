@@ -292,6 +292,50 @@ Origin: Session 2026-04-20 /redteam collection-gate sweep — `packages/kailash-
 
 **Why:** Mocks in integration tests hide real failures (connection handling, schema mismatches, transaction behavior) that only surface with real infrastructure.
 
+#### Exception: Protocol-Satisfying Deterministic Adapters Are Not Mocks
+
+A class that satisfies a `typing.Protocol` at runtime (`isinstance(x, TheProtocol) is True`) and produces deterministic output from its inputs is NOT a mock — it is a real implementation of the Protocol whose output happens to be deterministic. Tier 2 integration tests MAY use such adapters for Protocol-typed dependencies where real production implementations require API keys, network, or GPU that CI cannot provide.
+
+```python
+# DO — real Protocol implementation, isinstance holds, deterministic output
+class DeterministicJudge:
+    """Real JudgeCallable implementation for Tier 2 tests."""
+    judge_model: str = "deterministic-test-judge"
+
+    def __init__(self) -> None:
+        self.calls: list[JudgeInput] = []
+
+    async def __call__(self, judge_input: JudgeInput) -> JudgeResult:
+        self.calls.append(judge_input)
+        raw = min(len(judge_input.candidate_a) / 200.0, 1.0)
+        return JudgeResult(
+            score=raw, winner=None,
+            reasoning=f"Deterministic score={raw:.2f}",
+            judge_model=self.judge_model,
+            cost_microdollars=150,
+            prompt_tokens=10, completion_tokens=15,
+        )
+
+@pytest.mark.integration
+def test_facade_satisfies_protocol() -> None:
+    judge = DeterministicJudge()
+    assert isinstance(judge, JudgeCallable)  # Protocol check holds at runtime
+
+# DO NOT — MagicMock with spec=JudgeCallable
+judge = MagicMock(spec=JudgeCallable)  # methods are auto-generated stubs, still mock-based
+```
+
+**BLOCKED rationalizations:**
+
+- "MagicMock with `spec=` passes isinstance — same thing"
+- "It's the same as a mock if the output is scripted"
+- "`side_effect` on an AsyncMock is functionally equivalent"
+- "Protocol adapter is over-engineering; just use `patch`"
+
+**Why:** The Protocol contract is the scripting surface, not a mock framework's `side_effect` or `return_value`. A real class declaring the Protocol-required methods with correct signatures + returning real values of the Protocol-required types is a valid Tier 2 test double even when its output is deterministic. The rule distinguishes Tier 2 test-doubles from mocks by Protocol-conformance, not by whether the backing store is real — a real PostgreSQL + a `DeterministicJudge` are both Tier 2-legal; a mocked PostgreSQL + a real OpenAI call is Tier 2 illegal.
+
+Origin: Session 2026-04-20 (issue #567 PR#5, PR#580). `DeterministicJudge` in `packages/kailash-kaizen/tests/integration/judges/test_judges_wiring.py` exercises 7 Tier 2 tests through the `kaizen.judges` facade without API keys; satisfies `kailash.diagnostics.protocols.JudgeCallable` at runtime.
+
 ### Tier 3 (E2E): Real everything
 
 - Real browser, real database
