@@ -5,6 +5,27 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] — 2026-04-21 — AgentDiagnostics + TraceExporter → kaizen.observability (#567 PR#6 of 7)
+
+### Added
+
+- **`kaizen.observability.AgentDiagnostics`** — concrete Kaizen-side adapter satisfying the cross-SDK `kailash.diagnostics.protocols.Diagnostic` Protocol. Context-managed agent-run session that captures `TraceEvent` records and produces a `report()` rollup (counts by `event_type`, total cost in integer microdollars, p50/p95 duration, error rate, errored-export count). Signature-free — pure data aggregator; outside `rules/agent-reasoning.md` scope.
+- **`kaizen.observability.TraceExporter`** — single-filter-point sink adapter for `TraceEvent` records. Every event stamped with the cross-SDK-locked SHA-256 fingerprint from `kailash.diagnostics.protocols.compute_trace_event_fingerprint` (byte-identical with kailash-rs#468 / v3.17.1+, commit `e29d0bad`). Sinks: `NoOpSink`, `JsonlSink` (append-only JSONL with thread-safe writes), `CallableSink` (sync or async user-supplied callable). No third-party commercial-SDK imports anywhere in the surface per `rules/independence.md`.
+- **`BaseAgent.attach_trace_exporter(exporter)` + `BaseAgent.trace_exporter` property** — production hot-path wiring of the exporter. `AgentLoop.run_sync` and `run_async` emit `agent.run.start` and `agent.run.end` TraceEvents through the attached exporter, threading `parent_event_id` from start → end and stamping `duration_ms` + `status`. Fire-and-forget: exporter failures WARN-log and continue so the agent hot path never breaks because a trace sink failed. Closes `rules/orphan-detection.md` §1 for `kaizen.observability`.
+- **`kaizen.observability.AgentDiagnosticsReport`** — frozen dataclass shape returned by `AgentDiagnostics.report_dataclass()`; `.to_dict()` matches the `Diagnostic` Protocol's dict-shape contract.
+- **`specs/kaizen-observability.md`** — authoritative spec documenting the cross-SDK fingerprint canonicalization contract, BaseAgent wiring surface, tenant-isolation and classification discipline (payload_hash `"sha256:<8-hex>"` per `rules/event-payload-classification.md` §2), security threats subsection, Tier 1 + Tier 2 testing contract, and MLFP attribution history.
+- **`specs/diagnostics-catalog.md`** — catalog indexing every `Diagnostic` adapter (`DLDiagnostics`, `RAGDiagnostics`, `AlignmentDiagnostics`, `InterpretabilityDiagnostics`, `LLMJudge` / `LLMDiagnostics`, `AgentDiagnostics`, `GovernanceEngine` extensions) with its Tier 2 wiring-test file name (grep-able per `rules/facade-manager-detection.md` §2), medical-metaphor regression gate, and the additive extension flow for an 8th diagnostic.
+
+### Tests
+
+- **`packages/kailash-kaizen/tests/integration/observability/test_agent_diagnostics_wiring.py`** — 4 Tier 2 tests exercising a real `BaseAgent` + attached `TraceExporter`; asserts start + end events fire via `AgentLoop`, `run_id` stability, `parent_event_id` threading, fingerprint parity with the canonical helper, cost rollup as int microdollars, and short-circuit behaviour when `attach_trace_exporter(None)`.
+- **`packages/kailash-kaizen/tests/unit/observability/test_trace_exporter_fingerprint.py`** — 15 Tier 1 tests covering determinism, hex shape, per-field sensitivity of the 6 mandatory fields, canonicalization form (sort-keys, compact separators, `+00:00`, no `Z`), Enum string serialization, `cost_microdollars` MUST-be-int invariant (rejects float, negative, bool), re-export parity, and bounded-counter contract (no unbounded `_events` buffer).
+
+### Cross-SDK Parity
+
+- **kailash-rs#468** (v3.17.1+, commit `e29d0bad`) — the Rust-side `TraceEvent` + `compute_trace_event_fingerprint` pair; 4 round-trip tests green. The Python-side fingerprint contract in this release is byte-identical with the Rust side.
+- **kailash-rs#497** — Rust TraceExporter Kaizen-rs wiring tracker; this Python PR integrates against the byte-identical parity locked in kailash-rs#468.
+
 ## [2.9.0] — 2026-04-20 — LLMDiagnostics + JudgeCallable → kaizen.judges + kaizen.evaluation split (#567 PR#5 of 7)
 
 ### Added
