@@ -233,6 +233,88 @@ def test_exporter_returns_fingerprint_matching_canonical_helper():
     ), "sink received a different fingerprint than export() returned"
 
 
+def test_async_sink_tasks_retained_against_gc():
+    """Regression: security-reviewer M1 on PR #587.
+
+    ``loop.create_task`` returns a Task the event loop only weakly
+    references. Without the exporter retaining a strong reference,
+    GC mid-coroutine silently cancels the sink write and the trace
+    event is lost. This test:
+
+    1. Schedules an async sink through the sync ``export()`` path
+       inside a running loop.
+    2. Asserts the task is anchored in ``exporter._pending_tasks``
+       while in-flight.
+    3. Awaits ``aclose()`` to drain and asserts the set empties.
+    """
+    import asyncio
+
+    completed: list[str] = []
+
+    async def async_sink(event: TraceEvent, fp: str) -> None:
+        # Yield control at least once so the task is actually pending
+        # when we inspect the exporter.
+        await asyncio.sleep(0)
+        completed.append(event.event_id)
+
+    async def _drive() -> None:
+        exporter = TraceExporter(sink=async_sink)
+        exporter.export(_mk(event_id="ev-async-retain"))
+
+        # At this point the coroutine is scheduled but has not yet
+        # run (we haven't yielded). The task MUST be anchored in
+        # _pending_tasks to survive GC.
+        assert (
+            len(exporter._pending_tasks) == 1
+        ), f"expected 1 pending task, got {len(exporter._pending_tasks)}"  # noqa: SLF001  # noqa: SLF001
+
+        # aclose() drains outstanding tasks.
+        await exporter.aclose()
+        assert (
+            len(exporter._pending_tasks) == 0
+        ), "aclose() did not drain pending tasks"  # noqa: SLF001
+        assert completed == [
+            "ev-async-retain"
+        ], f"async sink task did not complete: completed={completed!r}"
+
+    asyncio.run(_drive())
+
+
+def test_aclose_tolerates_sink_exceptions():
+    """Exceptions raised by pending async-sink tasks MUST be captured
+    and logged by ``aclose()``, not propagated to the caller.
+
+    This preserves the fire-and-forget contract of the exporter: a
+    failing sink does not cascade into the caller's shutdown path.
+    """
+    import asyncio
+
+    async def failing_sink(event: TraceEvent, fp: str) -> None:
+        await asyncio.sleep(0)
+        raise RuntimeError("simulated failing sink in aclose path")
+
+    async def _drive() -> None:
+        exporter = TraceExporter(sink=failing_sink)
+        exporter.export(_mk(event_id="ev-async-fail"))
+        # aclose MUST NOT raise even though the task raises.
+        await exporter.aclose()
+        assert len(exporter._pending_tasks) == 0  # noqa: SLF001
+
+    asyncio.run(_drive())
+
+
+def test_aclose_on_empty_exporter_is_noop():
+    """``aclose()`` with no pending tasks returns immediately."""
+    import asyncio
+
+    async def _drive() -> None:
+        exporter = TraceExporter()
+        await exporter.aclose()
+        assert len(exporter._pending_tasks) == 0  # noqa: SLF001
+
+    asyncio.run(_drive())
+
+
 def test_exporter_export_count_bounded_not_history():
     """The exporter MUST carry bounded counters, not event history.
 

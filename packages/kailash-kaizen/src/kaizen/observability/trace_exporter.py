@@ -320,6 +320,14 @@ class TraceExporter:
         self._exported_count = 0
         self._errored_count = 0
 
+        # Retain async sink tasks against GC. `loop.create_task` returns
+        # a Task the event loop only weakly references; if the caller
+        # drops it and GC fires before the coroutine completes, the
+        # task is cancelled mid-flight and the sink write is lost.
+        # Anchor every task here and discard via a done-callback so the
+        # set stays bounded to currently-in-flight tasks only.
+        self._pending_tasks: set[asyncio.Task[None]] = set()
+
         logger.info(
             "kaizen.observability.trace_exporter.init",
             extra={
@@ -453,14 +461,20 @@ class TraceExporter:
                 f"got {type(event).__name__}"
             )
 
-    @staticmethod
-    def _run_async(awaitable: Awaitable[None]) -> None:
+    def _run_async(self, awaitable: Awaitable[None]) -> None:
         """Run an async sink's coroutine from a sync caller.
 
         Safe against "event loop already running" per
         ``rules/patterns.md`` § "Async Resource Cleanup": if a loop is
         running in the current thread, schedule the coroutine as a task
         on it; otherwise spawn a short-lived loop via ``asyncio.run``.
+
+        Tasks scheduled onto a running loop are retained in
+        ``self._pending_tasks`` until they complete. Without retention,
+        the event loop only weakly references the task — GC firing
+        mid-coroutine cancels the sink write and silently loses the
+        trace event. The done-callback discards the task from the set
+        so the retention window is bounded to "currently in flight".
         """
         try:
             loop = asyncio.get_running_loop()
@@ -468,9 +482,39 @@ class TraceExporter:
             loop = None
 
         if loop is not None and loop.is_running():
-            loop.create_task(awaitable)
+            task = loop.create_task(awaitable)
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
         else:
             asyncio.run(awaitable)
+
+    async def aclose(self) -> None:
+        """Await every outstanding async-sink task to completion.
+
+        Callers that run async sinks through the synchronous
+        :meth:`export` path SHOULD invoke ``await exporter.aclose()``
+        before process exit to ensure every scheduled sink write
+        finishes. Without this, an event loop that shuts down mid-task
+        cancels the remaining writes and loses the trailing trace
+        events. Exceptions raised by pending tasks are captured and
+        logged, not propagated — aclose is a cleanup contract, not a
+        retry.
+        """
+        pending = list(self._pending_tasks)
+        if not pending:
+            return
+        results = await asyncio.gather(*pending, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning(
+                    "kaizen.observability.trace_exporter.aclose.task_error",
+                    extra={
+                        "trace_exporter_run_id": self._run_id,
+                        "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
+                        "trace_exporter_error": str(result),
+                        "mode": "real",
+                    },
+                )
 
 
 # ---------------------------------------------------------------------------
