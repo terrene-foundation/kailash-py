@@ -163,6 +163,26 @@ class JsonlSink:
     by an internal :class:`threading.Lock` so concurrent agent runs
     can share one sink.
 
+    Path-safety contract (security-reviewer H2):
+
+      - The provided ``path`` is resolved via ``Path.expanduser().resolve(
+        strict=False)`` at construction time. This normalizes ``..``
+        segments so the audit trail in logs / error messages shows the
+        fully-resolved destination, not the caller's unnormalized input.
+      - On POSIX, writes go through ``os.open(..., O_NOFOLLOW, 0o600)``
+        followed by ``os.fdopen`` — an attacker who plants a symlink at
+        the target path gets ``OSError`` (typically ``ELOOP``) instead
+        of a silent cross-write into the symlink target.
+      - The file-mode bits are ``0o600`` (owner-only read/write). Trace
+        streams may contain classified payload hashes and operational
+        metadata that ops staff beyond the process owner should not see
+        without explicit authorization.
+      - **Callers MUST pre-validate tenant-derived paths against an
+        allowlist.** ``JsonlSink`` resolves symlinks but does not reject
+        ``..`` traversal above the allowlist root — path allowlisting
+        is the caller's responsibility because it is policy, not
+        mechanism.
+
     Args:
         path: Filesystem path to the JSONL log. Parent dirs are created
             lazily on first write.
@@ -171,7 +191,16 @@ class JsonlSink:
     """
 
     def __init__(self, path: Union[str, Path], *, mode: str = "a") -> None:
-        self._path = Path(path)
+        if mode not in ("a", "w"):
+            raise ValueError(
+                f"JsonlSink mode must be 'a' (append) or 'w' (write); got {mode!r}"
+            )
+        # Resolve the path once at construction time so every subsequent
+        # audit trail (logs, error messages, the `.path` property) shows
+        # the fully-normalized destination. strict=False allows the path
+        # to not yet exist (lazy parent-dir creation happens on first
+        # write) while still normalizing `..` segments.
+        self._path = Path(path).expanduser().resolve(strict=False)
         self._mode = mode
         self._lock = threading.Lock()
 
@@ -192,9 +221,25 @@ class JsonlSink:
             # Lazy parent-dir creation keeps the sink cheap to construct
             # for tests that never actually write.
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            with self._path.open(self._mode, encoding="utf-8") as f:
-                f.write(payload)
-                f.write("\n")
+
+            # POSIX: open via os.open with O_NOFOLLOW so an attacker who
+            # plants a symlink at the target path gets ELOOP instead of
+            # a silent cross-write. Windows fallback uses Path.open with
+            # mode 'a'/'w' (O_NOFOLLOW is POSIX-specific).
+            if hasattr(os, "O_NOFOLLOW"):
+                flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
+                if self._mode == "a":
+                    flags |= os.O_APPEND
+                elif self._mode == "w":
+                    flags |= os.O_TRUNC
+                fd = os.open(str(self._path), flags, 0o600)
+                with os.fdopen(fd, self._mode, encoding="utf-8") as f:
+                    f.write(payload)
+                    f.write("\n")
+            else:  # pragma: no cover — Windows fallback
+                with self._path.open(self._mode, encoding="utf-8") as f:
+                    f.write(payload)
+                    f.write("\n")
 
 
 @dataclass(frozen=True)
