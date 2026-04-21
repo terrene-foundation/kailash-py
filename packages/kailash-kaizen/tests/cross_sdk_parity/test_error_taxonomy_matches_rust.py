@@ -163,9 +163,6 @@ def test_raising_and_catching_cross_sdk_stable() -> None:
         ("ModelRequired", ("openai",)),
     ]:
         cls = getattr(errors_mod, name)
-        try:
+        with pytest.raises(errors_mod.LlmClientError) as excinfo:
             raise cls(*args)
-        except errors_mod.LlmClientError as exc:
-            assert isinstance(exc, cls)
-        else:
-            pytest.fail(f"{name} was not caught by LlmClientError")
+        assert isinstance(excinfo.value, cls)

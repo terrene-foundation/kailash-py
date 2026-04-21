@@ -47,14 +47,14 @@ _ENV_LOCK = threading.Lock()
 
 
 @pytest.fixture(autouse=True)
-def _env_serialized():
+def env_serialized():
     """Serialize every test-body mutation of LLM env vars."""
     with _ENV_LOCK:
         yield
 
 
 @pytest.fixture(autouse=True)
-def _clean_llm_env(monkeypatch):
+def clean_llm_env(monkeypatch):
     """Every test starts from a clean LLM env surface.
 
     Tests opt in to specific env vars via monkeypatch.setenv; delenv
@@ -170,7 +170,7 @@ def test_empty_env_raises_no_keys_configured() -> None:
         resolve_env_deployment()
 
 
-def test_never_fall_back_to_mock(monkeypatch, rust_fixture: dict) -> None:
+def test_never_fall_back_to_mock(rust_fixture: dict) -> None:
     """Cross-SDK invariant: empty env NEVER returns a mock deployment.
 
     Asserted directly against the Rust-fixture flag so a future "helpful"
