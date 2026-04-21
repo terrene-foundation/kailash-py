@@ -12,11 +12,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
 
+# Canonical MLError hierarchy re-exported from kailash.ml.errors. Eager
 from kailash_ml._device import BackendInfo, detect_backend
-from kailash_ml._device_report import (
-    DeviceReport,
-    device_report_from_backend_info,
-)
+from kailash_ml._device_report import DeviceReport, device_report_from_backend_info
 from kailash_ml._gpu_setup import resolve_torch_wheel
 from kailash_ml._result import TrainingResult
 from kailash_ml._results import (
@@ -28,9 +26,100 @@ from kailash_ml._results import (
     ServeResult,
     SetupResult,
 )
+from kailash_ml._seed import SeedReport, seed
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
+
+# import so every __all__ entry below resolves at module scope (CodeQL
+# py/modification-of-default-value on lazy __getattr__ entries in __all__
+# is blocked per zero-tolerance.md Rule 1a).
+from kailash_ml.errors import (
+    ActorRequiredError,
+    AliasNotFoundError,
+    AliasOccupiedError,
+    ArtifactEncryptionError,
+    ArtifactSizeExceededError,
+    AuthorizationError,
+    AutologError,
+    AutologNoAmbientRunError,
+    AutologUnknownFrameworkError,
+    AutoMLError,
+    BackendError,
+    BudgetExhaustedError,
+    CrossTenantLineageError,
+    DashboardError,
+    DiagnosticsError,
+    DLDiagnosticsStateError,
+    DriftMonitorError,
+    DriftThresholdError,
+    EnsembleFailureError,
+    EnvVarDeprecatedError,
+    ErasureRefusedError,
+    ExperimentNotFoundError,
+    FeatureNotFoundError,
+    FeatureNotYetSupportedError,
+    FeatureStoreError,
+    ImmutableGoldenReferenceError,
+    InferenceServerError,
+    InsufficientSamplesError,
+    InsufficientTrialsError,
+    InvalidInputSchemaError,
+    InvalidTenantIdError,
+    LineageRequiredError,
+    LiveStreamError,
+    MetricValueError,
+    MigrationFailedError,
+    MigrationImportError,
+    MLError,
+    ModelLoadError,
+    ModelNotFoundError,
+    ModelRegistryError,
+    ModelSignatureRequiredError,
+    MultiTenantOpError,
+    OnnxExportUnsupportedOpsError,
+    ParamValueError,
+    PointInTimeViolationError,
+    ProtocolConformanceError,
+    RateLimitExceededError,
+    ReferenceNotFoundError,
+    ReplayBufferUnderflowError,
+    RewardModelRequiredError,
+    RLEnvIncompatibleError,
+    RLError,
+    RLPolicyShapeMismatchError,
+    RunNotFoundError,
+    RunNotFoundInDashboardError,
+    SeedReportError,
+    ShadowDivergenceError,
+    StaleFeatureError,
+    TenantQuotaExceededError,
+    TenantRequiredError,
+    TrackerStoreInitError,
+    TrackingError,
+    UnknownTenantError,
+    UnsupportedFamily,
+    UnsupportedPrecision,
+    UnsupportedTrainerError,
+    WorkflowNodeMLContextError,
+    fingerprint_classified_value,
+)
+
+# Estimators (#479/#488) — eagerly imported because the module is light
+# (thin wrappers over sklearn which is already a base dep) and because
+# CodeQL flags __all__ entries that are only resolved through the lazy
+# __getattr__ path. Eager import keeps the symbols defined at module
+# scope without meaningful import-time cost.
+from kailash_ml.estimators import (
+    ColumnTransformer,
+    FeatureUnion,
+    Pipeline,
+    StandardScaler,
+    is_registered_estimator,
+    register_estimator,
+    registered_estimators,
+    unregister_estimator,
+)
 from kailash_ml.trainable import (
     HDBSCANTrainable,
     LightGBMTrainable,
@@ -48,22 +137,6 @@ from kailash_ml.types import (
     MetricSpec,
     MLToolProtocol,
     ModelSignature,
-)
-
-# Estimators (#479/#488) — eagerly imported because the module is light
-# (thin wrappers over sklearn which is already a base dep) and because
-# CodeQL flags __all__ entries that are only resolved through the lazy
-# __getattr__ path. Eager import keeps the symbols defined at module
-# scope without meaningful import-time cost.
-from kailash_ml.estimators import (
-    ColumnTransformer,
-    FeatureUnion,
-    Pipeline,
-    StandardScaler,
-    is_registered_estimator,
-    register_estimator,
-    registered_estimators,
-    unregister_estimator,
 )
 
 # ---------------------------------------------------------------------------
@@ -113,10 +186,10 @@ def train(
 # backend (offline / deterministic / CPU-only runs) enter a small
 # context manager.
 
-import contextvars as _contextvars
-from contextlib import contextmanager as _contextmanager
-from typing import Iterator as _Iterator, Optional as _Optional
-
+import contextvars as _contextvars  # noqa: E402 — after contextvar setup block
+from contextlib import contextmanager as _contextmanager  # noqa: E402
+from typing import Iterator as _Iterator  # noqa: E402
+from typing import Optional as _Optional  # noqa: E402
 
 # Thread-safe and asyncio-safe override consumed by detect_backend()
 # callers. A value of None means "no override — use the priority
@@ -193,6 +266,10 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
         _device_override.reset(token)
 
 
+# ``km.doctor()`` diagnostic per ``specs/ml-backends.md`` §7. Eager
+# import for the same CodeQL / ``__all__`` reasons as ``track`` above.
+from kailash_ml.doctor import doctor  # noqa: E402
+
 # Phase 6 (Registry + Tracking) — ``km.track()`` implementation lives in
 # ``kailash_ml.tracking.runner``. Eager-import the public symbol so it
 # appears in ``kailash_ml.__all__`` per orphan-detection §6 and so
@@ -200,10 +277,6 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
 # hop (the `__all__` / `__getattr__` pattern is a CodeQL trigger per
 # zero-tolerance §1a).
 from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
-
-# ``km.doctor()`` diagnostic per ``specs/ml-backends.md`` §7. Eager
-# import for the same CodeQL / ``__all__`` reasons as ``track`` above.
-from kailash_ml.doctor import doctor  # noqa: E402
 
 
 def __getattr__(name: str):  # noqa: N807
@@ -254,6 +327,80 @@ def __getattr__(name: str):  # noqa: N807
 
 __all__ = [
     "__version__",
+    # Canonical MLError hierarchy re-exported from kailash.ml.errors
+    # (ml-tracking §9.2 — exposed at package root so
+    # `from kailash_ml import MLError` works without a lazy __getattr__ hop).
+    "MLError",
+    "TrackingError",
+    "AutologError",
+    "RLError",
+    "BackendError",
+    "DriftMonitorError",
+    "InferenceServerError",
+    "ModelRegistryError",
+    "FeatureStoreError",
+    "AutoMLError",
+    "DiagnosticsError",
+    "DashboardError",
+    "UnsupportedTrainerError",
+    "MultiTenantOpError",
+    "MigrationFailedError",
+    "WorkflowNodeMLContextError",
+    "EnvVarDeprecatedError",
+    "MetricValueError",
+    "ParamValueError",
+    "ActorRequiredError",
+    "TenantRequiredError",
+    "RunNotFoundError",
+    "ExperimentNotFoundError",
+    "TrackerStoreInitError",
+    "InvalidTenantIdError",
+    "ModelSignatureRequiredError",
+    "LineageRequiredError",
+    "ArtifactEncryptionError",
+    "ArtifactSizeExceededError",
+    "AliasNotFoundError",
+    "ErasureRefusedError",
+    "MigrationImportError",
+    "AutologNoAmbientRunError",
+    "AutologUnknownFrameworkError",
+    "RLEnvIncompatibleError",
+    "RLPolicyShapeMismatchError",
+    "ReplayBufferUnderflowError",
+    "RewardModelRequiredError",
+    "FeatureNotYetSupportedError",
+    "UnsupportedPrecision",
+    "UnsupportedFamily",
+    "ReferenceNotFoundError",
+    "InsufficientSamplesError",
+    "DriftThresholdError",
+    "ModelLoadError",
+    "InvalidInputSchemaError",
+    "RateLimitExceededError",
+    "TenantQuotaExceededError",
+    "ShadowDivergenceError",
+    "OnnxExportUnsupportedOpsError",
+    "ModelNotFoundError",
+    "AliasOccupiedError",
+    "CrossTenantLineageError",
+    "ImmutableGoldenReferenceError",
+    "FeatureNotFoundError",
+    "StaleFeatureError",
+    "PointInTimeViolationError",
+    "BudgetExhaustedError",
+    "InsufficientTrialsError",
+    "EnsembleFailureError",
+    "DLDiagnosticsStateError",
+    "ProtocolConformanceError",
+    "SeedReportError",
+    "UnknownTenantError",
+    "AuthorizationError",
+    "LiveStreamError",
+    "RunNotFoundInDashboardError",
+    "fingerprint_classified_value",
+    # km.seed() + SeedReport (W5 — reproducibility surface)
+    "seed",
+    "SeedReport",
     # kailash-ml 2.0 kernel (Phase 2 — scaffolded, filled in Phase 3+)
     "MLEngine",
     "BackendInfo",

@@ -54,6 +54,10 @@ dependencies = [
     "skl2onnx>=1.16",
     "onnxmltools>=1.12",
     "onnxruntime>=1.17",
+    # PyYAML — reads the backend-compat-matrix.yaml package-data file
+    # (W6) at runtime so ``km.doctor`` subcommands can operate against
+    # an updateable matrix without a kailash-ml release.
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

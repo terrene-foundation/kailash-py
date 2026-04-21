@@ -1,0 +1,120 @@
+# Kailash ML — Backend Compatibility Matrix
+# ==========================================
+# Authoritative compatibility data for every supported accelerator
+# backend. Updateable without a kailash-ml SDK release via its own
+# file-format semver (``format_version``). Consumed by
+# ``kailash_ml.doctor.run_subcommand`` and the Round-8 decision-6 gate
+# in ``specs/ml-backends.md § GPU Arch Cutoff``.
+#
+# Contract (DO NOT break without a format_version bump):
+#
+# - ``format_version`` MUST be set and MUST follow semver.
+# - Every backend block MUST have: ``name``, ``min_torch_version``,
+#   ``archs`` (list or null), ``platform_requirement`` (free text),
+#   ``install_hint`` (free text), ``gotchas`` (list, may be empty).
+# - Entries added in a minor bump (format_version X.Y → X.(Y+1)) MUST
+#   be additive. Removals or semantics changes bump the major.
+
+format_version: "1.0.0"
+updated: "2026-04-21"
+
+backends:
+  cpu:
+    name: "CPU"
+    min_torch_version: "2.0.0"
+    archs: null
+    platform_requirement: "Any (Linux x86_64, Linux arm64, macOS, Windows)"
+    install_hint: "pip install kailash-ml (CPU is always available)"
+    gotchas: []
+
+  cuda:
+    name: "NVIDIA CUDA"
+    min_torch_version: "2.0.0"
+    archs:
+      # sm_70+ minimum per ml-backends.md. Pascal (sm_60/sm_61) is
+      # outside the support envelope; CPU fallback is the supported path.
+      - sm_70 # Volta (V100)
+      - sm_75 # Turing (T4, RTX 20xx)
+      - sm_80 # Ampere (A100)
+      - sm_86 # Ampere (RTX 30xx, A40)
+      - sm_89 # Ada (RTX 40xx, L40S)
+      - sm_90 # Hopper (H100, H200)
+    min_compute_capability: "7.0"
+    platform_requirement: "Linux x86_64 OR Linux aarch64 (Jetson) OR Windows x86_64"
+    install_hint: |
+      pip install torch --index-url https://download.pytorch.org/whl/cu124
+      Then: pip install kailash-ml[gpu]
+    gotchas:
+      - "Pascal (sm_60/sm_61) unsupported — use precision='32-true' on CPU."
+      - "Kepler/Maxwell unsupported (pre-Volta)."
+      - "bf16 requires Ampere (sm_80+); Turing falls back to fp16."
+
+  mps:
+    name: "Apple Metal (MPS)"
+    min_torch_version: "2.1.0"
+    archs: null
+    min_macos_version: "14.0" # Sonoma — required for torch 2.1+ MPS kernels
+    platform_requirement: "macOS 14.0+ on Apple Silicon (M1/M2/M3/M4)"
+    install_hint: "pip install torch (MPS is bundled in the standard wheel)"
+    gotchas:
+      - "fp16 has known correctness issues on some ops; bf16 is preferred."
+      - "Sparse ops fall back to CPU silently — watch device_report.warnings."
+      - "torch.use_deterministic_algorithms(True) raises on MPS for some ops."
+
+  rocm:
+    name: "AMD ROCm"
+    min_torch_version: "2.1.0"
+    archs:
+      # Instinct MI series + RDNA3 consumer GPUs. MI100 is excluded
+      # (pre-gfx908 is not supported by torch 2.1+).
+      - gfx908 # MI100, MI210
+      - gfx90a # MI250, MI250X
+      - gfx942 # MI300A, MI300X
+      - gfx1100 # RX 7900 XTX (RDNA3)
+      - gfx1101 # RX 7800 XT
+      - gfx1102 # RX 7700 XT
+    supported_gpus:
+      - "Instinct MI100"
+      - "Instinct MI210"
+      - "Instinct MI250 / MI250X"
+      - "Instinct MI300A / MI300X"
+      - "Radeon RX 7900 XTX / XT"
+      - "Radeon RX 7800 XT"
+      - "Radeon RX 7700 XT"
+    platform_requirement: "Linux x86_64 with ROCm 6.0+"
+    install_hint: |
+      pip install torch --index-url https://download.pytorch.org/whl/rocm6.1
+      xgboost does NOT ship ROCm wheels — device='cuda' on ROCm raises.
+    gotchas:
+      - "HIP_VISIBLE_DEVICES controls GPU selection (NOT CUDA_VISIBLE_DEVICES)."
+      - "xgboost has no ROCm build as of 2.0.3 — raise UnsupportedFamily."
+      - "lightgbm GPU build requires --config-settings=cmake.define.USE_GPU=1."
+
+  xpu:
+    name: "Intel Arc / Data Center GPU Max (XPU)"
+    min_torch_version: "2.5.0" # native XPU path
+    archs: null
+    probe_order:
+      # Native torch.xpu first (2.5+), then IPEX fallback.
+      - "torch.xpu.is_available()"
+      - "intel_extension_for_pytorch"
+    platform_requirement: "Linux x86_64 with Intel GPU drivers + oneAPI runtime"
+    install_hint: |
+      Native (torch >= 2.5): pip install torch
+      IPEX fallback: pip install intel-extension-for-pytorch
+    gotchas:
+      - "IPEX only required for torch < 2.5 — native torch 2.5+ works standalone."
+      - "Determinism flag is not fully honoured on XPU; log a WARN instead of raising."
+
+  tpu:
+    name: "Google TPU (XLA)"
+    min_torch_version: "2.3.0"
+    min_xrt_version: "2.3.0"
+    archs: null
+    platform_requirement: "Google Cloud TPU VM (v2/v3/v4/v5)"
+    install_hint: |
+      pip install torch_xla
+      Requires XRT_TPU_CONFIG env var set by the TPU runtime.
+    gotchas:
+      - "XRT_TPU_CONFIG must be set by the runtime; cold-start probe fails without it."
+      - "Experimental: torchrl on TPU is not release-blocking."
