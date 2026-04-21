@@ -28,9 +28,9 @@ fingerprint (kailash-rs#468 / v3.17.1+).
 See ``specs/kaizen-observability.md`` for:
 
     * Cross-SDK fingerprint contract (byte-identical with Rust).
-    * Third-party vendor policy (no Langfuse / LangSmith / vendor SDK
-      imports per ``rules/independence.md`` — users pass their own
-      :class:`CallableSink`).
+    * Third-party vendor policy (no commercial-SDK imports per
+      ``rules/independence.md`` — users bridge to external sinks via
+      their own :class:`CallableSink`).
     * Classification discipline for
       :class:`~kailash.diagnostics.protocols.TraceEvent.payload` (emitter
       MUST hash classified PKs per

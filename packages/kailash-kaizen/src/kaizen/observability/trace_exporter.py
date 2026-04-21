@@ -15,8 +15,8 @@ SHA-256 fingerprint via
 so a Rust subscriber reading a Python-emitted JSONL line produces the
 same correlation hash as the Python emitter (kailash-rs#468).
 
-Third-party observability vendors (Langfuse, LangSmith, OTel collectors,
-etc.) are deliberately NOT imported from this module.
+Third-party observability vendors (hosted tracing services, OTel
+collectors, etc.) are deliberately NOT imported from this module.
 ``rules/independence.md`` forbids commercial-SDK coupling. Users who
 want those sinks pass a :class:`CallableSink` that wraps whatever they
 want — the in-tree sinks (``JsonlSink``, ``NoOpSink``, ``CallableSink``)
