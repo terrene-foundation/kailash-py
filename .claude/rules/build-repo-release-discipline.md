@@ -1,3 +1,17 @@
+---
+paths:
+  - "pyproject.toml"
+  - "packages/**/pyproject.toml"
+  - "CHANGELOG.md"
+  - "packages/**/CHANGELOG.md"
+  - "packages/**/__init__.py"
+  - "src/kailash/__init__.py"
+  - ".github/workflows/publish-pypi.yml"
+  - ".github/workflows/publish-*.yml"
+  - ".github/workflows/release*.yml"
+  - "deploy/deployment-config.md"
+---
+
 # BUILD Repo Release Discipline
 
 ## Scope
@@ -44,9 +58,12 @@ done
 After `/release` publishes to PyPI, the session MUST verify the new version is installable AND the new surface importable:
 
 ```bash
-# DO — verify from a clean .venv (not the build venv that has editable installs)
-pip install --upgrade "kailash-kaizen==2.10.1" --target /tmp/verify-kaizen-2.10.1
-PYTHONPATH=/tmp/verify-kaizen-2.10.1 python -c "
+# DO — verify from a clean venv, NOT from the build venv that has editable installs
+# (pip --target is BLOCKED — it doesn't install console_scripts and confuses
+#  namespace-package resolution for kailash-* sub-packages. macOS especially.)
+uv venv /tmp/verify-kaizen --python 3.12
+uv pip install --python /tmp/verify-kaizen/bin/python "kailash-kaizen==2.10.1"
+/tmp/verify-kaizen/bin/python -c "
 from kaizen.observability import AgentDiagnostics, TraceExporter
 print(AgentDiagnostics, TraceExporter)
 "
@@ -54,7 +71,12 @@ print(AgentDiagnostics, TraceExporter)
 
 # DO NOT — report done on merge alone
 # "PR #587 merged, observability shipped" — but pip install still returns 2.7.5 (cached PyPI)
+
+# DO NOT — `pip install --target` for verification
+# (script entry points missing; namespace-package resolution wrong on macOS)
 ```
+
+**PyPI cache lag**: `pypi.org/pypi/<pkg>/json` `info.version` field can show the OLD version for up to several minutes after a successful tag-push + publish-workflow-success. Retry the clean-venv install up to 3× with 60s between attempts before declaring release failure. The simple index (`pypi.org/simple/<pkg>/`) can be even slower to reflect the new wheel. If the workflow run shows success and the `.../2.10.1/json` endpoint returns metadata, the release DID happen — trust the verification retry loop.
 
 **Why:** A release can succeed on PyPI metadata but fail on wheel upload, tag collision, or downstream dependency pinning — all of which surface only when a clean install runs the import. The installability check is the "smoke test" that proves the release reached consumers.
 
