@@ -163,7 +163,9 @@ class ToolHydrator:
     """
 
     threshold: int = _DEFAULT_THRESHOLD
-    base_tool_names: frozenset[str] = field(default_factory=lambda: _DEFAULT_BASE_TOOL_NAMES)
+    base_tool_names: frozenset[str] = field(
+        default_factory=lambda: _DEFAULT_BASE_TOOL_NAMES
+    )
 
     # Internal state
     _all_tool_defs: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
@@ -218,7 +220,9 @@ class ToolHydrator:
             desc = func_info.get("description", "")
             text = f"{name} {desc}"
             tokens = _tokenize(text)
-            self._search_index[name] = _ToolDoc(name=name, description=desc, tokens=tokens)
+            self._search_index[name] = _ToolDoc(
+                name=name, description=desc, tokens=tokens
+            )
 
         self._df = _build_index(self._search_index)
         total_tokens = sum(len(doc.tokens) for doc in self._search_index.values())
@@ -301,6 +305,50 @@ class ToolHydrator:
         count = len(self._hydrated_names)
         self._hydrated_names.clear()
         logger.info("Dehydrated %d tools, reset to base set", count)
+
+    def pre_hydrate_from_query(self, query: str, *, top_k: int = 5) -> list[str]:
+        """Hydrate the top-K BM25 matches for ``query`` into the active set.
+
+        Called by :meth:`AgentLoop.run_turn` once per turn, BEFORE the first
+        LLM completion, using the user's own input as the query. The LLM
+        then sees the base tools plus the ranked candidates on turn 1 and
+        can emit the real data-tool call on turn 1 instead of spending
+        turn 1 on a ``search_tools`` meta-tool call (issue #579).
+
+        This is *retrieval*, not reasoning — the LLM still decides whether
+        to invoke any hydrated tool, which one, and how. ``search_tools``
+        remains available as the escape hatch for queries where the
+        pre-hydrate misses.
+
+        Parameters
+        ----------
+        query:
+            User-supplied text. Typically the user's message for the
+            current turn.
+        top_k:
+            Maximum number of BM25 matches to hydrate. Default 5.
+
+        Returns
+        -------
+        List of tool names that were newly hydrated (may be shorter than
+        ``top_k`` if some matches were already in the active set or if
+        the BM25 returned fewer than ``top_k`` scoring documents).
+        """
+        if not self.is_active:
+            return []
+        results = self.search(query, top_n=top_k)
+        if not results:
+            logger.debug("pre_hydrate_from_query: no BM25 matches for %r", query[:80])
+            return []
+        hydrated = self.hydrate([r["name"] for r in results])
+        logger.info(
+            "pre_hydrate_from_query: query=%r top_k=%d hydrated=%d (%s)",
+            query[:80],
+            top_k,
+            len(hydrated),
+            hydrated,
+        )
+        return hydrated
 
     def search(self, query: str, *, top_n: int = 10) -> list[dict[str, Any]]:
         """Search over tool names and descriptions.

@@ -22,16 +22,18 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Callable, Awaitable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
+
     from kaizen_agents.delegate.compact import CompactionResult
     from kaizen_agents.delegate.tools.hydrator import ToolHydrator
 
 from kaizen_agents.delegate.adapters.openai_stream import StreamResult
-from kaizen_agents.delegate.adapters.protocol import StreamEvent, StreamingChatAdapter
+from kaizen_agents.delegate.adapters.protocol import StreamingChatAdapter
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.events import DelegateEvent, ToolCallEnd, ToolCallStart
 
@@ -191,7 +193,9 @@ class Conversation:
         """Append a user message."""
         self.messages.append({"role": "user", "content": content})
 
-    def add_assistant(self, content: str, tool_calls: list[dict[str, Any]] | None = None) -> None:
+    def add_assistant(
+        self, content: str, tool_calls: list[dict[str, Any]] | None = None
+    ) -> None:
         """Append an assistant message, optionally with tool calls."""
         msg: dict[str, Any] = {"role": "assistant"}
         if content:
@@ -214,7 +218,7 @@ class Conversation:
             }
         )
 
-    def compact(self, preserve_recent: int = 4) -> "CompactionResult":
+    def compact(self, preserve_recent: int = 4) -> CompactionResult:
         """Compact the conversation by pruning older messages.
 
         Preserves the system message (always first), the last
@@ -244,7 +248,13 @@ class Conversation:
 _DEFAULT_SYSTEM_PROMPT = """\
 You are kz, a PACT-governed autonomous agent CLI. You help users accomplish \
 tasks by using the tools available to you. Be direct and concise. When you \
-need to take action, use tools. When you have the answer, respond with text."""
+need to take action, use tools. When you have the answer, respond with text.
+
+If the active tool set is missing a tool you need, you may call \
+``search_tools(query=...)`` to discover it. When you already know the tool \
+name you want to reach, you can emit ``search_tools`` and the real tool call \
+in the same tool-call batch — the framework will hydrate first then execute, \
+saving a round-trip."""
 
 
 class AgentLoop:
@@ -419,7 +429,9 @@ class AgentLoop:
         """
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("No OpenAI API key found. Set OPENAI_API_KEY in your .env file.")
+            raise ValueError(
+                "No OpenAI API key found. Set OPENAI_API_KEY in your .env file."
+            )
 
         import httpx
         from openai import AsyncOpenAI
@@ -469,6 +481,14 @@ class AgentLoop:
         self._interrupted = False
         self._last_tool_events: list[DelegateEvent] = []
         self._conversation.add_user(user_message)
+
+        # Pre-hydrate the active tool set from the user's input (issue #579).
+        # BM25 retrieval — not routing: the LLM still decides which tool to
+        # call. This collapses the common-case 2-turn discovery tax to 0 by
+        # letting the LLM see candidate tools on turn 1 instead of forcing
+        # a dedicated ``search_tools`` meta-call.
+        if self._hydrator is not None and self._hydrator.is_active:
+            self._hydrator.pre_hydrate_from_query(user_message, top_k=5)
 
         inner_turns = 0
 
@@ -542,7 +562,9 @@ class AgentLoop:
         """
         return getattr(self, "_last_tool_events", [])
 
-    async def _stream_completion(self) -> AsyncGenerator[tuple[str, StreamResult], None]:
+    async def _stream_completion(
+        self,
+    ) -> AsyncGenerator[tuple[str, StreamResult], None]:
         """Make a streaming completion request and yield events incrementally.
 
         Yields (event_type, stream_result) tuples as they arrive from the
@@ -634,7 +656,9 @@ class AgentLoop:
                     break
                 yield event_type, result
 
-    async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[DelegateEvent]:
+    async def _execute_tool_calls(
+        self, tool_calls: list[dict[str, Any]]
+    ) -> list[DelegateEvent]:
         """Execute tool calls from the model's response.
 
         Independent tool calls are executed in parallel. Results are
@@ -671,7 +695,9 @@ class AgentLoop:
                 arguments = json.loads(func["arguments"]) if func["arguments"] else {}
             except json.JSONDecodeError:
                 error_msg = f"Failed to parse arguments: {func['arguments'][:200]}"
-                logger.warning("Tool call argument parse error for %s: %s", name, error_msg)
+                logger.warning(
+                    "Tool call argument parse error for %s: %s", name, error_msg
+                )
                 return tc_id, name, json.dumps({"error": error_msg})
 
             try:

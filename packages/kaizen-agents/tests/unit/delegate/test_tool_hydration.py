@@ -16,25 +16,24 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kaizen_agents.delegate.config.loader import KzConfig
+from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 from kaizen_agents.delegate.tools.hydrator import (
+    _DEFAULT_THRESHOLD,
     ToolHydrator,
     _bm25_score,
     _build_index,
     _tokenize,
     _ToolDoc,
-    _DEFAULT_THRESHOLD,
 )
 from kaizen_agents.delegate.tools.search import (
     SEARCH_TOOLS_SCHEMA,
     create_search_tools_executor,
 )
-from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
-from kaizen_agents.delegate.config.loader import KzConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,7 +56,9 @@ async def _noop_executor(**kwargs: Any) -> str:
     return json.dumps({"status": "ok"})
 
 
-def _build_registry(tool_count: int) -> tuple[ToolRegistry, dict[str, dict[str, Any]], dict[str, Any]]:
+def _build_registry(
+    tool_count: int,
+) -> tuple[ToolRegistry, dict[str, dict[str, Any]], dict[str, Any]]:
     """Build a ToolRegistry with N tools, returning (registry, defs, executors)."""
     registry = ToolRegistry()
     all_defs: dict[str, dict[str, Any]] = {}
@@ -74,7 +75,9 @@ def _build_registry(tool_count: int) -> tuple[ToolRegistry, dict[str, dict[str, 
     ]
 
     for name, desc in base_tools:
-        registry.register(name, desc, {"type": "object", "properties": {}}, _noop_executor)
+        registry.register(
+            name, desc, {"type": "object", "properties": {}}, _noop_executor
+        )
 
     # Add extra tools up to tool_count
     extra_tools = [
@@ -114,7 +117,9 @@ def _build_registry(tool_count: int) -> tuple[ToolRegistry, dict[str, dict[str, 
     for i, (name, desc) in enumerate(extra_tools):
         if i >= needed:
             break
-        registry.register(name, desc, {"type": "object", "properties": {}}, _noop_executor)
+        registry.register(
+            name, desc, {"type": "object", "properties": {}}, _noop_executor
+        )
 
     # If we need even more tools, generate synthetic ones
     for i in range(needed - len(extra_tools)):
@@ -122,7 +127,9 @@ def _build_registry(tool_count: int) -> tuple[ToolRegistry, dict[str, dict[str, 
             break
         name = f"mcp_synthetic_tool_{i}"
         desc = f"Synthetic tool number {i} for testing"
-        registry.register(name, desc, {"type": "object", "properties": {}}, _noop_executor)
+        registry.register(
+            name, desc, {"type": "object", "properties": {}}, _noop_executor
+        )
 
     # Build defs and executors dicts
     for tool_def in registry._tools.values():
@@ -159,8 +166,12 @@ class TestTokenize:
 class TestBM25Score:
     def test_exact_match_scores_higher(self) -> None:
         docs = {
-            "github": _ToolDoc("github", "Create GitHub issues", _tokenize("github create issues")),
-            "slack": _ToolDoc("slack", "Send Slack messages", _tokenize("slack send messages")),
+            "github": _ToolDoc(
+                "github", "Create GitHub issues", _tokenize("github create issues")
+            ),
+            "slack": _ToolDoc(
+                "slack", "Send Slack messages", _tokenize("slack send messages")
+            ),
         }
         df = _build_index(docs)
         n_docs = len(docs)
@@ -169,9 +180,7 @@ class TestBM25Score:
         github_score = _bm25_score(
             _tokenize("github"), docs["github"], df, n_docs, avgdl
         )
-        slack_score = _bm25_score(
-            _tokenize("github"), docs["slack"], df, n_docs, avgdl
-        )
+        slack_score = _bm25_score(_tokenize("github"), docs["slack"], df, n_docs, avgdl)
         assert github_score > slack_score
         assert slack_score == 0.0
 
@@ -230,7 +239,9 @@ class TestToolHydratorLifecycle:
         hydrator.load_tools(defs, executors)
 
         before = len(hydrator.get_active_tool_defs())
-        hydrated = hydrator.hydrate(["mcp_github_create_issue", "mcp_slack_send_message"])
+        hydrated = hydrator.hydrate(
+            ["mcp_github_create_issue", "mcp_slack_send_message"]
+        )
         after = len(hydrator.get_active_tool_defs())
 
         assert len(hydrated) == 2
@@ -372,7 +383,9 @@ class TestSearchToolsExecutor:
         return hydrator
 
     @pytest.mark.asyncio
-    async def test_search_returns_results(self, hydrator_with_tools: ToolHydrator) -> None:
+    async def test_search_returns_results(
+        self, hydrator_with_tools: ToolHydrator
+    ) -> None:
         executor = create_search_tools_executor(hydrator_with_tools)
         result_str = await executor(query="github issue")
         result = json.loads(result_str)
@@ -382,16 +395,23 @@ class TestSearchToolsExecutor:
         assert "hydrated" in result
 
     @pytest.mark.asyncio
-    async def test_search_auto_hydrates(self, hydrator_with_tools: ToolHydrator) -> None:
+    async def test_search_auto_hydrates(
+        self, hydrator_with_tools: ToolHydrator
+    ) -> None:
         executor = create_search_tools_executor(hydrator_with_tools)
 
         # Before search, the tool is not in the active set
-        assert hydrator_with_tools.get_active_executor("mcp_github_create_issue") is None
+        assert (
+            hydrator_with_tools.get_active_executor("mcp_github_create_issue") is None
+        )
 
         await executor(query="github issue")
 
         # After search, the tool should be hydrated
-        assert hydrator_with_tools.get_active_executor("mcp_github_create_issue") is not None
+        assert (
+            hydrator_with_tools.get_active_executor("mcp_github_create_issue")
+            is not None
+        )
 
     @pytest.mark.asyncio
     async def test_search_empty_query(self, hydrator_with_tools: ToolHydrator) -> None:
@@ -582,3 +602,205 @@ class TestThresholdConfiguration:
         active = hydrator.get_active_tool_defs()
         active_names = {d["function"]["name"] for d in active}
         assert active_names == {"file_read", "bash"}
+
+
+# =====================================================================
+# pre_hydrate_from_query — Issue #579 discovery-tax elimination
+# =====================================================================
+
+
+class TestPreHydrateFromQuery:
+    """Pre-hydrate the active tool set from the user's query.
+
+    Issue #579: eliminate the 2-of-N turn tax where the LLM spends turn 1
+    on a ``search_tools`` meta-call before reaching a real data tool.
+    """
+
+    def test_hydrates_bm25_top_k_for_matching_query(self) -> None:
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        hydrated = hydrator.pre_hydrate_from_query(
+            "create a github issue for the bug", top_k=5
+        )
+
+        assert "mcp_github_create_issue" in hydrated
+        # All hydrated names are now in the active set
+        active = hydrator.get_active_tool_defs()
+        active_names = {d["function"]["name"] for d in active}
+        assert "mcp_github_create_issue" in active_names
+
+    def test_respects_top_k_cap(self) -> None:
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        hydrated = hydrator.pre_hydrate_from_query(
+            "create github issue merge pull request list", top_k=2
+        )
+        # BM25 returns at most top_k candidates
+        assert len(hydrated) <= 2
+
+    def test_noop_when_hydrator_inactive(self) -> None:
+        """Below threshold -> pre_hydrate_from_query is a no-op.
+
+        Sub-threshold registries already expose every tool to the LLM; no
+        pre-hydrate work to do.
+        """
+        hydrator = ToolHydrator(threshold=30)
+        _, defs, executors = _build_registry(10)
+        hydrator.load_tools(defs, executors)
+
+        hydrated = hydrator.pre_hydrate_from_query("create a github issue", top_k=5)
+        assert hydrated == []
+        assert not hydrator.is_active
+
+    def test_noop_on_empty_query(self) -> None:
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        assert hydrator.pre_hydrate_from_query("", top_k=5) == []
+        assert hydrator.pre_hydrate_from_query("   ", top_k=5) == []
+
+    def test_noop_on_no_bm25_match(self) -> None:
+        """Query with no relevant terms returns empty, does not mutate state."""
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        before = hydrator.get_active_tool_defs()
+        hydrated = hydrator.pre_hydrate_from_query("zzzznonexistentzzzz qqqqq", top_k=5)
+        after = hydrator.get_active_tool_defs()
+
+        assert hydrated == []
+        # Active set unchanged
+        assert {d["function"]["name"] for d in before} == {
+            d["function"]["name"] for d in after
+        }
+
+    def test_idempotent_on_repeated_query(self) -> None:
+        """Calling twice with the same query leaves the active set stable.
+
+        Idempotence is at the ACTIVE SET level, not the return-value level:
+        ``hydrate()`` returns every registry hit whether or not it was
+        already hydrated, but the underlying ``_hydrated_names`` is a set
+        — no duplicates accrue.
+        """
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        hydrator.pre_hydrate_from_query("deploy to kubernetes", top_k=5)
+        active_after_first = {
+            d["function"]["name"] for d in hydrator.get_active_tool_defs()
+        }
+
+        hydrator.pre_hydrate_from_query("deploy to kubernetes", top_k=5)
+        active_after_second = {
+            d["function"]["name"] for d in hydrator.get_active_tool_defs()
+        }
+
+        assert active_after_first == active_after_second
+        # And at least one kubernetes-matching tool was hydrated.
+        assert any("kubernetes" in n for n in active_after_first)
+
+    def test_search_tools_remains_available_as_escape_hatch(self) -> None:
+        """Pre-hydrate doesn't remove search_tools; LLM can still discover
+        tools the BM25 pre-hydrate missed.
+        """
+        hydrator = ToolHydrator(threshold=10)
+        _, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        hydrator.pre_hydrate_from_query("github issue", top_k=5)
+        active = hydrator.get_active_tool_defs()
+        active_names = {d["function"]["name"] for d in active}
+        # Base tool set (including search_tools surrogate) remains available.
+        # search_tools itself is registered by AgentLoop, not ToolHydrator;
+        # here we verify the ``file_read`` base tool is still present as a
+        # proxy for "base set preserved".
+        assert "file_read" in active_names
+
+
+class TestAgentLoopCallsPreHydrate:
+    """AgentLoop.run_turn MUST call pre_hydrate_from_query on the user
+    message before the first LLM completion (issue #579).
+    """
+
+    def test_run_turn_invokes_pre_hydrate_when_hydrator_active(self) -> None:
+        hydrator = ToolHydrator(threshold=10)
+        registry, defs, executors = _build_registry(20)
+        hydrator.load_tools(defs, executors)
+
+        # Track calls to pre_hydrate_from_query without mocking the method
+        # (that would replace the behavior we care about).
+        pre_hydrate_calls: list[tuple[str, int]] = []
+        original = hydrator.pre_hydrate_from_query
+
+        def spy(query: str, *, top_k: int = 5) -> list[str]:
+            pre_hydrate_calls.append((query, top_k))
+            return original(query, top_k=top_k)
+
+        hydrator.pre_hydrate_from_query = spy  # type: ignore[method-assign]
+
+        loop = AgentLoop(
+            config=KzConfig(max_turns=1),
+            tools=registry,
+            client=MagicMock(),
+            adapter=MagicMock(),
+            hydrator=hydrator,
+        )
+
+        # Drive one turn with a short-circuit stream (no tool calls -> loop exits)
+        async def fake_stream() -> Any:
+            if False:
+                yield  # make this an async generator
+
+        with patch.object(loop, "_stream_completion", side_effect=fake_stream):
+            asyncio.run(_drain(loop.run_turn("create a github issue for the bug")))
+
+        assert len(pre_hydrate_calls) == 1
+        assert pre_hydrate_calls[0][0] == "create a github issue for the bug"
+        assert pre_hydrate_calls[0][1] == 5
+
+    def test_run_turn_skips_pre_hydrate_when_hydrator_inactive(self) -> None:
+        """Sub-threshold registry -> hydrator.is_active is False -> no
+        pre_hydrate call (all tools are already visible to the LLM).
+        """
+        hydrator = ToolHydrator(threshold=50)
+        registry, defs, executors = _build_registry(15)
+        hydrator.load_tools(defs, executors)
+
+        pre_hydrate_calls: list[tuple[str, int]] = []
+        original = hydrator.pre_hydrate_from_query
+
+        def spy(query: str, *, top_k: int = 5) -> list[str]:
+            pre_hydrate_calls.append((query, top_k))
+            return original(query, top_k=top_k)
+
+        hydrator.pre_hydrate_from_query = spy  # type: ignore[method-assign]
+
+        loop = AgentLoop(
+            config=KzConfig(max_turns=1),
+            tools=registry,
+            client=MagicMock(),
+            adapter=MagicMock(),
+            hydrator=hydrator,
+        )
+
+        async def fake_stream() -> Any:
+            if False:
+                yield
+
+        with patch.object(loop, "_stream_completion", side_effect=fake_stream):
+            asyncio.run(_drain(loop.run_turn("anything")))
+
+        assert pre_hydrate_calls == []
+
+
+async def _drain(gen: Any) -> None:
+    """Exhaust an async generator, discarding yields."""
+    async for _ in gen:
+        pass

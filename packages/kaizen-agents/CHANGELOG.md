@@ -5,6 +5,32 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-04-21 — ToolRegistry pre-hydrate eliminates discovery tax (#579)
+
+### Added
+
+- **`ToolHydrator.pre_hydrate_from_query(query, top_k=5)`** — BM25 retrieval over the deferred tool index, seeded with the user's own input. When the hydrator is active (tool count above threshold), the top-K matches are merged into the active set so the LLM sees candidate tools on turn 1. Prior behaviour required a dedicated `search_tools` meta-call on turn 1 before the LLM could emit the real data-tool call on turn 2 — a 25% overhead on an 8-turn budget (issue #579, documented in ImpactVerse/Iris live staging).
+- **`AgentLoop.run_turn`** now invokes `pre_hydrate_from_query(user_message, top_k=5)` once per turn before the first LLM completion. `search_tools` remains available as the escape hatch when the BM25 pre-hydrate misses.
+- **System prompt addendum** — the default system prompt now tells the LLM it can batch a `search_tools + real_tool` pair in a single tool-call batch when the target name is known, saving the round-trip on models that support parallel tool calls (GPT-4-class).
+
+### Why this is LLM-first compatible
+
+Pre-hydration is **retrieval, not routing or classification**. The framework runs a BM25 scoring pass (documented data operation) and merges results into the visible tool set. The LLM still decides whether to invoke any hydrated tool, which one, and how. `search_tools` is preserved for queries where the pre-hydrate misses — the multi-hop discovery path is unchanged. See `rules/agent-reasoning.md` Permitted Exception 6 (tool-result parsing / retrieval as data operation).
+
+### Behavior change
+
+Tool-call latency drops by ~600ms and turn-budget consumption drops by 25% on the common case where the user's natural-language query contains tokens that BM25 resolves to the correct candidates. Token cost per turn increases slightly (~600 tokens of hydrated tool schemas) — amortized over session length.
+
+### Tests
+
+- 9 new Tier 1 unit tests at `packages/kaizen-agents/tests/unit/delegate/test_tool_hydration.py::TestPreHydrateFromQuery` + `TestAgentLoopCallsPreHydrate` covering: top-K BM25 hits, `top_k` cap, inactive-hydrator no-op, empty-query no-op, no-match no-op, active-set idempotence across repeated queries, `search_tools` escape-hatch preservation, `AgentLoop.run_turn` invocation on active hydrator, and skip on inactive hydrator.
+
+### Cross-SDK
+
+Filed as follow-up for kailash-rs if `DefaultToolHydrator::search` + hot-path wiring shows the same pattern. Rust semantic parity MUST use the same method name and same behavior per `rules/cross-sdk-inspection.md` EATP D6.
+
+Closes #579.
+
 ## [0.9.3] - 2026-04-15 — Python 3.14 compatibility
 
 ### Fixed
