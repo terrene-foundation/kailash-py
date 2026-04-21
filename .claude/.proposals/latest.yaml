@@ -432,6 +432,156 @@ changes:
         Outcome: every BUILD-main version now matches production PyPI.
       memory_entry: "feedback_build_repo_release.md (persistent, indexed in MEMORY.md)"
 
+  - id: kailash-ml-1.0.0-spec-convergence-r8
+    type: specs_promotion
+    layer: Layer-4 (domain knowledge)
+    title: "21 ml-* specs promoted from draft to canonical; 8-persona Round 8 convergence across 2 consecutive clean rounds"
+    summary: |
+      Phase-A through Phase-H iterative spec-convergence cycle for kailash-ml 1.0.0.
+      Eight-persona /redteam panel (cross-spec, closure, newbie-UX, feasibility,
+      industry-parity, TBD-triage, senior-practitioner, spec-compliance) executed
+      across Rounds 1-8 with four 4-by-4 batch waves per round to avoid rate-limit
+      throttling. Rounds 7 and 8 achieved 0 CRIT + 0 HIGH + 0 MED across all 8
+      personas — two consecutive clean rounds satisfying the convergence exit
+      criterion. Specs promoted from `workspaces/kailash-ml-audit/specs-draft/` +
+      `supporting-specs-draft/` to canonical `specs/` at Round-8 merge time.
+    changes:
+      - path: "specs/ml-engines-v2.md"
+        disposition: NEW (replaces legacy specs/ml-engines.md)
+        summary: "MLEngine 1.0.0 — zero-arg construction, 8-method surface, km.* convenience wrappers, canonical Quick Start (§16 SHA-256 fingerprint contract c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00)"
+      - path: "specs/ml-engines-v2-addendum.md"
+        disposition: NEW
+        summary: "Classical-ML surface + EngineInfo/MethodSignature/ParamSpec/ClearanceRequirement frozen dataclasses + LineageGraph/LineageNode/LineageEdge + §E11.3 18-engine discovery registry"
+      - path: "specs/ml-tracking.md"
+        disposition: UPDATE (full v2 rewrite)
+        summary: "ExperimentTracker.create() async factory + ~/.kailash_ml/ml.db canonical + get_current_run() contextvar accessor + 8 _kml_* CREATE TABLE + MLError(Exception) at kailash_ml.errors with 11 typed children + ParamValueError multi-inherit"
+      - path: "specs/ml-registry.md"
+        disposition: NEW
+        summary: "ModelRegistry v2 — RegisterResult.artifact_uris: dict[str, str] + onnx_status Literal + is_golden release-gate + §7.1.1 v1.x @property back-compat shim + §7.1.2 Single-Format-Per-Row DDL Invariant + §5.6 ONNX export probe"
+      - path: "specs/ml-serving.md"
+        disposition: NEW
+        summary: "InferenceServer + ServeHandle, REST+MCP via Nexus, §4.1 batch padding_strategy, §5.2 streaming backpressure (abort_on_disconnect + max_buffered_chunks), §2.5.3 pickle-fallback gate"
+      - path: "specs/ml-autolog.md"
+        disposition: NEW
+        summary: "sklearn/lightgbm/PyTorch Lightning auto-logging contract + DDP rank-0-only emission hardcoded per Decision 4 + metric namespace discipline + non-intrusive patching"
+      - path: "specs/ml-diagnostics.md"
+        disposition: UPDATE (deep rewrite)
+        summary: "DLDiagnostics cross-SDK Diagnostic Protocol + torch-hook training instrumentation + SystemMetricsCollector stub with DL-GAP-2 v1.1 deferral note"
+      - path: "specs/ml-dashboard.md"
+        disposition: NEW
+        summary: "MLDashboard CLI + km.dashboard() non-blocking launcher + Streamlit panels for runs/models/serving/drift"
+      - path: "specs/ml-feature-store.md"
+        disposition: NEW
+        summary: "Polars-native FeatureStore + ConnectionManager backend + point-in-time queries + _kml_feature_groups DDL + ml_context envelope kwarg"
+      - path: "specs/ml-drift.md"
+        disposition: NEW
+        summary: "DriftMonitor KS/chi2/PSI/Jensen-Shannon + reference-vs-current + scheduled monitoring + feature-level reports + retraining hooks"
+      - path: "specs/ml-automl.md"
+        disposition: NEW
+        summary: "AutoMLEngine agent-infused search (grid/random/bayesian/successive-halving) + cost budget + human-approval gate + PACT envelope"
+      - path: "specs/ml-backends.md"
+        disposition: UPDATE (v2 matrix)
+        summary: "6 first-class backends (cpu/cuda/mps/rocm/xpu/tpu) + native-first XPU probe per Decision 5 + backend-compat-matrix.yaml data per Decision 6 + CPU+MPS BLOCKING CI per Decision 7"
+      - path: "specs/ml-rl-core.md"
+        disposition: NEW
+        summary: "RLTrainer + EnvironmentRegistry + PolicyRegistry + km.rl_train() + Stable-Baselines3 + Gymnasium + [rl] extra"
+      - path: "specs/ml-rl-algorithms.md"
+        disposition: NEW
+        summary: "PPO/SAC/DQN/A2C/TD3/DDPG baselines + MaskablePPO + Decision Transformer + hyperparameter presets + algorithm-family contracts"
+      - path: "specs/ml-rl-align-unification.md"
+        disposition: NEW
+        summary: "kailash-ml.rl ↔ kailash-align shared trajectory schema + GRPO/RLOO/PPO-LM interop + reward-hacking signal"
+      - path: "specs/kailash-core-ml-integration.md"
+        disposition: NEW
+        summary: "Core SDK ↔ ML bridge: extras alias pip install kailash[ml], kailash.ml namespace re-export, workflow-node adapters (Decision 14 MAJOR 1.0.0)"
+      - path: "specs/dataflow-ml-integration.md"
+        disposition: NEW
+        summary: "DataFlow ↔ ML bridge: TrainingContext, lineage_dataset_hash sha256:<64hex>, multi-tenant feature-group classification, ML-event subscribers"
+      - path: "specs/nexus-ml-integration.md"
+        disposition: NEW
+        summary: "Nexus ↔ ML bridge: ml-endpoints mount (REST+MCP+WS), UserContext preservation through ServeHandle, dashboard embed"
+      - path: "specs/kaizen-ml-integration.md"
+        disposition: NEW
+        summary: "Kaizen ↔ ML bridge: §2.4 Agent Tool Discovery via km.engine_info() binding §E11.3 MUST 1, SQLiteSink TraceExporter on ~/.kailash_ml/ml.db, shared CostTracker, _kml_agent_traces + _kml_agent_trace_events DDL"
+      - path: "specs/align-ml-integration.md"
+        disposition: NEW
+        summary: "Align ↔ ML bridge: fine-tuning-as-training-engine via LightningModule wrap, LoRA Lightning callback, RL ↔ alignment trajectory unification"
+      - path: "specs/pact-ml-integration.md"
+        disposition: NEW
+        summary: "PACT ↔ ML bridge: ml_context envelope kwarg, ClearanceRequirement tuple on engine methods, governance-gated AutoML + registry, MultiTenantOpError for cross-tenant admin export (Decision 12)"
+      - path: "specs/_index.md"
+        disposition: UPDATE
+        summary: "Replaced 5-row ML Lifecycle section with 16 ml-* rows across 4 sub-sections (Engine Core / Experiment-Registry-Serving / AutoML-Drift-Feature-Dashboard / RL) + NEW ML Integrations section with 6 supporting specs + retained ml-integration.md Legacy row"
+      - path: "packages/kailash-ml/README.md"
+        disposition: UPDATE (Quick Start rewrite)
+        summary: "Replaced 6-import primitive Quick Start with canonical engine-first body from ml-readme-quickstart-body-draft; fingerprint c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00 pinned; Tier-2 test_readme_quickstart_fingerprint_matches_spec guard spec'd at ml-engines-v2 §16.3"
+      - path: "specs/ml-engines.md"
+        disposition: DELETE (replaced by ml-engines-v2.md)
+        summary: "Legacy single-file engines spec retired; all content split across ml-engines-v2 + ml-engines-v2-addendum per rules/specs-authority.md §8 (300-line split rule)"
+    user_approved_decisions:
+      decisions_count: 14
+      citations_count: 129
+      spec_files_with_citations: 13
+      list:
+        - D1 — Status vocabulary FINISHED-only (hard-migrate SUCCESS/COMPLETED at install, no bridge)
+        - D2 — GDPR erasure audit-immutable (sha256:<8hex> fingerprints, never delete audit row)
+        - D3 — Cross-SDK Rust status enum 4-member {RUNNING,FINISHED,FAILED,KILLED} byte-identical
+        - D4 — DDP/FSDP/DeepSpeed rank-0-only hardcoded (torch.distributed.get_rank() == 0)
+        - D5 — XPU dual-path (torch.xpu native + ipex fallback, native-first probe order)
+        - D6 — backend-compat-matrix.yaml as data (packages/kailash-ml/data/, km.doctor reads)
+        - D7 — GPU CI runner CPU+MPS BLOCKING now, CUDA BLOCKING when self-hosted runner lands
+        - D8 — Lightning hard lock-in, NO escape hatch, raw training loops raise UnsupportedTrainerError
+        - D9 — Rust ExperimentTracker async contract start_run()/end_run() explicit (AsyncDrop not stable)
+        - D10 — Single canonical spec per domain, Rust-specific clauses in loom/.claude/variants/rs/
+        - D11 — Legacy namespace sunset at kailash-ml 3.0; 2.x DeprecationWarning; 1.x back-compat shim
+        - D12 — Cross-tenant admin export MultiTenantOpError in 1.0.0; PACT-gated post-1.0 spec
+        - D13 — Extras naming hyphens across all specs ([rl-offline], [autolog-lightning], etc.)
+        - D14 — Package version at merge kailash-ml 1.0.0 MAJOR (SQLiteTrackerBackend deleted, two registries merged, status vocab migration, mandatory tenant_id+actor_id+audit)
+    convergence_evidence:
+      rounds_executed: 8
+      final_round_verdict: "0 CRIT + 0 HIGH + 0 MED across all 8 personas"
+      consecutive_clean_rounds: 2
+      persona_convergence_milestones:
+        - "Newbie UX: 3 consecutive clean rounds (R6+R7+R8)"
+        - "TBD re-triage: 5 consecutive clean rounds (R4+R5+R6+R7+R8)"
+        - "Spec-compliance: 3 consecutive clean rounds (R6+R7+R8) + 7/7 G-REG + 4/4 H-REG"
+        - "Industry parity: 4 consecutive stable rounds (R5+R6+R7+R8) at 24/25 GREEN"
+        - "Senior-practitioner: CERTIFIED R4-R8, trajectory A10-3 HIGH → A11-NEW-1 MED → A11-NEW-2 MED → MED-R7-1 MED → ∅ (terminated)"
+        - "Cross-spec + Closure + Feasibility: 2 consecutive clean (R7+R8)"
+      canonical_fingerprints:
+        readme_quickstart_sha256: "c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00"
+      deferred_v1_1:
+        - "SystemMetricsCollector (industry-parity #7 PARTIAL, DL-GAP-2)"
+        - "ModelCard generator, cost dashboard, DatasetVersion surface"
+        - "Inference-time explainability, quantization/pruning/distillation primitives"
+        - "BYO-judge leaderboard, identity-provider binding"
+    cross_sdk:
+      kailash_rs_issue: "#502"
+      status: "parity issue updated with 7-package wave context; spec overlay path via loom/.claude/variants/rs/specs/ml-*.md post /sync"
+    release_wave:
+      package_count: 7
+      packages:
+        - "kailash 2.9.0 (ml extras alias)"
+        - "kailash-pact 0.10.0 (ml_context envelope kwarg + ClearanceRequirement)"
+        - "kailash-nexus 2.2.0 (ml-endpoints mount)"
+        - "kailash-kaizen 2.12.0 (§2.4 Agent Tool Discovery + SQLiteSink)"
+        - "kailash-align 0.5.0 (ml-unification)"
+        - "kailash-dataflow 2.1.0 (TrainingContext + lineage_dataset_hash)"
+        - "kailash-ml 1.0.0 (the 21-spec body)"
+    reasoning: |
+      This /codify cycle is an exceptional-scope spec promotion rather than a
+      typical rule/skill codification. The 21 spec files constitute the complete
+      authoritative contract for kailash-ml 1.0.0 MAJOR — every behavior, DDL
+      table, km.* verb signature, dataclass shape, and cross-framework
+      integration surface is pinned at spec level before /implement begins.
+      Loom /sync classification: Layer-4 domain knowledge, specific to kailash-py
+      BUILD repo. The specs themselves remain local (specs/ is BUILD-repo-only);
+      loom/ classifier reviews whether any patterns from the Round-8 convergence
+      protocol (8-persona panel + 4-by-4 rate-limit batching + iterative
+      Phase-A-through-H shard plan) warrant promotion to CO methodology artifacts.
+      Specifically, the "narrowing trajectory" pattern (HIGH → MED → ∅ across
+      rounds) is a convergence signal worth codifying in CO rules.
+
 # Deferred follow-ups (not new rules, but session-level action items):
 deferred:
   - topic: specs-authority-full-sibling-sweep

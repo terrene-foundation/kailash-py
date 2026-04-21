@@ -68,15 +68,57 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | [trust-posture.md](trust-posture.md) | TrustPosture state machine, BudgetTracker, PostureStore, audit store                 |
 | [trust-crypto.md](trust-crypto.md)   | Ed25519 signing, AES-256-GCM, key management, store backends, RBAC, interop          |
 
-## ML Lifecycle (2.0 — clean-sheet contracts)
+## ML Lifecycle 2.0 — Engine Core
 
-| File                                   | Description                                                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [ml-engines.md](ml-engines.md)         | **MLEngine single-point Engine contract**, `Trainable` protocol, `TrainingResult`, multi-tenancy, ONNX-default, migration shim (v2.0) |
-| [ml-backends.md](ml-backends.md)       | **6 first-class backends** (cpu/cuda/mps/rocm/xpu/tpu), `detect_backend()`, precision auto, Lightning integration, hardware-gated CI  |
-| [ml-tracking.md](ml-tracking.md)       | **ExperimentTracker/ModelRegistry/ArtifactStore** (MLflow-replacement), async-context, MCP surface, GDPR erasure, MLflow import       |
-| [ml-diagnostics.md](ml-diagnostics.md) | **DLDiagnostics adapter** (cross-SDK Diagnostic Protocol), torch-hook training instrumentation, plotly gated by `[dl]` extra (PR#1)   |
-| [ml-integration.md](ml-integration.md) | (DEPRECATED — superseded by ml-engines/backends/tracking trio above; retained for 1.x legacy-namespace reference until 3.0 cut)       |
+| File                                                   | Description                                                                                                                                                                             |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ml-engines-v2.md](ml-engines-v2.md)                   | **MLEngine single-point Engine contract (1.0.0)**, 8-method surface, `Trainable` protocol, `TrainingResult` + `DeviceReport`, `km.*` convenience wrappers, canonical README Quick Start |
+| [ml-engines-v2-addendum.md](ml-engines-v2-addendum.md) | **Engine addendum**: classical-ML surface, scikit-learn / lightgbm / xgboost / catboost trainables, legacy v1 namespace migration, Pydantic-to-DataFrame adapter                        |
+| [ml-backends.md](ml-backends.md)                       | **6 first-class backends** (cpu/cuda/mps/rocm/xpu/tpu), `detect_backend()`, precision auto, Lightning integration, hardware-gated CI matrix                                             |
+| [ml-diagnostics.md](ml-diagnostics.md)                 | **DLDiagnostics adapter** (cross-SDK Diagnostic Protocol), torch-hook training instrumentation, plotly gated by `[dl]` extra (PR#1 of #567)                                             |
+
+## ML Lifecycle 2.0 — Experiment, Registry, Serving
+
+| File                             | Description                                                                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ml-tracking.md](ml-tracking.md) | **ExperimentTracker** (MLflow-replacement), async-context ambient-run scope, nested runs, auto-logging, GDPR erasure, MLflow import bridge                                 |
+| [ml-registry.md](ml-registry.md) | **ModelRegistry** (staging → shadow → production → archived lifecycle), alias resolution, `ArtifactStore` abstraction (LocalFile / CAS sha256), ONNX-default serialisation |
+| [ml-serving.md](ml-serving.md)   | **Inference server + ServeHandle**, REST / MCP channels, model-signature input validation, batch mode, Nexus integration, `km.serve()` dispatch                            |
+| [ml-autolog.md](ml-autolog.md)   | **Auto-logging contract**: sklearn / lightgbm / PyTorch Lightning / torch training loops, ambient-run detection, metric namespace discipline, non-intrusive patching       |
+
+## ML Lifecycle 2.0 — AutoML, Drift, Feature Store, Dashboard
+
+| File                                       | Description                                                                                                                                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ml-automl.md](ml-automl.md)               | **AutoMLEngine** (agent-infused with LLM guardrails), search strategies (grid / random / bayesian / successive-halving), cost budget, human-approval gate, audit trail              |
+| [ml-drift.md](ml-drift.md)                 | **DriftMonitor** (KS / chi2 / PSI / Jensen-Shannon), reference-vs-current comparison, scheduled monitoring, feature-level + overall drift reports, drift-triggered retraining hooks |
+| [ml-feature-store.md](ml-feature-store.md) | **FeatureStore** (polars-native, ConnectionManager-backed), point-in-time queries, schema enforcement, feature versioning, tenant-scoped keys                                       |
+| [ml-dashboard.md](ml-dashboard.md)         | **MLDashboard** (`kailash-ml-dashboard` CLI + `km.dashboard()` launcher), runs / models / serving visualisation, plotly-based, notebook-friendly background-thread launch           |
+
+## ML Lifecycle 2.0 — Reinforcement Learning
+
+| File                                                     | Description                                                                                                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ml-rl-core.md](ml-rl-core.md)                           | **RL core surface**: `RLTrainer`, `EnvironmentRegistry`, `PolicyRegistry`, `km.rl_train()`, Stable-Baselines3 + Gymnasium integration, `[rl]` extra                 |
+| [ml-rl-algorithms.md](ml-rl-algorithms.md)               | **RL algorithms catalog**: PPO / SAC / DQN / A2C / TD3 / DDPG baselines, MaskablePPO, Decision Transformer, hyperparameter presets, algorithm-family contracts      |
+| [ml-rl-align-unification.md](ml-rl-align-unification.md) | **RL + Alignment unification**: shared trajectory schema, GRPO / RLOO / PPO-LM cross-framework interop, reward-hacking signal, kailash-align ↔ kailash-ml.rl bridge |
+
+## ML Integrations (cross-framework supporting specs)
+
+| File                                                             | Description                                                                                                                                     |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [kailash-core-ml-integration.md](kailash-core-ml-integration.md) | Core SDK ↔ ML bridge: extras alias (`pip install kailash[ml]`), workflow-node adapters, `kailash.ml` namespace re-export                        |
+| [dataflow-ml-integration.md](dataflow-ml-integration.md)         | DataFlow ↔ ML bridge: `TrainingContext`, `lineage_dataset_hash` provenance, multi-tenant feature-group classification, ML-event subscribers     |
+| [nexus-ml-integration.md](nexus-ml-integration.md)               | Nexus ↔ ML bridge: ml-endpoints mount (REST + MCP + WS), `UserContext` preservation, channel-aware `ServeHandle`, dashboard embed               |
+| [kaizen-ml-integration.md](kaizen-ml-integration.md)             | Kaizen ↔ ML bridge: §2.4 Agent Tool Discovery via `km.engine_info()`, `SQLiteSink` TraceExporter, shared `CostTracker`, `_kml_agent_*` tables   |
+| [align-ml-integration.md](align-ml-integration.md)               | Align ↔ ML bridge: fine-tuning-as-training-engine, LoRA Lightning callback, RL ↔ alignment trajectory unification via `ml-rl-align-unification` |
+| [pact-ml-integration.md](pact-ml-integration.md)                 | PACT ↔ ML bridge: `ml_context` envelope kwarg, D/T/R clearance on engine methods, governance-gated AutoML + registry                            |
+
+## ML Lifecycle (Legacy)
+
+| File                                   | Description                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [ml-integration.md](ml-integration.md) | (DEPRECATED — superseded by the ml-engines-v2 / ml-backends / ml-tracking trio above; retained for 1.x legacy-namespace reference until 3.0 cut) |
 
 ## Alignment (LLM Fine-Tuning)
 

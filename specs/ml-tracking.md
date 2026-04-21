@@ -1,159 +1,316 @@
-# Kailash ML Tracking — Experiment Tracker, Model Registry, Artifact Store
+# Kailash ML Tracking — Canonical Experiment Tracker, Model Registry, Artifact Store
 
-Version: 2.0.0 (draft)
+Version: 1.0.0 (draft)
 Package: `kailash-ml`
-Parent domain: ML Lifecycle (`ml-engines.md` covers training; `ml-features.md` covers feature storage (future); `ml-drift.md` covers drift detection (future))
-Scope authority: `ExperimentTracker`, `ModelRegistry`, `ArtifactStore`, their interop, their MCP surface, multi-tenant storage, retention, migration
+Status: DRAFT at `workspaces/kailash-ml-audit/specs-draft/ml-tracking-draft.md`. Promotes to `specs/ml-tracking.md` after round-2 /redteam convergence.
+Supersedes: the round-1 draft at the same path; the tracking sections of `specs/ml-engines.md §1.2 (ModelRegistry)` and `§1.6 (ExperimentTracker)` when kailash-ml 1.0 ships.
+Parent domain: ML Lifecycle.
+Sibling specs: `ml-autolog.md`, `ml-diagnostics.md`, `ml-dashboard.md`, `ml-rl.md`, `ml-registry.md`, `ml-serving.md`, `ml-drift.md`, `ml-feature-store.md`, `ml-automl.md`, `ml-engines.md`.
 
-Status: DRAFT — authored at `workspaces/kailash-ml-audit/specs-draft/ml-tracking-draft.md`. Becomes `specs/ml-tracking.md` after human review. Supersedes the tracking sections of `ml-engines.md §1.2 (ModelRegistry)` and `§1.6 (ExperimentTracker)` when the 2.0 redesign lands.
-
-Origin: `workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md` §2 (vision), §3.3 (MLflow parity gaps), §5 (API), §6.7 (PyCaret/MLflow-better claims).
+Origin of this rewrite: `workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md` theme T1 (two-tracker split, CRIT), T6 (spec-to-code drift, CRIT), T7 (industry parity, HIGH). Closes findings `round-1-spec-compliance.md:1.3, 1.4, 1.5, 1.6, 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.14, 1.15, 1.16, 1.17, 1.18, 1.19, 1.20`.
 
 ---
 
-## 1. Scope
+## 1. Scope + Non-Goals
 
 ### 1.1 In Scope
 
-This spec is authoritative for:
+- **ONE** canonical experiment tracker engine (`ExperimentTracker`) that writes to **ONE** default database (`~/.kailash_ml/ml.db`) that **ONE** default dashboard (`MLDashboard`) reads from. The path `~/.kailash_ml/ml.db` is canonical across every spec in this bundle.
+- Run lifecycle (start / finish / fail / kill), nested parent/child runs, SIGINT/SIGTERM auto-close.
+- Logging primitives (`log_param`, `log_params`, `log_metric`, `log_metrics`, `log_artifact`, `log_figure`, `log_model`, `attach_training_result`, `set_tags`).
+- Query primitives returning `polars.DataFrame` (NOT `list[Run]`).
+- `diff_runs(run_a, run_b) -> RunDiff` with a frozen dataclass contract.
+- Storage schema (SQLite default, Postgres production, `sqlite+memory` alias, S3 artifact backend).
+- `kailash_ml:v1:{tenant_id}:{resource}:{id}` tenant-scoped keyspace per `rules/tenant-isolation.md` §1.
+- `actor_id` kwarg + audit trail on every mutation.
+- 15 typed exceptions in the `TrackingError` family (adds `MetricValueError` + `ParamValueError` to the round-1 list of 13, finite-check symmetry for both metric and param paths). Cross-cutting errors `UnsupportedTrainerError` (Decision 8) and `MultiTenantOpError` (Decision 12) sit at the `MLError` root alongside the family classes — see §9.1.
+- `km.track()` contextvar that autolog, DL diagnostics, and RL diagnostics consume.
+- `TrackerMCPServer` MCP surface for agent-driven introspection.
+- `km.import_mlflow(uri, *, tenant_id=None)` bulk import from MLflow.
+- `MLDashboard(db_url=None)` that defaults to the same canonical DB.
+- Test matrix (Tier 1 unit per method + Tier 2 wiring `test_<method>_wiring.py` per `rules/facade-manager-detection.md` §2).
 
-- **Experiment runs** — lifecycle, nesting, metadata capture, metrics, parameters, tags, environment, auto-logging
-- **Run metadata** — start/end time, host, Python/CUDA/Lightning versions, git SHA, device, accelerator, precision, tracker run_id
-- **Model registry** — model names, integer-monotonic versions, aliases (`production`, `staging`, `champion`, etc.), stages (legacy compatibility), signatures, lineage
-- **Artifact storage** — content-addressed blob storage, multiple backends (`file://`, `sqlite://`, `s3://`, `gs://`, `azure://`, `http(s)://`), SHA-256 dedupe, encryption at rest, retention policies
-- **MCP surface** — tools exposed via `kailash-mcp` framework for agent-driven experiment introspection and run comparison
-- **Multi-tenant storage** — tenant-scoped storage key shapes, `TenantRequiredError` semantics, tenant-aware invalidation
-- **Retention and GDPR** — per-alias retention windows, data-subject erasure, audit-trail of erasure
-- **Migration** — bulk import from MLflow servers (runs, experiments, models, artifacts)
-- **In-memory mode** — `sqlite+memory` store for notebook workflows with no persistence
-- **Cross-SDK alignment** — shared contract between kailash-py and kailash-rs, with per-language backend notes
+### 1.2 Out of Scope (Owned by Sibling Specs)
 
-### 1.2 Out of Scope
+- Training itself → `ml-engines.md`.
+- Auto-instrumentation of sklearn/Lightning/transformers/xgboost/lightgbm → `ml-autolog.md`.
+- DL gradient/activation diagnostics → `ml-diagnostics.md`.
+- Dashboard HTTP/SSE/WebSocket server implementation → `ml-dashboard.md`.
+- RL reward-curve capture → `ml-rl.md`.
+- Model serving → `ml-serving.md`.
+- Drift → `ml-drift.md`.
+- Feature store → `ml-feature-store.md`.
+- AutoML orchestration → `ml-automl.md`.
 
-- **Training itself** — `ml-engines.md` owns the `Engine`, `Trainable` protocol, backend matrix, Lightning integration, ONNX export path. This spec consumes training outputs via `log_model` / `register` and records the lineage.
-- **Feature storage** — the future `ml-features.md` owns `FeatureStore`, point-in-time correctness, schema evolution. This spec references a feature store version as part of lineage but does not define its shape.
-- **Drift detection** — the future `ml-drift.md` owns `DriftMonitor`, PSI/KS computation, drift reports. This spec records drift-report run_ids as child runs but does not define drift semantics.
-- **Model serving** — `ml-engines.md §InferenceServer` owns `engine.serve()` and prediction endpoints. This spec records which model version is served via `alias="production"` but does not define the serving contract.
-- **Alignment / LLM fine-tuning** — `alignment-training.md` and `alignment-serving.md` own those flows. Tracking integration points are at the alignment spec, not here.
+### 1.3 Non-Goals
+
+- **No second tracker.** The legacy `SQLiteTrackerBackend` class is DELETED at 1.0.0 (§2.3). The internal `SQLiteStorageDriver` is a private implementation detail of `ExperimentTracker`; the user-facing API is `ExperimentTracker` / `km.track()` only.
+- **No MLflow-compat mode switch.** We import from MLflow; we do not serve the MLflow REST API.
+- **No proprietary-vendor bridges** (`langfuse`, `langsmith`, `wandb`) in the tracking core — third-party sinks are a future extension, not 2.0 scope.
 
 ---
 
-## 2. `ExperimentTracker` Async-Context Contract
+## 2. One-Tracker Contract
 
-### 2.1 Construction
+### 2.1 Canonical Engine
 
-**MUST**: `ExperimentTracker` instances MUST be constructed via one of two entry points:
+**MUST**: `ExperimentTracker` in `kailash_ml.engines.experiment_tracker` is the sole canonical tracker engine. `km.track()` is the async-context entry point that constructs an `ExperimentRun` wrapping the engine. A second user-facing tracker class is BLOCKED.
 
 ```python
-# DO — convenience entry point
+# DO — single canonical path
 import kailash_ml as km
-async with km.track(
-    name="cart-abandonment-v3",
-    tags={"env": "staging", "team": "growth"},
-    tenant_id="acme",
-    store="postgresql://...",
-) as tracker:
-    ...
+async with km.track("my-exp") as run:
+    await run.log_metric("loss", 0.32, step=1)
 
-# DO — explicit construction
-from kailash_ml import ExperimentTracker
-tracker = await ExperimentTracker.open(
-    name="cart-abandonment-v3",
-    tenant_id="acme",
-    store="postgresql://...",
-)
-try:
-    ...
-finally:
-    await tracker.close()
-
-# DO NOT — synchronous construction with manual lifecycle
-tracker = ExperimentTracker(conn, name="exp")  # BLOCKED — bypasses async context, leaks connection
+# DO NOT — parallel user-facing tracker (legacy class DELETED at 1.0.0)
+from kailash_ml.tracking import SQLiteTrackerBackend  # BLOCKED — removed at 1.0.0
+backend = SQLiteTrackerBackend("my.db")
+backend.log_metric(...)
 ```
 
-**Why:** The async context manager is the only construction path that guarantees connection lifecycle, run auto-completion, and flush-on-exit. Direct constructors leak the database connection and leave runs in `RUNNING` state forever.
+**Why:** Round-1 T1 documented `km.track()` → `ExperimentRun` writing to `~/.kailash_ml/ml.db` while `MLDashboard` read a second store path. The two DBs plus two code paths meant a `km.track()` run was invisible to the dashboard. A single canonical engine against a single canonical path (`~/.kailash_ml/ml.db`) is the only structural defense — `rules/facade-manager-detection.md` §1 applies.
 
 **BLOCKED rationalizations:**
 
-- "I only need to log one metric, context manager is overkill"
-- "The existing ExperimentTracker constructor works fine"
-- "We can flush manually at the end of the script"
+- "The 1.x engine stays for back-compat; the new one is parallel"
+- "Two stores with a bridge class is cleaner than migrating"
+- "Notebook users want a lighter API"
 
-### 2.2 Async Context Manager Contract
+Origin: closes `round-1-spec-compliance.md:1.8, 1.9`; round-1 theme T1.
 
-**MUST**: `ExperimentTracker` MUST implement `__aenter__` / `__aexit__` and auto-close the active run with status:
+### 2.2 Default Store Path
 
-- `COMPLETED` if the block exits normally
-- `FAILED` if the block raises any exception (the exception MUST be re-raised, not swallowed — `except: pass` on `__aexit__` is BLOCKED per `rules/zero-tolerance.md` Rule 3)
-- `KILLED` if `asyncio.CancelledError` bubbles through
+**MUST**: The default database path is `~/.kailash_ml/ml.db` (resolved as `Path.home() / ".kailash_ml" / "ml.db"`). This path is used by BOTH `km.track()` AND `MLDashboard()` when neither caller passes an explicit `store=` / `db_url=`. Any other default is BLOCKED.
 
 ```python
-# DO — exceptions re-raise, status auto-set
-async with km.track("exp") as t:
-    await t.log_metric("accuracy", 0.91)
-    raise RuntimeError("training diverged")
-# tracker recorded status=FAILED, error_type=RuntimeError, error_msg="training diverged"
-# exception propagates to caller
+# DO — single default
+async with km.track("x") as run: ...                       # writes ~/.kailash_ml/ml.db
+dashboard = MLDashboard()                                  # reads ~/.kailash_ml/ml.db
+dashboard.start()
 
-# DO NOT — silent swallow on __aexit__
-async def __aexit__(self, exc_type, exc, tb):
-    await self._end_run(status="FAILED" if exc else "COMPLETED")
-    return True  # BLOCKED — suppresses exception
+# DO NOT — separate default for dashboard
+dashboard = MLDashboard(db_url="sqlite:///some-other.db")  # BLOCKED as default
 ```
 
-**Why:** Context managers that swallow exceptions hide training failures as "completed runs," and the next session's leaderboard shows a diverged model as the best candidate. Status must reflect reality.
+**Why:** `packages/kailash-ml/src/kailash_ml/dashboard/__init__.py:46` in 0.x shipped a divergent default path, splitting every first-time user's data across two files. The canonical `~/.kailash_ml/ml.db` is the only path any ML primitive defaults to; `MLDashboard()`, `km.track()`, and every engine referenced in `ml-engines-v2-addendum §E1.1` read or write the same single location. The `1_0_0_merge_legacy_stores` numbered migration (§16) consolidates any 0.x alternate-path content into `ml.db` atomically on upgrade.
 
-### 2.3 Nested Runs
+Origin: closes `round-1-spec-compliance.md:1.8`.
 
-**MUST**: `tracker.run(name=, tags=)` MUST return an async context manager that creates a child run whose `parent_run_id` is the enclosing run. Nesting depth is unbounded.
+### 2.3 Storage-Driver Migration
+
+**MUST**: The legacy `kailash_ml.tracking.sqlite_backend.SQLiteTrackerBackend` class is **DELETED** at 1.0.0 per Decision 14 (breaking-change list) and `rules/orphan-detection.md` §3 (removed = deleted, not deprecated). The internal storage surface is replaced by `kailash_ml._storage.sqlite_driver.SQLiteStorageDriver`, consumed ONLY by `ExperimentTracker`. No deprecation shim, no `DeprecationWarning` re-export, no compatibility alias. Users upgrading from 0.x MUST switch to `km.track()` / `ExperimentTracker.create()`.
 
 ```python
-# DO — nested child runs
-async with km.track("automl-sweep") as parent:
-    await parent.log_param("strategy", "bayesian")
+# DO — internal storage driver
+# kailash_ml/engines/experiment_tracker.py
+from kailash_ml._storage.sqlite_driver import SQLiteStorageDriver  # renamed + moved
+
+# DO NOT — public class import path (DELETED at 1.0.0)
+from kailash_ml.tracking import SQLiteTrackerBackend  # BLOCKED — class removed
+```
+
+**Why:** `rules/orphan-detection.md` §3: removed = deleted, not deprecated. A `DeprecationWarning` shim leaves the orphan pattern alive for another release cycle and continues to mislead users into the split-store bug. 1.0.0 is the MAJOR boundary per Decision 14; breaking removal is correct disposition. The `1_0_0_delete_sqlitetrackerbackend` numbered migration (§16) removes the import at the same atomic upgrade point where the legacy store is consolidated.
+
+### 2.4 `ExperimentRun` Becomes A Thin Wrapper
+
+**MUST**: The legacy `ExperimentRun` class at `kailash_ml.tracking.runner` MUST become a thin async-context-manager wrapper around the engine's run handle. Every `ExperimentRun` method MUST delegate to the engine (no duplicate state, no duplicate SQL, no duplicate run_id generation).
+
+```python
+# DO — delegate to engine
+class ExperimentRun:
+    def __init__(self, tracker: "ExperimentTracker", run_record: RunRecord):
+        self._tracker = tracker
+        self._run = run_record
+
+    async def log_metric(self, key, value, *, step=None, timestamp=None):
+        return await self._tracker.log_metric(
+            self._run.run_id, key, value, step=step, timestamp=timestamp,
+        )
+
+# DO NOT — parallel implementation
+class ExperimentRun:
+    def __init__(self, path: Path):
+        # Any second storage layer that is NOT the engine is BLOCKED. The legacy
+        # SQLiteTrackerBackend class (0.x) is DELETED at 1.0.0 (see §2.3).
+        self._storage = _LegacyDirectSQLite(path)  # duplicates engine, splits state
+```
+
+**Why:** The two implementations are how the two DBs were born. One class owning the API, one class proxying to it, is the only long-term stable shape.
+
+### 2.5 Canonical Async Construction (CRIT-2)
+
+**MUST**: `ExperimentTracker` has ONE canonical async construction path:
+
+```python
+# kailash_ml/engines/experiment_tracker.py
+class ExperimentTracker:
+    @classmethod
+    async def create(
+        cls,
+        store_url: Optional[str] = None,
+        *,
+        default_tenant_id: Optional[str] = None,
+    ) -> "ExperimentTracker":
+        """Sole async construction path for ExperimentTracker.
+
+        Args:
+            store_url: SQLite / Postgres / MySQL URL. When None, defaults to
+                `f"sqlite:///{Path.home() / '.kailash_ml' / 'ml.db'}"` per §2.2.
+                Accepts `sqlite+memory` alias per §6.1.
+            default_tenant_id: Engine-level default tenant resolved at step 4
+                of §7.2. Set only for single-tenant dev / notebook use.
+
+        Returns:
+            Fully-initialized ExperimentTracker ready for use.
+        """
+        ...
+```
+
+Store-URL resolution routes through `kailash_ml._env.resolve_store_url(explicit=...)` per `ml-engines-v2.md §2.1 MUST 1b` (single shared helper; hand-rolled `os.environ.get(...)` is BLOCKED per `rules/security.md` § Multi-Site Kwarg Plumbing). The `store_url=None` default delegates the `KAILASH_ML_STORE_URL` / `KAILASH_ML_TRACKER_DB` bridge / `~/.kailash_ml/ml.db` precedence chain to the helper — sibling specs that construct an `ExperimentTracker` directly (`ml-rl-core §13.1`, `ml-rl-align-unification §4`, `ml-engines-v2 §2.3`, `ml-engines-v2-addendum §E1.2`) inherit the same precedence through the helper.
+
+Every sibling spec that constructs an `ExperimentTracker` directly (e.g. `ml-rl-core §13.1`, `ml-rl-align-unification §4`, `ml-engines-v2 §2.3`, `ml-engines-v2-addendum §E1.2`) MUST call `await ExperimentTracker.create(...)`. Direct `ExperimentTracker(conn)` / `ExperimentTracker(...)` synchronous instantiation is BLOCKED as user-facing API.
+
+```python
+# DO — canonical async construction
+tracker = await ExperimentTracker.create()                              # defaults to ~/.kailash_ml/ml.db
+tracker = await ExperimentTracker.create(f"sqlite:///{tmp_path}/t.db")  # explicit path
+tracker = await ExperimentTracker.create(store_url=None, default_tenant_id="dev")
+
+# DO NOT — synchronous constructor as user API
+tracker = ExperimentTracker(conn)          # BLOCKED — internal construction only
+tracker = ExperimentTracker("path.db")     # BLOCKED — use .create(store_url=...)
+
+# DO NOT — `.open()` or `.connect()` or other legacy factory names
+tracker = await ExperimentTracker.open(default_tenant_id="dev")  # BLOCKED — rename to .create()
+```
+
+**Why:** A single canonical constructor is the entry-point for every wiring test and every sibling spec. Allowing both `ExperimentTracker(conn)` and `ExperimentTracker.create(...)` creates two init paths that drift (different schema setup, different connection lifecycle, different default-tenant resolution). CRIT-2 of the /redteam Phase-B closure pinned this as a hard rename — every reference in every spec is updated to `await ExperimentTracker.create(...)`.
+
+Origin: CRIT-2 (round-2b closure verification); closes spec drift across ml-engines-v2, ml-rl-core, ml-rl-align-unification, ml-tracking.
+
+---
+
+## 3. Run Lifecycle
+
+### 3.1 Entry-Point Signature
+
+```python
+@asynccontextmanager
+async def track(
+    experiment: str,
+    *,
+    tags: Optional[Mapping[str, str]] = None,
+    tenant_id: Optional[str] = None,
+    parent_run_id: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    store: Optional[Union[str, "ExperimentTracker"]] = None,
+    data_subject_ids: Optional[List[str]] = None,
+) -> AsyncIterator["ExperimentRun"]: ...
+```
+
+**MUST**: Every positional/keyword argument above MUST be honored. Silent ignore of `parent_run_id` (seen in round-1) or `tenant_id` (round-1 T3) is BLOCKED.
+
+### 3.2 Status Transitions
+
+**MUST**: A run's `status` field transitions strictly as:
+
+```
+RUNNING ─── normal exit ──▶ FINISHED
+RUNNING ─── exception ──▶ FAILED  (exception re-raised, never swallowed)
+RUNNING ─── SIGINT/SIGTERM/CancelledError ──▶ KILLED
+```
+
+`except: pass` on `__aexit__` is BLOCKED per `rules/zero-tolerance.md` Rule 3. The ONLY valid status values are `"RUNNING"`, `"FINISHED"`, `"FAILED"`, `"KILLED"` (Decision 3 — 4-member enum byte-identical with kailash-rs, see §3.5). `status="COMPLETED"` and `status="SUCCESS"` are NOT valid — any legacy 0.x rows carrying those values MUST be hard-coerced to `"FINISHED"` by the `1_0_0_rename_status` numbered migration (§16). No accept-on-read bridge; no runtime coercion fallback.
+
+```python
+# DO — re-raise, record FAILED
+async def __aexit__(self, exc_type, exc, tb):
+    if exc_type is asyncio.CancelledError:
+        await self._tracker.finish_run(self._run.run_id, status="KILLED")
+    elif exc_type is not None:
+        await self._tracker.finish_run(
+            self._run.run_id, status="FAILED", error=repr(exc),
+        )
+    else:
+        await self._tracker.finish_run(self._run.run_id, status="FINISHED")
+    return False  # never swallow
+
+# DO NOT — silent swallow
+async def __aexit__(self, exc_type, exc, tb):
+    await self._tracker.finish_run(self._run.run_id, status="FINISHED")
+    return True  # BLOCKED
+```
+
+### 3.3 SIGINT/SIGTERM Handling
+
+**MUST**: On process-level SIGINT or SIGTERM received during an active run, the tracker MUST mark every currently-RUNNING run owned by this process as `KILLED` with `killed_reason="signal.SIGINT"` or `killed_reason="signal.SIGTERM"` before the process exits. Implementation MUST register a signal handler at `km.track()` entry that is idempotent across nested runs. Relying on Python's default SIGINT-to-KeyboardInterrupt translation alone is insufficient because a `kill -9` equivalent skips `__aexit__`.
+
+### 3.4 Nested Runs
+
+**MUST**: `parent_run_id=None` defaults to the ambient run resolved via `kailash_ml.tracking.get_current_run()` (§10.1). Passing `parent_run_id=parent.run_id` explicitly is equivalent. A run's `depth` column MUST be incremented from its parent's depth. Depth is unbounded.
+
+```python
+# DO — ambient parent, explicit parent both work
+async with km.track("sweep") as parent:
     for trial in trials:
-        async with parent.run(name=f"trial-{trial.n}") as child:
-            await child.log_param("lr", trial.lr)
+        async with km.track("trial") as child:              # ambient parent
             await child.log_metric("val_loss", trial.loss)
 
-# DO NOT — sibling runs used to represent trials
-for trial in trials:
-    async with km.track(f"automl-sweep-trial-{trial.n}") as t:
-        ...  # BLOCKED — no parent link, search_runs(parent_run_id=...) returns nothing
+async with km.track("sweep") as parent:
+    async with km.track("trial", parent_run_id=parent.run_id) as child:  # explicit
+        ...
 ```
 
-**Why:** Parent/child linkage is the structural substrate for HP search, AutoML, and fine-tuning lineage. Without it, comparing trial-level metrics requires grep-parsing run names, which defeats the query API.
+Origin: closes `round-1-SYNTHESIS.md` T6 nested-run ambiguity.
 
-### 2.4 Mandatory Auto-Capture
+### 3.5 Cross-SDK Status Enum Parity (Decision 3)
 
-**MUST**: On run start, the tracker MUST capture the following fields without explicit user action. Missing any field is a HIGH finding in `/redteam`:
+**MUST**: The run-status enum MUST be the 4-member set `{RUNNING, FINISHED, FAILED, KILLED}` — byte-identical across kailash-py and kailash-rs. No variants, no aliases, no per-SDK extensions. Legacy values `COMPLETED` / `SUCCESS` / `SUCCEEDED` / `CANCELLED` / `DONE` are BLOCKED everywhere (write path, read path, MCP surface, dashboard DTO).
 
-| Field                    | Source                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `start_time`             | `datetime.now(UTC)` at `__aenter__`                                                                                                                                                                                                                                                                                                            |
-| `end_time`               | `datetime.now(UTC)` at `__aexit__`                                                                                                                                                                                                                                                                                                             |
-| `host`                   | `socket.gethostname()`                                                                                                                                                                                                                                                                                                                         |
-| `python_version`         | `sys.version_info` triple                                                                                                                                                                                                                                                                                                                      |
-| `kailash_ml_version`     | `kailash_ml.__version__`                                                                                                                                                                                                                                                                                                                       |
-| `lightning_version`      | `lightning.pytorch.__version__` (if importable)                                                                                                                                                                                                                                                                                                |
-| `torch_version`          | `torch.__version__` (if importable)                                                                                                                                                                                                                                                                                                            |
-| `cuda_version`           | `torch.version.cuda` (if torch and CUDA present)                                                                                                                                                                                                                                                                                               |
-| `git_sha`                | `subprocess.run(["git", "rev-parse", "HEAD"])` if in a repo, else `None`. Failure logged, not raised.                                                                                                                                                                                                                                          |
-| `git_dirty`              | `True` if `git status --porcelain` is non-empty                                                                                                                                                                                                                                                                                                |
-| `device_used`            | From attached `TrainingResult.device_used` when `log_model(training_result=...)` is called                                                                                                                                                                                                                                                     |
-| `accelerator`            | From `TrainingResult.accelerator`                                                                                                                                                                                                                                                                                                              |
-| `precision`              | From `TrainingResult.precision`                                                                                                                                                                                                                                                                                                                |
-| `device_family`          | From `TrainingResult.device.family` (DeviceReport, kailash-ml ≥ 0.12.0). Family adapter that produced the run: `"sklearn"` / `"xgboost"` / `"lightgbm"` / `"torch"` / `"lightning"` / `"umap"` / `"hdbscan"`.                                                                                                                                  |
-| `device_backend`         | From `TrainingResult.device.backend`. The actually-resolved backend (never `"auto"`); distinct from the requested backend when `device.fallback_reason` is set.                                                                                                                                                                                |
-| `device_fallback_reason` | From `TrainingResult.device.fallback_reason` (nullable). One of `"oom"` / `"cuml_eviction"` / `"array_api_offlist"` / `"array_api_runtime_unavailable"` / `"driver_missing"` / `"unsupported_family"` / `None`. Critical for reproducibility — a run that "succeeded" with `fallback_reason="oom"` actually ran on CPU, not the requested GPU. |
-| `device_array_api`       | From `TrainingResult.device.array_api` (bool). `True` iff sklearn's `config_context(array_api_dispatch=True)` engaged for this call.                                                                                                                                                                                                           |
-| `tenant_id`              | From constructor / `km.track(tenant_id=)` or raises `TenantRequiredError` when multi-tenant mode                                                                                                                                                                                                                                               |
+```python
+# DO — the only valid status values
+STATUS_RUNNING  = "RUNNING"
+STATUS_FINISHED = "FINISHED"
+STATUS_FAILED   = "FAILED"
+STATUS_KILLED   = "KILLED"
+_ALLOWED_STATUSES = frozenset({STATUS_RUNNING, STATUS_FINISHED, STATUS_FAILED, STATUS_KILLED})
 
-**Why:** Every reproducibility failure in the field traces to missing one of these fields. MLflow makes the Python / CUDA / device fields optional and the top-N rule of thumb is that 1 in 20 runs reproduced by another person fails because of environment drift that would have been captured here.
+# DO NOT — any other string
+status = "COMPLETED"  # BLOCKED — legacy 0.x; migrate to FINISHED via 1_0_0_rename_status
+status = "SUCCESS"    # BLOCKED — legacy 0.x; migrate to FINISHED via 1_0_0_rename_status
+```
 
-### 2.5 Logging Primitives
+**Cross-SDK contract.** The kailash-rs `RunStatus` enum at `kailash-rs/crates/kailash-ml/src/tracking/status.rs` MUST declare the same four variants with the same serialized form. Cross-SDK follow-up tracked at kailash-rs#502 (open at the time of this spec). Any kailash-rs PR that deviates raises a cross-SDK review block per `rules/cross-sdk-inspection.md`.
 
-**MUST**: Each primitive has the listed signature. Polars-first return types apply where queries return tabular data.
+**Why:** Polyglot deployments correlate run status across Python services and Rust services via the audit / event stream. A divergent enum value (e.g. Rust emits `SUCCEEDED` while Python writes `FINISHED`) breaks every `WHERE status = 'FINISHED'` query and every dashboard panel that groups by status. The 4-member lock is the same stable-fingerprint discipline used by `rules/event-payload-classification.md` §2 for record-id hashing.
+
+Origin: Decision 3 (approved 2026-04-21). Kailash-rs cross-SDK todo: kailash-rs#502.
+
+---
+
+## 4. Logging Primitives
+
+### 4.1 Parameters
+
+```python
+async def log_param(self, key: str, value: Any) -> None: ...
+async def log_params(self, mapping: Mapping[str, Any]) -> None: ...
+```
+
+**MUST**: `value` is JSON-serialisable or coerced via `repr()` with a DEBUG log line. Keys follow `^[a-zA-Z_][a-zA-Z0-9_.\-]*$` — failing regex raises `ValueError`.
+
+**MUST — Finite Check On Numeric Params**: When `isinstance(value, (int, float))`, `log_param` / `log_params` MUST validate `math.isfinite(value)`. `NaN` / `±Inf` param values are BLOCKED via `ParamValueError` — silent coercion to `None` / `0.0` / `str(value)` is BLOCKED.
+
+```python
+# DO — param finite-check mirrors metric finite-check
+await run.log_param("learning_rate", float("nan"))  # raises ParamValueError
+
+# DO NOT — silent coerce to string "nan"
+```
+
+**Why:** `log_param("learning_rate", float("nan"))` is currently not validated but downstream comparison queries (`WHERE params->>'learning_rate' = ?`) break on NaN because NaN != NaN. The finite-check aligns the param path with the metric path (§4.2) — one rule covers both.
+
+### 4.2 Metrics (THE ROUND-1 CRIT GAP)
 
 ```python
 async def log_metric(
@@ -165,649 +322,947 @@ async def log_metric(
     timestamp: Optional[datetime] = None,
 ) -> None: ...
 
-async def log_metrics(self, metrics: Mapping[str, float], *, step: Optional[int] = None) -> None: ...
+async def log_metrics(
+    self,
+    mapping: Mapping[str, float],
+    *,
+    step: Optional[int] = None,
+    timestamp: Optional[datetime] = None,
+) -> None: ...
+```
 
-async def log_param(self, key: str, value: Any) -> None: ...
+**MUST**: `value` MUST be validated via `math.isfinite(value)`. `NaN`, `+inf`, `-inf` MUST raise `MetricValueError` (see §8). Silent coercion to `None`, `0.0`, or `str(value)` is BLOCKED.
 
-async def log_params(self, params: Mapping[str, Any]) -> None: ...
+```python
+# DO — finite-check, typed error
+import math
+def _validate_metric_value(key: str, value: float) -> None:
+    if not isinstance(value, (int, float)):
+        raise MetricValueError(f"metric {key!r} must be numeric, got {type(value).__name__}")
+    v = float(value)
+    if not math.isfinite(v):
+        raise MetricValueError(f"metric {key!r} value={v} is not finite")
 
+# DO NOT — silent coerce
+await run.log_metric("loss", float("nan"))  # BLOCKED: raises MetricValueError
+```
+
+**MUST**: `log_metric` MUST exist on the `ExperimentRun` object returned by `km.track()` (round-1 CRIT finding `1.3`). `log_metrics` MUST exist (round-1 `1.3`). `step` and `timestamp` keyword-only arguments MUST be honored (round-1 `1.4`).
+
+**Why:** Round-1 `round-1-industry-competitive.md` H-2 documented this as "sub-parity with MLflow 1.0, 2018." Every MLflow/W&B/Lightning tutorial since 2018 assumes `log_metric`. Missing it is an 8-year-old muscle-memory failure.
+
+Origin: closes `round-1-spec-compliance.md:1.3, 1.4`; closes industry H-2.
+
+### 4.3 Artifacts
+
+```python
 async def log_artifact(
     self,
-    path: Union[str, Path, bytes],
+    path_or_bytes: Union[str, Path, bytes],
+    name: str,
     *,
-    kind: str = "file",              # "file" | "directory" | "figure" | "table" | "model"
-    name: Optional[str] = None,      # Display name; defaults to basename
-    encryption: Optional[str] = None, # Override store default; None uses backend policy
+    content_type: Optional[str] = None,
+    data_subject_ids: Optional[List[str]] = None,
 ) -> ArtifactHandle: ...
+```
 
+**MUST**: Content-addressed (SHA-256). Second call with identical bytes returns the same `ArtifactHandle`. Encryption failure raises `ArtifactEncryptionError` — silent plaintext fallback is BLOCKED. Size exceeding the backend's `max_artifact_bytes` raises `ArtifactSizeExceededError`.
+
+### 4.4 Figures (DL Diagnostics Event Sink)
+
+```python
+async def log_figure(
+    self,
+    figure: Union["plotly.graph_objs.Figure", "matplotlib.figure.Figure"],
+    name: str,
+    *,
+    step: Optional[int] = None,
+) -> ArtifactHandle: ...
+```
+
+**MUST**: `log_figure` MUST serialize plotly figures via `figure.to_json()` and matplotlib figures via `fig.savefig(buf, format="png")`. The MIME type is recorded as `application/vnd.plotly.v1+json` or `image/png`. This is the sink `DLDiagnostics` and `RLDiagnostics` emit to.
+
+**Why:** Round-1 T2: `DLDiagnostics` has an in-memory plotly figure but no path to the tracker. `log_figure` is the missing wire.
+
+### 4.5 Model
+
+```python
 async def log_model(
     self,
     model: Any,
+    name: str,
     *,
-    format: str = "onnx",            # "onnx" (default) | "pickle" | "torch" | "lightning" | "sklearn"
-    name: Optional[str] = None,
+    format: str = "onnx",   # "onnx" | "pickle" | "torch" | "lightning" | "sklearn"
     aliases: Optional[List[str]] = None,
     signature: Optional[ModelSignature] = None,
     lineage: Optional[Mapping[str, Any]] = None,
-    training_result: Optional[TrainingResult] = None,  # Auto-populates device/accelerator/precision
-) -> ModelVersionInfo: ...
+    training_result: Optional["TrainingResult"] = None,
+) -> "ModelVersionInfo": ...
 ```
 
-**MUST**: `log_metric` values MUST be finite floats. `NaN`, `inf`, and `-inf` MUST raise `ValueError`. Silent coercion to `None` or `0.0` is BLOCKED.
+**MUST**: `signature is None` raises `ModelSignatureRequiredError`. `lineage is None AND self._run is None` raises `LineageRequiredError`. When called inside a `km.track()` block, `tracker_run_id` is auto-populated from the ambient run; calling outside raises `LineageRequiredError`.
 
-**Why:** Non-finite metrics poison every downstream aggregation (mean loss, best-so-far). MLflow accepts `NaN` silently and leaderboard ties against a NaN sort the NaN as "best" on some databases.
+Origin: closes `round-1-spec-compliance.md:1.10, 1.11`.
 
-### 2.6 Query Primitives
-
-**MUST**: `tracker.search(filter=, order_by=, limit=)` MUST return a `polars.DataFrame` (not pandas). Filter syntax accepts MLflow-compatible expressions (`"metrics.accuracy > 0.9"`, `"params.lr = 0.01"`, `"tags.env = 'prod'"`) plus the kailash-ml extension `"device_used LIKE 'cuda%'"`.
+### 4.6 Attach Training Result
 
 ```python
-# DO — polars result, MLflow-compatible filter
-df = await tracker.search(
-    filter="metrics.accuracy > 0.9 AND tags.env = 'prod'",
-    order_by="metrics.accuracy DESC",
-    limit=50,
-)
-assert isinstance(df, pl.DataFrame)
-
-# DO NOT — pandas return
-# BLOCKED: tracker.search returning pd.DataFrame contradicts kailash-ml polars-first contract
+async def attach_training_result(self, result: "TrainingResult") -> None: ...
 ```
 
-**Why:** MLflow returns pandas, which forces downstream users to pay the pandas import cost and pandas-to-polars conversion. Polars-native queries let the leaderboard flow directly into `polars.DataFrame.to_torch()` for GPU-side analysis.
+**MUST**: Persists `result.device: DeviceReport` into the run's envelope. For SQL/BI convenience, `attach_training_result` ALSO projects the DeviceReport into the three flattened `_kml_run` columns (`device_used`, `accelerator`, `precision`) using the same `device.backend_name` / `device.family` / `device.precision` mapping that `TrainingResult.__post_init__` uses for its 1.x back-compat mirrors (see `ml-engines-v2.md §4.1`). `result.seed_report` is persisted unchanged. These projections MUST use the canonical `DeviceReport` fields — storing a different string in the flat column than what `device.backend_name` would produce is BLOCKED (breaks the `TrainingResult.device` ⇔ `_kml_run.device_used` invariant).
 
-### 2.7 Storage Backends
+#### MUST: Resume HP-Diff Emission
 
-**MUST**: `ExperimentTracker.open(store=...)` MUST accept the following backend URIs:
+When the current run has a `parent_run_id` set (the run was created via `km.track(..., parent_run_id=<prior>)` as part of a `resume_from` checkpoint restore), `attach_training_result` MUST compute the HYPERPARAMETER DIFF against the parent run's final `hyperparameters` and:
 
-| URI scheme                | Use case                                  | Notes                                                                                                      |
-| ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `sqlite:///:memory:`      | Unit tests only — evicted on process exit | Alias `sqlite+memory` accepted for readability                                                             |
-| `sqlite+memory`           | Notebook workflows with no persistence    | **MUST** be supported — closes the user-reported pain point #8 in `00-synthesis-redesign-proposal.md §3.6` |
-| `sqlite:///path/to/ml.db` | Local single-file store                   | Default when `store=None` in `km.track()` — resolves to `~/.kailash_ml/ml.db`                              |
-| `postgresql://...`        | Multi-user, multi-host, prod              | Recommended for any shared team                                                                            |
-| `mysql://...`             | Multi-user, multi-host, prod              | Same contract as PostgreSQL                                                                                |
+1. Log each changed HP as two params: `params.{key}.old` = parent value, `params.{key}.new` = current value.
+2. Emit a metric `resume.hp_diff_count` = number of changed keys.
+3. DEBUG-log the full diff under `tracker.resume.hp_diff` structured event.
 
-**MUST**: The default `store` when `km.track()` is called with no arguments MUST be `f"sqlite:///{Path.home() / '.kailash_ml' / 'ml.db'}"`. The directory MUST be created if absent. Creation failure MUST raise a typed `TrackerStoreInitError`, not fall back to `:memory:`.
+```python
+# Example — cosine-schedule restart with lowered LR on resume
+async with km.track("fraud-v2", parent_run_id="run_abc") as child:
+    child.log_param("learning_rate", 1e-4)  # parent had 3e-4
+    # child.params["learning_rate.old"] = 3e-4 (auto-populated)
+    # child.params["learning_rate.new"] = 1e-4
+    # child.metric["resume.hp_diff_count"] = 1
+```
 
-**Why:** Silent fallback to `:memory:` loses every run as soon as the process exits, which is worse than failing at construction because the user thinks their runs are persisted.
+**Why:** The `RLTrainingConfig.resume_from` contract (see `ml-rl-core.md` §9) allows intentional HP changes on resume (lowered LR for cosine restart, stricter exploration, etc.). Without a structural HP-diff emission, the change is silent — a post-hoc audit cannot distinguish "run resumed with same HPs" (bit-reproduction) from "run resumed with different HPs" (intentional mutation). The diff is part of the reproducibility audit trail.
+
+### 4.7 Tags
+
+```python
+async def set_tags(self, **tags: str) -> None: ...
+```
+
+**MUST**: `tags` MUST be searchable via `search_runs(filter="tags.env = 'prod'")`. Tag values are strings; non-string tag values are coerced via `str()` with a DEBUG log line.
 
 ---
 
-## 3. `ModelRegistry`
+## 5. Query Primitives
 
-### 3.1 Model Names
-
-**MUST**: Model names MUST be unique within a `(tenant_id, name)` pair. Re-registering a new version under an existing name increments the version. Re-using a version number is BLOCKED — versions are integer-monotonic.
+### 5.1 Polars Return (ROUND-1 SPEC VIOLATION)
 
 ```python
-# DO — monotonic versions
-v1 = await registry.register(model, name="churn")   # version=1
-v2 = await registry.register(model_v2, name="churn") # version=2
-v3 = await registry.register(model_v3, name="churn") # version=3
-
-# DO NOT — version reuse
-await registry.register(model, name="churn", version=1)  # BLOCKED on second call
-```
-
-**Why:** Version reuse breaks every downstream system that caches by version — InferenceServer's LRU, the artifact store's content-addressed dedupe, audit trails that say "model:churn:v3 predicted X." Immutable versions are the only way a historical audit survives refactor.
-
-### 3.2 Aliases
-
-**MUST**: Aliases are **mutable pointers** to specific versions. `registry.set_alias(name=, alias=, version=)` repoints the alias without touching historical versions. Aliases are opaque strings — no enforced vocabulary.
-
-```python
-# DO — alias moves, versions immutable
-await registry.set_alias(name="churn", alias="production", version=3)
-await registry.set_alias(name="churn", alias="production", version=5)  # moves pointer
-# version 3 still exists and is still retrievable by version number
-
-# DO NOT — "promote" mutates version metadata
-# BLOCKED: registry.promote_version(3, "production") that changes v3.stage = "production"
-# (see §3.6 for legacy stage compatibility)
-```
-
-**Why:** MLflow's original stage system (None/Staging/Production/Archived) mutated version metadata, which meant "what was in production on April 5?" required reading audit logs. Aliases-as-pointers make that a trivial join. MLflow itself deprecated stages in favor of aliases in 2.9 — this spec skips the stage era entirely.
-
-### 3.3 Reserved Alias Names
-
-**MUST**: The aliases `production`, `staging`, `champion`, `challenger`, `canary`, and `shadow` MUST resolve with the following semantics when consumed by `engine.serve()` and the MCP surface:
-
-| Alias        | Meaning                                                               | Retention default   |
-| ------------ | --------------------------------------------------------------------- | ------------------- |
-| `production` | The live-traffic model                                                | Retain indefinitely |
-| `staging`    | Candidate for next promotion                                          | Retain last 10      |
-| `champion`   | Current best-performing model (synonym for production in A/B context) | Retain indefinitely |
-| `challenger` | Candidate being evaluated against champion                            | Retain last 10      |
-| `canary`     | Gradually rolled-out candidate                                        | Retain last 10      |
-| `shadow`     | Receives mirrored traffic, no user-facing outputs                     | Retain last 10      |
-
-**Why:** Mirror the semantics of production deployment tooling so platform teams can port their existing runbooks. Without reserved names, every team reinvents the same four aliases and the MCP tools can't render a meaningful status.
-
-### 3.4 Signatures Are Mandatory
-
-**MUST**: Every `ModelVersionInfo` MUST carry a non-null `ModelSignature`. Registration without a signature MUST raise `ModelSignatureRequiredError`.
-
-```python
-# DO — signature attached
-signature = ModelSignature(
-    inputs=[FeatureField("age", "float"), FeatureField("income", "float")],
-    outputs=[FeatureField("churn_prob", "float")],
-    feature_names=["age", "income"],
-)
-await registry.register(model, name="churn", signature=signature)
-
-# DO NOT — implicit signature
-await registry.register(model, name="churn")  # BLOCKED — ModelSignatureRequiredError
-```
-
-**Why:** MLflow signatures are optional and the overwhelming majority of MLflow-registered models in the wild ship without one. At serving time the absence of a signature means the first bad input (wrong dtype, wrong order) silently returns garbage predictions.
-
-### 3.5 Lineage Is Mandatory
-
-**MUST**: Every `ModelVersionInfo` MUST carry a non-null `lineage` dict with at least these keys:
-
-| Key                     | Type            | Purpose                                                                         |
-| ----------------------- | --------------- | ------------------------------------------------------------------------------- |
-| `tracker_run_id`        | `str`           | The ExperimentTracker run that produced the model                               |
-| `parent_version`        | `Optional[int]` | For fine-tuned or retrained models — the version this was derived from          |
-| `training_data_uri`     | `Optional[str]` | Pointer to the training dataset (S3 path, SQL query ID, DataFlow model+version) |
-| `feature_store_version` | `Optional[str]` | Schema version from the feature store (when the future `ml-features.md` lands)  |
-| `base_model_uri`        | `Optional[str]` | For LoRA/alignment: the base model used                                         |
-
-Registration with missing `tracker_run_id` MUST raise `LineageRequiredError`.
-
-```python
-# DO — full lineage auto-populated from tracker
-async with km.track("v3-retrain") as t:
-    result = await engine.train(...)
-    await registry.register(
-        result.model,
-        name="churn",
-        signature=sig,
-        # lineage auto-populated from t.run_id, result.training_data_uri
-    )
-
-# DO NOT — register without a tracker context
-await registry.register(model, name="churn", signature=sig)  # BLOCKED — LineageRequiredError
-```
-
-**Why:** Every production debugging session starts with "which data was this model trained on?" If lineage is optional it is skipped, and the answer becomes a git-log archaeology session. Mandatory lineage makes the answer a 1-line SQL query.
-
-**BLOCKED rationalizations:**
-
-- "This is an experimental model, lineage overhead is overkill"
-- "We'll add lineage before shipping to production"
-- "The user asked for a simple API"
-
-### 3.6 Legacy Stages (1.x Compatibility)
-
-**MUST**: The 1.x stage vocabulary (`staging`, `shadow`, `production`, `archived`) MUST be accepted at `registry.register(stage=...)` and MUST auto-convert to setting the corresponding alias. The `stage` parameter is deprecated — a `DeprecationWarning` MUST be emitted.
-
-```python
-# 1.x call — accepted with DeprecationWarning
-await registry.register(model, name="churn", stage="staging")
-# Equivalent to:
-await registry.register(model, name="churn")  # version N
-await registry.set_alias(name="churn", alias="staging", version=N)
-```
-
-**Why:** Downstream consumers listed in `00-synthesis-redesign-proposal.md §7` (aegis / aether / kz-engage) use the 1.x stage API. Hard breakage defers their migration; silent acceptance plus a loud deprecation gives them a bounded migration window.
-
-### 3.7 Query Methods
-
-**MUST**: Registry MUST expose the following async query methods:
-
-```python
-async def list(
+async def get_run(self, run_id: str, *, tenant_id: Optional[str] = None) -> RunRecord: ...
+async def list_runs(
     self,
     *,
-    name: Optional[str] = None,
-    alias: Optional[str] = None,
+    experiment: Optional[str] = None,
     tenant_id: Optional[str] = None,
+    status: Optional[str] = None,
     limit: int = 100,
-) -> List[ModelVersionInfo]: ...
-
-async def get(
-    self,
-    name: str,
-    *,
-    version: Optional[int] = None,
-    alias: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-) -> ModelVersionInfo: ...
-
-async def compare(
-    self,
-    name: str,
-    version_a: int,
-    version_b: int,
-    *,
-    tenant_id: Optional[str] = None,
-) -> RegistryComparison: ...
-
-async def set_alias(
+) -> pl.DataFrame: ...
+async def search_runs(
     self,
     *,
-    name: str,
-    alias: str,
-    version: int,
+    filter: Optional[str] = None,
+    order_by: Optional[str] = None,
+    limit: int = 100,
     tenant_id: Optional[str] = None,
-) -> None: ...
-
-async def delete_alias(
-    self,
-    *,
-    name: str,
-    alias: str,
-    tenant_id: Optional[str] = None,
-) -> None: ...
+) -> pl.DataFrame: ...
+async def list_experiments(self, *, tenant_id: Optional[str] = None) -> pl.DataFrame: ...
+async def list_metrics(self, run_id: str, *, tenant_id: Optional[str] = None) -> pl.DataFrame: ...
+async def list_artifacts(self, run_id: str, *, tenant_id: Optional[str] = None) -> pl.DataFrame: ...
 ```
 
-**Why:** Exposing alias operations and version lookups through explicit methods (not overloaded `get_model`) makes the MCP tool schema tractable and prevents the "pass `version=` and `alias=` together, one wins silently" class of bugs.
+**MUST**: `list_runs`, `search_runs`, `list_experiments`, `list_metrics`, `list_artifacts` MUST return `polars.DataFrame`. `list[Run]` / `list[dict]` / `pandas.DataFrame` returns are BLOCKED.
+
+Origin: closes `round-1-spec-compliance.md:1.5` (currently `search_runs` returns `list[Run]` at `engines/experiment_tracker.py:791`).
+
+### 5.2 Filter Syntax
+
+**MUST**: `filter` accepts the MLflow-compatible expression grammar:
+
+```
+<term> := "metrics." <name> <op> <value>
+        | "params." <name> <op> <value>
+        | "tags." <name> <op> <value>
+        | "attributes." <name> <op> <value>
+        | "env." <name> <op> <value>
+<op> := "=" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE" | "IN"
+<filter> := <term> ( ("AND" | "OR") <term> )*
+```
+
+Parse errors raise `ValueError("invalid filter: …")` — silent accept-anything is BLOCKED.
+
+### 5.3 `diff_runs` (ROUND-1 MISSING)
+
+```python
+@dataclass(frozen=True)
+class ParamDelta:
+    key: str
+    value_a: Any
+    value_b: Any
+    changed: bool
+
+@dataclass(frozen=True)
+class MetricDelta:
+    key: str
+    value_a: Optional[float]
+    value_b: Optional[float]
+    delta: Optional[float]
+    pct_change: Optional[float]
+    per_step: Optional[pl.DataFrame]  # when both runs logged steps
+
+@dataclass(frozen=True)
+class EnvDelta:
+    key: str
+    value_a: Any
+    value_b: Any
+    changed: bool
+
+@dataclass(frozen=True)
+class RunDiff:
+    run_id_a: str
+    run_id_b: str
+    params: Dict[str, ParamDelta]
+    metrics: Dict[str, MetricDelta]
+    environment: Dict[str, EnvDelta]
+    reproducibility_risk: bool  # True when git_sha differs AND cuda_version differs AND max pct_change > 5%
+    summary: str
+
+async def diff_runs(
+    self,
+    run_a: str,
+    run_b: str,
+    *,
+    tenant_id: Optional[str] = None,
+) -> RunDiff: ...
+```
+
+**MUST**: `RunDiff` is a frozen dataclass. `reproducibility_risk` MUST be a typed boolean field, not a free-text note. Implementation MUST live at `kailash_ml.engines.experiment_tracker.diff_runs` — the module-level `diff_runs` function consumed by `km.diff_runs()` is a thin wrapper.
+
+Origin: closes `round-1-spec-compliance.md:1.13` (grep currently empty).
 
 ---
 
-## 4. `ArtifactStore`
+## 6. Storage Layer
 
-### 4.1 Backends
+### 6.1 Backends
 
-**MUST**: `ArtifactStore` implementations MUST exist for each URI scheme below. `store.from_uri(uri)` is the factory:
+| URI scheme           | Driver class                       | Use case                                    |
+| -------------------- | ---------------------------------- | ------------------------------------------- |
+| `sqlite:///path.db`  | `SQLiteStorageDriver`              | Default (local single-file)                 |
+| `sqlite:///:memory:` | `SQLiteStorageDriver` + `:memory:` | Unit tests; alias accepted: `sqlite+memory` |
+| `sqlite+memory`      | Same as above (readability alias)  | Notebook workflows                          |
+| `postgresql://...`   | `PostgresStorageDriver`            | Production multi-user                       |
+| `mysql://...`        | `MySQLStorageDriver`               | Production multi-user                       |
 
-| Scheme                | Class                       | Use case                                                              |
-| --------------------- | --------------------------- | --------------------------------------------------------------------- |
-| `file://`             | `LocalFileArtifactStore`    | Single-host dev, CI                                                   |
-| `sqlite://`           | `SqliteBlobArtifactStore`   | Small artifacts (<10 MB), notebook-friendly, embedded with tracker DB |
-| `s3://`               | `S3ArtifactStore`           | AWS prod, requires `boto3`                                            |
-| `gs://`               | `GCSArtifactStore`          | GCP prod, requires `google-cloud-storage`                             |
-| `azure://`            | `AzureBlobArtifactStore`    | Azure prod, requires `azure-storage-blob`                             |
-| `http://`, `https://` | `HTTPReadOnlyArtifactStore` | Read-only import path, used by MLflow migration                       |
+**MUST**: `sqlite+memory` MUST be accepted (round-1 `1.6` HIGH — currently unsupported). Conversion is literal: `"sqlite+memory"` → `"sqlite:///:memory:"`.
 
-**Why:** Each backend exists for a specific use case; missing `sqlite://` forces notebook users onto the filesystem and breaks in JupyterHub ephemeral containers. Explicit backend list prevents the "add custom backend" sprawl MLflow experienced.
+Origin: closes `round-1-spec-compliance.md:1.6`.
 
-### 4.2 Content-Addressed Storage
+### 6.2 Artifact Backends
 
-**MUST**: Every artifact MUST be stored under its SHA-256 content hash. Uploading the same bytes twice MUST NOT produce a second stored copy — the second `put` returns the existing handle.
+`file://`, `sqlite://` (blob), `s3://`, `gs://`, `azure://`, `http(s)://` (read-only for MLflow migration). S3 is the default for prod; local SQLite blob is the default for notebooks.
 
-```python
-# DO — content-addressed dedupe
-h1 = await store.put(b"model_bytes...")
-h2 = await store.put(b"model_bytes...")
-assert h1.sha256 == h2.sha256
-assert h1.storage_uri == h2.storage_uri  # same underlying blob
+### 6.3 Schema DDL
 
-# DO NOT — path-keyed with overwrite
-# BLOCKED: store.put(path="artifacts/v3/model.onnx", data=bytes)  that overwrites
+All DDL lives in numbered migrations under `packages/kailash-ml/src/kailash_ml/_storage/migrations/` per `rules/schema-migration.md` §1. Below is the canonical table shape (PostgreSQL dialect shown — SQLite uses `TEXT`/`INTEGER` equivalents):
+
+```sql
+CREATE TABLE _kml_experiment (
+    tenant_id       TEXT        NOT NULL,
+    experiment_id   TEXT        NOT NULL,
+    name            TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL,
+    owner_actor_id  TEXT,
+    PRIMARY KEY (tenant_id, experiment_id),
+    UNIQUE (tenant_id, name)
+);
+
+CREATE TABLE _kml_run (
+    tenant_id       TEXT        NOT NULL,
+    run_id          TEXT        NOT NULL,
+    experiment_id   TEXT        NOT NULL,
+    parent_run_id   TEXT,
+    depth           INTEGER     NOT NULL DEFAULT 0,
+    status          TEXT        NOT NULL,   -- RUNNING|FINISHED|FAILED|KILLED
+    start_time      TIMESTAMPTZ NOT NULL,
+    end_time        TIMESTAMPTZ,
+    host            TEXT,
+    git_sha         TEXT,
+    git_dirty       BOOLEAN,
+    python_version  TEXT,
+    kailash_ml_version TEXT,
+    lightning_version TEXT,
+    torch_version   TEXT,
+    cuda_version    TEXT,
+    -- Flattened projections of TrainingResult.device: DeviceReport.
+    -- _kml_run mirrors the 1.x back-compat fields (device_used/accelerator/precision)
+    -- for BI/SQL query convenience; the authoritative source-of-truth remains the
+    -- serialized DeviceReport persisted in the per-run envelope artifact.
+    device_used     TEXT,   -- == TrainingResult.device.backend_name
+    accelerator     TEXT,   -- == TrainingResult.device.family
+    precision       TEXT,   -- == TrainingResult.device.precision
+    actor_id        TEXT,
+    killed_reason   TEXT,
+    error           TEXT,
+    data_subject_ids TEXT[],
+    PRIMARY KEY (tenant_id, run_id),
+    FOREIGN KEY (tenant_id, experiment_id) REFERENCES _kml_experiment(tenant_id, experiment_id)
+);
+CREATE INDEX _kml_run_parent ON _kml_run(tenant_id, parent_run_id);
+CREATE INDEX _kml_run_actor_time ON _kml_run(tenant_id, actor_id, start_time);
+
+CREATE TABLE _kml_param (
+    tenant_id TEXT NOT NULL,
+    run_id    TEXT NOT NULL,
+    key       TEXT NOT NULL,
+    value     JSONB NOT NULL,
+    PRIMARY KEY (tenant_id, run_id, key)
+);
+
+CREATE TABLE _kml_metric (
+    tenant_id TEXT        NOT NULL,
+    run_id    TEXT        NOT NULL,
+    key       TEXT        NOT NULL,
+    value     DOUBLE PRECISION NOT NULL,
+    step      BIGINT,            -- int64 — covers batch-level step counters on 100B-token training runs
+    timestamp TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (tenant_id, run_id, key, step)
+);
+-- MUST: step is BIGINT (int64), NOT INTEGER (int32). A tokens/sec of 100K on a
+-- 100B-parameter model hits 2^32 in 11 hours; 2^63 never. SQLite INTEGER is
+-- already int64 so the SQLite migration is a no-op; PostgreSQL INTEGER is 32-bit
+-- so a regression test (see §14.4) MUST insert step = 2_500_000_000 and read it
+-- back unchanged.
+
+CREATE TABLE _kml_tag (
+    tenant_id TEXT NOT NULL,
+    run_id    TEXT NOT NULL,
+    key       TEXT NOT NULL,
+    value     TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, run_id, key)
+);
+
+CREATE TABLE _kml_artifact (
+    tenant_id       TEXT        NOT NULL,
+    artifact_id     TEXT        NOT NULL,
+    run_id          TEXT        NOT NULL,
+    sha256          TEXT        NOT NULL,
+    name            TEXT        NOT NULL,
+    content_type    TEXT,
+    size_bytes      BIGINT      NOT NULL,
+    storage_uri     TEXT        NOT NULL,
+    encrypted       BOOLEAN     NOT NULL DEFAULT FALSE,
+    data_subject_ids TEXT[],
+    created_at      TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (tenant_id, artifact_id)
+);
+CREATE INDEX _kml_artifact_sha ON _kml_artifact(tenant_id, sha256);
+
+CREATE TABLE _kml_audit (
+    audit_id      BIGSERIAL   PRIMARY KEY,
+    tenant_id     TEXT        NOT NULL,
+    timestamp     TIMESTAMPTZ NOT NULL,
+    actor_id      TEXT        NOT NULL,
+    resource_kind TEXT        NOT NULL,  -- run|model|artifact|alias|experiment
+    resource_id   TEXT        NOT NULL,
+    action        TEXT        NOT NULL,  -- create|update|delete|promote|erase
+    prev_state    JSONB,
+    new_state     JSONB
+);
+CREATE INDEX _kml_audit_lookup ON _kml_audit(tenant_id, actor_id, timestamp);
+
+CREATE TABLE _kml_lineage (
+    tenant_id     TEXT NOT NULL,
+    model_name    TEXT NOT NULL,
+    version       INTEGER NOT NULL,
+    tracker_run_id TEXT NOT NULL,
+    parent_version INTEGER,
+    training_data_uri TEXT,
+    feature_store_version TEXT,
+    base_model_uri TEXT,
+    PRIMARY KEY (tenant_id, model_name, version)
+);
 ```
 
-**Why:** AutoML sweeps serialize the same base model hundreds of times with different hyperparameters. Content-addressed storage cuts artifact storage cost by 80%+ in a typical sweep. MLflow stores each run's artifacts under the run_id, which duplicates every byte across every trial.
+**MUST**: Migrations are numbered (`0001_create_kml_experiment.py`, ...) and reversible (`rules/schema-migration.md` §3). Destructive migrations require `force_downgrade=True` per `rules/schema-migration.md` §7. Migration filenames use the bare `kml_experiment` stem (Python identifier rules — leading underscore on a module name is reserved); the physical table name is `_kml_experiment` as declared in §6.3 DDL.
 
-### 4.3 Encryption at Rest
+---
 
-**MUST**: When an `encryption` policy is configured for the store, writes MUST encrypt before the bytes leave the tracker process. Encryption failure (unavailable key, library missing, invalid ciphertext length) MUST abort the write and raise `ArtifactEncryptionError`. Silent plaintext fallback is BLOCKED.
+## 7. Tenant-Isolation Keyspace
+
+### 7.1 Key Shape
+
+**MUST**: Every cache-level and lookup-level key MUST follow `kailash_ml:v1:{tenant_id}:{resource}:{id}`:
+
+| Resource   | Key shape                                            |
+| ---------- | ---------------------------------------------------- |
+| Experiment | `kailash_ml:v1:{tenant_id}:exp:{experiment_id}`      |
+| Run        | `kailash_ml:v1:{tenant_id}:run:{run_id}`             |
+| Model      | `kailash_ml:v1:{tenant_id}:model:{name}:{version}`   |
+| Alias      | `kailash_ml:v1:{tenant_id}:alias:{name}:{alias}`     |
+| Artifact   | `kailash_ml:v1:{tenant_id}:artifact:{sha256}`        |
+| Lineage    | `kailash_ml:v1:{tenant_id}:lineage:{name}:{version}` |
+
+Round-1 grep confirmed `kailash_ml:v1:` appears zero times in source. This closes that gap.
+
+Origin: closes `round-1-spec-compliance.md:1.14`; `rules/tenant-isolation.md` §1.
+
+### 7.2 Tenant-ID Resolution Order
+
+**MUST**: `tenant_id` is set at session boundary (`km.track(tenant_id=...)` or engine construction) and flows through the ambient contextvar per §10.2. Per-mutation `tenant_id=` kwargs are BLOCKED on user-facing primitives (HIGH-4 round-1 finding). The MCP surface (§11) is the exception and accepts explicit `tenant_id` because no contextvar crosses the MCP boundary.
+
+Resolution order (applied at session boundary, read at mutation time via `get_current_tenant_id()`):
+
+1. `km.track(tenant_id="acme")` kwarg at session entry.
+2. Ambient `get_current_tenant_id()` when constructing a nested `km.track()`.
+3. `KAILASH_TENANT_ID` environment variable.
+4. Engine-construction default set via `await ExperimentTracker.create(store_url=None, default_tenant_id="dev")` (§2.5).
+5. If none of the above AND `multi_tenant=True` was set on the engine → raise `TenantRequiredError`.
+6. If `multi_tenant=False` (default for dev), the tenant dimension is set to the literal string `"_single"` — NOT `"default"`, NOT `""`, and NOT `"global"`.
+
+#### MUST: `"_single"` Is The Canonical Cross-Spec Single-Tenant Sentinel
+
+The literal `"_single"` is the canonical single-tenant `tenant_id` sentinel across every kailash-ml engine (`ExperimentTracker`, `ModelRegistry`, `FeatureStore`, `InferenceServer`, `MLDashboard`). Every spec that materialises a `tenant_id` for a single-tenant deployment MUST use this exact string. The alternative sentinel `"global"` seen in earlier drafts is BLOCKED — `ml-tracking.md` is the authority per Decision 10 (single-spec-per-domain).
 
 ```python
-# DO — encryption failure aborts write
-store = S3ArtifactStore(bucket="...", encryption="aes-256-gcm", key_id=kms_key_arn)
-try:
-    h = await store.put(payload)
-except ArtifactEncryptionError as e:
-    logger.error("artifact.encryption.failed", extra={"reason": e.reason})
-    raise  # never silently ship plaintext
+# DO — canonical sentinel across every engine
+tenant_id = "_single"   # FeatureStore, ModelRegistry, Tracker, Serving, Dashboard
 
-# DO NOT — fallback to plaintext when encryption key unavailable
-if not key_available:
-    logger.warning("encryption key missing; storing plaintext")  # BLOCKED
-    await backend.put_raw(payload)
+# DO NOT — drift from the canonical form
+tenant_id = "global"    # BLOCKED — ml-tracking.md §7.2 authority
+tenant_id = "default"   # BLOCKED — rules/tenant-isolation.md §2
+tenant_id = ""          # BLOCKED — silent empty
 ```
 
-**Why:** The Phase 5.10 DataFlow audit (referenced in `rules/zero-tolerance.md` Rule 2 "Fake encryption") found a store that accepted an `encryption_key` parameter and stored plaintext. Operators believed data was encrypted. The same failure mode in ML artifact storage ships model weights (which may contain memorized training data) in plaintext. Abort-on-failure is the only contract that delivers what the operator asked for.
+**Why:** A cross-engine query "show me every run that ran against version 7 of `fraud`" must JOIN across the tracker table and the registry table on `tenant_id`. If the tracker stores `"_single"` while the registry stores `"global"`, every single-tenant user's join returns zero rows. The canonical-sentinel rule closes this by pinning every engine to the same literal. Leading underscore guarantees the sentinel is never confused with a real tenant identifier (identifiers per `rules/dataflow-identifier-safety.md` §2 match `^[a-zA-Z_][a-zA-Z0-9_]*$` — `_single` starts with underscore, marking it as a system-reserved identifier).
+
+```python
+# DO — session-level tenant in multi-tenant mode; metrics flow through ambient
+async with km.track("exp", tenant_id="acme") as run:
+    await run.log_metric("loss", 0.32, step=1)   # tenant resolved from ambient
+
+# DO NOT — per-call tenant kwarg on user-facing primitives (HIGH-4 round-1 finding)
+await run.log_metric("loss", 0.32, tenant_id="acme")   # BLOCKED
+
+# DO NOT — silent fallback to "default" in multi-tenant mode
+# BLOCKED per rules/tenant-isolation.md §2
+```
+
+Origin: closes `round-1-spec-compliance.md:1.15`; `rules/tenant-isolation.md` §2; HIGH-4 round-1 finding pinning.
+
+### 7.3 Invalidation
+
+**MUST**: `tracker.invalidate_experiment(name, *, tenant_id)` and `registry.invalidate_model(name, *, tenant_id)` MUST accept `tenant_id`. Omitting it requires explicit `tenant_id=None` AND the caller's admin authority (checked via PACT envelope).
+
+---
+
+## 8. Actor / Audit / GDPR Contract
+
+### 8.1 Actor Resolution (HIGH-4)
+
+**MUST**: Every user-facing mutation primitive (`log_param`, `log_metric`, `log_artifact`, `log_model`, `set_alias`, `delete_alias`, `delete_data_subject`, `set_tags`, `log_figure`, `attach_training_result`) resolves `actor_id` from the ambient contextvar. The user-facing signature does NOT take `actor_id=` as a per-call kwarg — actor identity is a session-level property, not a per-metric property, per HIGH-4 round-1 finding. The MCP surface (§11) is the ONLY exception: cross-process tool calls receive `(run_id, tenant_id, actor_id)` explicitly because no contextvar exists across the MCP boundary.
+
+```python
+# DO — actor flows from the session (km.track entry) through contextvar
+async with km.track("my-exp", actor_id="alice@acme.com") as run:
+    await run.log_metric("loss", 0.32, step=1)        # actor resolved from ambient
+    await run.log_param("lr", 1e-3)                    # same actor, no kwarg plumbing
+
+# DO NOT — actor as per-call kwarg
+await run.log_metric("loss", 0.32, actor_id="alice")   # BLOCKED — violates HIGH-4 round-1 finding
+await run.log_param("lr", 1e-3, actor_id="alice")      # BLOCKED — same
+```
+
+**Resolution order** (for both `tenant_id` and `actor_id`):
+
+1. Ambient `get_current_run()` already carries the values established at `km.track(...)` entry.
+2. `km.track(actor_id=..., tenant_id=...)` entry kwargs.
+3. `KAILASH_ACTOR_ID` / `KAILASH_TENANT_ID` env vars.
+4. Engine-construction defaults (`ExperimentTracker.create(default_tenant_id="dev")`).
+5. If `multi_tenant=True` and no tenant_id resolved → raise `TenantRequiredError`.
+6. If `require_actor=True` and no actor_id resolved → raise `ActorRequiredError`.
+7. If `multi_tenant=False` and no tenant_id → `"_single"` sentinel (NOT `"default"`).
+
+`require_actor` defaults to `False` in single-tenant dev mode, flips to `True` when `multi_tenant=True` is set at engine construction. Per HIGH-4 round-1 finding (TBD triage T-04).
+
+### 8.2 Audit Row Persistence
+
+**MUST**: Every mutation MUST write ONE row to `_kml_audit` with fields `(timestamp, actor_id, tenant_id, resource_kind, resource_id, action, prev_state, new_state)`. The row is written in the SAME transaction as the mutation — split-transaction writes where the audit row can be lost are BLOCKED.
+
+```python
+# DO — same transaction
+async with self._storage.transaction(tenant_id) as txn:
+    await txn.execute("INSERT INTO _kml_metric ...", ...)
+    await txn.execute("INSERT INTO _kml_audit ...", ...)
+
+# DO NOT — audit outside transaction
+await self._storage.insert_metric(...)
+await self._storage.insert_audit(...)  # BLOCKED: metric without audit if crash mid-way
+```
+
+### 8.3 Audit Indexing
+
+**MUST**: Index `_kml_audit` on `(tenant_id, actor_id, timestamp)` (schema §6.3 already declares this). "Show me everything actor `alice@acme.com` did to tenant `acme` this month" is a single indexed range scan.
+
+### 8.4 GDPR Erasure — Audit Rows Are Immutable (Decision 2)
+
+**MUST**: `delete_data_subject(data_subject_id, *, tenant_id)` DELETES run content, artifact content, and model content for every row whose `data_subject_ids TEXT[]` column contains `data_subject_id`. The erase job targets the following tables ONLY:
+
+- `_kml_param` — delete rows for affected `run_id`.
+- `_kml_metric` — delete rows for affected `run_id`.
+- `_kml_artifact` — delete rows AND storage-backend object content (S3 `DELETE`, local file unlink).
+- `_kml_model_artifact` — delete rows AND content-addressable storage objects per `ml-registry.md §7` (CAS GC).
+- `_kml_run.data_subject_ids` — remove the `data_subject_id` entry from the array; if the array becomes empty, leave the run shell row but null-out `error`, `git_sha`, `host`, `killed_reason`.
+
+**Audit rows are IMMUTABLE and MUST NOT be deleted or redacted.** The audit record of the erasure itself, AND every prior audit row referencing the erased content, persist with:
+
+- `resource_id` hashed to `sha256:<8hex>` (first 8 hex chars of SHA-256) per `rules/event-payload-classification.md` §2.
+- `prev_state` / `new_state` JSONB columns with any embedded classified PK values re-serialized through the same `sha256:<8hex>` fingerprint.
+- The `actor_id` of the erasure call is recorded in a new audit row with `action='erase'` and `new_state={"data_subject_fingerprint": "sha256:<8hex>", "rows_deleted": <count>}`.
+
+```sql
+-- DO — hashed fingerprint, audit row persists
+UPDATE _kml_audit
+SET prev_state = jsonb_set(prev_state, '{record_id}', to_jsonb('sha256:' || substring(encode(sha256(prev_state->>'record_id'::text::bytea), 'hex'), 1, 8)))
+WHERE prev_state ? 'record_id' AND prev_state->>'tenant_id' = $1 AND prev_state @> $2;
+-- (no DELETE on _kml_audit)
+
+-- DO NOT — delete the audit row
+DELETE FROM _kml_audit WHERE resource_id = ANY(:erased_ids);  -- BLOCKED: destroys forensic chain
+```
+
+**Why:** GDPR explicitly recognizes audit/forensic records as lawful basis for retention (Article 17(3)(e)). Deleting the audit row defeats incident response and regulatory reporting. Hashed fingerprints give forensic correlation ("the same subject was the source of both events") without exposing the raw PII. Cross-SDK parity: identical fingerprint format to kailash-rs per `rules/event-payload-classification.md` §2.
 
 **BLOCKED rationalizations:**
 
-- "KMS is down, we'll retry later — ship unencrypted for now"
-- "The model weights aren't sensitive data"
-- "We'll add encryption once the feature ships"
+- "GDPR requires full erasure including audit"
+- "The audit can be anonymized instead of hashed"
+- "Leaving any trace of the subject contradicts the erasure request"
+- "Hashed fingerprints are reversible so they count as PII"
 
-### 4.4 Size Limits
+**Response:** Regulator expectation is "the PII is unrecoverable from the stored record." `sha256:<8hex>` with 32 bits of entropy is not reversible against realistic PK spaces (UUIDs, emails, integers); is insufficient for rainbow-table attacks against the original value; and is sufficient for post-incident correlation. Audit rows containing these fingerprints are the institutional memory the erasure itself is audited against.
 
-**MUST**: Each store backend MUST expose `max_artifact_bytes` configured at construction. Default values:
+`ErasureRefusedError` is raised when the affected run is referenced by a production model alias (§9.1). The operator MUST first clear the production alias (`registry.delete_alias("production", actor_id=...)`) before re-running `delete_data_subject`.
 
-| Backend                   | Default `max_artifact_bytes` |
-| ------------------------- | ---------------------------- |
-| `SqliteBlobArtifactStore` | 10 MB                        |
-| `LocalFileArtifactStore`  | 10 GB                        |
-| `S3ArtifactStore`         | 5 TB (S3 object limit)       |
-| `GCSArtifactStore`        | 5 TB                         |
-| `AzureBlobArtifactStore`  | 200 GB                       |
-
-Exceeding the limit MUST raise `ArtifactSizeExceededError` at `put()` time with the current size, limit, and a suggestion to reconfigure or switch backend.
-
-**Why:** Silent multi-gigabyte writes into `SqliteBlobArtifactStore` corrupt the tracker DB. The limit plus typed error forces the user to make a backend choice consciously.
-
-### 4.5 Retention Policies
-
-**MUST**: `store.configure_retention(policy)` MUST accept a `RetentionPolicy` that maps aliases and unaliased runs to retention windows:
-
-```python
-policy = RetentionPolicy(
-    by_alias={
-        "production": RetainAll(),
-        "champion": RetainAll(),
-        "staging": RetainLastN(10),
-        "challenger": RetainLastN(10),
-        "canary": RetainLastN(10),
-        "shadow": RetainLastN(10),
-    },
-    unaliased_runs=RetainFor(days=90),
-    orphan_artifacts=RetainFor(days=30),
-)
-await store.configure_retention(policy)
-```
-
-**MUST**: Retention MUST be enforceable via `await store.apply_retention(dry_run: bool = False)` which returns a `RetentionReport` listing deleted artifacts, freed bytes, and preserved artifacts. Retention MUST never delete artifacts reachable via any alias, regardless of age.
-
-**Why:** MLflow's retention story is "write a cron that deletes old runs" which is left as an exercise to the user. The result is petabyte-scale MLflow servers in the wild because nobody wrote the cron. An in-product policy shifts the default from "retain forever" to "retain with intent."
+Origin: Decision 2 (approved 2026-04-21). Cross-references: `rules/event-payload-classification.md` §2, `rules/tenant-isolation.md` §5 ("audit rows persist tenant_id").
 
 ---
 
-## 5. MCP Surface
+## 9. Exception Taxonomy (CRIT-3 — Canonical Hierarchy)
 
-### 5.1 Server
+### 9.1 `MLError` Root + Per-Domain Family (authoritative)
 
-**MUST**: `ExperimentTracker` MUST expose an MCP server at `kailash_ml.tracker.mcp.TrackerMCPServer`. The server MUST be registered via the `kailash-mcp` framework per `rules/framework-first.md` — rolling a custom MCP server is BLOCKED.
+**MUST**: Every typed exception raised by `kailash-ml` MUST inherit from `kailash_ml.errors.MLError` (the package-level root) via the appropriate per-domain family error. No exception is "free-floating" — the declaration tree below is authoritative and MUST be mirrored in `packages/kailash-ml/src/kailash_ml/errors.py`. Every other spec in this bundle re-exports the family errors it raises via `from kailash_ml.errors import ...`.
 
 ```python
-# DO — framework-first MCP
+# kailash_ml/errors.py  — canonical hierarchy (authoritative)
+class MLError(Exception):
+    """Root of every typed exception raised by kailash-ml."""
+
+# --- domain families (one per spec) ---
+class TrackingError(MLError): ...
+class AutologError(MLError): ...
+class RLError(MLError): ...
+class BackendError(MLError, RuntimeError): ...   # keeps `except RuntimeError` back-compat
+class DriftMonitorError(MLError): ...
+class InferenceServerError(MLError): ...
+class ModelRegistryError(MLError): ...
+class FeatureStoreError(MLError): ...
+class AutoMLError(MLError): ...
+class DiagnosticsError(MLError): ...
+class DashboardError(MLError): ...
+
+# --- cross-cutting errors (span multiple domains) ---
+class UnsupportedTrainerError(MLError): ...          # Decision 8 — raised at Engine dispatch
+class MultiTenantOpError(MLError): ...               # Decision 12 — cross-tenant admin ops
+
+# --- tracking sub-types (TrackingError family) ---
+class TrackerStoreInitError(TrackingError): ...
+class InvalidTenantIdError(TrackingError): ...
+class TenantRequiredError(TrackingError): ...
+class ActorRequiredError(TrackingError): ...         # HIGH-4 round-1 finding (§8.1)
+class ModelSignatureRequiredError(TrackingError): ...
+class LineageRequiredError(TrackingError): ...
+class ArtifactEncryptionError(TrackingError): ...
+class ArtifactSizeExceededError(TrackingError): ...
+class AliasNotFoundError(TrackingError): ...
+class ErasureRefusedError(TrackingError): ...
+class MigrationImportError(TrackingError): ...
+class RunNotFoundError(TrackingError): ...
+class ExperimentNotFoundError(TrackingError): ...
+class MetricValueError(TrackingError, ValueError): ...   # Phase-B Round 2b §A.1 T-03 SAFE-DEFAULT — keeps `except ValueError`
+class ParamValueError(TrackingError, ValueError): ...    # NaN/Inf param finite-check, mirrors MetricValueError
+```
+
+**Family assignment rule**: an exception raised by a primitive in domain `D` inherits from `DError`. An exception raised by a cross-cutting primitive inherits from whichever domain owns the primary concern:
+
+- `TenantRequiredError` is raised across every domain but lives under `TrackingError` (tenant resolution is a tracker concern at root) — other specs `from kailash_ml.errors import TenantRequiredError` and re-raise.
+- `ActorRequiredError` — same pattern, TrackingError family.
+- `BackendError` multi-inherits `RuntimeError` because 0.x code callers catch `except RuntimeError` and MUST continue to work at 1.0.0 (kwargs-plumbing parity from `rules/security.md` § Multi-Site Kwarg Plumbing).
+- `MetricValueError` multi-inherits `ValueError` per Phase-B Round 2b §A.1 T-03 SAFE-DEFAULT so `except ValueError` continues to catch NaN/Inf rejections.
+- `ParamValueError` multi-inherits `ValueError` per the same Phase-B T-03 pattern — keeps `except ValueError` catching NaN/Inf rejections on the param path (`log_param` / `log_params`, §4.1).
+- `UnsupportedTrainerError` (Decision 8) is truly cross-cutting — raised at `MLEngine.fit()` dispatch time when a `Trainable.fit()` bypasses `L.Trainer`. It does NOT belong to a single domain family; it inherits directly from `MLError`. Every engine-integrating spec imports it from `kailash_ml.errors`. Declared originally in `ml-engines-v2-draft.md §3.2 MUST 2`; re-exported here in the canonical hierarchy.
+- `MultiTenantOpError` (Decision 12) is truly cross-cutting — raised by any primitive that performs a cross-tenant admin operation without PACT D/T/R clearance (registry export/import, feature-store snapshot, serving shadow across tenants). It lives directly under `MLError` (not under `ModelRegistryError` alone) so every spec that gates on cross-tenant paths re-exports it. Canonical home per `supporting-specs-draft/kailash-core-ml-integration-draft.md §3.3` is `kailash.ml.errors.MultiTenantOpError`; kailash-ml re-exports it as `kailash_ml.errors.MultiTenantOpError` so callers in either import path work.
+
+**MUST NOT**: A spec file MAY add sub-types under its family (e.g. `ReferenceNotFoundError(DriftMonitorError)` lives in `ml-drift.md`), but MUST NOT declare a new top-level family outside `kailash_ml.errors`. Every family declaration lives in one file.
+
+### 9.1.1 Canonical Hierarchy Diagram
+
+The hierarchy above is ALSO expressed as the following tree for visual reference. In case of any disagreement between the Python declaration block (§9.1) and this tree, the Python declaration is authoritative. Annotations `— NEW` mark entries introduced by round-3 spec-fix shard D (D1/D3/D4); decision annotations (`— Decision N`) reference `approved-decisions.md`.
+
+```
+MLError  (kailash_ml.errors)
+├── TrackingError
+│   ├── MetricValueError (TrackingError, ValueError)  — Phase-B Round 2b §A.1 T-03 pattern
+│   ├── ParamValueError (TrackingError, ValueError)   — NEW (D4 shard)
+│   ├── ActorRequiredError
+│   ├── TenantRequiredError
+│   ├── RunNotFoundError
+│   ├── ExperimentNotFoundError
+│   ├── TrackerStoreInitError
+│   ├── InvalidTenantIdError
+│   ├── ModelSignatureRequiredError
+│   ├── LineageRequiredError
+│   ├── ArtifactEncryptionError
+│   ├── ArtifactSizeExceededError
+│   ├── AliasNotFoundError
+│   ├── ErasureRefusedError
+│   └── MigrationImportError
+├── AutologError
+│   ├── AutologNoAmbientRunError
+│   └── AutologUnknownFrameworkError
+├── RLError
+│   ├── RLEnvIncompatibleError
+│   ├── RLPolicyShapeMismatchError
+│   ├── ReplayBufferUnderflowError
+│   ├── RewardModelRequiredError
+│   └── FeatureNotYetSupportedError
+├── BackendError (MLError, RuntimeError)
+│   ├── UnsupportedPrecision
+│   └── UnsupportedFamily
+├── DriftMonitorError
+│   ├── ReferenceNotFoundError
+│   ├── InsufficientSamplesError
+│   └── DriftThresholdError
+├── InferenceServerError
+│   ├── ModelLoadError
+│   ├── InvalidInputSchemaError
+│   ├── RateLimitExceededError
+│   ├── TenantQuotaExceededError
+│   ├── ShadowDivergenceError
+│   └── OnnxExportUnsupportedOpsError      — NEW (D1 shard)
+├── ModelRegistryError
+│   ├── ModelNotFoundError
+│   ├── AliasOccupiedError
+│   ├── AliasNotFoundError                  (re-export; canonical home TrackingError)
+│   ├── CrossTenantLineageError
+│   ├── ImmutableGoldenReferenceError      — NEW (D3 shard)
+│   └── TenantQuotaExceededError
+├── FeatureStoreError
+│   ├── FeatureNotFoundError
+│   ├── StaleFeatureError
+│   ├── PointInTimeViolationError
+│   └── TenantQuotaExceededError
+├── AutoMLError
+│   ├── BudgetExhaustedError
+│   ├── InsufficientTrialsError
+│   └── EnsembleFailureError
+├── DiagnosticsError
+│   ├── DLDiagnosticsStateError
+│   └── SeedReportError
+├── DashboardError
+│   ├── UnknownTenantError
+│   ├── AuthorizationError
+│   ├── LiveStreamError
+│   ├── RateLimitExceededError
+│   └── RunNotFoundInDashboardError
+├── UnsupportedTrainerError                 — Decision 8 (cross-cutting, ml-engines-v2 §3.2 MUST 2)
+└── MultiTenantOpError                      — Decision 12 (cross-cutting, kailash-core-ml-integration §3.3)
+```
+
+**Note on re-exports vs multi-inheritance**: the diagram shows `AliasNotFoundError` under BOTH `TrackingError` (canonical home — alias resolution is tracker-adjacent) and `ModelRegistryError` (so registry callers can catch it from the registry family). The Python-level declaration (`class AliasNotFoundError(TrackingError)`) is authoritative; the second appearance denotes a re-export for `except ModelRegistryError` ergonomics, not a second base class. Same pattern: `TenantQuotaExceededError` is declared once under whichever domain owns the primary quota check (registry, feature-store, or serving depending on call site); siblings re-export. No class multi-inherits from two domain families — that would ambiguate `except` order.
+
+### 9.2 Package-Level Re-Export
+
+**MUST**: `kailash_ml/__init__.py` MUST re-export every family error AND every tracking sub-type at the package root so `from kailash_ml import TenantRequiredError` works. Sibling specs (`ml-registry.md`, `ml-drift.md`, `ml-serving.md`, `ml-rl.md`, `ml-feature-store.md`, `ml-automl.md`, `ml-diagnostics.md`, `ml-dashboard.md`, `ml-autolog.md`, `ml-backends.md`) re-export their own family errors at sibling-package roots as well (e.g. `from kailash_ml.rl.errors import RLError`).
+
+### 9.3 Raising Contract
+
+**MUST**:
+
+- A TrackingError sub-type (§9.1) MUST be used for every typed raise path in this spec.
+- A plain `Exception`, `RuntimeError`, or `ValueError` from any code path under `kailash_ml.tracking` / `kailash_ml.engines.experiment_tracker` is BLOCKED — the typed hierarchy is the public contract.
+- Exception messages MUST NOT echo a raw user-supplied `tenant_id`, `run_id`, or `filter` verbatim — they embed a short hash fingerprint instead (same pattern as `rules/dataflow-identifier-safety.md` §2). Prevents stored-XSS-via-log-poisoning.
+
+Origin: closes `round-1-spec-compliance.md:1.19`; CRIT-3 (error hierarchy); Phase-B Round 2b §A.1 T-03 SAFE-DEFAULT (MetricValueError multi-inherit).
+
+---
+
+## 10. Contextvar Propagation (CRIT-4 — Public Accessor)
+
+### 10.1 Public Accessor — `get_current_run()`
+
+**MUST**: The public API for reading the ambient run is the module-level function `kailash_ml.tracking.get_current_run() -> Optional[ExperimentRun]`. Every sibling spec in this bundle (`ml-autolog`, `ml-diagnostics`, `ml-rl-core`, `ml-serving`, `ml-automl`, `ml-drift`, `ml-engines-v2`, `ml-engines-v2-addendum`, `ml-registry`, `ml-feature-store`, `ml-dashboard`) reads the ambient run through this accessor. Direct access to the internal `ContextVar` object is BLOCKED for library callers.
+
+```python
+# DO — public accessor
+from kailash_ml.tracking import get_current_run
+
+run = get_current_run()           # Optional[ExperimentRun]
+if run is not None:
+    await run.log_metric("x", 0.1)
+
+# DO NOT — reach into the internal ContextVar
+from kailash_ml.tracking.runner import _current_run  # BLOCKED outside tracking package
+run = _current_run.get()                              # BLOCKED — internal symbol
+```
+
+**Implementation contract**: The internal `ContextVar` lives at `kailash_ml.tracking.runner._current_run: ContextVar[Optional[ExperimentRun]]` as an implementation detail. `km.track()` pushes on `__aenter__` and pops on `__aexit__` via `ContextVar.reset(token)`. Leaked tokens across `await` boundaries are BLOCKED. Exactly one ambient run exists at any depth; nested `km.track()` stacks via token-reset.
+
+Consumers (listed in their spec):
+
+- `km.autolog()` (`ml-autolog.md` §3) — attaches callbacks only when `get_current_run() is not None`.
+- `DLDiagnostics(tracker=None)` (`ml-diagnostics.md` §4.1) — reads `get_current_run()` when `tracker is None`.
+- `RLDiagnostics(tracker=None)` (`ml-rl-core.md` §7) — same.
+- `ModelRegistry.register()` (`ml-registry.md` §6.2) — uses `get_current_run().run_id` as default `tracker_run_id`.
+- `MLEngine` + every engine in `ml-engines-v2-addendum §E1.1` — reads `get_current_run()` at mutation entry (E1.2 MUST 1).
+
+**Why:** A public accessor is the stable API surface. Callers that grep `_current_run.get()` in 0.x code MUST migrate to `get_current_run()` at 1.0.0 (see §15 Changelog). The internal ContextVar name may be refactored (e.g. renamed to `_run_ctxvar`, moved under a different sub-module) in any future minor release without breaking any sibling-spec consumer. `rules/orphan-detection.md` §6 applies: `get_current_run` MUST appear in `kailash_ml.tracking.__all__` and be eagerly imported — no lazy `__getattr__`.
+
+### 10.2 Public Accessor — `get_current_tenant_id()`
+
+**MUST**: The public accessor for tenant is `kailash_ml.tracking.get_current_tenant_id() -> Optional[str]`, reading the internal `_current_tenant_id: ContextVar[Optional[str]]` set by `km.track(tenant_id=)`. Every query primitive that defaults `tenant_id=None` to the ambient value MUST go through this accessor.
+
+### 10.3 DDP / FSDP / DeepSpeed Rank-0-Only Emission (Decision 4)
+
+**MUST**: Every mutation primitive on `ExperimentRun` — `log_metric`, `log_metrics`, `log_figure`, `log_artifact`, `log_model`, `log_param`, `log_params`, `set_tags`, `attach_training_result` — MUST emit ONLY when the process is rank-0 under a distributed training setup. Rank-0 is hardcoded, NOT configurable.
+
+```python
+# DO — rank-0 gate at every mutation entry
+def _is_rank_zero() -> bool:
+    try:
+        import torch.distributed as dist
+        if dist.is_available() and dist.is_initialized():
+            return dist.get_rank() == 0
+    except (ImportError, RuntimeError):
+        pass
+    return True  # rank API unavailable → treat as rank-0 (single-process)
+
+async def log_metric(self, key, value, *, step=None, timestamp=None):
+    if not _is_rank_zero():
+        return   # silent no-op on non-rank-0 workers
+    # ... normal path
+```
+
+**Why:** Lightning DDP, HF Trainer deepspeed integration, and raw `torch.distributed` launchers all spawn N processes (1 per GPU). Without the rank-0 gate, every metric is written N times, corrupting every dashboard panel and every `log_metrics` row. Rank-0-only is the industry convention (W&B, MLflow Lightning integration, `lightning.pytorch.loggers.*`). Decision 4 locks it as a MUST clause, not an opt-in flag — making it configurable re-introduces the N-duplicate failure mode.
+
+**Tier 2 test**: `tests/integration/test_tracker_ddp_rank0_only_emission.py` MUST mock `torch.distributed.get_rank()` to return 1 on a worker process, call `run.log_metric(...)`, and assert NO row appears in `_kml_metric`. The companion test on rank 0 MUST assert the row DOES appear. Rank-API-unavailable path (non-distributed execution) MUST pass-through normally.
+
+Origin: Decision 4 (approved 2026-04-21). Cross-references: autolog mirror clause (`ml-autolog.md §3.2`), DLDiagnostics mirror clause (`ml-diagnostics.md §4`).
+
+---
+
+## 11. MCP Surface
+
+### 11.1 Server Class
+
+**MUST**: `kailash_ml.tracker.mcp.TrackerMCPServer` MUST exist as a subclass of the `kailash-mcp` framework server base. Per `rules/framework-first.md`, rolling a custom MCP server is BLOCKED.
+
+```python
 from kailash_ml.tracker.mcp import TrackerMCPServer
 from kailash.mcp import serve_mcp
 
 server = TrackerMCPServer(tracker=my_tracker, registry=my_registry)
 await serve_mcp(server, transport="stdio")
-
-# DO NOT — hand-rolled FastMCP
-# BLOCKED: from fastmcp import FastMCP; mcp = FastMCP("tracker"); ...
 ```
 
-**Why:** The `kailash-mcp` framework enforces auth, rate-limits, and audit logging that a hand-rolled server silently skips. Every MLflow-like system that ships a custom MCP endpoint ends up re-implementing auth 3 months later.
+Origin: closes `round-1-spec-compliance.md:1.12` (grep currently empty).
 
-### 5.2 Tools
+### 11.2 Tools
 
-**MUST**: `TrackerMCPServer` MUST expose the following MCP tools. Each is an independently invocable method with a JSON schema documented in the server class:
+**MUST**: The server MUST expose these tools:
 
-| Tool name          | Purpose                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| `list_experiments` | `(tenant_id, filter_expr, limit)` → `List[ExperimentInfo]`                             |
-| `get_run`          | `(run_id, tenant_id)` → full metadata + metrics + params + auto-captured environment   |
-| `search_runs`      | `(query, order_by, limit, tenant_id)` → `List[RunInfo]`                                |
-| `get_model`        | `(name, alias_or_version, tenant_id)` → `ModelVersionInfo` with resolved artifact URIs |
-| `list_models`      | `(name_pattern, tenant_id)` → `List[ModelVersionInfo]`                                 |
-| `diff_runs`        | `(run_a, run_b, tenant_id)` → `RunDiff` with per-key param/metric/env deltas           |
-| `list_aliases`     | `(name, tenant_id)` → `Dict[alias, version]`                                           |
-| `get_lineage`      | `(model_name, version, tenant_id)` → full lineage chain to training data               |
+| Tool           | Signature                                                               |
+| -------------- | ----------------------------------------------------------------------- |
+| `start_run`    | `(experiment, tenant_id=None, parent_run_id=None, tags=None) -> run_id` |
+| `log_metric`   | `(run_id, key, value, step=None, tenant_id=None) -> None`               |
+| `log_params`   | `(run_id, mapping, tenant_id=None) -> None`                             |
+| `search_runs`  | `(filter, order_by, limit, tenant_id=None) -> DataFrame(JSON)`          |
+| `get_run`      | `(run_id, tenant_id=None) -> RunRecord(JSON)`                           |
+| `compare_runs` | `(run_a, run_b, tenant_id=None) -> RunDiff(JSON)`                       |
 
-**Why:** These eight tools are the smallest surface that lets an agent answer "which model is in production, how does it compare to the staging candidate, and what data was each trained on?" — the core MLflow use case. `diff_runs` is the killer feature MLflow does not provide.
+Every tool MUST be gated by the MCP framework's auth layer; audit rows record the calling agent identity.
 
-### 5.3 `diff_runs` Contract
+---
 
-**MUST**: `diff_runs(run_a, run_b)` MUST return a `RunDiff` with three sections:
+## 12. Import From MLflow
+
+### 12.1 Entry Point
 
 ```python
-@dataclass
-class RunDiff:
-    params: Dict[str, ParamDelta]          # keys present in either run
-    metrics: Dict[str, MetricDelta]        # keys present in either run; includes per-step diff if both logged steps
-    environment: Dict[str, EnvDelta]       # python/cuda/lightning/git_sha/device/accelerator/precision
-    summary: str                           # human-readable one-paragraph summary
+async def import_mlflow(
+    path_or_uri: str,
+    *,
+    tenant_id: Optional[str] = None,
+    since: Optional[datetime] = None,
+    until: Optional[datetime] = None,
+    model_names: Optional[List[str]] = None,
+) -> MigrationReport: ...
 ```
 
-**MUST**: `RunDiff` MUST highlight **high-impact deltas** with a typed flag: different `git_sha` AND different `cuda_version` AND >5% metric delta → flagged as "reproducibility risk." The flag MUST be emitted as a structured field, not a free-text note.
+**MUST**: `import_mlflow` MUST be exposed as `km.import_mlflow(...)`. Supports MLflow URI schemes `http://`, `https://`, `file://`, `sqlite://`, `databricks://`. Idempotent (matched by `source_run_id == MLflow.run_id`). Preserves MLflow stages as kailash-ml aliases (`Production` → `production`, `Staging` → `staging`).
 
-**Why:** Without a diff primitive, users copy-paste two `get_run` outputs into a spreadsheet. The reproducibility-risk flag catches the exact pattern that causes "we can't reproduce the staging result in production" — different CUDA versions with otherwise-identical params.
+Origin: closes `round-1-spec-compliance.md:1.18`; industry competitive gap (no migration = no adoption from MLflow-installed base).
+
+### 12.2 Re-verification of Pickle Models
+
+**MUST**: For every imported pickle-format model, if an ONNX export is viable, emit a fresh ONNX artifact and set `onnx_reexported=True` on the version. Otherwise set `onnx_status="legacy_pickle_only"`. Silent carry-over of the legacy format is BLOCKED.
 
 ---
 
-## 6. Storage Key Shape
+## 13. Dashboard Contract
 
-### 6.1 Tenant-Scoped Keys
+### 13.1 Default
 
-**MUST**: All primary keys MUST follow the shape `kailash_ml:v1:{tenant_id}:{resource}:{id}`:
+**MUST**: `MLDashboard(db_url=None)` MUST default `db_url` to `f"sqlite:///{Path.home() / '.kailash_ml' / 'ml.db'}"`. The default MUST match §2.2 verbatim. Shipping with any other default is BLOCKED.
 
-| Resource    | Key shape                                             |
-| ----------- | ----------------------------------------------------- |
-| Experiments | `kailash_ml:v1:{tenant_id}:exp:{experiment_id}`       |
-| Runs        | `kailash_ml:v1:{tenant_id}:run:{run_id}`              |
-| Models      | `kailash_ml:v1:{tenant_id}:model:{name}:{version}`    |
-| Aliases     | `kailash_ml:v1:{tenant_id}:alias:{name}:{alias}`      |
-| Artifacts   | `kailash_ml:v1:{tenant_id}:artifact:{sha256}`         |
-| Lineage     | `kailash_ml:v1:{tenant_id}:lineage:{model}:{version}` |
+### 13.2 Streaming Endpoints
 
-**Why:** Same tenant-dimension-everywhere contract as `rules/tenant-isolation.md` MUST Rule 1. Any piece of state without a tenant dimension leaks across tenants as soon as two tenants happen to share a primary key (run IDs are UUIDs but model names are user-chosen strings — overlap is the norm, not the exception).
+**MUST**: Dashboard server MUST expose SSE endpoint `/stream/runs/{run_id}` and WebSocket endpoint `/ws/runs/{run_id}` that push live metric updates. Implementation details are owned by `ml-dashboard.md`; this spec defines only the store-path contract and the event-shape contract (JSON with `type in {"metric","param","status","artifact"}`).
 
-### 6.2 Missing Tenant in Multi-Tenant Mode
+---
 
-**MUST**: When a `Tracker` or `Registry` is constructed with `multi_tenant=True`, every operation that constructs a key MUST require `tenant_id`. Missing `tenant_id` MUST raise `TenantRequiredError`. Silent fallback to `"default"` / `"global"` / `""` is BLOCKED.
+## 14. Test Matrix
 
-```python
-# DO — strict typed error
-tracker = await ExperimentTracker.open(store=..., multi_tenant=True)
-await tracker.log_metric("acc", 0.9)  # raises TenantRequiredError
+### 14.1 Unit Tests (Tier 1)
 
-# DO NOT — silent default
-# BLOCKED: tenant_id = tenant_id or "default"
+**MUST**: Every public method on `ExperimentTracker`, `ExperimentRun`, `ModelRegistry`, `ArtifactStore`, and `TrackerMCPServer` MUST have at least one Tier 1 unit test exercising the happy path AND one exercising each typed exception (§9.1). Unit tests MAY use `store="sqlite+memory"`.
+
+### 14.2 Wiring Tests (Tier 2)
+
+**MUST**: Every manager-shape class MUST have a `test_<lowercase_name>_wiring.py` file per `rules/facade-manager-detection.md` §2. Required files:
+
+```
+packages/kailash-ml/tests/integration/
+  test_experimenttracker_wiring.py
+  test_modelregistry_wiring.py
+  test_artifactstore_wiring.py
+  test_trackermcpserver_wiring.py
 ```
 
-**Why:** Exact same failure mode as `rules/tenant-isolation.md` MUST Rule 2. The first day of multi-tenant ops looks fine because tenant A and tenant B happen not to share a run name. The incident surfaces months later when they do.
+Each wiring test MUST:
 
-### 6.3 Invalidation
+1. Import through `km.track()` / `km.registry()` / `km.artifacts()` — NOT the class directly.
+2. Run against real Postgres (via the pre-configured Tier 2 fixture).
+3. Assert externally-observable effect (row in `_kml_audit`, artifact in S3 test bucket, etc.).
 
-**MUST**: `tracker.invalidate_experiment(name, tenant_id)` and `registry.invalidate_model(name, tenant_id)` MUST accept `tenant_id` so that tenant-scoped invalidation does not blow away other tenants' cached slots. Unscoped invalidation is permitted ONLY with `tenant_id=None` explicitly passed, and the caller MUST demonstrate admin authority (see `security-auth.md`).
+### 14.3 End-to-End Unification Regression
 
-**Why:** See `rules/tenant-isolation.md` MUST Rule 3. A tenant password rotation should not trigger a registry cold-start for every other tenant.
+**MUST**: Tier 2 file `tests/regression/test_tracker_dashboard_unification.py` MUST:
 
-### 6.4 Metric Labels
+1. Start `km.track("e2e")` against the default store.
+2. Log one metric.
+3. Open `MLDashboard()` with default constructor.
+4. Assert the dashboard's `latest()` method returns the run within 1 second.
 
-**MUST**: Prometheus metrics emitted by `ExperimentTracker` / `ModelRegistry` / `ArtifactStore` MUST NOT use `tenant_id` as an unbounded label. The bounded-top-N pattern from `rules/tenant-isolation.md` MUST Rule 4 applies — only the top 100 tenants get a label, the rest bucket as `"_other"`.
+This is the regression test that closes round-1 T1. Deleting it is BLOCKED.
 
-**Why:** See `rules/tenant-isolation.md` MUST Rule 4. A 10K-tenant SaaS producing 130K time series is a Prometheus OOM waiting to happen.
+### 14.4 NaN/Inf Metric Regression
 
----
+**MUST**: `tests/regression/test_metric_value_error.py` asserts `log_metric("loss", float("nan"))` and `log_metric("loss", float("inf"))` both raise `MetricValueError`.
 
-## 7. Retention and GDPR
+### 14.5 Tenant Isolation Regression
 
-### 7.1 Data Subject Columns
-
-**MUST**: Every run, model, and artifact record MUST carry two fields:
-
-| Field              | Type        | Purpose                                                              |
-| ------------------ | ----------- | -------------------------------------------------------------------- |
-| `owner_tenant_id`  | `str`       | The tenant that owns the record (always populated)                   |
-| `data_subject_ids` | `List[str]` | Optional list of data subject IDs whose personal data may be present |
-
-Data subject IDs are typically user IDs, customer IDs, or patient IDs that appeared in the training data. Recording them is the caller's responsibility — `km.track(data_subject_ids=[...])` is the entry point.
-
-**Why:** GDPR Article 17 (right to erasure) cannot be honored without knowing which runs / models / artifacts were trained on the subject's data. Optional fields get skipped in ad-hoc pipelines — the spec makes them a mandatory column with `List[str]` defaulting to `[]`.
-
-### 7.2 Erasure API
-
-**MUST**: `tracker.delete_data_subject(ids: List[str], *, reason: str, requested_by: str)` MUST:
-
-1. Enumerate every run, model, and artifact whose `data_subject_ids` intersect `ids`
-2. Delete the enumerated records atomically
-3. Write an audit row per deletion to `_kml_erasure_audit` with `(record_id, record_type, data_subject_ids, reason, requested_by, timestamp)`
-4. Return an `ErasureReport` listing deleted records and preserved-but-flagged records (models serving traffic under `alias=production`)
-
-```python
-# DO — audit trail persists even after records are gone
-report = await tracker.delete_data_subject(
-    ids=["user-42"],
-    reason="GDPR Art. 17 request",
-    requested_by="privacy-team@acme.com",
-)
-# The deleted runs' IDs are gone; _kml_erasure_audit has the audit trail
-
-# DO NOT — erase without audit
-# BLOCKED: raw DELETE WHERE user_id IN (...)  without writing _kml_erasure_audit
-```
-
-**MUST**: Records whose deletion would remove a model currently pointed at by `alias=production` MUST NOT be deleted. The `ErasureReport` MUST flag them with action `"requires_alias_migration"`. The caller is responsible for re-training on non-subject data and repointing the alias before retrying erasure.
-
-**Why:** GDPR erasure that takes down production inference is operationally worse than delaying the erasure. The flag-and-require-explicit-migration contract preserves production while making the blocker visible.
-
-**OPEN QUESTION**: GDPR exact semantics around derived data. If a subject's rows contributed to the training of a model that has since been re-trained on non-subject data, is the original model considered "containing personal data"? This spec's position: YES, because model weights can memorize training inputs. The original version must be deletable; only the new version that excludes the subject may be retained. Revisit once legal review is in.
-
-### 7.3 Retention Defaults
-
-**MUST**: The default retention policy, applied when no explicit policy is configured, MUST be:
-
-- Runs under any alias: retain indefinitely
-- Unaliased runs: retain 90 days
-- Orphan artifacts (no reachable run or model): retain 30 days
-- Erasure audit rows: retain indefinitely
-
-**Why:** Production runs are operationally valuable forever; experimental runs become noise within a quarter. Defaults encode the obvious policy so teams don't ship with "retain forever."
+**MUST**: `tests/regression/test_tenant_isolation_keyspace.py` asserts every key written by `km.track("exp", tenant_id="A")` contains the literal substring `:A:` and keys written with `tenant_id="B"` contain `:B:`; cross-tenant read of `:A:` keys under `tenant_id="B"` raises `RunNotFoundError`.
 
 ---
 
-## 8. Migration from MLflow
+## 15. Changelog — 1.0.0 Breaking Changes (Decision 14)
 
-### 8.1 Import Entry Point
+`kailash-ml 1.0.0` is a MAJOR release (0.17.x → 1.0.0). Every row below is a BREAKING change. The version jump signals API-stable across the full ML lifecycle surface.
 
-**MUST**: `km.import_mlflow(mlflow_uri, *, tenant_id, since=None, until=None, model_names=None)` MUST be the sole migration entry point. It MUST:
+| Area                  | Change                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tracker class         | **DELETED** — `kailash_ml.tracking.SQLiteTrackerBackend` removed. Use `km.track()` / `await ExperimentTracker.create(...)`. (§2.3, §2.5)                                                                                                                                                                                         |
+| Tracker constructor   | **RENAMED** — sole async factory is `await ExperimentTracker.create(store_url=None, *, default_tenant_id=None)`. Legacy `.open()` / `ExperimentTracker(conn)` BLOCKED. (§2.5)                                                                                                                                                    |
+| Default DB path       | **UNIFIED** — `km.track()` and `MLDashboard()` both default to `~/.kailash_ml/ml.db`. All 0.x alternate-path stores consolidated via `1_0_0_merge_legacy_stores` migration. (§2.2, §16)                                                                                                                                          |
+| Status vocabulary     | **HARD MIGRATION** — `{RUNNING, FINISHED, FAILED, KILLED}` only. 0.x `COMPLETED` / `SUCCESS` rows hard-coerced to `FINISHED` via `1_0_0_rename_status` migration. No accept-on-read bridge. (§3.2, §3.5, §16)                                                                                                                    |
+| `log_metric`          | **ADDED** on `ExperimentRun` (was engine-only at 0.x); NaN/Inf raises `MetricValueError`. (§4.2)                                                                                                                                                                                                                                 |
+| `log_metrics`         | **ADDED** on `ExperimentRun`. (§4.2)                                                                                                                                                                                                                                                                                             |
+| Query return type     | **CHANGED** — `list_runs` / `search_runs` / `list_experiments` / `list_metrics` / `list_artifacts` now return `polars.DataFrame`. `list[Run]` is BLOCKED. (§5.1)                                                                                                                                                                 |
+| `diff_runs`           | **ADDED** — new primitive with frozen `RunDiff` dataclass. (§5.3)                                                                                                                                                                                                                                                                |
+| Keyspace              | **MIGRATED** — all cache keys to `kailash_ml:v1:{tenant_id}:{resource}:{id}`. (§7.1)                                                                                                                                                                                                                                             |
+| Tenant strict mode    | **ENFORCED** — `multi_tenant=True` raises `TenantRequiredError`; silent `"default"` fallback BLOCKED. `"_single"` used in single-tenant dev. (§7.2)                                                                                                                                                                              |
+| `actor_id`            | **CONTEXTVAR ONLY** — `actor_id` flows from `km.track(actor_id=...)` session entry, NOT as per-call kwarg on `log_metric` / `log_param` / etc. (HIGH-4 round-1 finding, §8.1)                                                                                                                                                    |
+| Audit rows            | **IMMUTABLE** — every mutation writes a row; GDPR erasure does NOT delete audit rows (hashed fingerprints retained per Decision 2). (§8.2, §8.4)                                                                                                                                                                                 |
+| Error hierarchy       | **NEW ROOT** — `MLError` is the package root; 11 family errors inherit from `MLError`; every domain-specific error re-routes. (CRIT-3, §9.1)                                                                                                                                                                                     |
+| Exceptions            | 15 typed exceptions in the `TrackingError` family (`ActorRequiredError`, `MetricValueError`, `ParamValueError` added; `ParamValueError` mirrors `MetricValueError` multi-inheriting `ValueError`). Cross-cutting `UnsupportedTrainerError` (Decision 8) and `MultiTenantOpError` (Decision 12) sit at the `MLError` root. (§9.1) |
+| `sqlite+memory` alias | **ACCEPTED** in `store_url=` parameter. (§6.1)                                                                                                                                                                                                                                                                                   |
+| Contextvar public API | **ADDED** — `kailash_ml.tracking.get_current_run()` + `get_current_tenant_id()` public; direct `_current_run` access BLOCKED for library callers. (CRIT-4, §10.1, §10.2)                                                                                                                                                         |
+| DDP rank-0 gate       | **HARDCODED** — every mutation emits only when `torch.distributed.get_rank() == 0` OR rank API unavailable. NOT configurable. (Decision 4, §10.3)                                                                                                                                                                                |
+| MCP                   | `TrackerMCPServer` added with 6 tools. MCP is the ONLY surface that takes explicit `(run_id, tenant_id, actor_id)` (no contextvar across MCP). (§11)                                                                                                                                                                             |
+| MLflow import         | `km.import_mlflow()` added. (§12)                                                                                                                                                                                                                                                                                                |
+| `log_figure`          | New primitive for DLDiagnostics / RLDiagnostics event sink. (§4.4)                                                                                                                                                                                                                                                               |
+| `km.autolog()`        | New entry point (`ml-autolog.md`).                                                                                                                                                                                                                                                                                               |
 
-1. Connect to the MLflow tracking server at `mlflow_uri` (supports `http://`, `https://`, `file://`, `sqlite://`, `databricks://`)
-2. Enumerate experiments within the optional time / name filters
-3. Import each experiment, preserving `experiment_id`, `run_id`, metrics, params, tags, and artifacts
-4. Re-verify every model artifact — if the artifact is pickle and an ONNX export is possible, emit a fresh ONNX artifact and flag the version `onnx_reexported=True`; if not possible, flag `onnx_status="legacy_pickle_only"`
-5. Preserve MLflow stages as aliases — `"Production"` → alias `"production"`, etc.
-6. Return a `MigrationReport` with counts (experiments, runs, models, artifacts, reexported, failed) and a per-record log of any import failures
+### Migration script outline (ships in same PR — Decision 14)
 
-**Why:** Bulk-importing preserves institutional history when teams migrate. Skipping ONNX re-verification means every migrated pickle-model silently falls through to the native prediction path and never gets the ONNX optimization. The re-export-or-flag contract makes that visible.
-
-**OPEN QUESTION**: Scope of MLflow-import. Should we support streaming import of in-flight experiments (MLflow server still receiving writes while we copy)? Initial position: NO — recommend read-only MLflow snapshots for migration. Revisit if pressure from a specific migration customer surfaces.
-
-### 8.2 Import Determinism
-
-**MUST**: Re-running `km.import_mlflow()` against the same MLflow server MUST be idempotent — runs already imported (matched by `source_run_id` equal to MLflow's `run_id`) MUST NOT be duplicated. New runs since the last import MUST be imported. The `MigrationReport` MUST distinguish "imported-new" from "already-imported-skipped."
-
-**Why:** A partial migration followed by a resume is the common real-world path. Non-idempotent import duplicates the last N runs on every resume.
-
----
-
-## 9. In-Memory Mode
-
-### 9.1 `sqlite+memory` Contract
-
-**MUST**: `ExperimentTracker` and `ModelRegistry` MUST support `store="sqlite+memory"` (alias: `"sqlite:///:memory:"`). In this mode:
-
-- No disk I/O — database lives in process memory
-- `ArtifactStore` defaults to `SqliteBlobArtifactStore` within the same in-memory DB
-- Process exit drops all runs, models, and artifacts — no persistence
-- Intended for notebooks, unit tests, and interactive debugging
-
-```python
-# DO — notebook workflow with no persistence
-async with km.track("sandbox", store="sqlite+memory") as t:
-    await t.log_metric("acc", 0.85)
-    # Everything disappears when the cell finishes
-```
-
-**Why:** Closes the user-reported pain point #8 in `00-synthesis-redesign-proposal.md §3.6` — the 1.x `ExperimentTracker` required a file-backed SQLite and could not use `:memory:`, blocking every notebook exploration workflow.
-
-### 9.2 Explicit Mode Flag
-
-**MUST**: `tracker.is_ephemeral: bool` MUST be True when the store is in-memory. Auto-capture MUST emit a WARN-level log on `__aenter__` stating "tracker is ephemeral — runs will not persist." The log MUST include the run_id so downstream log aggregators can correlate.
-
-**Why:** Notebook users commonly forget they started in ephemeral mode and expect their results to be visible next session. The WARN is loud enough to catch the mistake on first use.
+- `kailash_ml.tracking.migrations.1_0_0_rename_status` — coerce SUCCESS/COMPLETED → FINISHED atomically (§16).
+- `kailash_ml.tracking.migrations.1_0_0_merge_legacy_stores` — consolidate any existing `~/.kailash_ml/kailash-ml.db` / alternate 0.x store into `~/.kailash_ml/ml.db` (§16).
+- `kailash_ml.tracking.migrations.1_0_0_delete_sqlitetrackerbackend` — remove the legacy import alias + namespace surface (§16).
 
 ---
 
-## 10. Cross-SDK Alignment
+## 16. Migration — 0.17.x → 1.0.0
 
-### 10.1 Shared Contract
+### 16.1 Numbered Migration Inventory
 
-This spec is **Python-Rust shared**. The API surface (method names, signatures modulo language conventions, storage key shape, tool names, error types) MUST match between kailash-py and kailash-rs. Per `rules/cross-sdk-inspection.md` (EATP D6), the SDKs carry independent implementations with matching semantics.
+All migrations live under `packages/kailash-ml/src/kailash_ml/_storage/migrations/` per `rules/schema-migration.md`. They run atomically on first `km.track()` / `MLDashboard()` call at 1.0.0 against any pre-1.0 store, in numeric order.
 
-### 10.2 Rust Translation
+| Migration                               | Operation                                                                                                                                                                                                                                                                        |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `1_0_0_rename_status`                   | `UPDATE _kml_run SET status='FINISHED' WHERE status IN ('COMPLETED', 'SUCCESS', 'SUCCEEDED', 'DONE')` — atomic, single transaction. Add CHECK constraint `status IN ('RUNNING', 'FINISHED', 'FAILED', 'KILLED')` after the coercion.                                             |
+| `1_0_0_merge_legacy_stores`             | Detect any existing `~/.kailash_ml/kailash-ml.db` (legacy dashboard default) — copy rows into `~/.kailash_ml/ml.db` resolving `tenant_id` collisions via (tenant_id, run_id) compound PK; rename legacy file to `kailash-ml.db.pre-1.0`. Emit INFO log with row counts migrated. |
+| `1_0_0_delete_sqlitetrackerbackend`     | Remove `kailash_ml.tracking.SQLiteTrackerBackend` import alias from `__init__.py`; delete `kailash_ml/tracking/sqlite_backend.py` (file-level delete); update `__all__` to drop the symbol. (Code-level migration, not DDL.)                                                     |
+| `1_0_0_add_actor_required_error`        | Register `ActorRequiredError` in `kailash_ml.errors.__all__` + re-export from `kailash_ml/__init__.py`. (Code-level migration.)                                                                                                                                                  |
+| `1_0_0_add_contextvar_public_accessors` | Register `get_current_run`, `get_current_tenant_id` in `kailash_ml.tracking.__all__` + eager import per `rules/orphan-detection.md` §6. (Code-level migration.)                                                                                                                  |
+| `1_0_0_collapse_keyspace`               | Version-wildcard sweep any cached redis keys `kailash_ml:v0:*` into `kailash_ml:v1:*` per `rules/tenant-isolation.md §3a`. Operators who never enabled Redis cache are no-op.                                                                                                    |
 
-| Clause                            | Python                                        | Rust                                                  |
-| --------------------------------- | --------------------------------------------- | ----------------------------------------------------- | --- | --------------------- |
-| Async context manager (§2.2)      | `async with km.track(...) as t:`              | `async_trait` + `tracker.with_run(                    | r   | async { ... }).await` |
-| ONNX export (default format §2.5) | `format="onnx"` via `skl2onnx` / `torch.onnx` | `tract-onnx` as the export backend                    |
-| Storage backends (§4.1)           | `boto3`, `google-cloud-storage`, etc.         | `rust-s3`, `google-cloud-storage-rs`, `azure_storage` |
-| MCP surface (§5)                  | `kailash-mcp` (Python)                        | `mcp-rs` (Rust)                                       |
-| Polars return (§2.6)              | `polars.DataFrame`                            | `polars::DataFrame` (Rust polars)                     |
-| Storage key shape (§6)            | Same `kailash_ml:v1:{tenant_id}:...`          | Same — binary-identical keys allow cross-SDK read     |
+### 16.2 Migration Doc
 
-**MUST**: Rust reads of keys written by Python (and vice versa) MUST succeed without transformation. Cross-SDK interop tests (one written in Python, read in Rust; one written in Rust, read in Python) MUST live in `kailash-py/tests/cross_sdk/` and `kailash-rs/tests/cross_sdk/` respectively.
+The migration guide ships in the same PR as the 1.0.0 version bump at `packages/kailash-ml/docs/MIGRATION_1_0_0.md`. It covers:
 
-**Why:** The value proposition of cross-SDK alignment collapses the moment the wire formats drift. Mechanical key-shape equality is the cheapest guarantee against that drift.
+1. **What's deleted** — `SQLiteTrackerBackend`, `ExperimentTracker(conn)` sync-construction, per-call `tenant_id=` / `actor_id=` kwargs on mutations, `status="COMPLETED"` / `"SUCCESS"` write paths.
+2. **What's renamed** — `.open()` → `.create()`, legacy store path → canonical `~/.kailash_ml/ml.db`.
+3. **What's new** — `get_current_run()` / `get_current_tenant_id()`, `MLError` root, `log_metric` on ExperimentRun, `diff_runs`, `km.autolog()`, `TrackerMCPServer`.
+4. **Code-migration examples** — 10-line before/after sketches for the five most common 0.x usages.
+5. **Rollback instructions** — the legacy store is renamed (not deleted) to `kailash-ml.db.pre-1.0`; a user who needs to roll back pins to `kailash-ml<1.0` and points the dashboard at the renamed file.
 
-### 10.3 Rust-Specific Notes
+### 16.3 Migration Tests
 
-**MUST**: Rust `TrainingResult.accelerator` values MUST match the Python value set — `"cuda"`, `"mps"`, `"rocm"`, `"xpu"`, `"tpu"`, `"cpu"`. TPU support in Rust is marked N/A (`torch_xla` is Python-only) but the enum variant MUST exist so records imported from Python deserialize.
+**MUST**: `tests/integration/test_migration_1_0_0.py` exercises each numbered migration against a synthetic 0.17.x store:
 
-**Why:** Skipping the `TPU` variant in the Rust enum makes Python-written records unreadable in Rust and breaks the shared-contract claim.
+1. Seed the pre-1.0 store with 100 rows mixing `status='COMPLETED'`, `'SUCCESS'`, `'FINISHED'`.
+2. Run the migration suite.
+3. Assert every row now has `status='FINISHED'` (no drift).
+4. Assert the CHECK constraint rejects a subsequent insert with `status='COMPLETED'`.
+5. Repeat for legacy-store merge + alias-deletion tests.
 
----
-
-## 11. Errors
-
-### 11.1 Exception Hierarchy
-
-**MUST**: All exceptions raised from `kailash_ml.tracker`, `kailash_ml.registry`, and `kailash_ml.artifacts` MUST inherit from `TrackingError`. Subclasses:
-
-| Exception                     | Raised when                                                                  |
-| ----------------------------- | ---------------------------------------------------------------------------- |
-| `TrackerStoreInitError`       | Store URI cannot be initialized (permission, disk full, invalid connection)  |
-| `TenantRequiredError`         | Multi-tenant mode without `tenant_id`                                        |
-| `InvalidTenantIdError`        | `tenant_id` fails the safety regex                                           |
-| `ModelSignatureRequiredError` | `registry.register()` called without `signature`                             |
-| `LineageRequiredError`        | `registry.register()` called without a tracker context (no `tracker_run_id`) |
-| `ArtifactEncryptionError`     | Encrypt-then-store failed; includes `.reason` field                          |
-| `ArtifactSizeExceededError`   | Artifact exceeds backend `max_artifact_bytes`                                |
-| `RunNotFoundError`            | `get_run(run_id)` with unknown run                                           |
-| `ModelNotFoundError`          | `registry.get(name, version)` with unknown version                           |
-| `AliasNotFoundError`          | `registry.get(name, alias=)` with unset alias                                |
-| `ErasureRefusedError`         | `delete_data_subject()` blocked by production alias                          |
-| `MigrationImportError`        | MLflow import failed for a specific record (other records continue)          |
-
-**Why:** Typed exceptions make error handling surgical. MLflow raises generic `Exception` in many paths, which forces downstream code to `except Exception: ...` and swallow unrelated errors.
+Regression test `tests/regression/test_migration_idempotent.py` ensures running the migration suite twice produces the same result (no duplicate rows, no duplicate errors).
 
 ---
 
-## 12. Version
+## Appendix A. Open Questions
 
-```python
-from kailash_ml import __version__
-assert __version__ == "2.0.0"
-```
+All round-2 open questions are RESOLVED per `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` (2026-04-21). This appendix is retained for traceability only — no open questions remain at 1.0.0.
 
-Both `packages/kailash-ml/pyproject.toml` and `packages/kailash-ml/src/kailash_ml/__init__.py` MUST report the same version (zero-tolerance Rule 5).
-
----
-
-## Appendix A. MLflow Features Consciously NOT Matched
-
-| MLflow feature                                          | Decision    | Reason                                                                                                                                                                                                |
-| ------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mlflow.projects`                                       | NOT MATCHED | Replaced by Kaizen workflow orchestration per `rules/framework-first.md`. Reimplementing projects-as-entrypoints duplicates Kaizen.                                                                   |
-| `mlflow.evaluate`                                       | NOT MATCHED | Replaced by `engine.evaluate()` in `ml-engines.md`. Tracking records the run_id; evaluation is a training-spec concern.                                                                               |
-| Model flavors (`mlflow.sklearn`, `mlflow.pytorch`, ...) | NOT MATCHED | Replaced by `format=` parameter on `log_model`. Flavor-as-module proliferates import paths; `format="onnx"` defaults enforce one canonical format.                                                    |
-| Model serving via MLflow REST                           | NOT MATCHED | Replaced by Nexus multi-channel serving (REST + MCP + CLI + WebSocket) per `nexus-channels.md`.                                                                                                       |
-| AutoLog for 13 frameworks                               | NOT MATCHED | Auto-capture is scoped to environment fields (§2.4). Per-framework autologging is brittle (MLflow auto-log for XGBoost has been broken across 4 MLflow versions). Users call `log_metric` explicitly. |
-| System metrics (CPU, memory, GPU util) sampling         | DEFERRED    | Scope-deferred to a future `ml-observability.md`. Not worth coupling to tracking right now.                                                                                                           |
-
-## Appendix B. Open Questions
-
-1. **GDPR semantics for derived models** (§7.2) — is a re-trained model considered to "contain" the original subject's data? Current position: YES. Awaiting legal review.
-2. **MLflow import scope** (§8.1) — streaming vs snapshot only? Current position: snapshot only. Revisit on customer pressure.
-3. **Alias vocabulary** (§3.3) — are the six reserved names (`production`, `staging`, `champion`, `challenger`, `canary`, `shadow`) the right set? Should `experiment` or `candidate` be reserved too?
-4. **`diff_runs` reproducibility flag threshold** (§5.3) — is 5% metric delta the right trigger? Could be configurable per tenant.
-5. **Artifact encryption key management** (§4.3) — this spec assumes the store uses backend-provided KMS integration. Should we specify a BYOK path? Defer to `security-data.md` when that spec is updated.
-6. **Retention defaults** (§7.3) — 90 days for unaliased, 30 for orphan artifacts. Survey actual usage before locking.
-7. **Cross-SDK TPU variant** (§10.3) — Python-only enum variants create Rust deserialization problems when the variant is absent. Accept lossy deserialize or require exhaustive variants? Current position: exhaustive.
+| Original TBD                    | Disposition                                                                                                                                                                                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status vocab migration          | **PINNED** (Decision 1) — FINISHED only; hard-coerce via numbered migration (§16).                                                                                                                                                                                                  |
+| GDPR erasure semantics          | **PINNED** (Decision 2) — audit rows immutable; hashed fingerprints (§8.4).                                                                                                                                                                                                         |
+| `MetricValueError` inheritance  | **PINNED** (Phase-B Round 2b §A.1 T-03 SAFE-DEFAULT) — `MetricValueError(TrackingError, ValueError)` multi-inherit (§9.1).                                                                                                                                                          |
+| Actor-resolution default        | **PINNED** (HIGH-4 round-1 finding) — `require_actor=False` default, flipped True by `multi_tenant=True`; contextvar only, no kwarg (§8.1).                                                                                                                                         |
+| `_kml_` vs `kailash_ml_` prefix | **PINNED** (TBD T-02 + Phase-F F1) — keep both: `_kml_` tables (internal tables; leading underscore marks these as not-for-direct-user-query per `rules/dataflow-identifier-safety.md` Rule 2; Postgres 63-char brevity retained); `kailash_ml:` Redis keyspace (operator-visible). |
+| Audit-row delete semantics      | **PINNED** (Decision 2) — audit rows NEVER deleted; fingerprints persist.                                                                                                                                                                                                           |
+| Cross-SDK status-enum parity    | **PINNED** (Decision 3) — 4-member enum byte-identical kailash-py ↔ kailash-rs; cross-SDK todo at kailash-rs#502.                                                                                                                                                                   |
 
 ---
 
-_End of draft. Authored per `rules/specs-authority.md` and `rules/rule-authoring.md`. Promotes to `specs/ml-tracking.md` after human review. On promotion, supersedes the tracking sections of `specs/ml-engines.md` (§1.2 ModelRegistry, §1.6 ExperimentTracker) and registers in `specs/_index.md` alongside `ml-engines.md` and `ml-integration.md`._
+_End of spec. Authored per `rules/specs-authority.md` + `rules/rule-authoring.md` + `rules/tenant-isolation.md` + `rules/facade-manager-detection.md` + `rules/schema-migration.md` + `rules/event-payload-classification.md`. Pinned 2026-04-21 per `workspaces/kailash-ml-audit/04-validate/approved-decisions.md` Decisions 1-14. Closes round-1 findings 1.3, 1.4, 1.5, 1.6, 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.14, 1.15, 1.16, 1.17, 1.18, 1.19, 1.20 + themes T1 / T6 / T7-H2 + CRIT-1/2/3/4 + HIGH-4/6/8._

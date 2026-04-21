@@ -1,8 +1,10 @@
 # Kailash ML Backends Specification
 
+Version: 1.0.0 (draft)
+
 Parent domain: ML Lifecycle (`kailash-ml`). Companion files: `ml-engines.md` (engine contracts), `ml-integration.md` (architecture, type contracts, ONNX bridge).
 
-Package: `kailash-ml` v2.0
+Package: `kailash-ml` v1.0.0
 License: Apache-2.0
 Python: >=3.11
 Cross-SDK: Shared semantics with `kailash-rs` per EATP D6 — see § 9.
@@ -23,7 +25,7 @@ Six first-class backends. Every engine that places tensors, invokes a Trainer, o
 | **cuda** | NVIDIA (A100, H100, L40S, V100, T4, RTX 30xx/40xx) | `"cuda"` (alias `"gpu"`) | `"cuda:{idx}"`                              | `pip install kailash-ml[cuda]` (pulls `torch` CUDA wheel from PyPI)                                                                   | `torch.cuda.is_available()`                                                                       | yes  | yes  | yes\*\*  | yes        |
 | **mps**  | Apple Silicon (M1/M2/M3/M4)                        | `"mps"`                  | `"mps"`                                     | Base install; `torch` universal2 wheel on Darwin ARM64                                                                                | `torch.backends.mps.is_available()` AND `torch.backends.mps.is_built()`                           | yes  | yes  | no\*\*\* | no\*\*\*\* |
 | **rocm** | AMD Instinct (MI210, MI250, MI300)                 | `"cuda"` (HIP layer)     | `"cuda:{idx}"` (HIP→CUDA API source-compat) | `pip install kailash-ml[rocm]` (separate torch ROCm wheel index; MUST specify `--index-url https://download.pytorch.org/whl/rocm6.0`) | `torch.version.hip is not None` AND `torch.cuda.is_available()`                                   | yes  | yes  | yes\*\*  | yes        |
-| **xpu**  | Intel Data Center GPU Max, Arc                     | `"xpu"`                  | `"xpu:{idx}"`                               | `pip install kailash-ml[xpu]` (pulls `intel-extension-for-pytorch`)                                                                   | `hasattr(torch, "xpu") and torch.xpu.is_available()`                                              | yes  | yes  | yes\*\*  | yes        |
+| **xpu**  | Intel Data Center GPU Max, Arc                     | `"xpu"`                  | `"xpu:{idx}"`                               | Base install on torch ≥ 2.5 (native `torch.xpu`); `pip install kailash-ml[xpu]` on pre-2.5 boxes (ipex fallback; Linux only)          | Dual-path probe (Decision 5; § 2.2.1) — native `torch.xpu.is_available()` then `ipex` fallback    | yes  | yes  | yes\*\*  | yes        |
 | **tpu**  | Google TPU v2/v3/v4/v5                             | `"tpu"`                  | `xm.xla_device()`                           | `pip install kailash-ml[tpu]` (pulls `torch_xla`; Linux only)                                                                         | Successful `import torch_xla.core.xla_model as xm` AND non-empty `xm.get_xla_supported_devices()` | yes  | no   | yes      | no         |
 
 Notes on the precision matrix:
@@ -41,7 +43,7 @@ Gotchas below MUST be surfaced by `km.doctor()` (§ 7) when the relevant backend
 - **cuda** — honors `CUDA_VISIBLE_DEVICES=""` (MUST disable detection).
 - **mps** — op coverage incomplete (torch 2.4); CPU fallback emits `UserWarning`. MUST log WARN when MPS triggers CPU fallback.
 - **rocm** — `torch.version.hip` is the sole discriminator vs CUDA; some ops missing on ROCm < 6.0. MUST log ROCm version at INFO.
-- **xpu** — requires `intel-extension-for-pytorch` at 2.0 (OPEN QUESTION whether torch ≥ 2.5 native XPU suffices).
+- **xpu** — dual-path resolver accepts BOTH native `torch.xpu` (torch ≥ 2.5) AND `intel-extension-for-pytorch` fallback (Decision 5; § 2.2.1). `km.doctor()` MUST report which path resolved via `BackendInfo.diagnostic_source` and `BackendInfo.xpu_via_ipex`.
 - **tpu** — XLA compiles lazily; first step emits ~30s pause. MUST log INFO before first step so operators do not read the pause as a hang.
 
 ---
@@ -76,9 +78,55 @@ def detect_backend(prefer: Optional[str] = None) -> BackendInfo:
 1. **cuda** — `torch.cuda.is_available()` AND `torch.version.hip is None`
 2. **mps** — `torch.backends.mps.is_available()` AND `torch.backends.mps.is_built()`
 3. **rocm** — `torch.cuda.is_available()` AND `torch.version.hip is not None`
-4. **xpu** — `hasattr(torch, "xpu") and torch.xpu.is_available()`
+4. **xpu** — dual-path probe per Decision 5 (see § 2.2.1)
 5. **tpu** — `torch_xla.core.xla_model.get_xla_supported_devices()` returns non-empty list
 6. **cpu** — always available
+
+#### 2.2.1 MUST: XPU Dual-Path Resolver (Decision 5)
+
+Per approved Decision 5, the XPU probe MUST accept BOTH paths and MUST attempt them in native-first order:
+
+1. **Native torch ≥ 2.5 XPU** — `hasattr(torch, "xpu") and torch.xpu.is_available()` — selected first.
+2. **Intel Extension for PyTorch (ipex)** — fallback on `ImportError` / `AttributeError` from the native probe: `import intel_extension_for_pytorch` then `torch.xpu.is_available()` (ipex registers the `torch.xpu` namespace at import time).
+
+The resolved `BackendInfo` MUST set `backend="xpu"` and MUST annotate the path used:
+
+- `BackendInfo(backend="xpu", diagnostic_source="native-torch-xpu", xpu_via_ipex=False, ...)` when the native probe succeeded.
+- `BackendInfo(backend="xpu", diagnostic_source="ipex", xpu_via_ipex=True, ...)` when the ipex fallback was required.
+
+```python
+# DO — dual-path with native first (Decision 5)
+def _probe_xpu() -> tuple[bool, bool]:
+    """Returns (available, via_ipex). Native-first; ipex fallback."""
+    # Native torch ≥ 2.5 path
+    if hasattr(torch, "xpu"):
+        try:
+            if torch.xpu.is_available():
+                return (True, False)
+        except (RuntimeError, AttributeError):
+            pass  # fall through to ipex probe
+    # ipex fallback — registers torch.xpu namespace on import
+    try:
+        import intel_extension_for_pytorch  # noqa: F401
+    except ImportError:
+        return (False, False)
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        return (True, True)
+    return (False, False)
+
+# DO NOT — sole-dependency lock-in on ipex
+import intel_extension_for_pytorch  # hard import at module top
+# ↑ breaks on torch ≥ 2.5 boxes that have native XPU without ipex installed
+
+# DO NOT — native-only probe
+if hasattr(torch, "xpu") and torch.xpu.is_available():
+    ...
+# ↑ misses ipex-only deployments on torch < 2.5 boxes
+```
+
+**Extra contract.** `[xpu]` extra per `rules/dependencies.md` (declared-imported discipline): `intel-extension-for-pytorch>=2.5; platform_system == "Linux"`. The native-first probe means `[xpu]` is NOT required on torch ≥ 2.5 Linux boxes; ipex is the fallback install for pre-2.5 boxes or users who prefer the Intel-distributed build.
+
+**Why:** Approved Decision 5 pins "Native-first probe order. No sole-dependency lock-in." Hard-requiring ipex breaks modern torch; skipping ipex breaks pre-2.5 deployments. Dual-path with native-first is the only contract that survives both.
 
 ```python
 # DO — let the resolver run
@@ -264,27 +312,9 @@ trainer = pl.Trainer(accelerator="cuda")         # Trainer moves it again
 
 ### 4.3 MUST: `TrainingResult` Carries The Resolved Values
 
-Every `TrainingResult` returned by a Lightning-wrapped training path MUST populate the following fields with concrete (never `"auto"`) values:
+Every `TrainingResult` returned by a Lightning-wrapped training path MUST populate `backend`, `accelerator`, `device_string`, `devices`, `precision`, and `cuda_capability` (when applicable). A TrainingResult with `backend="auto"` or `precision="auto"` is a contract violation.
 
-- **Top-level fields** (`accelerator`, `device_used`, `precision`, `lightning_trainer_config`) — defined in `specs/ml-engines.md` §4.1; these are the primary reproducibility envelope.
-- **`device: DeviceReport`** — the GPU-first Phase 1 transparency object; carries `family`, `backend`, `device_string`, `precision`, `fallback_reason`, `array_api`. The DeviceReport replaces what earlier drafts of this spec called the flat `backend` / `devices` / `cuda_capability` fields. CUDA capability (`major.minor`) lives on `BackendInfo`, NOT on `TrainingResult` directly — callers needing it inspect `engine.backend_info.cuda_capability`.
-
-A `TrainingResult` with `accelerator="auto"`, `precision="auto"`, or `device.backend="auto"` is a contract violation.
-
-```python
-# DO — concrete values + DeviceReport populated
-TrainingResult(
-    ..., accelerator="cuda", precision="bf16-mixed", device_used="cuda:0",
-    device=DeviceReport(family="lightning", backend="cuda",
-                         device_string="cuda:0", precision="bf16-mixed",
-                         fallback_reason=None, array_api=False),
-)
-
-# DO NOT — "auto" leak
-TrainingResult(..., accelerator="auto", precision="auto", device=None)
-```
-
-**Why:** Downstream consumers (ExperimentTracker auto-logs, MLflow export, ModelRegistry metadata) rely on these fields for reproducibility. "auto" strings make the run impossible to replay. The `device: DeviceReport` field is the Phase 1 transparency contract; without it callers cannot distinguish actual-CUDA-execution from silent-CPU-fallback (`fallback_reason="oom"` / `"cuml_eviction"` / `"array_api_offlist"` / `"array_api_runtime_unavailable"`).
+**Why:** Downstream consumers (ExperimentTracker auto-logs, MLflow export, ModelRegistry metadata) rely on these fields for reproducibility. "auto" strings make the run impossible to replay.
 
 ---
 
@@ -294,15 +324,10 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 
 ### 5.1 sklearn
 
-- **Backend support**: Lightning Trainer always runs on CPU; the inner estimator MAY route through the sklearn Array API on a non-CPU device per Phase 1.
-- **TrainingResult top-level fields**: `accelerator="cpu"`, `device_used="cpu"`. (The historical `TrainingResult.backend` field never existed; per §4.3 the canonical surface is `accelerator` + `device_used` + the GPU-first `device: DeviceReport` envelope.)
-- **DeviceReport (`TrainingResult.device`)** populates per the Phase 1 transparency contract:
-  - Allowlisted estimator + non-CPU `info.backend` → engage `sklearn.config_context(array_api_dispatch=True)`, move X/y to a torch tensor on `info.device_string`, log INFO `sklearn.array_api.engaged`. `device.array_api=True`, `device.backend=info.backend`.
-  - Off-allowlist estimator + non-CPU `info.backend` → CPU numpy fallback. Log WARN `sklearn.array_api.offlist`, set `device.fallback_reason="array_api_offlist"`.
-  - Allowlisted estimator + scipy env-var gate (`SCIPY_ARRAY_API` not set before sklearn import) raises `RuntimeError` at `config_context` enter-time → adapter catches the gate error, logs WARN `sklearn.array_api.runtime_unavailable` (with `hint` field naming `SCIPY_ARRAY_API=1`), retries on CPU numpy. `device.fallback_reason="array_api_runtime_unavailable"`. Non-array-api `RuntimeError`s MUST re-raise unchanged.
-- **Phase 1 Array API allowlist** (frozenset of `type(estimator).__name__` matches): `Ridge`, `LogisticRegression`, `LinearRegression`, `LinearDiscriminantAnalysis`, `KMeans`, `PCA`, `StandardScaler`, `MinMaxScaler`. Expansion is a spec amendment, not a code edit.
-- **Wrapping**: MUST be wrapped as `LightningModule` for metric/callback unification (`SklearnLightningAdapter`); the inner `.fit()` runs inside the Array API context when engaged.
-- **If caller specifies `prefer_backend="cuda"` with off-allowlist estimator**: MUST log WARN `"sklearn.array_api.offlist"` and proceed on CPU; MUST NOT raise. (sklearn's CPU-only is not a user error; it is the family's nature for off-allowlist estimators.)
+- **Backend support**: CPU only.
+- **TrainingResult.backend**: always `"cpu"`.
+- **Wrapping**: MUST be wrapped as `LightningModule` for metric/callback unification, but the inner `.fit()` runs on CPU regardless of `info.backend`.
+- **If caller specifies `prefer_backend="cuda"`**: MUST log WARN `"sklearn.backend.ignored"` and proceed on CPU; MUST NOT raise. (Rationale: sklearn's CPU-only is not a user error; it is the family's nature.)
 
 ### 5.2 xgboost
 
@@ -311,7 +336,6 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
   - `info.backend == "cuda"` → pass `device="cuda"`
   - `info.backend == "cpu"` → pass `device="cpu"`
   - `info.backend in {"mps", "rocm", "xpu", "tpu"}` → MUST raise `UnsupportedFamily` naming the backend and the family. MUST NOT silently fall back to CPU.
-- **OOM single-retry fallback (Phase 1)**: A GPU OOM during `trainer.fit` (`_is_gpu_oom_error(exc)` matches `"out of memory"` / `"cuda out of memory"` / `OutOfMemoryError` / `CudaOutOfMemoryError`) MUST be intercepted exactly once. The adapter logs WARN `xgboost.gpu.oom_fallback` with structured fields `{family, requested_backend, fallback_backend, fallback_reason, error_class}`, calls `set_params(device="cpu")`, rebuilds the Lightning Trainer on a CPU TrainingContext, and retries. The returned `TrainingResult.device.backend="cpu"` and `device.fallback_reason="oom"`. Non-OOM exceptions re-raise unchanged. Re-raise also when `ctx.backend == "cpu"` (no fallback target).
 - **ROCm note**: xgboost does not ship a ROCm build as of 2.0.3; `device="cuda"` on a ROCm box raises at runtime. MUST detect this and raise `UnsupportedFamily` before the training call.
 
 ### 5.3 lightgbm
@@ -321,7 +345,6 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
   - `info.backend == "cuda"` → probe lightgbm build; if GPU support present, pass `device_type="gpu"` + `gpu_use_dp=False`. If not, raise `UnsupportedFamily` with the install hint: `pip install lightgbm --config-settings=cmake.define.USE_GPU=1`.
   - `info.backend == "cpu"` → pass `device_type="cpu"`.
   - `info.backend in {"mps", "rocm", "xpu", "tpu"}` → MUST raise `UnsupportedFamily`.
-- **OOM single-retry fallback (Phase 1)**: Same shape as §5.2. WARN log key is `lightgbm.gpu.oom_fallback`. CPU rebuild uses `set_params(device_type="cpu")` (lightgbm idiom, not xgboost's `device=`). `device.fallback_reason="oom"` on the post-fallback `TrainingResult.device`.
 
 ### 5.4 catboost
 
@@ -337,23 +360,6 @@ The Engine routes every training call through the Lightning wrapper (§ 4), but 
 
 - **Backend support**: follows torch's device support — cuda, mps, cpu. TPU/XLA path exists in `torchrl` ≥ 0.5 but is experimental. Default to `"cuda"` / `"mps"` / `"cpu"`; treat `"tpu"`/`"rocm"`/`"xpu"` as OPEN QUESTION and raise `UnsupportedFamily` at 2.0 until validated.
 - **RL Engine wrapping**: RL trainers MUST use Lightning's accelerator for environment-rollout → learner transfers. The inner SB3/torchrl policy MUST be constructed with `device=info.device_string`.
-
-### 5.7 umap-learn (Phase 1) — `UMAPTrainable`
-
-- **Adapter class**: `kailash_ml.UMAPTrainable` (eagerly exported from `kailash_ml.__all__`; defined in `kailash_ml.trainable`).
-- **Backend support**: CPU only via the `umap-learn` pip package (base dependency; no `[umap]` extra).
-- **Mapping**:
-  - `info.backend == "cpu"` → standard CPU path. `device.fallback_reason=None`.
-  - `info.backend in {"cuda", "mps", "rocm", "xpu", "tpu"}` → cuML eviction is unconditional (Phase 1 design per `workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md` § "CRITICAL-1 disposition"). The adapter logs INFO `umap.cuml_eviction` (NOT WARN — this is the documented Phase 1 design, not a degraded path), runs on CPU, sets `device.fallback_reason="cuml_eviction"`. MUST NOT raise.
-- **No `[rapids]` extra**: Removed in 0.12.0 per CRITICAL-1 disposition. Users who require cuML on NVIDIA install it themselves and swap it in via `kailash_ml.register_trainable("umap", MyCustomCuMLUMAP)`.
-- **Phase 2 (planned)**: torch-native UMAP across MPS/ROCm/XPU. Spec amendment + new fallback codes (e.g., `oom`) will land with the Phase 2 implementation.
-
-### 5.8 sklearn.cluster.HDBSCAN (Phase 1) — `HDBSCANTrainable`
-
-- **Adapter class**: `kailash_ml.HDBSCANTrainable` (eagerly exported from `kailash_ml.__all__`; defined in `kailash_ml.trainable`).
-- **Backend support**: CPU only via `sklearn.cluster.HDBSCAN` (sklearn ≥ 1.3 — already required by base `scikit-learn>=1.5` dep).
-- **Mapping**: Same shape as §5.7. INFO log key `hdbscan.cuml_eviction`. `device.fallback_reason="cuml_eviction"` on non-CPU requests.
-- **Phase 3 (planned)**: torch-native HDBSCAN. Same spec-amendment process as UMAP Phase 2.
 
 ---
 
@@ -382,11 +388,9 @@ Every per-backend file MUST exercise ALL of:
 
 1. `detect_backend(prefer=<that backend>)` returns a `BackendInfo` with correct fields.
 2. `resolve_precision(info, "auto")` returns the expected precision for that device class.
-3. A small `BoringModel`-style Lightning training run completes one epoch and produces a `TrainingResult` whose `accelerator`, `device_used`, `precision`, and `device.backend` (DeviceReport) match the resolution.
-4. The same run's `TrainingResult.device_used` reads back through `ModelRegistry.get_model()` unchanged (state-persistence verification per `rules/testing.md` § Tier 2).
-5. A non-Lightning family run (sklearn MUST be in every file) produces a `TrainingResult` with `accelerator="cpu"` and `device.backend="cpu"` regardless of hardware (DeviceReport may carry `array_api=True` + `device.backend=info.backend` when the Array-API path engaged for an allowlisted estimator on a non-CPU backend), and (for xgboost/lightgbm on cuda-only backends) an `UnsupportedFamily` is raised when the family cannot run on the backend.
-
-**Implementation status (verified 2026-04-17 — redteam):** Tier 1 coverage landed at `tests/unit/test_device_resolver.py` and `tests/unit/test_trainable_protocol.py`. Tier 2 hardware-contract landed at `tests/integration/test_backend_resolver_contract.py` and asserts clauses §2.2, §2.3, §3.3, §4.1, §5.1 on real hardware (no mocks). The per-backend integration files enumerated above are NOT all present — only the combined contract file exists at 2026-04-17. Splitting into `backends/test_<name>_backend.py` is Phase 5 (redesign proposal §9) once CI lanes are provisioned (§11 OPEN QUESTION 1). **RL + `agents/` subpackages do NOT consult the resolver** (pinned by `tests/regression/test_rl_orphan_guard.py`) — Phase 6 fix required.
+3. A small `BoringModel`-style Lightning training run completes one epoch and produces a `TrainingResult` whose `backend`, `accelerator`, `devices`, `precision` match the resolution.
+4. The same run's `TrainingResult.device: DeviceReport` round-trips through `ModelRegistry.get_model()` unchanged — `device.backend_name`, `device.family`, and `device.precision` match the flattened `_kml_run` columns (state-persistence verification per `rules/testing.md` § Tier 2). The 1.x back-compat mirrors (`result.device_used`, `result.accelerator`, `result.precision`) MUST resolve to the same strings (see `ml-engines-v2.md §4.1` for the canonical dataclass shape).
+5. A non-Lightning family run (sklearn MUST be in every file) produces a `TrainingResult` with `backend="cpu"` regardless of hardware, and (for xgboost/lightgbm on cuda-only backends) an `UnsupportedFamily` is raised when the family cannot run on the backend.
 
 ### 6.2 MUST: `skipif` Via Probe, Not Via Marker Alone
 
@@ -406,11 +410,24 @@ async def test_mps_lightning_training(...):
 
 **Why:** Marker filtering is an opt-in layer (`pytest -m gpu_mps`). Without `skipif`, a developer running the full suite locally gets confusing failures instead of clean skips.
 
-### 6.3 MUST: CI Matrix Declares Hardware Lanes
+### 6.3 MUST: CI Matrix Declares Hardware Lanes (Decision 7)
 
-`.github/workflows/ml-backends.yml` MUST define separate jobs for `cpu`, `cuda` (self-hosted NVIDIA runner), `mps` (GitHub `macos-14` runner on ARM64), `rocm` (self-hosted AMD runner, OPEN QUESTION on availability), `xpu` (self-hosted Intel runner, OPEN QUESTION), and `tpu` (Google TPU VM, OPEN QUESTION). The `cpu` job is non-optional and blocks merge. GPU jobs are non-blocking at 2.0 but MUST report status.
+Per approved Decision 7, `.github/workflows/ml-backends.yml` MUST define separate jobs for every backend enumerated in § 1, with promotion status pinned by the workflow file:
 
-**Why:** A backend without a CI lane is a backend without a guarantee. Shipping bf16 on H100 with no CI run on an H100 ships a claim, not a feature.
+| Lane   | Runner                                       | Status at 1.0.0                                                | Promotion trigger                                              |
+| ------ | -------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `cpu`  | GitHub hosted (`ubuntu-latest`, `macos-14`)  | **BLOCKING** — fails the merge on red                          | n/a (already blocking)                                         |
+| `mps`  | GitHub hosted (`macos-14` on Apple Silicon)  | **BLOCKING** — fails the merge on red                          | n/a (already blocking)                                         |
+| `cuda` | Self-hosted NVIDIA (pending; see infra todo) | NON-BLOCKING until the self-hosted runner lands; THEN BLOCKING | PR that registers the self-hosted NVIDIA runner flips the flag |
+| `rocm` | Self-hosted AMD (pending; see infra todo)    | NON-BLOCKING until the self-hosted runner lands; THEN BLOCKING | PR that registers the self-hosted AMD runner flips the flag    |
+| `xpu`  | Self-hosted Intel (pending; see infra todo)  | NON-BLOCKING until the self-hosted runner lands; THEN BLOCKING | PR that registers the self-hosted Intel runner flips the flag  |
+| `tpu`  | Google TPU VM (pending; see infra todo)      | NON-BLOCKING until the TPU VM lane lands; THEN BLOCKING        | PR that provisions the TPU VM workflow target flips the flag   |
+
+**MUST clause.** CPU and MPS are BLOCKING gates for every PR. CUDA, ROCm, XPU, TPU jobs are NON-BLOCKING until a self-hosted runner (or equivalent managed lane) lands for each — at which point they promote to BLOCKING. The promotion is locked by the CI workflow file (NOT changeable per-PR); a PR that tries to demote a backend from BLOCKING to NON-BLOCKING is rejected at review.
+
+**Runner acquisition todo.** Tracked in `workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md` (Foundation infra backlog). Each row in the table above flips to BLOCKING in the same PR that registers the corresponding runner with GitHub Actions.
+
+**Why:** Decision 7 approved 2026-04-21 says: "CPU + MPS (macos-14) BLOCKING now. CUDA becomes BLOCKING the day a self-hosted runner lands. Track runner acquisition as explicit infra todo." The prior text ("GPU jobs are non-blocking at 2.0 but MUST report status") inverted both halves: it dropped MPS from BLOCKING and left CUDA non-blocking forever.
 
 ---
 
@@ -429,7 +446,7 @@ Outputs (structured JSON when `--json`, human-readable by default):
 - **Detected backends**: enumeration of which of the 6 backends are present, with `diagnostic_source` for each.
 - **Selected default**: the backend `detect_backend(None)` would return.
 - **Precision for each detected backend**: result of `resolve_precision(info, "auto")`.
-- **Installed extras**: which of `[cuda]`, `[rocm]`, `[xpu]`, `[tpu]`, `[dl]`, `[agents]`, `[explain]`, `[imbalance]` are installed.
+- **Installed extras**: which of `[cuda]`, `[rocm]`, `[xpu]`, `[tpu]`, `[dl]`, `[dl-deepspeed]`, `[dl-fsdp]`, `[agents]`, `[explain]`, `[imbalance]` are installed. `[dl-deepspeed]` pins `deepspeed>=0.14.0 + pydantic>=2.0` and is the required extra for `MLEngine.fit(strategy="deepspeed")` per `ml-engines-v2-draft.md §3.2 MUST 6`; `[dl-fsdp]` is an alias for `[dl]` + `torch>=2.3`.
 - **Family probes**: torch, lightning, sklearn, xgboost, lightgbm, catboost, onnxruntime, onnxruntime-gpu — each with version or `"not installed"`.
 - **ONNX runtime availability**: including CUDA EP, ROCm EP, DirectML EP detection.
 - **Default SQLite path**: `~/.kailash_ml/ml.db` and whether the directory is writable.
@@ -449,6 +466,72 @@ The `cpu` CI lane MUST run `km-doctor --json` after install and fail if exit != 
 
 **Why:** Install correctness is harder to test than training correctness. `doctor` is the single command that turns "does the install work?" from a 20-minute investigation into a 200ms script.
 
+### 7.4 MUST: `backend-compat-matrix.yaml` As Data, Not Code (Decision 6)
+
+Per approved Decision 6, the hardware-architecture compatibility matrix MUST live as a YAML data file packaged with the SDK, NOT hardcoded in spec markdown or Python source. This lets new GPU architectures, new driver minimum versions, and new precision cutoffs ship as data-file updates without a kailash-ml SDK re-release.
+
+**File path.** `packages/kailash-ml/data/backend-compat-matrix.yaml` (shipped as package data via `importlib.resources.files("kailash_ml.data") / "backend-compat-matrix.yaml"`).
+
+**Schema (v1).**
+
+```yaml
+# packages/kailash-ml/data/backend-compat-matrix.yaml
+schema_version: 1
+backends:
+  cuda:
+    min_compute: 7.0 # Volta; no Kepler/Maxwell/Pascal
+    supported_precision: [fp32, fp16, bf16, int8]
+    notes: {}
+  mps:
+    min_macos: 14.0
+    supported_precision: [fp32, fp16]
+    experimental_precision: [bf16]
+    notes:
+      bf16: "PyTorch 2.3+ bf16 on MPS requires force=True; SDPA still fp32 fallback"
+  rocm:
+    arch_allowlist: [gfx906, gfx908, gfx90a, gfx942] # MI50/MI100/MI210/MI250/MI300
+    supported_precision: [fp32, fp16, bf16]
+  xpu:
+    native_min_torch: "2.5"
+    ipex_min_version: "2.5"
+    supported_precision: [fp32, fp16, bf16]
+  tpu:
+    min_jax_tpu: "0.4"
+    supported_precision: [bf16, fp32]
+  cpu:
+    supported_precision: [fp32]
+```
+
+**Loader contract.** `kailash_ml.backends._compat_matrix.load_compat_matrix()` MUST:
+
+1. Read from `importlib.resources.files("kailash_ml.data") / "backend-compat-matrix.yaml"`.
+2. Validate `schema_version == 1`; unknown versions raise `CompatMatrixSchemaError(BackendError)` with the observed-vs-expected schema_version.
+3. Memoize the parsed matrix at module load; re-read on explicit `load_compat_matrix(force_reload=True)` for tests.
+
+**`km.doctor` consumer contract.** `km.doctor()` (§ 7) MUST:
+
+1. Call `load_compat_matrix()` at the start of the doctor run.
+2. For the detected backend, look up the supported precision set AND the architecture/OS/version gate (CUDA compute, macOS version, ROCm arch, torch/ipex version, TPU jax_tpu min).
+3. If the detected hardware is outside the matrix's supported envelope, raise `UnsupportedPrecision(BackendError, RuntimeError)` with actionable install hints (e.g. `"Detected CUDA compute 6.1 (Pascal); kailash-ml requires compute >= 7.0 (Volta+). Upgrade hardware or use precision='32-true' on CPU."`).
+4. In `--json` mode, emit the matrix values under `compat_matrix` so the CI lane can assert against them.
+
+**Update path.** New architecture support MUST be shipped by (a) editing the YAML, (b) bumping a `kailash-ml-data` companion wheel version, and (c) `pip install --upgrade kailash-ml-data`. No kailash-ml code change required for envelope widening. Envelope narrowing (dropping a previously-supported arch) MUST go through a standard semver-major kailash-ml release with migration notes.
+
+**Tier 2 tests (required).**
+
+- `packages/kailash-ml/tests/integration/test_backend_compat_matrix_loads.py` — imports `load_compat_matrix()`, asserts `schema_version == 1`, asserts every backend in § 1 has an entry, asserts every entry's `supported_precision` is a subset of `{fp32, fp16, bf16, int8}`.
+- `packages/kailash-ml/tests/integration/test_backend_compat_matrix_schema.py` — schema validator (pydantic / voluptuous / jsonschema) that asserts the YAML matches the Rule 1 schema; unknown top-level keys fail. Runs against a hand-crafted invalid YAML fixture to prove the validator rejects drift.
+- `packages/kailash-ml/tests/integration/test_km_doctor_uses_compat_matrix.py` — runs `km-doctor --json`, asserts the output `compat_matrix` key matches the packaged YAML verbatim.
+
+**BLOCKED rationalizations:**
+
+- "Hardcoding in Python is fine; new archs are rare"
+- "We can update the spec markdown instead"
+- "YAML introduces a parser dependency"
+- "One matrix source — the code — is simpler than two"
+
+**Why:** Decision 6 approved 2026-04-21 says: "`backend-compat-matrix.yaml` as data in `packages/kailash-ml/data/backend-compat-matrix.yaml`. `km.doctor` subcommand reads it. Update without SDK release." Hardcoding the matrix forces an SDK release for every NVIDIA / AMD / Intel / Apple hardware generation — the exact constraint the decision rejected.
+
 ---
 
 ## 8. Error Hierarchy
@@ -457,9 +540,13 @@ The `cpu` CI lane MUST run `km-doctor --json` after install and fail if exit != 
 
 ```python
 # kailash_ml/backends/errors.py
+# Canonical hierarchy: every backend error inherits from the canonical MLError
+# family root per `ml-tracking.md §9.1` (CRIT-3). Multi-inherits RuntimeError
+# so `except RuntimeError` call sites continue to work (0.x back-compat).
+from kailash_ml.errors import MLError
 
-class BackendError(RuntimeError):
-    """Base class for all backend-selection errors."""
+class BackendError(MLError, RuntimeError):
+    """Base class for all backend-selection errors. Canonical family root per CRIT-3."""
 
 class BackendUnavailable(BackendError):
     """Requested backend is not present in the current environment."""
@@ -517,7 +604,7 @@ This spec's semantics are shared with `kailash-rs`. Implementation details diffe
 - `resolve_precision(info, requested)` returning equivalent precision strings.
 - The error hierarchy: `BackendUnavailable`, `UnsupportedFamily`, `PrecisionUnsupported`.
 - `km.doctor()` equivalent (Rust: `kailash-ml-doctor` binary crate), with the same structured-JSON schema.
-- `TrainingResult` fields: top-level `accelerator`, `device_used`, `precision`, `lightning_trainer_config` PLUS the GPU-first `device: DeviceReport` envelope (family / backend / device_string / precision / fallback_reason / array_api). Both SDKs MUST converge on the DeviceReport shape; the legacy flat `backend` / `devices` / `cuda_capability` fields are NOT first-class on TrainingResult.
+- `TrainingResult` fields: `backend`, `device_string`, `devices`, `precision`, `cuda_capability`.
 
 ### 9.2 Python-Specific
 
@@ -554,14 +641,18 @@ Both SDKs MUST pass a shared test matrix encoded in `tests/integration/backends/
 
 ---
 
-## 11. Open Questions (blocking spec-lock)
+## 11. RESOLVED — Prior Open Questions
 
-1. **ROCm / XPU / TPU runner availability** — does the Foundation have self-hosted lanes for AMD (MI250/MI300), Intel (PVC/Arc), and Google TPU? A backend without a CI lane is a claim without a guarantee.
-2. **MPS bf16 status** — PyTorch ≥ 2.3 announced partial support; does op coverage cover canonical workloads (Transformer attention, LSTM, BatchNorm2d)? Default stays fp16 until confirmed.
-3. **TPU first-class-ness** — TPU is 1–2% of market share and ~40% of the backend maintenance burden (XLA compile, torch_xla versioning, Linux-only, graph-mode quirks). Strong case to demote to "experimental" at 2.0.
-4. **XPU via ipex vs native torch.xpu** — does 2.0 require `intel-extension-for-pytorch` or accept either path?
-5. **ROCm bf16 cutoff** — MI250 vs MI300 exact model line that gates bf16.
-6. **CUDA bf16 probe** — use `torch.cuda.is_bf16_supported()` directly rather than a hand-coded CC table.
+All spec-lock questions are resolved. Cited decisions live in `workspaces/kailash-ml-audit/04-validate/approved-decisions.md`; Phase-B SAFE-DEFAULTs live in the round-2b open-tbd-triage file under `workspaces/kailash-ml-audit/04-validate/`.
+
+| Original TBD                                  | Disposition                                                                                                                                                                                      | Reference                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| ROCm / XPU / TPU runner availability          | Runner acquisition tracked as infra todo. CI promotion flipped lane-by-lane via the CI workflow file.                                                                                            | Decision 7; `workspaces/kailash-ml-audit/infra/gpu-runner-acquisition.md`; § 6.3 |
+| MPS bf16 status                               | Default fp16; bf16 experimental behind `precision="bf16-mixed"` + `force=True`. Envelope pinned in `backend-compat-matrix.yaml` under `mps.experimental_precision`.                              | Decision 6; § 3.2; § 7.4                                                         |
+| TPU first-class-ness                          | TPU remains first-class at 1.0.0. Compat envelope (`min_jax_tpu: "0.4"`, `supported_precision: [bf16, fp32]`) pinned in the matrix YAML; envelope changes ship as data, not SDK.                 | Decision 6; § 7.4                                                                |
+| XPU via ipex vs native `torch.xpu`            | Both. Native-first dual-path resolver: `torch.xpu.is_available()` then `ipex` fallback on `ImportError` / `AttributeError`. `BackendInfo.xpu_via_ipex` reports which path resolved.              | Decision 5; § 2.2.1                                                              |
+| ROCm bf16 cutoff (MI250 vs MI300)             | Data-driven via `backend-compat-matrix.yaml` `rocm.arch_allowlist`. Ship `gfx906/gfx908/gfx90a/gfx942` at 1.0.0; envelope widening ships via `kailash-ml-data` companion wheel (no SDK release). | Decision 6; § 7.4                                                                |
+| CUDA bf16 probe (`is_bf16_supported()` vs CC) | Runtime probe via `torch.cuda.get_device_capability()` — the `BackendInfo.cuda_capability` field (§ 2.4) carries the (major, minor) tuple. Matrix YAML gates `cuda.min_compute: 7.0`.            | § 2.4; § 7.4                                                                     |
 
 ---
 
