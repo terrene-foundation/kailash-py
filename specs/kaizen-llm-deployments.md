@@ -141,7 +141,73 @@ The following MUST be byte-identical between kailash-py and kailash-rs:
 - `grammar_kind()` labels: `bedrock_claude`, `bedrock_llama`, `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere`, `vertex_claude`, `vertex_gemini`, `azure_openai`
 - Fingerprint algorithm: first 8 hex chars of SHA-256
 
-## Migration Guide (from v0.9.x pre-#498)
+## Observability Contract (ADR-0001 D8)
+
+Every `LlmClient.complete` / `stream_completion` call emits three structured log events (`llm.request.start`, `llm.request.ok`, `llm.request.error`) whose canonical field-name set is byte-identical across kailash-py and kailash-rs:
+
+| Field                | Description                                                       | Emitted on         |
+| -------------------- | ----------------------------------------------------------------- | ------------------ |
+| `deployment_preset`  | Preset name, regex `^[a-z][a-z0-9_]{0,31}$`                       | start / ok / error |
+| `wire_protocol`      | `WireProtocol` enum member (`OpenAiChat`, `AnthropicMessages`, …) | start / ok / error |
+| `endpoint_host`      | URL-encoded hostname only — NOT the full URL                      | start / ok / error |
+| `auth_strategy_kind` | Result of `auth.auth_strategy_kind()` — NEVER the credential      | start / ok / error |
+| `model_on_wire_id`   | Resolved model id returned by `ModelGrammar.resolve()`            | start / ok / error |
+| `request_id`         | UUID correlation id (see `rules/observability.md` §2)             | start / ok / error |
+| `latency_ms`         | Wall-clock float                                                  | ok / error         |
+| `upstream_status`    | HTTP status code                                                  | ok                 |
+| `error_class`        | Exception class name                                              | error              |
+
+Transport-layer emission (`kaizen.llm.http_client.LlmHttpClient`) currently ships a subset (`deployment_preset`, `auth_strategy_kind`, `endpoint_host`, `request_id`, `latency_ms`, `method`, `status_code`, `exception_class`). The LlmClient wrapper above HTTP adds `wire_protocol`, `model_on_wire_id`, `upstream_status`, `error_class` before final emission. Credential-carrying names (`api_key`, `authorization`, `token`, `secret_access_key`) MUST NEVER appear as field NAMES in any emission path — enforced by `tests/cross_sdk_parity/test_observability_field_names_match_rust.py`.
+
+Field names are validated against `logging.LogRecord` reserved attributes (`module`, `name`, `msg`, etc.) per `rules/observability.md` §9 — a collision silently corrupts log triage.
+
+## Error Taxonomy
+
+Full hierarchy under `kaizen.llm.errors.LlmClientError`. Every class is an importable `Exception` subclass AND a cross-SDK variant in Rust's `LlmClientError` enum (EATP D6):
+
+```
+LlmClientError                         -- root; catch-all for the deployment surface
+├── LlmError                           -- provider-call failures
+│   ├── Timeout(timeout_s: float)
+│   ├── RateLimited(retry_after: float)
+│   ├── ProviderError(status, body)    -- body is credential-scrubbed before construction
+│   └── InvalidResponse(reason: str)
+├── AuthError
+│   ├── Invalid(...)                   -- credential rejected by provider
+│   ├── Expired(...)
+│   └── MissingCredential(source_hint: str)
+├── EndpointError
+│   ├── InvalidEndpoint(reason: str)   -- scheme / ip / host validation failed
+│   └── Unreachable(host: str)
+├── ModelGrammarError
+│   ├── ModelGrammarInvalid(reason: str)
+│   └── ModelRequired(deployment_preset, env_hint)
+└── ConfigError
+    ├── NoKeysConfigured(...)          -- from_env() found zero credentials
+    ├── InvalidUri(...)                -- KAILASH_LLM_DEPLOYMENT URI failed regex
+    └── InvalidPresetName(...)         -- register_preset() name regex violation
+```
+
+Construction signatures are fixed — changing them (e.g. adding `**kwargs` that echo user input into the message) is a security-review-blocking change. `ProviderError.body_snippet` is defensively scrubbed for OpenAI / Anthropic / Google / AWS / Bearer token patterns BEFORE truncation.
+
+## Back-Compat Guarantees (ADR-0001 D6 + D10)
+
+Today's public surface is preserved through all v2.x releases; v3.0 is the earliest window for removal; ≥ 18 months of coexistence.
+
+| Preserved symbol                                   | Disposition                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------- |
+| `kaizen.providers.registry.get_provider(name)`     | Preserved; internally MAY route via `LlmClient.from_deployment`     |
+| `kaizen.providers.registry.get_provider_for_model` | Preserved                                                           |
+| `kaizen.providers.registry.PROVIDERS` dict         | Additive-only; no renames, no removals in v2.x                      |
+| `kaizen.config.providers.validate_*_config`        | Preserved                                                           |
+| `kaizen.config.providers.autoselect_provider`      | Preserved; ordering preserved (OpenAI > Azure > Anthropic > Google) |
+| Every concrete `*Provider` class (OpenAIProvider…) | Preserved; functionally identical                                   |
+
+New symbols are ADDITIVE under `kaizen.llm.*`: `LlmClient`, `LlmDeployment`, `WireProtocol`, `Endpoint`, `ResolvedModel`, `AuthStrategy`, `ApiKeyBearer`, `StaticNone`, `AwsBearerToken`, `AwsSigV4`, `GcpOauth`, `AzureEntra`. Zero breaking changes for callers on the legacy surface.
+
+When BOTH the deployment-tier (URI or selector) AND legacy per-provider keys are set, a single `WARNING llm_client.migration.legacy_and_deployment_both_configured` is emitted and the deployment path wins. `tests/regression/test_legacy_key_does_not_leak_into_deployment_path` enforces no credential cross-contamination.
+
+## Migration (from v0.9.x pre-#498)
 
 **Before:**
 
@@ -161,10 +227,12 @@ deployment = LlmDeployment.openai(
 client = LlmClient.from_deployment(deployment)
 ```
 
-**Legacy path still works:** `kaizen.providers.registry.get_provider(...)` continues to function unchanged. 39 consumer files were verified via `tests/regression/test_provider_registry_backcompat.py`.
+Legacy path still works — see `docs/migration/llm-deployments-v2.md` for the full symbol-by-symbol mapping.
 
 ## References
 
 - Workspace: `workspaces/issue-498-llm-deployment/`
 - ADR-0001: `workspaces/issue-498-llm-deployment/02-plans/02-adr-0001-llm-deployment-abstraction.md`
 - Cross-SDK: `kailash-rs#406`
+- Parity suite: `packages/kailash-kaizen/tests/cross_sdk_parity/`
+- Migration guide: `docs/migration/llm-deployments-v2.md`
