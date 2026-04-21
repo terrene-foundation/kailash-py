@@ -64,6 +64,25 @@ class Migration(MigrationBase):
         parking = dialect.quote_identifier(PARKING_TABLE)
         runs = dialect.quote_identifier(RUNS_TABLE)
 
+        # Fresh-install tolerance: 0002 creates _kml_runs. On first-run
+        # ordering the registry calls 0001 before 0002, so the runs
+        # table may not exist yet. In that case there are trivially
+        # zero legacy rows to migrate — return a no-op result rather
+        # than failing the INSERT INTO parking SELECT FROM _kml_runs.
+        if not await _runs_table_exists(conn, runs):
+            return MigrationResult.now(
+                version=self.version,
+                name=self.name,
+                rows_migrated=0,
+                tenant_id=tenant_id,
+                was_dry_run=dry_run,
+                direction="upgrade",
+                notes=(
+                    f"no-op: {RUNS_TABLE!r} does not exist yet "
+                    f"(fresh install — 0002 will create it)"
+                ),
+            )
+
         if dry_run:
             count = await _count_legacy(conn, runs)
             return MigrationResult.now(
@@ -214,6 +233,21 @@ def _literal_list(items) -> str:
     user input."""
     quoted = [f"'{v}'" for v in sorted(items)]
     return ", ".join(quoted)
+
+
+async def _runs_table_exists(conn: Any, runs_quoted: str) -> bool:
+    """Return True iff the ``_kml_runs`` table exists in the backing store.
+
+    Uses a SELECT ... WHERE 1=0 probe so we get a typed
+    ``OperationalError`` / ``ProgrammingError`` on missing-table and
+    a clean empty result on present-table — no dialect-specific
+    ``information_schema`` queries required.
+    """
+    try:
+        await _execute(conn, f"SELECT 1 FROM {runs_quoted} WHERE 1=0")
+    except Exception:  # noqa: BLE001 — any driver error means absent
+        return False
+    return True
 
 
 async def _create_parking_table(conn: Any, parking_quoted: str) -> None:

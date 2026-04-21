@@ -15,18 +15,33 @@ pain point #8 in ``workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-pr
 """
 from __future__ import annotations
 
-from kailash_ml.tracking.runner import (
-    ExperimentRun,
-    RunStatus,
-    _current_run as current_run,
-    track,
-)
+from typing import Optional
+
+from kailash_ml.tracking.runner import ExperimentRun, RunStatus
+from kailash_ml.tracking.runner import _current_run
+from kailash_ml.tracking.runner import _current_run as current_run
+from kailash_ml.tracking.runner import track
 from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
+from kailash_ml.tracking.tracker import ExperimentTracker
+
+
+def get_current_run() -> Optional[ExperimentRun]:
+    """Return the ambient :class:`ExperimentRun`, or ``None``.
+
+    Public accessor for the `km.track()` contextvar per
+    ``specs/ml-tracking.md`` §10.1. Autolog, DL diagnostics, and RL
+    diagnostics consume this to discover the run they should log
+    against without callers threading the run id manually.
+    """
+    return _current_run.get()
+
 
 __all__ = [
     "ExperimentRun",
+    "ExperimentTracker",
     "RunStatus",
     "SQLiteTrackerBackend",
     "track",
     "current_run",
+    "get_current_run",
 ]
