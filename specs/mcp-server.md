@@ -616,12 +616,30 @@ This wiring is the production call site required by `rules/orphan-detection.md` 
 
 #### Error Semantics
 
-| Condition                                        | Raised exception  | Error code          |
-| ------------------------------------------------ | ----------------- | ------------------- |
-| `request_input()` called with no transport bound | `MCPError`        | `INVALID_REQUEST`   |
-| Response timeout                                 | `MCPError`        | `REQUEST_TIMEOUT`   |
-| Schema validation failure on response            | `ValidationError` | (propagated)        |
-| Client declined / cancelled                      | `MCPError`        | `REQUEST_CANCELLED` |
+Error codes emitted to MCP clients MUST match kailash-rs byte-for-byte (MCP 2025-06-18 / JSON-RPC 2.0). See cross-SDK parity notes below.
+
+| Condition                                        | Raised exception  | Error code (wire value)                        |
+| ------------------------------------------------ | ----------------- | ---------------------------------------------- |
+| `request_input()` called with no transport bound | `MCPError`        | `INVALID_REQUEST` (`-32600`)                   |
+| Response timeout                                 | `MCPError`        | `MCP_ELICITATION_TIMEOUT` (`-32001`)           |
+| Schema validation failure on response            | `ValidationError` | (propagated; `-32602` if wrapped as MCP error) |
+| Client declined / cancelled                      | `MCPError`        | `MCP_REQUEST_CANCELLED` (`-32800`)             |
+| Transport rebound mid-request (future)           | `MCPError`        | `MCP_TRANSPORT_REBOUND` (`-32002`)             |
+
+##### Cross-SDK Parity (kailash-rs)
+
+The four MCP wire codes used by `elicitation/create` MUST match kailash-rs byte-for-byte. Clients written against one SDK's codes MUST handle errors the same way when the server runs the other SDK.
+
+| Variant            | Wire code | kailash-py constant                                                     | kailash-rs constant  |
+| ------------------ | --------- | ----------------------------------------------------------------------- | -------------------- |
+| RequestCancelled   | `-32800`  | `MCPErrorCode.MCP_REQUEST_CANCELLED`                                    | `RequestCancelled`   |
+| SchemaValidation   | `-32602`  | `MCPErrorCode.INVALID_PARAMS` / `MCP_SCHEMA_VALIDATION` (alias)         | `SchemaValidation`   |
+| ElicitationTimeout | `-32001`  | `MCPErrorCode.MCP_ELICITATION_TIMEOUT` (alias of `TRANSPORT_ERROR`)     | `ElicitationTimeout` |
+| TransportRebound   | `-32002`  | `MCPErrorCode.MCP_TRANSPORT_REBOUND` (alias of `AUTHENTICATION_FAILED`) | `TransportRebound`   |
+
+Pin-value regression: `packages/kailash-mcp/tests/unit/test_elicitation_error_codes_parity.py`. A source-level grep asserts ElicitationSystem uses the `MCP_*` constants, not the legacy positive-code application variants (`REQUEST_CANCELLED = 1007`, `REQUEST_TIMEOUT = 1006`) which were invalid JSON-RPC wire values before issue #572.
+
+Related: kailash-rs#471, kailash-py#572.
 
 #### Security
 

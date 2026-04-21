@@ -75,6 +75,19 @@ class MCPErrorCode(Enum):
     REQUEST_TIMEOUT = 1006
     REQUEST_CANCELLED = 1007
 
+    # MCP 2025-06-18 elicitation/create wire codes — cross-SDK parity with
+    # kailash-rs (see issue #572 / kailash-rs#471). These are the values
+    # serialized into JSON-RPC error payloads sent to MCP clients and MUST
+    # match byte-for-byte across SDKs. MCP_ELICITATION_TIMEOUT and
+    # MCP_TRANSPORT_REBOUND are value-aliases of TRANSPORT_ERROR /
+    # AUTHENTICATION_FAILED under Python's Enum aliasing; the distinct name
+    # preserves call-site intent. MCP_SCHEMA_VALIDATION is an alias of
+    # INVALID_PARAMS (both are -32602 per JSON-RPC 2.0).
+    MCP_REQUEST_CANCELLED = -32800  # JSON-RPC 2.0 extension (cancellation)
+    MCP_ELICITATION_TIMEOUT = -32001  # alias of TRANSPORT_ERROR
+    MCP_TRANSPORT_REBOUND = -32002  # alias of AUTHENTICATION_FAILED
+    MCP_SCHEMA_VALIDATION = -32602  # alias of INVALID_PARAMS
+
 
 class MCPError(Exception):
     """Enhanced MCP error with structured information.

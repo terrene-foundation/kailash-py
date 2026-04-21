@@ -851,8 +851,8 @@ class ElicitationSystem:
 
         Raises:
             MCPError(INVALID_REQUEST): No send-transport is bound.
-            MCPError(REQUEST_TIMEOUT): Client did not respond within `timeout`.
-            MCPError(REQUEST_CANCELLED): Client returned a `decline` or
+            MCPError(MCP_ELICITATION_TIMEOUT, code=-32001): Client did not respond within `timeout`.
+            MCPError(MCP_REQUEST_CANCELLED, code=-32800): Client returned a `decline` or
                 `cancel` action.
             ValidationError: Response failed `input_schema` validation.
         """
@@ -892,7 +892,7 @@ class ElicitationSystem:
             response_future.set_exception(
                 MCPError(
                     f"Client cancelled elicitation request: {reason}",
-                    error_code=MCPErrorCode.REQUEST_CANCELLED,
+                    error_code=MCPErrorCode.MCP_REQUEST_CANCELLED,
                 )
             )
             if not response_future.done()
@@ -938,7 +938,7 @@ class ElicitationSystem:
             )
             raise MCPError(
                 f"Elicitation request {request_id} timed out after {timeout}s",
-                error_code=MCPErrorCode.REQUEST_TIMEOUT,
+                error_code=MCPErrorCode.MCP_ELICITATION_TIMEOUT,
             )
         except MCPError:
             elapsed_ms = (time.monotonic() - start_ts) * 1000
