@@ -209,23 +209,52 @@ def _probe_rocm(torch: object) -> tuple[bool, str, Optional[str]]:
         return False, f"torch.version.hip.probe_failed:{type(exc).__name__}", None
 
 
-def _probe_xpu(torch: object) -> tuple[bool, str]:
-    """XPU native probe.
+def _probe_xpu(torch: object) -> tuple[bool, str, Optional[bool]]:
+    """XPU dual-path probe (native torch.xpu → ipex fallback).
 
-    Per ml-backends.md §1.1 we intentionally do NOT fall back to
-    intel-extension-for-pytorch. Native `torch.xpu` requires torch ≥ 2.5;
-    on older torch versions or hosts without Intel GPU support, XPU is
-    unavailable.
+    Per `specs/ml-backends.md §2.2.1` and Decision 5, the XPU probe MUST
+    attempt BOTH paths in native-first order:
+
+    1. Native torch ≥ 2.5 ``torch.xpu.is_available()`` — selected first.
+    2. Intel Extension for PyTorch (ipex) — fallback on ``ImportError`` /
+       ``AttributeError`` from the native probe. ``ipex`` registers the
+       ``torch.xpu`` namespace at import time; after a successful import
+       we re-probe ``torch.xpu.is_available()``.
+
+    Returns:
+        ``(available, diagnostic_source, via_ipex)`` where ``via_ipex``
+        is ``None`` when XPU is unavailable, ``False`` when the native
+        probe resolved it, and ``True`` when the ipex fallback was
+        required.
     """
+    # Native-first path.
     try:
         xpu = getattr(torch, "xpu", None)
-        if xpu is None:
-            return False, "torch.xpu.missing (requires torch>=2.5)"
-        if not xpu.is_available():
-            return False, "torch.xpu.is_available=false"
-        return True, "torch.xpu.is_available"
+        if xpu is not None and xpu.is_available():
+            return True, "native-torch-xpu", False
+    except Exception as exc:  # noqa: BLE001 — probe MUST NOT raise
+        # Native probe raised; fall through to ipex fallback.
+        native_err: Optional[str] = f"native.probe_failed:{type(exc).__name__}"
+    else:
+        native_err = None
+
+    # ipex fallback — registers torch.xpu namespace on import.
+    try:
+        import intel_extension_for_pytorch  # type: ignore[import]  # noqa: PLC0415,F401
+    except ImportError:
+        if native_err is not None:
+            return False, f"torch.xpu.missing+ipex.import_failed({native_err})", None
+        return False, "torch.xpu.is_available=false+ipex.import_failed", None
     except Exception as exc:  # noqa: BLE001
-        return False, f"torch.xpu.probe_failed:{type(exc).__name__}"
+        return False, f"ipex.probe_failed:{type(exc).__name__}", None
+    # After ipex import, re-probe torch.xpu.
+    try:
+        xpu = getattr(torch, "xpu", None)
+        if xpu is not None and xpu.is_available():
+            return True, "ipex", True
+        return False, "torch.xpu.is_available=false (ipex-imported)", None
+    except Exception as exc:  # noqa: BLE001
+        return False, f"torch.xpu.probe_failed:{type(exc).__name__} (ipex)", None
 
 
 def _probe_tpu() -> tuple[bool, str]:
@@ -495,7 +524,15 @@ def _build_rocm_info(torch: object, rocm_version: Optional[str]) -> BackendInfo:
     return _with_precision(info)
 
 
-def _build_xpu_info(torch: object) -> BackendInfo:
+def _build_xpu_info(torch: object, *, via_ipex: bool = False) -> BackendInfo:
+    """Build XPU BackendInfo.
+
+    Per `specs/ml-backends.md §2.2.1` the `diagnostic_source` field MUST
+    name which path resolved the backend: ``"native-torch-xpu"`` when the
+    native torch ≥ 2.5 probe succeeded, ``"ipex"`` when the Intel
+    Extension for PyTorch fallback was required. ``xpu_via_ipex`` mirrors
+    the same bit for structured-log consumers.
+    """
     count = _xpu_device_count(torch)
     info = BackendInfo(
         backend="xpu",
@@ -504,8 +541,8 @@ def _build_xpu_info(torch: object) -> BackendInfo:
         device_count=count,
         devices=1,
         capabilities=_capabilities_for_xpu(),
-        diagnostic_source="torch.xpu.is_available",
-        xpu_via_ipex=False,  # Native torch.xpu only at 2.0 per spec §1.1.
+        diagnostic_source="ipex" if via_ipex else "native-torch-xpu",
+        xpu_via_ipex=via_ipex,
     )
     return _with_precision(info)
 
@@ -554,13 +591,14 @@ _INSTALL_HINTS: dict[str, str] = {
 }
 
 
-def _probe_all() -> dict[str, tuple[bool, str, Optional[str]]]:
+def _probe_all() -> dict[str, tuple[bool, str, object]]:
     """Run every probe once; return a map of backend → (available, source, extra).
 
-    `extra` holds rocm_version for rocm, None otherwise.
+    `extra` is polymorphic: holds ``rocm_version: str`` for rocm,
+    ``via_ipex: bool`` for xpu, ``None`` otherwise.
     """
     torch, _torch_version = _probe_torch()
-    results: dict[str, tuple[bool, str, Optional[str]]] = {}
+    results: dict[str, tuple[bool, str, object]] = {}
     if torch is None:
         results["cuda"] = (False, "torch.import_failed", None)
         results["mps"] = (False, "torch.import_failed", None)
@@ -573,8 +611,8 @@ def _probe_all() -> dict[str, tuple[bool, str, Optional[str]]]:
         results["mps"] = (mps_ok, mps_src, None)
         rocm_ok, rocm_src, rocm_ver = _probe_rocm(torch)
         results["rocm"] = (rocm_ok, rocm_src, rocm_ver)
-        xpu_ok, xpu_src = _probe_xpu(torch)
-        results["xpu"] = (xpu_ok, xpu_src, None)
+        xpu_ok, xpu_src, xpu_via_ipex = _probe_xpu(torch)
+        results["xpu"] = (xpu_ok, xpu_src, xpu_via_ipex)
     tpu_ok, tpu_src = _probe_tpu()
     results["tpu"] = (tpu_ok, tpu_src, None)
     results["cpu"] = (True, "always_available", None)
@@ -665,13 +703,13 @@ def detect_backend(prefer: Optional[str] = None) -> BackendInfo:
     return _build_cpu_info("fallback:no_probe_succeeded")
 
 
-def _build_info_for(
-    name: str, torch: object | None, extra: Optional[str]
-) -> BackendInfo:
+def _build_info_for(name: str, torch: object | None, extra: object) -> BackendInfo:
     """Dispatch helper: build BackendInfo for a named backend.
 
     `torch` may be None on a base install (no DL extras); in that case
     only "cpu" should reach this function (guarded by the probes above).
+    `extra` is polymorphic: rocm_version (str) for rocm, xpu_via_ipex
+    (bool) for xpu, None otherwise.
     """
     if name == "cpu":
         return _build_cpu_info("priority_resolver")
@@ -684,9 +722,11 @@ def _build_info_for(
     if name == "mps":
         return _build_mps_info()
     if name == "rocm":
-        return _build_rocm_info(torch, extra)
+        rocm_version = extra if isinstance(extra, str) else None
+        return _build_rocm_info(torch, rocm_version)
     if name == "xpu":
-        return _build_xpu_info(torch)
+        via_ipex = bool(extra) if isinstance(extra, bool) else False
+        return _build_xpu_info(torch, via_ipex=via_ipex)
     if name == "tpu":
         return _build_tpu_info()
     # Defensive: every KNOWN_BACKENDS name is handled above.
