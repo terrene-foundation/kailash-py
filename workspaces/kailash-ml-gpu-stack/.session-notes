@@ -1,0 +1,26 @@
+# Session Notes — 2026-04-20 (late, wrap)
+
+## Where we are
+
+All 8 deferments from the prior session are closed. Shipped **kailash-ml 0.15.2** (PR #568, tag `ml-v0.15.2`, live on PyPI) bundling M1+M2+L1+L2 with a post-review extension to 7 non-DEBUG log sites + canonical SHA-256 8-hex fingerprint. Filed kailash-rs **#446** (cross-SDK audit fingerprint canonicalisation blocker) + **#447** (MLFP parity umbrella, BP-051/052/053). Produced a 5-agent ultrathink synthesis for kailash-py **#567** — user deferred implementation to next session.
+
+## Read first
+
+1. `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` — **Option E** architecture + 4 pre-implementation blockers (B1-B4) + 8-PR sequence. User approved; start here next session.
+2. `workspaces/issue-567-mlfp-diagnostics/01-analysis/proposal-governance-absorb.md` — canonical SHA-256 chain format (genesis `"0"*64`, colon-delimited input, `+00:00` timestamps).
+3. `workspaces/issue-567-mlfp-diagnostics/01-analysis/proposal-kaizen-primitives.md` — definitive `TraceEvent` dataclass + `JudgeCallable` protocol + `kaizen.evaluation.*` namespace split.
+4. kailash-rs issues **#446** (blocker, MUST land before BP-051) and **#447** (umbrella, references `/schemas/trace-event.v1.json`).
+5. `packages/kailash-ml/src/kailash_ml/engine.py::_hash_model_name` — 8-hex SHA-256 helper, canonical per `rules/observability.md` §8 + `rules/event-payload-classification.md` §2. Use as template for the M2 pattern.
+
+## In-flight state
+
+- `.session-notes` at repo root has pre-existing (not-mine) uncommitted 2026-04-19→20 handoff edits; do not overwrite without reading.
+- `.claude/.proposals/latest.yaml` has pre-existing uncommitted edit from before this session.
+- Seven agent worktrees remain locked under `.claude/worktrees/agent-*` from earlier sessions (unrelated to this cycle); clean up on idle.
+
+## Traps
+
+- `gh pr merge --admin --merge --delete-branch` fails local-branch cleanup when a worktree references the branch — merge still succeeds on remote; run `git worktree remove -f -f` + `git branch -D` separately.
+- `git tag <name> HEAD^` tags the WRONG commit if there are unpushed local commits ahead of the merge — tag via explicit SHA (`git tag ml-v0.15.2 <merge-sha>`) after verifying with `git log <tag> -1`.
+- Pyright "import could not be resolved" on files inside `.claude/worktrees/agent-*` — known layout issue, do not chase.
+- `AsyncMock()` fixtures auto-coroutine every attribute — after L1 migration, unit tests calling `conn.dialect.quote_identifier(...)` need a REAL `SQLiteDialect()` on `mock.dialect`.

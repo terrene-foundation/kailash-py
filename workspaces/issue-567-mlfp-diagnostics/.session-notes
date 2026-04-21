@@ -1,0 +1,32 @@
+# Session Notes — 2026-04-20
+
+## Where we are
+
+Issue #567 at 6/7 merged (PR#1/#2/#3/#4/#5/#7 + CI-fix #577). PR#6 (AgentDiagnostics + TraceExporter → kaizen.observability) remains — blocked on kailash-rs#468 (B1 canonical audit-chain fingerprint). Two follow-up PRs open awaiting review: #581 (#579 analysis) and #582 (codify).
+
+## Read first
+
+1. `workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md` — 7-PR plan, PR#6 scope + dependency on B1
+2. `src/kailash/diagnostics/protocols.py` — `TraceEvent` + `TraceExporter` contract that PR#6 implements
+3. `src/kailash/trust/pact/audit.py::AuditChain._compute_fingerprint` — canonical fingerprint PR#6 must match post-B1
+4. `.claude/.proposals/latest.yaml` — 3 rules + 1 skill pending loom Gate-1, deferred follow-ups section
+5. `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py` — reference adapter shape for PR#6
+
+## In-flight state
+
+- PR#581 (#579 analysis) and PR#582 (codify) open; neither admin-merged yet
+- `latest.yaml` has `status: pending_review` — next human run at loom/ does Gate-1 classify
+- MLFP source for PR#6: `/private/tmp/pcml-run26-template/shared/mlfp06/diagnostics/agent.py` (668 LOC) + `_traces.py` (360 LOC). Strip Langfuse (independence), reroute cost via `CostTracker` microdollars (framework-first)
+- kailash-rs has two pending issues from this session: #468 (B1) and #496 (#579 parity)
+
+## Traps
+
+- **PR#6 needs B1 or explicit risk acceptance** — without kailash-rs#468 closed, TraceEvent fingerprint parity is promise-only; document the risk in PR#6 body if shipping without it
+- **Sibling CI fix carries forward** — every new PR#6 CI workflow MUST prepend `uv pip install -e "."` (see rules/deployment.md new section) — the kaizen workflows (unified-ci.yml, trust-tests.yml, security-tests.yml) are NOT currently covered by PR#577's fix
+- **specs/kaizen-*.md sibling sweep deferred** — adding kaizen-observability.md in PR#6 triggers rules/specs-authority.md §5b; enumerate all `specs/kaizen-*.md` siblings and re-derive against TraceEvent / TraceExporter before APPROVE
+- **15 pending journal entries** across `workspaces/kailash-ml-gpu-stack/journal/.pending/` + `workspaces/issue-567-mlfp-diagnostics/journal/.pending/` — promote-or-delete pass needed
+
+## Open questions for the human
+
+- Ship PR#6 before or after kailash-rs#468 acceptance? (governance + cross-SDK fingerprint risk)
+- Admin-merge PR#581 (analysis) and PR#582 (codify) now, or batch with next session's work?
