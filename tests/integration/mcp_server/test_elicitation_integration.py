@@ -168,7 +168,10 @@ async def test_elicitation_timeout_with_silent_send() -> None:
     with pytest.raises(MCPError) as exc_info:
         await system.request_input("Waiting forever?", timeout=0.1)
 
-    assert exc_info.value.error_code == MCPErrorCode.REQUEST_TIMEOUT
+    # Issue #572: elicitation timeout now emits MCP wire code -32001 per
+    # MCP 2025-06-18 spec, not the legacy application code 1006.
+    assert exc_info.value.error_code == MCPErrorCode.MCP_ELICITATION_TIMEOUT
+    assert exc_info.value.error_code.value == -32001
 
 
 @pytest.mark.asyncio
@@ -200,7 +203,7 @@ async def test_elicitation_bind_transport_replaces_prior() -> None:
 
 @pytest.mark.asyncio
 async def test_elicitation_cancel_request_surfaces_as_cancelled_error() -> None:
-    """Client decline/cancel -> MCPError(REQUEST_CANCELLED) at caller."""
+    """Client decline/cancel -> MCPError(MCP_REQUEST_CANCELLED) at caller."""
     system = ElicitationSystem()
 
     async def cancelling_send(message: Dict[str, Any]) -> None:
@@ -214,7 +217,10 @@ async def test_elicitation_cancel_request_surfaces_as_cancelled_error() -> None:
     with pytest.raises(MCPError) as exc_info:
         await system.request_input("Proceed?", timeout=1.0)
 
-    assert exc_info.value.error_code == MCPErrorCode.REQUEST_CANCELLED
+    # Issue #572: cancellation emits MCP wire code -32800 per MCP 2025-06-18
+    # (JSON-RPC 2.0 cancellation extension), not the legacy app code 1007.
+    assert exc_info.value.error_code == MCPErrorCode.MCP_REQUEST_CANCELLED
+    assert exc_info.value.error_code.value == -32800
     assert "user declined" in str(exc_info.value)
 
 
@@ -310,7 +316,9 @@ async def test_mcpserver_route_server_initiated_response_decline_action() -> Non
     server.elicitation_system.bind_transport(declining_send)
     with pytest.raises(MCPError) as exc_info:
         await server.elicitation_system.request_input("Proceed?", timeout=1.0)
-    assert exc_info.value.error_code == MCPErrorCode.REQUEST_CANCELLED
+    # Issue #572: MCP 2025-06-18 wire code for cancellation.
+    assert exc_info.value.error_code == MCPErrorCode.MCP_REQUEST_CANCELLED
+    assert exc_info.value.error_code.value == -32800
     assert "decline" in str(exc_info.value)
 
 

@@ -710,7 +710,9 @@ class TestElicitationSystem:
                 timeout=0.1,
             )
 
-        assert exc_info.value.error_code == MCPErrorCode.REQUEST_TIMEOUT
+        # Issue #572: elicitation timeout emits MCP 2025-06-18 wire code -32001.
+        assert exc_info.value.error_code == MCPErrorCode.MCP_ELICITATION_TIMEOUT
+        assert exc_info.value.error_code.value == -32001
         assert len(captured_messages) == 1
         assert captured_messages[0]["method"] == "elicitation/create"
 
