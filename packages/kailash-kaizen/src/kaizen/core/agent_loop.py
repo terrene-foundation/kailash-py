@@ -20,11 +20,74 @@ import concurrent.futures
 import contextvars
 import inspect
 import logging
+import time
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_trace_event(
+    agent: Any,
+    *,
+    event_type: str,
+    run_id: str,
+    parent_event_id: Optional[str] = None,
+    duration_ms: Optional[float] = None,
+    status: Optional[str] = None,
+) -> Optional[str]:
+    """Emit a TraceEvent to the agent's trace exporter if one is attached.
+
+    Fire-and-forget: any failure inside the exporter is logged at WARN
+    and swallowed. Trace emission MUST NOT break the agent's hot path
+    (rules/observability.md Rule 7 carve-out for observability side
+    paths — the agent operation itself succeeded; the trace write is
+    the degraded-path signal).
+
+    Returns the emitted event's ``event_id`` so callers can thread it
+    into ``parent_event_id`` of subsequent events, or ``None`` when no
+    exporter is attached.
+    """
+    exporter = getattr(agent, "_trace_exporter", None)
+    if exporter is None:
+        return None
+
+    try:
+        # Lazy import to avoid kaizen.core → kaizen.observability circular.
+        from kailash.diagnostics.protocols import (  # noqa: PLC0415
+            TraceEvent,
+            TraceEventStatus,
+            TraceEventType,
+        )
+
+        event_id = f"evt-{uuid.uuid4().hex[:12]}"
+        event = TraceEvent(
+            event_id=event_id,
+            event_type=TraceEventType(event_type),
+            timestamp=datetime.now(timezone.utc),
+            run_id=run_id,
+            agent_id=str(getattr(agent, "agent_id", "unknown")),
+            cost_microdollars=0,
+            parent_event_id=parent_event_id,
+            duration_ms=duration_ms,
+            status=TraceEventStatus(status) if status is not None else None,
+        )
+        exporter.export(event)
+        return event_id
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget trace
+        logger.warning(
+            "kaizen.agent_loop.trace_export_failed",
+            extra={
+                "trace_event_type": event_type,
+                "trace_run_id": run_id,
+                "trace_agent_id": str(getattr(agent, "agent_id", "unknown")),
+                "trace_error": str(exc),
+                "mode": "real",
+            },
+        )
+        return None
 
 
 @dataclass
@@ -352,6 +415,14 @@ class AgentLoop:
 
         session_id = inputs.pop("session_id", None)
 
+        # Trace correlation — issue #567 PR#6 hot-path wiring of kaizen.observability.
+        # run_id is stable across start/end events per rules/observability.md Rule 2.
+        trace_run_id = f"run-{uuid.uuid4().hex[:12]}"
+        trace_t0 = time.monotonic()
+        start_event_id = _emit_trace_event(
+            agent, event_type="agent.run.start", run_id=trace_run_id
+        )
+
         try:
             # Load memory context
             _load_memory_context(agent, inputs, session_id)
@@ -392,11 +463,27 @@ class AgentLoop:
             # Save memory turn
             _save_memory_turn(agent, inputs, processed_inputs, final_result, session_id)
 
+            _emit_trace_event(
+                agent,
+                event_type="agent.run.end",
+                run_id=trace_run_id,
+                parent_event_id=start_event_id,
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                status="ok",
+            )
             return final_result
 
         except Exception as error:
             import gc
 
+            _emit_trace_event(
+                agent,
+                event_type="agent.run.end",
+                run_id=trace_run_id,
+                parent_event_id=start_event_id,
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                status="error",
+            )
             gc.collect()
             return agent._handle_error(error, {"inputs": inputs})
 
@@ -420,6 +507,12 @@ class AgentLoop:
             )
 
         session_id = inputs.pop("session_id", None)
+
+        trace_run_id = f"run-{uuid.uuid4().hex[:12]}"
+        trace_t0 = time.monotonic()
+        start_event_id = _emit_trace_event(
+            agent, event_type="agent.run.start", run_id=trace_run_id
+        )
 
         try:
             # Load memory context (sync -- memory is sync API)
@@ -463,7 +556,23 @@ class AgentLoop:
                 agent, inputs, processed_inputs, final_result, session_id
             )
 
+            _emit_trace_event(
+                agent,
+                event_type="agent.run.end",
+                run_id=trace_run_id,
+                parent_event_id=start_event_id,
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                status="ok",
+            )
             return final_result
 
         except Exception as error:
+            _emit_trace_event(
+                agent,
+                event_type="agent.run.end",
+                run_id=trace_run_id,
+                parent_event_id=start_event_id,
+                duration_ms=(time.monotonic() - trace_t0) * 1000.0,
+                status="error",
+            )
             return agent._handle_error(error, {"inputs": inputs})
