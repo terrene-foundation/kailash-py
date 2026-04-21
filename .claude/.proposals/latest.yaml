@@ -343,6 +343,95 @@ changes:
       outcome: "6 of 7 PRs merged in 2 sessions (PR#6 pending cross-SDK B1 acceptance)"
       plan_file: "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md"
 
+  - id: build-repo-release-discipline
+    type: rule
+    severity: HIGH
+    target: rules/build-repo-release-discipline.md (NEW FILE)
+    section: "new rule file"
+    summary: |
+      New rule mandates that BUILD repo sessions (kailash-py, kailash-rs)
+      MUST proceed through `/release` to PyPI / crates.io in the same
+      session that merges code. "Done" means installable from the
+      package index, not merged to main. Release scope for the session
+      = modified package + every sibling package whose main is ahead
+      of the package index by ≥1 bump.
+
+      Full rule already landed at `.claude/rules/build-repo-release-discipline.md`
+      in this session (local-active). Classification suggestion: global
+      because kailash-rs has identical failure mode (crate versions on
+      crates.io lag main). Variant overlays may differ on tooling syntax
+      (`pip install` vs `cargo install`, `twine` vs `cargo publish`) but
+      the structural rule is language-agnostic.
+
+      Core MUST clauses:
+        1. Every merge triggers a release cycle in the same session
+        2. Package-index installability is the done gate
+           (`pip install <pkg>==<new> && python -c "from <pkg> import <surface>"`)
+        3. Release scope enumerated before first merge of the session
+           (main-vs-pypi table per package, cached in working memory)
+        4. Release authorization is the only structural gate (human
+           approves scope; agent owns enumeration)
+
+      Core MUST NOT clauses:
+        1. Report done / complete / shipped at admin-merge
+        2. Defer release to next session / next batch
+        3. Release only the modified package (ignore stale siblings)
+        4. Report done after `/release` returns success but before
+           clean-venv install + import of new surface succeeds
+
+      BLOCKED rationalizations enumerated: "PR merged work complete",
+      "Tests pass on main user can install from source", "Release is a
+      follow-up task", "Waiting for user to batch releases for efficiency",
+      "Consumer can add BUILD repo as editable dep", "CI green on main
+      means feature is live", "release-specialist is a separate agent".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable at 100% fidelity. kailash-rs has the identical
+      failure mode: crate versions published to crates.io lag main.
+      The rule applies verbatim with s/PyPI/crates.io/, s/pip install/
+      cargo install/, s/twine/cargo publish/. Variant overlay ONLY if
+      the release-runbook commands diverge enough to warrant a separate
+      file; structurally the rule is identical.
+
+      This is the single highest-leverage institutional fix of the
+      2026-04-21 session. All other rules assume code lands on main;
+      this rule closes the gap between main and consumer-observable
+      state, which is where every prior "we shipped it but users don't
+      see it" incident has actually lived.
+    evidence:
+      session: "2026-04-21"
+      user_directive: |
+        "what happened??? we didn't do anything? ... MLFP is unblocked
+        for coursework (core SDK works, kailash-ml 0.15.2 has the core
+        engines) but the Protocol-based integration the issue #567
+        process produced isn't consumable here yet. Next template bump
+        carrying a kaizen/pact/align PyPI release will bring them through."
+
+        Followed by: "please /codify for build repo to never to stop at
+        CI merge, MUST BE release! Never say or report done after CI
+        merge, ALWAYS prepare for release and proceed!"
+      release_gap_at_session_start: |
+        main vs PyPI (before 2026-04-21 session):
+          kailash: 2.8.12 main → 2.8.11 PyPI (1 patch behind)
+          kailash-kaizen: 2.9.0 main → 2.7.5 PyPI (3 minor behind)
+          kailash-ml: 0.17.0 main → 0.15.2 PyPI (2 minor behind)
+          kailash-align: 0.4.0 main → 0.3.2 PyPI (1 minor behind)
+          kailash-pact: 0.9.0 main → 0.8.2 PyPI (1 minor behind)
+          kailash-mcp: 0.2.8 main → 0.2.7 PyPI (1 patch behind)
+        7 PRs of issue #567 MLFP diagnostics had merged across 3 prior
+        sessions; zero had reached PyPI.
+      release_cycle_execution: |
+        Wave 1: 5 packages (kailash 2.8.12, mcp 0.2.8, ml 0.17.0,
+          align 0.4.0, pact 0.9.0) — tagged 2026-04-21T05:41-05:44,
+          published via tag-triggered publish-pypi.yml OIDC trusted
+          publisher, clean-venv install + import verified for each.
+        Wave 2: kailash-kaizen 2.10.1 (after PR #587 merged at
+          2026-04-21T05:49:16Z) — TestPyPI + production + clean-venv
+          install + observability surface import + security-fix
+          presence check all green.
+        Outcome: every BUILD-main version now matches production PyPI.
+      memory_entry: "feedback_build_repo_release.md (persistent, indexed in MEMORY.md)"
+
 # Deferred follow-ups (not new rules, but session-level action items):
 deferred:
   - topic: specs-authority-full-sibling-sweep

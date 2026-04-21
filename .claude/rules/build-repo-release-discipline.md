@@ -1,0 +1,136 @@
+# BUILD Repo Release Discipline
+
+## Scope
+
+ALL sessions in BUILD repos (`kailash-py`, `kailash-rs`) that merge code to main. Does NOT apply to downstream USE projects (template repos, application repos, external consumers) — those consume BUILD artifacts via PyPI and do not run `/release`.
+
+## ABSOLUTE: "Done" Means Released, Not Merged
+
+A session touching BUILD-repo source (new feature, bug fix, refactor, new test, new docs surface) MUST proceed through the full release cycle — admin-merge → `/release` → PyPI publication → installable verification — within the same session. Reporting "done" / "complete" / "shipped" at admin-merge is BLOCKED.
+
+**Why:** Downstream consumers (USE templates, application repos, external packages like MLFP coursework, third-party integrations) consume BUILD repos only via PyPI. A PR merged to BUILD-main is invisible to everyone downstream until the release cut. Stopping at merge conflates BUILD-state with consumable-state and leaves every consumer blocked on the next scheduled release — which may be days or weeks away.
+
+**Origin:** Session 2026-04-21 — 7 PRs of issue #567 (MLFP diagnostics upstream) merged over 3 sessions. PyPI versions held at `kailash 2.8.11` / `kailash-kaizen 2.7.5` / `kailash-ml 0.15.2` / `kailash-align 0.3.2` / `kailash-pact 0.8.2`. BUILD-main versions advanced to `2.8.25` / `2.9.0` / `0.17.0` / `0.4.0` / `0.9.0`. Downstream MLFP consumer observed "what happened??? we didn't do anything" because no PyPI release cut between the merge waves and the consumer's next template bump.
+
+## MUST Rules
+
+### 1. Every Merge Triggers A Release Cycle In The Same Session
+
+When any PR merges to BUILD-main in the current session, the session MUST run `/release` for:
+
+1. **The package directly modified** by the merged PR.
+2. **Every sibling package whose main version is ahead of PyPI by ≥1 bump.** Rationale: if a prior session merged but did not release a sibling, the current session inherits the obligation — there is no external release cadence that will sweep it up.
+
+```bash
+# DO — enumerate packages whose main > pypi, include all in the release scope
+for pkg in kailash kailash-dataflow kailash-nexus kailash-kaizen kailash-mcp \
+           kailash-ml kailash-align kailash-pact; do
+  main_version=$(grep '^version' packages/$pkg/pyproject.toml 2>/dev/null | head -1 | cut -d'"' -f2)
+  [ -z "$main_version" ] && main_version=$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)
+  pypi_version=$(curl -s https://pypi.org/pypi/$pkg/json | python -c 'import sys, json; print(json.load(sys.stdin)["info"]["version"])')
+  if [ "$main_version" != "$pypi_version" ]; then
+    echo "RELEASE NEEDED: $pkg main=$main_version pypi=$pypi_version"
+  fi
+done
+
+# DO NOT — only release the package you touched
+/release kailash-kaizen  # but kailash-ml main 0.17.0 > pypi 0.15.2 is left stale
+```
+
+**Why:** Sibling packages drift over time — each session addresses its own PR's package and leaves siblings behind. The downstream consumer experiences a compounding gap. Closing siblings opportunistically (every session that releases anything sweeps every stale package) is the only way the gap converges to zero.
+
+### 2. PyPI Installability Is The Done Gate, Not Merge
+
+After `/release` publishes to PyPI, the session MUST verify the new version is installable AND the new surface importable:
+
+```bash
+# DO — verify from a clean .venv (not the build venv that has editable installs)
+pip install --upgrade "kailash-kaizen==2.10.1" --target /tmp/verify-kaizen-2.10.1
+PYTHONPATH=/tmp/verify-kaizen-2.10.1 python -c "
+from kaizen.observability import AgentDiagnostics, TraceExporter
+print(AgentDiagnostics, TraceExporter)
+"
+# Expect: class printout, no ImportError
+
+# DO NOT — report done on merge alone
+# "PR #587 merged, observability shipped" — but pip install still returns 2.7.5 (cached PyPI)
+```
+
+**Why:** A release can succeed on PyPI metadata but fail on wheel upload, tag collision, or downstream dependency pinning — all of which surface only when a clean install runs the import. The installability check is the "smoke test" that proves the release reached consumers.
+
+### 3. Release Scope Enumerated Before First Merge Of The Session
+
+At the start of a session that will merge code, the agent MUST enumerate every BUILD-repo package and cache (main_version, pypi_version) per package. The enumeration lives in the session's working memory for the rest of the session so release-scope decisions are not re-derived per-PR.
+
+```markdown
+# DO — enumerate once, reference throughout
+
+Release scope for this session (at session start, before first merge):
+| Package | main | PyPI | Release needed? |
+|-----------------|-------|-------|-----------------|
+| kailash | 2.8.25| 2.8.11| YES (14 patches)|
+| kailash-dataflow| 2.0.12| 2.0.12| NO |
+| kailash-kaizen | 2.9.0 | 2.7.5 | YES (minor) |
+| kailash-ml | 0.17.0| 0.15.2| YES (2 minors) |
+| kailash-align | 0.4.0 | 0.3.2 | YES (minor) |
+| kailash-pact | 0.9.0 | 0.8.2 | YES (minor) |
+
+Release cycle at end of session: kailash + kaizen + ml + align + pact.
+
+# DO NOT — derive release scope only for the PR's package at merge time
+```
+
+**Why:** Without session-level scope enumeration, each merge independently asks "should I release this?" and the answer is always "only this one" — missing the sibling drift. Enumerating up-front locks in the "sweep all stale" obligation.
+
+### 4. Release Authorization Is The Only Structural Gate
+
+Per `rules/autonomous-execution.md` § "Structural vs Execution Gates", release authorization is a structural gate requiring human authority. The release-specialist prompts the human at `/release` time to approve PyPI publication. The human MAY authorize the entire enumerated scope or a subset; the session MUST NOT skip the prompt.
+
+```
+# DO — surface the full scope, let human approve
+"I'm about to /release 5 packages: kailash 2.8.26, kailash-kaizen 2.10.1,
+ kailash-ml 0.17.0, kailash-align 0.4.0, kailash-pact 0.9.0. Authorize all?"
+
+# DO NOT — release without asking
+"Running /release kailash-kaizen..." (no prompt)
+
+# DO NOT — skip release because "human hasn't asked"
+"Merged PR #587. User will release when they next cut a batch."
+```
+
+**Why:** The human owns release authorization (version increment + public-API commitment). But the agent owns scope enumeration. Splitting these correctly keeps the human's authority intact while closing the sibling-drift trap.
+
+## MUST NOT
+
+- Report "done" / "complete" / "shipped" at admin-merge for any PR that landed code
+
+**Why:** Merged-not-released is the exact failure mode that produced the 2026-04-21 MLFP frustration. "Done" is a consumer-facing claim; consumers see PyPI, not main.
+
+- Defer release to "next session" / "next batch" / "release-specialist follow-up"
+
+**Why:** Every deferred release compounds the sibling-drift trap. The cheapest release is the one you run in the session that created the merge — context is warm, no re-enumeration cost.
+
+- Release only the package modified by the PR, ignoring stale siblings
+
+**Why:** The drift is multiplicative across sessions. Each session that releases only its own package leaves every sibling one bump further behind PyPI. Consumer experience degrades monotonically.
+
+- Report done after `/release` returns success but before installability check
+
+**Why:** PyPI publication can succeed on metadata and fail on wheel / tag / dependency — only a clean-venv install + import catches the full chain.
+
+**BLOCKED rationalizations:**
+
+- "PR merged, work complete"
+- "Tests pass on main, user can install from source"
+- "Release is a follow-up task, not part of implementation"
+- "Waiting for user to batch releases for efficiency"
+- "The consumer can add the BUILD repo as an editable dependency"
+- "CI green on main means the feature is live"
+- "release-specialist is a separate agent, not this session's concern"
+
+## Relationship To Other Rules
+
+- `rules/deployment.md` — `/release` mechanics, PyPI publishing, CI/CD. This rule mandates WHEN to invoke that machinery.
+- `rules/autonomous-execution.md` § "Fix-Immediately When Review Surfaces A Same-Class Gap Within Shard Budget" — sibling rule. Both mandate closing loops within-session rather than deferring to next-session context reload.
+- `rules/zero-tolerance.md` Rule 5 (Version Consistency on Release) — the atomicity requirement for pyproject.toml + **version**. This rule is the orchestration layer that ensures the consistency-checked bump reaches PyPI.
+- `rules/artifact-flow.md` — separate artifact lifecycle (proposals → loom → templates). Code releases follow this rule; COC artifact proposals follow artifact-flow.
