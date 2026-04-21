@@ -1,0 +1,41 @@
+{
+  "_source": "kailash-rs error taxonomy for the LLM deployment surface (ADR-0001). Names below mirror the Rust variant identifiers -- in Rust they are enum variants of LlmClientError; in Python they are Exception subclasses. EATP D6 mandates byte-identical class / variant names for cross-SDK forensic correlation.",
+  "_refresh": "When kailash-rs adds / renames a LlmClientError variant, update this file in the same PR that lands the cross-SDK parity change.",
+  "root_error": "LlmClientError",
+  "tier_1_categories": [
+    "LlmError",
+    "AuthError",
+    "EndpointError",
+    "ModelGrammarError",
+    "ConfigError"
+  ],
+  "variants": {
+    "LlmError": ["Timeout", "RateLimited", "ProviderError", "InvalidResponse"],
+    "AuthError": ["Invalid", "Expired", "MissingCredential"],
+    "EndpointError": ["InvalidEndpoint", "Unreachable"],
+    "ModelGrammarError": ["ModelGrammarInvalid", "ModelRequired"],
+    "ConfigError": ["NoKeysConfigured", "InvalidUri", "InvalidPresetName"]
+  },
+  "all_names_flat": [
+    "LlmClientError",
+    "LlmError",
+    "Timeout",
+    "RateLimited",
+    "ProviderError",
+    "InvalidResponse",
+    "AuthError",
+    "Invalid",
+    "Expired",
+    "MissingCredential",
+    "EndpointError",
+    "InvalidEndpoint",
+    "Unreachable",
+    "ModelGrammarError",
+    "ModelGrammarInvalid",
+    "ModelRequired",
+    "ConfigError",
+    "NoKeysConfigured",
+    "InvalidUri",
+    "InvalidPresetName"
+  ]
+}

@@ -5,6 +5,53 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] — 2026-04-21 — LLM deployment four-axis abstraction (#498)
+
+### Why
+
+Enterprise LLM deployments cannot be expressed by a single provider-name string. Bedrock-Claude is Anthropic's wire protocol with AWS SigV4 auth against a Bedrock endpoint under a Bedrock-specific model grammar; Vertex-Claude is the same wire protocol with GCP OAuth2 auth against a Vertex endpoint under a Vertex-specific model grammar; Azure-OpenAI is OpenAI's wire protocol with Azure Entra auth and pinned api-version. Every new foundation-model host that lands as a per-provider `kaizen.providers.registry.*` class forks the adapter surface further. This release decomposes the LLM call into four orthogonal axes (wire × auth × endpoint × grammar) so each new host becomes a ≤10-LOC preset instead of a full adapter. Cross-SDK parity with kailash-rs#406 is enforced by a shared parity suite (see `packages/kailash-kaizen/tests/cross_sdk_parity/`).
+
+### Added
+
+- `LlmClient.from_deployment(deployment)` + `LlmClient.from_env()` — four-axis LLM deployment abstraction (ADR-0001).
+- `LlmDeployment` frozen Pydantic model composing `WireProtocol` + `Endpoint` + `AuthStrategy` + `ModelGrammar` + defaults.
+- **24 presets** (cross-SDK parity with kailash-rs): `openai`, `anthropic`, `google`, `cohere`, `mistral`, `perplexity`, `huggingface`, `ollama`, `docker_model_runner`, `groq`, `together`, `fireworks`, `openrouter`, `deepseek`, `lm_studio`, `llama_cpp`, `bedrock_claude`, `bedrock_llama`, `bedrock_titan`, `bedrock_mistral`, `bedrock_cohere`, `vertex_claude`, `vertex_gemini`, `azure_openai`.
+- Auth strategies: `ApiKeyBearer`, `StaticNone`, `AwsBearerToken`, `AwsSigV4`, `GcpOauth`, `AzureEntra` (with three mutually-exclusive variants: api-key, workload-identity, managed-identity).
+- `LlmClient.from_env()` three-tier precedence: `KAILASH_LLM_DEPLOYMENT` URI > `KAILASH_LLM_PROVIDER` selector > legacy per-provider keys (OpenAI > Azure > Anthropic > Google). Never falls back to mock.
+- URI schemes with strict per-scheme regex validation: `bedrock://{region}/{model}`, `vertex://{project}/{region}/{model}`, `azure://{resource}/{deployment}?api-version=…`, `openai-compat://{host}/{model}`.
+- Plugin hook `register_preset(name, factory)` with regex-validated name gate (`^[a-z][a-z0-9_]{0,31}$`) for third-party preset extension.
+- `LlmHttpClient` — only HTTP client constructor path for LLM calls; grep-auditable. Emits structured log fields `deployment_preset`, `auth_strategy_kind`, `endpoint_host`, `request_id`, `latency_ms`, `method`, `status_code`, `exception_class`.
+- `SafeDnsResolver` — post-connect peer-IP revalidation to close the DNS-rebinding window on every LLM HTTP call.
+- `check_url(url)` SSRF guard — structural gate at `Endpoint.from_url` rejecting private IPs, loopback, link-local, and non-HTTPS schemes before the endpoint is finalized.
+- `BedrockClaudeGrammar`, `BedrockLlamaGrammar`, `BedrockTitanGrammar`, `BedrockMistralGrammar`, `BedrockCohereGrammar`, `VertexClaudeGrammar`, `VertexGeminiGrammar`, `AzureOpenAIGrammar`.
+- Cross-SDK parity suite at `packages/kailash-kaizen/tests/cross_sdk_parity/` — 32 tests asserting preset names, from_env precedence, observability field names, and error taxonomy match Rust byte-for-byte.
+- Authoritative spec `specs/kaizen-llm-deployments.md` (238 LOC) and migration guide `docs/migration/llm-deployments-v2.md`.
+- Optional extras: `kailash-kaizen[bedrock]` (botocore for SigV4), `[vertex]` (google-auth), `[azure]` (azure-identity for workload/managed variants). API-key-only Azure usage does not require `[azure]`.
+
+### Security
+
+- `ApiKey` newtype wraps `SecretStr`. No `__eq__` / `__hash__`; only `ApiKey.constant_time_eq(other)` via `hmac.compare_digest`. Eliminates timing side-channels in credential comparison.
+- Every auth class `__repr__` emits `auth_strategy_kind()` + an 8-hex-char SHA-256 fingerprint — the raw credential never reaches a log line, a repr, or a pickled trace event.
+- `AwsSigV4.sign_request` routes through `botocore.auth.SigV4Auth`. Inlined `hmac.new` signing is grep-blocked in `packages/kailash-kaizen/src/kaizen/llm/auth/aws.py`.
+- `AwsBearerToken` and `AwsSigV4` enforce a region allowlist at construction time (`BEDROCK_SUPPORTED_REGIONS`). No default `AWS_REGION`.
+- `ResolvedModel.with_extra_header` deny-lists 7 forbidden header names (`authorization`, `host`, `cookie`, `x-amz-security-token`, `x-api-key`, `x-goog-api-key`, `anthropic-version`) — prevents callers from overriding the deployment's auth or routing layer.
+- `ModelGrammar.resolve` validates `caller_model` against `^[a-zA-Z0-9._:/@-]{1,256}$` before any parsing or URL interpolation.
+- `LlmDeployment.mock()` is gated behind `KAILASH_TEST_MODE=1` OR the optional `[test-utils]` extra. `LlmClient.from_env()` NEVER returns a mock deployment — empty env raises `NoKeysConfigured`.
+- `GcpOauth` and `AzureEntra` token caches use `asyncio.Lock` for single-flight refresh (no thundering herd on expiry).
+- `Endpoint` is a frozen Pydantic model with `extra='forbid'`; side-door writes after construction are rejected at type level.
+
+### Changed
+
+- `kaizen.providers.registry.*` and `kaizen.config.providers.*` now route internally through the preset layer. Public API unchanged; no import breakage.
+
+### Deprecated
+
+- `kaizen.providers.registry.get_provider(name)` — preserved through v2.x; v3.0 earliest removal (≥ 18 months coexistence). Prefer `LlmClient.from_deployment(LlmDeployment.<preset>())`. See `docs/migration/llm-deployments-v2.md` for the full symbol-by-symbol mapping. No deprecation warnings in this release; deprecation-window announcement will precede removal.
+
+### Migration Notes
+
+Zero breaking changes. Legacy code paths continue to work unchanged; every `OpenAIProvider`, `AnthropicProvider`, etc. remains importable and functionally identical. When BOTH the new deployment-tier env vars (URI or selector) AND legacy per-provider keys are set, a single `WARNING llm_client.migration.legacy_and_deployment_both_configured` is emitted and the deployment path wins. `tests/regression/test_legacy_key_does_not_leak_into_deployment_path` enforces no credential cross-contamination.
+
 ## [2.10.1] — 2026-04-21 — Security patch on kaizen.observability (PR #587 security-reviewer feedback)
 
 ### Security
