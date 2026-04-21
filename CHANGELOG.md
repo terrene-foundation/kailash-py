@@ -15,6 +15,21 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.12 — 2026-04-21 (closes #573) — `immutable_audit_log` orphan removed
+
+**Cross-SDK orphan-check mirroring kailash-rs#461 / PR #466.** `src/kailash/trust/immutable_audit_log.py` defined `ImmutableAuditLog` (541 LOC) as a deque-based append-only log with SHA-256 hash chaining. Grep across `src/` + `packages/*/src/` + `tests/` + `packages/*/tests/` returned zero production or test consumers — the module was a pure facade per `rules/orphan-detection.md` §1, never wired into any call site. The canonical audit-storage surface is `kailash.trust.audit_store` (`InMemoryAuditStore` + `AuditStoreProtocol`), which has real production consumers.
+
+**What changed:**
+
+- **Deleted** `src/kailash/trust/immutable_audit_log.py` entirely (`ImmutableAuditLog`, `AuditEntry`, `RetentionPolicy`, `ChainVerificationResult`, `_compute_entry_hash`). Per `rules/orphan-detection.md` §3 ("Removed = Deleted, Not Deprecated") — no deprecation banner, no feature flag, no re-export shim. The module was not exported from `kailash.trust.__init__` so no public-surface change was required.
+- **Regression guard** at `tests/regression/test_issue_573_immutable_audit_log_orphan.py` (3 assertions: module is not importable, file is absent from tree, `kailash.trust.ImmutableAuditLog` attribute does not exist). Re-introduction without a production call site fails the test loudly.
+- **`specs/trust-posture.md` § 8.5** renamed "Immutable Audit Log" → "Append-Only Audit Storage" and points to `kailash.trust.audit_store`.
+- **`docs/migration/v2-to-v3.md` § Audit Store** annotates the prior import path as "removed in 2.8.12" with the canonical `kailash.trust.audit_store` replacement.
+
+**Why this matters:** Orphan facades in audit-chain surfaces are especially dangerous — downstream consumers may import them believing audit protection is active, when in fact the facade runs in isolation with no persistence integration. The deletion eliminates this vector before it can be triggered.
+
+Closes #573.
+
 ### kailash 2.8.11 — 2026-04-20 — dialect-safety sweep
 
 **Post-2.8.10 follow-up.** 2.8.10 shipped `quote_identifier` into the core dialect layer, but `/redteam` found 40+ DDL sites across `src/kailash/trust/audit_store.py`, DataFlow migrations (`application_safe_rename_strategy`, `column_removal_manager`, `not_null_handler`), DataFlow optimization (`index_recommendation_engine`, `query_plan_analyzer`, `sql_query_optimizer`), and the migration generator (`src/kailash/utils/migrations/generator.py`) that were still interpolating dynamic identifiers via raw f-string. 2.8.11 routes every remaining dynamic DDL identifier through `dialect.quote_identifier()` or `_validate_identifier()` and adds 20 regression tests (4 audit_store + 10 migrations + 6 optimization advisories) covering PostgreSQL / MySQL / SQLite payloads.

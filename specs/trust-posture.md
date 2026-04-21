@@ -196,9 +196,9 @@ class AuditStoreProtocol(Protocol):
 
 Every event is linked to the previous via SHA-256: `hash(event_data + prev_hash)`. The genesis sentinel is `"0" * 64`. Hash comparisons use `hmac.compare_digest()` for constant-time comparison (preventing timing side-channel attacks).
 
-### 8.5 Immutable Audit Log
+### 8.5 Append-Only Audit Storage
 
-`kailash.trust.immutable_audit_log.ImmutableAuditLog` provides a deque-based append-only log with the same hash chain properties. Thread-safe via `threading.Lock`. Bounded to 10,000 entries with retention policy eviction.
+Append-only audit storage for trust events is provided by `kailash.trust.audit_store` (`InMemoryAuditStore` for tests, persistent stores for production). The prior `kailash.trust.immutable_audit_log.ImmutableAuditLog` was a deque-based reference implementation with no production consumers — removed in kailash 2.8.12 (issue #573) after the cross-SDK orphan-check flagged it as the Python sibling of kailash-rs's canonical-anchor orphan (kailash-rs#461, PR #466). Users requiring an in-memory bounded chain use `InMemoryAuditStore` directly; the hash-chain properties (SHA-256 `hash(event_data + prev_hash)`, `"0" * 64` genesis, constant-time compare) are preserved there.
 
 ---
 
@@ -214,4 +214,3 @@ Every event is linked to the previous via SHA-256: `hash(event_data + prev_hash)
 The chain hash is computed via `hash_trust_chain_state()` which produces a deterministic SHA-256 over the chain's genesis, capabilities, delegations, and existing anchors.
 
 ---
-

@@ -89,8 +89,10 @@ from kailash.trust.envelope import ConstraintEnvelope, AgentPosture
 
 ### Audit Store
 
+**Note:** `kailash.trust.immutable_audit_log` was a deque-based reference implementation with no production consumers across the SDK. It was **removed entirely in kailash 2.8.12** (issue #573, cross-SDK mirror of kailash-rs#461). Migrate to `kailash.trust.audit_store`.
+
 ```python
-# v2.x
+# v2.x (removed in 2.8.12)
 from kailash.trust.immutable_audit_log import AuditEntry
 
 # v3.0
