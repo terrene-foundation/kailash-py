@@ -1,0 +1,61 @@
+{
+  "_source": "kailash-rs ADR-0001 D8 (llm.request.{start,ok,error}) -- the observability contract both SDKs emit",
+  "_refresh": "When kailash-rs changes llm.request span fields, update this file in the same PR that lands the cross-SDK parity change. Both SDKs MUST emit THIS set so log aggregators parsing one stream can join against the other.",
+  "_eatp": "EATP D6 -- semantically matching fields; names byte-identical.",
+  "canonical_field_names": [
+    "deployment_preset",
+    "wire_protocol",
+    "endpoint_host",
+    "auth_strategy_kind",
+    "model_on_wire_id",
+    "request_id",
+    "latency_ms",
+    "upstream_status",
+    "error_class"
+  ],
+  "emission_events": [
+    "llm.request.start",
+    "llm.request.ok",
+    "llm.request.error"
+  ],
+  "field_levels": {
+    "llm.request.start": [
+      "deployment_preset",
+      "wire_protocol",
+      "endpoint_host",
+      "auth_strategy_kind",
+      "model_on_wire_id",
+      "request_id"
+    ],
+    "llm.request.ok": [
+      "deployment_preset",
+      "wire_protocol",
+      "endpoint_host",
+      "auth_strategy_kind",
+      "model_on_wire_id",
+      "request_id",
+      "latency_ms",
+      "upstream_status"
+    ],
+    "llm.request.error": [
+      "deployment_preset",
+      "wire_protocol",
+      "endpoint_host",
+      "auth_strategy_kind",
+      "model_on_wire_id",
+      "request_id",
+      "latency_ms",
+      "error_class"
+    ]
+  },
+  "http_subset_fields": [
+    "deployment_preset",
+    "auth_strategy_kind",
+    "endpoint_host",
+    "request_id",
+    "latency_ms",
+    "method",
+    "status_code",
+    "exception_class"
+  ]
+}

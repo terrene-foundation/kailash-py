@@ -1,0 +1,42 @@
+{
+  "_source": "kailash-rs from_env() three-tier precedence (ADR-0001 D7). Both SDKs MUST resolve (URI > selector > legacy > error) in the same order with the same typed errors.",
+  "_refresh": "When the Rust precedence chain changes (e.g. a new URI scheme lands) update this fixture in the SAME PR that lands the Rust change. Cross-SDK drift on precedence silently changes which credentials win in a mixed-env process.",
+  "precedence_order": [
+    {
+      "tier": 1,
+      "env_var": "KAILASH_LLM_DEPLOYMENT",
+      "form": "uri",
+      "required_when_set": true,
+      "on_failure": "InvalidUri"
+    },
+    {
+      "tier": 2,
+      "env_var": "KAILASH_LLM_PROVIDER",
+      "form": "selector",
+      "on_unknown": "NoKeysConfigured"
+    },
+    {
+      "tier": 3,
+      "form": "legacy",
+      "key_order": [
+        ["OPENAI_API_KEY", "openai"],
+        ["AZURE_OPENAI_API_KEY", "azure_openai"],
+        ["ANTHROPIC_API_KEY", "anthropic"],
+        ["GOOGLE_API_KEY", "google"]
+      ]
+    },
+    {
+      "tier": 4,
+      "form": "none",
+      "on_empty": "NoKeysConfigured"
+    }
+  ],
+  "uri_schemes": {
+    "bedrock": "bedrock://{region}/{model}",
+    "vertex": "vertex://{project}/{region}/{model}",
+    "azure": "azure://{resource}/{deployment}?api-version={version}",
+    "openai-compat": "openai-compat://{host}/{model}"
+  },
+  "migration_warning_key": "llm_client.migration.legacy_and_deployment_both_configured",
+  "never_fall_back_to_mock": true
+}
