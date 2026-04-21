@@ -448,17 +448,17 @@ deferred:
     priority: next-session
     owner: any reviewer at PR#580 gate
   - topic: pr6-agent-diagnostics-blocked
+    status: closed
+    closed_date: "2026-04-21"
+    closed_by: "PR #587 (feat/567-pr6-mlfp-observability) merged at commit 0cd0babd; kaizen-kaizen 2.10.1 released to PyPI 2026-04-21T05:53:26Z; cross-SDK fingerprint parity verified against kailash-rs#468 commit e29d0bad (byte-identical)."
     description: |
       PR#6 (AgentDiagnostics + TraceExporter → kaizen.observability)
-      is the last remaining #567 PR. Blocked on kailash-rs#468 (B1
-      cross-SDK canonical audit-chain fingerprint reconciliation).
-      Until the Rust SDK accepts B1, TraceEvent fingerprint parity
-      cannot be guaranteed. Next session MUST check kailash-rs#468
-      status; if accepted → kick off PR#6 worktree agent; if still
-      open → escalate or accept the cross-SDK risk with documented
-      decision.
-    priority: next-session
-    owner: pr6 orchestrator
+      shipped 2026-04-21. Cross-SDK canonical audit-chain fingerprint
+      parity (kailash-rs#468 N4 form) verified byte-identical at commit
+      e29d0bad. Rust-side wiring (kaizen-rs port) tracked separately at
+      kailash-rs#497 (still open, not in scope for kailash-py).
+    priority: closed
+    owner: closed
   - topic: clean-up-pending-journal-entries
     description: |
       Multiple pending journal entries from morning + afternoon session
