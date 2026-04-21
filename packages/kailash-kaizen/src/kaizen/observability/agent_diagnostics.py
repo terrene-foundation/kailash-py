@@ -65,7 +65,7 @@ from typing import Any, Optional
 
 from kailash.diagnostics.protocols import TraceEvent, TraceEventStatus, TraceEventType
 
-from kaizen.observability.trace_exporter import TraceExporter
+from kaizen.observability.trace_exporter import TraceExporter, _hash_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ class AgentDiagnostics:
             "kaizen.observability.agent_diagnostics.init",
             extra={
                 "agent_diag_run_id": self.run_id,
-                "agent_diag_tenant_id": tenant_id,
+                "agent_diag_tenant_hash": _hash_tenant_id(tenant_id),
                 "agent_diag_max_history": max_history,
                 "agent_diag_exporter_sink": type(
                     self._exporter._sink  # noqa: SLF001 — stable public shape
@@ -231,7 +231,7 @@ class AgentDiagnostics:
             "kaizen.observability.agent_diagnostics.exit",
             extra={
                 "agent_diag_run_id": self.run_id,
-                "agent_diag_tenant_id": self._tenant_id,
+                "agent_diag_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "agent_diag_event_count": len(self._events),
                 "agent_diag_exported": self._exporter.exported_count,
                 "agent_diag_errored": self._exporter.errored_count,

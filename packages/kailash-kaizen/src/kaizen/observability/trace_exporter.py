@@ -55,6 +55,7 @@ Related:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 import logging
@@ -83,6 +84,25 @@ __all__ = [
     "SinkCallable",
     "compute_fingerprint",
 ]
+
+
+def _hash_tenant_id(tenant_id: Optional[str]) -> Optional[str]:
+    """Hash a tenant_id to the cross-SDK ``sha256:<8-hex>`` form.
+
+    Per ``rules/observability.md`` §8 + ``rules/tenant-isolation.md`` §4,
+    schema-level tenant identifiers MUST NOT appear as raw values on
+    WARN+ or INFO log lines that may leak into broader-audience log
+    aggregators (Datadog, Splunk, CloudWatch). This helper produces the
+    same 8-hex-char prefix as
+    ``rules/event-payload-classification.md`` §2 so forensic correlation
+    across Python and Rust log streams remains stable.
+
+    Returns ``None`` for a ``None`` input (no tenant scope to log).
+    """
+    if tenant_id is None:
+        return None
+    digest = hashlib.sha256(str(tenant_id).encode("utf-8")).hexdigest()[:8]
+    return f"sha256:{digest}"
 
 
 # Type alias for a sink callable. Sync or async both supported.
@@ -259,7 +279,7 @@ class TraceExporter:
             "kaizen.observability.trace_exporter.init",
             extra={
                 "trace_exporter_run_id": self._run_id,
-                "trace_exporter_tenant_id": self._tenant_id,
+                "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "trace_exporter_sink": type(resolved_sink).__name__,
                 "trace_exporter_raise_on_error": self._raise_on_error,
                 "mode": "real",
@@ -303,7 +323,7 @@ class TraceExporter:
                 "kaizen.observability.trace_exporter.sink_error",
                 extra={
                     "trace_exporter_run_id": self._run_id,
-                    "trace_exporter_tenant_id": self._tenant_id,
+                    "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
                     "trace_exporter_event_id": event.event_id,
                     "trace_exporter_event_type": event.event_type.value,
                     "trace_exporter_fingerprint": fingerprint,
@@ -321,7 +341,7 @@ class TraceExporter:
             "kaizen.observability.trace_exporter.export.ok",
             extra={
                 "trace_exporter_run_id": self._run_id,
-                "trace_exporter_tenant_id": self._tenant_id,
+                "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "trace_exporter_event_id": event.event_id,
                 "trace_exporter_event_type": event.event_type.value,
                 "trace_exporter_fingerprint": fingerprint,
@@ -349,7 +369,7 @@ class TraceExporter:
                 "kaizen.observability.trace_exporter.sink_error",
                 extra={
                     "trace_exporter_run_id": self._run_id,
-                    "trace_exporter_tenant_id": self._tenant_id,
+                    "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
                     "trace_exporter_event_id": event.event_id,
                     "trace_exporter_event_type": event.event_type.value,
                     "trace_exporter_fingerprint": fingerprint,
@@ -367,7 +387,7 @@ class TraceExporter:
             "kaizen.observability.trace_exporter.export_async.ok",
             extra={
                 "trace_exporter_run_id": self._run_id,
-                "trace_exporter_tenant_id": self._tenant_id,
+                "trace_exporter_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "trace_exporter_event_id": event.event_id,
                 "trace_exporter_event_type": event.event_type.value,
                 "trace_exporter_fingerprint": fingerprint,
