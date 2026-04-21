@@ -11,7 +11,7 @@
 
 1. **Routes every LLM call through `kaizen_agents.Delegate`** — no raw `openai.chat.completions.create` / `litellm.completion` per `rules/zero-tolerance.md` Rule 4 + `rules/framework-first.md`.
 2. **Uses structured `Signature(InputField/OutputField)` for scoring** — no regex on LLM output per `rules/agent-reasoning.md` MUST Rule 3.
-3. **Tracks spend in integer microdollars through `CostTracker`** — cross-SDK parity with `pact.costs.CostTracker` (no raw USD floats).
+3. **Tracks spend in integer microdollars through `kaizen.cost.tracker.CostTracker`** — same integer-microdollar contract as `pact.costs.CostTracker` for cross-SDK parity (no raw USD floats).
 4. **Raises typed `JudgeBudgetExhaustedError` when the cap is hit** — no silent partial-success payloads per `rules/zero-tolerance.md` Rule 3.
 
 ## Public surface (facade import per `rules/orphan-detection.md` §1)
@@ -173,7 +173,7 @@ Portions of `LLMJudge` / `LLMDiagnostics` / the wrapper judges originated in the
 - Medical metaphors ("Stethoscope" lens metaphor) stripped per `rules/terrene-naming.md`.
 - `_parse_score` regex heuristics REPLACED with structured Signature-based parsing per `rules/agent-reasoning.md` Rule 3.
 - Raw `openai.*` / `litellm.*` calls ROUTED through `kaizen_agents.Delegate` per `rules/framework-first.md`.
-- USD-float cost accumulation REPLACED with integer-microdollar `CostTracker` for cross-SDK parity with `pact.costs.CostTracker`.
+- USD-float cost accumulation REPLACED with integer-microdollar `kaizen.cost.tracker.CostTracker` (same integer-microdollar contract as `pact.costs.CostTracker` for cross-SDK parity).
 - Partial-success on budget overflow REPLACED with typed `JudgeBudgetExhaustedError` per `rules/zero-tolerance.md` Rule 3.
 - Frozen result dataclasses + `__exit__` non-raise contract added.
 
