@@ -184,6 +184,16 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         # Observability (lazy)
         self._observability_manager = None
 
+        # Trace exporter (cross-SDK diagnostics per issue #567 PR#6).
+        # When set via attach_trace_exporter(), AgentLoop emits
+        # agent.run.start / agent.run.end TraceEvents through the
+        # exporter so downstream sinks see the full run lifecycle.
+        # None = no-op: every tracing call short-circuits without cost.
+        # See rules/orphan-detection.md §1 — this attribute is the
+        # production call site that keeps kaizen.observability's
+        # TraceExporter from becoming an orphan facade.
+        self._trace_exporter = None
+
         # Node.__init__
         super().__init__()
 
@@ -364,6 +374,41 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             "No execution strategy configured. Pass strategy= to "
             "BaseAgent.__init__() or override _default_strategy()."
         )
+
+    # =========================================================================
+    # Trace exporter wiring (issue #567 PR#6)
+    # =========================================================================
+
+    def attach_trace_exporter(self, exporter: Any) -> None:
+        """Attach a ``TraceExporter`` for cross-SDK diagnostics.
+
+        When set, :class:`~kaizen.core.agent_loop.AgentLoop` emits
+        ``agent.run.start`` and ``agent.run.end``
+        :class:`kailash.diagnostics.protocols.TraceEvent` records on
+        the production hot path. The exporter stamps each event with
+        its cross-SDK fingerprint (kailash-rs#468 / v3.17.1+) and
+        routes it to the configured sink.
+
+        Passing ``None`` detaches the exporter — every tracing call
+        short-circuits to a no-op thereafter.
+
+        Typed accept: the argument is duck-typed to
+        ``kaizen.observability.TraceExporter`` to avoid a hard import
+        cycle (``kaizen.observability`` imports from ``kaizen.core``).
+        The hot path simply calls ``exporter.export(event)``; a mis-
+        shaped object fails loudly at first emission with a typed
+        error, not silently.
+
+        Args:
+            exporter: A :class:`~kaizen.observability.TraceExporter` or
+                ``None`` to detach.
+        """
+        self._trace_exporter = exporter
+
+    @property
+    def trace_exporter(self) -> Any:
+        """The currently attached trace exporter, or ``None``."""
+        return self._trace_exporter
 
     # =========================================================================
     # Convenience methods
