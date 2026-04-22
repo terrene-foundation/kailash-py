@@ -129,6 +129,63 @@ CREATE TABLE IF NOT EXISTS experiment_model_versions (
 );
 """
 
+# W15 — audit + GDPR infrastructure. Kept parallel to the ``experiment_*``
+# naming of the 0.x-era tables so the schema-unification shard (deferred
+# per the wave plan) can rename the entire surface in one pass without
+# forcing W15 to block on it. Spec trace: ml-tracking.md §8.2 / §8.4.
+_AUDIT_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_audit (
+    audit_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL,
+    actor_id       TEXT NOT NULL,
+    timestamp      TEXT NOT NULL,
+    resource_kind  TEXT NOT NULL,
+    resource_id    TEXT NOT NULL,
+    action         TEXT NOT NULL,
+    prev_state     TEXT,
+    new_state      TEXT
+);
+"""
+
+_AUDIT_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_audit_tenant_actor_ts
+    ON experiment_audit (tenant_id, actor_id, timestamp);
+"""
+
+# Append-only invariant (spec §8.4) — audit rows MUST NOT be rewritten
+# or deleted. Per-dialect triggers raise ABORT on UPDATE / DELETE; the
+# erasure path APPENDS a new row rather than rewriting existing ones
+# so the forensic chain is preserved.
+_AUDIT_NO_UPDATE_TRIGGER_SQL = """
+CREATE TRIGGER IF NOT EXISTS experiment_audit_no_update
+BEFORE UPDATE ON experiment_audit
+BEGIN
+    SELECT RAISE(ABORT, 'experiment_audit is append-only per ml-tracking.md S8.4');
+END;
+"""
+
+_AUDIT_NO_DELETE_TRIGGER_SQL = """
+CREATE TRIGGER IF NOT EXISTS experiment_audit_no_delete
+BEFORE DELETE ON experiment_audit
+BEGIN
+    SELECT RAISE(ABORT, 'experiment_audit is append-only per ml-tracking.md S8.4');
+END;
+"""
+
+_RUN_SUBJECTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_run_subjects (
+    tenant_id  TEXT NOT NULL,
+    run_id     TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, run_id, subject_id)
+);
+"""
+
+_RUN_SUBJECTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_run_subjects_tenant_subject
+    ON experiment_run_subjects (tenant_id, subject_id);
+"""
+
 # Pre-0.14 databases carried a narrower schema. First access probes
 # ``PRAGMA table_info`` and ALTER TABLE any missing columns so existing
 # ``~/.kailash_ml/ml.db`` files keep working after the 0.14 schema
@@ -242,6 +299,13 @@ class SqliteTrackerStore:
                 await conn.execute(_ARTIFACTS_SHA_INDEX_SQL)
                 await conn.execute(_TAGS_SCHEMA_SQL)
                 await conn.execute(_MODEL_VERSIONS_SCHEMA_SQL)
+                # W15 audit + GDPR tables.
+                await conn.execute(_AUDIT_SCHEMA_SQL)
+                await conn.execute(_AUDIT_INDEX_SQL)
+                await conn.execute(_AUDIT_NO_UPDATE_TRIGGER_SQL)
+                await conn.execute(_AUDIT_NO_DELETE_TRIGGER_SQL)
+                await conn.execute(_RUN_SUBJECTS_SCHEMA_SQL)
+                await conn.execute(_RUN_SUBJECTS_INDEX_SQL)
                 # Detect pre-0.14 databases and add missing columns.
                 cur = await conn.execute("PRAGMA table_info(experiment_runs)")
                 rows = await cur.fetchall()
@@ -625,6 +689,181 @@ class SqliteTrackerStore:
             cur = await conn.execute(sql, (run_id,))
             rows = await cur.fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # W15 — audit + GDPR subject persistence
+    # ------------------------------------------------------------------
+
+    async def insert_audit_row(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        timestamp: str,
+        resource_kind: str,
+        resource_id: str,
+        action: str,
+        prev_state: Optional[str] = None,
+        new_state: Optional[str] = None,
+    ) -> None:
+        await self.initialize()
+        sql = (
+            "INSERT INTO experiment_audit "
+            "(tenant_id, actor_id, timestamp, resource_kind, resource_id, "
+            "action, prev_state, new_state) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        values = (
+            tenant_id,
+            actor_id,
+            timestamp,
+            resource_kind,
+            resource_id,
+            action,
+            prev_state,
+            new_state,
+        )
+        async with self._pool.acquire_write() as conn:
+            await conn.execute(sql, values)
+            await conn.commit()
+
+    async def list_audit_rows(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: Optional[str] = None,
+        resource_kind: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        clauses: list[str] = ["tenant_id = ?"]
+        params: list[Any] = [tenant_id]
+        if actor_id is not None:
+            clauses.append("actor_id = ?")
+            params.append(actor_id)
+        if resource_kind is not None:
+            clauses.append("resource_kind = ?")
+            params.append(resource_kind)
+        if resource_id is not None:
+            clauses.append("resource_id = ?")
+            params.append(resource_id)
+        sql = (
+            "SELECT audit_id, tenant_id, actor_id, timestamp, resource_kind, "
+            "resource_id, action, prev_state, new_state FROM experiment_audit "
+            f"WHERE {' AND '.join(clauses)} "
+            "ORDER BY timestamp, audit_id LIMIT ?"
+        )
+        params.append(int(limit))
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, tuple(params))
+            rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    async def register_run_subjects(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        subject_ids: Sequence[str],
+    ) -> None:
+        await self.initialize()
+        # Dedupe — callers may replay with the same subject set.
+        uniq = sorted({str(s) for s in subject_ids if s})
+        if not uniq:
+            return
+        sql = (
+            "INSERT OR IGNORE INTO experiment_run_subjects "
+            "(tenant_id, run_id, subject_id) VALUES (?, ?, ?)"
+        )
+        values = [(tenant_id, run_id, s) for s in uniq]
+        async with self._pool.acquire_write() as conn:
+            await conn.executemany(sql, values)
+            await conn.commit()
+
+    async def list_subject_runs(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> list[str]:
+        await self.initialize()
+        sql = (
+            "SELECT DISTINCT run_id FROM experiment_run_subjects "
+            "WHERE tenant_id = ? AND subject_id = ? ORDER BY run_id"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, subject_id))
+            rows = await cur.fetchall()
+        return [r[0] if not isinstance(r, dict) else r["run_id"] for r in rows]
+
+    async def erase_subject_content(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> dict[str, int]:
+        await self.initialize()
+        run_ids = await self.list_subject_runs(
+            tenant_id=tenant_id, subject_id=subject_id
+        )
+        if not run_ids:
+            return {
+                "runs": 0,
+                "params": 0,
+                "metrics": 0,
+                "artifacts": 0,
+                "tags": 0,
+                "model_versions": 0,
+                "subjects": 0,
+            }
+        placeholders = ",".join("?" * len(run_ids))
+        counters: dict[str, int] = {"runs": len(run_ids)}
+        async with self._pool.acquire_write() as conn:
+            # Metrics
+            cur = await conn.execute(
+                f"DELETE FROM experiment_metrics WHERE run_id IN ({placeholders})",
+                tuple(run_ids),
+            )
+            counters["metrics"] = cur.rowcount or 0
+            # Artifacts
+            cur = await conn.execute(
+                f"DELETE FROM experiment_artifacts WHERE run_id IN ({placeholders})",
+                tuple(run_ids),
+            )
+            counters["artifacts"] = cur.rowcount or 0
+            # Tags
+            cur = await conn.execute(
+                f"DELETE FROM experiment_tags WHERE run_id IN ({placeholders})",
+                tuple(run_ids),
+            )
+            counters["tags"] = cur.rowcount or 0
+            # Model versions
+            cur = await conn.execute(
+                f"DELETE FROM experiment_model_versions WHERE run_id IN ({placeholders})",
+                tuple(run_ids),
+            )
+            counters["model_versions"] = cur.rowcount or 0
+            # Null-out params JSON on each affected run (retain the row
+            # shell per spec §8.4 — the run record persists for audit
+            # forensics; its mutable content is cleared).
+            cur = await conn.execute(
+                f"UPDATE experiment_runs SET params = '{{}}' "
+                f"WHERE run_id IN ({placeholders})",
+                tuple(run_ids),
+            )
+            counters["params"] = cur.rowcount or 0
+            # Subject-link rows for this tenant+subject pair.
+            cur = await conn.execute(
+                "DELETE FROM experiment_run_subjects "
+                "WHERE tenant_id = ? AND subject_id = ?",
+                (tenant_id, subject_id),
+            )
+            counters["subjects"] = cur.rowcount or 0
+            await conn.commit()
+        return counters
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from kailash_ml.tracking.erasure import EraseResult, erase_subject
 from kailash_ml.tracking.query import (
     EnvDelta,
     FilterParseError,
@@ -29,7 +30,12 @@ from kailash_ml.tracking.query import (
     RunDiff,
     RunRecord,
 )
-from kailash_ml.tracking.runner import ExperimentRun, RunStatus, _current_actor_id
+from kailash_ml.tracking.runner import (
+    SINGLE_TENANT_SENTINEL,
+    ExperimentRun,
+    RunStatus,
+    _current_actor_id,
+)
 from kailash_ml.tracking.runner import _current_run
 from kailash_ml.tracking.runner import _current_run as current_run
 from kailash_ml.tracking.runner import _current_tenant_id, track
@@ -82,6 +88,7 @@ def get_current_actor_id() -> Optional[str]:
 __all__ = [
     "AbstractTrackerStore",
     "EnvDelta",
+    "EraseResult",
     "ExperimentRun",
     "ExperimentTracker",
     "FilterParseError",
@@ -91,8 +98,10 @@ __all__ = [
     "RunDiff",
     "RunRecord",
     "RunStatus",
+    "SINGLE_TENANT_SENTINEL",
     "SqliteTrackerStore",
     "current_run",
+    "erase_subject",
     "get_current_actor_id",
     "get_current_run",
     "get_current_tenant_id",

@@ -203,3 +203,75 @@ class AbstractTrackerStore(Protocol):
     async def list_model_versions(self, run_id: str) -> list[dict[str, Any]]:
         """Model-version rows ordered by ``created_at, name``."""
         ...
+
+    # ------------------------------------------------------------------
+    # Audit + GDPR (spec §8.2 + §8.4 — W15)
+    # ------------------------------------------------------------------
+    #
+    # Audit rows are immutable: every backend MUST install a DDL-level
+    # defense (trigger, revoke, or equivalent) that blocks UPDATE and
+    # DELETE on the audit table. The erasure path therefore MUST NOT
+    # attempt to rewrite existing audit rows — it appends a new row
+    # with the erasure event and fingerprinted subject id, per
+    # ``rules/event-payload-classification.md`` §2.
+
+    async def insert_audit_row(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        timestamp: str,
+        resource_kind: str,
+        resource_id: str,
+        action: str,
+        prev_state: Optional[str] = None,
+        new_state: Optional[str] = None,
+    ) -> None:
+        """Append one audit row. Never mutates existing rows."""
+        ...
+
+    async def list_audit_rows(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: Optional[str] = None,
+        resource_kind: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Forensic read over ``_kml_audit`` (indexed on
+        ``(tenant_id, actor_id, timestamp)``)."""
+        ...
+
+    async def register_run_subjects(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        subject_ids: Sequence[str],
+    ) -> None:
+        """Attach one or more ``data_subject_id`` values to a run so GDPR
+        erasure can locate them (spec §8.4). Idempotent."""
+        ...
+
+    async def list_subject_runs(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> list[str]:
+        """Return the run_ids associated with ``subject_id`` for the tenant."""
+        ...
+
+    async def erase_subject_content(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> dict[str, int]:
+        """Delete params / metrics / artifacts / tags / model-versions
+        / subject-links for every run associated with ``subject_id`` on
+        the tenant. Audit rows MUST NOT be touched. Returns counters
+        ``{resource_kind: rows_deleted}``; callers serialise those
+        counters into the new erasure audit row."""
+        ...

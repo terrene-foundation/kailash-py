@@ -47,6 +47,7 @@ from kailash_ml.errors import (
     MetricValueError,
     ModelSignatureRequiredError,
     ParamValueError,
+    TenantRequiredError,
     TrackingError,
 )
 from kailash_ml.tracking.storage import AbstractTrackerStore, SqliteTrackerStore
@@ -305,13 +306,31 @@ def _threading_is_main() -> bool:
     return threading.current_thread() is threading.main_thread()
 
 
-def _resolve_tenant_id(explicit: Optional[str]) -> Optional[str]:
-    """Return the effective tenant_id for a new run.
+#: Canonical single-tenant sentinel per ``specs/ml-tracking.md`` §7.2.
+#: Leading underscore marks the value as system-reserved — real tenant
+#: identifiers follow the ``^[a-zA-Z][...]`` convention, so a user-set
+#: tenant can never collide with this sentinel. Cross-spec stable string;
+#: BLOCKED alternatives include ``"default"`` / ``"global"`` / ``""``.
+SINGLE_TENANT_SENTINEL: str = "_single"
 
-    Priority: explicit kwarg > ambient contextvar > ``KAILASH_TENANT_ID``
-    env var > ``None``. The contextvar layer lets nested
-    ``km.track(...)`` calls inherit the outer tenant without callers
-    re-passing it (spec §10.2 + §7.2 resolution order).
+
+def _resolve_tenant_id(
+    explicit: Optional[str],
+    *,
+    multi_tenant: bool = False,
+) -> str:
+    """Return the effective tenant_id for a new run (spec §7.2).
+
+    Resolution order: explicit kwarg > ambient contextvar >
+    ``KAILASH_TENANT_ID`` env var.
+
+    Args:
+        explicit: Value passed to ``km.track(tenant_id=...)``.
+        multi_tenant: When ``True`` (strict mode) an unresolved tenant
+            raises :class:`TenantRequiredError` per spec §7.2 rule 5.
+            When ``False`` (default, single-tenant dev mode) an
+            unresolved tenant returns :data:`SINGLE_TENANT_SENTINEL`
+            per spec §7.2 rule 6 / 7.
     """
     if explicit is not None and explicit != "":
         return explicit
@@ -321,7 +340,15 @@ def _resolve_tenant_id(explicit: Optional[str]) -> Optional[str]:
     from_env = os.environ.get("KAILASH_TENANT_ID")
     if from_env:
         return from_env
-    return None
+    if multi_tenant:
+        raise TenantRequiredError(
+            reason=(
+                "multi_tenant=True requires a tenant_id; pass it on "
+                "km.track(tenant_id=...), set the ambient contextvar, or "
+                "export KAILASH_TENANT_ID (spec ml-tracking.md §7.2)"
+            )
+        )
+    return SINGLE_TENANT_SENTINEL
 
 
 def _resolve_actor_id(explicit: Optional[str]) -> Optional[str]:
@@ -740,6 +767,71 @@ class ExperimentRun:
     #    §4.7 / invariant 8 regex ``^[a-z_][a-z_0-9]*$``. Both raise
     #    :class:`TrackingError` on mismatch.
 
+    # ------------------------------------------------------------------
+    # W15 — audit emission
+    # ------------------------------------------------------------------
+
+    def _audit_actor(self) -> str:
+        """Resolve the actor_id for the current audit row.
+
+        Session-level actor per spec §8.1: resolved at ``__aenter__``
+        from :func:`_resolve_actor_id` and stored on ``self.actor_id``.
+        When the caller never supplied an actor (single-tenant dev),
+        we record the literal ``"_unset"`` so the audit column stays
+        NOT NULL AND the missing-actor case is grep-able in forensics.
+        """
+        return self.actor_id or "_unset"
+
+    def _audit_tenant(self) -> str:
+        """Resolve the tenant_id for the current audit row.
+
+        Single-tenant runs persist :data:`SINGLE_TENANT_SENTINEL`;
+        multi-tenant runs persist the caller-supplied tenant. Either
+        way the column is NOT NULL per spec §7.2 + §8.2.
+        """
+        return self.tenant_id or SINGLE_TENANT_SENTINEL
+
+    async def _emit_audit(
+        self,
+        *,
+        resource_kind: str,
+        resource_id: str,
+        action: str,
+        prev_state: Optional[Any] = None,
+        new_state: Optional[Any] = None,
+    ) -> None:
+        """Append one audit row through the backend (spec §8.2).
+
+        Runs on rank-0 only so DDP/FSDP jobs produce exactly one audit
+        trail per mutation. ``prev_state`` / ``new_state`` are JSON-
+        serialised; callers pass native dicts / scalars and the helper
+        handles the encoding.
+        """
+        if not _is_rank_zero():
+            return
+        # Backends landed pre-W15 may not yet satisfy the extended
+        # Protocol — fall back silently when the method is missing so
+        # third-party stores don't break. Once the 1.0.0 release ships
+        # this guard is vestigial; keeping it for now protects OSS
+        # consumers on in-flight backend ports.
+        writer = getattr(self._backend, "insert_audit_row", None)
+        if writer is None:
+            return
+        prev_json = (
+            json.dumps(prev_state, default=str) if prev_state is not None else None
+        )
+        new_json = json.dumps(new_state, default=str) if new_state is not None else None
+        await writer(
+            tenant_id=self._audit_tenant(),
+            actor_id=self._audit_actor(),
+            timestamp=_iso_utc(),
+            resource_kind=resource_kind,
+            resource_id=resource_id,
+            action=action,
+            prev_state=prev_json,
+            new_state=new_json,
+        )
+
     async def log_param(self, key: str, value: Any) -> None:
         """Record a single param. Persisted immediately (spec §4.1).
 
@@ -752,6 +844,12 @@ class ExperimentRun:
         checked = _validate_param_value(str(key), value)
         self._params[str(key)] = checked
         await self._backend.set_params(self.run_id, self._params)
+        await self._emit_audit(
+            resource_kind="param",
+            resource_id=self.run_id,
+            action="log_param",
+            new_state={"key": str(key)},
+        )
 
     async def log_params(self, params: Mapping[str, Any]) -> None:
         """Record multiple params. Persisted immediately (spec §4.1)."""
@@ -764,6 +862,12 @@ class ExperimentRun:
         for k, v in updates.items():
             self._params[k] = v
         await self._backend.set_params(self.run_id, self._params)
+        await self._emit_audit(
+            resource_kind="param",
+            resource_id=self.run_id,
+            action="log_params",
+            new_state={"keys": sorted(updates.keys())},
+        )
 
     async def log_metric(
         self,
@@ -785,6 +889,12 @@ class ExperimentRun:
         v = _validate_metric_value(str(key), value)
         ts = (timestamp or _now_utc()).isoformat()
         await self._backend.append_metric(self.run_id, str(key), v, step, ts)
+        await self._emit_audit(
+            resource_kind="metric",
+            resource_id=self.run_id,
+            action="log_metric",
+            new_state={"key": str(key), "step": step},
+        )
 
     async def log_metrics(
         self,
@@ -802,6 +912,15 @@ class ExperimentRun:
             _validate_key("metric", str(k))
             rows.append((str(k), _validate_metric_value(str(k), v), step, ts))
         await self._backend.append_metrics_batch(self.run_id, rows)
+        await self._emit_audit(
+            resource_kind="metric",
+            resource_id=self.run_id,
+            action="log_metrics",
+            new_state={
+                "keys": sorted(str(k) for k in metrics.keys()),
+                "step": step,
+            },
+        )
 
     async def log_artifact(
         self,
@@ -816,16 +935,16 @@ class ExperimentRun:
         A second call with identical bytes returns an
         :class:`ArtifactHandle` with the same ``sha256`` and
         ``storage_uri`` — dedupe is structural (PK on
-        ``(run_id, name, sha256)``). ``data_subject_ids`` is accepted
-        for forward-compat with the W15 tenant/GDPR wave and is
-        currently unused.
+        ``(run_id, name, sha256)``). ``data_subject_ids`` is the W15
+        hook: every id passed is recorded in ``experiment_run_subjects``
+        so :func:`km.erase_subject` can later locate every run this
+        subject appears in and GDPR-erase it (spec §8.4).
 
         Full encryption policy (``ArtifactEncryptionError``) + size
         cap (``ArtifactSizeExceededError``) land in W17 alongside the
         artifact-store backend work; this W12 path writes plaintext
         locally.
         """
-        del data_subject_ids  # accepted for forward-compat (W15)
         if not _is_rank_zero():
             # Return a deterministic sentinel handle so callers on
             # non-rank-0 workers do not crash when they unpack the
@@ -848,6 +967,28 @@ class ExperimentRun:
             size,
             uri,
             _iso_utc(),
+        )
+        # Register subject IDs (GDPR linking) BEFORE the audit emission
+        # so an audit row that references the subject-count reflects
+        # the post-registration state.
+        if data_subject_ids:
+            registrar = getattr(self._backend, "register_run_subjects", None)
+            if registrar is not None:
+                await registrar(
+                    tenant_id=self._audit_tenant(),
+                    run_id=self.run_id,
+                    subject_ids=list(data_subject_ids),
+                )
+        await self._emit_audit(
+            resource_kind="artifact",
+            resource_id=sha,
+            action="log_artifact",
+            new_state={
+                "name": name,
+                "size_bytes": size,
+                "content_type": content_type,
+                "subject_count": (len(data_subject_ids) if data_subject_ids else 0),
+            },
         )
         return ArtifactHandle(
             name=name,
@@ -971,6 +1112,17 @@ class ExperimentRun:
             lineage_json,
             _iso_utc(),
         )
+        await self._emit_audit(
+            resource_kind="model_version",
+            resource_id=handle.sha256,
+            action="log_model",
+            new_state={
+                "name": name,
+                "format": format,
+                "has_signature": signature is not None,
+                "has_lineage": lineage is not None,
+            },
+        )
         return ModelVersionInfo(
             name=name,
             format=format,
@@ -1048,6 +1200,19 @@ class ExperimentRun:
             for k, v in valid_hps.items():
                 self._params[k] = v
             await self._backend.set_params(self.run_id, self._params)
+        # Top-level audit row so attach_training_result is grep-able in
+        # forensics as a single event — the metric/param flattening
+        # above produces its own child audit rows via log_metric /
+        # log_params.
+        await self._emit_audit(
+            resource_kind="training_result",
+            resource_id=self.run_id,
+            action="attach_training_result",
+            new_state={
+                "numeric_metric_count": len(numeric_rows),
+                "hyperparameter_count": len(valid_hps),
+            },
+        )
 
     async def add_tag(self, key: str, value: Any) -> None:
         """Record a single tag (spec §4.7)."""
@@ -1055,6 +1220,12 @@ class ExperimentRun:
             return
         _validate_tag_key(str(key))
         await self._backend.upsert_tag(self.run_id, str(key), _coerce_tag_value(value))
+        await self._emit_audit(
+            resource_kind="tag",
+            resource_id=self.run_id,
+            action="add_tag",
+            new_state={"key": str(key)},
+        )
 
     async def add_tags(self, tags: Mapping[str, Any]) -> None:
         """Record many tags atomically (spec §4.7)."""
@@ -1065,6 +1236,12 @@ class ExperimentRun:
             _validate_tag_key(str(k))
             validated[str(k)] = _coerce_tag_value(v)
         await self._backend.upsert_tags(self.run_id, validated)
+        await self._emit_audit(
+            resource_kind="tag",
+            resource_id=self.run_id,
+            action="add_tags",
+            new_state={"keys": sorted(validated.keys())},
+        )
 
     async def set_tags(self, **tags: Any) -> None:
         """Record many tags via kwargs (spec §4.7 canonical API).
@@ -1161,6 +1338,20 @@ class ExperimentRun:
             "error_message": None,
         }
         await self._backend.insert_run(row)
+        # Emit a single audit row for run start (spec §8.2). Must run
+        # AFTER insert_run so the run row exists before audit references
+        # it — backends that expose FK-style integrity would otherwise
+        # reject the audit write.
+        await self._emit_audit(
+            resource_kind="run",
+            resource_id=self.run_id,
+            action="run.start",
+            new_state={
+                "experiment": self.experiment,
+                "parent_run_id": self.parent_run_id,
+                "host": row["host"],
+            },
+        )
 
         # Bind contextvars so nested km.track() calls inherit run +
         # tenant + actor identity. Per spec §10.1/§10.2 and §8.1 the
@@ -1269,6 +1460,30 @@ class ExperimentRun:
                 "error_message": err_msg,
             },
         )
+        # Final audit row: the terminal status. Append-only per spec
+        # §8.2 — this row is written AFTER the run row is finalised so
+        # the forensic read "what did actor X do on tenant Y" returns
+        # every child write sandwiched between run.start and run.end.
+        try:
+            await self._emit_audit(
+                resource_kind="run",
+                resource_id=self.run_id,
+                action="run.end",
+                new_state={
+                    "status": status,
+                    "duration_seconds": duration,
+                    "killed_reason": self._killed_reason,
+                    "error_type": err_type,
+                },
+            )
+        except Exception as audit_exc:  # noqa: BLE001
+            # An audit failure on the terminal row MUST NOT mask the
+            # original exception — log at WARN so operators see the
+            # issue without losing the user-triggered stack trace.
+            logger.warning(
+                "tracking.audit.terminal_emit_failed",
+                extra={"run_id": self.run_id, "error": str(audit_exc)},
+            )
         # Do NOT suppress exceptions (spec §3.2) — return None / falsy.
         return None
 
@@ -1287,6 +1502,7 @@ async def track(
     actor_id: Optional[str] = None,
     parent_run_id: Optional[str] = None,
     store: Optional[str] = None,
+    multi_tenant: bool = False,
     **params: Any,
 ) -> AsyncIterator[ExperimentRun]:
     """Async-context experiment tracker.
@@ -1335,13 +1551,22 @@ async def track(
         store: Override the default SQLite path. Accepts either a raw
             path (``"/tmp/ml.db"``), ``":memory:"``, or a
             ``sqlite:///...`` URI. Ignored when ``backend`` is given.
+        multi_tenant: When ``True`` the run enters strict multi-tenant
+            mode (spec §7.2 rule 5) — an unresolved ``tenant_id`` from
+            any of the 4 resolution sources raises
+            :class:`TenantRequiredError`. When ``False`` (default,
+            single-tenant dev mode) an unresolved tenant falls back to
+            :data:`SINGLE_TENANT_SENTINEL` (``"_single"``).
         **params: Arbitrary serialisable params logged at run start.
     """
     owns_backend = False
     if backend is None:
         backend = SqliteTrackerStore(_resolve_store_path(store))
         owns_backend = True
-    resolved_tenant = _resolve_tenant_id(tenant_id)
+    # Spec §7.2 rule 5 — multi_tenant strict raises TenantRequiredError
+    # when no tenant resolves from any source. Non-strict falls back to
+    # the canonical single-tenant sentinel.
+    resolved_tenant = _resolve_tenant_id(tenant_id, multi_tenant=multi_tenant)
     resolved_actor = _resolve_actor_id(actor_id)
     # Explicit parent_run_id wins per spec §3.4; fall back to the
     # ambient contextvar so sibling specs' example

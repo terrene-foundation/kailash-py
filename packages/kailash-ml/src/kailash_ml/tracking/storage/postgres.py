@@ -128,6 +128,73 @@ CREATE TABLE IF NOT EXISTS experiment_model_versions (
 )
 """
 
+# W15 — audit + GDPR infrastructure. Parity with the SQLite backend;
+# schema-unification to ``_kml_*`` is a later wave.
+_AUDIT_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_audit (
+    audit_id       BIGSERIAL PRIMARY KEY,
+    tenant_id      TEXT NOT NULL,
+    actor_id       TEXT NOT NULL,
+    timestamp      TEXT NOT NULL,
+    resource_kind  TEXT NOT NULL,
+    resource_id    TEXT NOT NULL,
+    action         TEXT NOT NULL,
+    prev_state     TEXT,
+    new_state      TEXT
+)
+"""
+
+_AUDIT_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_experiment_audit_tenant_actor_ts "
+    "ON experiment_audit (tenant_id, actor_id, timestamp)"
+)
+
+# pl/pgSQL function + triggers to block UPDATE / DELETE on the audit
+# table. ``CREATE OR REPLACE FUNCTION`` is idempotent; ``CREATE TRIGGER``
+# needs a ``DROP IF EXISTS`` dance because PostgreSQL lacks
+# ``CREATE OR REPLACE TRIGGER`` until v14.
+_AUDIT_FN_SQL = (
+    "CREATE OR REPLACE FUNCTION experiment_audit_reject_mutation() "
+    "RETURNS TRIGGER AS $$ "
+    "BEGIN RAISE EXCEPTION "
+    "'experiment_audit is append-only per ml-tracking.md S8.4'; "
+    "END; $$ LANGUAGE plpgsql"
+)
+
+_AUDIT_DROP_UPDATE_TRIGGER_SQL = (
+    "DROP TRIGGER IF EXISTS experiment_audit_no_update ON experiment_audit"
+)
+
+_AUDIT_DROP_DELETE_TRIGGER_SQL = (
+    "DROP TRIGGER IF EXISTS experiment_audit_no_delete ON experiment_audit"
+)
+
+_AUDIT_CREATE_UPDATE_TRIGGER_SQL = (
+    "CREATE TRIGGER experiment_audit_no_update "
+    "BEFORE UPDATE ON experiment_audit "
+    "FOR EACH ROW EXECUTE FUNCTION experiment_audit_reject_mutation()"
+)
+
+_AUDIT_CREATE_DELETE_TRIGGER_SQL = (
+    "CREATE TRIGGER experiment_audit_no_delete "
+    "BEFORE DELETE ON experiment_audit "
+    "FOR EACH ROW EXECUTE FUNCTION experiment_audit_reject_mutation()"
+)
+
+_RUN_SUBJECTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_run_subjects (
+    tenant_id  TEXT NOT NULL,
+    run_id     TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, run_id, subject_id)
+)
+"""
+
+_RUN_SUBJECTS_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_experiment_run_subjects_tenant_subject "
+    "ON experiment_run_subjects (tenant_id, subject_id)"
+)
+
 
 class PostgresTrackerStore:
     """PostgreSQL backend for :class:`AbstractTrackerStore` via
@@ -177,6 +244,16 @@ class PostgresTrackerStore:
             await self._conn.execute(_ARTIFACTS_SHA_INDEX_SQL)
             await self._conn.execute(_TAGS_SCHEMA_SQL)
             await self._conn.execute(_MODEL_VERSIONS_SCHEMA_SQL)
+            # W15 audit + GDPR tables.
+            await self._conn.execute(_AUDIT_SCHEMA_SQL)
+            await self._conn.execute(_AUDIT_INDEX_SQL)
+            await self._conn.execute(_AUDIT_FN_SQL)
+            await self._conn.execute(_AUDIT_DROP_UPDATE_TRIGGER_SQL)
+            await self._conn.execute(_AUDIT_CREATE_UPDATE_TRIGGER_SQL)
+            await self._conn.execute(_AUDIT_DROP_DELETE_TRIGGER_SQL)
+            await self._conn.execute(_AUDIT_CREATE_DELETE_TRIGGER_SQL)
+            await self._conn.execute(_RUN_SUBJECTS_SCHEMA_SQL)
+            await self._conn.execute(_RUN_SUBJECTS_INDEX_SQL)
             self._initialized = True
 
     async def close(self) -> None:
@@ -529,6 +606,191 @@ class PostgresTrackerStore:
             run_id,
         )
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # W15 — audit + GDPR subject persistence
+    # ------------------------------------------------------------------
+
+    async def insert_audit_row(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        timestamp: str,
+        resource_kind: str,
+        resource_id: str,
+        action: str,
+        prev_state: Optional[str] = None,
+        new_state: Optional[str] = None,
+    ) -> None:
+        await self.initialize()
+        sql = (
+            "INSERT INTO experiment_audit "
+            "(tenant_id, actor_id, timestamp, resource_kind, resource_id, "
+            "action, prev_state, new_state) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        await self._conn.execute(
+            sql,
+            tenant_id,
+            actor_id,
+            timestamp,
+            resource_kind,
+            resource_id,
+            action,
+            prev_state,
+            new_state,
+        )
+
+    async def list_audit_rows(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: Optional[str] = None,
+        resource_kind: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        clauses: list[str] = ["tenant_id = ?"]
+        params: list[Any] = [tenant_id]
+        if actor_id is not None:
+            clauses.append("actor_id = ?")
+            params.append(actor_id)
+        if resource_kind is not None:
+            clauses.append("resource_kind = ?")
+            params.append(resource_kind)
+        if resource_id is not None:
+            clauses.append("resource_id = ?")
+            params.append(resource_id)
+        sql = (
+            "SELECT audit_id, tenant_id, actor_id, timestamp, resource_kind, "
+            "resource_id, action, prev_state, new_state FROM experiment_audit "
+            f"WHERE {' AND '.join(clauses)} "
+            "ORDER BY timestamp, audit_id LIMIT ?"
+        )
+        params.append(int(limit))
+        rows = await self._conn.fetch(sql, *params)
+        return [dict(r) for r in rows]
+
+    async def register_run_subjects(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        subject_ids: Sequence[str],
+    ) -> None:
+        await self.initialize()
+        uniq = sorted({str(s) for s in subject_ids if s})
+        if not uniq:
+            return
+        sql = (
+            "INSERT INTO experiment_run_subjects "
+            "(tenant_id, run_id, subject_id) VALUES (?, ?, ?) "
+            "ON CONFLICT (tenant_id, run_id, subject_id) DO NOTHING"
+        )
+        async with self._conn.transaction() as tx:
+            for s in uniq:
+                await tx.execute(sql, tenant_id, run_id, s)
+
+    async def list_subject_runs(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> list[str]:
+        await self.initialize()
+        rows = await self._conn.fetch(
+            "SELECT DISTINCT run_id FROM experiment_run_subjects "
+            "WHERE tenant_id = ? AND subject_id = ? ORDER BY run_id",
+            tenant_id,
+            subject_id,
+        )
+        return [r["run_id"] if isinstance(r, dict) else r[0] for r in rows]
+
+    async def erase_subject_content(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+    ) -> dict[str, int]:
+        await self.initialize()
+        run_ids = await self.list_subject_runs(
+            tenant_id=tenant_id, subject_id=subject_id
+        )
+        if not run_ids:
+            return {
+                "runs": 0,
+                "params": 0,
+                "metrics": 0,
+                "artifacts": 0,
+                "tags": 0,
+                "model_versions": 0,
+                "subjects": 0,
+            }
+        counters: dict[str, int] = {"runs": len(run_ids)}
+        # ``?`` placeholders in a CM ``= ANY($)`` clause — the dialect
+        # translator expands ``?`` to ``$N``; passing the list as a
+        # single parameter gives PG an array to match against, keeping
+        # the statement count-free regardless of the number of runs.
+        async with self._conn.transaction() as tx:
+            counters["metrics"] = await _pg_delete_count(
+                tx,
+                "DELETE FROM experiment_metrics WHERE run_id = ANY(?)",
+                run_ids,
+            )
+            counters["artifacts"] = await _pg_delete_count(
+                tx,
+                "DELETE FROM experiment_artifacts WHERE run_id = ANY(?)",
+                run_ids,
+            )
+            counters["tags"] = await _pg_delete_count(
+                tx,
+                "DELETE FROM experiment_tags WHERE run_id = ANY(?)",
+                run_ids,
+            )
+            counters["model_versions"] = await _pg_delete_count(
+                tx,
+                "DELETE FROM experiment_model_versions WHERE run_id = ANY(?)",
+                run_ids,
+            )
+            counters["params"] = await _pg_delete_count(
+                tx,
+                "UPDATE experiment_runs SET params = '{}' " "WHERE run_id = ANY(?)",
+                run_ids,
+            )
+            counters["subjects"] = await _pg_delete_count(
+                tx,
+                "DELETE FROM experiment_run_subjects "
+                "WHERE tenant_id = ? AND subject_id = ?",
+                [tenant_id, subject_id],
+                expand=False,
+            )
+        return counters
+
+
+async def _pg_delete_count(tx: Any, sql: str, arg: Any, *, expand: bool = True) -> int:
+    """Execute ``sql`` inside a transaction and return the affected-row count.
+
+    ``ConnectionManager`` surfaces ``execute`` as "fire-and-forget"; the
+    affected-row count is exposed by the underlying asyncpg status string.
+    We parse that string (``DELETE <n>`` / ``UPDATE <n>``) to keep the
+    counters accurate — a zero here would silently hide a bug in the
+    GDPR erasure path. When ``expand`` is True the single list argument
+    is passed as one parameter; when False, the list is a positional
+    parameter sequence.
+    """
+    if expand:
+        result = await tx.execute(sql, arg)
+    else:
+        result = await tx.execute(sql, *arg)
+    if isinstance(result, str):
+        parts = result.strip().split()
+        if parts and parts[-1].isdigit():
+            return int(parts[-1])
+    return 0
 
 
 # ---------------------------------------------------------------------------

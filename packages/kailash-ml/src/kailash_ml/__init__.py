@@ -276,6 +276,7 @@ from kailash_ml.doctor import doctor  # noqa: E402
 # ``from kailash_ml import track`` works without a lazy ``__getattr__``
 # hop (the `__all__` / `__getattr__` pattern is a CodeQL trigger per
 # zero-tolerance §1a).
+from kailash_ml.tracking import erase_subject  # noqa: E402 — W15 GDPR surface
 from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
 
 
@@ -432,6 +433,7 @@ __all__ = [
     "HDBSCANTrainable",
     "train",
     "track",
+    "erase_subject",
     "doctor",
     "resolve_torch_wheel",
     # GPU-first Phase 1 public API — device reporting + script-level overrides
