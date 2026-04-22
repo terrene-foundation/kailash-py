@@ -255,6 +255,7 @@ class DLDiagnostics:
         dead_neuron_threshold: float = 0.5,
         window: int = 64,
         run_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> None:
         torch, nn = _require_torch()
         if not isinstance(model, nn.Module):
@@ -274,6 +275,10 @@ class DLDiagnostics:
         self.window = window
         # Satisfies kailash.diagnostics.protocols.Diagnostic.run_id.
         self.run_id: str = run_id if run_id is not None else uuid.uuid4().hex
+        # Optional tracker for as_lightning_callback() emission path. Duck-typed:
+        # any object with a ``log_figure(figure, name, *, step)`` method (sync or
+        # async return) satisfies the contract. See as_lightning_callback().
+        self._tracker = tracker
 
         # Time series storage — lists of dicts, converted to Polars on demand.
         self._grad_log: list[dict[str, Any]] = []
@@ -440,6 +445,161 @@ class DLDiagnostics:
         self._tracking = {k: False for k in self._tracking}
         self._gradcam_activation = None
         self._gradcam_gradient = None
+
+    # ── Lightning callback integration (specs/ml-diagnostics.md §W22) ─────
+
+    def as_lightning_callback(
+        self,
+        *,
+        emit_every_n_epochs: int = 1,
+        plots: Optional[list[str]] = None,
+    ) -> Any:
+        """Return a ``lightning.pytorch.callbacks.Callback`` bound to this diag.
+
+        The callback's ``on_train_epoch_end`` hook is rank-0-gated (Decision 4 —
+        hardcoded via :func:`kailash_ml.tracking.runner._is_rank_zero`) and
+        emits a curated set of plotly figures to the tracker attached on
+        :meth:`__init__` via ``tracker=``.
+
+        If ``tracker is None`` the callback is a structural no-op (still
+        attaches, never emits). The callback tolerates a sync OR async
+        ``tracker.log_figure(figure, name, *, step=None)`` transparently: if
+        the returned value is awaitable it is driven to completion via
+        :func:`asyncio.run` or the running event loop's run-in-executor
+        machinery.
+
+        Args:
+            emit_every_n_epochs: Emission cadence. ``1`` emits every epoch;
+                ``5`` emits every fifth. Must be >= 1.
+            plots: Subset of plot method names to emit. Defaults to
+                ``["loss_curves", "gradient_flow", "dead_neurons"]`` — the
+                three that require no extra dependencies beyond ``[dl]``.
+                Unknown names raise ``ValueError``.
+
+        Returns:
+            A ``lightning.pytorch.callbacks.Callback`` subclass instance.
+
+        Raises:
+            ImportError: If the ``[dl]`` extra is not installed (lightning
+                unavailable).
+            ValueError: On ``emit_every_n_epochs < 1`` or unknown plot name.
+        """
+        if emit_every_n_epochs < 1:
+            raise ValueError(
+                f"emit_every_n_epochs must be >= 1; got {emit_every_n_epochs}"
+            )
+        default_plots = ["loss_curves", "gradient_flow", "dead_neurons"]
+        selected = list(plots) if plots is not None else default_plots
+        allowed = {
+            "loss_curves",
+            "gradient_flow",
+            "activation_stats",
+            "dead_neurons",
+            "training_dashboard",
+            "lr_vs_loss",
+            "weight_distributions",
+            "gradient_norms",
+        }
+        unknown = [p for p in selected if p not in allowed]
+        if unknown:
+            raise ValueError(
+                f"as_lightning_callback(plots=...) contains unknown plot names "
+                f"{unknown}; valid: {sorted(allowed)}"
+            )
+
+        try:
+            # pyright: ignore[reportMissingImports]  # optional dl extra
+            from lightning.pytorch.callbacks import Callback as _LCallback
+        except ImportError as exc:  # pragma: no cover — [dl] extra missing
+            raise ImportError(
+                "DLDiagnostics.as_lightning_callback() requires the [dl] "
+                "extra. Install with: pip install kailash-ml[dl]"
+            ) from exc
+
+        diag = self
+
+        class _DLDiagnosticsCallback(_LCallback):
+            """Lightning callback that emits DLDiagnostics figures per epoch.
+
+            Rank-0-only per Decision 4; no-op on non-zero DDP workers and when
+            ``diag._tracker is None``.
+            """
+
+            def __init__(self) -> None:
+                super().__init__()
+                self._diag = diag
+                self._emit_every_n = emit_every_n_epochs
+                self._plots = tuple(selected)
+
+            # Lightning hook — signature fixed by L.Callback API.
+            def on_train_epoch_end(self, trainer: Any, pl_module: Any) -> None:
+                from kailash_ml.tracking.runner import _is_rank_zero
+
+                if not _is_rank_zero():
+                    return
+                if self._diag._tracker is None:
+                    return
+                epoch = int(getattr(trainer, "current_epoch", 0))
+                # Cadence gate: emit on epochs 0, N, 2N, ... so the first
+                # epoch always produces a baseline figure.
+                if epoch % self._emit_every_n != 0:
+                    return
+                for plot_name in self._plots:
+                    try:
+                        plot_method = getattr(self._diag, f"plot_{plot_name}")
+                        figure = plot_method()
+                    except Exception as plot_exc:  # noqa: BLE001
+                        # Per observability.md Rule 8 schema-revealing names
+                        # stay at DEBUG; WARN carries the plot kind only.
+                        logger.warning(
+                            "dldiagnostics.callback.plot_failed",
+                            extra={
+                                "dl_plot_name": plot_name,
+                                "dl_run_id": self._diag.run_id,
+                                "dl_epoch": epoch,
+                            },
+                        )
+                        logger.debug(
+                            "dldiagnostics.callback.plot_failed.detail",
+                            extra={
+                                "dl_plot_name": plot_name,
+                                "error": str(plot_exc),
+                            },
+                        )
+                        continue
+                    self._emit_figure(plot_name, figure, epoch)
+
+            def _emit_figure(self, name: str, figure: Any, step: int) -> None:
+                """Call ``tracker.log_figure`` sync- or async-safely.
+
+                Lightning's training loop is synchronous; if the tracker's
+                ``log_figure`` returns a coroutine we await it via
+                :func:`asyncio.run` OR, if we're inside a running loop,
+                :meth:`asyncio.get_event_loop().run_until_complete` — the
+                call is driven to completion before the hook returns so the
+                epoch boundary never leaks a pending coroutine.
+                """
+                import asyncio
+                import inspect
+
+                tracker = self._diag._tracker
+                try:
+                    result = tracker.log_figure(figure, name, step=step)
+                except TypeError:
+                    # Tracker may not accept ``step`` keyword; fall back.
+                    result = tracker.log_figure(figure, name)
+                if inspect.iscoroutine(result):
+                    try:
+                        asyncio.run(result)
+                    except RuntimeError:
+                        # A loop is already running in this thread; close the
+                        # coroutine rather than leak it. Real-world callers
+                        # (Lightning+asyncio ExperimentRun) typically use a
+                        # sync wrapper at construction, so this branch is the
+                        # defensive fallback.
+                        result.close()
+
+        return _DLDiagnosticsCallback()
 
     # ── Recording ─────────────────────────────────────────────────────────
 
