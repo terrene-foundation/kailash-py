@@ -113,6 +113,11 @@ class TrainingContext:
     Carries the Engine's resolved accelerator / precision / tenant /
     tracker binding — Trainables MUST NOT re-resolve these themselves
     (ml-engines.md §3.2 MUST 4).
+
+    The Lightning passthrough block (``strategy``, ``num_nodes``,
+    ``enable_checkpointing``, ``auto_find_lr``, ``callbacks``) carries
+    the W20 ``MLEngine.fit()`` kwargs into the TrainingPipeline /
+    Trainable adapter per ``ml-engines-v2.md`` §3.2 MUST 6-8.
     """
 
     accelerator: str
@@ -123,6 +128,15 @@ class TrainingContext:
     tenant_id: Optional[str] = None
     tracker_run_id: Optional[str] = None
     trial_number: Optional[int] = None
+    # Lightning passthrough (ml-engines-v2.md §3.2 MUST 6-8 / §2.2).
+    # `strategy` is typed Any because concrete values are `str | None |
+    # lightning.pytorch.strategies.Strategy` and importing lightning at
+    # module-load time would force the `[dl]` extra.
+    strategy: Any = None
+    num_nodes: int = 1
+    enable_checkpointing: bool = True
+    auto_find_lr: bool = False
+    callbacks: Optional[tuple] = None
 
 
 class Predictions:

@@ -68,6 +68,7 @@ __all__ = [
     "ModelNotFoundError",
     "OnnxExportError",
     "SchemaDriftError",
+    "UnsupportedTrainerError",
 ]
 
 
@@ -160,6 +161,30 @@ class SchemaDriftError(_EngineError):
         )
         self.before = before
         self.after = after
+
+
+class UnsupportedTrainerError(_EngineError):
+    """Raised when a Trainable bypasses the Lightning training loop.
+
+    Per `ml-engines-v2.md` §3.2 MUST 2 (Decision 8 hard lock-in), raw
+    training loops (custom `for epoch in range(...)`, hand-rolled
+    optimizer stepping) are BLOCKED at ``MLEngine.fit()`` dispatch
+    time. A Trainable MUST delegate to ``L.Trainer(...).fit(module, ...)``
+    as its terminal step; custom logic lives inside the wrapped
+    ``LightningModule``'s ``training_step`` / ``validation_step``.
+    """
+
+    def __init__(self, family: str, reason: str) -> None:
+        super().__init__(
+            f"Trainer for family {family!r} is not supported: {reason}. "
+            f"Per ml-engines-v2.md §3.2 MUST 2, custom training loops are "
+            f"BLOCKED; Trainable.fit() MUST terminate in "
+            f"L.Trainer(...).fit(module, ...). Wrap the family as a "
+            f"LightningModule adapter (see SklearnLightningAdapter, "
+            f"XGBoostLightningAdapter, etc.)."
+        )
+        self.family = family
+        self.reason = reason
 
 
 # ---------------------------------------------------------------------------
@@ -1211,6 +1236,14 @@ class MLEngine:
         hp_search: str = "none",
         n_trials: int = 0,
         metric: Optional[str] = None,
+        # --- Lightning distribution passthrough (ml-engines-v2.md §3.2 MUST 6) ---
+        strategy: Any = None,
+        devices: Any = "auto",
+        num_nodes: int = 1,
+        # --- Lightning checkpoint + LR discovery (§3.2 MUST 7 / MUST 8) ---
+        enable_checkpointing: bool = True,
+        auto_find_lr: bool = False,
+        callbacks: Optional[list] = None,
     ) -> Any:
         """Train a single family through the Lightning-wrapped Trainable adapter.
 
@@ -1227,6 +1260,14 @@ class MLEngine:
         (§3 MUST 2 — custom training loops BLOCKED at the adapter
         boundary). `tenant_id` is propagated from Engine into TrainingResult
         per §4.2 MUST 3.
+
+        Lightning passthrough kwargs (``strategy``, ``devices``,
+        ``num_nodes``, ``enable_checkpointing``, ``auto_find_lr``,
+        ``callbacks``) flow into the ``TrainingContext`` the trainable
+        receives; the adapter is responsible for lifting them into the
+        concrete ``L.Trainer(strategy=…, devices=…, num_nodes=…,
+        enable_checkpointing=…, callbacks=…)`` invocation per §2.2 +
+        §3.2 MUST 6-8.
         """
         # Validate family/trainable mutually-exclusive per §2.3
         if family is not None and trainable is not None:
@@ -1265,18 +1306,82 @@ class MLEngine:
         if trainable is None:
             trainable = _build_trainable_from_family(family, target=target)
 
+        # Raw-loop detection (§3.2 MUST 2; Decision 8 hard lock-in).
+        # Trainables that mark themselves as raw-loop (custom for-epoch
+        # trainer bypassing L.Trainer) are BLOCKED at dispatch time.
+        # The lightweight marker `_raw_loop=True` is the structural hook
+        # family adapters opt into when their fit() doesn't terminate in
+        # `L.Trainer(...).fit(module, ...)`. Lightning-module verification
+        # (via `to_lightning_module()`) lives in _train_lightning.
+        if getattr(trainable, "_raw_loop", False) is True:
+            fam_name = (
+                family
+                if family is not None
+                else getattr(trainable, "family_name", type(trainable).__name__)
+            )
+            raise UnsupportedTrainerError(
+                family=fam_name,
+                reason=(
+                    "trainable is marked _raw_loop=True (custom training "
+                    "loop bypassing L.Trainer)"
+                ),
+            )
+
+        # Schema-drift detection (§2.3). When setup() produced a schema
+        # hash AND data was supplied directly here, verify the fit-time
+        # schema matches. Skip the check when either side is absent —
+        # drift is defined as "two known schemas differ", not "one is
+        # missing". The hash inputs MUST match setup() exactly (target,
+        # ignored_columns, feature_store_name) or the comparison is
+        # meaningless; see §2.1 MUST 6 canonicalisation.
+        if self._setup_result is not None:
+            setup_hash = getattr(self._setup_result, "schema_hash", None)
+            setup_target = getattr(self._setup_result, "target", None)
+            setup_ignore = list(
+                getattr(self._setup_result, "ignored_columns", ()) or ()
+            )
+            setup_fs_name = (
+                getattr(self._setup_result, "feature_store_name", None)
+                or "engine_default"
+            )
+            if setup_hash is not None and setup_target is not None:
+                # Normalise incoming data to the polars DataFrame shape
+                # setup() saw; _compute_schema_hash reads columns/schema
+                # attrs on the frame.
+                drift_df = self._to_polars_dataframe(data)
+                fit_hash = MLEngine._compute_schema_hash(
+                    df=drift_df,
+                    target=setup_target,
+                    ignore=setup_ignore,
+                    feature_store_name=setup_fs_name,
+                )
+                if fit_hash != setup_hash:
+                    raise SchemaDriftError(before=setup_hash, after=fit_hash)
+
         # Build TrainingContext from Engine's resolved backend so the
-        # trainable does NOT re-resolve (§3.2 MUST 4).
+        # trainable does NOT re-resolve (§3.2 MUST 4). Lightning
+        # passthrough kwargs flow through context so the trainable's
+        # Lightning adapter can lift them onto L.Trainer(...) per
+        # §3.2 MUST 6-8.
         from kailash_ml.trainable import TrainingContext
 
         info = self._backend_info or detect_backend()
+        # When caller supplies `devices` explicitly (non-"auto"), honor
+        # it; otherwise fall back to the backend-resolved device count
+        # so existing CPU-only adapters keep working unchanged.
+        resolved_devices = info.devices if devices == "auto" else devices
         ctx = TrainingContext(
             accelerator=info.accelerator,
             precision=info.precision,
-            devices=info.devices,
+            devices=resolved_devices,
             device_string=info.device_string,
             backend=info.backend,
             tenant_id=self._tenant_id,
+            strategy=strategy,
+            num_nodes=num_nodes,
+            enable_checkpointing=enable_checkpointing,
+            auto_find_lr=auto_find_lr,
+            callbacks=tuple(callbacks) if callbacks is not None else None,
         )
 
         # Delegate to the trainable's Lightning-wrapped fit path
