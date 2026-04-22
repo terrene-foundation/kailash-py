@@ -35,7 +35,10 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     │   └── MigrationImportError
     ├── AutologError
     │   ├── AutologNoAmbientRunError
-    │   └── AutologUnknownFrameworkError
+    │   ├── AutologUnknownFrameworkError
+    │   ├── AutologAttachError
+    │   ├── AutologDetachError
+    │   └── AutologDoubleAttachError
     ├── RLError
     │   ├── RLEnvIncompatibleError
     │   ├── RLPolicyShapeMismatchError
@@ -152,6 +155,9 @@ __all__ = [
     # --- AutologError subclasses ---
     "AutologNoAmbientRunError",
     "AutologUnknownFrameworkError",
+    "AutologAttachError",
+    "AutologDetachError",
+    "AutologDoubleAttachError",
     # --- RLError subclasses ---
     "RLEnvIncompatibleError",
     "RLPolicyShapeMismatchError",
@@ -455,6 +461,39 @@ class AutologNoAmbientRunError(AutologError):
 class AutologUnknownFrameworkError(AutologError):
     """Raised when ``km.autolog(flavor=X)`` is called with an unknown
     framework name."""
+
+
+class AutologAttachError(AutologError):
+    """Raised when a :class:`FrameworkIntegration.attach` call fails.
+
+    The inner exception from the framework (Lightning, sklearn, etc.) is
+    preserved as ``__cause__`` per ``specs/ml-autolog.md §7.1``. Callers
+    can catch :class:`AutologError` to handle any attach failure, or
+    ``AutologAttachError`` specifically.
+    """
+
+
+class AutologDetachError(AutologError):
+    """Raised when a :class:`FrameworkIntegration.detach` call fails on
+    ``__aexit__``.
+
+    Per ``specs/ml-autolog.md §7.1``, ``AutologDetachError`` MUST NOT
+    swallow the user's in-flight exception — it re-raises the user's
+    exception with the detach failure attached as ``__context__``.
+    Losing the user's stack is a ``rules/zero-tolerance.md`` Rule 3
+    violation.
+    """
+
+
+class AutologDoubleAttachError(AutologError):
+    """Raised when :meth:`FrameworkIntegration.attach` is invoked twice
+    on the same integration instance without an intervening
+    :meth:`FrameworkIntegration.detach`.
+
+    Guards against the "two ``async with km.autolog()`` blocks nested"
+    failure mode where the inner block's ``detach`` silently dismantles
+    the outer block's hooks. See ``specs/ml-autolog.md §3.2``.
+    """
 
 
 # --- RLError subclasses ------------------------------------------------

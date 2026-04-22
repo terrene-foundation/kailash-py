@@ -41,6 +41,9 @@ from kailash_ml.errors import (
     ArtifactEncryptionError,
     ArtifactSizeExceededError,
     AuthorizationError,
+    AutologAttachError,
+    AutologDetachError,
+    AutologDoubleAttachError,
     AutologError,
     AutologNoAmbientRunError,
     AutologUnknownFrameworkError,
@@ -279,6 +282,14 @@ from kailash_ml.doctor import doctor  # noqa: E402
 from kailash_ml.tracking import erase_subject  # noqa: E402 — W15 GDPR surface
 from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
 
+# Phase 7 (W23.a) — ``km.autolog()`` / ``km.autolog_fn()`` surface.
+# Eager import per ``rules/orphan-detection.md §6`` — the symbol
+# is in ``__all__`` below so ``from kailash_ml import *`` picks it
+# up and CodeQL's ``__all__``/``__getattr__`` scanner sees an eager
+# import site (per ``rules/zero-tolerance.md §1a`` second-instance
+# example).
+from kailash_ml.autolog import autolog, autolog_fn  # noqa: E402
+
 
 def __getattr__(name: str):  # noqa: N807
     """Lazy-load engines on first access."""
@@ -365,6 +376,9 @@ __all__ = [
     "MigrationImportError",
     "AutologNoAmbientRunError",
     "AutologUnknownFrameworkError",
+    "AutologAttachError",
+    "AutologDetachError",
+    "AutologDoubleAttachError",
     "RLEnvIncompatibleError",
     "RLPolicyShapeMismatchError",
     "ReplayBufferUnderflowError",
@@ -435,6 +449,8 @@ __all__ = [
     "track",
     "erase_subject",
     "doctor",
+    "autolog",
+    "autolog_fn",
     "resolve_torch_wheel",
     # GPU-first Phase 1 public API — device reporting + script-level overrides
     "DeviceReport",
