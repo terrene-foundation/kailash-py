@@ -544,14 +544,32 @@ class ExperimentTracker:
             )
 
     def _resolve_tenant(self, explicit: Optional[str]) -> Optional[str]:
-        """Resolve the tenant for a query.
+        """Resolve the tenant for a query (spec §10.2 + §7.2).
 
-        Explicit wins over the engine default; passing ``None`` with
-        no engine default falls through to an unscoped query.
-        W15 will extend this with ``multi_tenant_strict`` mode that
-        raises :class:`TenantRequiredError` when neither is set.
+        Priority (first non-None wins):
+
+        1. ``explicit`` kwarg — caller-side override.
+        2. Ambient ``get_current_tenant_id()`` — the active
+           ``km.track(tenant_id=...)`` scope. W14 contextvar plumbing
+           lets any query invoked inside ``async with km.track("exp",
+           tenant_id="acme"):`` auto-scope without callers re-passing.
+        3. Engine default (``default_tenant_id=`` on ``create()``).
+        4. ``None`` → unscoped.
+
+        W15 will extend with ``multi_tenant_strict`` mode that raises
+        :class:`TenantRequiredError` when none of the above yield a
+        value and the tracker was opened in strict mode.
         """
-        return explicit if explicit is not None else self._default_tenant_id
+        if explicit is not None:
+            return explicit
+        # Import at call-site to avoid a module-level cycle with
+        # ``kailash_ml.tracking`` (which imports ExperimentTracker).
+        from kailash_ml.tracking import get_current_tenant_id  # noqa: PLC0415
+
+        ambient = get_current_tenant_id()
+        if ambient is not None:
+            return ambient
+        return self._default_tenant_id
 
     async def close(self) -> None:
         """Release any backend resources owned by this tracker."""

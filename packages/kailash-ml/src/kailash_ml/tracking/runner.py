@@ -138,7 +138,7 @@ _DEFAULT_TRACKER_DB = _DEFAULT_TRACKER_DIR / "ml.db"
 
 
 # ---------------------------------------------------------------------------
-# Contextvars — parent-run propagation + tenant-id override
+# Contextvars — parent-run + tenant + actor (spec §10.1 + §10.2 + §8.1)
 # ---------------------------------------------------------------------------
 
 #: The currently-active ``ExperimentRun``, scoped via :mod:`contextvars`
@@ -146,6 +146,23 @@ _DEFAULT_TRACKER_DB = _DEFAULT_TRACKER_DIR / "ml.db"
 #: parent_run_id without callers threading it manually.
 _current_run: contextvars.ContextVar[Optional["ExperimentRun"]] = (
     contextvars.ContextVar("kailash_ml_current_run", default=None)
+)
+
+#: Tenant id for the active ``km.track(...)`` scope per
+#: ``specs/ml-tracking.md`` §10.2. Consumers read through the public
+#: accessor :func:`kailash_ml.tracking.get_current_tenant_id`; direct
+#: access to this symbol from outside the ``tracking`` package is
+#: BLOCKED per §10.1.
+_current_tenant_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "kailash_ml_current_tenant_id", default=None
+)
+
+#: Actor id for the active ``km.track(...)`` scope per spec §8.1.
+#: Session-level property (NOT a per-call kwarg on mutation primitives —
+#: HIGH-4 round-1 finding). Public accessor:
+#: :func:`kailash_ml.tracking.get_current_actor_id`.
+_current_actor_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "kailash_ml_current_actor_id", default=None
 )
 
 
@@ -291,11 +308,37 @@ def _threading_is_main() -> bool:
 def _resolve_tenant_id(explicit: Optional[str]) -> Optional[str]:
     """Return the effective tenant_id for a new run.
 
-    Priority: explicit kwarg > ``KAILASH_TENANT_ID`` env var > ``None``.
+    Priority: explicit kwarg > ambient contextvar > ``KAILASH_TENANT_ID``
+    env var > ``None``. The contextvar layer lets nested
+    ``km.track(...)`` calls inherit the outer tenant without callers
+    re-passing it (spec §10.2 + §7.2 resolution order).
     """
     if explicit is not None and explicit != "":
         return explicit
+    ambient = _current_tenant_id.get()
+    if ambient is not None and ambient != "":
+        return ambient
     from_env = os.environ.get("KAILASH_TENANT_ID")
+    if from_env:
+        return from_env
+    return None
+
+
+def _resolve_actor_id(explicit: Optional[str]) -> Optional[str]:
+    """Return the effective actor_id for a new run (spec §8.1).
+
+    Priority: explicit kwarg > ambient contextvar > ``KAILASH_ACTOR_ID``
+    env var > ``None``. Per HIGH-4 round-1 finding, ``actor_id`` is a
+    session-level property plumbed via contextvar — MUST NOT surface as
+    a per-call kwarg on mutation primitives (the only exception is the
+    MCP boundary, where no contextvar crosses the process boundary).
+    """
+    if explicit is not None and explicit != "":
+        return explicit
+    ambient = _current_actor_id.get()
+    if ambient is not None and ambient != "":
+        return ambient
+    from_env = os.environ.get("KAILASH_ACTOR_ID")
     if from_env:
         return from_env
     return None
@@ -625,11 +668,16 @@ class ExperimentRun:
         params: Mapping[str, Any],
         tenant_id: Optional[str],
         parent_run_id: Optional[str],
+        actor_id: Optional[str] = None,
     ) -> None:
         self.experiment = experiment
         self.run_id = str(uuid.uuid4())
         self.parent_run_id = parent_run_id
         self.tenant_id = tenant_id
+        #: Actor identity established at :func:`track` entry (spec §8.1).
+        #: Read-only after construction; mutation primitives route through
+        #: the ambient contextvar, not this field.
+        self.actor_id = actor_id
         self._backend = backend
         # Accumulated params — the constructor kwargs form the initial
         # set and callers can add more via log_param / log_params.
@@ -669,8 +717,13 @@ class ExperimentRun:
         # can filter on it.
         self._killed = False
         self._killed_reason: Optional[str] = None
-        # Contextvar token for parent-run propagation
+        # Contextvar tokens — one per ambient scope (run / tenant / actor).
+        # Set at ``__aenter__`` via ``ContextVar.set(...)`` and released
+        # at ``__aexit__`` via ``reset(token)``. Leaked tokens across
+        # the async boundary are BLOCKED per spec §10.1.
         self._ctx_token: Any = None
+        self._tenant_ctx_token: Any = None
+        self._actor_ctx_token: Any = None
 
     # ------------------------------------------------------------------
     # Logging primitives — W12 (spec ml-tracking.md §4)
@@ -1108,8 +1161,13 @@ class ExperimentRun:
         }
         await self._backend.insert_run(row)
 
-        # Bind contextvar so nested km.track() calls link properly.
+        # Bind contextvars so nested km.track() calls inherit run +
+        # tenant + actor identity. Per spec §10.1/§10.2 and §8.1 the
+        # three are session-level properties; the tokens released at
+        # ``__aexit__`` restore the outer scope's bindings.
         self._ctx_token = _current_run.set(self)
+        self._tenant_ctx_token = _current_tenant_id.set(self.tenant_id)
+        self._actor_ctx_token = _current_actor_id.set(self.actor_id)
 
         # Register with the process-level active-run list and install
         # signal handlers exactly once per process. Nested runs see
@@ -1138,7 +1196,16 @@ class ExperimentRun:
                 pass
         _restore_signal_handlers_if_last()
 
-        # Release contextvar binding
+        # Release contextvar bindings in reverse order so the outer
+        # scope's values are restored cleanly. All three tokens MUST
+        # reset — leaking a tenant or actor binding past ``__aexit__``
+        # would let sibling work inherit the wrong identity.
+        if self._actor_ctx_token is not None:
+            _current_actor_id.reset(self._actor_ctx_token)
+            self._actor_ctx_token = None
+        if self._tenant_ctx_token is not None:
+            _current_tenant_id.reset(self._tenant_ctx_token)
+            self._tenant_ctx_token = None
         if self._ctx_token is not None:
             _current_run.reset(self._ctx_token)
             self._ctx_token = None
@@ -1216,6 +1283,7 @@ async def track(
     *,
     backend: Optional[SQLiteTrackerBackend] = None,
     tenant_id: Optional[str] = None,
+    actor_id: Optional[str] = None,
     parent_run_id: Optional[str] = None,
     store: Optional[str] = None,
     **params: Any,
@@ -1243,9 +1311,19 @@ async def track(
         backend: An explicit :class:`SQLiteTrackerBackend` instance. If
             omitted, a backend is created on the default store path
             (``~/.kailash_ml/ml.db``) OR the ``store`` URI if provided.
-        tenant_id: Optional tenant id. If omitted, falls back to the
-            ``KAILASH_TENANT_ID`` env var; if still absent, runs as
-            single-tenant.
+        tenant_id: Optional tenant id. Resolution order: explicit
+            kwarg > ambient ``_current_tenant_id`` contextvar > env var
+            ``KAILASH_TENANT_ID`` > ``None`` (single-tenant). The
+            resolved value is re-bound into the contextvar for the
+            duration of the run so nested primitives read it via
+            :func:`kailash_ml.tracking.get_current_tenant_id` without
+            re-passing it (spec §10.2).
+        actor_id: Optional actor identity for audit rows (spec §8.1).
+            Session-level only — MUST NOT be passed per-call on
+            ``log_*`` primitives (HIGH-4 round-1 finding). Resolution
+            order mirrors ``tenant_id``: kwarg > ambient contextvar >
+            ``KAILASH_ACTOR_ID`` env var > ``None``. Read via
+            :func:`kailash_ml.tracking.get_current_actor_id`.
         parent_run_id: Explicit parent run id (spec §3.1 MUST honor).
             When omitted, the ambient run from
             :func:`kailash_ml.tracking.get_current_run` is used so
@@ -1261,6 +1339,7 @@ async def track(
         backend = SQLiteTrackerBackend(_resolve_store_path(store))
         owns_backend = True
     resolved_tenant = _resolve_tenant_id(tenant_id)
+    resolved_actor = _resolve_actor_id(actor_id)
     # Explicit parent_run_id wins per spec §3.4; fall back to the
     # ambient contextvar so sibling specs' example
     # ``async with km.track("sweep") as parent: async with km.track("trial")``
@@ -1276,6 +1355,7 @@ async def track(
         backend=backend,
         params=params,
         tenant_id=resolved_tenant,
+        actor_id=resolved_actor,
         parent_run_id=resolved_parent,
     )
     try:

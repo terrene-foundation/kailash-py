@@ -25,10 +25,10 @@ from kailash_ml.tracking.query import (
     RunDiff,
     RunRecord,
 )
-from kailash_ml.tracking.runner import ExperimentRun, RunStatus
+from kailash_ml.tracking.runner import ExperimentRun, RunStatus, _current_actor_id
 from kailash_ml.tracking.runner import _current_run
 from kailash_ml.tracking.runner import _current_run as current_run
-from kailash_ml.tracking.runner import track
+from kailash_ml.tracking.runner import _current_tenant_id, track
 from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
 from kailash_ml.tracking.tracker import ExperimentTracker
 
@@ -42,6 +42,33 @@ def get_current_run() -> Optional[ExperimentRun]:
     against without callers threading the run id manually.
     """
     return _current_run.get()
+
+
+def get_current_tenant_id() -> Optional[str]:
+    """Return the ambient tenant_id for the active ``km.track()`` scope.
+
+    Public accessor per ``specs/ml-tracking.md`` §10.2. Query
+    primitives that default ``tenant_id=None`` route through this to
+    read the session-level tenant without callers plumbing it per call.
+    Returns ``None`` when no ``km.track(...)`` scope is active AND no
+    ``KAILASH_TENANT_ID`` env var resolution has fired — callers that
+    require tenant scoping check for ``None`` and raise
+    :class:`TenantRequiredError` in multi-tenant strict mode (W15).
+    """
+    return _current_tenant_id.get()
+
+
+def get_current_actor_id() -> Optional[str]:
+    """Return the ambient actor_id for the active ``km.track()`` scope.
+
+    Public accessor per ``specs/ml-tracking.md`` §8.1. Every mutation
+    primitive on :class:`ExperimentRun` persists the actor read through
+    this accessor — per HIGH-4 round-1 finding the actor is a
+    session-level property, NOT a per-call kwarg. The MCP surface
+    (§11) is the only caller that reads actor explicitly; every other
+    consumer routes through this accessor.
+    """
+    return _current_actor_id.get()
 
 
 __all__ = [
@@ -58,4 +85,6 @@ __all__ = [
     "track",
     "current_run",
     "get_current_run",
+    "get_current_tenant_id",
+    "get_current_actor_id",
 ]

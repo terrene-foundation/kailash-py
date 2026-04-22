@@ -165,21 +165,55 @@ class SQLiteTrackerBackend:
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = str(db_path)
-        if self._db_path != ":memory:":
+        # W14: in-memory stores route through a named URI with
+        # ``cache=shared`` so multiple backend instances pointed at the
+        # same ``:memory:`` address see one database (spec §6.1 +
+        # ``rules/patterns.md`` "URI shared-cache for :memory:"). Raw
+        # ``:memory:`` would give every call site a private DB, which
+        # breaks fixtures that open two handles expecting the same
+        # rows.
+        connect_uri: str
+        use_uri = False
+        if self._db_path == ":memory:":
+            connect_uri = "file:memdb_kailash_ml?mode=memory&cache=shared"
+            use_uri = True
+        else:
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+            connect_uri = self._db_path
         # ``check_same_thread=False`` lets us reuse the connection across
         # the worker threads that ``asyncio.to_thread`` hands us. The
         # ``_conn_lock`` makes that safe.
         self._conn = sqlite3.connect(
-            self._db_path,
+            connect_uri,
             check_same_thread=False,
             isolation_level=None,  # autocommit; per-statement atomic
+            uri=use_uri,
         )
         self._conn.row_factory = sqlite3.Row
-        # WAL is not meaningful for ``:memory:`` — sqlite3 silently
-        # accepts the pragma but there is no on-disk journal.
+        # W14 PRAGMA stack (spec §6.1 / ``rules/patterns.md`` "Default
+        # PRAGMAs on every connection"). Each PRAGMA is applied exactly
+        # once at connect time so the on-disk state matches the
+        # contract the tracker exposes to concurrent writers.
+        #
+        # - journal_mode=WAL — readers never block writers; mandatory
+        #   for multi-process SQLite. Skipped on ``:memory:`` since
+        #   there is no on-disk journal.
+        # - busy_timeout=30000 — 30s retry window before SQLITE_BUSY
+        #   surfaces to the caller; covers the common "test-suite
+        #   parallelism holds a write lock for 200ms" case without
+        #   forcing callers to catch.
+        # - synchronous=NORMAL — durable across process crashes (WAL
+        #   guarantees), faster than FULL by ~1 order for write-heavy
+        #   tracker workloads.
+        # - cache_size=-20000 — 20MB page cache (KB when positive, pages
+        #   when negative; -20000 is 20MB regardless of page_size).
+        # - foreign_keys=ON — enforced FK integrity at every write;
+        #   W14 schema unification (future wave) relies on this.
         if self._db_path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=30000")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA cache_size=-20000")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn_lock = threading.Lock()
         self._async_lock = asyncio.Lock()
