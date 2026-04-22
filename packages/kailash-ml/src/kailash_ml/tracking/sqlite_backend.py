@@ -69,6 +69,67 @@ CREATE INDEX IF NOT EXISTS idx_experiment_runs_experiment
     ON experiment_runs (experiment);
 """
 
+# W12 — logging-primitive auxiliary tables. Keyed by ``run_id`` so they
+# mirror the ``_kml_metrics`` / ``_kml_artifacts`` / ``_kml_tags`` shapes
+# from migration 0002 without requiring the tenant-scoped composite PKs
+# that the migration-layer tables use. Schema unification is W14 work;
+# W12 uses the parallel ``experiment_*`` schema of ``SQLiteTrackerBackend``.
+_METRICS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_metrics (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id      TEXT NOT NULL,
+    key         TEXT NOT NULL,
+    step        INTEGER,
+    value       REAL NOT NULL,
+    timestamp   TEXT NOT NULL
+);
+"""
+
+_METRICS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_metrics_run_key_step
+    ON experiment_metrics (run_id, key, step);
+"""
+
+_ARTIFACTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_artifacts (
+    run_id        TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    sha256        TEXT NOT NULL,
+    content_type  TEXT,
+    size_bytes    INTEGER NOT NULL,
+    storage_uri   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    PRIMARY KEY (run_id, name, sha256)
+);
+"""
+
+_ARTIFACTS_SHA_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_artifacts_run_sha
+    ON experiment_artifacts (run_id, sha256);
+"""
+
+_TAGS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_tags (
+    run_id  TEXT NOT NULL,
+    key     TEXT NOT NULL,
+    value   TEXT NOT NULL,
+    PRIMARY KEY (run_id, key)
+);
+"""
+
+_MODEL_VERSIONS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_model_versions (
+    run_id         TEXT NOT NULL,
+    name           TEXT NOT NULL,
+    format         TEXT NOT NULL,
+    artifact_sha   TEXT NOT NULL,
+    signature_json TEXT,
+    lineage_json   TEXT,
+    created_at     TEXT NOT NULL,
+    PRIMARY KEY (run_id, name)
+);
+"""
+
 # Pre-0.14 databases carried a narrower schema. On first access we probe
 # ``PRAGMA table_info`` and ALTER TABLE any missing columns so existing
 # ``~/.kailash_ml/ml.db`` files keep working after the 0.14 schema
@@ -141,6 +202,13 @@ class SQLiteTrackerBackend:
             with self._conn_lock:
                 self._conn.execute(_SCHEMA_SQL)
                 self._conn.execute(_INDEX_SQL)
+                # W12 logging-primitive tables (spec ml-tracking.md §4).
+                self._conn.execute(_METRICS_SCHEMA_SQL)
+                self._conn.execute(_METRICS_INDEX_SQL)
+                self._conn.execute(_ARTIFACTS_SCHEMA_SQL)
+                self._conn.execute(_ARTIFACTS_SHA_INDEX_SQL)
+                self._conn.execute(_TAGS_SCHEMA_SQL)
+                self._conn.execute(_MODEL_VERSIONS_SCHEMA_SQL)
                 # Detect pre-0.14 databases and add missing columns.
                 cur = self._conn.execute("PRAGMA table_info(experiment_runs)")
                 existing = {row[1] for row in cur.fetchall()}
@@ -320,6 +388,225 @@ class SQLiteTrackerBackend:
         rows = await asyncio.to_thread(_read)
         return [_row_to_dict(r) for r in rows]
 
+    # ------------------------------------------------------------------
+    # W12 — Logging primitives (metrics, artifacts, tags, model versions)
+    # ------------------------------------------------------------------
+
+    async def append_metric(
+        self,
+        run_id: str,
+        key: str,
+        value: float,
+        step: Optional[int],
+        timestamp: str,
+    ) -> None:
+        """Append one metric row. Append-only; no merge / update."""
+        await self.initialize()
+        sql = (
+            "INSERT INTO experiment_metrics "
+            "(run_id, key, step, value, timestamp) VALUES (?, ?, ?, ?, ?)"
+        )
+        values = (run_id, key, step, float(value), timestamp)
+
+        def _write() -> None:
+            with self._conn_lock:
+                self._conn.execute(sql, values)
+
+        async with self._async_lock:
+            await asyncio.to_thread(_write)
+
+    async def append_metrics_batch(
+        self,
+        run_id: str,
+        rows: list[tuple[str, float, Optional[int], str]],
+    ) -> None:
+        """Append many metric rows atomically. ``rows`` is
+        ``[(key, value, step, timestamp), ...]``.
+        """
+        await self.initialize()
+        if not rows:
+            return
+        sql = (
+            "INSERT INTO experiment_metrics "
+            "(run_id, key, step, value, timestamp) VALUES (?, ?, ?, ?, ?)"
+        )
+        values = [(run_id, k, s, float(v), ts) for (k, v, s, ts) in rows]
+
+        def _write() -> None:
+            with self._conn_lock:
+                self._conn.executemany(sql, values)
+
+        async with self._async_lock:
+            await asyncio.to_thread(_write)
+
+    async def list_metrics(self, run_id: str) -> list[dict[str, Any]]:
+        """Return every metric row for a run ordered by ``(key, step, id)``."""
+        await self.initialize()
+        sql = (
+            "SELECT key, step, value, timestamp FROM experiment_metrics "
+            "WHERE run_id = ? ORDER BY key, step, id"
+        )
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, (run_id,))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [dict(r) for r in rows]
+
+    async def insert_artifact(
+        self,
+        run_id: str,
+        name: str,
+        sha256: str,
+        content_type: Optional[str],
+        size_bytes: int,
+        storage_uri: str,
+        created_at: str,
+    ) -> bool:
+        """Insert an artifact row; dedupe on ``(run_id, name, sha256)``.
+
+        Returns ``True`` if a new row was inserted; ``False`` when the
+        row already existed (content-addressed dedupe per spec §4.3).
+        """
+        await self.initialize()
+        sql = (
+            "INSERT OR IGNORE INTO experiment_artifacts "
+            "(run_id, name, sha256, content_type, size_bytes, storage_uri, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        values = (
+            run_id,
+            name,
+            sha256,
+            content_type,
+            int(size_bytes),
+            storage_uri,
+            created_at,
+        )
+
+        def _write() -> int:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, values)
+                return cur.rowcount
+
+        async with self._async_lock:
+            changed = await asyncio.to_thread(_write)
+        return bool(changed)
+
+    async def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
+        """Return every artifact row for a run ordered by ``created_at``."""
+        await self.initialize()
+        sql = (
+            "SELECT name, sha256, content_type, size_bytes, storage_uri, created_at "
+            "FROM experiment_artifacts WHERE run_id = ? ORDER BY created_at, name"
+        )
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, (run_id,))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [dict(r) for r in rows]
+
+    async def upsert_tag(self, run_id: str, key: str, value: str) -> None:
+        """Insert or update a single tag row."""
+        await self.initialize()
+        sql = (
+            "INSERT INTO experiment_tags (run_id, key, value) VALUES (?, ?, ?) "
+            "ON CONFLICT(run_id, key) DO UPDATE SET value = excluded.value"
+        )
+
+        def _write() -> None:
+            with self._conn_lock:
+                self._conn.execute(sql, (run_id, key, value))
+
+        async with self._async_lock:
+            await asyncio.to_thread(_write)
+
+    async def upsert_tags(self, run_id: str, tags: Mapping[str, str]) -> None:
+        """Insert or update many tag rows atomically."""
+        await self.initialize()
+        if not tags:
+            return
+        sql = (
+            "INSERT INTO experiment_tags (run_id, key, value) VALUES (?, ?, ?) "
+            "ON CONFLICT(run_id, key) DO UPDATE SET value = excluded.value"
+        )
+        values = [(run_id, k, v) for k, v in tags.items()]
+
+        def _write() -> None:
+            with self._conn_lock:
+                self._conn.executemany(sql, values)
+
+        async with self._async_lock:
+            await asyncio.to_thread(_write)
+
+    async def list_tags(self, run_id: str) -> dict[str, str]:
+        """Return the tag map for a run."""
+        await self.initialize()
+        sql = "SELECT key, value FROM experiment_tags WHERE run_id = ?"
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, (run_id,))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return {r["key"]: r["value"] for r in rows}
+
+    async def insert_model_version(
+        self,
+        run_id: str,
+        name: str,
+        format: str,
+        artifact_sha: str,
+        signature_json: Optional[str],
+        lineage_json: Optional[str],
+        created_at: str,
+    ) -> None:
+        """Insert a run-scoped model-version snapshot (spec §4.5)."""
+        await self.initialize()
+        sql = (
+            "INSERT INTO experiment_model_versions "
+            "(run_id, name, format, artifact_sha, signature_json, lineage_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        values = (
+            run_id,
+            name,
+            format,
+            artifact_sha,
+            signature_json,
+            lineage_json,
+            created_at,
+        )
+
+        def _write() -> None:
+            with self._conn_lock:
+                self._conn.execute(sql, values)
+
+        async with self._async_lock:
+            await asyncio.to_thread(_write)
+
+    async def list_model_versions(self, run_id: str) -> list[dict[str, Any]]:
+        """Return model-version rows for a run ordered by ``created_at``."""
+        await self.initialize()
+        sql = (
+            "SELECT name, format, artifact_sha, signature_json, lineage_json, created_at "
+            "FROM experiment_model_versions WHERE run_id = ? ORDER BY created_at, name"
+        )
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, (run_id,))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [dict(r) for r in rows]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -357,7 +644,9 @@ _COLUMNS = (
 
 # Columns allowed on the update path (same set, fixed identifiers only —
 # prevents dynamic identifier interpolation into the UPDATE statement).
-_UPDATABLE_COLUMNS = set(_COLUMNS) - {"run_id", "experiment"}
+_UPDATABLE_COLUMNS: set[str] = {
+    c for c in _COLUMNS if c not in ("run_id", "experiment")
+}
 
 _BOOLEAN_COLUMNS = {"git_dirty", "device_array_api"}
 

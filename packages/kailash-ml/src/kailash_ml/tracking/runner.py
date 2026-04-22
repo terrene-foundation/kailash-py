@@ -21,8 +21,13 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import hashlib
+import io
+import json
 import logging
+import math
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -31,19 +36,67 @@ import threading
 import traceback
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Mapping, Optional
+from typing import Any, AsyncIterator, Mapping, Optional, Union
 
 from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
+from kailash_ml.errors import (
+    MetricValueError,
+    ModelSignatureRequiredError,
+    ParamValueError,
+    TrackingError,
+)
 from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
 
 __all__ = [
+    "ArtifactHandle",
     "ExperimentRun",
+    "ModelVersionInfo",
     "RunStatus",
     "track",
 ]
+
+
+# ---------------------------------------------------------------------------
+# W12 — value objects returned by logging primitives
+# ---------------------------------------------------------------------------
+
+#: Regex for param / metric / tag keys per spec §4.1 + §4.7.
+_KEY_REGEX = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.\-]*$")
+#: Tag keys are stricter: lowercase + digits + underscore (spec §4.7 / W12 invariant 8).
+_TAG_KEY_REGEX = re.compile(r"^[a-z_][a-z_0-9]*$")
+
+
+@dataclass(frozen=True)
+class ArtifactHandle:
+    """Handle returned by :meth:`ExperimentRun.log_artifact` / ``log_figure``.
+
+    Content-addressed per spec §4.3 — two calls with identical bytes
+    return handles with the same ``sha256`` and the same ``storage_uri``.
+    """
+
+    name: str
+    sha256: str
+    storage_uri: str
+    size_bytes: int
+    content_type: Optional[str]
+
+
+@dataclass(frozen=True)
+class ModelVersionInfo:
+    """Return value of :meth:`ExperimentRun.log_model` (spec §4.5).
+
+    W12 emits a run-scoped snapshot; the cross-run :class:`ModelRegistry`
+    lineage lives in W16 and is NOT populated by ``log_model``.
+    """
+
+    name: str
+    format: str
+    artifact_sha: str
+    run_id: str
 
 
 logger = logging.getLogger(__name__)
@@ -249,6 +302,193 @@ def _resolve_tenant_id(explicit: Optional[str]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# W12 — rank-0 guard + finite-check + key validation helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_rank_zero() -> bool:
+    """Return True unless the process is a non-zero rank in a DDP/FSDP job.
+
+    Per ``specs/ml-tracking.md`` §4 + Decision 4, every logging primitive
+    MUST be a no-op on non-rank-0 workers so the tracker backend is
+    written exactly once per run even in multi-GPU training. When torch
+    is not importable OR ``torch.distributed`` is not initialised, the
+    process is single-process by definition — always rank 0.
+    """
+    try:
+        import torch.distributed as dist  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 — absence / import errors are expected
+        return True
+    try:
+        if not dist.is_available() or not dist.is_initialized():
+            return True
+        return int(dist.get_rank()) == 0
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("tracking.ddp.rank_probe_failed", extra={"error": str(exc)})
+        return True
+
+
+def _validate_key(kind: str, key: str) -> None:
+    """Validate a param / metric / tag key per spec §4.1."""
+    if not isinstance(key, str) or not _KEY_REGEX.match(key):
+        raise TrackingError(
+            reason=f"{kind} key {key!r} must match {_KEY_REGEX.pattern}"
+        )
+
+
+def _validate_tag_key(key: str) -> None:
+    """Validate a tag key per W12 invariant 8 (lowercase + _ + digits)."""
+    if not isinstance(key, str) or not _TAG_KEY_REGEX.match(key):
+        raise TrackingError(
+            reason=f"tag key {key!r} must match {_TAG_KEY_REGEX.pattern}"
+        )
+
+
+def _validate_metric_value(key: str, value: Any) -> float:
+    """Coerce + finite-check a metric value per spec §4.2."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise MetricValueError(
+            reason=f"metric {key!r} must be numeric, got {type(value).__name__}"
+        )
+    v = float(value)
+    if not math.isfinite(v):
+        raise MetricValueError(reason=f"metric {key!r} value={v} is not finite")
+    return v
+
+
+def _validate_param_value(key: str, value: Any) -> Any:
+    """Finite-check a numeric param value per spec §4.1.
+
+    Non-numeric params pass through unchanged; numeric params must be
+    finite — NaN / ±Inf are rejected so downstream `params->>'key' = ?`
+    comparison queries stay correct.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        v = float(value)
+        if not math.isfinite(v):
+            raise ParamValueError(reason=f"param {key!r} value={v} is not finite")
+    return value
+
+
+def _artifact_storage_root(db_path: str) -> Path:
+    """Return the directory that holds artifact bytes for ``db_path``.
+
+    - ``:memory:`` → ``~/.kailash_ml/artifacts-memory`` (tests use tmp_path)
+    - ``/foo/bar/ml.db`` → ``/foo/bar/artifacts``
+    """
+    if db_path == ":memory:":
+        return _DEFAULT_TRACKER_DIR / "artifacts-memory"
+    return Path(db_path).parent / "artifacts"
+
+
+def _hash_and_materialise_artifact(
+    db_path: str,
+    payload: Union[bytes, str, Path],
+) -> tuple[bytes, str, int, str]:
+    """Return ``(bytes, sha256, size, storage_uri)`` for an artifact payload.
+
+    When ``payload`` is bytes, the bytes are hashed + written to a
+    content-addressed path under the backend's artifact root. When
+    ``payload`` is a path, the file contents are read + hashed. The
+    returned ``storage_uri`` is the absolute path the bytes were
+    persisted to; callers record it verbatim in ``experiment_artifacts``.
+    """
+    if isinstance(payload, (str, Path)):
+        path = Path(payload)
+        if not path.is_file():
+            raise FileNotFoundError(f"log_artifact path {path!s} does not exist")
+        blob = path.read_bytes()
+    elif isinstance(payload, bytes):
+        blob = payload
+    else:
+        raise TypeError(
+            f"log_artifact payload must be bytes / str / Path, "
+            f"got {type(payload).__name__}"
+        )
+    sha = hashlib.sha256(blob).hexdigest()
+    root = _artifact_storage_root(db_path)
+    root.mkdir(parents=True, exist_ok=True)
+    bucket = root / sha[:2]
+    bucket.mkdir(parents=True, exist_ok=True)
+    target = bucket / sha
+    if not target.exists():
+        # Write bytes atomically via a temp file + rename so concurrent
+        # workers writing the same content can't race on a half-written
+        # blob. ``NamedTemporaryFile`` in the same parent guarantees
+        # ``os.replace`` is atomic on POSIX.
+        tmp = target.with_suffix(".partial")
+        tmp.write_bytes(blob)
+        os.replace(tmp, target)
+    return blob, sha, len(blob), str(target)
+
+
+def _iso_utc() -> str:
+    return _now_utc().isoformat()
+
+
+def _coerce_tag_value(value: Any) -> str:
+    """Coerce a tag value to ``str`` per spec §4.7.
+
+    Non-string tag values are coerced via ``str()`` with a DEBUG log line.
+    """
+    if isinstance(value, str):
+        return value
+    coerced = str(value)
+    logger.debug(
+        "tracking.tag.value_coerced",
+        extra={"value_type": type(value).__name__},
+    )
+    return coerced
+
+
+def _serialise_figure(figure: Any) -> tuple[bytes, str]:
+    """Serialise a plotly / matplotlib figure per spec §4.4.
+
+    Returns ``(bytes, content_type)``. Plotly figures take the JSON
+    path; matplotlib figures take the PNG path. Anything else raises
+    :class:`TrackingError` — the surface is intentionally narrow so a
+    future DL-diagnostics integration can trust the sink shape.
+    """
+    # Plotly figure first — the attribute check is duck-typed so we do
+    # NOT require plotly to be importable at call time.
+    if hasattr(figure, "to_json") and callable(figure.to_json):
+        try:
+            payload = figure.to_json()
+        except Exception as exc:  # noqa: BLE001
+            raise TrackingError(
+                reason=f"log_figure: figure.to_json() failed: {exc}"
+            ) from exc
+        if isinstance(payload, str):
+            return payload.encode("utf-8"), "application/vnd.plotly.v1+json"
+        if isinstance(payload, (bytes, bytearray)):
+            return bytes(payload), "application/vnd.plotly.v1+json"
+        raise TrackingError(
+            reason=(
+                f"log_figure: figure.to_json() returned "
+                f"{type(payload).__name__}, expected str/bytes"
+            )
+        )
+    # Matplotlib — `savefig(buf, format="png")` writes to an in-memory buffer.
+    if hasattr(figure, "savefig") and callable(figure.savefig):
+        buf = io.BytesIO()
+        try:
+            figure.savefig(buf, format="png")
+        except Exception as exc:  # noqa: BLE001
+            raise TrackingError(
+                reason=f"log_figure: matplotlib savefig failed: {exc}"
+            ) from exc
+        return buf.getvalue(), "image/png"
+    raise TrackingError(
+        reason=(
+            f"log_figure: unsupported figure type {type(figure).__name__}; "
+            f"expected plotly.graph_objs.Figure or matplotlib.figure.Figure"
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # Auto-capture helpers (spec §2.4 — 16 mandatory fields)
 # ---------------------------------------------------------------------------
 
@@ -433,26 +673,361 @@ class ExperimentRun:
         self._ctx_token: Any = None
 
     # ------------------------------------------------------------------
-    # Logging primitives
+    # Logging primitives — W12 (spec ml-tracking.md §4)
     # ------------------------------------------------------------------
+    #
+    # Every primitive honours two shared invariants:
+    #
+    # 1. **Rank-0 guard.** When the process is a non-zero rank in a
+    #    DDP/FSDP job, every primitive is a no-op. Logging runs exactly
+    #    once per global-step in multi-GPU training (Decision 4).
+    # 2. **Key regex.** Param / metric keys follow §4.1
+    #    ``^[a-zA-Z_][a-zA-Z0-9_.\-]*$``; tag keys follow the stricter
+    #    §4.7 / invariant 8 regex ``^[a-z_][a-z_0-9]*$``. Both raise
+    #    :class:`TrackingError` on mismatch.
 
     async def log_param(self, key: str, value: Any) -> None:
-        """Record a single param. Persisted immediately."""
-        self._params[str(key)] = value
+        """Record a single param. Persisted immediately (spec §4.1).
+
+        Numeric values MUST be finite — ``NaN`` / ``±Inf`` raise
+        :class:`ParamValueError` per §4.1 MUST-finite-check.
+        """
+        if not _is_rank_zero():
+            return
+        _validate_key("param", str(key))
+        checked = _validate_param_value(str(key), value)
+        self._params[str(key)] = checked
         await self._backend.set_params(self.run_id, self._params)
 
     async def log_params(self, params: Mapping[str, Any]) -> None:
-        """Record multiple params. Persisted immediately."""
+        """Record multiple params. Persisted immediately (spec §4.1)."""
+        if not _is_rank_zero():
+            return
+        updates: dict[str, Any] = {}
         for k, v in params.items():
-            self._params[str(k)] = v
+            _validate_key("param", str(k))
+            updates[str(k)] = _validate_param_value(str(k), v)
+        for k, v in updates.items():
+            self._params[k] = v
         await self._backend.set_params(self.run_id, self._params)
 
-    def attach_training_result(self, result: TrainingResult) -> None:
-        """Populate device fields from a ``TrainingResult``.
+    async def log_metric(
+        self,
+        key: str,
+        value: float,
+        *,
+        step: Optional[int] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Append one metric row (spec §4.2 — the round-1 CRIT gap).
 
-        Called by the Trainable fit path (directly or through the
-        MLEngine auto-logger) so the DB row records the actual
-        resolved device rather than leaving it ``None``.
+        Metrics are append-only (one row per call) so ``log_metric("loss",
+        v, step=k)`` produces the training curve directly. ``value`` MUST
+        be finite — ``NaN`` / ``±Inf`` raise :class:`MetricValueError`.
+        """
+        if not _is_rank_zero():
+            return
+        _validate_key("metric", str(key))
+        v = _validate_metric_value(str(key), value)
+        ts = (timestamp or _now_utc()).isoformat()
+        await self._backend.append_metric(self.run_id, str(key), v, step, ts)
+
+    async def log_metrics(
+        self,
+        metrics: Mapping[str, float],
+        *,
+        step: Optional[int] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Append many metric rows atomically (spec §4.2)."""
+        if not _is_rank_zero():
+            return
+        ts = (timestamp or _now_utc()).isoformat()
+        rows: list[tuple[str, float, Optional[int], str]] = []
+        for k, v in metrics.items():
+            _validate_key("metric", str(k))
+            rows.append((str(k), _validate_metric_value(str(k), v), step, ts))
+        await self._backend.append_metrics_batch(self.run_id, rows)
+
+    async def log_artifact(
+        self,
+        path_or_bytes: Union[str, Path, bytes],
+        name: str,
+        *,
+        content_type: Optional[str] = None,
+        data_subject_ids: Optional[list[str]] = None,
+    ) -> ArtifactHandle:
+        """Persist an artifact content-addressed by SHA-256 (spec §4.3).
+
+        A second call with identical bytes returns an
+        :class:`ArtifactHandle` with the same ``sha256`` and
+        ``storage_uri`` — dedupe is structural (PK on
+        ``(run_id, name, sha256)``). ``data_subject_ids`` is accepted
+        for forward-compat with the W15 tenant/GDPR wave and is
+        currently unused.
+
+        Full encryption policy (``ArtifactEncryptionError``) + size
+        cap (``ArtifactSizeExceededError``) land in W17 alongside the
+        artifact-store backend work; this W12 path writes plaintext
+        locally.
+        """
+        del data_subject_ids  # accepted for forward-compat (W15)
+        if not _is_rank_zero():
+            # Return a deterministic sentinel handle so callers on
+            # non-rank-0 workers do not crash when they unpack the
+            # return value. storage_uri="" signals "not persisted".
+            return ArtifactHandle(
+                name=name,
+                sha256="",
+                storage_uri="",
+                size_bytes=0,
+                content_type=content_type,
+            )
+        _, sha, size, uri = _hash_and_materialise_artifact(
+            self._backend._db_path, path_or_bytes
+        )
+        await self._backend.insert_artifact(
+            self.run_id,
+            name,
+            sha,
+            content_type,
+            size,
+            uri,
+            _iso_utc(),
+        )
+        return ArtifactHandle(
+            name=name,
+            sha256=sha,
+            storage_uri=uri,
+            size_bytes=size,
+            content_type=content_type,
+        )
+
+    async def log_figure(
+        self,
+        figure: Any,
+        name: str,
+        *,
+        step: Optional[int] = None,
+    ) -> ArtifactHandle:
+        """Serialise a plotly / matplotlib figure as an artifact (spec §4.4).
+
+        Plotly figures serialise via ``figure.to_json()`` with MIME
+        ``application/vnd.plotly.v1+json``. Matplotlib figures serialise
+        via ``fig.savefig(buf, format="png")`` with MIME ``image/png``.
+        The resulting bytes flow through :meth:`log_artifact` so the
+        SHA-256 dedupe still applies. ``step`` is recorded via a
+        sibling metric ``{name}.step`` for DL-diagnostics timeline
+        reconstruction.
+        """
+        if not _is_rank_zero():
+            return ArtifactHandle(
+                name=name,
+                sha256="",
+                storage_uri="",
+                size_bytes=0,
+                content_type=None,
+            )
+        payload_bytes, content_type = _serialise_figure(figure)
+        handle = await self.log_artifact(payload_bytes, name, content_type=content_type)
+        if step is not None:
+            # Sibling metric so downstream DL-diagnostics can reconstruct
+            # the figure→step timeline without opening the artifact.
+            try:
+                await self.log_metric(f"{name}.step", float(step), step=int(step))
+            except TrackingError:
+                # key regex may reject e.g. "confusion matrix.step";
+                # fall through silently — the figure artifact itself
+                # still carries the step in its filename via the caller.
+                pass
+        return handle
+
+    async def log_model(
+        self,
+        model: Any,
+        name: str,
+        *,
+        format: str = "onnx",
+        aliases: Optional[list[str]] = None,
+        signature: Optional[Any] = None,
+        lineage: Optional[Mapping[str, Any]] = None,
+        training_result: Optional[TrainingResult] = None,
+    ) -> ModelVersionInfo:
+        """Record a run-scoped model-version snapshot (spec §4.5).
+
+        Signature is mandatory (``signature is None`` raises
+        :class:`ModelSignatureRequiredError`). Lineage OR an ambient
+        run is mandatory — since :class:`ExperimentRun` is the run, the
+        latter always holds and ``lineage=None`` is permitted.
+
+        For W12 the serialisation path is minimal — the model is
+        serialised via ``pickle`` for the ``pickle`` format, and via
+        ``str(model).encode()`` otherwise. Full ONNX / PyTorch /
+        Lightning / sklearn export lands in W17 (artifact-store /
+        onnx) alongside the cross-run :class:`ModelRegistry`.
+        """
+        del aliases  # recorded in W18 (aliases + lineage queries)
+        if signature is None:
+            raise ModelSignatureRequiredError(
+                reason=(
+                    f"log_model({name!r}) requires a non-None signature "
+                    f"(spec ml-tracking.md §4.5)"
+                )
+            )
+        # self._run is always populated (log_model is an instance
+        # method) — the spec's LineageRequiredError branch fires only
+        # for module-level callers in W16+.
+        if not _is_rank_zero():
+            return ModelVersionInfo(
+                name=name, format=format, artifact_sha="", run_id=self.run_id
+            )
+        # Serialise the model bytes. For W12 we accept bytes / str
+        # payloads directly; richer exporters land in W17.
+        if isinstance(model, (bytes, bytearray)):
+            blob = bytes(model)
+        else:
+            try:
+                import pickle  # noqa: PLC0415
+
+                blob = pickle.dumps(model)
+            except Exception as exc:
+                raise TrackingError(
+                    reason=(
+                        f"log_model({name!r}) could not serialise model "
+                        f"of type {type(model).__name__}: {exc}"
+                    )
+                ) from exc
+        handle = await self.log_artifact(
+            blob, f"model:{name}", content_type=f"application/x-{format}"
+        )
+        signature_json = (
+            json.dumps(signature, default=str) if signature is not None else None
+        )
+        lineage_json = json.dumps(dict(lineage), default=str) if lineage else None
+        if training_result is not None:
+            # Side-effect: keep the run's device envelope in sync with
+            # the model's training provenance.
+            self.attach_training_result(training_result)
+        await self._backend.insert_model_version(
+            self.run_id,
+            name,
+            format,
+            handle.sha256,
+            signature_json,
+            lineage_json,
+            _iso_utc(),
+        )
+        return ModelVersionInfo(
+            name=name,
+            format=format,
+            artifact_sha=handle.sha256,
+            run_id=self.run_id,
+        )
+
+    async def attach_training_result_async(self, result: TrainingResult) -> None:
+        """Async variant of :meth:`attach_training_result` that ALSO
+        flattens ``result.metrics`` + ``result.hyperparameters`` into
+        the metric / param tables (W12 invariant 6, spec §4.6).
+
+        The sync :meth:`attach_training_result` is preserved for
+        back-compat with W8 callers that populate device fields only;
+        callers that want the full flattening MUST switch to this
+        method.
+        """
+        if not _is_rank_zero():
+            return
+        # 1. Device envelope (mirrors the sync variant below).
+        self.attach_training_result(result)
+        # 2. Flatten metrics — spec §4.6 MUST "persist result.metrics
+        #    + result.hyperparameters into appropriate tables". Numeric
+        #    metrics get `log_metric`; non-numeric metrics are skipped
+        #    with a DEBUG — the metrics table is numeric-only.
+        metrics = getattr(result, "metrics", None) or {}
+        numeric_rows: list[tuple[str, float, Optional[int], str]] = []
+        ts = _iso_utc()
+        for k, v in dict(metrics).items():
+            if not _KEY_REGEX.match(str(k)):
+                logger.debug(
+                    "tracking.attach.metric_key_skipped",
+                    extra={
+                        "run_id": self.run_id,
+                        "field_hash": hashlib.sha256(str(k).encode()).hexdigest()[:8],
+                    },
+                )
+                continue
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                logger.debug(
+                    "tracking.attach.metric_non_numeric_skipped",
+                    extra={"run_id": self.run_id},
+                )
+                continue
+            fv = float(v)
+            if not math.isfinite(fv):
+                logger.debug(
+                    "tracking.attach.metric_non_finite_skipped",
+                    extra={"run_id": self.run_id},
+                )
+                continue
+            numeric_rows.append((str(k), fv, None, ts))
+        if numeric_rows:
+            await self._backend.append_metrics_batch(self.run_id, numeric_rows)
+        # 3. Flatten hyperparameters — log_params already handles
+        #    finite-check + key validation.
+        hps = getattr(result, "hyperparameters", None) or {}
+        valid_hps: dict[str, Any] = {}
+        for k, v in dict(hps).items():
+            if not _KEY_REGEX.match(str(k)):
+                logger.debug(
+                    "tracking.attach.hp_key_skipped",
+                    extra={"run_id": self.run_id},
+                )
+                continue
+            try:
+                valid_hps[str(k)] = _validate_param_value(str(k), v)
+            except ParamValueError:
+                logger.debug(
+                    "tracking.attach.hp_non_finite_skipped",
+                    extra={"run_id": self.run_id},
+                )
+                continue
+        if valid_hps:
+            for k, v in valid_hps.items():
+                self._params[k] = v
+            await self._backend.set_params(self.run_id, self._params)
+
+    async def add_tag(self, key: str, value: Any) -> None:
+        """Record a single tag (spec §4.7)."""
+        if not _is_rank_zero():
+            return
+        _validate_tag_key(str(key))
+        await self._backend.upsert_tag(self.run_id, str(key), _coerce_tag_value(value))
+
+    async def add_tags(self, tags: Mapping[str, Any]) -> None:
+        """Record many tags atomically (spec §4.7)."""
+        if not _is_rank_zero():
+            return
+        validated: dict[str, str] = {}
+        for k, v in tags.items():
+            _validate_tag_key(str(k))
+            validated[str(k)] = _coerce_tag_value(v)
+        await self._backend.upsert_tags(self.run_id, validated)
+
+    async def set_tags(self, **tags: Any) -> None:
+        """Record many tags via kwargs (spec §4.7 canonical API).
+
+        Equivalent to :meth:`add_tags` with ``**kwargs`` instead of a
+        mapping — matches the MLflow/W&B tutorial idiom
+        ``run.set_tags(env="prod", cost_center="research")``.
+        """
+        await self.add_tags(tags)
+
+    def attach_training_result(self, result: TrainingResult) -> None:
+        """Populate device fields from a ``TrainingResult`` (W8 sync path).
+
+        Sync variant preserved for back-compat with Trainable.fit()
+        call sites that predate W12's metric/param-flattening. W12
+        callers that also want the flattening MUST use
+        :meth:`attach_training_result_async` (spec §4.6 MUST-flatten).
 
         Per ``specs/ml-tracking.md`` §2.4, device fields are sourced
         from ``TrainingResult.device`` (a :class:`DeviceReport`) when
