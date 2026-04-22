@@ -181,24 +181,25 @@ class Patience:
 
 
 # ---------------------------------------------------------------------------
-# Default store resolution
+# Default store resolution — MUST Rule 1b (ml-engines-v2.md §2.1): single
+# authority chain routed through kailash_ml._env.resolve_store_url. Hand-
+# rolled os.environ.get(...) at this site would silently diverge from the
+# tracker / registry / feature-store resolution chain; use the shared helper.
 # ---------------------------------------------------------------------------
 
 
-_DEFAULT_STORE_DIR = pathlib.Path.home() / ".kailash_ml"
-_DEFAULT_DB_PATH = _DEFAULT_STORE_DIR / "ml.db"
+from kailash_ml._env import resolve_store_url as _resolve_store_url
 
 
 def _default_store_url() -> str:
-    """Return the default SQLite store URL, honoring an env override.
+    """Return the default store URL via the shared authority chain.
 
-    `KAILASH_ML_STORE_URL` lets CI and test runs point the Engine at a
-    throwaway location without patching the Engine itself.
+    Delegates entirely to :func:`kailash_ml._env.resolve_store_url` so
+    every engine / tracker / registry / feature-store resolves the same
+    URL from the same precedence (explicit kwarg > ``KAILASH_ML_STORE_URL``
+    > legacy ``KAILASH_ML_TRACKER_DB`` > ``sqlite:///~/.kailash_ml/ml.db``).
     """
-    override = os.environ.get("KAILASH_ML_STORE_URL")
-    if override:
-        return override
-    return f"sqlite:///{_DEFAULT_DB_PATH}"
+    return _resolve_store_url(None)
 
 
 # ---------------------------------------------------------------------------
