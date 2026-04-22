@@ -15,17 +15,31 @@ primitive. Scope matches the W16 wave plan:
   key (§7.3).
 * One audit row per successful register per §8.
 
+W17 additions:
+
+* :class:`~kailash_ml.tracking.artifacts.AbstractArtifactStore` plumbed
+  through ``__init__(store, artifact_store=None)``. When
+  ``artifact_store`` is supplied the caller MAY pass ``artifact_bytes``
+  (pre-serialized) in place of an explicit ``artifact_uri`` —
+  registration writes the bytes to the store and derives URI +
+  sha256 + probe columns itself.
+* :func:`~kailash_ml.tracking.artifacts.onnx_probe.classify_onnx_bytes`
+  populates ``onnx_status`` / ``onnx_opset_imports`` / ``ort_extensions``
+  on the ``format="onnx"`` path per §5.6.
+
 Deferred to later waves (noted so readers know not to search for the
 symbols):
 
-* ONNX export probe (§5.6) populating ``onnx_status`` /
-  ``onnx_unsupported_ops`` — W17 ships the probe; the columns are
-  persisted now with ``None`` defaults.
 * Alias mutations (§4.1) — ``set_alias`` / ``clear_alias`` /
   ``promote_model`` / ``demote_model`` — W18.
 * Lineage-DAG walk + ``diff_versions`` + ``search_models`` — W18.
-* ``artifact_uri`` derivation from an artifact writer — W17 (today the
-  caller supplies both ``artifact_uri`` and ``artifact_sha256``).
+* Direct ``trainable=...`` kwarg on ``register_model`` that runs
+  ``export_to_onnx`` internally — W21 (the ``MLEngine.register``
+  convenience surface). W17 ships the bytes-accepting form; the engine
+  produces bytes via ``OnnxBridge`` and hands them here.
+* ``allow_pickle_fallback=True`` → ``onnx_status="legacy_pickle_only"``
+  disposition — W18 (paired with alias promotion so serving has a
+  fallback policy to honor).
 * Package-level ``km.register(...)`` wrapper — W33.
 """
 from __future__ import annotations
@@ -41,6 +55,11 @@ from typing import Any, Literal, Mapping, Optional
 
 from kailash_ml._result import TrainingResult
 from kailash_ml.errors import fingerprint_classified_value
+from kailash_ml.tracking.artifacts import AbstractArtifactStore
+from kailash_ml.tracking.artifacts.onnx_probe import (
+    OnnxProbeResult,
+    classify_onnx_bytes,
+)
 
 __all__ = [
     "ModelRegistry",
@@ -51,6 +70,7 @@ __all__ = [
     "InvalidModelNameError",
     "LineageRequiredError",
     "SignatureMismatchError",
+    "ArtifactStoreRequiredError",
     "RESERVED_MODEL_NAME_PREFIXES",
     "MODEL_NAME_REGEX",
     "default_idempotency_key",
@@ -86,6 +106,17 @@ class LineageRequiredError(ModelRegistryError):
 
 class SignatureMismatchError(ModelRegistryError):
     """Signature inference failed AND no explicit signature supplied (§5.1)."""
+
+
+class ArtifactStoreRequiredError(ModelRegistryError):
+    """``register_model`` passed ``artifact_bytes`` but no ``artifact_store``.
+
+    Raised when the caller wants the registry to derive ``artifact_uri``
+    + ``artifact_sha256`` from pre-serialized bytes but forgot to wire
+    an :class:`AbstractArtifactStore` into the registry. The message
+    points to the ``ModelRegistry(store, artifact_store=...)`` slot so
+    the fix is O(one line).
+    """
 
 
 # --- Signatures + Lineage ------------------------------------------------
@@ -216,10 +247,25 @@ class ModelRegistry:
     (see the module docstring).
     """
 
-    def __init__(self, store: Any) -> None:
-        # Typed as ``Any`` to avoid a cyclic Protocol import; runtime
-        # checks happen in the store when the registry primitives fire.
+    def __init__(
+        self,
+        store: Any,
+        *,
+        artifact_store: Optional[AbstractArtifactStore] = None,
+    ) -> None:
+        # ``store`` is the AbstractTrackerStore (W14b) owning the SQL
+        # tables. ``artifact_store`` is the W17 byte layer — when
+        # supplied the caller MAY pass pre-serialized bytes via
+        # ``register_model(artifact_bytes=..., format=...)`` and the
+        # registry handles URI + sha256 derivation internally. When
+        # omitted the caller MUST pass an explicit ``artifact_uri`` +
+        # ``artifact_sha256`` (W16 back-compat path).
+        #
+        # Typed as ``Any`` for the tracker store to avoid a cyclic
+        # Protocol import; runtime checks happen in the store when the
+        # registry primitives fire.
         self._store = store
+        self._artifact_store = artifact_store
 
     async def register_model(
         self,
@@ -233,6 +279,7 @@ class ModelRegistry:
         format: Literal["onnx", "torchscript", "gguf", "pickle"] = "onnx",
         artifact_uri: Optional[str] = None,
         artifact_sha256: Optional[str] = None,
+        artifact_bytes: Optional[bytes] = None,
         idempotency_key: Optional[str] = None,
         is_golden: bool = False,
         metadata: Optional[Mapping[str, Any]] = None,
@@ -267,12 +314,26 @@ class ModelRegistry:
         resolved_lineage = self._resolve_lineage(lineage, training_result)
         resolved_signature = self._require_signature(signature, training_result)
 
-        if artifact_uri is None or artifact_sha256 is None:
-            raise ValueError(
-                "register_model requires artifact_uri AND artifact_sha256 "
-                "at this wave — the W17 ArtifactStore shard takes ownership "
-                "of both once it lands."
-            )
+        # Resolve artifact_uri / artifact_sha256 / probe columns.
+        # Three mutually-exclusive paths:
+        # (A) caller supplies ``artifact_uri`` + ``artifact_sha256``
+        #     explicitly — W16 back-compat; probe columns stay NULL.
+        # (B) caller supplies ``artifact_bytes`` and the registry has
+        #     an ``artifact_store`` — W17 path: store bytes, derive URI
+        #     + sha256 + (for format="onnx") populate probe columns.
+        # (C) neither — raise so callers know the contract.
+        (
+            artifact_uri,
+            artifact_sha256,
+            probe_result,
+        ) = await self._resolve_artifact(
+            tenant_id=tenant_id,
+            name=name,
+            format=format,
+            artifact_uri=artifact_uri,
+            artifact_sha256=artifact_sha256,
+            artifact_bytes=artifact_bytes,
+        )
 
         if idempotency_key is None:
             idempotency_key = default_idempotency_key(
@@ -321,10 +382,18 @@ class ModelRegistry:
             lineage_parent_version_id=resolved_lineage.parent_version_id,
             idempotency_key=idempotency_key,
             is_golden=is_golden,
-            onnx_status=None,
-            onnx_unsupported_ops=None,
-            onnx_opset_imports=None,
-            ort_extensions=None,
+            onnx_status=probe_result.onnx_status if probe_result else None,
+            onnx_unsupported_ops=None,  # probe raises on unsupported ops
+            onnx_opset_imports=(
+                json.dumps(probe_result.opset_imports, sort_keys=True)
+                if probe_result
+                else None
+            ),
+            ort_extensions=(
+                json.dumps(probe_result.ort_extensions)
+                if probe_result and probe_result.ort_extensions
+                else None
+            ),
             metadata_json=metadata_json,
             created_at=now.isoformat(),
         )
@@ -429,6 +498,84 @@ class ModelRegistry:
                 "model_registry.name.single_underscore_convention",
                 extra={"name": name},
             )
+
+    async def _resolve_artifact(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        format: str,
+        artifact_uri: Optional[str],
+        artifact_sha256: Optional[str],
+        artifact_bytes: Optional[bytes],
+    ) -> tuple[str, str, Optional[OnnxProbeResult]]:
+        """Resolve ``(uri, sha256, probe_result)`` per the §5.6 contract.
+
+        Three paths (§7.1 + W17.C plumbing):
+
+        (A) Explicit ``artifact_uri`` + ``artifact_sha256`` — W16
+            back-compat. Probe columns stay NULL because the registry
+            has no bytes to probe. Mutually exclusive with
+            ``artifact_bytes`` (passing both is caller confusion, not a
+            contract we can silently arbitrate).
+
+        (B) ``artifact_bytes`` + a configured ``artifact_store`` —
+            registry writes the bytes to the store, derives URI +
+            sha256 from the store's return, and (for ``format="onnx"``)
+            runs :func:`classify_onnx_bytes` to populate probe columns.
+
+        (C) Neither — raise a typed error naming the missing kwarg so
+            the caller fixes the right end.
+        """
+        # Path (A): explicit URI + sha — early return, no probe.
+        if artifact_uri is not None and artifact_sha256 is not None:
+            if artifact_bytes is not None:
+                raise ValueError(
+                    "register_model: pass EITHER (artifact_uri + "
+                    "artifact_sha256) OR artifact_bytes, not both — "
+                    "the registry cannot arbitrate between caller-"
+                    "supplied metadata and bytes the store would derive."
+                )
+            return artifact_uri, artifact_sha256, None
+
+        # Path (C): neither — surface the missing-kwarg contract loudly.
+        if artifact_bytes is None:
+            raise ValueError(
+                "register_model requires EITHER explicit "
+                "(artifact_uri + artifact_sha256) OR artifact_bytes + "
+                "a configured artifact_store. See "
+                "ModelRegistry(store, artifact_store=...)."
+            )
+
+        # Path (B): bytes → store → URI + sha + probe.
+        if self._artifact_store is None:
+            raise ArtifactStoreRequiredError(
+                "register_model(artifact_bytes=...) requires "
+                "ModelRegistry(store, artifact_store=LocalFileArtifactStore("
+                "root_dir) | CasSha256ArtifactStore(...) | ...). "
+                "Construct the registry with an artifact_store and retry."
+            )
+
+        uri, sha256_hex = await self._artifact_store.put(
+            artifact_bytes, tenant_id=tenant_id
+        )
+
+        if format != "onnx":
+            return uri, sha256_hex, None
+
+        probe: OnnxProbeResult = classify_onnx_bytes(artifact_bytes)
+        # Defence-in-depth: the store's digest and the probe's sha256
+        # MUST match — they're both sha256(plaintext). A divergence
+        # signals a backend bug (wrong hash algorithm) or a
+        # bytes-mutated-mid-flight bug. Raising here is the §10.1
+        # integrity invariant at the registry layer.
+        if probe.sha256_hex != sha256_hex:
+            raise ValueError(
+                f"artifact_store digest {sha256_hex!r} != probe "
+                f"digest {probe.sha256_hex!r} for "
+                f"name={name!r} — backend contract broken"
+            )
+        return uri, sha256_hex, probe
 
     @staticmethod
     def _resolve_lineage(
