@@ -25,6 +25,15 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+from kailash_ml.drift.stats import (
+    DriftThresholds,
+    chi2_test,
+    jensen_shannon_continuous,
+    jensen_shannon_discrete,
+    new_category_fraction as _new_category_fraction,
+    select_statistics,
+)
+from kailash_ml.errors import ZeroVarianceReferenceError
 from kailash_ml.types import AgentInfusionProtocol
 from scipy.stats import ks_2samp
 
@@ -65,7 +74,13 @@ Signature: ``async def handler(report: DriftReport) -> None``.
 
 @dataclass
 class FeatureDriftResult:
-    """Drift result for a single feature."""
+    """Drift result for a single feature.
+
+    W26 (spec ``ml-drift.md §§3.1–3.3``): ``chi2_*``, ``jsd``,
+    ``new_category_fraction``, ``statistics_used``, and
+    ``stability_note`` are added with optional/None defaults so existing
+    callers that only read PSI / KS continue to work unchanged.
+    """
 
     feature_name: str
     psi: float
@@ -73,6 +88,19 @@ class FeatureDriftResult:
     ks_pvalue: float
     drift_detected: bool
     drift_type: str  # "none", "moderate", "severe"
+    # W26 extended stats — optional so pre-W26 callers / persisted rows
+    # still deserialize cleanly.
+    chi2_statistic: float | None = None
+    chi2_pvalue: float | None = None
+    jsd: float | None = None
+    new_category_fraction: float | None = None
+    # Set of statistic tokens computed for this column (per
+    # ``kailash_ml.drift.stats.select_statistics``).  Serialized as a
+    # sorted list for JSON portability.
+    statistics_used: list[str] | None = None
+    # Per spec §3.6 MUST 5 — smoothing fired OR stats skipped due to
+    # ``MIN_BIN_COUNT``.  ``None`` when nothing noteworthy happened.
+    stability_note: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -82,6 +110,14 @@ class FeatureDriftResult:
             "ks_pvalue": self.ks_pvalue,
             "drift_detected": self.drift_detected,
             "drift_type": self.drift_type,
+            "chi2_statistic": self.chi2_statistic,
+            "chi2_pvalue": self.chi2_pvalue,
+            "jsd": self.jsd,
+            "new_category_fraction": self.new_category_fraction,
+            "statistics_used": (
+                list(self.statistics_used) if self.statistics_used is not None else None
+            ),
+            "stability_note": self.stability_note,
         }
 
     @classmethod
@@ -93,6 +129,12 @@ class FeatureDriftResult:
             ks_pvalue=data["ks_pvalue"],
             drift_detected=data["drift_detected"],
             drift_type=data["drift_type"],
+            chi2_statistic=data.get("chi2_statistic"),
+            chi2_pvalue=data.get("chi2_pvalue"),
+            jsd=data.get("jsd"),
+            new_category_fraction=data.get("new_category_fraction"),
+            statistics_used=data.get("statistics_used"),
+            stability_note=data.get("stability_note"),
         )
 
 
@@ -397,6 +439,8 @@ class DriftMonitor:
         psi_threshold: float = 0.2,
         ks_threshold: float = 0.05,
         performance_threshold: float = 0.1,
+        thresholds: DriftThresholds | None = None,
+        tracker: Any = None,
     ) -> None:
         import math
 
@@ -412,6 +456,18 @@ class DriftMonitor:
         self._psi_threshold = psi_threshold
         self._ks_threshold = ks_threshold
         self._performance_threshold = performance_threshold
+        # W26: per-column threshold config.  Falls back to legacy
+        # psi_threshold / ks_threshold values when None so pre-W26
+        # constructors are unaffected.
+        self._thresholds = thresholds or DriftThresholds(
+            psi=psi_threshold, ks_pvalue=ks_threshold
+        )
+        # W26: optional duck-typed tracker.  When set, check_drift emits
+        # ``log_metric("drift/{feature}/{statistic}", value)`` per
+        # spec §6.4.  The duck-typed contract is the same shape
+        # RLDiagnostics / DLDiagnostics consume — any object exposing
+        # ``log_metric(key, value, *, step=None)`` satisfies it.
+        self._tracker = tracker
         self._initialized = False
         # In-memory reference cache (bounded to prevent OOM with many models)
         self._references: dict[str, _StoredReference] = {}
@@ -578,18 +634,64 @@ class DriftMonitor:
                 )
                 continue
             cur_series = current_data[feature_name]
+            per_col_thresholds = self._thresholds.resolve(feature_name)
+            stats_to_compute = select_statistics(ref_series)
 
             psi = _compute_psi(ref_series, cur_series)
 
             # KS test only for numeric features
             is_numeric = ref_series.dtype not in (pl.Categorical, pl.Utf8, pl.String)
-            if is_numeric:
+            if is_numeric and "ks" in stats_to_compute:
                 ks_stat, ks_pval = _compute_ks(ref_series, cur_series)
             else:
                 ks_stat, ks_pval = 0.0, 1.0
 
-            drift_detected = psi > self._psi_threshold or (
-                is_numeric and ks_pval < self._ks_threshold
+            # W26: chi² for categorical / boolean columns.
+            chi2_stat: float | None = None
+            chi2_pval: float | None = None
+            if "chi2" in stats_to_compute:
+                chi2_stat, chi2_pval = chi2_test(ref_series, cur_series)
+
+            # W26: JSD for continuous + categorical.  Zero-variance
+            # reference raises at the stats layer; surface as a
+            # per-feature stability note rather than abort the whole
+            # check_drift call (the caller may want to see the other
+            # features' drift state even if one column is degenerate).
+            jsd: float | None = None
+            stability_note: str | None = None
+            if "jsd" in stats_to_compute:
+                try:
+                    if is_numeric:
+                        jsd = jensen_shannon_continuous(ref_series, cur_series)
+                    else:
+                        jsd = jensen_shannon_discrete(ref_series, cur_series)
+                except ZeroVarianceReferenceError as exc:
+                    stability_note = f"zero_variance_reference:{feature_name}"
+                    logger.warning(
+                        "drift.jsd.zero_variance_reference",
+                        extra={
+                            "drift_feature": feature_name,
+                            "drift_reason": str(exc),
+                        },
+                    )
+
+            new_cat_frac: float | None = None
+            if "new_category" in stats_to_compute:
+                new_cat_frac = _new_category_fraction(ref_series, cur_series)
+
+            # Aggregate drift detection across every computed statistic.
+            drift_detected = (
+                psi > per_col_thresholds["psi"]
+                or (is_numeric and ks_pval < per_col_thresholds["ks_pvalue"])
+                or (
+                    chi2_pval is not None
+                    and chi2_pval < per_col_thresholds["chi2_pvalue"]
+                )
+                or (jsd is not None and jsd >= per_col_thresholds["jsd"])
+                or (
+                    new_cat_frac is not None
+                    and new_cat_frac > per_col_thresholds["new_category_fraction"]
+                )
             )
             drift_type = "severe" if psi > 0.25 else "moderate" if psi > 0.1 else "none"
 
@@ -601,8 +703,31 @@ class DriftMonitor:
                     ks_pvalue=ks_pval,
                     drift_detected=drift_detected,
                     drift_type=drift_type,
+                    chi2_statistic=chi2_stat,
+                    chi2_pvalue=chi2_pval,
+                    jsd=jsd,
+                    new_category_fraction=new_cat_frac,
+                    statistics_used=sorted(stats_to_compute),
+                    stability_note=stability_note,
                 )
             )
+
+            # W26: tracker emission per spec §6.4 + todo invariant 4.
+            # Emits one ``log_metric`` per computed statistic, keyed as
+            # ``drift/{feature}/{statistic}``.  Best-effort — a tracker
+            # backend error MUST NOT abort drift detection.
+            if self._tracker is not None:
+                self._emit_feature_metrics(
+                    feature_name=feature_name,
+                    psi=psi,
+                    ks_pval=(
+                        ks_pval if is_numeric and "ks" in stats_to_compute else None
+                    ),
+                    chi2_pval=chi2_pval,
+                    jsd=jsd,
+                    new_cat_frac=new_cat_frac,
+                    drift_detected=drift_detected,
+                )
 
         overall_drift = any(f.drift_detected for f in feature_results)
         overall_severity = "none"
@@ -838,6 +963,57 @@ class DriftMonitor:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _emit_feature_metrics(
+        self,
+        *,
+        feature_name: str,
+        psi: float,
+        ks_pval: float | None,
+        chi2_pval: float | None,
+        jsd: float | None,
+        new_cat_frac: float | None,
+        drift_detected: bool,
+    ) -> None:
+        """Emit per-feature drift statistics to the configured tracker.
+
+        W26 invariant 4 + spec ``ml-drift.md §6.4``.  Keys use the
+        ``drift/{feature}/{statistic}`` shape the todo fixes; when
+        drift is detected, a sentinel ``drift/{feature}/alert`` value
+        of ``1.0`` lands so dashboards can filter alerts without a
+        separate tag system.
+        """
+        if self._tracker is None:
+            return
+
+        def _emit(key: str, value: float | None) -> None:
+            if value is None:
+                return
+            try:
+                self._tracker.log_metric(key, float(value))
+            except Exception as exc:  # noqa: BLE001 — tracker backends vary
+                # Best-effort emission; the in-memory report is the
+                # source of truth.  DEBUG because tracker outages are
+                # not drift findings.
+                logger.debug(
+                    "drift.tracker_emit_failed",
+                    extra={
+                        "drift_feature": feature_name,
+                        "drift_metric": key,
+                        "error": str(exc),
+                    },
+                )
+
+        base = f"drift/{feature_name}"
+        _emit(f"{base}/psi", psi)
+        _emit(f"{base}/ks_pvalue", ks_pval)
+        _emit(f"{base}/chi2_pvalue", chi2_pval)
+        _emit(f"{base}/jsd", jsd)
+        _emit(f"{base}/new_category_fraction", new_cat_frac)
+        # Sentinel binary alert flag — matches the todo's "+ tag
+        # 'drift_alert'" invariant.  Log aggregators and dashboards
+        # query ``drift/*/alert == 1`` to surface drifted features.
+        _emit(f"{base}/alert", 1.0 if drift_detected else 0.0)
 
     async def _store_report(self, report: DriftReport) -> None:
         """Persist a drift report to the database."""

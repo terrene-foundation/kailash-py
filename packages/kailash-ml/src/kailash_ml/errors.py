@@ -89,6 +89,7 @@ from kailash.ml.errors import (  # Fingerprint helper (classified-payload discip
     UnsupportedPrecision,
     UnsupportedTrainerError,
     WorkflowNodeMLContextError,
+    ZeroVarianceReferenceError,
     fingerprint_classified_value,
 )
 
@@ -141,6 +142,7 @@ __all__ = [
     "ReferenceNotFoundError",
     "InsufficientSamplesError",
     "DriftThresholdError",
+    "ZeroVarianceReferenceError",
     "ModelLoadError",
     "InvalidInputSchemaError",
     "RateLimitExceededError",

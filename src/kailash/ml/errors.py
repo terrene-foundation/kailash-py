@@ -559,7 +559,15 @@ class DriftThresholdError(DriftMonitorError):
     NaN, above 1.0 for PSI)."""
 
 
-# --- InferenceServerError subclasses -----------------------------------
+class ZeroVarianceReferenceError(DriftMonitorError):
+    """Raised when a reference column has ``std == 0``.
+
+    Per ``specs/ml-drift.md §3.6 MUST 2``, a reference column with zero
+    variance MUST raise rather than silently collapse to a single-bin
+    histogram — that is a data-quality finding routed to the
+    ``data_quality`` axis, not a drift finding. Error message identifies
+    the column by name.
+    """
 
 
 class ModelLoadError(InferenceServerError):
