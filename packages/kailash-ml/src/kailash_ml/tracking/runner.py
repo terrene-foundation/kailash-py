@@ -49,7 +49,7 @@ from kailash_ml.errors import (
     ParamValueError,
     TrackingError,
 )
-from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
+from kailash_ml.tracking.storage import AbstractTrackerStore, SqliteTrackerStore
 
 __all__ = [
     "ArtifactHandle",
@@ -415,29 +415,30 @@ def _validate_param_value(key: str, value: Any) -> Any:
     return value
 
 
-def _artifact_storage_root(db_path: str) -> Path:
-    """Return the directory that holds artifact bytes for ``db_path``.
-
-    - ``:memory:`` → ``~/.kailash_ml/artifacts-memory`` (tests use tmp_path)
-    - ``/foo/bar/ml.db`` → ``/foo/bar/artifacts``
-    """
-    if db_path == ":memory:":
-        return _DEFAULT_TRACKER_DIR / "artifacts-memory"
-    return Path(db_path).parent / "artifacts"
-
-
 def _hash_and_materialise_artifact(
-    db_path: str,
+    artifact_root: Optional[str],
     payload: Union[bytes, str, Path],
 ) -> tuple[bytes, str, int, str]:
     """Return ``(bytes, sha256, size, storage_uri)`` for an artifact payload.
 
+    ``artifact_root`` is the directory the backend dedicates to
+    content-addressed blobs (``AbstractTrackerStore.artifact_root``).
+    A backend returning ``None`` — e.g. a future S3-backed store
+    without a local mirror — raises :class:`TrackingError` here per
+    spec §4.3.
+
     When ``payload`` is bytes, the bytes are hashed + written to a
-    content-addressed path under the backend's artifact root. When
-    ``payload`` is a path, the file contents are read + hashed. The
-    returned ``storage_uri`` is the absolute path the bytes were
-    persisted to; callers record it verbatim in ``experiment_artifacts``.
+    content-addressed path under the root. When ``payload`` is a path,
+    the file contents are read + hashed. The returned ``storage_uri``
+    is the absolute path the bytes were persisted to; callers record
+    it verbatim in ``experiment_artifacts``.
     """
+    if artifact_root is None:
+        raise TrackingError(
+            "backend.artifact_root is None — this backend does not "
+            "support local artifact materialisation; supply a write-"
+            "through artifact store (W17)"
+        )
     if isinstance(payload, (str, Path)):
         path = Path(payload)
         if not path.is_file():
@@ -451,7 +452,7 @@ def _hash_and_materialise_artifact(
             f"got {type(payload).__name__}"
         )
     sha = hashlib.sha256(blob).hexdigest()
-    root = _artifact_storage_root(db_path)
+    root = Path(artifact_root)
     root.mkdir(parents=True, exist_ok=True)
     bucket = root / sha[:2]
     bucket.mkdir(parents=True, exist_ok=True)
@@ -664,7 +665,7 @@ class ExperimentRun:
         self,
         *,
         experiment: str,
-        backend: SQLiteTrackerBackend,
+        backend: AbstractTrackerStore,
         params: Mapping[str, Any],
         tenant_id: Optional[str],
         parent_run_id: Optional[str],
@@ -837,7 +838,7 @@ class ExperimentRun:
                 content_type=content_type,
             )
         _, sha, size, uri = _hash_and_materialise_artifact(
-            self._backend._db_path, path_or_bytes
+            self._backend.artifact_root, path_or_bytes
         )
         await self._backend.insert_artifact(
             self.run_id,
@@ -1281,7 +1282,7 @@ class ExperimentRun:
 async def track(
     experiment: str,
     *,
-    backend: Optional[SQLiteTrackerBackend] = None,
+    backend: Optional[AbstractTrackerStore] = None,
     tenant_id: Optional[str] = None,
     actor_id: Optional[str] = None,
     parent_run_id: Optional[str] = None,
@@ -1308,8 +1309,10 @@ async def track(
 
     Args:
         experiment: Experiment name (user-chosen grouping key).
-        backend: An explicit :class:`SQLiteTrackerBackend` instance. If
-            omitted, a backend is created on the default store path
+        backend: An explicit :class:`AbstractTrackerStore` instance
+            (e.g. :class:`SqliteTrackerStore` or
+            :class:`PostgresTrackerStore`). If omitted, a SQLite backend
+            is created on the default store path
             (``~/.kailash_ml/ml.db``) OR the ``store`` URI if provided.
         tenant_id: Optional tenant id. Resolution order: explicit
             kwarg > ambient ``_current_tenant_id`` contextvar > env var
@@ -1336,7 +1339,7 @@ async def track(
     """
     owns_backend = False
     if backend is None:
-        backend = SQLiteTrackerBackend(_resolve_store_path(store))
+        backend = SqliteTrackerStore(_resolve_store_path(store))
         owns_backend = True
     resolved_tenant = _resolve_tenant_id(tenant_id)
     resolved_actor = _resolve_actor_id(actor_id)

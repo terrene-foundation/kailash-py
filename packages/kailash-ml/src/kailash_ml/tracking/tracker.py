@@ -44,7 +44,7 @@ from kailash_ml.tracking.query import (
 )
 from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.runner import track as _track_async
-from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
+from kailash_ml.tracking.storage import AbstractTrackerStore, SqliteTrackerStore
 
 __all__ = ["ExperimentTracker"]
 
@@ -81,7 +81,7 @@ class ExperimentTracker:
             )
         self._store_url: Optional[str] = None
         self._default_tenant_id: Optional[str] = None
-        self._backend: Optional[SQLiteTrackerBackend] = None
+        self._backend: Optional[AbstractTrackerStore] = None
 
     # ------------------------------------------------------------------
     # Factory
@@ -136,13 +136,14 @@ class ExperimentTracker:
 
         # Open the SQLite backend against the resolved path so
         # `track()` can delegate without re-resolving the URL every
-        # call. For Postgres/MySQL the SQLiteTrackerBackend is not the
-        # right backing store — the field stays None and callers MUST
-        # pass an explicit ``backend`` to :meth:`track`. A full
-        # Postgres tracker backend is out of scope for W10.
+        # call. For Postgres/MySQL the SqliteTrackerStore is not the
+        # right backing store — callers supply a :class:`PostgresTrackerStore`
+        # (W14b) via the explicit ``backend=`` kwarg to :meth:`track`
+        # or pre-assigning ``tracker._backend`` when they need the
+        # persistent-engine shape.
         sqlite_path = _sqlite_path_for(resolved)
         if sqlite_path is not None:
-            tracker._backend = SQLiteTrackerBackend(sqlite_path)
+            tracker._backend = SqliteTrackerStore(sqlite_path)
 
         logger.info(
             "kailash_ml.tracker.ready",
@@ -254,7 +255,7 @@ class ExperimentTracker:
         if self._backend is None:
             # Lazy-construct a backend on the resolved SQLite path so
             # the pair matches the context-manager path's defaults.
-            self._backend = SQLiteTrackerBackend(
+            self._backend = SqliteTrackerStore(
                 _sqlite_path_for(self.store_url) or ":memory:"
             )
         # Resolve parent per spec §3.4 — explicit wins over ambient.
@@ -530,17 +531,18 @@ class ExperimentTracker:
     # ------------------------------------------------------------------
 
     def _require_backend(self) -> None:
-        """Raise if the tracker has no SQLite backend (Postgres path).
+        """Raise if the tracker has no backend attached.
 
-        W13 query primitives currently only implement the SQLite path
-        via :class:`SQLiteTrackerBackend`. Postgres / MySQL query
-        backends land in W14+.
+        Query primitives route through an :class:`AbstractTrackerStore`;
+        both :class:`SqliteTrackerStore` (the default) and
+        :class:`PostgresTrackerStore` (W14b) satisfy the contract.
         """
         if self._backend is None:
             raise RuntimeError(
-                "ExperimentTracker has no SQLite backend attached; "
-                "W13 query primitives require sqlite:// store URLs. "
-                "Postgres / MySQL query support lands in W14+."
+                "ExperimentTracker has no tracker store attached; "
+                "supply a SqliteTrackerStore / PostgresTrackerStore "
+                "via ExperimentTracker.create(store_url=...) or "
+                "assign tracker._backend before calling query primitives."
             )
 
     def _resolve_tenant(self, explicit: Optional[str]) -> Optional[str]:

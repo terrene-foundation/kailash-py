@@ -23,7 +23,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from kailash_ml.tracking import RunStatus, SQLiteTrackerBackend, track
+from kailash_ml.tracking import RunStatus, SqliteTrackerStore, track
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -34,13 +34,13 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 @pytest.fixture
-async def backend(tmp_path: Path) -> SQLiteTrackerBackend:
-    """Real SQLiteTrackerBackend on a real disk file.
+async def backend(tmp_path: Path) -> SqliteTrackerStore:
+    """Real SqliteTrackerStore on a real disk file.
 
     Yields + closes per ``rules/testing.md`` "Fixtures Yield + Cleanup".
     """
     db_path = tmp_path / "tracker.db"
-    be = SQLiteTrackerBackend(db_path)
+    be = SqliteTrackerStore(db_path)
     await be.initialize()
     try:
         yield be
@@ -53,7 +53,7 @@ async def backend(tmp_path: Path) -> SQLiteTrackerBackend:
 # ---------------------------------------------------------------------------
 
 
-async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
+async def test_km_track_round_trip(backend: SqliteTrackerStore) -> None:
     """The 17 auto-capture fields survive a write/read round trip."""
     async with track("round-trip-exp", backend=backend, lr=0.01, depth=5) as run:
         await run.log_param("batch_size", 128)
@@ -102,7 +102,7 @@ async def test_km_track_round_trip(backend: SQLiteTrackerBackend) -> None:
 
 
 async def test_km_track_all_17_auto_capture_fields_present(
-    backend: SQLiteTrackerBackend,
+    backend: SqliteTrackerStore,
 ) -> None:
     """Explicit whitelist check: every spec §2.4 field column exists.
 
@@ -152,7 +152,7 @@ async def test_km_track_all_17_auto_capture_fields_present(
 # ---------------------------------------------------------------------------
 
 
-async def test_km_track_status_completed(backend: SQLiteTrackerBackend) -> None:
+async def test_km_track_status_completed(backend: SqliteTrackerStore) -> None:
     """Clean exit -> status=FINISHED, no error fields.
 
     W11 renamed the terminal status from legacy ``COMPLETED`` to
@@ -168,7 +168,7 @@ async def test_km_track_status_completed(backend: SQLiteTrackerBackend) -> None:
     assert row["error_message"] is None
 
 
-async def test_km_track_status_failed(backend: SQLiteTrackerBackend) -> None:
+async def test_km_track_status_failed(backend: SqliteTrackerStore) -> None:
     """Raise inside body -> status=FAILED, exc captured."""
     run_id: str | None = None
     with pytest.raises(RuntimeError, match="training diverged"):
@@ -184,7 +184,7 @@ async def test_km_track_status_failed(backend: SQLiteTrackerBackend) -> None:
     assert "training diverged" in row["error_message"]
 
 
-async def test_km_track_status_killed(backend: SQLiteTrackerBackend) -> None:
+async def test_km_track_status_killed(backend: SqliteTrackerStore) -> None:
     """KeyboardInterrupt inside body -> status=KILLED.
 
     Per ``specs/ml-tracking.md`` §2.2 the context manager MUST record
@@ -208,7 +208,7 @@ async def test_km_track_status_killed(backend: SQLiteTrackerBackend) -> None:
 
 
 async def test_km_track_status_killed_via_signal_handler(
-    backend: SQLiteTrackerBackend,
+    backend: SqliteTrackerStore,
 ) -> None:
     """The process-level SIGINT handler flips every active ``_killed`` flag.
 
@@ -238,7 +238,7 @@ async def test_km_track_status_killed_via_signal_handler(
 # ---------------------------------------------------------------------------
 
 
-async def test_km_track_nested_runs(backend: SQLiteTrackerBackend) -> None:
+async def test_km_track_nested_runs(backend: SqliteTrackerStore) -> None:
     """Child run's parent_run_id matches the enclosing run."""
     parent_id: str | None = None
     child_id: str | None = None
@@ -260,7 +260,7 @@ async def test_km_track_nested_runs(backend: SQLiteTrackerBackend) -> None:
 
 
 async def test_km_track_tenant_from_env(
-    backend: SQLiteTrackerBackend,
+    backend: SqliteTrackerStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``KAILASH_TENANT_ID`` env var populates ``tenant_id`` when no kwarg."""
@@ -273,7 +273,7 @@ async def test_km_track_tenant_from_env(
 
 
 async def test_km_track_tenant_explicit_overrides_env(
-    backend: SQLiteTrackerBackend,
+    backend: SqliteTrackerStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Explicit ``tenant_id=`` kwarg wins over the env var."""
@@ -290,7 +290,7 @@ async def test_km_track_tenant_explicit_overrides_env(
 
 
 async def test_km_track_integrates_trainable_device_report(
-    backend: SQLiteTrackerBackend,
+    backend: SqliteTrackerStore,
 ) -> None:
     """Attaching a real ``TrainingResult`` populates device fields.
 

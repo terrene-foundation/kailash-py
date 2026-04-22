@@ -43,6 +43,9 @@ from kailash_ml.tracking.runner import (
     _validate_param_value,
     _validate_tag_key,
 )
+from kailash_ml.tracking.storage.sqlite import (  # noqa: F401 — referenced by monkeypatch blocks
+    SqliteTrackerStore as _SqliteTrackerStore,
+)
 
 # Module-wide asyncio marker applied selectively per class via decorators
 # below so pure-helper tests (TestValidators / TestFigureSerialisation)
@@ -247,12 +250,11 @@ class TestLogArtifact:
         self, tmp_path: Path, monkeypatch
     ) -> None:
         # Override artifact root so dedupe is tested against tmp_path.
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         tracker = await _mk_tracker()
         try:
@@ -281,12 +283,11 @@ class TestLogArtifact:
             await tracker.close()
 
     async def test_accepts_filesystem_path(self, tmp_path: Path, monkeypatch) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         path = tmp_path / "weights.bin"
         path.write_bytes(b"\x00\x01\x02\x03")
@@ -305,12 +306,11 @@ class TestLogFigure:
     async def test_plotly_is_logged_as_plotly_json(
         self, tmp_path: Path, monkeypatch
     ) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         tracker = await _mk_tracker()
         try:
@@ -325,12 +325,11 @@ class TestLogFigure:
     async def test_matplotlib_is_logged_as_png(
         self, tmp_path: Path, monkeypatch
     ) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         tracker = await _mk_tracker()
         try:
@@ -344,12 +343,11 @@ class TestLogFigure:
 @pytest.mark.asyncio
 class TestLogModel:
     async def test_signature_is_mandatory(self, tmp_path, monkeypatch) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         tracker = await _mk_tracker()
         try:
@@ -360,12 +358,11 @@ class TestLogModel:
             await tracker.close()
 
     async def test_snapshot_row_written(self, tmp_path, monkeypatch) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         tracker = await _mk_tracker()
         try:
@@ -480,12 +477,11 @@ class TestAttachTrainingResultAsync:
     async def test_flattens_metrics_and_hyperparameters(
         self, tmp_path, monkeypatch
     ) -> None:
-        from kailash_ml.tracking import runner as _runner
 
         monkeypatch.setattr(
-            _runner,
-            "_artifact_storage_root",
-            lambda _db: tmp_path / "artifacts",
+            _SqliteTrackerStore,
+            "artifact_root",
+            property(lambda self, _r=tmp_path / "artifacts": str(_r)),
         )
         device = DeviceReport(
             family="cpu",

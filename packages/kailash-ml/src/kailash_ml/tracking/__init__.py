@@ -6,12 +6,16 @@ Implements the Phase 6 / ``specs/ml-tracking.md`` §2 contract for the
 ``km.track()`` async-context entry point. The public surface is:
 
 - :class:`ExperimentRun` — async context manager yielded by ``km.track()``
-- :class:`SQLiteTrackerBackend` — the default SQLite-backed store
+- :class:`AbstractTrackerStore` — Protocol both backends satisfy
+- :class:`SqliteTrackerStore` — SQLite via :class:`AsyncSQLitePool`
+  (default — W14b ``specs/ml-tracking.md`` §6.1)
+- :class:`PostgresTrackerStore` — PostgreSQL via
+  :class:`kailash.db.connection.ConnectionManager` (production multi-user)
 - :func:`track` — the async-context factory (``km.track`` is an alias)
 
-The SQLite backend is the default because it closes the user-reported
-pain point #8 in ``workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md``
-(requiring external tracker infrastructure for single-laptop workflows).
+The SQLite backend is the default because it closes user pain point
+#8 in ``workspaces/kailash-ml-audit/analysis/00-synthesis-redesign-proposal.md``
+(no external tracker infrastructure for single-laptop workflows).
 """
 from __future__ import annotations
 
@@ -29,7 +33,11 @@ from kailash_ml.tracking.runner import ExperimentRun, RunStatus, _current_actor_
 from kailash_ml.tracking.runner import _current_run
 from kailash_ml.tracking.runner import _current_run as current_run
 from kailash_ml.tracking.runner import _current_tenant_id, track
-from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
+from kailash_ml.tracking.storage import (
+    AbstractTrackerStore,
+    PostgresTrackerStore,
+    SqliteTrackerStore,
+)
 from kailash_ml.tracking.tracker import ExperimentTracker
 
 
@@ -72,19 +80,21 @@ def get_current_actor_id() -> Optional[str]:
 
 
 __all__ = [
+    "AbstractTrackerStore",
     "EnvDelta",
     "ExperimentRun",
     "ExperimentTracker",
     "FilterParseError",
     "MetricDelta",
     "ParamDelta",
+    "PostgresTrackerStore",
     "RunDiff",
     "RunRecord",
     "RunStatus",
-    "SQLiteTrackerBackend",
-    "track",
+    "SqliteTrackerStore",
     "current_run",
+    "get_current_actor_id",
     "get_current_run",
     "get_current_tenant_id",
-    "get_current_actor_id",
+    "track",
 ]

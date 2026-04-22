@@ -634,7 +634,7 @@ def compute_run_diff(
     """Produce a :class:`RunDiff` from two records + their metric rows.
 
     ``metrics_*`` comes from
-    :meth:`SQLiteTrackerBackend.list_metrics` — ordered by
+    :meth:`AbstractTrackerStore.list_metrics` — ordered by
     ``(key, step, id)`` so per-step frames can be assembled without a
     resort. The spec (§5.3) defines ``reproducibility_risk`` as
     ``True`` when the git_sha AND the cuda_version differ AND any
