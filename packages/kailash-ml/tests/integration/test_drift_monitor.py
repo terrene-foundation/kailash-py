@@ -226,9 +226,16 @@ async def test_multiple_drift_reports_persisted(monitor: DriftMonitor) -> None:
 
 @pytest.mark.integration
 async def test_no_reference_raises(monitor: DriftMonitor) -> None:
-    """check_drift without set_reference_data raises ValueError."""
+    """check_drift without set_reference_data raises ReferenceNotFoundError.
+
+    W26.b: spec ``ml-drift.md §4.6`` mandates a typed error (not
+    ``ValueError``) so callers can catch the specific missing-reference
+    case without false-positive matches against other ValueError paths.
+    """
+    from kailash_ml.errors import ReferenceNotFoundError
+
     current = pl.DataFrame({"val": [1.0, 2.0, 3.0]})
-    with pytest.raises(ValueError, match="No reference set"):
+    with pytest.raises(ReferenceNotFoundError, match="No reference set"):
         await monitor.check_drift("nonexistent", current)
 
 

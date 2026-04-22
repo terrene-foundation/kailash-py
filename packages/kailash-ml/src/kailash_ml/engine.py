@@ -34,6 +34,7 @@ from typing import Any, Mapping, Optional, Union
 from kailash_ml._device import BackendInfo, detect_backend
 from kailash_ml._results import PredictionResult, ServeResult
 from kailash_ml.engines import _engine_sql as _sql
+from kailash_ml.errors import ReferenceNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -1938,9 +1939,12 @@ class MLEngine:
             # monitor's current-window stats as a side effect of its
             # comparison against the reference window.
             await drift_monitor.check_drift(model_name, data)
-        except ValueError as exc:
+        except (ValueError, ReferenceNotFoundError) as exc:
             # No reference set is expected for first-call live runs —
             # log at INFO, do not raise (the evaluation itself succeeded).
+            # W26.b: check_drift now raises typed ReferenceNotFoundError;
+            # legacy ValueError retained for backward-compat with older
+            # monitor builds.
             logger.info(
                 "evaluate.drift.no_reference",
                 extra={

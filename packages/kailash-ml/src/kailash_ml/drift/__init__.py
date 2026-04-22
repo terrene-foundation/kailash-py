@@ -16,6 +16,10 @@ and ``§3.6`` for the pinned smoothing-constant contract.
 """
 from __future__ import annotations
 
+from kailash_ml.drift.policy import (
+    DriftMonitorReferencePolicy,
+    DriftPolicyMode,
+)
 from kailash_ml.drift.stats import (
     JSD_SMOOTH_EPS,
     KL_SMOOTH_EPS,
@@ -29,6 +33,8 @@ from kailash_ml.drift.stats import (
 )
 
 __all__ = [
+    "DriftMonitorReferencePolicy",
+    "DriftPolicyMode",
     "DriftThresholds",
     "JSD_SMOOTH_EPS",
     "KL_SMOOTH_EPS",

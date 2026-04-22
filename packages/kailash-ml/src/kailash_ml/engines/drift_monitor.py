@@ -19,12 +19,13 @@ import json
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
 import polars as pl
+from kailash_ml.drift.policy import DriftMonitorReferencePolicy
 from kailash_ml.drift.stats import (
     DriftThresholds,
     chi2_test,
@@ -33,7 +34,13 @@ from kailash_ml.drift.stats import (
     new_category_fraction as _new_category_fraction,
     select_statistics,
 )
-from kailash_ml.errors import ZeroVarianceReferenceError
+from kailash_ml.errors import (
+    DriftMonitorError,
+    DriftThresholdError,
+    InsufficientSamplesError,
+    ReferenceNotFoundError,
+    ZeroVarianceReferenceError,
+)
 from kailash_ml.types import AgentInfusionProtocol
 from scipy.stats import ks_2samp
 
@@ -263,7 +270,15 @@ class DriftSpec:
 
 @dataclass
 class _StoredReference:
-    """In-memory representation of stored reference data."""
+    """In-memory representation of stored reference data.
+
+    W26.b: ``policy`` / ``timestamp_column`` / ``raw_data`` support
+    non-static reference-refresh modes per ``specs/ml-drift.md §4.5``.
+    ``data`` (per-feature Series) is retained for static-mode fast path
+    so existing code paths are unaffected. ``raw_data`` holds the full
+    reference DataFrame only when ``policy.mode != "static"`` — static
+    monitors keep the lightweight per-feature Series form.
+    """
 
     model_name: str
     feature_columns: list[str]
@@ -271,6 +286,15 @@ class _StoredReference:
     statistics: dict[str, Any]  # per-feature stats
     sample_size: int
     set_at: datetime
+    policy: DriftMonitorReferencePolicy = field(
+        default_factory=DriftMonitorReferencePolicy
+    )
+    timestamp_column: str | None = None
+    raw_data: pl.DataFrame | None = None
+    # Sliding-mode refresh cadence memoisation: (last_refresh_at, cached_slice).
+    # Rolling-mode recomputes on every check so this stays None.
+    _cached_slice_at: datetime | None = None
+    _cached_slice: pl.DataFrame | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -378,21 +402,79 @@ def _compute_ks(reference: pl.Series, current: pl.Series) -> tuple[float, float]
 
 
 # ---------------------------------------------------------------------------
+# Datetime dtype helper
+# ---------------------------------------------------------------------------
+
+
+def _is_datetime_dtype(dtype: Any) -> bool:
+    """Accept any parameterisation of ``pl.Datetime``.
+
+    ``pl.Datetime`` is parameterised by ``(time_unit, time_zone)`` in
+    modern polars, so ``dtype == pl.Datetime`` is False for e.g.
+    ``Datetime('us', 'UTC')``. This helper walks the standard escape
+    hatches so every supported shape is accepted.
+    """
+    try:
+        # Polars ≥0.20: Datetime instances provide base_type().
+        if hasattr(dtype, "base_type"):
+            base = dtype.base_type()
+            if base == pl.Datetime:
+                return True
+    except Exception:  # noqa: BLE001 — defensive for dtype API drift
+        pass
+    try:
+        if isinstance(dtype, pl.Datetime):
+            return True
+    except TypeError:
+        # Older polars raised if pl.Datetime was a class-like singleton.
+        pass
+    return dtype == pl.Datetime
+
+
+# ---------------------------------------------------------------------------
 # SQL helpers
 # ---------------------------------------------------------------------------
 
 
 async def _create_drift_tables(conn: ConnectionManager) -> None:
-    """Create drift monitor tables if they do not exist."""
+    """Create drift monitor tables if they do not exist.
+
+    W26.b extends ``_kml_drift_references`` with ``policy_json`` and
+    ``timestamp_column`` to persist ``DriftMonitorReferencePolicy``
+    configuration. Both columns are NULL by default, preserving
+    static-mode semantics for references written prior to the
+    migration.
+    """
     await conn.execute(
         "CREATE TABLE IF NOT EXISTS _kml_drift_references ("
         "  model_name TEXT PRIMARY KEY,"
         "  feature_columns TEXT NOT NULL,"
         "  statistics TEXT NOT NULL,"
         "  sample_size INTEGER NOT NULL,"
-        "  set_at TEXT NOT NULL"
+        "  set_at TEXT NOT NULL,"
+        "  policy_json TEXT,"
+        "  timestamp_column TEXT"
         ")"
     )
+    # Best-effort migration for DBs created before W26.b. SQLite's
+    # `ALTER TABLE ADD COLUMN` is idempotent-safe only when wrapped in
+    # a try/except — a blanket `IF NOT EXISTS` variant does not exist
+    # pre-3.35 and is dialect-specific. We swallow the "duplicate
+    # column" error after the first migration and log at DEBUG.
+    for col_ddl in (
+        "ALTER TABLE _kml_drift_references ADD COLUMN policy_json TEXT",
+        "ALTER TABLE _kml_drift_references ADD COLUMN timestamp_column TEXT",
+    ):
+        try:
+            await conn.execute(col_ddl)
+        except Exception as exc:  # noqa: BLE001 — dialect-agnostic idempotency
+            logger.debug(
+                "drift.migration.alter_table_ignored",
+                extra={
+                    "drift_ddl": col_ddl,
+                    "drift_reason": str(exc),
+                },
+            )
     await conn.execute(
         "CREATE TABLE IF NOT EXISTS _kml_drift_reports ("
         "  id TEXT PRIMARY KEY,"
@@ -474,6 +556,12 @@ class DriftMonitor:
         self._max_references = 100
         # Scheduled monitoring tasks
         self._scheduled_tasks: dict[str, asyncio.Task[None]] = {}
+        # W26.b: minimum rows in a policy-sliced reference before
+        # check_drift will run the statistics. Below this raise
+        # InsufficientSamplesError rather than emit a report computed
+        # against a sparse slice — slice sparsity itself is a data
+        # finding, not a drift one.
+        self._min_slice_samples: int = 10
 
     async def _ensure_tables(self) -> None:
         if not self._initialized:
@@ -481,31 +569,16 @@ class DriftMonitor:
             self._initialized = True
 
     # ------------------------------------------------------------------
-    # set_reference_data
+    # Per-feature summary statistics (extracted so both set_reference_data
+    # and policy-driven slicing in check_drift can re-derive them).
     # ------------------------------------------------------------------
 
-    async def set_reference_data(
-        self,
-        model_name: str,
+    @staticmethod
+    def _compute_reference_summary(
         reference_data: pl.DataFrame,
         feature_columns: list[str],
-    ) -> None:
-        """Store per-feature reference distribution.
-
-        Parameters
-        ----------
-        model_name:
-            Model identifier.
-        reference_data:
-            Reference dataset.
-        feature_columns:
-            Columns to monitor for drift.
-        """
-        await self._ensure_tables()
-
-        now = datetime.now(timezone.utc)
-
-        # Compute per-feature statistics
+    ) -> tuple[dict[str, pl.Series], dict[str, Any]]:
+        """Return (per-feature Series dict, per-feature stats dict)."""
         statistics: dict[str, Any] = {}
         data_series: dict[str, pl.Series] = {}
         for col in feature_columns:
@@ -531,6 +604,186 @@ class DriftMonitor:
                     "n": len(num),
                 }
             statistics[col] = stats
+        return data_series, statistics
+
+    # ------------------------------------------------------------------
+    # Policy-driven reference slicing (W26.b) — returns the effective
+    # reference DataFrame for a given ``checked_at``. Static mode
+    # short-circuits to the original frame; rolling/sliding/seasonal
+    # filter on the stored timestamp column.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _slice_reference(
+        reference: _StoredReference,
+        checked_at: datetime,
+    ) -> pl.DataFrame:
+        """Return the policy-appropriate reference slice.
+
+        Contract:
+        - ``static``: returns the full raw frame unchanged.
+        - ``rolling``: returns rows in ``[checked_at - window, checked_at)``.
+        - ``sliding``: same as rolling but memoised per ``refresh_cadence``.
+        - ``seasonal``: returns rows in ``[checked_at - period - tol,
+          checked_at - period + tol]`` where ``tol`` is ``policy.window``
+          or a sensible default.
+
+        Raises
+        ------
+        DriftMonitorError
+            When policy != static but no raw reference / timestamp
+            column was stored.
+        """
+        policy = reference.policy
+        if policy.mode == "static":
+            if reference.raw_data is None:
+                # Pure static-mode path — raw_data isn't stored.
+                # _slice_reference is only called for non-static modes
+                # from check_drift, so this branch is defensive.
+                return pl.DataFrame({name: s for name, s in reference.data.items()})
+            return reference.raw_data
+
+        if reference.raw_data is None or reference.timestamp_column is None:
+            raise DriftMonitorError(
+                reason=(
+                    "Non-static DriftMonitorReferencePolicy requires raw "
+                    "reference_data and a timestamp_column; set_reference_data "
+                    "may not have been called with these arguments"
+                ),
+                resource_id=reference.model_name,
+            )
+
+        ts_col = reference.timestamp_column
+        raw = reference.raw_data
+
+        if policy.mode in ("rolling", "sliding"):
+            if policy.mode == "sliding":
+                cadence = policy.refresh_cadence
+                if (
+                    cadence is not None
+                    and reference._cached_slice is not None
+                    and reference._cached_slice_at is not None
+                    and (checked_at - reference._cached_slice_at) < cadence
+                ):
+                    return reference._cached_slice
+            assert policy.window is not None
+            lower = checked_at - policy.window
+            sliced = raw.filter(
+                (pl.col(ts_col) >= lower) & (pl.col(ts_col) < checked_at)
+            )
+            if policy.mode == "sliding":
+                reference._cached_slice_at = checked_at
+                reference._cached_slice = sliced
+            return sliced
+
+        # mode == "seasonal"
+        assert policy.seasonal_period is not None
+        anchor = checked_at - policy.seasonal_period
+        # Tolerance defaults to the explicit policy.window if set,
+        # else 1/24 of the seasonal period (approx. one hour for a
+        # weekly period) with a minimum of one hour so intra-hour
+        # rounding never produces empty slices.
+        if policy.window is not None:
+            tol = policy.window
+        else:
+            tol = max(policy.seasonal_period / 24, timedelta(hours=1))
+        lower = anchor - tol
+        upper = anchor + tol
+        return raw.filter((pl.col(ts_col) >= lower) & (pl.col(ts_col) <= upper))
+
+    # ------------------------------------------------------------------
+    # set_reference_data
+    # ------------------------------------------------------------------
+
+    async def set_reference_data(
+        self,
+        model_name: str,
+        reference_data: pl.DataFrame,
+        feature_columns: list[str],
+        *,
+        policy: DriftMonitorReferencePolicy | None = None,
+        timestamp_column: str | None = None,
+    ) -> None:
+        """Store per-feature reference distribution.
+
+        Parameters
+        ----------
+        model_name:
+            Model identifier.
+        reference_data:
+            Reference dataset.
+        feature_columns:
+            Columns to monitor for drift.
+        policy:
+            Optional :class:`DriftMonitorReferencePolicy`. When ``None``
+            or ``policy.mode == "static"`` the monitor retains the
+            pre-W26.b lightweight per-feature Series form. Non-static
+            policies require ``timestamp_column`` and persist the full
+            reference DataFrame so slicing is deterministic.
+        timestamp_column:
+            Required when ``policy.mode != "static"``. MUST name a
+            ``pl.Datetime`` column in ``reference_data``.
+
+        Raises
+        ------
+        DriftThresholdError
+            When non-static policy is supplied without a valid
+            timestamp column.
+        """
+        await self._ensure_tables()
+
+        resolved_policy = policy or DriftMonitorReferencePolicy()
+
+        if resolved_policy.mode != "static":
+            if timestamp_column is None:
+                raise DriftThresholdError(
+                    reason=(
+                        f"DriftMonitorReferencePolicy.mode={resolved_policy.mode!r} "
+                        "requires timestamp_column"
+                    ),
+                    resource_id=model_name,
+                )
+            if timestamp_column not in reference_data.columns:
+                raise DriftThresholdError(
+                    reason=(
+                        f"timestamp_column={timestamp_column!r} not present in "
+                        f"reference_data columns={list(reference_data.columns)!r}"
+                    ),
+                    resource_id=model_name,
+                )
+            ts_dtype = reference_data[timestamp_column].dtype
+            if not _is_datetime_dtype(ts_dtype):
+                raise DriftThresholdError(
+                    reason=(
+                        f"timestamp_column={timestamp_column!r} MUST be "
+                        f"pl.Datetime, got {ts_dtype!r}"
+                    ),
+                    resource_id=model_name,
+                )
+        elif timestamp_column is not None:
+            # Accept timestamp_column for static mode as a forward-compat
+            # storage hint but raise if it's missing from the frame.
+            if timestamp_column not in reference_data.columns:
+                raise DriftThresholdError(
+                    reason=(
+                        f"timestamp_column={timestamp_column!r} not present in "
+                        f"reference_data columns={list(reference_data.columns)!r}"
+                    ),
+                    resource_id=model_name,
+                )
+
+        now = datetime.now(timezone.utc)
+
+        data_series, statistics = self._compute_reference_summary(
+            reference_data, feature_columns
+        )
+
+        # Keep the full raw frame for non-static policies so
+        # check_drift can slice deterministically. Static mode retains
+        # its lightweight per-feature Series form for backward compat.
+        raw_data: pl.DataFrame | None = (
+            reference_data if resolved_policy.mode != "static" else None
+        )
 
         ref = _StoredReference(
             model_name=model_name,
@@ -539,6 +792,9 @@ class DriftMonitor:
             statistics=statistics,
             sample_size=reference_data.height,
             set_at=now,
+            policy=resolved_policy,
+            timestamp_column=timestamp_column,
+            raw_data=raw_data,
         )
         self._references[model_name] = ref
         # Evict oldest references if over limit
@@ -549,6 +805,8 @@ class DriftMonitor:
             else:
                 break
 
+        policy_json = json.dumps(resolved_policy.to_dict())
+
         # Persist to database (transaction eliminates TOCTOU race)
         async with self._conn.transaction() as tx:
             existing = await tx.fetchone(
@@ -558,24 +816,30 @@ class DriftMonitor:
             if existing:
                 await tx.execute(
                     "UPDATE _kml_drift_references "
-                    "SET feature_columns = ?, statistics = ?, sample_size = ?, set_at = ? "
+                    "SET feature_columns = ?, statistics = ?, sample_size = ?, "
+                    "    set_at = ?, policy_json = ?, timestamp_column = ? "
                     "WHERE model_name = ?",
                     json.dumps(feature_columns),
                     json.dumps(statistics, default=str),
                     reference_data.height,
                     now.isoformat(),
+                    policy_json,
+                    timestamp_column,
                     model_name,
                 )
             else:
                 await tx.execute(
                     "INSERT INTO _kml_drift_references "
-                    "(model_name, feature_columns, statistics, sample_size, set_at) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "(model_name, feature_columns, statistics, sample_size, "
+                    " set_at, policy_json, timestamp_column) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     model_name,
                     json.dumps(feature_columns),
                     json.dumps(statistics, default=str),
                     reference_data.height,
                     now.isoformat(),
+                    policy_json,
+                    timestamp_column,
                 )
 
         logger.info(
@@ -595,6 +859,7 @@ class DriftMonitor:
         current_data: pl.DataFrame,
         *,
         agent: AgentInfusionProtocol | None = None,
+        checked_at: datetime | None = None,
     ) -> DriftReport:
         """Check feature drift against stored reference.
 
@@ -606,6 +871,11 @@ class DriftMonitor:
             Current dataset to compare.
         agent:
             Optional agent for drift interpretation.
+        checked_at:
+            Wall-clock anchor used to slice the reference when the
+            model's policy is non-static. Defaults to
+            ``datetime.now(timezone.utc)``. Tests MUST pin this so the
+            time axis is deterministic.
 
         Returns
         -------
@@ -613,21 +883,63 @@ class DriftMonitor:
 
         Raises
         ------
-        ValueError
+        ReferenceNotFoundError
             If no reference is set for the model.
+        InsufficientSamplesError
+            If a non-static policy's slice contains fewer than
+            ``_min_slice_samples`` rows.
         """
         await self._ensure_tables()
 
         reference = self._references.get(model_name)
         if reference is None:
-            raise ValueError(
-                f"No reference set for model '{model_name}'. Call set_reference_data() first."
+            raise ReferenceNotFoundError(
+                reason=(
+                    f"No reference set for model {model_name!r}. "
+                    "Call set_reference_data() first."
+                ),
+                resource_id=model_name,
             )
+
+        resolved_checked_at = checked_at or datetime.now(timezone.utc)
+
+        logger.info(
+            "drift.check.start",
+            extra={
+                "drift_model_name": model_name,
+                "drift_mode": reference.policy.mode,
+                "drift_checked_at": resolved_checked_at.isoformat(),
+            },
+        )
+
+        # Policy-driven reference re-materialisation. Static mode keeps
+        # the stored per-feature Series form; non-static modes re-slice
+        # and recompute the summary against the sliced window.
+        if reference.policy.mode == "static":
+            effective_ref_series: dict[str, pl.Series] = reference.data
+            effective_sample_size = reference.sample_size
+        else:
+            sliced = self._slice_reference(reference, resolved_checked_at)
+            min_samples = self._min_slice_samples
+            if sliced.height < min_samples:
+                raise InsufficientSamplesError(
+                    reason=(
+                        f"Policy-sliced reference for model {model_name!r} "
+                        f"has {sliced.height} rows; require >= {min_samples}"
+                    ),
+                    resource_id=model_name,
+                    mode=reference.policy.mode,
+                    checked_at=resolved_checked_at.isoformat(),
+                )
+            effective_ref_series, _ = self._compute_reference_summary(
+                sliced, reference.feature_columns
+            )
+            effective_sample_size = sliced.height
 
         feature_results: list[FeatureDriftResult] = []
 
         for feature_name in reference.feature_columns:
-            ref_series = reference.data[feature_name]
+            ref_series = effective_ref_series[feature_name]
             if feature_name not in current_data.columns:
                 logger.warning(
                     "Feature '%s' not in current data, skipping.", feature_name
@@ -742,14 +1054,24 @@ class DriftMonitor:
             feature_results=feature_results,
             overall_drift_detected=overall_drift,
             overall_severity=overall_severity,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=resolved_checked_at,
             reference_set_at=reference.set_at,
-            sample_size_reference=reference.sample_size,
+            sample_size_reference=effective_sample_size,
             sample_size_current=current_data.height,
         )
 
         # Store report
         await self._store_report(report)
+
+        logger.info(
+            "drift.check.ok",
+            extra={
+                "drift_model_name": model_name,
+                "drift_mode": reference.policy.mode,
+                "drift_overall_drift": overall_drift,
+                "drift_overall_severity": overall_severity,
+            },
+        )
 
         # Optional agent interpretation
         if agent is not None and report.overall_drift_detected:
