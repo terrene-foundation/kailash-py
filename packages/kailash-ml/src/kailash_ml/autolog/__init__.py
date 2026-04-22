@@ -46,7 +46,9 @@ from kailash_ml.autolog.config import AutologConfig, AutologHandle
 # does NOT pull sklearn / lightgbm / lightning into sys.modules.
 from kailash_ml.autolog import _lightgbm  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _lightning  # noqa: F401 — registration side-effect
+from kailash_ml.autolog import _polars  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _sklearn  # noqa: F401 — registration side-effect
+from kailash_ml.autolog import _statsmodels  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _transformers  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _xgboost  # noqa: F401 — registration side-effect
 
