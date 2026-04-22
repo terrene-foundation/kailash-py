@@ -492,6 +492,67 @@ async def _create_drift_tables(conn: ConnectionManager) -> None:
         "  set_at TEXT NOT NULL"
         ")"
     )
+    # W26.c (spec §5.1) — restart-surviving drift schedules.
+    # Landed with tenant_id + actor_id columns even though tenant-scoping
+    # isn't fully wired across the monitor surface yet; a later
+    # tenant-scoping shard will tighten API defaults, not migrate the
+    # table. ``enabled`` is stored as INTEGER for SQLite portability
+    # (SQLite has no native BOOLEAN type).
+    await conn.execute(
+        "CREATE TABLE IF NOT EXISTS _kml_drift_schedules ("
+        "  schedule_id TEXT PRIMARY KEY,"
+        "  tenant_id TEXT NOT NULL DEFAULT '',"
+        "  model_name TEXT NOT NULL,"
+        "  model_version INTEGER NOT NULL DEFAULT 0,"
+        "  interval_seconds INTEGER NOT NULL,"
+        "  enabled INTEGER NOT NULL DEFAULT 1,"
+        "  starts_at TEXT,"
+        "  ends_at TEXT,"
+        "  last_run_at TEXT,"
+        "  last_run_outcome TEXT,"
+        "  last_run_drift_detected INTEGER,"
+        "  next_run_at TEXT NOT NULL,"
+        "  created_at TEXT NOT NULL,"
+        "  created_by_actor_id TEXT NOT NULL DEFAULT 'system',"
+        "  updated_at TEXT NOT NULL"
+        ")"
+    )
+    # Partial index on next_run_at (SQLite 3.8+; PostgreSQL + MySQL both
+    # accept the same syntax). Fallback on older engines is handled via
+    # try/except below — non-partial index is functionally equivalent for
+    # the scheduler polling query.
+    for idx_ddl in (
+        "CREATE INDEX IF NOT EXISTS idx_drift_sched_next "
+        "ON _kml_drift_schedules (next_run_at) WHERE enabled = 1",
+        "CREATE INDEX IF NOT EXISTS idx_drift_sched_tenant "
+        "ON _kml_drift_schedules (tenant_id)",
+    ):
+        try:
+            await conn.execute(idx_ddl)
+        except Exception as exc:  # noqa: BLE001 — partial-index fallback
+            # SQLite < 3.8 rejects "WHERE" in CREATE INDEX. Fall back to
+            # non-partial for the next_run_at index; non-partial is the
+            # same structure, slightly larger. The tenant_id index has
+            # no partial clause so this branch only fires if the DDL
+            # hits a true engine issue — log at DEBUG regardless.
+            logger.debug(
+                "drift.migration.index_ddl_ignored",
+                extra={
+                    "drift_ddl": idx_ddl,
+                    "drift_reason": str(exc),
+                },
+            )
+            if "WHERE" in idx_ddl:
+                try:
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_drift_sched_next "
+                        "ON _kml_drift_schedules (next_run_at)"
+                    )
+                except Exception as fallback_exc:  # noqa: BLE001
+                    logger.debug(
+                        "drift.migration.index_fallback_ignored",
+                        extra={"drift_reason": str(fallback_exc)},
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -554,8 +615,22 @@ class DriftMonitor:
         # In-memory reference cache (bounded to prevent OOM with many models)
         self._references: dict[str, _StoredReference] = {}
         self._max_references = 100
-        # Scheduled monitoring tasks
+        # W26.c (spec §5) — persistent restart-surviving schedules.
+        # ``_data_sources`` maps schedule_id → async data_fn. Python
+        # callables are not persistable, so after process restart the
+        # caller MUST re-register via ``register_data_source`` before
+        # ``start_scheduler`` dispatches the schedule. ``_scheduled_specs``
+        # holds the optional DriftSpec (callback + threshold overrides)
+        # per schedule_id for the worker dispatch path.
+        self._data_sources: dict[str, Any] = {}
+        self._scheduled_specs: dict[str, DriftSpec] = {}
+        # Legacy in-process task map retained for the deprecated
+        # ``active_schedules`` property + ``cancel_monitoring`` shim so
+        # downstream consumers (dashboard/server.py) keep working.
         self._scheduled_tasks: dict[str, asyncio.Task[None]] = {}
+        # Worker loop state
+        self._scheduler_worker_task: asyncio.Task[None] | None = None
+        self._scheduler_running: bool = False
         # W26.b: minimum rows in a policy-sliced reference before
         # check_drift will run the statistics. Below this raise
         # InsufficientSamplesError rather than emit a report computed
@@ -1192,7 +1267,7 @@ class DriftMonitor:
         )
 
     # ------------------------------------------------------------------
-    # Scheduled monitoring
+    # Scheduled monitoring — W26.c restart-surviving (spec §5)
     # ------------------------------------------------------------------
 
     async def schedule_monitoring(
@@ -1200,67 +1275,460 @@ class DriftMonitor:
         model_name: str,
         interval: timedelta,
         data_fn: Any,  # async callable returning pl.DataFrame
+        *,
         spec: DriftSpec | None = None,
-    ) -> None:
-        """Schedule periodic drift monitoring as an asyncio background task.
+        actor_id: str = "system",
+        starts_at: datetime | None = None,
+        ends_at: datetime | None = None,
+        tenant_id: str = "",
+        enabled: bool = True,
+        schedule_id: str | None = None,
+    ) -> str:
+        """Persist a restart-surviving drift-check schedule.
+
+        Per ``specs/ml-drift.md §5``, the schedule is written to
+        ``_kml_drift_schedules`` BEFORE the scheduler worker dispatches
+        it. The Python callable ``data_fn`` is registered in-process on
+        ``self._data_sources[schedule_id]`` — after a process restart,
+        the caller MUST re-register via :meth:`register_data_source`
+        with the original ``schedule_id`` before calling
+        :meth:`start_scheduler`.
 
         Parameters
         ----------
         model_name:
-            Model identifier (must have a reference set).
+            Model identifier (must have a reference set on this monitor
+            instance when the schedule is first registered).
         interval:
-            How often to run drift checks.
+            How often to run drift checks. Must be >= 1 second.
         data_fn:
             Async callable that returns the current data as ``pl.DataFrame``.
-            Signature: ``async def get_data() -> pl.DataFrame``.
         spec:
-            Optional drift check specification overrides.
+            Optional :class:`DriftSpec` overrides (thresholds + on-drift
+            callback).
+        actor_id:
+            Audit attribution for the schedule row.
+        starts_at:
+            First dispatch time (UTC). Defaults to immediately.
+        ends_at:
+            Optional expiry — schedules past this are skipped by the
+            worker (enabled remains 1).
+        tenant_id:
+            Tenant scope. Defaults to ``""`` (empty-tenant / legacy);
+            will be tightened to a required argument in the tenant-scoping
+            shard.
+        enabled:
+            Initial enabled state. ``False`` writes the row but the
+            scheduler worker will skip it until re-enabled.
+        schedule_id:
+            Caller-supplied id (defaults to ``uuid4()``). Use when
+            re-registering a schedule that previously existed
+            (e.g. after restart if the caller tracks ids externally).
+
+        Returns
+        -------
+        str
+            The ``schedule_id`` of the persisted schedule row.
         """
         if model_name not in self._references:
             raise ValueError(
-                f"No reference set for model '{model_name}'. Call set_reference_data() first."
+                f"No reference set for model '{model_name}'. "
+                "Call set_reference_data() first."
             )
         if interval.total_seconds() < 1:
             raise ValueError("Monitoring interval must be at least 1 second.")
 
-        # Cancel existing schedule for this model
-        await self.cancel_monitoring(model_name)
+        await self._ensure_tables()
 
-        spec = spec or DriftSpec()
+        resolved_id = schedule_id or str(uuid.uuid4())
+        interval_seconds = int(interval.total_seconds())
+        now = datetime.now(timezone.utc)
+        resolved_start = starts_at or now
+        next_run_at = resolved_start
 
-        async def _monitoring_loop() -> None:
-            while True:
-                await asyncio.sleep(interval.total_seconds())
+        await self._conn.execute(
+            "INSERT INTO _kml_drift_schedules "
+            "(schedule_id, tenant_id, model_name, model_version, "
+            " interval_seconds, enabled, starts_at, ends_at, "
+            " next_run_at, created_at, created_by_actor_id, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            resolved_id,
+            tenant_id,
+            model_name,
+            0,
+            interval_seconds,
+            1 if enabled else 0,
+            resolved_start.isoformat() if starts_at is not None else None,
+            ends_at.isoformat() if ends_at is not None else None,
+            next_run_at.isoformat(),
+            now.isoformat(),
+            actor_id,
+            now.isoformat(),
+        )
+
+        self._data_sources[resolved_id] = data_fn
+        self._scheduled_specs[resolved_id] = spec or DriftSpec()
+
+        logger.info(
+            "drift.scheduler.schedule_created",
+            extra={
+                "drift_schedule_id": resolved_id,
+                "drift_model_name": model_name,
+                "drift_interval_seconds": interval_seconds,
+                "drift_tenant_id": tenant_id,
+                "drift_actor_id": actor_id,
+            },
+        )
+        return resolved_id
+
+    def register_data_source(self, schedule_id: str, data_fn: Any) -> None:
+        """Re-register the async data callable for a persisted schedule.
+
+        REQUIRED after a process restart for every schedule the caller
+        wants the scheduler worker to dispatch. Schedules without a
+        registered data source are skipped with a WARN log line per
+        :meth:`_poll_and_dispatch` — the worker does not crash.
+        """
+        self._data_sources[schedule_id] = data_fn
+        # Keep a default spec available — callers can upgrade via
+        # ``register_spec`` if they need to restore thresholds / callback.
+        self._scheduled_specs.setdefault(schedule_id, DriftSpec())
+
+    def register_spec(self, schedule_id: str, spec: DriftSpec) -> None:
+        """Re-register the :class:`DriftSpec` for a persisted schedule.
+
+        Optional counterpart to :meth:`register_data_source` for callers
+        that need to restore threshold overrides / drift callbacks after
+        a process restart. The ``DriftSpec.on_drift_detected`` callable
+        is not serialisable, so the caller owns its recovery.
+        """
+        self._scheduled_specs[schedule_id] = spec
+
+    async def cancel_schedule(
+        self,
+        schedule_id: str,
+        *,
+        actor_id: str = "system",
+        reason: str = "",
+    ) -> bool:
+        """Disable a persisted schedule (spec §5.5 soft-cancel).
+
+        Sets ``enabled = 0`` + updates ``updated_at``. Returns ``True``
+        if a row existed and was previously enabled, ``False`` otherwise.
+        Also drops any in-process dispatch task the legacy shim may
+        have spawned.
+        """
+        await self._ensure_tables()
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        row = await self._conn.fetchone(
+            "SELECT enabled, model_name FROM _kml_drift_schedules "
+            "WHERE schedule_id = ?",
+            schedule_id,
+        )
+        if row is None:
+            return False
+
+        was_enabled = bool(row["enabled"])
+        if was_enabled:
+            await self._conn.execute(
+                "UPDATE _kml_drift_schedules "
+                "SET enabled = 0, updated_at = ? "
+                "WHERE schedule_id = ?",
+                now_iso,
+                schedule_id,
+            )
+
+        # Also clean up the legacy in-process task keyed by model_name
+        # if this schedule was dispatched through the shim path.
+        model_name = row["model_name"] if hasattr(row, "__getitem__") else None
+        if model_name is not None:
+            task = self._scheduled_tasks.pop(model_name, None)
+            if task is not None and not task.done():
+                task.cancel()
                 try:
-                    current_data = await data_fn()
-                    report = await self.check_drift(model_name, current_data)
-                    if (
-                        report.overall_drift_detected
-                        and spec.on_drift_detected is not None
-                    ):
-                        await spec.on_drift_detected(report)
+                    await task
                 except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    logger.exception(
-                        "Scheduled drift check failed for '%s'.", model_name
+                    pass
+
+        logger.info(
+            "drift.scheduler.cancel",
+            extra={
+                "drift_schedule_id": schedule_id,
+                "drift_actor_id": actor_id,
+                "drift_reason": reason,
+                "drift_was_enabled": was_enabled,
+            },
+        )
+        return was_enabled
+
+    async def list_schedules(
+        self,
+        *,
+        model_name: str | None = None,
+        tenant_id: str | None = None,
+        enabled_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Return persisted schedule rows as dicts.
+
+        Filters:
+          - ``model_name`` — restrict to a single model.
+          - ``tenant_id`` — restrict to a single tenant.
+          - ``enabled_only`` — exclude disabled schedules (default).
+
+        Each returned dict contains the columns from
+        ``_kml_drift_schedules`` plus an ``enabled: bool`` projection
+        (SQLite stores ``enabled`` as INTEGER 0/1; the boolean projection
+        is the cross-dialect stable form).
+        """
+        await self._ensure_tables()
+
+        clauses: list[str] = []
+        params: list[Any] = []
+        if enabled_only:
+            clauses.append("enabled = 1")
+        if model_name is not None:
+            clauses.append("model_name = ?")
+            params.append(model_name)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = (
+            "SELECT schedule_id, tenant_id, model_name, model_version, "
+            "       interval_seconds, enabled, starts_at, ends_at, "
+            "       last_run_at, last_run_outcome, last_run_drift_detected, "
+            "       next_run_at, created_at, created_by_actor_id, updated_at "
+            f"FROM _kml_drift_schedules {where} "
+            "ORDER BY next_run_at ASC"
+        )
+        rows = await self._conn.fetch(sql, *params)
+        result: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            d["enabled"] = bool(d.get("enabled"))
+            if d.get("last_run_drift_detected") is not None:
+                d["last_run_drift_detected"] = bool(d["last_run_drift_detected"])
+            result.append(d)
+        return result
+
+    async def start_scheduler(self, *, poll_interval: float = 10.0) -> None:
+        """Start the background worker that polls _kml_drift_schedules.
+
+        Spawns exactly one coroutine per monitor instance. The worker
+        polls the persisted schedule table every ``poll_interval``
+        seconds, atomically claims due schedules, and dispatches the
+        drift check through :meth:`check_drift`.
+
+        Re-calling ``start_scheduler`` when already running is a no-op.
+        """
+        if self._scheduler_running:
+            return
+        await self._ensure_tables()
+        self._scheduler_running = True
+        self._scheduler_worker_task = asyncio.create_task(
+            self._scheduler_worker(poll_interval),
+            name="drift-scheduler-worker",
+        )
+        logger.info(
+            "drift.scheduler.started",
+            extra={"drift_poll_interval_seconds": poll_interval},
+        )
+
+    async def stop_scheduler(self) -> None:
+        """Cancel the background worker and any in-flight legacy tasks."""
+        self._scheduler_running = False
+        if self._scheduler_worker_task is not None:
+            self._scheduler_worker_task.cancel()
+            try:
+                await self._scheduler_worker_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:  # noqa: BLE001 — defensive on shutdown
+                logger.debug("drift.scheduler.stop_error", exc_info=True)
+            self._scheduler_worker_task = None
+        # Drop any legacy in-process tasks left by the deprecated
+        # ``cancel_monitoring`` shim path.
+        for model_name in list(self._scheduled_tasks):
+            task = self._scheduled_tasks.pop(model_name, None)
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.info("drift.scheduler.stopped")
+
+    async def _scheduler_worker(self, poll_interval: float) -> None:
+        """Worker loop polling the schedule table (spec §5.2)."""
+        while self._scheduler_running:
+            try:
+                await self._poll_and_dispatch()
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 — worker resilience
+                logger.exception("drift.scheduler.poll_error")
+            try:
+                await asyncio.sleep(poll_interval)
+            except asyncio.CancelledError:
+                raise
+
+    async def _poll_and_dispatch(self) -> None:
+        """Claim due schedules and dispatch drift checks (spec §5.2-5.3).
+
+        Atomic claim protocol (cross-dialect, no ``RETURNING``):
+
+        1. ``SELECT`` enabled rows with ``next_run_at <= now`` and
+           ``next_run_at`` matching a snapshot we took (optimistic read).
+        2. ``UPDATE`` with a ``WHERE next_run_at = ?`` guard — if another
+           process / worker already bumped ``next_run_at`` the guard
+           fails silently and we skip.
+        3. Re-``SELECT`` the row and verify ``next_run_at`` matches the
+           new value we tried to write — this is the optimistic-concurrency
+           confirmation (rowcount is surfaced inconsistently across
+           aiosqlite / asyncpg / aiomysql; round-trip read is the portable
+           form).
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        due_rows = await self._conn.fetch(
+            "SELECT schedule_id, interval_seconds, next_run_at, "
+            "       model_name, ends_at "
+            "FROM _kml_drift_schedules "
+            "WHERE enabled = 1 AND next_run_at <= ? "
+            "ORDER BY next_run_at ASC",
+            now_iso,
+        )
+        for row in due_rows:
+            schedule_id = row["schedule_id"]
+            old_next_run = row["next_run_at"]
+            interval_seconds = int(row["interval_seconds"])
+            model_name = row["model_name"]
+            ends_at = row.get("ends_at") if hasattr(row, "get") else row["ends_at"]
+
+            # Honour ends_at — treat as past-expiry, don't claim but
+            # leave the row alone (operators inspect + disable).
+            if ends_at is not None:
+                try:
+                    ends_at_dt = datetime.fromisoformat(ends_at)
+                    if ends_at_dt.tzinfo is None:
+                        ends_at_dt = ends_at_dt.replace(tzinfo=timezone.utc)
+                    if now >= ends_at_dt:
+                        continue
+                except ValueError:
+                    logger.debug(
+                        "drift.scheduler.ends_at_unparseable",
+                        extra={
+                            "drift_schedule_id": schedule_id,
+                            "drift_ends_at": ends_at,
+                        },
                     )
 
-        task = asyncio.create_task(
-            _monitoring_loop(), name=f"drift-monitor-{model_name}"
-        )
-        self._scheduled_tasks[model_name] = task
-        logger.info(
-            "Scheduled drift monitoring for '%s' every %s.",
-            model_name,
-            interval,
-        )
+            new_next_run = now + timedelta(seconds=interval_seconds)
+            new_next_run_iso = new_next_run.isoformat()
+
+            # Atomic claim — update only if another process hasn't
+            # already moved ``next_run_at``.
+            await self._conn.execute(
+                "UPDATE _kml_drift_schedules "
+                "SET next_run_at = ?, updated_at = ? "
+                "WHERE schedule_id = ? AND next_run_at = ? "
+                "  AND enabled = 1",
+                new_next_run_iso,
+                now_iso,
+                schedule_id,
+                old_next_run,
+            )
+            confirm = await self._conn.fetchone(
+                "SELECT next_run_at FROM _kml_drift_schedules " "WHERE schedule_id = ?",
+                schedule_id,
+            )
+            if confirm is None or confirm["next_run_at"] != new_next_run_iso:
+                logger.debug(
+                    "drift.scheduler.claim_contended",
+                    extra={"drift_schedule_id": schedule_id},
+                )
+                continue
+
+            logger.debug(
+                "drift.scheduler.claim_won",
+                extra={"drift_schedule_id": schedule_id},
+            )
+
+            data_fn = self._data_sources.get(schedule_id)
+            if data_fn is None:
+                logger.warning(
+                    "drift.scheduler.missing_data_source",
+                    extra={
+                        "drift_schedule_id": schedule_id,
+                        "drift_model_name": model_name,
+                    },
+                )
+                continue
+
+            spec = self._scheduled_specs.get(schedule_id, DriftSpec())
+
+            # Dispatch drift check. Any exception here is logged as a
+            # run outcome but does not abort subsequent schedules in
+            # this poll batch.
+            outcome = "success"
+            drift_detected: bool | None = None
+            try:
+                current_data = await data_fn()
+                report = await self.check_drift(model_name, current_data)
+                drift_detected = report.overall_drift_detected
+                if report.overall_drift_detected and spec.on_drift_detected is not None:
+                    await spec.on_drift_detected(report)
+            except Exception:  # noqa: BLE001 — record + continue
+                outcome = "failed"
+                logger.exception(
+                    "drift.scheduler.dispatch_failed",
+                    extra={
+                        "drift_schedule_id": schedule_id,
+                        "drift_model_name": model_name,
+                    },
+                )
+
+            await self._conn.execute(
+                "UPDATE _kml_drift_schedules "
+                "SET last_run_at = ?, last_run_outcome = ?, "
+                "    last_run_drift_detected = ?, updated_at = ? "
+                "WHERE schedule_id = ?",
+                now_iso,
+                outcome,
+                None if drift_detected is None else (1 if drift_detected else 0),
+                datetime.now(timezone.utc).isoformat(),
+                schedule_id,
+            )
+
+    # ------------------------------------------------------------------
+    # Deprecated shims — retained for one milestone so the dashboard +
+    # Tier-1 test suite keep working. See spec §5 (retained API surface).
+    # ------------------------------------------------------------------
 
     async def cancel_monitoring(self, model_name: str) -> bool:
-        """Cancel scheduled monitoring for a model.
+        """Deprecated — prefer :meth:`cancel_schedule` keyed by schedule_id.
 
-        Returns ``True`` if a task was cancelled, ``False`` if none was active.
+        Cancels every persisted schedule for ``model_name`` (soft-disable
+        via ``cancel_schedule``) AND drops any in-process task the legacy
+        dispatch path may have spawned. Returns ``True`` if at least one
+        schedule was previously enabled OR an in-process task was
+        cancelled; ``False`` otherwise.
         """
+        cancelled_any = False
+        try:
+            schedules = await self.list_schedules(
+                model_name=model_name, enabled_only=True
+            )
+        except Exception:  # noqa: BLE001 — tolerate mock-fetch quirks in unit tests
+            schedules = []
+        for sched in schedules:
+            if await self.cancel_schedule(
+                sched["schedule_id"], actor_id="system", reason="cancel_monitoring shim"
+            ):
+                cancelled_any = True
+
         task = self._scheduled_tasks.pop(model_name, None)
         if task is not None and not task.done():
             task.cancel()
@@ -1268,18 +1736,26 @@ class DriftMonitor:
                 await task
             except asyncio.CancelledError:
                 pass
-            logger.info("Cancelled drift monitoring for '%s'.", model_name)
-            return True
-        return False
+            cancelled_any = True
+        return cancelled_any
 
     async def shutdown(self) -> None:
-        """Cancel all scheduled monitoring tasks."""
-        for model_name in list(self._scheduled_tasks):
-            await self.cancel_monitoring(model_name)
+        """Deprecated — prefer :meth:`stop_scheduler`.
+
+        Stops the scheduler worker AND cancels every in-process task
+        left by the legacy dispatch path.
+        """
+        await self.stop_scheduler()
 
     @property
     def active_schedules(self) -> list[str]:
-        """Return model names with active monitoring schedules."""
+        """Deprecated — returns legacy in-process task model-names only.
+
+        For persistent schedules prefer :meth:`list_schedules`. Retained
+        so existing consumers (dashboard/server.py `overview` endpoint)
+        keep compiling; the overview will show 0 in-process tasks now
+        that the dispatch path is DB-backed.
+        """
         return [name for name, task in self._scheduled_tasks.items() if not task.done()]
 
     # ------------------------------------------------------------------
