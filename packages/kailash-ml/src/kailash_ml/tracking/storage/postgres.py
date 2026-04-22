@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -195,6 +196,49 @@ _RUN_SUBJECTS_INDEX_SQL = (
     "ON experiment_run_subjects (tenant_id, subject_id)"
 )
 
+# W16 — model registry (``ml-registry.md`` §3-§7). Parallel-schema with
+# SQLite per ``ml-tracking.md`` §6. ``experiment_registry_*`` prefix
+# matches SQLite; the schema-unification shard renames every
+# ``experiment_*`` table to ``_kml_*`` per spec §5A in one pass.
+_REGISTRY_VERSIONS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_registry_versions (
+    id                        TEXT PRIMARY KEY,
+    tenant_id                 TEXT NOT NULL,
+    name                      TEXT NOT NULL,
+    version                   INTEGER NOT NULL,
+    format                    TEXT NOT NULL,
+    artifact_uri              TEXT NOT NULL,
+    artifact_sha256           TEXT NOT NULL,
+    signature_json            TEXT NOT NULL,
+    signature_sha256          TEXT NOT NULL,
+    lineage_run_id            TEXT NOT NULL,
+    lineage_dataset_hash      TEXT NOT NULL,
+    lineage_code_sha          TEXT NOT NULL,
+    lineage_parent_version_id TEXT,
+    idempotency_key           TEXT NOT NULL,
+    is_golden                 BOOLEAN NOT NULL DEFAULT FALSE,
+    onnx_status               TEXT,
+    onnx_unsupported_ops      TEXT,
+    onnx_opset_imports        TEXT,
+    ort_extensions            TEXT,
+    metadata_json             TEXT,
+    actor_id                  TEXT NOT NULL,
+    created_at                TEXT NOT NULL,
+    UNIQUE (tenant_id, name, version)
+)
+"""
+
+_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_experiment_registry_versions_tenant_name "
+    "ON experiment_registry_versions (tenant_id, name)"
+)
+
+_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS "
+    "idx_experiment_registry_versions_idempotency "
+    "ON experiment_registry_versions (tenant_id, name, idempotency_key)"
+)
+
 
 class PostgresTrackerStore:
     """PostgreSQL backend for :class:`AbstractTrackerStore` via
@@ -254,6 +298,10 @@ class PostgresTrackerStore:
             await self._conn.execute(_AUDIT_CREATE_DELETE_TRIGGER_SQL)
             await self._conn.execute(_RUN_SUBJECTS_SCHEMA_SQL)
             await self._conn.execute(_RUN_SUBJECTS_INDEX_SQL)
+            # W16 registry tables.
+            await self._conn.execute(_REGISTRY_VERSIONS_SCHEMA_SQL)
+            await self._conn.execute(_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL)
+            await self._conn.execute(_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL)
             self._initialized = True
 
     async def close(self) -> None:
@@ -769,6 +817,155 @@ class PostgresTrackerStore:
                 expand=False,
             )
         return counters
+
+    # ------------------------------------------------------------------
+    # Model registry (W16 — ml-registry.md §3-§7)
+    # ------------------------------------------------------------------
+
+    async def insert_model_registration(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        name: str,
+        format: str,
+        artifact_uri: str,
+        artifact_sha256: str,
+        signature_json: str,
+        signature_sha256: str,
+        lineage_run_id: str,
+        lineage_dataset_hash: str,
+        lineage_code_sha: str,
+        lineage_parent_version_id: Optional[str],
+        idempotency_key: str,
+        is_golden: bool,
+        onnx_status: Optional[str],
+        onnx_unsupported_ops: Optional[str],
+        onnx_opset_imports: Optional[str],
+        ort_extensions: Optional[str],
+        metadata_json: Optional[str],
+        created_at: str,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        row_id = str(uuid.uuid4())
+        # Single-statement atomic insert per ml-registry.md §3.2. The
+        # next version is computed from the same table inside the INSERT;
+        # two concurrent callers either serialise on the unique index
+        # (one succeeds, the other retries via the idempotency-key check
+        # or surfaces the integrity error) or end up with distinct
+        # versions because each caller's COALESCE(MAX) sees the prior's
+        # commit. RETURNING * gives us the assigned version in one
+        # round-trip.
+        sql = (
+            "INSERT INTO experiment_registry_versions ("
+            "id, tenant_id, name, version, format, artifact_uri, "
+            "artifact_sha256, signature_json, signature_sha256, "
+            "lineage_run_id, lineage_dataset_hash, lineage_code_sha, "
+            "lineage_parent_version_id, idempotency_key, is_golden, "
+            "onnx_status, onnx_unsupported_ops, onnx_opset_imports, "
+            "ort_extensions, metadata_json, actor_id, created_at"
+            ") VALUES ("
+            "?, ?, ?, COALESCE("
+            "(SELECT MAX(version) FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ?), 0) + 1, "
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "RETURNING *"
+        )
+        rows = await self._conn.fetch(
+            sql,
+            row_id,
+            tenant_id,
+            name,
+            tenant_id,
+            name,
+            format,
+            artifact_uri,
+            artifact_sha256,
+            signature_json,
+            signature_sha256,
+            lineage_run_id,
+            lineage_dataset_hash,
+            lineage_code_sha,
+            lineage_parent_version_id,
+            idempotency_key,
+            bool(is_golden),
+            onnx_status,
+            onnx_unsupported_ops,
+            onnx_opset_imports,
+            ort_extensions,
+            metadata_json,
+            actor_id,
+            created_at,
+        )
+        if not rows:
+            raise RuntimeError(
+                "insert_model_registration failed to return inserted row"
+            )
+        return _pg_registry_row_to_dict(rows[0])
+
+    async def find_model_registration_by_idempotency_key(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        idempotency_key: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        rows = await self._conn.fetch(
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? AND idempotency_key = ? "
+            "LIMIT 1",
+            tenant_id,
+            name,
+            idempotency_key,
+        )
+        if not rows:
+            return None
+        return _pg_registry_row_to_dict(rows[0])
+
+    async def get_model_version(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        version: int,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        rows = await self._conn.fetch(
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? AND version = ?",
+            tenant_id,
+            name,
+            int(version),
+        )
+        if not rows:
+            return None
+        return _pg_registry_row_to_dict(rows[0])
+
+    async def list_model_versions_by_name(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        rows = await self._conn.fetch(
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? ORDER BY version ASC",
+            tenant_id,
+            name,
+        )
+        return [_pg_registry_row_to_dict(r) for r in rows]
+
+
+def _pg_registry_row_to_dict(row: Any) -> dict[str, Any]:
+    """Normalise a Postgres registry row — ``is_golden`` lands as a Python
+    bool already via asyncpg, but surfacing through ``dict(row)`` keeps
+    downstream code decoupled from the Record type."""
+    out: dict[str, Any] = dict(row)
+    if "is_golden" in out:
+        out["is_golden"] = bool(out["is_golden"])
+    return out
 
 
 async def _pg_delete_count(tx: Any, sql: str, arg: Any, *, expand: bool = True) -> int:

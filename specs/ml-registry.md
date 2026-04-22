@@ -122,7 +122,7 @@ await conn.execute("INSERT INTO ... (version) VALUES ($1)", v + 1)
 
 ### 3.3 Reserved Name Patterns
 
-Model names MUST match `^[a-zA-Z][a-zA-Z0-9_-]{0,127}$` and MUST NOT start with any of the reserved prefixes:
+Model names MUST match `^[a-zA-Z_][a-zA-Z0-9_-]{0,127}$` and MUST NOT start with any of the reserved prefixes:
 
 - `_kml_` — internal tables (see `rules/dataflow-identifier-safety.md` MUST 2).
 - `system_` — reserved for operational controls.
@@ -130,6 +130,8 @@ Model names MUST match `^[a-zA-Z][a-zA-Z0-9_-]{0,127}$` and MUST NOT start with 
 - `__` (double underscore) — reserved for framework-internal models.
 
 Registration with a reserved-prefix name MUST raise `InvalidModelNameError`. Single-underscore-prefix (`_my_model`) is permitted but emits a DEBUG log noting the convention.
+
+**Note (regex widened 2026-04-22):** The charset after the anchor was `[a-zA-Z]` before 2026-04-22; it has been widened to `[a-zA-Z_]` so the regex and the prose "single-underscore-prefix is permitted" no longer contradict. Reserved-prefix enforcement happens against the four explicit prefixes above, not against the anchor character alone.
 
 ### 3.4 Aliases Scope Rule
 

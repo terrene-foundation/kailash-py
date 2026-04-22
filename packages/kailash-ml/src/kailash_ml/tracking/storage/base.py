@@ -275,3 +275,81 @@ class AbstractTrackerStore(Protocol):
         ``{resource_kind: rows_deleted}``; callers serialise those
         counters into the new erasure audit row."""
         ...
+
+    # ------------------------------------------------------------------
+    # Model registry (spec ``ml-registry.md`` §3-§7 — W16)
+    # ------------------------------------------------------------------
+    #
+    # The run-scoped ``insert_model_version`` above (spec §4.5) remains
+    # the per-run snapshot surface used by ``ExperimentRun.log_model``.
+    # The tenant-scoped ``insert_model_registration`` below is the
+    # :class:`ModelRegistry` primitive: it assigns the next
+    # ``(tenant_id, name)`` integer-monotonic version atomically inside
+    # a single transaction per ``ml-registry.md`` §3.2 + §7.2.
+
+    async def insert_model_registration(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        name: str,
+        format: str,
+        artifact_uri: str,
+        artifact_sha256: str,
+        signature_json: str,
+        signature_sha256: str,
+        lineage_run_id: str,
+        lineage_dataset_hash: str,
+        lineage_code_sha: str,
+        lineage_parent_version_id: Optional[str],
+        idempotency_key: str,
+        is_golden: bool,
+        onnx_status: Optional[str],
+        onnx_unsupported_ops: Optional[str],
+        onnx_opset_imports: Optional[str],
+        ort_extensions: Optional[str],
+        metadata_json: Optional[str],
+        created_at: str,
+    ) -> dict[str, Any]:
+        """Atomically assign the next version and insert one row.
+
+        Returns the inserted row as a dict (including the assigned
+        ``version``). The backend computes the next integer inside the
+        INSERT using ``COALESCE(MAX(version), 0) + 1`` filtered by
+        ``(tenant_id, name)`` so two concurrent callers cannot observe
+        the same stale ``max`` and collide on the unique index.
+        """
+        ...
+
+    async def find_model_registration_by_idempotency_key(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        idempotency_key: str,
+    ) -> Optional[dict[str, Any]]:
+        """Return an existing version with the same ``idempotency_key``
+        under ``(tenant_id, name)``, or ``None``. Implements ``ml-registry.md``
+        §7.3 dedup. The key is caller-supplied (defaulting to
+        ``sha256(dataset_hash + code_sha + signature_json)``)."""
+        ...
+
+    async def get_model_version(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        version: int,
+    ) -> Optional[dict[str, Any]]:
+        """Look up a registered version, or ``None`` if absent."""
+        ...
+
+    async def list_model_versions_by_name(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+    ) -> list[dict[str, Any]]:
+        """Every registered version for ``(tenant_id, name)`` ordered
+        by ``version`` ascending."""
+        ...

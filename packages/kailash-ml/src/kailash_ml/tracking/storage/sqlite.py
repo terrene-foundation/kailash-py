@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -186,6 +187,54 @@ CREATE INDEX IF NOT EXISTS idx_experiment_run_subjects_tenant_subject
     ON experiment_run_subjects (tenant_id, subject_id);
 """
 
+# W16 — tenant-scoped model registry (``ml-registry.md`` §3-§7). Named
+# ``experiment_registry_*`` to stay on the ``experiment_*`` prefix
+# convention W15 established; the schema-unification shard renames
+# every ``experiment_*`` surface to ``_kml_*`` in one pass (see
+# ``specs/ml-registry.md`` §5A.3 for the canonical ``_kml_*`` shape the
+# unification shard targets).
+_REGISTRY_VERSIONS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_registry_versions (
+    id                        TEXT PRIMARY KEY,
+    tenant_id                 TEXT NOT NULL,
+    name                      TEXT NOT NULL,
+    version                   INTEGER NOT NULL,
+    format                    TEXT NOT NULL,
+    artifact_uri              TEXT NOT NULL,
+    artifact_sha256           TEXT NOT NULL,
+    signature_json            TEXT NOT NULL,
+    signature_sha256          TEXT NOT NULL,
+    lineage_run_id            TEXT NOT NULL,
+    lineage_dataset_hash      TEXT NOT NULL,
+    lineage_code_sha          TEXT NOT NULL,
+    lineage_parent_version_id TEXT,
+    idempotency_key           TEXT NOT NULL,
+    is_golden                 INTEGER NOT NULL DEFAULT 0,
+    onnx_status               TEXT,
+    onnx_unsupported_ops      TEXT,
+    onnx_opset_imports        TEXT,
+    ort_extensions            TEXT,
+    metadata_json             TEXT,
+    actor_id                  TEXT NOT NULL,
+    created_at                TEXT NOT NULL,
+    UNIQUE (tenant_id, name, version)
+);
+"""
+
+_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_registry_versions_tenant_name
+    ON experiment_registry_versions (tenant_id, name);
+"""
+
+# Idempotency lookup hits ``(tenant_id, name, idempotency_key)`` — a
+# dedicated unique index keeps the §7.3 dedup path O(1) AND prevents
+# two concurrent inserts with the same key from both succeeding.
+_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_experiment_registry_versions_idempotency
+    ON experiment_registry_versions (tenant_id, name, idempotency_key);
+"""
+
 # Pre-0.14 databases carried a narrower schema. First access probes
 # ``PRAGMA table_info`` and ALTER TABLE any missing columns so existing
 # ``~/.kailash_ml/ml.db`` files keep working after the 0.14 schema
@@ -306,6 +355,10 @@ class SqliteTrackerStore:
                 await conn.execute(_AUDIT_NO_DELETE_TRIGGER_SQL)
                 await conn.execute(_RUN_SUBJECTS_SCHEMA_SQL)
                 await conn.execute(_RUN_SUBJECTS_INDEX_SQL)
+                # W16 registry tables.
+                await conn.execute(_REGISTRY_VERSIONS_SCHEMA_SQL)
+                await conn.execute(_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL)
+                await conn.execute(_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL)
                 # Detect pre-0.14 databases and add missing columns.
                 cur = await conn.execute("PRAGMA table_info(experiment_runs)")
                 rows = await cur.fetchall()
@@ -865,6 +918,144 @@ class SqliteTrackerStore:
             await conn.commit()
         return counters
 
+    # ------------------------------------------------------------------
+    # Model registry (W16 — ml-registry.md §3-§7)
+    # ------------------------------------------------------------------
+
+    async def insert_model_registration(
+        self,
+        *,
+        tenant_id: str,
+        actor_id: str,
+        name: str,
+        format: str,
+        artifact_uri: str,
+        artifact_sha256: str,
+        signature_json: str,
+        signature_sha256: str,
+        lineage_run_id: str,
+        lineage_dataset_hash: str,
+        lineage_code_sha: str,
+        lineage_parent_version_id: Optional[str],
+        idempotency_key: str,
+        is_golden: bool,
+        onnx_status: Optional[str],
+        onnx_unsupported_ops: Optional[str],
+        onnx_opset_imports: Optional[str],
+        ort_extensions: Optional[str],
+        metadata_json: Optional[str],
+        created_at: str,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        # Next version computed atomically inside the INSERT per
+        # ``ml-registry.md`` §3.2 — two concurrent registers cannot
+        # observe the same stale max, so collisions resolve at the
+        # unique index (``UNIQUE (tenant_id, name, version)``).
+        row_id = str(uuid.uuid4())
+        sql = (
+            "INSERT INTO experiment_registry_versions ("
+            "id, tenant_id, name, version, format, artifact_uri, "
+            "artifact_sha256, signature_json, signature_sha256, "
+            "lineage_run_id, lineage_dataset_hash, lineage_code_sha, "
+            "lineage_parent_version_id, idempotency_key, is_golden, "
+            "onnx_status, onnx_unsupported_ops, onnx_opset_imports, "
+            "ort_extensions, metadata_json, actor_id, created_at"
+            ") VALUES ("
+            "?, ?, ?, COALESCE("
+            "(SELECT MAX(version) FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ?), 0) + 1, "
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        values = (
+            row_id,
+            tenant_id,
+            name,
+            # next-version sub-select params
+            tenant_id,
+            name,
+            format,
+            artifact_uri,
+            artifact_sha256,
+            signature_json,
+            signature_sha256,
+            lineage_run_id,
+            lineage_dataset_hash,
+            lineage_code_sha,
+            lineage_parent_version_id,
+            idempotency_key,
+            1 if is_golden else 0,
+            onnx_status,
+            onnx_unsupported_ops,
+            onnx_opset_imports,
+            ort_extensions,
+            metadata_json,
+            actor_id,
+            created_at,
+        )
+        async with self._pool.acquire_write() as conn:
+            await conn.execute(sql, values)
+            await conn.commit()
+            # Read back — we need the assigned ``version`` regardless of
+            # whether RETURNING is supported (SQLite added it in 3.35 but
+            # the CI matrix still includes older runtimes).
+            cur = await conn.execute(
+                "SELECT * FROM experiment_registry_versions WHERE id = ?",
+                (row_id,),
+            )
+            row = await cur.fetchone()
+        return _registry_row_to_dict(row) if row is not None else {}
+
+    async def find_model_registration_by_idempotency_key(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        idempotency_key: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? AND idempotency_key = ? "
+            "LIMIT 1"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, name, idempotency_key))
+            row = await cur.fetchone()
+        return _registry_row_to_dict(row) if row is not None else None
+
+    async def get_model_version(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        version: int,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? AND version = ?"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, name, int(version)))
+            row = await cur.fetchone()
+        return _registry_row_to_dict(row) if row is not None else None
+
+    async def list_model_versions_by_name(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND name = ? ORDER BY version ASC"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, name))
+            rows = await cur.fetchall()
+        return [_registry_row_to_dict(r) for r in rows]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -931,4 +1122,14 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
     for col in _BOOLEAN_COLUMNS:
         if col in out:
             out[col] = _int_to_bool(out[col])
+    return out
+
+
+def _registry_row_to_dict(row: Any) -> dict[str, Any]:
+    """Convert a :table:`experiment_registry_versions` row to a plain
+    dict, normalising ``is_golden`` to ``bool`` so callers never see
+    the storage-side ``0/1`` encoding."""
+    out: dict[str, Any] = dict(row)
+    if "is_golden" in out:
+        out["is_golden"] = bool(out["is_golden"])
     return out
