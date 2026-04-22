@@ -3052,9 +3052,10 @@ class MLEngine:
         root = pathlib.Path(
             os.environ.get(
                 "KAILASH_ML_ARTIFACT_ROOT",
-                str(_DEFAULT_STORE_DIR / "artifacts"),
+                str(pathlib.Path.home() / ".kailash_ml" / "artifacts"),
             )
         )
+        root.mkdir(parents=True, exist_ok=True)
         self._artifact_store = LocalFileArtifactStore(root_dir=root)
         return self._artifact_store
 
