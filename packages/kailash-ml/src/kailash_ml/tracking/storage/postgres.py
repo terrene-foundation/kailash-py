@@ -239,6 +239,33 @@ _REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL = (
     "ON experiment_registry_versions (tenant_id, name, idempotency_key)"
 )
 
+# W18 — alias table per ``ml-registry.md`` §4. See the SQLite-side
+# comment for the rationale; this is the Postgres-dialect mirror.
+_REGISTRY_ALIASES_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_registry_aliases (
+    id                 TEXT PRIMARY KEY,
+    tenant_id          TEXT NOT NULL,
+    model_name         TEXT NOT NULL,
+    alias              TEXT NOT NULL,
+    model_version_id   TEXT NOT NULL,
+    actor_id           TEXT NOT NULL,
+    set_at             TEXT NOT NULL,
+    cleared_at         TEXT,
+    sequence_num       INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tenant_id, model_name, alias)
+)
+"""
+
+_REGISTRY_ALIASES_TENANT_NAME_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_experiment_registry_aliases_tenant_name "
+    "ON experiment_registry_aliases (tenant_id, model_name)"
+)
+
+_REGISTRY_ALIASES_VERSION_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_experiment_registry_aliases_version_id "
+    "ON experiment_registry_aliases (model_version_id)"
+)
+
 
 class PostgresTrackerStore:
     """PostgreSQL backend for :class:`AbstractTrackerStore` via
@@ -302,6 +329,10 @@ class PostgresTrackerStore:
             await self._conn.execute(_REGISTRY_VERSIONS_SCHEMA_SQL)
             await self._conn.execute(_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL)
             await self._conn.execute(_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL)
+            # W18 alias table.
+            await self._conn.execute(_REGISTRY_ALIASES_SCHEMA_SQL)
+            await self._conn.execute(_REGISTRY_ALIASES_TENANT_NAME_INDEX_SQL)
+            await self._conn.execute(_REGISTRY_ALIASES_VERSION_INDEX_SQL)
             self._initialized = True
 
     async def close(self) -> None:
@@ -955,6 +986,247 @@ class PostgresTrackerStore:
             tenant_id,
             name,
         )
+        return [_pg_registry_row_to_dict(r) for r in rows]
+
+    async def get_model_version_by_id(
+        self,
+        *,
+        tenant_id: str,
+        version_id: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        row = await self._conn.fetchone(
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND id = ?",
+            tenant_id,
+            version_id,
+        )
+        return _pg_registry_row_to_dict(row) if row is not None else None
+
+    # ------------------------------------------------------------------
+    # W18 — registry aliases (``ml-registry.md`` §4)
+    # ------------------------------------------------------------------
+
+    async def upsert_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        model_version_id: str,
+        actor_id: str,
+        set_at: str,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        # INSERT ... ON CONFLICT DO UPDATE atomically upserts the single
+        # ``(tenant_id, model_name, alias)`` row. Postgres's RETURNING
+        # gives us prev + new state without a follow-up SELECT. The
+        # ``xmax = 0`` predicate (common PG trick) lets us detect
+        # insert-vs-update: on INSERT xmax is 0; on UPDATE it's the old
+        # row's txid. Using a CTE keeps the prev_* values readable
+        # alongside the final row.
+        row_id = str(uuid.uuid4())
+        sql = (
+            "WITH prev AS (SELECT id, model_version_id AS prev_mv, "
+            "  cleared_at AS prev_cleared_at, sequence_num AS prev_seq "
+            "  FROM experiment_registry_aliases "
+            "  WHERE tenant_id = ? AND model_name = ? AND alias = ? "
+            "  FOR UPDATE) "
+            "INSERT INTO experiment_registry_aliases "
+            "(id, tenant_id, model_name, alias, model_version_id, "
+            " actor_id, set_at, cleared_at, sequence_num) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, "
+            "  COALESCE((SELECT prev_seq FROM prev), 0) + 1) "
+            "ON CONFLICT (tenant_id, model_name, alias) DO UPDATE SET "
+            "  model_version_id = EXCLUDED.model_version_id, "
+            "  actor_id = EXCLUDED.actor_id, "
+            "  set_at = EXCLUDED.set_at, "
+            "  cleared_at = NULL, "
+            "  sequence_num = "
+            "    experiment_registry_aliases.sequence_num + 1 "
+            "RETURNING "
+            "  (SELECT prev_mv FROM prev) AS prev_mv, "
+            "  (SELECT prev_cleared_at FROM prev) AS prev_cleared_at, "
+            "  sequence_num, model_version_id"
+        )
+        row = await self._conn.fetchone(
+            sql,
+            tenant_id,
+            model_name,
+            alias,
+            row_id,
+            tenant_id,
+            model_name,
+            alias,
+            model_version_id,
+            actor_id,
+            set_at,
+        )
+        if row is None:
+            raise RuntimeError("upsert_alias did not return a row")
+        row_d = dict(row)
+        prev_cleared = row_d.get("prev_cleared_at") is not None
+        return {
+            "prev_model_version_id": (None if prev_cleared else row_d.get("prev_mv")),
+            "new_model_version_id": row_d["model_version_id"],
+            "prev_cleared": prev_cleared,
+            "sequence_num": int(row_d["sequence_num"]),
+        }
+
+    async def clear_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        actor_id: str,
+        cleared_at: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "UPDATE experiment_registry_aliases SET "
+            "  cleared_at = ?, actor_id = ?, "
+            "  sequence_num = sequence_num + 1 "
+            "WHERE tenant_id = ? AND model_name = ? AND alias = ? "
+            "  AND cleared_at IS NULL "
+            "RETURNING model_version_id, sequence_num"
+        )
+        row = await self._conn.fetchone(
+            sql,
+            cleared_at,
+            actor_id,
+            tenant_id,
+            model_name,
+            alias,
+        )
+        if row is None:
+            return None
+        row_d = dict(row)
+        return {
+            "prev_model_version_id": row_d["model_version_id"],
+            "sequence_num": int(row_d["sequence_num"]),
+        }
+
+    async def get_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "SELECT v.* FROM experiment_registry_aliases a "
+            "JOIN experiment_registry_versions v ON v.id = a.model_version_id "
+            "WHERE a.tenant_id = ? AND a.model_name = ? AND a.alias = ? "
+            "AND a.cleared_at IS NULL"
+        )
+        row = await self._conn.fetchone(sql, tenant_id, model_name, alias)
+        return _pg_registry_row_to_dict(row) if row is not None else None
+
+    async def list_aliases_for_version(
+        self,
+        *,
+        tenant_id: str,
+        model_version_id: str,
+    ) -> list[str]:
+        await self.initialize()
+        rows = await self._conn.fetch(
+            "SELECT alias FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_version_id = ? "
+            "AND cleared_at IS NULL ORDER BY alias",
+            tenant_id,
+            model_version_id,
+        )
+        return [r["alias"] if isinstance(r, dict) else r[0] for r in rows]
+
+    async def list_aliases_for_name(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        include_cleared: bool = False,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        clause = "" if include_cleared else " AND cleared_at IS NULL"
+        sql = (
+            "SELECT alias, model_version_id, actor_id, set_at, "
+            "cleared_at, sequence_num "
+            "FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_name = ?" + clause + " ORDER BY alias"
+        )
+        rows = await self._conn.fetch(sql, tenant_id, model_name)
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # W18 — registry queries (``ml-registry.md`` §9)
+    # ------------------------------------------------------------------
+
+    async def list_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        name: Optional[str] = None,
+        alias: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        if offset < 0:
+            raise ValueError(f"offset must be non-negative, got {offset}")
+        # Parameters appended in FINAL-SQL order: JOIN(?) first, then
+        # WHERE(?) clauses, then LIMIT/OFFSET — mirrors the SQLite
+        # side. See sqlite.py for the full comment on the ordering
+        # constraint.
+        params: list[Any] = []
+        join_sql = ""
+        if alias is not None:
+            join_sql = (
+                " JOIN experiment_registry_aliases a "
+                "ON a.model_version_id = v.id "
+                "AND a.tenant_id = v.tenant_id "
+                "AND a.cleared_at IS NULL "
+                "AND a.alias = ?"
+            )
+            params.append(alias)
+        clauses = ["v.tenant_id = ?"]
+        params.append(tenant_id)
+        if name is not None:
+            clauses.append("v.name = ?")
+            params.append(name)
+        where_sql = " WHERE " + " AND ".join(clauses)
+        sql = (
+            "SELECT v.* FROM experiment_registry_versions v"
+            + join_sql
+            + where_sql
+            + " ORDER BY v.name, v.version DESC LIMIT ? OFFSET ?"
+        )
+        params.extend([int(limit), int(offset)])
+        rows = await self._conn.fetch(sql, *params)
+        return [_pg_registry_row_to_dict(r) for r in rows]
+
+    async def search_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        where_sql: str,
+        params: Sequence[Any],
+        order_by_sql: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        clause = f" AND ({where_sql})" if where_sql else ""
+        order = f" ORDER BY {order_by_sql}" if order_by_sql else ""
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ?" + clause + order + " LIMIT ?"
+        )
+        values: list[Any] = [tenant_id, *params, int(limit)]
+        rows = await self._conn.fetch(sql, *values)
         return [_pg_registry_row_to_dict(r) for r in rows]
 
 

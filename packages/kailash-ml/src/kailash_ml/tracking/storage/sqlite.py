@@ -235,6 +235,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS
     ON experiment_registry_versions (tenant_id, name, idempotency_key);
 """
 
+# W18 — alias table per ``ml-registry.md`` §4. One row per
+# ``(tenant_id, model_name, alias)``; mutations UPSERT the row so the
+# audit trail in ``experiment_audit`` is the authoritative history of
+# alias transitions (§4.1 MUST 4). Clearing an alias flips
+# ``cleared_at`` to non-null per §4.1 MUST 5 — the row stays so
+# subsequent set operations can observe the prior state without a
+# DELETE+INSERT race. ``sequence_num`` implements the last-writer-wins
+# contract from §4.1 MUST 3 (concurrent set calls bump the counter).
+_REGISTRY_ALIASES_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS experiment_registry_aliases (
+    id                 TEXT PRIMARY KEY,
+    tenant_id          TEXT NOT NULL,
+    model_name         TEXT NOT NULL,
+    alias              TEXT NOT NULL,
+    model_version_id   TEXT NOT NULL,
+    actor_id           TEXT NOT NULL,
+    set_at             TEXT NOT NULL,
+    cleared_at         TEXT,
+    sequence_num       INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tenant_id, model_name, alias)
+);
+"""
+
+_REGISTRY_ALIASES_TENANT_NAME_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_registry_aliases_tenant_name
+    ON experiment_registry_aliases (tenant_id, model_name);
+"""
+
+_REGISTRY_ALIASES_VERSION_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_experiment_registry_aliases_version_id
+    ON experiment_registry_aliases (model_version_id);
+"""
+
 # Pre-0.14 databases carried a narrower schema. First access probes
 # ``PRAGMA table_info`` and ALTER TABLE any missing columns so existing
 # ``~/.kailash_ml/ml.db`` files keep working after the 0.14 schema
@@ -359,6 +392,10 @@ class SqliteTrackerStore:
                 await conn.execute(_REGISTRY_VERSIONS_SCHEMA_SQL)
                 await conn.execute(_REGISTRY_VERSIONS_TENANT_NAME_INDEX_SQL)
                 await conn.execute(_REGISTRY_VERSIONS_IDEMPOTENCY_INDEX_SQL)
+                # W18 registry alias table.
+                await conn.execute(_REGISTRY_ALIASES_SCHEMA_SQL)
+                await conn.execute(_REGISTRY_ALIASES_TENANT_NAME_INDEX_SQL)
+                await conn.execute(_REGISTRY_ALIASES_VERSION_INDEX_SQL)
                 # Detect pre-0.14 databases and add missing columns.
                 cur = await conn.execute("PRAGMA table_info(experiment_runs)")
                 rows = await cur.fetchall()
@@ -1053,6 +1090,267 @@ class SqliteTrackerStore:
         )
         async with self._pool.acquire_read() as conn:
             cur = await conn.execute(sql, (tenant_id, name))
+            rows = await cur.fetchall()
+        return [_registry_row_to_dict(r) for r in rows]
+
+    async def get_model_version_by_id(
+        self,
+        *,
+        tenant_id: str,
+        version_id: str,
+    ) -> Optional[dict[str, Any]]:
+        """Tenant-scoped lookup by UUID — used by alias/lineage resolution."""
+        await self.initialize()
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ? AND id = ?"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, version_id))
+            row = await cur.fetchone()
+        return _registry_row_to_dict(row) if row is not None else None
+
+    # ------------------------------------------------------------------
+    # W18 — registry aliases (``ml-registry.md`` §4)
+    # ------------------------------------------------------------------
+
+    async def upsert_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        model_version_id: str,
+        actor_id: str,
+        set_at: str,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        # Read the existing row inside the write lock so the read +
+        # upsert form one serialized sequence; concurrent setters race
+        # on the UNIQUE constraint and the loser retries at the caller.
+        select_sql = (
+            "SELECT id, model_version_id, cleared_at, sequence_num "
+            "FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_name = ? AND alias = ?"
+        )
+        async with self._pool.acquire_write() as conn:
+            cur = await conn.execute(select_sql, (tenant_id, model_name, alias))
+            existing = await cur.fetchone()
+            if existing is None:
+                row_id = str(uuid.uuid4())
+                await conn.execute(
+                    "INSERT INTO experiment_registry_aliases "
+                    "(id, tenant_id, model_name, alias, model_version_id, "
+                    "actor_id, set_at, cleared_at, sequence_num) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1)",
+                    (
+                        row_id,
+                        tenant_id,
+                        model_name,
+                        alias,
+                        model_version_id,
+                        actor_id,
+                        set_at,
+                    ),
+                )
+                await conn.commit()
+                return {
+                    "prev_model_version_id": None,
+                    "new_model_version_id": model_version_id,
+                    "prev_cleared": False,
+                    "sequence_num": 1,
+                }
+            prev_version_id = existing["model_version_id"]
+            prev_cleared = existing["cleared_at"] is not None
+            next_seq = int(existing["sequence_num"]) + 1
+            await conn.execute(
+                "UPDATE experiment_registry_aliases "
+                "SET model_version_id = ?, actor_id = ?, set_at = ?, "
+                "cleared_at = NULL, sequence_num = ? "
+                "WHERE id = ?",
+                (
+                    model_version_id,
+                    actor_id,
+                    set_at,
+                    next_seq,
+                    existing["id"],
+                ),
+            )
+            await conn.commit()
+        return {
+            "prev_model_version_id": (None if prev_cleared else prev_version_id),
+            "new_model_version_id": model_version_id,
+            "prev_cleared": prev_cleared,
+            "sequence_num": next_seq,
+        }
+
+    async def clear_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        actor_id: str,
+        cleared_at: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        select_sql = (
+            "SELECT id, model_version_id, cleared_at, sequence_num "
+            "FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_name = ? AND alias = ?"
+        )
+        async with self._pool.acquire_write() as conn:
+            cur = await conn.execute(select_sql, (tenant_id, model_name, alias))
+            existing = await cur.fetchone()
+            if existing is None or existing["cleared_at"] is not None:
+                return None
+            next_seq = int(existing["sequence_num"]) + 1
+            await conn.execute(
+                "UPDATE experiment_registry_aliases "
+                "SET cleared_at = ?, actor_id = ?, sequence_num = ? "
+                "WHERE id = ?",
+                (cleared_at, actor_id, next_seq, existing["id"]),
+            )
+            await conn.commit()
+        return {
+            "prev_model_version_id": existing["model_version_id"],
+            "sequence_num": next_seq,
+        }
+
+    async def get_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+    ) -> Optional[dict[str, Any]]:
+        await self.initialize()
+        sql = (
+            "SELECT v.* FROM experiment_registry_aliases a "
+            "JOIN experiment_registry_versions v ON v.id = a.model_version_id "
+            "WHERE a.tenant_id = ? AND a.model_name = ? AND a.alias = ? "
+            "AND a.cleared_at IS NULL"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, model_name, alias))
+            row = await cur.fetchone()
+        return _registry_row_to_dict(row) if row is not None else None
+
+    async def list_aliases_for_version(
+        self,
+        *,
+        tenant_id: str,
+        model_version_id: str,
+    ) -> list[str]:
+        await self.initialize()
+        sql = (
+            "SELECT alias FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_version_id = ? "
+            "AND cleared_at IS NULL ORDER BY alias"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, model_version_id))
+            rows = await cur.fetchall()
+        return [r["alias"] for r in rows]
+
+    async def list_aliases_for_name(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        include_cleared: bool = False,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        clause = "" if include_cleared else " AND cleared_at IS NULL"
+        sql = (
+            "SELECT alias, model_version_id, actor_id, set_at, "
+            "cleared_at, sequence_num "
+            "FROM experiment_registry_aliases "
+            "WHERE tenant_id = ? AND model_name = ?" + clause + " ORDER BY alias"
+        )
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, (tenant_id, model_name))
+            rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # W18 — registry queries (``ml-registry.md`` §9)
+    # ------------------------------------------------------------------
+
+    async def list_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        name: Optional[str] = None,
+        alias: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        if offset < 0:
+            raise ValueError(f"offset must be non-negative, got {offset}")
+        # Parameters are appended in FINAL-SQL order: JOIN(?) first,
+        # then WHERE(?) clauses, then LIMIT/OFFSET. A prior iteration
+        # appended tenant_id before the JOIN param, which binds the
+        # tenant value to the JOIN's alias placeholder and vice-versa
+        # — silent zero-row result instead of a type error.
+        params: list[Any] = []
+        join_sql = ""
+        if alias is not None:
+            # Inner join filters to versions currently holding the alias.
+            join_sql = (
+                " JOIN experiment_registry_aliases a "
+                "ON a.model_version_id = v.id "
+                "AND a.tenant_id = v.tenant_id "
+                "AND a.cleared_at IS NULL "
+                "AND a.alias = ?"
+            )
+            params.append(alias)
+        clauses = ["v.tenant_id = ?"]
+        params.append(tenant_id)
+        if name is not None:
+            clauses.append("v.name = ?")
+            params.append(name)
+        where_sql = " WHERE " + " AND ".join(clauses)
+        sql = (
+            "SELECT v.* FROM experiment_registry_versions v"
+            + join_sql
+            + where_sql
+            + " ORDER BY v.name, v.version DESC LIMIT ? OFFSET ?"
+        )
+        params.extend([int(limit), int(offset)])
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, tuple(params))
+            rows = await cur.fetchall()
+        return [_registry_row_to_dict(r) for r in rows]
+
+    async def search_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        where_sql: str,
+        params: Sequence[Any],
+        order_by_sql: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+        # Caller pre-validates ``where_sql`` + ``order_by_sql`` against a
+        # strict allowlist (``rules/dataflow-identifier-safety.md`` MUST
+        # Rule 1) — this store is a thin executor. All user-supplied
+        # values arrive as ``params`` placeholders.
+        clause = f" AND ({where_sql})" if where_sql else ""
+        order = f" ORDER BY {order_by_sql}" if order_by_sql else ""
+        sql = (
+            "SELECT * FROM experiment_registry_versions "
+            "WHERE tenant_id = ?" + clause + order + " LIMIT ?"
+        )
+        values: list[Any] = [tenant_id, *params, int(limit)]
+        async with self._pool.acquire_read() as conn:
+            cur = await conn.execute(sql, tuple(values))
             rows = await cur.fetchall()
         return [_registry_row_to_dict(r) for r in rows]
 

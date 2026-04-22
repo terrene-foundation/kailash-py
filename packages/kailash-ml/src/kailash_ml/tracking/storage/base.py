@@ -353,3 +353,163 @@ class AbstractTrackerStore(Protocol):
         """Every registered version for ``(tenant_id, name)`` ordered
         by ``version`` ascending."""
         ...
+
+    async def get_model_version_by_id(
+        self,
+        *,
+        tenant_id: str,
+        version_id: str,
+    ) -> Optional[dict[str, Any]]:
+        """Look up a version row by its UUID, tenant-scoped.
+
+        Used by alias resolution (``_kml_model_aliases.model_version_id``
+        → ``_kml_model_versions`` row) and the lineage-DAG walk. The
+        tenant filter is the § cross-tenant refusal invariant:
+        aliases/lineage in tenant B MUST NOT resolve rows written under
+        tenant A (``ml-registry.md`` §6.3).
+        """
+        ...
+
+    # ------------------------------------------------------------------
+    # Registry aliases (spec ``ml-registry.md`` §4 — W18)
+    # ------------------------------------------------------------------
+    #
+    # Aliases are mutable pointers. One row per
+    # ``(tenant_id, model_name, alias)``; the audit table is the
+    # authoritative history of transitions. ``cleared_at IS NULL``
+    # distinguishes the active pointer from the soft-deleted state
+    # (§4.1 MUST 5). ``sequence_num`` bumps on every mutation so
+    # concurrent set operations resolve last-writer-wins (§4.1 MUST 3).
+
+    async def upsert_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        model_version_id: str,
+        actor_id: str,
+        set_at: str,
+    ) -> dict[str, Any]:
+        """Point ``alias`` at ``model_version_id`` under the tenant.
+
+        Atomically inserts-or-updates the ``(tenant_id, model_name,
+        alias)`` row. Returns a dict with:
+
+        - ``prev_model_version_id`` — the version the alias pointed at
+          before this call, or ``None`` if the alias was absent /
+          previously cleared.
+        - ``new_model_version_id`` — the version the alias now points
+          at (always equal to the input).
+        - ``prev_cleared`` — ``True`` if the alias row existed but was
+          cleared; ``False`` otherwise.
+        - ``sequence_num`` — the incremented LWW counter.
+        """
+        ...
+
+    async def clear_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+        actor_id: str,
+        cleared_at: str,
+    ) -> Optional[dict[str, Any]]:
+        """Soft-delete the alias row per §4.1 MUST 5.
+
+        Sets ``cleared_at = now`` on the existing row and bumps
+        ``sequence_num``. Returns a dict with ``prev_model_version_id``
+        + ``sequence_num``, or ``None`` when no active alias row
+        existed (idempotent no-op).
+        """
+        ...
+
+    async def get_alias(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        alias: str,
+    ) -> Optional[dict[str, Any]]:
+        """Resolve the currently-active alias row.
+
+        Returns the joined registry-version row (every column of
+        ``experiment_registry_versions``) the alias points at, or
+        ``None`` if the alias is absent OR cleared.
+        """
+        ...
+
+    async def list_aliases_for_version(
+        self,
+        *,
+        tenant_id: str,
+        model_version_id: str,
+    ) -> list[str]:
+        """Every active alias currently pointing at ``model_version_id``.
+
+        Used by ``list_models`` to aggregate the alias set per version
+        row and by ``demote_model`` to decide whether to auto-set
+        ``@archived`` (§8.2 — only when no other alias still points at
+        the version).
+        """
+        ...
+
+    async def list_aliases_for_name(
+        self,
+        *,
+        tenant_id: str,
+        model_name: str,
+        include_cleared: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Every alias row for ``(tenant_id, model_name)``.
+
+        Defaults to active aliases only; ``include_cleared=True``
+        returns the full history (including soft-deleted rows) for
+        diagnostic UIs. Rows carry ``alias``, ``model_version_id``,
+        ``set_at``, ``cleared_at``, ``actor_id``, ``sequence_num``.
+        """
+        ...
+
+    # ------------------------------------------------------------------
+    # Registry queries (spec ``ml-registry.md`` §9 — W18)
+    # ------------------------------------------------------------------
+
+    async def list_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        name: Optional[str] = None,
+        alias: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Tenant-scoped version listing with optional filters.
+
+        - ``name`` filters to a single model name.
+        - ``alias`` restricts to versions currently holding that alias
+          (join through ``experiment_registry_aliases`` where
+          ``cleared_at IS NULL``).
+        """
+        ...
+
+    async def search_registry_versions(
+        self,
+        *,
+        tenant_id: str,
+        where_sql: str,
+        params: Sequence[Any],
+        order_by_sql: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Execute a validated ``SELECT * FROM experiment_registry_versions
+        WHERE tenant_id = ? AND {where_sql} ORDER BY {order_by_sql} LIMIT ?``.
+
+        The caller (:meth:`ModelRegistry.search_models`) validates
+        ``where_sql`` + ``order_by_sql`` against a strict allowlist and
+        identifier regex (``rules/dataflow-identifier-safety.md`` MUST
+        Rule 1). Backends MUST NOT interpolate anything besides
+        ``tenant_id`` into the final statement beyond the caller-
+        supplied fragments.
+        """
+        ...
