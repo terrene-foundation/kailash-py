@@ -10,13 +10,72 @@ DONE). **W19** split into two sub-shards:
 - **W19.a (this session)** — MUST 1b env authority chain wire +
   Tier-1 invariant test coverage for 9 W19 invariants against the
   existing engine surface. 20 new tests (20/20 green).
-- **W19.b (next session)** — MUST 2 full six-primitive default
-  construction (ConnectionManager + ExperimentTracker +
-  ModelRegistry + FeatureStore + ArtifactStore + TrainingPipeline
-  auto-wired on first async entry). Currently lazy paths exist for
-  registry/ConnectionManager via `_ensure_registry_for_read`;
-  unifying into `_ensure_default_primitives_async()` is a separate
-  200+ LOC shard.
+- **W19.b (this session)** — MUST 2 full six-primitive default
+  construction. Shipped
+  `MLEngine._ensure_default_primitives_async()` + `engine_info`
+  property + new `_experiment_tracker` slot. ConnectionManager →
+  ArtifactStore → ModelRegistry → FeatureStore → TrainingPipeline →
+  ExperimentTracker constructed in dependency order. Idempotent on
+  re-entry; DI-injected slots honored (identity preserved) on
+  every slot. 6 new Tier-1 tests; 65/65 green across the W19 unit
+  + env + compare integration sweep.
+
+## W19.b — six-primitive default composition (done, this session)
+
+- **New slot** — `MLEngine._experiment_tracker` (engine-owned
+  `ExperimentTracker`; async-only factory, so it can only land
+  inside `_ensure_default_primitives_async()`, not `__init__`).
+  `_tracker` stays the user-facing `Optional[ExperimentRun]`
+  kwarg per §2.2 (HIGH-8: NOT Optional[ExperimentTracker]).
+- **New method** — `_ensure_default_primitives_async()` fills the
+  six slots in dependency order:
+  1. `ConnectionManager` — built from `self.store_url`; sqlite dir
+     created here (zero-arg construction stays filesystem-pure
+     until first async entry).
+  2. `ArtifactStore` — `LocalFileArtifactStore` rooted at
+     `KAILASH_ML_ARTIFACT_ROOT` env (defaults to
+     `~/.kailash_ml/artifacts`).
+  3. `ModelRegistry` (legacy `engines.model_registry.ModelRegistry`
+     — the one already wired by existing fit/evaluate paths) with
+     injected `artifact_store=`.
+  4. `FeatureStore(conn)` + `await initialize()`.
+  5. `TrainingPipeline(feature_store, registry)`.
+  6. `ExperimentTracker.create(store_url, default_tenant_id=
+     self._tenant_id)`.
+  Every slot is guarded by `is None` — DI-injected instances are
+  NEVER wrapped or replaced (§2.1 MUST 3 identity contract).
+- **New property** — `engine_info: Mapping[str, bool]` returns the
+  slot-population snapshot. Observability handle for `/redteam`
+  and tests; NOT a callable (stays outside the 8-method cap).
+  Every slot `False` after zero-arg `MLEngine()`; every slot
+  `True` after `_ensure_default_primitives_async()`.
+- **New tests** — `TestInvariant2SixPrimitivesConstructed` in
+  `test_w19_engine_surface.py`:
+  - `test_engine_info_all_false_before_ensure` — slot snapshot
+    after zero-arg construction is all-False.
+  - `test_ensure_default_primitives_fills_every_slot` — post-ensure
+    snapshot is all-True; each slot's runtime type matches the
+    canonical default (`ConnectionManager`, `LocalFileArtifactStore`,
+    `ModelRegistry`, `FeatureStore`, `TrainingPipeline`,
+    `ExperimentTracker`).
+  - `test_ensure_default_primitives_is_idempotent` — identity
+    preserved across two calls (zip-identity on the 6-tuple).
+  - `test_di_injected_connection_manager_not_replaced` — injected
+    `ConnectionManager` survives ensure; downstream registry +
+    feature_store are built against it.
+  - `test_di_injected_artifact_store_not_replaced` — sentinel
+    ArtifactStore identity survives.
+  - `test_experiment_tracker_inherits_engine_tenant_id` —
+    `engine.tenant_id="acme"` flows into
+    `_experiment_tracker.default_tenant_id`.
+- **Tmp-store fixture** — `_tmp_store_env` redirects the default
+  store + artifact root to `tmp_path` via `KAILASH_ML_STORE_URL`
+  + `KAILASH_ML_ARTIFACT_ROOT`, so W19.b tests never touch
+  `~/.kailash_ml/`.
+- **Totals** — 6/6 new W19.b tests; 26/26 cumulative W19 unit
+  tests; 65/65 across construction + env resolver + W19 + compare
+  integration; 126/126 on the tracker/registry/artifact sweep
+  (no regression).
 
 ## W19.a — env authority chain + invariant tests (done, this session)
 
@@ -97,20 +156,25 @@ Single commit on the branch:
 ## Read first
 
 1. `workspaces/kailash-ml-audit/02-plans/01-master-34-wave-plan.md`
-   §250 — W19 split; W19.b is the next shard.
-2. `specs/ml-engines-v2.md §2.1 MUST 2 + §2.2` — the six-primitive
-   composition invariant (FeatureStore + ModelRegistry +
-   TrainingPipeline + ExperimentTracker + ConnectionManager +
-   ArtifactStore) constructed on default construction.
-3. `packages/kailash-ml/src/kailash_ml/engine.py::_ensure_registry_for_read`
-   (lines ~2479-2506) — existing lazy-construction pattern to
-   generalise into `_ensure_default_primitives_async()` covering
-   every DI slot uniformly.
-4. `packages/kailash-ml/tests/unit/test_w19_engine_surface.py` —
-   W19.a Tier-1 invariant tests landed this session. W19.b should
-   add a class `TestInvariant2DefaultPrimitivesConstructed` that
-   asserts every slot is non-None after `engine._ensure_default_primitives_async()`
-   against a fresh SQLite store.
+   §259 — W20 is the next shard:
+   `MLEngine.fit()` + `predict()` + `finalize()` + `evaluate()`
+   with the Lightning distribution passthrough (strategy, devices,
+   num_nodes, enable_checkpointing, auto_find_lr, callbacks).
+2. `specs/ml-engines-v2.md §2.1 MUST 8-9 + §2.2` — the 10 W20
+   invariants: fit() family-vs-trainable mutual exclusion,
+   EngineNotSetUpError, UnsupportedTrainerError on raw-loop
+   detection, Lightning Strategy plumb-through, ambient
+   ModelCheckpoint, `Trainer.lr_find` wiring, predict() channel
+   dispatch, finalize() full-fit contract, evaluate() mode
+   (holdout/shadow/live), SchemaDriftError.
+3. `packages/kailash-ml/src/kailash_ml/engine.py` — existing fit /
+   predict / finalize / evaluate bodies have most of §2.1 MUST 8
+   already; W20's scope is verifying the Lightning passthrough
+   invariants via tests + filling any gaps.
+4. The W19.b `_ensure_default_primitives_async()` entry point is
+   available for any W20 test that needs a fully-wired engine
+   without manually constructing ConnectionManager / tracker /
+   registry.
 
 ## In-flight state
 

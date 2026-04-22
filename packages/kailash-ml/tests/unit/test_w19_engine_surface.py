@@ -352,3 +352,156 @@ class TestInvariant9TenantIdPlumbed:
         engine = MLEngine()
         result: SetupResult = await engine.setup(_frame(), target="y")
         assert result.tenant_id is None
+
+
+# ----------------------------------------------------------------------
+# Invariant 2 (W19.b): Six-primitive default composition (§2.1 MUST 2)
+# Engine-owns-construction contract — every DI slot that was None at
+# __init__ is non-None after `_ensure_default_primitives_async()`.
+# Idempotent — second call is a no-op. DI-injected sentinels are
+# NEVER replaced by the default.
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def _tmp_store_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> str:
+    """Redirect engine defaults to a throwaway store + artifact root.
+
+    Every W19.b test uses this fixture so the test never touches
+    ``~/.kailash_ml/``. Honours the single-authority chain per §2.1
+    MUST 1b (writes through ``KAILASH_ML_STORE_URL``).
+    """
+    store_url = f"sqlite:///{tmp_path}/w19b.db"
+    monkeypatch.setenv(CANONICAL_STORE_URL_ENV, store_url)
+    monkeypatch.delenv(LEGACY_TRACKER_DB_ENV, raising=False)
+    monkeypatch.setenv("KAILASH_ML_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
+    return store_url
+
+
+class TestInvariant2SixPrimitivesConstructed:
+    """§2.1 MUST 2 — Engine owns construction of the six primitives."""
+
+    @pytest.mark.asyncio
+    async def test_engine_info_all_false_before_ensure(
+        self, _tmp_store_env: str
+    ) -> None:
+        """Zero-arg engine carries zero populated slots at construction."""
+        engine = MLEngine()
+        snap = engine.engine_info
+        assert snap == {
+            "connection_manager": False,
+            "artifact_store": False,
+            "registry": False,
+            "feature_store": False,
+            "trainer": False,
+            "experiment_tracker": False,
+        }
+
+    @pytest.mark.asyncio
+    async def test_ensure_default_primitives_fills_every_slot(
+        self, _tmp_store_env: str
+    ) -> None:
+        """After `_ensure_default_primitives_async()` every slot is populated."""
+        engine = MLEngine()
+        await engine._ensure_default_primitives_async()
+        try:
+            snap = engine.engine_info
+            assert all(
+                snap.values()
+            ), f"expected every slot populated; got {dict(snap)}"
+            # Canonical default types — proves the engine constructed
+            # real primitives, not placeholders.
+            assert engine._connection_manager is not None
+            assert type(engine._connection_manager).__name__ == "ConnectionManager"
+            assert type(engine._artifact_store).__name__ == "LocalFileArtifactStore"
+            assert type(engine._registry).__name__ == "ModelRegistry"
+            assert type(engine._feature_store).__name__ == "FeatureStore"
+            assert type(engine._trainer).__name__ == "TrainingPipeline"
+            assert type(engine._experiment_tracker).__name__ == "ExperimentTracker"
+        finally:
+            # Cleanup the pool / tracker to avoid resource warnings.
+            await engine._experiment_tracker.close()
+            await engine._connection_manager.close()
+
+    @pytest.mark.asyncio
+    async def test_ensure_default_primitives_is_idempotent(
+        self, _tmp_store_env: str
+    ) -> None:
+        """Second call MUST be a no-op — identity preserved for every slot."""
+        engine = MLEngine()
+        await engine._ensure_default_primitives_async()
+        try:
+            first = (
+                engine._connection_manager,
+                engine._artifact_store,
+                engine._registry,
+                engine._feature_store,
+                engine._trainer,
+                engine._experiment_tracker,
+            )
+            await engine._ensure_default_primitives_async()
+            second = (
+                engine._connection_manager,
+                engine._artifact_store,
+                engine._registry,
+                engine._feature_store,
+                engine._trainer,
+                engine._experiment_tracker,
+            )
+            for a, b in zip(first, second):
+                assert a is b, (
+                    f"slot identity broken by second ensure call: "
+                    f"first={type(a).__name__} second={type(b).__name__}"
+                )
+        finally:
+            await engine._experiment_tracker.close()
+            await engine._connection_manager.close()
+
+    @pytest.mark.asyncio
+    async def test_di_injected_connection_manager_not_replaced(
+        self, _tmp_store_env: str
+    ) -> None:
+        """DI-injected ConnectionManager is honored — default NEVER replaces it."""
+        from kailash.db.connection import ConnectionManager
+
+        injected = ConnectionManager(_tmp_store_env)
+        await injected.initialize()
+        engine = MLEngine(connection_manager=injected)
+        try:
+            await engine._ensure_default_primitives_async()
+            # Identity MUST survive — the default path skipped the slot
+            assert engine._connection_manager is injected
+            # Downstream primitives MUST be built against the injected CM
+            assert engine._registry is not None
+            assert engine._feature_store is not None
+        finally:
+            await engine._experiment_tracker.close()
+            await injected.close()
+
+    @pytest.mark.asyncio
+    async def test_di_injected_artifact_store_not_replaced(
+        self, _tmp_store_env: str
+    ) -> None:
+        """DI-injected ArtifactStore flows through to the default-built ModelRegistry."""
+        sentinel = _NamedDouble("injected-artifact-store")
+        engine = MLEngine(artifact_store=sentinel)
+        try:
+            await engine._ensure_default_primitives_async()
+            # The injected artifact-store identity survives
+            assert engine._artifact_store is sentinel
+        finally:
+            await engine._experiment_tracker.close()
+            await engine._connection_manager.close()
+
+    @pytest.mark.asyncio
+    async def test_experiment_tracker_inherits_engine_tenant_id(
+        self, _tmp_store_env: str
+    ) -> None:
+        """Default ExperimentTracker receives engine.tenant_id as default_tenant_id."""
+        engine = MLEngine(tenant_id="acme")
+        await engine._ensure_default_primitives_async()
+        try:
+            assert engine._experiment_tracker.default_tenant_id == "acme"
+        finally:
+            await engine._experiment_tracker.close()
+            await engine._connection_manager.close()

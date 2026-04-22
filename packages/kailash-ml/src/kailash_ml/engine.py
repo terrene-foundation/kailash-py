@@ -463,10 +463,20 @@ class MLEngine:
         # override is supplied, the engine uses it as-is (§2.1 MUST 3).
         self._feature_store = feature_store
         self._registry = registry
+        # `_tracker` is the user-facing Optional[ExperimentRun] handle
+        # per §2.2 (HIGH-8: NOT an ExperimentTracker instance). The
+        # engine-owned ExperimentTracker lives in `_experiment_tracker`
+        # and is constructed lazily by
+        # :meth:`_ensure_default_primitives_async` per §2.1 MUST 2.
         self._tracker = tracker
         self._trainer = trainer
         self._artifact_store = artifact_store
         self._connection_manager = connection_manager
+        # Engine-owned ExperimentTracker (§2.1 MUST 2 six-primitive
+        # composition). None until `_ensure_default_primitives_async`
+        # runs; DI cannot replace this slot directly because its
+        # construction is async-only (ExperimentTracker.create).
+        self._experiment_tracker: Any = None
 
         # Resolve the backend at construction time so that BackendInfo
         # is always available on the instance. For `accelerator="auto"`
@@ -557,6 +567,131 @@ class MLEngine:
                 else f"<injected:{type(store).__name__}>"
             )
         return self._resolved_store_url
+
+    @property
+    def engine_info(self) -> Mapping[str, bool]:
+        """Observability snapshot of which DI slots are currently wired.
+
+        Returns a frozen mapping ``{slot_name: bool}`` reporting whether
+        each §2.1 MUST 2 primitive is populated. This is the
+        observability handle ``/redteam`` uses to verify the
+        six-primitive composition contract end-to-end: every slot is
+        ``False`` immediately after construction, ``True`` after
+        :meth:`_ensure_default_primitives_async` runs. DI overrides are
+        reflected as ``True`` from ``__init__`` since the engine
+        accepted the injection without constructing a default.
+
+        The returned mapping is deliberately read-only — callers MUST
+        NOT mutate it.
+        """
+        return {
+            "connection_manager": self._connection_manager is not None,
+            "artifact_store": self._artifact_store is not None,
+            "registry": self._registry is not None,
+            "feature_store": self._feature_store is not None,
+            "trainer": self._trainer is not None,
+            "experiment_tracker": self._experiment_tracker is not None,
+        }
+
+    # ------------------------------------------------------------------
+    # §2.1 MUST 2 — six-primitive default composition
+    # ------------------------------------------------------------------
+
+    async def _ensure_default_primitives_async(self) -> None:
+        """Construct any DI slot still ``None`` with its canonical default.
+
+        Unifies the scattered lazy-construction paths
+        (``_get_registry``, ``_ensure_registry_for_read``,
+        ``_acquire_connection``, ``_resolve_artifact_store``) into a
+        single entry point. Every slot-fill is idempotent — a second
+        call is a no-op. DI-injected primitives are honored as-is per
+        §2.1 MUST 3; the default path NEVER wraps or replaces an
+        injected instance.
+
+        Construction order (respects dependency chain):
+
+        1. ``ConnectionManager`` — built from :attr:`store_url`; the
+           SQLite directory is created here so zero-arg construction
+           stays filesystem-pure until first async entry.
+        2. ``ArtifactStore`` — ``LocalFileArtifactStore`` rooted at
+           ``KAILASH_ML_ARTIFACT_ROOT`` (defaults to
+           ``~/.kailash_ml/artifacts``).
+        3. ``ModelRegistry`` — wraps the ConnectionManager + ArtifactStore
+           via :class:`kailash_ml.engines.model_registry.ModelRegistry`.
+        4. ``FeatureStore`` — wraps the ConnectionManager; registered
+           feature tables carry the default ``kml_feat_`` prefix.
+        5. ``TrainingPipeline`` — binds (feature_store, registry).
+        6. ``ExperimentTracker`` — constructed via
+           :meth:`ExperimentTracker.create` with the engine's tenant_id
+           as the default tenant so every auto-logged run carries the
+           engine's tenancy envelope.
+
+        Raises:
+            Any error from the underlying primitive constructors is
+            surfaced as-is (they are typed per their own specs). The
+            engine does NOT wrap them — caller debugging follows the
+            native exception back to the failing primitive.
+        """
+        # 1. ConnectionManager
+        if self._connection_manager is None:
+            from kailash.db.connection import ConnectionManager
+
+            url = self.store_url
+            if url.startswith("sqlite:///"):
+                db_path = pathlib.Path(url[len("sqlite:///") :])
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+            cm = ConnectionManager(url)
+            await cm.initialize()
+            self._connection_manager = cm
+
+        # 2. ArtifactStore
+        if self._artifact_store is None:
+            from kailash_ml.engines.model_registry import LocalFileArtifactStore
+
+            root = pathlib.Path(
+                os.environ.get(
+                    "KAILASH_ML_ARTIFACT_ROOT",
+                    str(pathlib.Path.home() / ".kailash_ml" / "artifacts"),
+                )
+            )
+            root.mkdir(parents=True, exist_ok=True)
+            self._artifact_store = LocalFileArtifactStore(root_dir=root)
+
+        # 3. ModelRegistry
+        if self._registry is None:
+            from kailash_ml.engines.model_registry import ModelRegistry
+
+            self._registry = ModelRegistry(
+                self._connection_manager,
+                artifact_store=self._artifact_store,
+            )
+
+        # 4. FeatureStore
+        if self._feature_store is None:
+            from kailash_ml.engines.feature_store import FeatureStore
+
+            fs = FeatureStore(self._connection_manager)
+            await fs.initialize()
+            self._feature_store = fs
+
+        # 5. TrainingPipeline
+        if self._trainer is None:
+            from kailash_ml.engines.training_pipeline import TrainingPipeline
+
+            self._trainer = TrainingPipeline(
+                self._feature_store,
+                self._registry,
+            )
+
+        # 6. ExperimentTracker — async-only factory, so it can only
+        # land here (construction outside __init__).
+        if self._experiment_tracker is None:
+            from kailash_ml.tracking.tracker import ExperimentTracker
+
+            self._experiment_tracker = await ExperimentTracker.create(
+                self.store_url,
+                default_tenant_id=self._tenant_id,
+            )
 
     # ------------------------------------------------------------------
     # The eight public methods (§2.1 MUST 5)
