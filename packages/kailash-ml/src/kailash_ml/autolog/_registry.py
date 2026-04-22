@@ -123,6 +123,27 @@ class FrameworkIntegration(ABC):
         user's ``async with`` body raised an exception per §3.2.
         """
 
+    async def flush(self, run: "ExperimentRun") -> None:
+        """Drain any buffered log events to the tracker.
+
+        Called by the autolog context manager between ``yield`` and
+        :meth:`detach` — the event loop is still running, so integrations
+        MAY ``await`` their tracker calls here even when the user's
+        instrumented code path was sync (e.g. scikit-learn's
+        ``estimator.fit(X, y)``).
+
+        Default implementation is a no-op. Integrations whose hook
+        surface is natively async (Lightning's ``pl.Callback`` which
+        receives the run via an injected tracker reference) leave this
+        untouched. Integrations whose hook surface is sync (sklearn
+        wrapping ``BaseEstimator.fit``, statsmodels wrapping
+        ``Results.summary``) override to drain an in-memory buffer.
+
+        Per ``rules/zero-tolerance.md`` Rule 3 — failures here raise
+        loudly; silent-swallow of buffered events is BLOCKED.
+        """
+        return None
+
     def _guard_double_attach(self) -> None:
         """Helper for subclasses — raise
         :class:`~kailash.ml.errors.AutologDoubleAttachError` when

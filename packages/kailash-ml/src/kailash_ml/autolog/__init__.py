@@ -38,6 +38,14 @@ from kailash_ml.autolog._registry import (
 )
 from kailash_ml.autolog.config import AutologConfig, AutologHandle
 
+# Framework integrations — W23.b onwards. Each module registers its
+# concrete integration class via @register_integration at module
+# scope (orphan-detection.md §1 — production call site is the CM's
+# auto-detect + explicit-name resolver). Framework imports live
+# inside each module's attach()/flush() so importing this package
+# does NOT pull sklearn / lightgbm / lightning into sys.modules.
+from kailash_ml.autolog import _sklearn  # noqa: F401 — registration side-effect
+
 
 __all__ = [
     "AutologConfig",

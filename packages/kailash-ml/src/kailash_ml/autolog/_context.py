@@ -307,6 +307,22 @@ async def autolog(
         try:
             yield handle
         finally:
+            # Flush sync-instrumentation buffers BEFORE detach. Default
+            # flush is a no-op (native-async integrations); sklearn /
+            # statsmodels override to drain their buffer. Runs under
+            # the outer run's event loop so `await` is valid per
+            # ml-autolog.md §3.2 extension.
+            flush_errors: list[BaseException] = []
+            for integ in active:
+                try:
+                    await integ.flush(run)
+                except Exception as exc:  # noqa: BLE001
+                    flush_errors.append(exc)
+                    logger.exception(
+                        "autolog.flush_failed",
+                        extra={"integration": integ.name},
+                    )
+
             # §8.5 — detach MUST run even when the wrapped block
             # raised. Preserve the user's exception via __context__ if
             # any detach fails (§7.1 MUST — losing the user's stack is
@@ -322,6 +338,11 @@ async def autolog(
                         "autolog.detach_failed",
                         extra={"integration": integ.name},
                     )
+
+            # Combine flush + detach errors. The first failure of
+            # either class becomes the primary; the rest chain via
+            # __cause__.
+            detach_errors = flush_errors + detach_errors
             if detach_errors:
                 first = detach_errors[0]
                 wrapped = AutologDetachError(
