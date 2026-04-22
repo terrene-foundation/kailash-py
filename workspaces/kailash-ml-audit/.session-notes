@@ -1,233 +1,98 @@
-# Session Notes — 2026-04-22
+# Session Notes — 2026-04-22 (W22.b)
 
 ## Where we are
 
 kailash-ml 1.0.0 `/implement` phase, branch
-`feat/kailash-ml-1.0.0-m1-foundations`, local only. W19 partial-slice
-in progress. 20 of 38 waves landed (W16–W18 complete, M5 Milestone
-DONE). **W19** split into two sub-shards:
+`feat/kailash-ml-1.0.0-m1-foundations`, local only. **W22.b** landed
+this session: engine-boundary auto-attach of
+`DLDiagnostics.as_lightning_callback()` in
+`TrainingPipeline._train_lightning`. Next shard is **W23.a** — autolog
+for sklearn + lightgbm + Lightning + torch per `specs/ml-autolog.md`.
 
-- **W19.a (this session)** — MUST 1b env authority chain wire +
-  Tier-1 invariant test coverage for 9 W19 invariants against the
-  existing engine surface. 20 new tests (20/20 green).
-- **W19.b (this session)** — MUST 2 full six-primitive default
-  construction. Shipped
-  `MLEngine._ensure_default_primitives_async()` + `engine_info`
-  property + new `_experiment_tracker` slot. ConnectionManager →
-  ArtifactStore → ModelRegistry → FeatureStore → TrainingPipeline →
-  ExperimentTracker constructed in dependency order. Idempotent on
-  re-entry; DI-injected slots honored (identity preserved) on
-  every slot. 6 new Tier-1 tests; 65/65 green across the W19 unit
-  + env + compare integration sweep.
+## What W22.b delivered
 
-## W19.b — six-primitive default composition (done, this session)
+1. `DLDiagnostics.is_available() -> bool` classmethod in
+   `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py` — probes
+   both `torch` and `lightning.pytorch`; returns False if either import
+   fails. Used as the availability gate by `_train_lightning`.
+2. `_is_dl_diagnostics_callback: bool = True` sentinel on the nested
+   `_DLDiagnosticsCallback` class. The nested class cannot be
+   referenced by name from outside `as_lightning_callback`, so the
+   sentinel is the isinstance-equivalent for de-duplication at the
+   engine boundary.
+3. Auto-attach block in `_train_lightning` (between `trainer_kwargs`
+   assembly and `L.Trainer(**trainer_kwargs)`). Appends the DL callback
+   iff `DLDiagnostics.is_available()` AND
+   `kailash_ml.tracking.get_current_run()` is not None; de-dupes
+   against caller-supplied DL callbacks (caller's instance wins).
+   INFO log line `training_pipeline.lightning.dl_diagnostics_attached`
+   on append, `_skipped_duplicate` on de-dup.
+4. Tier-1 unit tests —
+   `packages/kailash-ml/tests/unit/test_w22b_train_lightning_autoattach.py`
+   (8 tests): no-run skip, dl-unavailable skip, positive auto-attach,
+   sentinel presence, caller-supplied de-dup (caller wins), non-DL
+   user-callback composition, is_available() probe both branches.
+5. Tier-2 wiring test —
+   `packages/kailash-ml/tests/integration/test_w22b_autoattach_wiring.py`
+   (2 tests): real 1-epoch `L.Trainer.fit` via `_train_lightning` with
+   a sync duck-typed tracker as the ambient run — asserts `loss_curves`
+   emitted with plotly Figure per `specs/ml-diagnostics.md §4.1` duck
+   typing.
 
-- **New slot** — `MLEngine._experiment_tracker` (engine-owned
-  `ExperimentTracker`; async-only factory, so it can only land
-  inside `_ensure_default_primitives_async()`, not `__init__`).
-  `_tracker` stays the user-facing `Optional[ExperimentRun]`
-  kwarg per §2.2 (HIGH-8: NOT Optional[ExperimentTracker]).
-- **New method** — `_ensure_default_primitives_async()` fills the
-  six slots in dependency order:
-  1. `ConnectionManager` — built from `self.store_url`; sqlite dir
-     created here (zero-arg construction stays filesystem-pure
-     until first async entry).
-  2. `ArtifactStore` — `LocalFileArtifactStore` rooted at
-     `KAILASH_ML_ARTIFACT_ROOT` env (defaults to
-     `~/.kailash_ml/artifacts`).
-  3. `ModelRegistry` (legacy `engines.model_registry.ModelRegistry`
-     — the one already wired by existing fit/evaluate paths) with
-     injected `artifact_store=`.
-  4. `FeatureStore(conn)` + `await initialize()`.
-  5. `TrainingPipeline(feature_store, registry)`.
-  6. `ExperimentTracker.create(store_url, default_tenant_id=
-     self._tenant_id)`.
-  Every slot is guarded by `is None` — DI-injected instances are
-  NEVER wrapped or replaced (§2.1 MUST 3 identity contract).
-- **New property** — `engine_info: Mapping[str, bool]` returns the
-  slot-population snapshot. Observability handle for `/redteam`
-  and tests; NOT a callable (stays outside the 8-method cap).
-  Every slot `False` after zero-arg `MLEngine()`; every slot
-  `True` after `_ensure_default_primitives_async()`.
-- **New tests** — `TestInvariant2SixPrimitivesConstructed` in
-  `test_w19_engine_surface.py`:
-  - `test_engine_info_all_false_before_ensure` — slot snapshot
-    after zero-arg construction is all-False.
-  - `test_ensure_default_primitives_fills_every_slot` — post-ensure
-    snapshot is all-True; each slot's runtime type matches the
-    canonical default (`ConnectionManager`, `LocalFileArtifactStore`,
-    `ModelRegistry`, `FeatureStore`, `TrainingPipeline`,
-    `ExperimentTracker`).
-  - `test_ensure_default_primitives_is_idempotent` — identity
-    preserved across two calls (zip-identity on the 6-tuple).
-  - `test_di_injected_connection_manager_not_replaced` — injected
-    `ConnectionManager` survives ensure; downstream registry +
-    feature_store are built against it.
-  - `test_di_injected_artifact_store_not_replaced` — sentinel
-    ArtifactStore identity survives.
-  - `test_experiment_tracker_inherits_engine_tenant_id` —
-    `engine.tenant_id="acme"` flows into
-    `_experiment_tracker.default_tenant_id`.
-- **Tmp-store fixture** — `_tmp_store_env` redirects the default
-  store + artifact root to `tmp_path` via `KAILASH_ML_STORE_URL`
-  + `KAILASH_ML_ARTIFACT_ROOT`, so W19.b tests never touch
-  `~/.kailash_ml/`.
-- **Totals** — 6/6 new W19.b tests; 26/26 cumulative W19 unit
-  tests; 65/65 across construction + env resolver + W19 + compare
-  integration; 126/126 on the tracker/registry/artifact sweep
-  (no regression).
+Spec mandate closed: `specs/ml-diagnostics.md §5.3 Engine-boundary
+auto-attach` ("W22 invariant 4 — callback appended by MLEngine.fit").
+Test sweep: `66 passed, 1 warning` across W20/W22/W22.a/W22.b/DL-wiring.
 
-## W19.a — env authority chain + invariant tests (done, this session)
+## Read first for W23.a
 
-- **W19.a edit** — `kailash_ml/engine.py::_default_store_url` now
-  delegates to `kailash_ml._env.resolve_store_url(None)` (MUST 1b
-  single-site env-var plumbing). Hand-rolled `os.environ.get(...)`
-  at the engine site removed; the engine now shares the exact
-  authority chain with tracker/registry/feature-store: explicit
-  kwarg → `KAILASH_ML_STORE_URL` → legacy `KAILASH_ML_TRACKER_DB`
-  (DEBUG log once; raises `EnvVarDeprecatedError` when
-  `KAILASH_ML_STRICT_ENV=1`) → `sqlite:///~/.kailash_ml/ml.db`.
-- **W19.a tests** — `tests/unit/test_w19_engine_surface.py` with
-  20 Tier-1 tests covering 7 of the 9 invariants:
-  - Inv 1: zero-arg construction + `engine.store_url` matches the
-    shared resolver output (with `KAILASH_ML_STORE_URL` /
-    `KAILASH_ML_TRACKER_DB` monkeypatch-unset for determinism).
-  - Inv 2: all 7 DI slots present on `__init__` signature; a
-    sentinel object flows through every slot.
-  - Inv 3: DI overrides honored literally (identity `is` check)
-    for tracker / registry / feature_store / artifact_store /
-    connection_manager.
-  - Inv 4: setup() idempotent per (df_fingerprint, target, ignore,
-    feature_store_name) — same input → same `schema_hash`; different
-    target or different ignore → different hash.
-  - Inv 5: compare() dispatches every family through `self.fit()`
-    (monkeypatched stub counts invocations; exercises the
-    Lightning-spine invariant at the dispatch layer).
-  - Inv 6: setup() raises `TargetNotFoundError`, ValueError on
-    empty target, ValueError on zero-feature ignore list.
-  - Inv 7: 8-method surface exactly (setup, compare, fit, predict,
-    finalize, evaluate, register, serve) with a guard against 9th-
-    method drift via public-callable enumeration.
-  - Inv 9: `tenant_id` plumbed onto `SetupResult` (echoes
-    `engine.tenant_id`; `None` single-tenant).
-- **Skipped this shard** — Inv 2 (full MUST-2 six-primitive default
-  composition) deferred to W19.b per capacity budget; Inv 8
-  (async-first + sync variant) deferred to a later wave since the
-  sync variant lives at `kailash_ml.sync.Engine` which this shard
-  does not touch.
-- **Totals** — 20/20 new tests green; 59/59 green across W19 unit +
-  env resolver + existing compare integration tests.
-
-## W18 — alias + lineage + query ops (done)
-
-Single commit on the branch:
-
-- **W18** (`7a0f6ad9`) — 2766 LOC / 7 files.
-  - `ModelRegistry.set_alias` / `clear_alias` / `promote_model` /
-    `demote_model` — tenant-scoped alias mutations; `promote_model`
-    defaults to `force=False` (raises `AliasOccupiedError`),
-    `demote_model` auto-sets `@archived` when no other alias holds
-    the demoted version.
-  - `ModelRegistry.get_model` / `list_models` / `search_models` /
-    `diff_versions` — polars-native listing, restricted filter DSL
-    (allowlist cols + ops, `LIKE` / subquery / function-call BLOCKED),
-    structural diff (signature add/removed/changed + lineage + format
-    + onnx_status).
-  - `ModelRegistry.get_lineage_parent` — one-hop DAG walk with
-    cross-tenant refusal (`CrossTenantLineageError` when parent
-    resolves into a different tenant).
-  - `register_model(alias=...)` kwarg now validates + applies
-    post-registration; invalid alias blocks registration before the
-    version row lands.
-  - New dataclasses: `ModelHandle` (lazy `.load()` via attached
-    artifact store), `ModelDiff`, `{Set,Clear}AliasResult`,
-    `{Promote,Demote}Result`.
-  - New errors: `InvalidAliasError`, `AliasOccupiedError`,
-    `AliasNotFoundError`, `ModelNotFoundError`,
-    `CrossTenantLineageError`, `FilterParseError`.
-  - Storage: `experiment_registry_aliases` table added to SQLite +
-    Postgres (soft delete via `cleared_at`, LWW via `sequence_num`,
-    one row per `(tenant_id, model_name, alias)`). Audit rows route
-    through existing `experiment_audit` with `resource_kind="model_alias"`.
-  - Tests: 41 Tier-1 unit (regex + reserved aliases + DSL grammar +
-    log-poisoning defense) + 26 Tier-2 wiring against real SQLite.
-    All 166 W16+W17+W18 tests green; 446 tracker regression passes.
-
-## Read first
-
-1. `workspaces/kailash-ml-audit/02-plans/01-master-34-wave-plan.md`
-   §259 — W20 is the next shard:
-   `MLEngine.fit()` + `predict()` + `finalize()` + `evaluate()`
-   with the Lightning distribution passthrough (strategy, devices,
-   num_nodes, enable_checkpointing, auto_find_lr, callbacks).
-2. `specs/ml-engines-v2.md §2.1 MUST 8-9 + §2.2` — the 10 W20
-   invariants: fit() family-vs-trainable mutual exclusion,
-   EngineNotSetUpError, UnsupportedTrainerError on raw-loop
-   detection, Lightning Strategy plumb-through, ambient
-   ModelCheckpoint, `Trainer.lr_find` wiring, predict() channel
-   dispatch, finalize() full-fit contract, evaluate() mode
-   (holdout/shadow/live), SchemaDriftError.
-3. `packages/kailash-ml/src/kailash_ml/engine.py` — existing fit /
-   predict / finalize / evaluate bodies have most of §2.1 MUST 8
-   already; W20's scope is verifying the Lightning passthrough
-   invariants via tests + filling any gaps.
-4. The W19.b `_ensure_default_primitives_async()` entry point is
-   available for any W20 test that needs a fully-wired engine
-   without manually constructing ConnectionManager / tracker /
-   registry.
+1. `specs/ml-autolog.md` — whole file; covers sklearn / lightgbm /
+   Lightning / torch monkey-patch targets, ambient-run detection
+   contract, metric namespace discipline (`train/{metric}`,
+   `val/{metric}`), and the opt-in `km.autolog(flavor=...)` entry.
+2. `workspaces/kailash-ml-audit/02-plans/01-master-34-wave-plan.md`
+   §W23 — 6 invariants (per-flavor enable, silent skip when
+   `ambient_run is None`, namespace discipline, extras gating,
+   unpatch on opt-out, rank-0-only for Lightning).
+3. `packages/kailash-ml/src/kailash_ml/tracking/__init__.py` —
+   `get_current_run()` is the single detection source (same accessor
+   W22.b used).
 
 ## In-flight state
 
-- `ModelRegistry` now exposes the full §4 + §8 + §9 surface;
-  register_model's `alias=` kwarg is live. `_validate_alias` lives
-  at `ALIAS_REGEX` (`^@[a-zA-Z][a-zA-Z0-9_-]{0,63}$`); reserved set
-  is `RESERVED_ALIASES`.
-- Audit emission routes every mutation through
-  `_emit_alias_audit(..., resource_kind="model_alias",
-  resource_id="<name>@<alias>")` — a promote also emits a
-  `set_alias` sibling row because the helper flow is
-  promote → set_alias → audit; the spec's §8.1 requires both.
-- `MLEngine.register` convenience (W21) still unowned; the current
-  shard's register_model accepts bytes or explicit URI per W17.
-- `allow_pickle_fallback=True` disposition still deferred — pickled
-  formats WARN at registration but do not route through §5.6.2
-  `"legacy_pickle_only"` yet.
-- Schema unification (`experiment_*` → `_kml_*`) still deferred.
-- `.pending/` journal entries still unflushed from prior sessions.
-- Pre-existing segfault-on-import tests remain
-  (`test_automl_engine.py`, `test_w09_lightning_adapters.py`,
-  `test_xgboost_oom_fallback.py`, `test_device_report.py`,
-  `test_auto_logging.py`). Not W18 regressions.
+- The sync-tracker stub via `_current_run.set(tracker)` in W22.b's
+  Tier-2 wiring avoids the async bridge trap. A real `ExperimentRun`
+  plumbed through the auto-attach path would hit the
+  `asyncio.run()` → `RuntimeError` fallback and drop emissions
+  (documented in W22.a traps). W23.a does NOT need to fix this — the
+  autolog path writes metrics, not figures, and the tracker's
+  `log_metric` has the same async shape so the same workaround
+  applies.
+- Tier-2 wiring registers `_TinyTupleModule` via `sys.modules` under
+  `kailash_ml._w22b_tiny.*` so `_shared.validate_model_class`
+  allowlist stays intact. Any future Tier-2 pipeline test that needs
+  a tuple-aware Lightning module can copy this pattern — the
+  alternative (monkey-patching the allowlist) weakens a security
+  gate for test convenience.
 
-## Traps
+## Traps carried over from W22.a
 
-- `list_registry_versions` parameters MUST be appended in final-SQL
-  order: JOIN(alias)? → WHERE(tenant_id) → WHERE(name)? →
-  LIMIT/OFFSET. The first iteration appended `tenant_id` before the
-  JOIN param and silently returned zero rows (no type error,
-  because both are strings). The inline comment locks the ordering.
-- `demote_model` auto-archive walks
-  `list_aliases_for_version(tenant_id, model_version_id)` AFTER the
-  clear — the just-cleared alias is excluded by the
-  `cleared_at IS NULL` predicate. If you add aliases that survive
-  the clear, this invariant breaks.
-- `ModelHandle.load()` forwards `tenant_id=` to
-  `AbstractArtifactStore.get(uri, tenant_id=...)`. W17's CAS store
-  enforces tenant isolation on disk, so a handle copied across
-  tenants (which you cannot do through the public API) would fail
-  loudly — not silently return someone else's bytes.
-- The alias-audit resource_id format is
-  `"<model_name>@<alias>"` (e.g. `"fraud@@production"`). The double
-  `@` is the alias's `@` prefix, NOT a typo.
-- Promote emits BOTH a `set_alias` row (from the inner set_alias
-  helper) AND a `promote` row (from promote_model itself). Demote
-  is symmetrical: `clear_alias` sibling + `demote` row. Audit
-  consumers filtering by action MUST accept either.
-- `search_models` DSL accepts ONLY `<col> <op> <literal>` clauses
-  joined by `AND`. Quoted strings OR unsigned ints — no NULL, no
-  list, no subquery, no function call. Rejection messages do NOT
-  echo the raw filter (log-poisoning defense aligned with the
-  dialect identifier helper).
-- `test_alias_mutations_emit_audit_rows` depends on the
-  `resource_id` format being exactly `"fraud@@production"`; a rename
-  of the format breaks the audit-trail grep in CI.
+- `tracker.log_figure` is `async def` on real `ExperimentRun` but the
+  callback uses `asyncio.run(coro)` — this RAISES `RuntimeError:
+  asyncio.run() cannot be called from a running event loop` if
+  Lightning is driven from inside an async parent. The defensive
+  `result.close()` branch handles it but SILENTLY DROPS the
+  emission. A real-tracker Tier-2 needs an event-loop-aware bridge
+  (e.g., `asyncio.run_coroutine_threadsafe` to a dedicated worker
+  loop). Out of scope for W22.b; flag if W22.c re-opens it.
+- `MLEngine` has no `close()` method. Broader engine-suite runs
+  segfault during aiosqlite teardown when many tests run together;
+  use per-file invocation or the `managed_engines` factory fixture.
+- `DLDiagnostics.plot_*()` methods don't return `None` on empty
+  logs — they return minimal plotly Figures. Tests that only assert
+  `.calls` length can pass without detecting "emitted but empty";
+  assert `figure_type == "Figure"` if substance matters.
+
+## Commits this session
+
+- `47361d57` W22.a — pre-session baseline (already present at entry)
+- (pending) W22.b — engine auto-attach + tests

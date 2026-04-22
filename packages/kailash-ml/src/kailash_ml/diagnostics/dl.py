@@ -428,6 +428,22 @@ class DLDiagnostics:
         )
         return self
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """Return ``True`` iff torch AND lightning.pytorch can both be imported.
+
+        Used by :meth:`TrainingPipeline._train_lightning` to decide whether to
+        auto-attach a diagnostics callback per ``specs/ml-diagnostics.md §5.3
+        Engine-boundary auto-attach`` (cross-ref ``ml-engines-v2.md §3.2 MUST 5``).
+        Install-time import probe — no module-level side effects.
+        """
+        try:
+            import lightning.pytorch  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
+            import torch  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
+        except ImportError:
+            return False
+        return True
+
     def detach(self) -> None:
         """Remove ALL registered hooks and release references.
 
@@ -524,6 +540,14 @@ class DLDiagnostics:
             Rank-0-only per Decision 4; no-op on non-zero DDP workers and when
             ``diag._tracker is None``.
             """
+
+            # Sentinel attribute used by
+            # :meth:`TrainingPipeline._train_lightning` to de-duplicate the
+            # engine-appended callback against a caller-supplied duplicate per
+            # ``specs/ml-diagnostics.md §5.3`` — "user-supplied duplicate
+            # DLDiagnostics.as_lightning_callback() is de-duplicated by
+            # isinstance — the engine-appended instance wins."
+            _is_dl_diagnostics_callback: bool = True
 
             def __init__(self) -> None:
                 super().__init__()

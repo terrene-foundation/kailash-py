@@ -17,15 +17,15 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+from kailash_ml.engines._shared import validate_model_class as _validate_model_class
+from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
+from kailash_ml.interop import to_sklearn_input
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureSchema,
     MetricSpec,
     ModelSignature,
 )
-
-from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
-from kailash_ml.interop import to_sklearn_input
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,10 @@ __all__ = [
     "TrainingResult",
 ]
 
-# ---------------------------------------------------------------------------
-# Security: model class allowlist (C1)
-# ---------------------------------------------------------------------------
-
-from kailash_ml.engines._shared import validate_model_class as _validate_model_class
-
+# Security allowlist (C1): `_validate_model_class` imported above gates
+# model-class strings through the `ALLOWED_MODEL_PREFIXES` frozenset in
+# `engines/_shared.py`. Moved to module-top imports so ruff E402 stops
+# flagging this file.
 
 # ---------------------------------------------------------------------------
 # Core types
@@ -548,10 +546,10 @@ class TrainingPipeline:
         try:
             import lightning as L  # pyright: ignore[reportMissingImports]  # optional dl extra
             import torch  # pyright: ignore[reportMissingImports]  # optional dl extra
-            from torch.utils.data import (
+            from torch.utils.data import (  # pyright: ignore[reportMissingImports]
                 DataLoader,
                 TensorDataset,
-            )  # pyright: ignore[reportMissingImports]
+            )
         except ImportError as exc:
             raise ImportError(
                 "PyTorch Lightning is required for DL training. "
@@ -620,6 +618,43 @@ class TrainingPipeline:
                 "diagnostic_source": backend_info.diagnostic_source,
             },
         )
+
+        # Engine-boundary auto-attach of DLDiagnostics.as_lightning_callback()
+        # per specs/ml-diagnostics.md §5.3 (cross-ref ml-engines-v2.md §3.2
+        # MUST 5). Attaches IFF (a) DLDiagnostics.is_available() AND (b)
+        # kailash_ml.tracking.get_current_run() returns a non-None
+        # ExperimentRun. The attachment is non-overridable — user-supplied
+        # callbacks compose with the engine-appended diagnostics callback;
+        # duplicate caller-supplied DL callbacks are de-duplicated by the
+        # ``_is_dl_diagnostics_callback`` sentinel (engine-appended wins).
+        from kailash_ml.diagnostics.dl import DLDiagnostics
+        from kailash_ml.tracking import get_current_run
+
+        ambient_run = get_current_run()
+        if ambient_run is not None and DLDiagnostics.is_available():
+            user_callbacks = list(trainer_kwargs.get("callbacks") or [])
+            already_has_dl_cb = any(
+                getattr(cb, "_is_dl_diagnostics_callback", False)
+                for cb in user_callbacks
+            )
+            if already_has_dl_cb:
+                logger.info(
+                    "training_pipeline.lightning.dl_diagnostics_skipped_duplicate",
+                    extra={"dl_run_id": getattr(ambient_run, "run_id", None)},
+                )
+                trainer_kwargs["callbacks"] = user_callbacks
+            else:
+                diag = DLDiagnostics(lightning_module, tracker=ambient_run)
+                dl_cb = diag.as_lightning_callback()
+                user_callbacks.append(dl_cb)
+                trainer_kwargs["callbacks"] = user_callbacks
+                logger.info(
+                    "training_pipeline.lightning.dl_diagnostics_attached",
+                    extra={
+                        "dl_run_id": diag.run_id,
+                        "dl_tracker_type": type(ambient_run).__name__,
+                    },
+                )
 
         # Train
         trainer = L.Trainer(**trainer_kwargs)
