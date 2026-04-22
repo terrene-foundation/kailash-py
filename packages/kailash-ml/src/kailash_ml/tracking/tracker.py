@@ -27,9 +27,21 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+
+if TYPE_CHECKING:
+    import polars as pl  # noqa: F401 — referenced in forward-string annotations
 
 from kailash_ml._env import resolve_store_url
+from kailash_ml.errors import RunNotFoundError
+from kailash_ml.tracking.query import (
+    FilterParseError,
+    RunDiff,
+    RunRecord,
+    build_search_sql,
+    compute_run_diff,
+    run_record_from_row,
+)
 from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.runner import track as _track_async
 from kailash_ml.tracking.sqlite_backend import SQLiteTrackerBackend
@@ -326,6 +338,221 @@ class ExperimentTracker:
             )
         await run.__aexit__(exc_type, error, None)
 
+    # ------------------------------------------------------------------
+    # W13 — Query primitives (spec ml-tracking.md §5)
+    # ------------------------------------------------------------------
+
+    async def get_run(
+        self, run_id: str, *, tenant_id: Optional[str] = None
+    ) -> RunRecord:
+        """Return a typed :class:`RunRecord` for ``run_id`` (spec §5.1).
+
+        ``tenant_id`` scopes the lookup when set — reading another
+        tenant's run raises :class:`RunNotFoundError`. When omitted,
+        falls back to the engine-level default tenant.
+
+        Raises :class:`RunNotFoundError` if the run does not exist or
+        is scoped to a different tenant.
+        """
+        self._require_backend()
+        assert self._backend is not None
+        row = await self._backend.get_run(run_id)
+        if row is None:
+            raise RunNotFoundError(
+                reason=f"run_id {run_id!r} not found",
+                resource_id=run_id,
+            )
+        resolved_tenant = (
+            tenant_id if tenant_id is not None else self._default_tenant_id
+        )
+        if resolved_tenant is not None and row.get("tenant_id") != resolved_tenant:
+            raise RunNotFoundError(
+                reason=f"run_id {run_id!r} not visible to tenant",
+                resource_id=run_id,
+                tenant_id=resolved_tenant,
+            )
+        return run_record_from_row(row)
+
+    async def list_runs(
+        self,
+        *,
+        experiment: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> "pl.DataFrame":
+        """Return runs matching the given filters as a polars DataFrame.
+
+        Columns: ``run_id``, ``experiment``, ``status``, ``tenant_id``,
+        ``parent_run_id``, ``wall_clock_start``, ``wall_clock_end``,
+        ``duration_seconds``, ``git_sha``, ``device_used``. Ordered by
+        ``wall_clock_end DESC`` by default.
+        """
+        self._require_backend()
+        assert self._backend is not None
+        resolved_tenant = self._resolve_tenant(tenant_id)
+        rows = await self._backend.query_runs(
+            experiment=experiment,
+            tenant_id=resolved_tenant,
+            status=status,
+            limit=limit,
+        )
+        return _runs_dataframe(rows)
+
+    async def search_runs(
+        self,
+        *,
+        filter: Optional[str] = None,
+        order_by: Optional[str] = None,
+        limit: int = 100,
+        tenant_id: Optional[str] = None,
+    ) -> "pl.DataFrame":
+        """MLflow-compatible search over runs (spec §5.2).
+
+        ``filter`` accepts expressions like
+        ``"metrics.val_loss < 0.5 AND params.family = 'lightgbm'"``.
+        Parse errors raise :class:`ValueError` with prefix
+        ``"invalid filter:"``.
+        """
+        self._require_backend()
+        assert self._backend is not None
+        resolved_tenant = self._resolve_tenant(tenant_id)
+        try:
+            sql, params = build_search_sql(
+                filter,
+                tenant_id=resolved_tenant,
+                order_by=order_by,
+                limit=limit,
+            )
+        except FilterParseError:
+            raise
+        rows = await self._backend.search_runs_raw(sql, params)
+        return _runs_dataframe(rows)
+
+    async def list_experiments(
+        self, *, tenant_id: Optional[str] = None
+    ) -> "pl.DataFrame":
+        """Summarise every experiment as a polars DataFrame.
+
+        Columns: ``experiment``, ``run_count``, ``finished_count``,
+        ``failed_count``, ``killed_count``, ``latest_wall_clock_end``.
+        """
+        self._require_backend()
+        assert self._backend is not None
+        resolved_tenant = self._resolve_tenant(tenant_id)
+        rows = await self._backend.list_experiments_summary(tenant_id=resolved_tenant)
+        import polars as pl  # noqa: PLC0415
+
+        if not rows:
+            return pl.DataFrame(
+                schema={
+                    "experiment": pl.Utf8,
+                    "run_count": pl.Int64,
+                    "finished_count": pl.Int64,
+                    "failed_count": pl.Int64,
+                    "killed_count": pl.Int64,
+                    "latest_wall_clock_end": pl.Utf8,
+                }
+            )
+        return pl.DataFrame(rows)
+
+    async def list_metrics(
+        self, run_id: str, *, tenant_id: Optional[str] = None
+    ) -> "pl.DataFrame":
+        """Return every metric row logged against ``run_id``.
+
+        Tenant-scoped via :meth:`get_run` — unauthorised access raises
+        :class:`RunNotFoundError`. Columns: ``key``, ``step``,
+        ``value``, ``timestamp``.
+        """
+        # Route through get_run so tenant-scope is enforced before the
+        # metric rows are exposed.
+        await self.get_run(run_id, tenant_id=tenant_id)
+        assert self._backend is not None
+        rows = await self._backend.list_metrics(run_id)
+        import polars as pl  # noqa: PLC0415
+
+        if not rows:
+            return pl.DataFrame(
+                schema={
+                    "key": pl.Utf8,
+                    "step": pl.Int64,
+                    "value": pl.Float64,
+                    "timestamp": pl.Utf8,
+                }
+            )
+        return pl.DataFrame(rows)
+
+    async def list_artifacts(
+        self, run_id: str, *, tenant_id: Optional[str] = None
+    ) -> "pl.DataFrame":
+        """Return every artifact row logged against ``run_id``.
+
+        Tenant-scoped via :meth:`get_run`. Columns: ``name``,
+        ``sha256``, ``content_type``, ``size_bytes``, ``storage_uri``,
+        ``created_at``.
+        """
+        await self.get_run(run_id, tenant_id=tenant_id)
+        assert self._backend is not None
+        rows = await self._backend.list_artifacts(run_id)
+        import polars as pl  # noqa: PLC0415
+
+        if not rows:
+            return pl.DataFrame(
+                schema={
+                    "name": pl.Utf8,
+                    "sha256": pl.Utf8,
+                    "content_type": pl.Utf8,
+                    "size_bytes": pl.Int64,
+                    "storage_uri": pl.Utf8,
+                    "created_at": pl.Utf8,
+                }
+            )
+        return pl.DataFrame(rows)
+
+    async def diff_runs(
+        self,
+        run_a: str,
+        run_b: str,
+        *,
+        tenant_id: Optional[str] = None,
+    ) -> RunDiff:
+        """Compute a :class:`RunDiff` between two runs (spec §5.3)."""
+        record_a = await self.get_run(run_a, tenant_id=tenant_id)
+        record_b = await self.get_run(run_b, tenant_id=tenant_id)
+        assert self._backend is not None
+        metrics_a = await self._backend.list_metrics(run_a)
+        metrics_b = await self._backend.list_metrics(run_b)
+        return compute_run_diff(record_a, record_b, metrics_a, metrics_b)
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _require_backend(self) -> None:
+        """Raise if the tracker has no SQLite backend (Postgres path).
+
+        W13 query primitives currently only implement the SQLite path
+        via :class:`SQLiteTrackerBackend`. Postgres / MySQL query
+        backends land in W14+.
+        """
+        if self._backend is None:
+            raise RuntimeError(
+                "ExperimentTracker has no SQLite backend attached; "
+                "W13 query primitives require sqlite:// store URLs. "
+                "Postgres / MySQL query support lands in W14+."
+            )
+
+    def _resolve_tenant(self, explicit: Optional[str]) -> Optional[str]:
+        """Resolve the tenant for a query.
+
+        Explicit wins over the engine default; passing ``None`` with
+        no engine default falls through to an unscoped query.
+        W15 will extend this with ``multi_tenant_strict`` mode that
+        raises :class:`TenantRequiredError` when neither is set.
+        """
+        return explicit if explicit is not None else self._default_tenant_id
+
     async def close(self) -> None:
         """Release any backend resources owned by this tracker."""
         if self._backend is not None:
@@ -447,6 +674,50 @@ def _sqlite_path_for(url: str) -> Optional[str]:
         rest = url[len("sqlite:///") :]
         return rest or ":memory:"
     return None
+
+
+_RUN_DATAFRAME_COLUMNS: tuple[str, ...] = (
+    "run_id",
+    "experiment",
+    "status",
+    "tenant_id",
+    "parent_run_id",
+    "wall_clock_start",
+    "wall_clock_end",
+    "duration_seconds",
+    "git_sha",
+    "device_used",
+    "accelerator",
+)
+
+
+def _runs_dataframe(rows: list[dict[str, Any]]) -> "Any":
+    """Project run rows into the W13 polars DataFrame shape.
+
+    Returns a polars DataFrame with a stable column set so downstream
+    diff / dashboard consumers can rely on column names across empty
+    and non-empty returns.
+    """
+    import polars as pl  # noqa: PLC0415 — polars is a declared kailash-ml dep
+
+    if not rows:
+        return pl.DataFrame(
+            schema={
+                "run_id": pl.Utf8,
+                "experiment": pl.Utf8,
+                "status": pl.Utf8,
+                "tenant_id": pl.Utf8,
+                "parent_run_id": pl.Utf8,
+                "wall_clock_start": pl.Utf8,
+                "wall_clock_end": pl.Utf8,
+                "duration_seconds": pl.Float64,
+                "git_sha": pl.Utf8,
+                "device_used": pl.Utf8,
+                "accelerator": pl.Utf8,
+            }
+        )
+    projected = [{col: row.get(col) for col in _RUN_DATAFRAME_COLUMNS} for row in rows]
+    return pl.DataFrame(projected)
 
 
 def _mask_url(url: str) -> str:

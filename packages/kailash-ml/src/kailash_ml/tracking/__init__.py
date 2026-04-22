@@ -17,6 +17,14 @@ from __future__ import annotations
 
 from typing import Optional
 
+from kailash_ml.tracking.query import (
+    EnvDelta,
+    FilterParseError,
+    MetricDelta,
+    ParamDelta,
+    RunDiff,
+    RunRecord,
+)
 from kailash_ml.tracking.runner import ExperimentRun, RunStatus
 from kailash_ml.tracking.runner import _current_run
 from kailash_ml.tracking.runner import _current_run as current_run
@@ -37,8 +45,14 @@ def get_current_run() -> Optional[ExperimentRun]:
 
 
 __all__ = [
+    "EnvDelta",
     "ExperimentRun",
     "ExperimentTracker",
+    "FilterParseError",
+    "MetricDelta",
+    "ParamDelta",
+    "RunDiff",
+    "RunRecord",
     "RunStatus",
     "SQLiteTrackerBackend",
     "track",

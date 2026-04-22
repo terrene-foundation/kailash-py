@@ -21,7 +21,7 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from kailash.db.dialect import _validate_identifier
 
@@ -387,6 +387,110 @@ class SQLiteTrackerBackend:
 
         rows = await asyncio.to_thread(_read)
         return [_row_to_dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # W13 — query primitives
+    # ------------------------------------------------------------------
+
+    async def query_runs(
+        self,
+        *,
+        experiment: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Typed ``list_runs`` variant used by :class:`ExperimentTracker`.
+
+        Accepts the spec §5.1 kwargs (``experiment`` / ``tenant_id`` /
+        ``status`` / ``limit``) and composes them as an explicit
+        ``AND`` chain. Returns raw row dicts; polars conversion lives
+        in the tracker so the backend stays polars-agnostic.
+        """
+        await self.initialize()
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
+
+        clauses: list[str] = []
+        params: list[Any] = []
+        if experiment is not None:
+            clauses.append("experiment = ?")
+            params.append(experiment)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = (
+            "SELECT * FROM experiment_runs"
+            + where_sql
+            + " ORDER BY wall_clock_end DESC, wall_clock_start DESC LIMIT ?"
+        )
+        params.append(int(limit))
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, tuple(params))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [_row_to_dict(r) for r in rows]
+
+    async def search_runs_raw(
+        self, sql: str, params: Sequence[Any]
+    ) -> list[dict[str, Any]]:
+        """Execute a pre-built SELECT produced by
+        :func:`kailash_ml.tracking.query.build_search_sql` and return row
+        dicts.
+
+        The SQL string is built from a static template + parameterised
+        values — no user input is interpolated, so this path is safe
+        even though the string is not audited locally. Identifier
+        allowlisting lives in :mod:`kailash_ml.tracking.query`.
+        """
+        await self.initialize()
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, tuple(params))
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [_row_to_dict(r) for r in rows]
+
+    async def list_experiments_summary(
+        self, *, tenant_id: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        """Aggregate every experiment into a single summary row.
+
+        Columns: ``experiment``, ``run_count``, ``finished_count``,
+        ``failed_count``, ``killed_count``, ``latest_wall_clock_end``.
+        Tenant-scoped when ``tenant_id`` is non-None.
+        """
+        await self.initialize()
+        where = " WHERE tenant_id = ?" if tenant_id is not None else ""
+        sql = (
+            "SELECT experiment, "
+            "COUNT(*) AS run_count, "
+            "SUM(CASE WHEN status = 'FINISHED' THEN 1 ELSE 0 END) AS finished_count, "
+            "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_count, "
+            "SUM(CASE WHEN status = 'KILLED' THEN 1 ELSE 0 END) AS killed_count, "
+            "MAX(wall_clock_end) AS latest_wall_clock_end "
+            "FROM experiment_runs"
+            + where
+            + " GROUP BY experiment ORDER BY latest_wall_clock_end DESC"
+        )
+        params: tuple[Any, ...] = (tenant_id,) if tenant_id is not None else ()
+
+        def _read() -> list[sqlite3.Row]:
+            with self._conn_lock:
+                cur = self._conn.execute(sql, params)
+                return list(cur.fetchall())
+
+        rows = await asyncio.to_thread(_read)
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
     # W12 — Logging primitives (metrics, artifacts, tags, model versions)
