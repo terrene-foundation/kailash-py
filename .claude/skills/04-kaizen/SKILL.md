@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kaizen AI agent framework. Use for BaseAgent, Signature, Delegate, multi-agent, RAG, vision, audio, trust, EATP, governance, L3 autonomy."
+description: "Kaizen AI agents. Use for BaseAgent, Signature, Delegate, multi-agent, RAG, trust/EATP, governance, L3 autonomy."
 ---
 
 # Kailash Kaizen — AI Agent Framework

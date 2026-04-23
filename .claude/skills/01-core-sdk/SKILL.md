@@ -1,11 +1,15 @@
 ---
 name: core-sdk
-description: "Kailash Core SDK fundamentals including workflow creation, node patterns, connections, runtime execution, parameter passing, error handling, cyclic workflows, async patterns, MCP integration, and installation. Use when asking about 'workflow basics', 'core sdk', 'create workflow', 'workflow builder', 'node patterns', 'connections', 'runtime', 'parameters', 'imports', 'installation', 'getting started', 'workflow execution', 'async workflows', 'error handling', 'cyclic workflows', 'PythonCode node', 'SwitchNode', or 'MCP integration'. Also covers observability: 'OpenTelemetry', 'OTel', 'tracing', 'TracingLevel', 'WorkflowTracer', 'node instrumentation', 'NodeInstrumentor', 'database instrumentation', 'Prometheus metrics', 'MetricsBridge', 'KAILASH_TRACING_LEVEL', or 'span attributes'."
+description: "Kailash Core SDK fundamentals. Use for WorkflowBuilder, nodes, connections, runtime, parameters, async, cycles, MCP, OpenTelemetry tracing."
 ---
 
 # Kailash Core SDK - Foundational Skills
 
 Comprehensive guide to Kailash Core SDK fundamentals for workflow automation and integration.
+
+## When to Use
+
+Use Core SDK when asking about workflow basics, core sdk, create workflow, workflow builder, node patterns, connections, runtime, parameters, imports, installation, getting started, workflow execution, async workflows, error handling, cyclic workflows, PythonCode node, SwitchNode, or MCP integration. Also covers observability: OpenTelemetry, OTel, tracing, `TracingLevel`, `WorkflowTracer`, node instrumentation, `NodeInstrumentor`, database instrumentation, Prometheus metrics, `MetricsBridge`, `KAILASH_TRACING_LEVEL`, and span attributes.
 
 ## Features
 

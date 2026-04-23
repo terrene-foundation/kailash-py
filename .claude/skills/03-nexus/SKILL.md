@@ -1,11 +1,15 @@
 ---
 name: nexus
-description: "Kailash Nexus - zero-config multi-channel platform for deploying workflows as API + CLI + MCP simultaneously. Use when asking about 'Nexus', 'multi-channel', 'platform deployment', 'API deployment', 'CLI deployment', 'MCP deployment', 'unified sessions', 'workflow deployment', 'production deployment', 'API gateway', 'FastAPI alternative', 'session management', 'health monitoring', 'enterprise platform', 'plugins', 'event system', or 'workflow registration'. Also covers K8s integration: 'K8s probes', 'healthz', 'readyz', 'startup probe', 'ProbeManager', 'ProbeState', 'OpenAPI', 'openapi.json', 'OpenApiGenerator', 'security headers', 'CSRF middleware', 'CSRFMiddleware', 'SecurityHeadersMiddleware', 'middleware presets', 'Preset', or 'HSTS'."
+description: "Kailash Nexus: multi-channel API+CLI+MCP platform. Use for workflow deployment, sessions, K8s probes, OpenAPI, CSRF, security headers."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework
 
 Nexus is a zero-config multi-channel platform built on Kailash Core SDK that deploys workflows as API + CLI + MCP simultaneously.
+
+## When to Use
+
+Use Nexus when asking about Nexus, multi-channel, platform deployment, API deployment, CLI deployment, MCP deployment, unified sessions, workflow deployment, production deployment, API gateway, FastAPI alternative, session management, health monitoring, enterprise platform, plugins, event system, or workflow registration. Also covers K8s integration: K8s probes, healthz, readyz, startup probe, `ProbeManager`, `ProbeState`, OpenAPI, `openapi.json`, `OpenApiGenerator`, security headers, CSRF middleware, `CSRFMiddleware`, `SecurityHeadersMiddleware`, middleware presets, `Preset`, and HSTS.
 
 ## Features
 
