@@ -408,10 +408,11 @@ def _acquire_engine_lock(engine: Any) -> threading.Lock:
     exercise the helpers without a full engine. Production callers pass
     a real :class:`kailash.trust.pact.engine.GovernanceEngine`.
     """
+    # threading.Lock and threading.RLock are factories, not classes (Py3.11+).
+    # Use type() on actual lock instances to obtain the underlying types.
+    _LOCK_TYPES = (type(threading.Lock()), type(threading.RLock()))
     lock = getattr(engine, "_lock", None)
-    if isinstance(lock, threading.Lock) or isinstance(
-        lock, type(threading.RLock())  # type: ignore[arg-type]
-    ):
+    if isinstance(lock, _LOCK_TYPES):
         return lock  # type: ignore[return-value]
     return _FALLBACK_LOCK
 
