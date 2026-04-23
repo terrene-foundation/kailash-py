@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-align"
-version = "0.4.0"
+version = "0.5.0"
 description = "LLM fine-tuning and alignment framework for the Kailash platform"
 readme = "README.md"
 license = "Apache-2.0"
@@ -52,8 +52,11 @@ serve = [
 online = [
     "vllm>=0.6",
 ]
+rl-bridge = [
+    "kailash-ml[rl]>=1.1,<2.0",
+]
 all = [
-    "kailash-align[rlhf,eval,serve,online]",
+    "kailash-align[rlhf,eval,serve,online,rl-bridge]",
 ]
 dev = [
     "pytest>=8.0",
