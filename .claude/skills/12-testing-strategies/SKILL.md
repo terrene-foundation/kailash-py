@@ -17,11 +17,11 @@ Use when asking about testing, test strategy, 3-tier testing, unit tests, integr
 
 ## 3-Tier Strategy
 
-| Tier            | Scope               | Mocking                | Speed      | Infrastructure             |
-| --------------- | ------------------- | ---------------------- | ---------- | -------------------------- |
-| 1 - Unit        | Functions, classes  | Allowed                | <1s/test   | None                       |
-| 2 - Integration | Workflows, DB, APIs | Real infra recommended | 1-10s/test | Real DB, real runtime      |
-| 3 - E2E         | Complete user flows | Real infra recommended | 10s+/test  | Real HTTP, real everything |
+| Tier            | Scope               | Mocking                       | Speed      | Infrastructure             |
+| --------------- | ------------------- | ----------------------------- | ---------- | -------------------------- |
+| 1 - Unit        | Functions, classes  | Allowed                       | <1s/test   | None                       |
+| 2 - Integration | Workflows, DB, APIs | **BLOCKED — real infra only** | 1-10s/test | Real DB, real runtime      |
+| 3 - E2E         | Complete user flows | **BLOCKED — real infra only** | 10s+/test  | Real HTTP, real everything |
 
 ### Real Infrastructure Policy (Tiers 2-3)
 
