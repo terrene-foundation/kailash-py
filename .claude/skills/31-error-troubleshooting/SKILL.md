@@ -1,11 +1,15 @@
 ---
 name: error-troubleshooting
-description: "Common error patterns and troubleshooting guides for Kailash SDK including Nexus blocking issues, connection parameter errors, runtime execution errors, cycle convergence problems, missing .build() calls, parameter validation errors, and DataFlow template syntax errors. Use when encountering errors, debugging issues, or asking about 'error', 'troubleshooting', 'debugging', 'not working', 'hangs', 'timeout', 'validation error', 'connection error', 'runtime error', 'cycle not converging', 'missing build', or 'template syntax'."
+description: "Kailash errors: Nexus hangs, connection errors, runtime errors, cycles, missing .build(), validation, template syntax."
 ---
 
 # Kailash Error Troubleshooting
 
 Common error patterns and solutions for Kailash SDK.
+
+## When to Use
+
+Use when encountering errors, debugging issues, or asking about error, troubleshooting, debugging, not working, hangs, timeout, validation error, connection error, runtime error, cycle not converging, missing build, or template syntax. Covers Nexus blocking issues, connection parameter errors, runtime execution errors, cycle convergence problems, missing `.build()` calls, parameter validation errors, and DataFlow template syntax errors.
 
 ## Sub-File Index
 
