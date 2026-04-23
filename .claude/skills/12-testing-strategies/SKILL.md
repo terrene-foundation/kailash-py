@@ -85,6 +85,10 @@ def test_null_byte_exists_in_source():
 See `rules/testing.md` "MUST: Behavioral Regression Tests Over
 Source-Grep" for the full rule and rationale.
 
+## Release-Blocking Regression Tier (Above Tier 3 E2E)
+
+Unit and integration tests per primitive cannot observe the handoff between primitives; each primitive's tests construct test fixtures with exactly the fields it needs, and the chain between A → B fails only when A's real output is missing a field B actually needs. For every pipeline the docs teach (README Quick Start, tutorial, `specs/*.md` canonical example), add a regression test that executes the docs-exact code against real infrastructure AND asserts a deterministic fingerprint over the output. Flipped fingerprints block release. See `skills/16-validation-patterns/SKILL.md` § "End-to-End Pipeline Regression Above Unit/Integration" for the full pattern + kailash-ml 1.0.0 W33b evidence, and `rules/testing.md` § "End-to-End Pipeline Regression Tests Above Unit + Integration" for the MUST clause.
+
 ## Optional Dependency Testing
 
 Tests that exercise optional extras (e.g., `[hpo]`, `[redis]`, `[vault]`)

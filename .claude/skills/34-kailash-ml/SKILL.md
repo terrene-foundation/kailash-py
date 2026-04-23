@@ -89,7 +89,17 @@ Authoritative domain truth lives in `specs/`. Read the spec before touching the 
 
 ## 1.0.0 Wave Release (7 packages atomic)
 
-- `kailash 2.9.0` (ml extras alias) + `kailash-pact 0.10.0` (ml_context + ClearanceRequirement) + `kailash-nexus 2.2.0` (ml-endpoints mount) + `kailash-kaizen 2.12.0` (§2.4 Agent Tool Discovery + SQLiteSink) + `kailash-align 0.5.0` (ml-unification) + `kailash-dataflow 2.1.0` (TrainingContext + lineage_dataset_hash) + `kailash-ml 1.0.0`.
+- `kailash 2.9.0` (ml extras alias) + `kailash-pact 0.10.0` (ml_context + ClearanceRequirement) + `kailash-nexus 2.2.0` (ml-endpoints mount) + `kailash-kaizen 2.12.0` (§2.4 Agent Tool Discovery + SQLiteSink) + `kailash-align 0.6.0` (ml-unification + rl_bridge) + `kailash-dataflow 2.1.0` (TrainingContext + lineage_dataset_hash) + `kailash-ml 1.0.0`.
+
+**M1 release-wave patterns** — see [m1-release-wave](m1-release-wave.md) for:
+
+- Canonical 48-symbol `__all__` (41 §15.9 + erase_subject + 7 Phase-1 adapters)
+- km.train + km.register canonical async-await pipeline (commit `fdd3040e`)
+- TrainingResult.trainable back-reference (commit `15033fa6`)
+- Release-blocking README Quick Start regression (SHA-256 fingerprint end-to-end)
+- MIGRATION.md sunset contract (W33b)
+- 7 integration surfaces (kailash.ml / kailash.observability.ml / dataflow.ml / nexus.ml / kaizen.ml / align.ml / pact.ml)
+- 8 institutional patterns from session 2026-04-23
 
 ---
 

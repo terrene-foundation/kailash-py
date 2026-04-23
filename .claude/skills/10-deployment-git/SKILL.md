@@ -57,6 +57,14 @@ SDK release and development infrastructure patterns for:
   - Common gotcha: stale literal version assertions in test fixtures (durable cross-surface contract pattern)
   - ML stack wheel-lag guidance (torch / transformers / accelerate)
 
+- **[multi-package-release-wave](multi-package-release-wave.md)** - Atomic 7-package release coordination
+  - Reverse dep-graph publish order (`kailash → dataflow → nexus → kaizen → pact → align → ml`)
+  - Per-package version owner + sole CHANGELOG owner rules (parallel-worktree safe)
+  - Pre-flight build + twine + TestPyPI dry-run for every package in the wave
+  - Version consistency verification across 14 version locations
+  - Rollback decision tree (mid-wave failure handling)
+  - kailash-ml 1.0.0 M1 atomic wave (2026-04-23, 7 packages, 227 tests)
+
 ### Docker
 
 - **[deployment-docker-quick](deployment-docker-quick.md)** - Docker deployment patterns

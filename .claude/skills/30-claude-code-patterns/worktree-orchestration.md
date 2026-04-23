@@ -159,6 +159,111 @@ Mechanical sweeps (run BEFORE LLM judgment):
 """)
 ```
 
+## Rule 6 — Parallel-Launch Burst Size Limit (≤3 Opus agents per wave)
+
+**Rule:** Orchestrators MUST cap concurrent worktree agent launches at **3 Opus-tier agents per wave**. Launching 4+ simultaneously is BLOCKED — Anthropic's service-side rate limiter returns `API Error: Server is temporarily limiting requests` and every agent in the burst fails with no partial progress.
+
+### Failure mode evidence
+
+Session 2026-04-23 kailash-ml 1.0.0 M1 `/implement` for branch `feat/kailash-ml-1.0.0-m1-foundations` attempted to launch all 6 M10 shards (W31a/b/c + W32a/b/c) simultaneously. **All 6 agents** returned `API Error: Server is temporarily limiting requests` within seconds of launch. Fell back to two sequential waves of 3; both waves landed cleanly (6 shards merged, 189 M10 tests passing).
+
+### Why ≤3 is the ceiling
+
+Each Opus worktree agent consumes a full Anthropic API session plus its tool calls. Six simultaneous sessions against the same account key trigger burst-window throttling at the service tier. The throttle is ALL-OR-NOTHING per burst — no partial backoff, no queueing — so a 6-agent launch produces 6 failures, not 3 successes + 3 retries.
+
+### Prompt template
+
+```python
+# DO — two waves of 3, second wave launched after first wave reports
+for wave in [shards[0:3], shards[3:6]]:
+    agents = [Agent(isolation="worktree", prompt=s.prompt) for s in wave]
+    wait_for_all(agents)  # wave barrier
+
+# DO NOT — single 6-agent burst
+agents = [Agent(isolation="worktree", prompt=s.prompt) for s in all_6_shards]
+# → all 6 hit "Server is temporarily limiting requests" simultaneously
+```
+
+**BLOCKED rationalizations:** "Anthropic's limits are generous" / "5 worked last week, 6 should too" / "A retry loop will handle throttles" / "Parallelism maximizes throughput regardless of cap".
+
+**Why:** The cap is empirically grounded in a single session's reproducible failure. Waves of 3 are both the observed success threshold AND a safe margin — the second wave starts only after the first wave's agents have all reported, giving the rate-limit window time to close.
+
+Origin: Session 2026-04-23 kailash-ml-audit M1 — 6-agent burst 100% failure, 3+3 wave pattern 100% success.
+
+## Rule 7 — Pre-Flight Merge-Base Check Before Launch
+
+**Rule:** Before launching parallel worktree agents that will eventually merge back to the same integration branch, the orchestrator MUST verify every worktree's branch is created FROM THE CURRENT TIP of the integration branch — not from an older ancestor. Branching from an older ancestor is silently valid until merge time, at which point the shards diverge from each other AND from intermediate reconciliation commits.
+
+### Failure mode evidence
+
+Session 2026-04-23 M10 wave: **5 of 6 worktree agents** branched their shard from an older ancestor of `feat/kailash-ml-1.0.0-m1-foundations` instead of the current tip. Detected only at post-merge reconciliation (commit fa300831) when `__all__` reconciliation revealed each shard had landed its own version of the canonical list, diverging from the W33 shard that had correctly branched from tip.
+
+### Why the check is load-bearing
+
+`Agent(isolation="worktree", prompt="...")` creates the worktree via `git worktree add` with a default base; unless the orchestrator passes `--force-checkout <SHA>` or similar, the base is whatever ref HEAD points at when the harness runs, which can be stale if the integration branch has advanced since the orchestrator's last `git fetch`. The drift is invisible at shard-time because each shard passes its own tests; the collision only surfaces when 6 shards land top-level `__all__` entries on top of 6 different parent trees.
+
+### Prompt template (pre-flight)
+
+```bash
+# DO — orchestrator computes the tip explicitly, passes it to each agent
+INTEGRATION_TIP=$(git rev-parse feat/kailash-ml-1.0.0-m1-foundations)
+for shard in shards; do
+  git worktree add -b "feat/${shard}" ".claude/worktrees/${shard}" "${INTEGRATION_TIP}"
+done
+
+# DO NOT — let the harness pick the base silently
+# Each worktree branches from whatever the harness sees as HEAD; 5/6 can
+# land on an ancestor that is 2 commits behind the true tip.
+```
+
+**BLOCKED rationalizations:** "Worktrees always branch from HEAD" / "Merge reconciliation will surface the drift" / "A git fetch before launch is redundant".
+
+**Why:** The reconciliation cost of 5/6 misaligned shards is a full `__all__` merge pass (commit fa300831 canonical 41 + 7 Phase-1 adapters = 48 total) done manually post-merge. A 1-second `git rev-parse` + explicit base-SHA pass converts it into 0 work.
+
+Origin: Session 2026-04-23 M10 wave — 5/6 shards branched from older ancestor; post-merge `__all__` reconciliation commit fa300831 required.
+
+## Rule 8 — Explicit Branch Naming In Prompts
+
+**Rule:** Every worktree-isolation delegation MUST include an explicit `feat/<shard-name>` (or equivalent semantic prefix per `rules/git.md` conventional commits) in the prompt. Omitting the branch name is BLOCKED — the harness falls back to `worktree-agent-<hash>` which is neither greppable nor conventional-commit-compliant, breaking changelog tooling and release-trace auditability.
+
+### Failure mode evidence
+
+Session 2026-04-23 initial launch attempted: `Agent(isolation="worktree", prompt="Implement W33 km.* wrappers...")` without branch name. Harness assigned `worktree-agent-a3f9c1` as the branch. Post-merge `git log --grep="W33"` returned zero matches; the shard was findable only by commit SHA. Fixed by re-launching with explicit `Branch: feat/W33-km-wrappers` in the prompt header.
+
+### Why the name is load-bearing
+
+Conventional-commit `feat/<shard-name>` branch names serve four downstream consumers:
+
+1. **Release changelog generation** — `git log --grep="^feat(<shard>)"` drives CHANGELOG entries
+2. **Traceability** — `git branch --list 'feat/W*'` surfaces all shards in a wave
+3. **Reviewer context** — PR titles inherit branch names; `worktree-agent-a3f9c1` communicates nothing
+4. **Post-mortem search** — future sessions find this session's work via `git log --grep`
+
+Hash-based names fail all four.
+
+### Prompt template
+
+```python
+# DO — explicit branch name in prompt header
+Agent(isolation="worktree", prompt="""
+Branch: feat/W33-km-wrappers
+Worktree: .claude/worktrees/W33-km-wrappers
+
+Implement W33 km.* public-API wrappers per specs/ml-engines-v2.md §15.9.
+Commit discipline: after each file, git commit -m "feat(W33): <what>"
+""")
+
+# DO NOT — omit branch, let harness pick
+Agent(isolation="worktree", prompt="Implement W33 km.* wrappers...")
+# → branch = worktree-agent-a3f9c1; grep -irn "W33" in history returns nothing
+```
+
+**BLOCKED rationalizations:** "The harness default works" / "We'll rename the branch at merge time" / "The commit bodies mention W33, grep works on those".
+
+**Why:** Grep on commit bodies is slower (scans every commit, not just branch names) and noisier (false positives from unrelated mentions). Branch names are the cheapest index; losing them costs every future `git log --grep` 10× the tokens.
+
+Origin: Session 2026-04-23 — W33 initial launch lost to `worktree-agent-<hash>`; re-launched with explicit `feat/W33-km-wrappers`.
+
 ## Related rules & skills
 
 - `rules/agents.md` — the load-bearing MUST clauses for all 5 worktree rules
