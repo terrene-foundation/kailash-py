@@ -49,6 +49,7 @@ from kaizen.judges._wrappers import (
     SelfConsistencyJudge,
     SelfConsistencyReport,
 )
+from kaizen.ml._tracker_bridge import emit_metric, resolve_active_tracker
 
 if TYPE_CHECKING:  # pragma: no cover
     import plotly.graph_objects as go_types  # noqa: F401
@@ -183,6 +184,7 @@ class LLMDiagnostics:
         max_history: int = 1024,
         sensitive: bool = False,
         tenant_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
         run_id: Optional[str] = None,
     ) -> None:
         if max_history < 1:
@@ -192,6 +194,7 @@ class LLMDiagnostics:
 
         self._sensitive = sensitive
         self._tenant_id = tenant_id
+        self._tracker = tracker  # lazy — resolved at each emission (spec §2.2)
         self.run_id: str = run_id if run_id is not None else uuid.uuid4().hex
 
         self._judge: LLMJudge = (
@@ -257,6 +260,57 @@ class LLMDiagnostics:
         """The underlying :class:`LLMJudge` (for tenant / budget access)."""
         return self._judge
 
+    # ── Auto-emission to ambient km.track() run (spec §3.1 / §3.2) ──
+    #
+    # Spec §3.2 locks the metric-prefix namespace for LLM diagnostics
+    # at ``llm.*`` (e.g. ``llm.score``, ``llm.cost_microdollars``,
+    # ``llm.prompt_tokens``). Every *_log.append() path invokes the
+    # matching _emit_*_metrics helper so metrics flow to the ambient
+    # ``km.track()`` run without caller opt-in.
+
+    def _emit_judge_metrics(self, entry: "_JudgeEntry") -> None:
+        tracker = resolve_active_tracker(self._tracker)
+        if tracker is None:
+            return
+        emit_metric(tracker, "llm.score", float(entry.score))
+        emit_metric(tracker, "llm.cost_microdollars", float(entry.cost_microdollars))
+        emit_metric(tracker, "llm.judge_calls", 1.0)
+
+    def _emit_faithful_metrics(self, entry: "_FaithfulEntry") -> None:
+        tracker = resolve_active_tracker(self._tracker)
+        if tracker is None:
+            return
+        emit_metric(tracker, "llm.faithfulness", float(entry.faithfulness))
+        emit_metric(
+            tracker,
+            "llm.faithfulness_cost_microdollars",
+            float(entry.cost_microdollars),
+        )
+
+    def _emit_consistency_metrics(self, entry: "_ConsistencyEntry") -> None:
+        tracker = resolve_active_tracker(self._tracker)
+        if tracker is None:
+            return
+        emit_metric(tracker, "llm.consistency_mean_score", float(entry.mean_score))
+        emit_metric(tracker, "llm.consistency_stdev_score", float(entry.stdev_score))
+        emit_metric(
+            tracker,
+            "llm.consistency_cost_microdollars",
+            float(entry.cost_microdollars),
+        )
+
+    def _emit_refusal_metrics(self, entry: "_RefusalEntry") -> None:
+        tracker = resolve_active_tracker(self._tracker)
+        if tracker is None:
+            return
+        emit_metric(tracker, "llm.over_refusal_rate", float(entry.over_refusal_rate))
+        if entry.under_refusal_rate is not None:
+            emit_metric(
+                tracker,
+                "llm.under_refusal_rate",
+                float(entry.under_refusal_rate),
+            )
+
     # ── Public API: LLM as judge ────────────────────────────────────
 
     def llm_as_judge(
@@ -292,6 +346,7 @@ class LLMDiagnostics:
             cost_microdollars=int(result.cost_microdollars),
         )
         self._judge_log.append(entry)
+        self._emit_judge_metrics(entry)
         logger.info(
             "kaizen.llm_diagnostics.llm_as_judge.ok",
             extra={
@@ -349,6 +404,7 @@ class LLMDiagnostics:
             cost_microdollars=int(result.cost_microdollars),
         )
         self._faithful_log.append(entry)
+        self._emit_faithful_metrics(entry)
         logger.info(
             "kaizen.llm_diagnostics.faithfulness.ok",
             extra={
@@ -402,6 +458,7 @@ class LLMDiagnostics:
             cost_microdollars=report.total_cost_microdollars,
         )
         self._consistency_log.append(entry)
+        self._emit_consistency_metrics(entry)
         logger.info(
             "kaizen.llm_diagnostics.self_consistency.ok",
             extra={
@@ -458,6 +515,7 @@ class LLMDiagnostics:
             n_harmful=int(result["n_harmful"]),
         )
         self._refusal_log.append(entry)
+        self._emit_refusal_metrics(entry)
         logger.info(
             "kaizen.llm_diagnostics.refusal_calibrator.ok",
             extra={
