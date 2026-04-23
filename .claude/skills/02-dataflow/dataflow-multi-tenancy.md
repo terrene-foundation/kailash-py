@@ -87,7 +87,7 @@ async with TenantContextSwitch(db, tenant_id="tenant_abc"):
 ### Primary Sources
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L296-L303)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L296-L303)
 
 ## Quick Tips
 

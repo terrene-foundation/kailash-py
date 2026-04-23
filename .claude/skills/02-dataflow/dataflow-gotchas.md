@@ -662,7 +662,7 @@ class DevModel:
 
 ### Primary Sources
 
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L28-L72)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L28-L72)
 
 ### Related Documentation
 

@@ -131,7 +131,7 @@ def db():
 ### Primary Sources
 
 ### Related Documentation
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L893-L940)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L893-L940)
 - **Test Strategy**: [`test-3tier-strategy`](#)
 
 ## Quick Tips

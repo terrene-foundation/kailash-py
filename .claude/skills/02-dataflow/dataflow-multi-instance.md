@@ -95,7 +95,7 @@ class Model1:
 
 ### Specialist Reference
 
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L86-L116)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L86-L116)
 
 ## Quick Tips
 
