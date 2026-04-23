@@ -167,6 +167,40 @@ grep -l "TrainingResult" specs/ml-*.md    # find downstream consumers
 
 Origin: Journal entries `workspaces/kailash-ml-gpu-stack/journal/0007-DISCOVERY-full-specs-sweep-round.md` (2026-04-19) + `0008-GAP-full-specs-redteam-2026-04-20-findings.md` (2026-04-20). Two-session reproducibility validates the rule.
 
+### 5c. Orchestrator MUST Amend Todo Text At Launch When Spec Has Moved
+
+Before launching any `/implement` shard agent, the orchestrator MUST cross-check the todo's claims (version bumps, `__all__` counts, public-surface symbol lists, spec section references) against the current canonical spec AND the current package state (`pyproject.toml`, `__init__.py`, prior merged shards). Discrepancies MUST be resolved IN THE TODO TEXT before launch — not left for the agent to discover mid-implementation. Launching with a known-stale todo is BLOCKED.
+
+```markdown
+# DO — amend the todo at launch time, note the correction inline
+
+Todo W32b says: "bump kailash-align 0.4.0 → 0.5.0"
+Current state: W30.3 already shipped align 0.5.0 (merged commit 41a217dc).
+→ AMEND AT LAUNCH: "bump kailash-align 0.5.0 → 0.6.0"
+→ prompt the agent with the amended version, note the reason inline.
+
+Todo W33 says: "`__all__` exports 34 symbols"
+Spec §15.9 says: "`__all__` exports 41 symbols (40 + erase_subject)"
+→ AMEND AT LAUNCH: prefer spec per specs-authority §5b, prompt agent with 41.
+
+# DO NOT — launch with stale todo, let agent discover mid-flight
+
+# Todo says "bump to 0.5.0" → agent bumps to 0.5.0 → git rejects (tag exists) →
+
+# agent blocked at commit time, burns budget re-deriving the current state.
+```
+
+**BLOCKED rationalizations:**
+
+- "The agent is smart enough to read current state"
+- "The todo was approved, amending is scope creep"
+- "Let the agent hit the conflict and learn"
+- "The spec will be re-read at implement time anyway"
+
+**Why:** Todos are written at `/todos` time against the state-of-repo-then; by `/implement` time the state has moved — prior shards have shipped, specs have been edited during `/redteam` convergence, and the todo's literal claims are stale. An orchestrator that launches a stale todo burns the agent's budget on re-derivation AND risks a shard failure (version-tag collision, symbol-count mismatch, spec reference 404) that wastes the whole launch. A 2-minute launch-time amendment costs less than ANY shard re-run. Evidence: kailash-ml-audit 2026-04-23 — W32-32b todo text said "bump align 0.5.0" but W30.3 already shipped 0.5.0; amended to 0.6.0 BEFORE launch saved a failed shard. W33 todo said `__all__` = 34/35 symbols; spec §15.9 says 41; orchestrator amended prompt to prefer the spec per §5b, agent correctly landed 41. Without these amendments both shards would have failed at commit time.
+
+Origin: kailash-ml-audit session 2026-04-23 M10 release wave.
+
 ### 6. Deviations From Spec Require Explicit Acknowledgment
 
 When implementation deviates from a spec (different approach, technology, or user-observable behavior), the agent MUST: (a) update the spec file with the new truth, (b) log the deviation with rationale, and (c) flag user-visible changes for approval.

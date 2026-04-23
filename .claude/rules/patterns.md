@@ -87,6 +87,42 @@ from kaizen.core import BaseAgent, Signature, InputField, OutputField
 - **Docker/Nexus**: `AsyncLocalRuntime` + `await runtime.execute_workflow_async(workflow.build())`
 - **CLI/Scripts**: `LocalRuntime` + `runtime.execute(workflow.build())`
 
+## Paired Public Surface — Consistent Async-ness (MUST)
+
+When two top-level functions form a canonical user pipeline — pairs like `train`/`register`, `fit`/`predict`, `encrypt`/`decrypt`, `publish`/`subscribe`, `login`/`logout` — BOTH MUST be either async OR sync. Mixing (one `async def`, one sync-wrapping-`asyncio.run()`) is BLOCKED. Agents, Nexus handlers, pytest-asyncio tests, and Jupyter kernels all run inside an active event loop; a sync function that internally calls `asyncio.run()` raises `RuntimeError: This event loop is already running` in every async caller.
+
+```python
+# DO — both async, composable under any event-loop context
+# kailash_ml/__init__.py
+async def train(df, target): ...
+async def register(result, *, name): ...
+
+# User code inside pytest-asyncio / Nexus handler / Jupyter:
+result = await km.train(df, target="y")
+registered = await km.register(result, name="demo")  # works in any event loop
+
+# DO NOT — async train + sync register that wraps asyncio.run()
+async def train(df, target): ...
+def register(result, *, name):   # sync surface hiding asyncio.run()
+    return asyncio.run(_register_impl(result, name))  # RuntimeError in async callers
+
+# In pytest-asyncio:
+result = await km.train(df, target="y")
+km.register(result, name="demo")  # RuntimeError: This event loop is already running
+```
+
+**BLOCKED rationalizations:**
+
+- "Notebook users want sync; agent users want async; we'll offer both shapes"
+- "`asyncio.run()` handles the wrapping transparently"
+- "A sync wrapper is a convenience, users can opt out by awaiting directly"
+- "The async caller is a rare case, the sync path covers 95%"
+- "We'll document the async requirement in the docstring"
+
+**Why:** `asyncio.run()` creates a new event loop and raises if one is already running. Every modern Python async context — `pytest.mark.asyncio`, Nexus's FastAPI handlers, Jupyter's IPKernel, any Kaizen agent loop — has a running loop. A sync-wrapping-`asyncio.run()` surface works only in pure-CLI contexts and crashes everywhere else with an opaque `RuntimeError`. The "both shapes" trap (offering `km.register` sync AND `km.register_async`) doubles the public API surface, forces every caller to remember which variant their context permits, and ships two implementations of the same primitive that drift. Canonical pairs MUST pick one async-ness and commit. Evidence: kailash-ml 1.0.0 W33/W33c — `km.train` was async (W33), `km.register` landed sync (W33c) with internal `asyncio.run()`; the canonical 3-line Quick Start `result = await km.train(...); registered = km.register(result, ...)` crashed in every async context. Fix commit `fdd3040e` converted `km.register` to `async def`, matching `km.train`.
+
+Origin: kailash-ml-audit session 2026-04-23 — W33c async/sync inconsistency caught by end-to-end README regression test.
+
 ## SQLite Connection Management
 
 - Acquire through `AsyncSQLitePool` (`acquire_read` / `acquire_write`)

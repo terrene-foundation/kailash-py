@@ -171,6 +171,47 @@ __all__ = ["__version__", ...]  # DeviceReport absent
 
 Origin: PR #523 / PR #529 (2026-04-19) — kailash-ml 0.11.0 eagerly imported 4 DeviceReport symbols but omitted all from `__all__`; patched in 0.11.1.
 
+### 6a. Merge-Time `__all__` Reconciliation Across Shard Base-SHAs
+
+When two or more parallel-worktree shards each edit the same package's `__init__.py::__all__` AND the shards were branched from DIFFERENT base SHAs (see `rules/worktree-isolation.md` §5), the orchestrator MUST reconcile `__all__` at merge time using this protocol:
+
+1. **Prefer HEAD (newest canonical structure).** The later-merged shard's `__all__` ordering + group-comment layout is canonical.
+2. **Preserve invariants from the older base.** Enumerate any symbols / counts / semantic groups the older-base shard depended on (e.g. "7 Phase-1 Trainable adapters MUST be exported") and verify they survive the reconciliation.
+3. **Update count-dependent tests.** Tests that assert `len(__all__) == N` MUST be patched to reflect the reconciled count in the SAME commit as the reconciliation.
+4. **Run the module-scope import check from §6.** Every newly-added entry MUST still have a matching eager import.
+
+```python
+# DO — reconcile __all__ at merge time, prefer HEAD, preserve invariants
+# After merging W31 (base 899ce3e5) + W33 (base 41a217dc), both edited __all__.
+# W33 introduced 6-group canonical structure; W31 added 7 Trainable adapters.
+# Resolution:
+__all__ = [
+    # Group 1 — Core engine facade (W33's canonical structure)
+    "MLEngine", "Engine",
+    # Group 2 — Trainable adapters (W31 invariant: 7 Phase-1 adapters)
+    "Trainable", "SklearnTrainable", "LightGBMTrainable", "XGBoostTrainable",
+    "CatBoostTrainable", "TorchTrainable", "LightningTrainable",
+    # ... Groups 3-6 from W33 ...
+]
+# Then: update test_km_all_ordering.py count expectation in the same commit.
+
+# DO NOT — pick one shard's __all__ wholesale, lose the other's invariant
+# (W33's __all__ wins → 7 Trainable adapters missing → every downstream
+#  import of SklearnTrainable breaks on the next install)
+```
+
+**BLOCKED rationalizations:**
+
+- "The merge conflict resolution picked one side; git knows best"
+- "The missing adapters will surface in CI; we'll fix then"
+- "Count-dependent tests are brittle; we should delete them"
+- "HEAD always wins, older shard's invariants don't matter"
+- "The reconciliation can happen in a follow-up PR"
+
+**Why:** `__all__` is the public-API contract (§6 above); parallel shards from different base SHAs each advance that contract independently, and git's 3-way merge picks one side arbitrarily when both modified the same list. Without explicit reconciliation, the newer shard's canonical structure wipes the older shard's added exports, silently orphaning production symbols that downstream consumers depend on. The count-dependent tests are the structural defense — they fail loudly when `len(__all__)` changes unexpectedly, forcing the orchestrator to examine every reconciliation. Evidence: kailash-ml-audit 2026-04-23 merge — W33 (base `41a217dc`) landed a 6-group canonical `__all__`; W31 (base `899ce3e5`) had separately added 7 Trainable adapters. Merge picked HEAD; fix commit `fa300831` merged the 6-group canonical structure with the 7 Phase-1 Trainable adapters and reconciled `test_km_all_ordering.py` count expectation.
+
+Origin: kailash-ml-audit session 2026-04-23 — W31/W33 parallel-shard `__all__` reconciliation at merge (commit `fa300831`).
+
 ## MUST NOT
 
 - Land a `db.X` / `app.X` facade without the production call site in the same PR

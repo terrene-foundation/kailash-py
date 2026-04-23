@@ -181,6 +181,27 @@ Production code MUST NOT contain:
 
   **Why:** See `rules/tenant-isolation.md`. This is the Phase 5.7 orphan pattern surfaced at the cache key layer.
 
+- **Fake integration via missing handoff field** — a frozen dataclass on a pipeline's critical path that omits the field the NEXT primitive needs to consume it:
+
+  ```python
+  # BLOCKED — TrainingResult is frozen, has no `trainable` or `.model` field
+  @dataclass(frozen=True)
+  class TrainingResult:
+      run_id: str
+      metrics: dict
+      duration_s: float
+      # ... no `trainable`, no `model` → register cannot locate fitted model
+      # ... so km.register(result, ...) raises ValueError at ONNX export time
+
+  # km.train returns TrainingResult(run_id="...", metrics={...}, duration_s=1.5)
+  # km.register(result, name="demo") → ValueError: could not locate trained model
+  # Every unit test of fit() passes ✓ (returns TrainingResult)
+  # Every unit test of register() passes ✓ (accepts TrainingResult with mocked .trainable)
+  # End-to-end Quick Start in the README is broken on every fresh install.
+  ```
+
+  **Why:** A pipeline's canonical 3-line chain (`train → register → serve`) is the public API surface the README advertises. When the frozen-dataclass handoff between two primitives omits the field the consumer primitive needs, both primitives pass their own unit+integration tests (each constructs its own `TrainingResult` with exactly the fields IT needs) while the advertised pipeline breaks on every real install. The dataclass IS structurally a stub — `register` receives a "result" object the framework's own `train` produced, but the object cannot support `register`'s contract. The fix is to add the missing handoff field (`trainable: Trainable | None = None`), ensure every `fit()` return site populates it, AND add an end-to-end regression test (see `rules/testing.md` § End-to-End Pipeline Regression Tests). Evidence: kailash-ml-audit 2026-04-23 W33b — `TrainingResult(frozen=True)` without `trainable` shipped in W31 + W33; `km.register` landed in W33c with no way to resolve `.model`; canonical Quick Start raised `ValueError` on every fresh install until W33b added `trainable=self` at every `Trainable.fit()` return site and landed `packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py`.
+
 - **Fake metrics** — a metrics class where every counter is a no-op because `prometheus_client` isn't installed but there's no warning:
   ```python
   # BLOCKED — silent no-op metrics

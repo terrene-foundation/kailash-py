@@ -358,6 +358,57 @@ tests/
 | General                              | 80%     |
 | Financial / Auth / Security-critical | 100%    |
 
+## End-to-End Pipeline Regression Tests Above Unit + Integration
+
+Unit tests prove each primitive works in isolation. Integration tests prove each primitive works against real infrastructure. Neither catches the class of bug where every primitive passes its own tests but the documented user-facing PIPELINE (the 3-line Quick Start, the advertised README example, the tutorial flow) breaks at a handoff between primitives. Every canonical pipeline the docs teach MUST have a Tier-2-or-above regression test that executes the DOCS-EXACT code with real dependencies and asserts the final user-visible outcome.
+
+### MUST: Every Documented User Pipeline Has An End-To-End Regression Test
+
+For every pipeline the README / Quick Start / tutorial documents as "here's how you use this package", a regression test MUST execute the literal documented code (modulo data fixtures) against real infrastructure and assert the end state. The test MUST live in `tests/regression/` with an `@pytest.mark.regression` marker, and the test name MUST include "quickstart" or "readme" or the tutorial's name so it is grep-able.
+
+```python
+# DO — executes the docs-exact chain, asserts the final contract
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_readme_quickstart_executes_end_to_end() -> None:
+    """Regression: README Quick Start (3-line chain) MUST execute.
+
+    Documented in packages/kailash-ml/README.md §Quick Start:
+        import kailash_ml as km
+        result = await km.train(df, target="churned")
+        registered = await km.register(result, name="demo")
+    """
+    import kailash_ml as km
+    df = pl.DataFrame({"feature_a": [...], "churned": [...]})
+
+    result = await km.train(df, target="churned")
+    assert result.trainable is not None  # handoff field MUST survive km.train
+    assert result.trainable.model is not None
+
+    registered = await km.register(result, name="demo")
+    assert "onnx" in registered.artifact_uris  # km.register MUST export ONNX
+
+# DO NOT — assume unit coverage + integration coverage = pipeline coverage
+# (unit: fit() returns TrainingResult ✓)
+# (integration: MLEngine.register accepts TrainingResult ✓)
+# (pipeline: km.train().trainable is None → km.register raises ValueError ✗)
+# No test ever exercised the handoff because each primitive's tests
+# constructed a TrainingResult with the fields THEIR primitive needs.
+```
+
+**BLOCKED rationalizations:**
+
+- "Every primitive has unit + integration coverage; the pipeline is just composition"
+- "The README example is illustrative, it doesn't need a test"
+- "The Tier 2 tests per primitive prove the interfaces match"
+- "If a user hits this bug they'll file an issue; we'll catch it then"
+- "End-to-end tests are slow and flaky"
+- "The pipeline is a concern of the demo app, not the SDK tests"
+
+**Why:** Unit tests per primitive construct test fixtures with exactly the fields the primitive under test needs — they cannot observe a field MISSING from the handoff between primitive A and primitive B, because A's test constructs its own input and B's test constructs its own input. Only a test that runs the DOCS-EXACT chain, using each primitive's real output as the next primitive's real input, exercises the handoff contract. When the docs teach a pipeline, the pipeline IS the public API; anything less is a per-primitive API that happens to be co-advertised. Evidence: kailash-ml-audit 2026-04-23 W33b — `test_readme_quickstart_executes_end_to_end` at `packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py` caught the `km.train → km.register` pipeline broken: `TrainingResult` had no `trainable` field, so `km.register` couldn't locate the fitted model for ONNX export. Every unit test of `fit()` passed (returned a `TrainingResult`); every unit test of `register()` passed (accepted a `TrainingResult` with a mock `.trainable`); the canonical 3-line Quick Start in the README raised `ValueError` on every fresh install. Root cause (see `zero-tolerance.md` §2 "Fake integration via missing field") surfaced only at end-to-end.
+
+Origin: kailash-ml-audit session 2026-04-23 W33b — README regression test caught an integration gap invisible to unit + integration tests per primitive.
+
 ## State Persistence Verification (Tiers 2-3)
 
 Every write MUST be verified with a read-back:
