@@ -1,5 +1,7 @@
 # Agent Orchestration Rules
 
+See `.claude/guides/rule-extracts/agents.md` for full evidence, extended examples, and post-mortems.
+
 ## Specialist Delegation (MUST)
 
 When working with Kailash frameworks, MUST consult the relevant specialist: **dataflow-specialist** (DB/DataFlow), **nexus-specialist** (API/deployment), **kaizen-specialist** (AI agents), **mcp-specialist** (MCP integration), **mcp-platform-specialist** (FastMCP platform), **pact-specialist** (governance), **ml-specialist** (ML lifecycle), **align-specialist** (LLM fine-tuning). See `rules/framework-first.md` for the domain-to-framework binding.
@@ -41,19 +43,14 @@ Reviews happen at COC phase boundaries, not per-edit. Skip only when explicitly 
 | Before release      | `/release`   | **MUST**    | **reviewer** + **security-reviewer** + **gold-standards-validator**: Blocking.                                  |
 | After release       | post-merge   | RECOMMENDED | **reviewer** against MERGED main. Catches drift the pre-release review missed. If CRIT/HIGH, ship as `x.y.z+1`. |
 
-**BLOCKED responses when skipping MUST gates:**
-
-- "Skipping review to save time"
-- "Reviews will happen in a follow-up session"
-- "The changes are straightforward, no review needed"
-- "Already reviewed informally during implementation"
-
 **Background agent pattern for MUST gates** — review costs near-zero parent context:
 
 ```
 Agent({subagent_type: "reviewer", run_in_background: true, prompt: "Review all changes since last gate..."})
 Agent({subagent_type: "security-reviewer", run_in_background: true, prompt: "Security audit all changes..."})
 ```
+
+**BLOCKED responses when skipping MUST gates:** "Skipping review to save time" / "Reviews will happen in a follow-up session" / "The changes are straightforward, no review needed" / "Already reviewed informally during implementation".
 
 ### MUST: Reviewer Prompts Include Mechanical AST/Grep Sweep
 
@@ -64,10 +61,9 @@ Every gate-level reviewer prompt MUST include explicit mechanical sweeps that ve
 Agent(subagent_type="reviewer", prompt="""
 ... diff context ...
 Mechanical sweeps (run BEFORE LLM judgment):
-1. Parity grep: `grep -c "return TrainingResult(" src/...trainable.py`
-   must equal `grep -cE "device=DeviceReport" src/...trainable.py`
+1. Parity grep (`grep -c`) on critical call-site patterns
 2. `pytest --collect-only -q` exit 0 across all test dirs
-3. For every public symbol in __all__ added by this PR — verify eager import
+3. Every public symbol in __all__ added by this PR has an eager import
 """)
 
 # DO NOT — reviewer prompt only includes diff context
@@ -76,9 +72,9 @@ Agent(subagent_type="reviewer", prompt="Review the diff between main and feat/X.
 
 **BLOCKED rationalizations:** "The reviewer is smart enough to spot orphans" / "Mechanical sweeps are /redteam's job" / "Adding sweeps is repetitive".
 
-**Why:** Reviewers are constrained by the diff. The orphan failure mode in `orphan-detection.md` §1 is invisible at diff-level. A 4-second `grep -c` catches what 5 minutes of LLM judgment misses.
+**Why:** Reviewers are constrained by the diff. The orphan failure mode in `orphan-detection.md` §1 is invisible at diff-level. A 4-second `grep -c` catches what 5 minutes of LLM judgment misses. See guide for full evidence.
 
-Origin: Session 2026-04-19. See `skills/30-claude-code-patterns/worktree-orchestration.md` § "Reviewer Prompts — Mechanical AST/Grep Sweep" for full evidence.
+Origin: Session 2026-04-19. See `skills/30-claude-code-patterns/worktree-orchestration.md`.
 
 ## Zero-Tolerance
 
@@ -97,12 +93,10 @@ Agent(isolation: "worktree", prompt: "implement feature Y...")
 
 # DO NOT — multiple agents sharing same target/ (serializes on lock)
 Agent(prompt: "implement feature X...")
-Agent(prompt: "implement feature Y...")  # blocks waiting for X's build lock
+Agent(prompt: "implement feature Y...")
 ```
 
-**Why:** Cargo uses an exclusive filesystem lock on `target/`. Worktrees give each agent its own `target/`.
-
-See `skills/30-claude-code-patterns/worktree-orchestration.md` for the full 5-layer protocol — `isolation: "worktree"` is necessary but not sufficient.
+**Why:** Cargo uses an exclusive filesystem lock on `target/`. Worktrees give each agent its own `target/`. See `skills/30-claude-code-patterns/worktree-orchestration.md` for the full 5-layer protocol — `isolation: "worktree"` is necessary but not sufficient.
 
 ## MUST: Worktree Prompts Use Relative Paths Only
 
@@ -114,47 +108,32 @@ Agent(isolation="worktree", prompt="Edit packages/kailash-ml/src/kailash_ml/trai
 
 # DO NOT — absolute paths bypass worktree isolation
 Agent(isolation="worktree", prompt="Edit /Users/esperie/repos/loom/kailash-py/packages/...")
-# ↑ writes land in the MAIN checkout; worktree stays empty; auto-cleanup deletes it
 ```
 
 **BLOCKED rationalizations:** "Absolute paths are unambiguous" / "The agent should figure out its own cwd" / "This worked the one time I tested it".
 
-**Why:** `isolation: "worktree"` sets cwd to the worktree; absolute paths point back to the parent checkout, silently defeating isolation. Session 2026-04-19: 2 of 3 parallel shards wrote to MAIN; one lost 300+ LOC when its empty worktree auto-cleaned.
-
-Origin: See `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 2 for the full post-mortem.
+**Why:** `isolation: "worktree"` sets cwd to the worktree; absolute paths point back to the parent checkout, silently defeating isolation. Session 2026-04-19: 2 of 3 parallel shards wrote to MAIN; one lost 300+ LOC when its empty worktree auto-cleaned. See guide + `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 2 for full post-mortem.
 
 ## MUST: Recover Orphan Writes From Zero-Commit Worktree Agents
 
 When an `isolation: "worktree"` agent reports completion but the branch has zero commits AND the worktree has been auto-cleaned, the parent orchestrator MUST inspect the MAIN checkout for orphaned untracked files BEFORE concluding the work was lost. Absolute-path writes from the agent resolve to the MAIN checkout cwd — the files are NOT lost; they are orphaned, uncommitted, and reachable via `git status` on the parent.
 
 ```bash
-# DO — recovery protocol (4 steps)
-git worktree list | grep <expected-branch>          # empty if cleaned
-git log <expected-branch> --oneline | head -5       # zero agent commits confirms truncation
-git status --short                                   # "??" entries surface the orphans
-find . -path .claude/worktrees -prune -o -name "<expected-file>" -print
-# → git checkout -b recovery/<original-branch-name>
-# → git add <orphaned files> && git -c core.hooksPath=/dev/null commit -m "feat(...): recovered from failed parallel worktree agent"
+# DO — recovery protocol (detect → recover → PR with recovery/ prefix)
+git worktree list | grep <expected-branch>      # empty if cleaned
+git log <expected-branch> --oneline | head -5   # zero agent commits confirms truncation
+git status --short                              # "??" entries surface the orphans
+# → git checkout -b recovery/<original-branch-name> && git add <orphans> && git commit
 # → fill missing deliverables (tests, specs, pyproject bumps, CHANGELOG)
-# → gh pr create with recovery/ prefix + body explicitly noting the recovery
 
 # DO NOT — abandon orphans and re-launch the agent
-# Re-launch WILL produce another orphan set; MAIN checkout now has
-# double the orphan surface and the next session must resolve two
-# partial adapters.
 ```
 
-**BLOCKED rationalizations:**
-
-- "The agent said it was done, so the work must be committed somewhere"
-- "Re-launching is cleaner than recovery"
-- "If the branch has zero commits, the work is gone"
-- "The main checkout is clean, nothing to recover"
-- "recovery/ branches are a workaround; feat/ is more correct"
+**BLOCKED rationalizations:** "The agent said it was done, so the work must be committed somewhere" / "Re-launching is cleaner than recovery" / "If the branch has zero commits, the work is gone" / "The main checkout is clean, nothing to recover" / "recovery/ branches are a workaround; feat/ is more correct".
 
 **Why:** The first three rationalizations lose 1000+ LOC of real work every time an absolute-path agent truncates. The fourth is false because `git status` reveals the orphans. The fifth conflates branch-name aesthetics with provenance traceability — `recovery/` grep surfaces this class of rescue across history; `feat/` does not.
 
-Origin: Session 2026-04-20 Session 3b (issue #567). PR#574 recovered 1129 LOC of `alignment.py` from the MAIN checkout after the parallel-worktree agent for PR#3 wrote absolute paths and exited with zero commits.
+Origin: Session 2026-04-20 Session 3b (issue #567, PR #574 recovered 1129 LOC of `alignment.py`). See guide for full 4-step protocol.
 
 ## MUST: Worktree Agents Commit Incremental Progress
 
@@ -174,9 +153,7 @@ Agent(isolation="worktree", prompt="Implement feature X. Report when done.")
 
 **BLOCKED rationalizations:** "The agent will commit at the end" / "Splitting adds overhead" / "The parent can recover from the worktree after exit".
 
-**Why:** Worktrees with zero commits are silently deleted. Session 2026-04-19: Shard A wrote 300+ LOC, truncated mid-message, zero commits, work lost. Only Shard B self-corrected because its prompt emphasized commit-before-exit.
-
-Origin: See `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 3.
+**Why:** Worktrees with zero commits are silently deleted. Session 2026-04-19: Shard A wrote 300+ LOC, truncated mid-message, zero commits, work lost. See guide + `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 3.
 
 ## MUST: Verify Agent Deliverables Exist After Exit
 
@@ -187,9 +164,7 @@ When an agent reports completion of a file-writing task, the parent MUST `ls` or
 result = Agent(prompt="Write src/feature.py with ...")
 Read("src/feature.py")  # raises if missing → retry
 
-# DO NOT — trust the completion message
-result = Agent(prompt="Write src/feature.py with ...")
-# parent moves on; src/feature.py never existed
+# DO NOT — trust the completion message (budget-exhaustion truncates writes)
 ```
 
 **BLOCKED rationalizations:** "The agent said 'done', that's good enough" / "Now let me write the file…" (with no subsequent tool call).
@@ -201,32 +176,23 @@ result = Agent(prompt="Write src/feature.py with ...")
 When launching two or more parallel agents whose worktrees touch the SAME sub-package, the orchestrator MUST designate ONE agent as **version owner** (pyproject.toml + `__init__.py::__version__` + CHANGELOG) AND tell every sibling explicitly: "do NOT edit those files". Integration belongs to the orchestrator.
 
 ```python
-# DO — explicit ownership in prompts
-Agent(isolation="worktree", prompt="""...resolve #546 ONNX matrix...
-Version bump + CHANGELOG:
-- packages/kailash-ml/pyproject.toml → 0.13.0
-- packages/kailash-ml/src/kailash_ml/__init__.py::__version__
-- packages/kailash-ml/CHANGELOG.md""")
-Agent(isolation="worktree", prompt="""...resolve #547+#548 km.doctor + km.track...
+# DO — explicit ownership in prompts (sibling sees coordination note)
+Agent(isolation="worktree", prompt="""... bump package to 0.13.0, CHANGELOG, __version__ ...""")
+Agent(isolation="worktree", prompt="""...
 COORDINATION NOTE: A parallel agent is bumping this package to 0.13.0.
-You MUST NOT edit packages/kailash-ml/pyproject.toml,
-packages/kailash-ml/src/kailash_ml/__init__.py::__version__, or
-packages/kailash-ml/CHANGELOG.md. Just deliver the functionality.""")
+You MUST NOT edit pyproject.toml / __version__ / CHANGELOG.""")
 
-# DO NOT — silent parallel ownership
-Agent(isolation="worktree", prompt="...resolve #546... bump to 0.13.0")
-Agent(isolation="worktree", prompt="...resolve #547+#548... bump to 0.13.0")
-# ↑ Both agents race; merge picks one version field arbitrarily, dropping the other's CHANGELOG prose
+# DO NOT — both agents bump independently (merge arbitrarily picks one side's CHANGELOG)
 ```
 
 **BLOCKED rationalizations:** "Both agents are smart enough to see the existing version" / "We'll resolve at merge time" / "Each agent owns a section of the CHANGELOG".
 
-**Why:** Parallel agents see the same base SHA; each independently bumps `version = "0.12.1"` → `"0.13.0"` and writes a top-level `## [0.13.0]` CHANGELOG entry. Merge picks one — discarding the other agent's prose silently. One-sentence exclusion clause prevents an O(manual) reconciliation.
+**Why:** Parallel agents see the same base SHA; each independently bumps `version` and writes a top-level CHANGELOG entry. Merge picks one — discarding the other's prose silently. One-sentence exclusion clause prevents O(manual) reconciliation.
 
-Origin: Session 2026-04-20 kailash-ml 0.13.0 + kailash 2.8.10 parallel-release cycle (PRs #552, #553). Full evidence in `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 5.
+Origin: Session 2026-04-20 kailash-ml 0.13.0 + kailash 2.8.10 parallel-release (PRs #552, #553). See guide for full example.
 
 ## MUST NOT
 
 - **Framework work without specialist** — misuse violates invariants (pool sharing, session lifecycle, trust boundaries).
 - **Sequential when parallel is possible** — wastes the autonomous execution multiplier.
-- **Raw SQL / custom API / custom agents / custom governance** — see `rules/framework-first.md` for the domain-to-framework binding (DataFlow / Nexus / Kaizen / PACT). Framework specialists auto-invoke on matching work.
+- **Raw SQL / custom API / custom agents / custom governance** — see `rules/framework-first.md` and guide for per-framework rationale. Framework specialists auto-invoke on matching work.
