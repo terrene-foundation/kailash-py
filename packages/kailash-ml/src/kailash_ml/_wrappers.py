@@ -147,27 +147,49 @@ async def train(
     engine = _get_default_engine(tenant_id)
 
     # Step 2 — setup the engine with the training frame and target.
+    # The setup call stores the schema for drift detection; fit() on
+    # this engine implementation still requires ``data`` + ``target``
+    # passed explicitly (integrated setup->fit lands in a later phase
+    # per engine.py comments). We therefore forward the frame + target
+    # to compare()/fit() directly rather than relying on the implicit
+    # setup-store.
     await engine.setup(df, target=target, ignore=ignore)
 
     # Step 3 — compare for "auto" family, otherwise fit a single family.
     if family == "auto":
-        comparison = await engine.compare(metric=metric)
-        # ``comparison.winner`` is the winning family name; we fit it
-        # explicitly so the caller receives a populated TrainingResult.
-        winner = getattr(comparison, "winner", None)
-        if winner is None:
-            # Fall back to sklearn when compare() couldn't pick a winner
-            # (empty compare result). The engine validates the family.
-            winner = "sklearn"
-        return await engine.fit(
-            family=winner,
-            hyperparameters=hyperparameters,
-            hp_search=hp_search,
-            n_trials=n_trials,
+        comparison = await engine.compare(
+            data=df,
+            target=target,
             metric=metric,
         )
+        # The ComparisonResult exposes ``best`` (a TrainingResult) and
+        # ``leaderboard`` (the ranked list). Return the best result
+        # directly — its ``.family`` is already a concrete family name
+        # (not "auto"), so the ``km.train(family='auto')`` contract
+        # test that asserts ``result.family != 'auto'`` holds.
+        best = getattr(comparison, "best", None)
+        if best is None:
+            leaderboard = getattr(comparison, "leaderboard", ()) or ()
+            if leaderboard:
+                best = leaderboard[0]
+        if best is None:
+            # compare() returned no candidates — fall back to sklearn
+            # fit to honour the "km.train always returns a result"
+            # contract.
+            return await engine.fit(
+                data=df,
+                target=target,
+                family="sklearn",
+                hyperparameters=hyperparameters,
+                hp_search=hp_search,
+                n_trials=n_trials,
+                metric=metric,
+            )
+        return best
 
     return await engine.fit(
+        data=df,
+        target=target,
         family=family,
         hyperparameters=hyperparameters,
         hp_search=hp_search,
