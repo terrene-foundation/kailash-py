@@ -430,9 +430,13 @@ class InferenceServer:
         """
         if self._status != "starting":
             raise InferenceServerError(
-                f"InferenceServer[{self._server_id}] already started — "
-                f"status={self._status!r}; construct a fresh server to "
-                f"rebind channels."
+                reason=(
+                    f"InferenceServer[{self._server_id}] already started — "
+                    f"status={self._status!r}; construct a fresh server to "
+                    f"rebind channels."
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
             )
 
         t0 = time.monotonic()
@@ -472,9 +476,14 @@ class InferenceServer:
                 },
             )
             raise ModelLoadError(
-                f"InferenceServer[{self._server_id}] failed to start "
-                f"model {self._config.model_name!r} v{self._config.model_version}: "
-                f"{exc.__class__.__name__}: {exc}"
+                reason=(
+                    f"InferenceServer[{self._server_id}] failed to start "
+                    f"model {self._config.model_name!r} "
+                    f"v{self._config.model_version}: "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
             ) from exc
 
         self._status = "ready"
@@ -600,16 +609,24 @@ class InferenceServer:
         """
         if self._status != "ready":
             raise InferenceServerError(
-                f"InferenceServer[{self._server_id}] status={self._status!r}; "
-                f"predict() requires 'ready'."
+                reason=(
+                    f"InferenceServer[{self._server_id}] "
+                    f"status={self._status!r}; predict() requires 'ready'."
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
             )
         if self._loaded is None or (
             self._loaded.onnx_bytes is None and self._loaded.pickle_bytes is None
         ):
             # Defensive: the ready→loaded invariant is maintained by start()
             raise InferenceServerError(
-                f"InferenceServer[{self._server_id}] has no loaded artifact; "
-                f"start() was not called."
+                reason=(
+                    f"InferenceServer[{self._server_id}] has no loaded "
+                    f"artifact; start() was not called."
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
             )
 
         effective_tenant = (
@@ -672,8 +689,12 @@ class InferenceServer:
                 },
             )
             raise InferenceServerError(
-                f"InferenceServer[{self._server_id}] predict failed: "
-                f"{type(exc).__name__} (fingerprint={fingerprint})"
+                reason=(
+                    f"InferenceServer[{self._server_id}] predict failed: "
+                    f"{type(exc).__name__} (fingerprint={fingerprint})"
+                ),
+                tenant_id=effective_tenant,
+                resource_id=self._config.model_name,
             ) from exc
         finally:
             self._inflight -= 1
@@ -756,10 +777,15 @@ class InferenceServer:
             )
         except (FileNotFoundError, LookupError) as exc:
             raise ModelLoadError(
-                f"InferenceServer[{self._server_id}] could not load "
-                f"{artifact_name!r} for {self._config.model_name} "
-                f"v{self._config.model_version} (runtime={self._config.runtime}): "
-                f"{exc.__class__.__name__}: {exc}"
+                reason=(
+                    f"InferenceServer[{self._server_id}] could not load "
+                    f"{artifact_name!r} for {self._config.model_name} "
+                    f"v{self._config.model_version} "
+                    f"(runtime={self._config.runtime}): "
+                    f"{exc.__class__.__name__}: {exc}"
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
             ) from exc
 
         if self._config.runtime == "onnx":
@@ -851,9 +877,14 @@ class InferenceServer:
         expected = self._config.tenant_id
         if expected is not None and tenant_id != expected:
             raise InferenceServerError(
-                f"InferenceServer[{self._server_id}] is scoped to tenant "
-                f"{expected!r}; invocation with tenant_id={tenant_id!r} "
-                f"refused (rules/tenant-isolation.md Rule 2)."
+                reason=(
+                    f"InferenceServer[{self._server_id}] is scoped to "
+                    f"tenant {expected!r}; invocation with "
+                    f"tenant_id={tenant_id!r} refused "
+                    f"(rules/tenant-isolation.md Rule 2)."
+                ),
+                tenant_id=expected,
+                resource_id=self._config.model_name,
             )
 
     def _validate_signature(self, features: Mapping[str, Any]) -> None:
@@ -884,29 +915,51 @@ class InferenceServer:
             first = records[0]
             if not isinstance(first, Mapping):
                 raise InvalidInputSchemaError(
-                    f"InferenceServer[{self._server_id}] batch records must "
-                    f"be mappings; first record is {type(first).__name__}"
+                    reason=(
+                        f"InferenceServer[{self._server_id}] batch records "
+                        f"must be mappings; first record is "
+                        f"{type(first).__name__}"
+                    ),
+                    tenant_id=self._config.tenant_id,
+                    resource_id=self._config.model_name,
                 )
             provided = set(first.keys())
             missing = expected_features - provided
             if missing:
                 raise InvalidInputSchemaError(
-                    f"InferenceServer[{self._server_id}] batch missing "
-                    f"required feature(s) {sorted(missing)}; expected "
-                    f"{sorted(expected_features)}, got {sorted(provided)}"
+                    reason=(
+                        f"InferenceServer[{self._server_id}] batch missing "
+                        f"required feature(s) {sorted(missing)}; expected "
+                        f"{sorted(expected_features)}, "
+                        f"got {sorted(provided)}"
+                    ),
+                    tenant_id=self._config.tenant_id,
+                    resource_id=self._config.model_name,
+                    missing_features=sorted(missing),
                 )
             # Check subsequent records share the same key set.
             for idx, rec in enumerate(records[1:], start=1):
                 if not isinstance(rec, Mapping):
                     raise InvalidInputSchemaError(
-                        f"InferenceServer[{self._server_id}] batch record "
-                        f"{idx} is {type(rec).__name__}, expected mapping"
+                        reason=(
+                            f"InferenceServer[{self._server_id}] batch "
+                            f"record {idx} is {type(rec).__name__}, "
+                            f"expected mapping"
+                        ),
+                        tenant_id=self._config.tenant_id,
+                        resource_id=self._config.model_name,
                     )
                 rec_missing = expected_features - set(rec.keys())
                 if rec_missing:
                     raise InvalidInputSchemaError(
-                        f"InferenceServer[{self._server_id}] batch record "
-                        f"{idx} missing required feature(s) {sorted(rec_missing)}"
+                        reason=(
+                            f"InferenceServer[{self._server_id}] batch "
+                            f"record {idx} missing required feature(s) "
+                            f"{sorted(rec_missing)}"
+                        ),
+                        tenant_id=self._config.tenant_id,
+                        resource_id=self._config.model_name,
+                        missing_features=sorted(rec_missing),
                     )
             return
 
@@ -916,9 +969,14 @@ class InferenceServer:
         missing = expected_features - provided
         if missing:
             raise InvalidInputSchemaError(
-                f"InferenceServer[{self._server_id}] request missing "
-                f"required feature(s) {sorted(missing)}; expected "
-                f"{sorted(expected_features)}, got {sorted(provided)}"
+                reason=(
+                    f"InferenceServer[{self._server_id}] request missing "
+                    f"required feature(s) {sorted(missing)}; expected "
+                    f"{sorted(expected_features)}, got {sorted(provided)}"
+                ),
+                tenant_id=self._config.tenant_id,
+                resource_id=self._config.model_name,
+                missing_features=sorted(missing),
             )
 
     async def _run_inference(self, features: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -973,12 +1031,15 @@ async def _resolve_model_via_registry(
     except Exception as exc:
         # ModelRegistry raises its own ModelNotFoundError; re-raise as
         # the canonical kailash_ml.errors.ModelNotFoundError so callers
-        # match against one class.
+        # match against one class. MLError subclasses are kwarg-only.
         exc_name = exc.__class__.__name__
         if "ModelNotFound" in exc_name:
             raise ModelNotFoundError(
-                f"InferenceServer could not resolve model {name!r} "
-                f"(alias={alias!r}, version={version!r}): {exc}"
+                reason=(
+                    f"InferenceServer could not resolve model {name!r} "
+                    f"(alias={alias!r}, version={version!r}): {exc}"
+                ),
+                resource_id=name,
             ) from exc
         raise
 
