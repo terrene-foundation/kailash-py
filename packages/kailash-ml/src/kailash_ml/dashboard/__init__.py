@@ -11,11 +11,25 @@ Usage::
 
     dashboard = MLDashboard(db_url="sqlite:///ml.db")
     dashboard.serve(host="0.0.0.0", port=5000)
+
+**Callable-module shim** — per ``rules/orphan-detection.md §6`` the public
+Group-1 verb ``km.dashboard(...)`` is eager-imported in
+:mod:`kailash_ml.__init__` as a module-scope callable. However Python's
+import machinery sets ``kailash_ml.dashboard`` to THIS submodule object
+the moment any test does ``from kailash_ml.dashboard import MLDashboard``,
+silently shadowing the verb. To keep both surfaces working without
+renaming the subpackage (breaking public import paths), this module
+installs a ``_CallableModule`` subclass of :class:`types.ModuleType` that
+forwards ``__call__`` to the :func:`kailash_ml._wrappers.dashboard`
+verb. The callable-module pattern is a standard Python technique (PEP
+562 / ``sys.modules[__name__].__class__`` assignment).
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import sys as _sys
+from types import ModuleType as _ModuleType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -160,3 +174,36 @@ def main() -> None:
         dashboard.serve()
 
     serve()
+
+
+# ---------------------------------------------------------------------------
+# Callable-module shim (see module docstring for rationale).
+# ---------------------------------------------------------------------------
+
+
+class _CallableDashboardModule(_ModuleType):
+    """Make ``kailash_ml.dashboard(...)`` forward to the Group-1 verb.
+
+    Python's import machinery unconditionally sets
+    ``kailash_ml.dashboard`` to this module object when any code runs
+    ``import kailash_ml.dashboard`` or
+    ``from kailash_ml.dashboard import ...``. That would silently
+    overwrite the eager-imported ``dashboard`` callable exposed by
+    :mod:`kailash_ml.__init__`, breaking the ``km.dashboard(...)``
+    Group-1 contract tested by
+    ``tests/unit/test_km_eager_imports.py::test_group_1_verbs_are_callable``.
+
+    By swapping this module's ``__class__`` to a ``ModuleType`` subclass
+    with ``__call__``, the module object IS callable — so
+    ``kailash_ml.dashboard(...)`` still works as a verb invocation even
+    after submodule loading.
+    """
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # Lazy import to avoid a circular import at package init time.
+        from kailash_ml._wrappers import dashboard as _dashboard_verb
+
+        return _dashboard_verb(*args, **kwargs)
+
+
+_sys.modules[__name__].__class__ = _CallableDashboardModule
