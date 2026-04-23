@@ -139,7 +139,7 @@ jobs:
           # released to PyPI yet, so a transitive `kailash>=2.8.9` resolve
           # from PyPI would miss the module the integration tests import.
           uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-ml[dl,dev,stats]" --python .venv/bin/python
           # kailash-ml integration tests import `kailash_align` via
           # test_rl_align_cross_sdk_wiring.py (cross-SDK RL protocol wiring).
           # Install kailash-align editable so the test collects cleanly.
@@ -147,7 +147,8 @@ jobs:
           # SDK Editable For Unreleased Core Modules" — the same discipline
           # applies bi-directionally at the bridge boundary.
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
-          uv pip install pytest-cov --python .venv/bin/python
+          # pytest-httpserver for test_drift_alerting_wiring webhook tests
+          uv pip install pytest-cov pytest-httpserver --python .venv/bin/python
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/unit/ \
             packages/kailash-ml/tests/integration/ \
