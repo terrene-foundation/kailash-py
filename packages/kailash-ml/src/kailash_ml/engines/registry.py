@@ -192,8 +192,11 @@ def engine_info(name: str) -> EngineInfo:
     """
     if name not in _REGISTRY:
         raise EngineNotFoundError(
-            f"engine_info({name!r}) — no such engine. Available: "
-            f"{tuple(_REGISTRY.keys())}"
+            reason=(
+                f"engine_info({name!r}) — no such engine. Available: "
+                f"{tuple(_REGISTRY.keys())}"
+            ),
+            resource_id=name,
         )
     return _REGISTRY[name]
 

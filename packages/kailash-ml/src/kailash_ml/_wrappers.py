@@ -51,7 +51,7 @@ from kailash_ml.errors import ModelRegistryError
 # alongside the rest of Group 1. The ``from kailash_ml import autolog``
 # path in ``__init__.py`` pulls them from here.
 from kailash_ml.autolog import autolog as _autolog_cm
-from kailash_ml.autolog import autolog_fn as _autolog_fn  # noqa: F401 — sibling surface
+from kailash_ml.autolog import autolog_fn  # noqa: F401 — sibling surface
 from kailash_ml.diagnostics import diagnose_classifier, diagnose_regressor
 from kailash_ml.diagnostics.dl import DLDiagnostics
 from kailash_ml.diagnostics.rag import RAGDiagnostics
@@ -298,20 +298,37 @@ async def watch(
     # default engine's composition so the monitor shares the tenant's
     # SQLite store.
     conn = getattr(engine, "_connection_manager", None)
-    monitor = DriftMonitor(conn, alert_config=alerts)
+    # DriftMonitor requires a non-empty tenant_id (§W26.e
+    # ``TenantRequiredError``). In single-tenant mode callers may pass
+    # ``tenant_id=None`` into ``km.watch`` — bridge that to the
+    # DriftMonitor's canonical ``"_single"`` tenant (same convention
+    # :class:`MLEngine` uses for single-tenant persistence).
+    monitor_tenant = tenant_id if tenant_id else "_single"
+    monitor = DriftMonitor(conn, tenant_id=monitor_tenant, alerts=alerts)
     # Ensure schema exists before the caller queries it.
     if hasattr(monitor, "initialize"):
-        await monitor.initialize()
+        init_fn = monitor.initialize
+        if asyncio.iscoroutinefunction(init_fn):
+            await init_fn()
+        else:
+            init_fn()
     if reference is not None:
         # Persist the reference distribution eagerly so the monitor is
-        # ready for ``check_drift`` immediately.
-        await monitor.set_reference(
-            model_uri,
-            reference,
-            actor_id=actor_id or "km.watch",
-        )
-    _ = axes  # accepted for forward compatibility; current DriftMonitor
-    # derives the active axes from the supplied reference distribution.
+        # ready for ``check_drift`` immediately. The engine method is
+        # ``set_reference_data`` per §E1.1 / drift_monitor.py.
+        setter = getattr(monitor, "set_reference_data", None)
+        if setter is None:
+            setter = getattr(monitor, "set_reference", None)
+        if setter is None:
+            raise ModelRegistryError(
+                reason=(
+                    "km.watch(reference=...) — DriftMonitor exposes "
+                    "neither set_reference_data nor set_reference"
+                ),
+            )
+        await setter(model_uri, reference)
+    _ = axes, actor_id  # accepted for forward compatibility; current
+    # DriftMonitor derives active axes from the reference distribution.
     return monitor
 
 
@@ -375,24 +392,31 @@ def dashboard(
     # the wrapper is actually used.
     from kailash_ml.dashboard import MLDashboard  # noqa: WPS433
 
-    server = MLDashboard(
-        db_url=db_url,
-        port=port,
-        bind=bind,
-        auth=auth,
-        tenant_id=tenant_id,
-        title=title,
-    )
+    # The current :class:`MLDashboard` signature is
+    # ``(db_url, artifact_root, host, port)``. ``auth`` / ``tenant_id``
+    # / ``title`` are reserved per ``§15.7`` for a future version of
+    # the dashboard that implements them; accepting them at this
+    # wrapper boundary keeps ``km.dashboard`` future-compatible without
+    # forcing the dashboard module to change its signature today.
+    _ = (auth, tenant_id, title)  # reserved — see comment above
+    server_kwargs: dict[str, Any] = {"host": bind, "port": port}
+    if db_url is not None:
+        server_kwargs["db_url"] = db_url
+    server = MLDashboard(**server_kwargs)
 
     url = f"http://{bind}:{port}"
 
     def _run() -> None:
         try:
-            server.run()
+            server.serve()
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("dashboard.run.error", extra={"error": str(exc)})
 
-    thread = threading.Thread(target=_run, name="kailash_ml.dashboard", daemon=True)
+    thread = threading.Thread(
+        target=_run,
+        name="kailash_ml.dashboard",
+        daemon=True,
+    )
     thread.start()
     return DashboardHandle(url=url, thread=thread, server=server)
 
@@ -565,6 +589,7 @@ __all__ = [
     "dashboard",
     "diagnose",
     "autolog",
+    "autolog_fn",
     "track",
     "rl_train",
     "DashboardHandle",
