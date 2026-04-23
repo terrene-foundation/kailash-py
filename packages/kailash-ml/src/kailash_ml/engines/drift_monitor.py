@@ -25,6 +25,10 @@ from typing import Any
 
 import numpy as np
 import polars as pl
+from kailash_ml.drift.alerts import (
+    AlertConfig,
+    DriftAlertDispatcher,
+)
 from kailash_ml.drift.policy import DriftMonitorReferencePolicy
 from kailash_ml.drift.stats import (
     DriftThresholds,
@@ -584,6 +588,7 @@ class DriftMonitor:
         performance_threshold: float = 0.1,
         thresholds: DriftThresholds | None = None,
         tracker: Any = None,
+        alerts: AlertConfig | None = None,
     ) -> None:
         import math
 
@@ -637,6 +642,12 @@ class DriftMonitor:
         # against a sparse slice — slice sparsity itself is a data
         # finding, not a drift one.
         self._min_slice_samples: int = 10
+        # W26.d: optional alerting surface.  Per spec §6.1 the
+        # dispatcher is in-memory per DriftMonitor instance; cross-
+        # process coordination is an explicit non-goal for this shard.
+        self._alert_dispatcher: DriftAlertDispatcher | None = (
+            DriftAlertDispatcher(alerts) if alerts is not None else None
+        )
 
     async def _ensure_tables(self) -> None:
         if not self._initialized:
@@ -935,6 +946,7 @@ class DriftMonitor:
         *,
         agent: AgentInfusionProtocol | None = None,
         checked_at: datetime | None = None,
+        tenant_id: str | None = None,
     ) -> DriftReport:
         """Check feature drift against stored reference.
 
@@ -951,6 +963,11 @@ class DriftMonitor:
             model's policy is non-static. Defaults to
             ``datetime.now(timezone.utc)``. Tests MUST pin this so the
             time axis is deterministic.
+        tenant_id:
+            W26.d passthrough — used as the tenant dimension on alert
+            cooldown / rate-limit keys. Defaults to ``""`` because
+            full tenant-scoping of the drift surface is a follow-up
+            shard (spec §4.1 non-goal for W26.d).
 
         Returns
         -------
@@ -1135,8 +1152,8 @@ class DriftMonitor:
             sample_size_current=current_data.height,
         )
 
-        # Store report
-        await self._store_report(report)
+        # Store report (returns report_id for alert dispatch linkback)
+        report_id = await self._store_report(report)
 
         logger.info(
             "drift.check.ok",
@@ -1147,6 +1164,32 @@ class DriftMonitor:
                 "drift_overall_severity": overall_severity,
             },
         )
+
+        # W26.d: evaluate + dispatch alerts per spec §6.2.  Dispatcher
+        # errors from individual channels are already swallowed+logged
+        # inside the dispatcher; a catastrophic dispatcher failure
+        # (state mutation, bug) is caught here so drift detection
+        # returns the report regardless.
+        if self._alert_dispatcher is not None:
+            try:
+                await self._alert_dispatcher.evaluate_and_dispatch(
+                    report=report,
+                    tenant_id=tenant_id or "",
+                    model_name=model_name,
+                    # W26.d passthrough — registry/version wiring is a
+                    # follow-up shard. Use 0 as the sentinel and keep
+                    # the DriftAlert payload field stable.
+                    model_version=0,
+                    report_id=report_id,
+                )
+            except Exception:  # pragma: no cover - defense-in-depth
+                logger.exception(
+                    "drift.alert.dispatcher_error",
+                    extra={
+                        "drift_model_name": model_name,
+                        "drift_report_id": report_id,
+                    },
+                )
 
         # Optional agent interpretation
         if agent is not None and report.overall_drift_detected:
@@ -1813,8 +1856,13 @@ class DriftMonitor:
         # query ``drift/*/alert == 1`` to surface drifted features.
         _emit(f"{base}/alert", 1.0 if drift_detected else 0.0)
 
-    async def _store_report(self, report: DriftReport) -> None:
-        """Persist a drift report to the database."""
+    async def _store_report(self, report: DriftReport) -> str:
+        """Persist a drift report to the database.
+
+        Returns the generated ``report_id`` so the alert dispatcher
+        (W26.d) can link :class:`DriftAlert` payloads back into
+        ``_kml_drift_reports`` per spec §6.3.
+        """
         report_id = str(uuid.uuid4())
         await self._conn.execute(
             "INSERT INTO _kml_drift_reports "
@@ -1827,6 +1875,7 @@ class DriftMonitor:
             report.overall_severity,
             report.checked_at.isoformat(),
         )
+        return report_id
 
     async def _load_performance_baseline(
         self, model_name: str

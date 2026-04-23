@@ -58,6 +58,11 @@ dependencies = [
     # (W6) at runtime so ``km.doctor`` subcommands can operate against
     # an updateable matrix without a kailash-ml release.
     "pyyaml>=6.0",
+    # httpx — used by ``kailash_ml.drift.alerts.WebhookAlertChannel``
+    # (W26.d) for the async HTTP POST path. Declared-imported per
+    # rules/dependencies.md: transitive availability via kailash's own
+    # httpx dep is not a declaration.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
