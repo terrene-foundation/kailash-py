@@ -258,7 +258,7 @@ class MultiCycleStrategy:
                                 from kaizen.core.autonomy.hooks.types import HookEvent
 
                                 try:
-                                    loop = asyncio.get_running_loop()
+                                    asyncio.get_running_loop()  # probe only
                                     # In async context - use thread pool.
                                     # Copy contextvars into the worker so
                                     # caller-set request-scoped state
@@ -306,7 +306,7 @@ class MultiCycleStrategy:
                             if asyncio.iscoroutinefunction(agent.execute_tool):
                                 # Check if we're in a running event loop
                                 try:
-                                    loop = asyncio.get_running_loop()
+                                    asyncio.get_running_loop()  # probe only
                                     # We're in an async context - use thread pool to avoid nested loop.
                                     # Copy contextvars so caller-set state
                                     # reaches the tool coroutine
@@ -351,7 +351,7 @@ class MultiCycleStrategy:
                                 from kaizen.core.autonomy.hooks.types import HookEvent
 
                                 try:
-                                    loop = asyncio.get_running_loop()
+                                    asyncio.get_running_loop()  # probe only
                                     # In async context - use thread pool.
                                     # Copy contextvars so caller-set
                                     # state reaches the hook coroutine
@@ -784,7 +784,7 @@ class MultiCycleStrategy:
             from kaizen.core.autonomy.hooks.types import HookEvent
 
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()  # probe only
                 # In async context - use thread pool. Copy contextvars
                 # so caller-set request-scoped state reaches the hook
                 # coroutine (issue #486).
@@ -831,7 +831,7 @@ class MultiCycleStrategy:
         if asyncio.iscoroutinefunction(agent.execute_tool):
             # Check if we're in a running event loop
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()  # probe only
                 # We're in an async context - use thread pool to avoid
                 # nested loop. Copy contextvars so caller-set state
                 # reaches the tool coroutine (issue #486).
@@ -860,7 +860,7 @@ class MultiCycleStrategy:
             from kaizen.core.autonomy.hooks.types import HookEvent
 
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()  # probe only
                 # In async context - use thread pool. Copy contextvars
                 # so caller-set state reaches the hook coroutine
                 # (issue #486).

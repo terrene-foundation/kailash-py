@@ -1041,6 +1041,11 @@ class LightningTrainable:
         self._batch_size = batch_size
         self._task = task
         self._is_fitted = False
+        # Empty tuple default so downstream predict() code paths that
+        # read self._feature_names before fit() has been called get a
+        # consistent shape rather than AttributeError. Populated during
+        # fit() from _split_xy(data, target).
+        self._feature_names: tuple[str, ...] = ()
 
     @property
     def model(self) -> Any:
@@ -1050,7 +1055,6 @@ class LightningTrainable:
         at construction.
         """
         return self._module
-        self._feature_names: tuple[str, ...] = ()
 
     def to_lightning_module(self) -> Any:
         return self._module

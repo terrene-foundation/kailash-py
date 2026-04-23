@@ -62,6 +62,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import math
 import os
 import threading
 import time
@@ -774,7 +775,7 @@ def _clamp_unit(value: Any, *, default: float = 0.0) -> float:
         f = float(value)
     except (TypeError, ValueError):
         return default
-    if f != f:  # NaN
+    if math.isnan(f):  # NaN — math.isnan is clearer than self-!= to CodeQL
         return default
     if f > 1.0 and f <= 10.0:
         # Some judges produce 0..10 scales — normalise.

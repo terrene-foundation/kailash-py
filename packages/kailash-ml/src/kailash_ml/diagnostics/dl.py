@@ -1776,7 +1776,9 @@ class DLDiagnostics:
                 # Non-numeric tensor (e.g. mixed dtype). Skip silently.
                 return
             for val_name, val in (("mean", mean), ("std", std)):
-                if val != val or val in (float("inf"), float("-inf")):
+                # math.isfinite rejects NaN AND ±inf in one call; clearer
+                # to CodeQL than `val != val or val in (inf, -inf)`.
+                if not math.isfinite(val):
                     logger.warning(
                         "dldiagnostics.act_hook.nonfinite",
                         extra={

@@ -112,11 +112,15 @@ class DriftThresholds:
                 raise DriftThresholdError(
                     reason=f"DriftThresholds.{name}={val!r} must be non-negative"
                 )
-            if name in {"ks_pvalue", "chi2_pvalue"} and not 0.0 <= val <= 1.0:
+            # Note: `val < 0` is already rejected above, so the lower-bound
+            # half of `0.0 <= val <= 1.0` is implied; we test only the upper
+            # bound to silence CodeQL py/redundant-comparison while keeping
+            # the same rejection semantics.
+            if name in {"ks_pvalue", "chi2_pvalue"} and val > 1.0:
                 raise DriftThresholdError(
                     reason=f"DriftThresholds.{name}={val!r} must lie in [0, 1] (p-value)"
                 )
-            if name == "new_category_fraction" and not 0.0 <= val <= 1.0:
+            if name == "new_category_fraction" and val > 1.0:
                 raise DriftThresholdError(
                     reason=f"DriftThresholds.{name}={val!r} must lie in [0, 1] (fraction)"
                 )
