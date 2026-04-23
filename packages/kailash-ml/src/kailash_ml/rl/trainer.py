@@ -29,7 +29,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kailash_ml._device_report import DeviceReport
 from kailash_ml.errors import RLError
+from kailash_ml.rl._lineage import RLLineage
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,12 @@ class RLTrainingResult:
     eval_history: list[dict[str, Any]] = field(default_factory=list)
     reward_curve: list[tuple[int, float]] = field(default_factory=list)
     env_name: str = ""
+    # Cross-SDK Protocol fields per ``specs/ml-rl-align-unification.md``
+    # §3.2 (result parity) + §5 (lineage). Both default to ``None`` so
+    # existing classical callers continue to work unmodified; the W30
+    # dispatcher populates them for new runs.
+    lineage: RLLineage | None = None
+    device: DeviceReport | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -120,6 +128,8 @@ class RLTrainingResult:
             "eval_history": list(self.eval_history),
             "reward_curve": list(self.reward_curve),
             "env_name": self.env_name,
+            "lineage": self.lineage.to_dict() if self.lineage is not None else None,
+            "device": self.device.as_log_extra() if self.device is not None else None,
         }
 
 

@@ -25,19 +25,32 @@ from __future__ import annotations
 # public symbols MUST appear in ``__all__``; lazy ``__getattr__`` is
 # reserved for symbols whose backend imports are expensive. These four
 # are cheap (no SB3 touch at import time).
+from kailash_ml.rl._lineage import RLLineage
 from kailash_ml.rl._rl_train import rl_train
+from kailash_ml.rl.align_adapter import (
+    FeatureNotAvailableError,
+    register_bridge_adapter,
+    resolve_bridge_adapter,
+)
 from kailash_ml.rl.envs import EnvironmentRegistry, EnvironmentSpec
 from kailash_ml.rl.policies import PolicyRegistry, PolicySpec, PolicyVersion
+from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
 from kailash_ml.rl.trainer import RLTrainer, RLTrainingConfig, RLTrainingResult
 
 __all__ = [
     "EnvironmentRegistry",
     "EnvironmentSpec",
+    "FeatureNotAvailableError",
+    "PolicyArtifactRef",
     "PolicyRegistry",
     "PolicySpec",
     "PolicyVersion",
+    "RLLifecycleProtocol",
+    "RLLineage",
     "RLTrainer",
     "RLTrainingConfig",
     "RLTrainingResult",
+    "register_bridge_adapter",
+    "resolve_bridge_adapter",
     "rl_train",
 ]
