@@ -1,5 +1,30 @@
 # DataFlow Changelog
 
+## [2.1.0] - 2026-04-23 — W31.b kailash-ml bridge (`dataflow.ml`)
+
+### Added
+
+- **New `dataflow.ml` module** (spec `specs/dataflow-ml-integration.md`). The DataFlow × kailash-ml bridge kailash-ml 1.0.0 consumes for feature-store + lineage + training-lifecycle event integration. Additive — no existing engine/Express/classification/trust surface changes.
+  - `dataflow.ml.ml_feature_source(feature_group, tenant_id=None, point_in_time=None, since=None, until=None, limit=None) -> polars.LazyFrame` — materialize a `FeatureGroup`-shaped adapter as a polars LazyFrame. Duck-typed validation (any object with `.name` + callable `.materialize`) so DataFlow does not hard-import `kailash_ml.engines.feature_store.FeatureGroup`. Tenant strict mode: `multi_tenant=True` groups raise `MLTenantRequiredError` when `tenant_id is None` (per `rules/tenant-isolation.md` § 2). Cache keys follow the canonical `kailash_ml:v1:{tenant_id}:feature_source:{group}:{params}` shape.
+  - `dataflow.ml.transform(expr, source, *, name, tenant_id=None) -> polars.LazyFrame` — apply a polars expression to a feature source, propagating classification metadata from source to result and tagging the result with `kailash_ml.transform` for downstream lineage. Rejects pandas/non-Expr inputs at the boundary per `rules/framework-first.md` § "Raw Is Always Wrong".
+  - `dataflow.ml.hash(df, *, algorithm="sha256", stable=True) -> str` — stable SHA-256 content fingerprint of a polars DataFrame/LazyFrame in `"sha256:<64hex>"` form for `ModelRegistry.register_version(lineage_dataset_hash=...)`. Cross-SDK byte-identical with kailash-rs `dataflow::hash` for the same canonicalized polars Arrow IPC stream.
+  - `dataflow.ml.TrainingContext(run_id, tenant_id, dataset_hash, actor_id)` — frozen dataclass for training-run provenance. Validates `dataset_hash` starts with `"sha256:"` at construction time.
+  - `dataflow.ml.emit_train_start(db, context, *, model_name=None, engine=None)` and `dataflow.ml.emit_train_end(db, context, *, status, duration_seconds=None, error=None)` — publish `kailash_ml.train.start` / `kailash_ml.train.end` `DomainEvent`s on `db.event_bus`. Payload record_id routes through `format_record_id_for_event` so cross-SDK fingerprint correlation matches DataFlow's existing write-event surface (per `rules/event-payload-classification.md` § 1).
+  - `dataflow.ml.on_train_start(db, handler)` / `dataflow.ml.on_train_end(db, handler)` — subscribe to the training lifecycle events; return list of subscription ids matching `DataFlow.on_model_change` shape for uniform sub/unsub handling.
+  - `dataflow.ml._kml_classify_actions(policy, model_name, columns) -> Dict[str, "allow"|"redact"|"hash"|"encrypt"]` — DataFlow classification bridge for kailash-ml training paths. Single translation point from `MaskingStrategy` to action strings; fail-safe `"redact"` for unknown strategies prevents silent pass-through of raw classified columns into training data.
+  - `dataflow.ml.build_cache_key(...)` — tenant-aware cache key helper (exposed for invalidation callers).
+- **Error taxonomy** (spec § 5): `DataFlowMLIntegrationError`, `FeatureSourceError`, `DataFlowTransformError`, `LineageHashError`, `MLTenantRequiredError`. All inherit from `dataflow.exceptions.DataFlowError` so existing `except DataFlowError` handlers continue to catch ML-bridge failures.
+
+### Tests
+
+- `packages/kailash-dataflow/tests/unit/ml/test_dataflow_ml_symbols.py` — 25 Tier 1 tests covering import surface, `TrainingContext` validation, hash stability (column-reorder, row-reorder, dtype-sensitive, sha256 format), transform rejection of pandas/non-Expr inputs, classification metadata propagation, `_kml_classify_actions` MaskingStrategy translation, cache key shape, error hierarchy.
+- `packages/kailash-dataflow/tests/integration/test_dataflow_ml_feature_source_wiring.py` — 7 Tier 2 wiring tests against real SQLite-backed DataFlow (write-then-read persistence; multi-tenant strict mode; transform round-trip; classification metadata; limit forwarding; lineage hash stability).
+- `packages/kailash-dataflow/tests/integration/test_dataflow_ml_event_wiring.py` — 9 Tier 2 wiring tests against real DataFlow event bus (start/end subscribers, pub/sub fan-out, event-type separation, failure payload, sha256 record_id fingerprint).
+
+### Version
+
+- `kailash-dataflow` bumped from 2.0.12 to 2.1.0. Additive minor (no breaking changes). Consumed by kailash-ml 1.0.0 (W31.b coordination).
+
 ## [2.0.11] - 2026-04-19 — BP-049 classified-data leak fixes (#522)
 
 ### Security
