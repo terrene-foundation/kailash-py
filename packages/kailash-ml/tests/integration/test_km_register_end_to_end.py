@@ -98,8 +98,8 @@ async def test_sklearn_fit_attaches_trainable_and_register_finds_model() -> None
         )
 
         # Step 4: register via the canonical lookup path
-        reg = await engine.register(result, name="w33c-e2e-sklearn", format="onnx")
-        assert reg.name == "w33c-e2e-sklearn"
+        reg = await engine.register(result, name="w33c_e2e_sklearn", format="onnx")
+        assert reg.name == "w33c_e2e_sklearn"
         assert reg.version == 1
         assert "onnx" in reg.artifact_uris
         assert Path(reg.artifact_uris["onnx"]).exists()
@@ -132,8 +132,8 @@ async def test_xgboost_fit_attaches_trainable_and_register_finds_model() -> None
         ), "W33c regression: xgboost adapter did not attach trainable"
         assert result.trainable.model is not None
 
-        reg = await engine.register(result, name="w33c-e2e-xgboost", format="onnx")
-        assert reg.name == "w33c-e2e-xgboost"
+        reg = await engine.register(result, name="w33c_e2e_xgboost", format="onnx")
+        assert reg.name == "w33c_e2e_xgboost"
         assert "onnx" in reg.artifact_uris
 
 
@@ -164,8 +164,8 @@ async def test_lightgbm_fit_attaches_trainable_and_register_finds_model() -> Non
         ), "W33c regression: lightgbm adapter did not attach trainable"
         assert result.trainable.model is not None
 
-        reg = await engine.register(result, name="w33c-e2e-lightgbm", format="onnx")
-        assert reg.name == "w33c-e2e-lightgbm"
+        reg = await engine.register(result, name="w33c_e2e_lightgbm", format="onnx")
+        assert reg.name == "w33c_e2e_lightgbm"
         assert "onnx" in reg.artifact_uris
 
 
@@ -196,22 +196,22 @@ async def test_tenant_id_replace_preserves_trainable() -> None:
         os.environ["KAILASH_ML_STORE_URL"] = f"sqlite:///{tmp}/ml.db"
         os.environ["KAILASH_ML_ARTIFACT_ROOT"] = tmp
 
-        engine = MLEngine(tenant_id="tenant-w33c")
+        engine = MLEngine(tenant_id="tenant_w33c")
         df = _binary_classification_df()
 
         # fit() triggers the tenant_id mismatch branch: the trainable
         # returned tenant_id=None (no ctx tenant) but the engine forces
-        # "tenant-w33c" via replace(). After replace the `trainable`
+        # "tenant_w33c" via replace(). After replace the `trainable`
         # field MUST still be attached.
         result = await engine.fit(df, target="target", family="sklearn")
-        assert result.tenant_id == "tenant-w33c"
+        assert result.tenant_id == "tenant_w33c"
         assert result.trainable is not None, (
             "dataclasses.replace() stripped result.trainable — "
             "multi-tenant km.register pipeline would break"
         )
 
         reg = await engine.register(
-            result, name="w33c-tenant-propagation", format="onnx"
+            result, name="w33c_tenant_propagation", format="onnx"
         )
-        assert reg.tenant_id == "tenant-w33c"
+        assert reg.tenant_id == "tenant_w33c"
         assert "onnx" in reg.artifact_uris

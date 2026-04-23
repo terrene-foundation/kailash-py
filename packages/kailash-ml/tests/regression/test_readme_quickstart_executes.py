@@ -70,9 +70,9 @@ def test_readme_quickstart_km_train_then_km_register_executes() -> None:
 
     # Step 2: register — must succeed and return a RegisterResult with
     # an ONNX artifact URI populated (default format="onnx").
-    registered = km.register(result, name="w33c-readme-quickstart")
+    registered = km.register(result, name="w33c_readme_quickstart")
     assert registered is not None, "km.register returned None"
-    assert registered.name == "w33c-readme-quickstart"
+    assert registered.name == "w33c_readme_quickstart"
     assert registered.version >= 1
     assert registered.stage == "staging"
     # ONNX artifact is mandatory per §6.1 MUST 2 for the sklearn branch.
@@ -110,10 +110,10 @@ def test_readme_quickstart_engine_fit_then_engine_register_executes() -> None:
             "engine.fit path also dropped result.trainable — cross-path "
             "regression (both km.* and engine.* must attach)"
         )
-        registered = await engine.register(result, name="w33c-async-chain")
+        registered = await engine.register(result, name="w33c_async_chain")
         return registered
 
     registered = asyncio.run(_chain())
-    assert registered.name == "w33c-async-chain"
+    assert registered.name == "w33c_async_chain"
     assert registered.version >= 1
     assert "onnx" in registered.artifact_uris
