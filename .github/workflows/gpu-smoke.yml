@@ -1,0 +1,214 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# gpu-smoke.yml — GPU runner canary for kailash-ml CUDA CI (IT-1)
+#
+# Purpose
+# -------
+# This workflow is the first thing that runs when a self-hosted CUDA runner
+# is registered.  It exists ONLY on [self-hosted, cuda, gpu] runners.
+# Passing this workflow green is the human gate before CUDA jobs in
+# test-kailash-ml.yml are flipped from continue-on-error: true to blocking.
+#
+# Trigger
+# -------
+# Manual only (workflow_dispatch) — run this once after provisioning the
+# runner to verify the hardware and software stack before enabling CUDA CI.
+# Also runs on pushes to feat/** that touch kailash-ml or this file so
+# the runner stays continuously warm-tested on development branches.
+#
+# Human steps required before this can run:
+#   1. Provision a VM or bare-metal host with an NVIDIA GPU
+#      (H100 / A100 / RTX 4090 or better recommended for regression coverage)
+#   2. Install the GitHub Actions self-hosted runner binary
+#   3. Configure the runner with labels: self-hosted, cuda, gpu
+#      (See docs/ci/self-hosted-runner.md for the exact registration command)
+#   4. Start the runner service
+#   5. Dispatch this workflow — it should complete green
+#   6. Then follow "Flip CUDA to blocking" in docs/ci/self-hosted-runner.md
+#
+# Flip CUDA from non-blocking to blocking (one-line change per workflow):
+#   grep -rn 'continue-on-error: true.*IT-1' .github/workflows/
+#   Then remove the line `continue-on-error: true` for each CUDA job.
+
+name: GPU Smoke Test (CUDA canary)
+
+on:
+  workflow_dispatch:
+    inputs:
+      python_version:
+        description: "Python version to test against"
+        required: false
+        default: "3.12"
+        type: choice
+        options:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+  push:
+    branches: [feat/*, feature/*, session/*, session-*]
+    paths:
+      - "packages/kailash-ml/**"
+      - ".github/workflows/gpu-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-smoke-${{ github.run_id }}
+  cancel-in-progress: false # never cancel a running GPU job; cleanup is expensive
+
+jobs:
+  cuda-smoke:
+    name: CUDA Smoke (km.doctor gpu + DeviceReport)
+    # -----------------------------------------------------------------------
+    # HARD REQUIREMENT: runs ONLY on the self-hosted CUDA runner.
+    # This job will never run on GitHub-hosted ubuntu-latest.
+    # Register the runner with labels: self-hosted, cuda, gpu
+    # See docs/ci/self-hosted-runner.md for provisioning instructions.
+    # -----------------------------------------------------------------------
+    runs-on: [self-hosted, cuda, gpu]
+    timeout-minutes: 20
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Cleanup from previous run (Invariant 1: runner isolated per run)
+      # -----------------------------------------------------------------------
+      - name: Pre-run cleanup
+        shell: bash
+        run: |
+          # Remove any leftover venv and cache from the previous run.
+          # This ensures hermetic installs — no stale .venv poisoning the build.
+          rm -rf .venv
+          # Wipe uv cache for this project to avoid cross-run dep pollution.
+          # We keep the global uv cache (~/.cache/uv) for speed — it is
+          # content-addressed so stale entries cannot poison installs.
+          echo "Pre-run cleanup complete."
+
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ inputs.python_version || '3.12' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python_version || '3.12' }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Verify CUDA visible to host
+        shell: bash
+        run: |
+          # nvidia-smi must succeed — if this step fails the runner is not
+          # correctly provisioned.  Do NOT continue-on-error here; a missing
+          # GPU invalidates every subsequent assertion.
+          nvidia-smi --query-gpu=name,driver_version,memory.total \
+            --format=csv,noheader,nounits
+          echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<not set, all GPUs visible>}"
+
+      - name: Install kailash-ml[dl,dev] + root kailash editable
+        shell: bash
+        run: |
+          uv venv .venv
+          # Install root kailash editable first so kailash.diagnostics.protocols
+          # resolves from the local tree (not yet released to PyPI).
+          uv pip install -e "." --python .venv/bin/python
+          # Install kailash-ml with deep-learning extras (torch + cuda deps)
+          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+
+      - name: Verify torch CUDA is available
+        shell: bash
+        run: |
+          .venv/bin/python - <<'PYEOF'
+          import torch
+          assert torch.cuda.is_available(), (
+              "torch.cuda.is_available() returned False — "
+              "CUDA driver or runtime not found in this environment. "
+              "Check nvidia-smi output and the driver install on the runner."
+          )
+          print(f"torch version: {torch.__version__}")
+          print(f"CUDA version (torch): {torch.version.cuda}")
+          print(f"GPU count: {torch.cuda.device_count()}")
+          for i in range(torch.cuda.device_count()):
+              props = torch.cuda.get_device_properties(i)
+              print(f"  GPU {i}: {props.name} ({props.total_memory // 1024**3} GiB)")
+          PYEOF
+
+      - name: km.doctor gpu — JSON output validates DeviceReport
+        shell: bash
+        run: |
+          # Run km-doctor in JSON mode and assert:
+          #  1. Exit code 0 (all backends probed without error)
+          #  2. The "cuda" backend is present in the output
+          #  3. The "cuda" backend status is "ok" (not "unavailable")
+          #  4. devices >= 1
+          #
+          # This is the canonical "runner is healthy" test per IT-1.
+          .venv/bin/python - <<'PYEOF'
+          import io, json, sys
+          from kailash_ml.doctor import doctor
+
+          buf = io.StringIO()
+          exit_code = doctor(as_json=True, out=buf)
+
+          payload = json.loads(buf.getvalue())
+          print(json.dumps(payload, indent=2))
+
+          # Assertion 1 — exit code
+          assert exit_code == 0, (
+              f"km.doctor exited with code {exit_code}; "
+              f"expected 0 (all green). Full payload above."
+          )
+
+          # Assertion 2 — cuda backend present
+          backends_by_name = {b["backend"]: b for b in payload["backends"]}
+          assert "cuda" in backends_by_name, (
+              f"'cuda' backend not found in km.doctor output. "
+              f"Available backends: {list(backends_by_name)}. "
+              "Is kailash-ml[dl] installed and CUDA visible?"
+          )
+
+          # Assertion 3 — cuda status ok
+          cuda_entry = backends_by_name["cuda"]
+          assert cuda_entry["status"] == "ok", (
+              f"cuda backend status = {cuda_entry['status']!r}; expected 'ok'. "
+              f"Entry: {cuda_entry}"
+          )
+
+          # Assertion 4 — at least 1 GPU device
+          assert cuda_entry["devices"] >= 1, (
+              f"cuda backend reports {cuda_entry['devices']} devices; expected >= 1."
+          )
+
+          print(
+              f"\nSMOKE PASS: CUDA backend ok, "
+              f"{cuda_entry['devices']} GPU(s) visible, "
+              f"driver={cuda_entry.get('driver_version', 'n/a')}"
+          )
+          PYEOF
+
+      - name: DeviceReport populated on training call
+        shell: bash
+        run: |
+          # Exercise a minimal sklearn fit+predict through kailash-ml to confirm
+          # DeviceReport.backend == "cuda" when CUDA is available.
+          # Uses pytest with the integration + cuda markers to pick up only
+          # the CUDA-specific wiring tests.
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/integration/ \
+            packages/kailash-ml/tests/unit/test_device_report.py \
+            -m 'cuda or gpu' \
+            --maxfail=3 -q --timeout=120 \
+            -v
+
+      # -----------------------------------------------------------------------
+      # Post-run cleanup (Invariant 1: runner isolated per run)
+      # -----------------------------------------------------------------------
+      - name: Post-run cleanup
+        if: always()
+        shell: bash
+        run: |
+          # Remove .venv so the next run starts clean.
+          # GPU memory is freed when the Python process exits above.
+          rm -rf .venv
+          echo "Post-run cleanup complete."
