@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "BRIDGE_ADAPTERS",
+    "CANONICAL_BRIDGE_ALGO_NAMES",
     "FeatureNotAvailableError",
+    "is_known_bridge_algo",
     "register_bridge_adapter",
     "resolve_bridge_adapter",
 ]
@@ -45,6 +47,56 @@ __all__ = [
 # OWN import time via :func:`register_bridge_adapter`. Starts empty;
 # this module does NOT import ``kailash_align`` to populate it.
 BRIDGE_ADAPTERS: dict[str, type["RLLifecycleProtocol"]] = {}
+
+
+# Canonical set of bridge-algo names per ``specs/ml-rl-align-unification.md``
+# §3 (dispatch) — the names kailash-align[rl-bridge] is expected to
+# register when installed. Used by :func:`is_known_bridge_algo` so
+# :mod:`kailash_ml.rl._rl_train` can distinguish "user typed a bogus
+# algo" (re-raise the classical ``RLError("unknown_algorithm")``) from
+# "user typed a bridge algo but kailash-align is missing" (raise
+# ``FeatureNotAvailableError`` naming the ``[rl-bridge]`` extra).
+#
+# Kept as a frozenset so rule changes require a spec amendment + code
+# edit in exactly one place.
+CANONICAL_BRIDGE_ALGO_NAMES: frozenset[str] = frozenset(
+    {
+        "dpo",
+        "ppo-rlhf",
+        "rloo",
+        "online-dpo",
+        "kto",
+        "simpo",
+        "cpo",
+        "grpo",
+        "orpo",
+        "bco",
+    }
+)
+
+
+def is_known_bridge_algo(algo_name: str) -> bool:
+    """Return ``True`` if ``algo_name`` is a canonical bridge algo.
+
+    Check order:
+
+    1. Already-registered bridge adapter (``kailash-align`` has been
+       imported and registered it).
+    2. Canonical spec set (:data:`CANONICAL_BRIDGE_ALGO_NAMES`) — covers
+       the "install kailash-align[rl-bridge]" remediation path even
+       before the align package is importable.
+
+    Used by ``_rl_train.py`` to route unknown names to the right error:
+    bogus names get ``RLError("unknown_algorithm")`` without ever
+    touching the bridge; canonical bridge names missing kailash-align
+    get ``FeatureNotAvailableError`` naming the extra.
+    """
+    if algo_name in BRIDGE_ADAPTERS:
+        return True
+    lower = algo_name.lower() if isinstance(algo_name, str) else algo_name
+    if isinstance(lower, str) and lower in CANONICAL_BRIDGE_ALGO_NAMES:
+        return True
+    return False
 
 
 class FeatureNotAvailableError(Exception):

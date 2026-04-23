@@ -41,7 +41,7 @@ from typing import Any
 from kailash_ml._version import __version__ as _KML_VERSION
 from kailash_ml.errors import RLError
 from kailash_ml.rl._lineage import RLLineage
-from kailash_ml.rl.align_adapter import resolve_bridge_adapter
+from kailash_ml.rl.align_adapter import is_known_bridge_algo, resolve_bridge_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -152,16 +152,26 @@ def rl_train(
     #
     # Per ``specs/ml-rl-align-unification.md`` §3.1, dispatch tries the
     # first-party classical registry FIRST. If the classical registry
-    # raises ``unknown_algorithm`` we try the bridge; bridge resolution
-    # may itself raise ``FeatureNotAvailableError`` if kailash-align is
-    # not installed. Either error propagates up with an actionable
-    # message naming the missing extra (rules/dependencies.md §
-    # "Optional Extras with Loud Failure").
+    # raises ``unknown_algorithm`` we try the bridge ONLY when the name
+    # is a canonical bridge algo (kailash-align[rl-bridge] registers it
+    # OR the spec §3 canonical set lists it). Bogus names that match
+    # neither surface re-raise the original ``RLError("unknown_algorithm")``
+    # — they never reach the bridge importer, so a missing kailash-align
+    # cannot mask a typo as ``FeatureNotAvailableError``. Spec intent:
+    # the canonical taxonomy error is ``unknown_algorithm``; the extras
+    # remediation error (``FeatureNotAvailableError``) applies only when
+    # the user's algo IS in the canonical bridge set.
     try:
         load_adapter_class(algo)
         _is_classical = True
     except RLError as exc:
         if getattr(exc, "reason", None) != "unknown_algorithm":
+            raise
+        # Only fall through to bridge resolution for known bridge algos.
+        # Bogus names re-raise the classical unknown_algorithm error so
+        # the user sees the actionable "supported=[...]" field rather
+        # than a bridge-extras install suggestion that wouldn't help.
+        if not is_known_bridge_algo(algo):
             raise
         _is_classical = False
 
