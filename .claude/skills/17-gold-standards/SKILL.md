@@ -1,11 +1,15 @@
 ---
 name: gold-standards
-description: "Mandatory best practices and gold standards for Kailash SDK development including absolute imports, parameter passing, error handling, testing policies (Real infrastructure recommended in Tiers 2-3), workflow design, custom node development, security, documentation, and test creation. Use when asking about 'best practices', 'standards', 'gold standards', 'mandatory rules', 'required patterns', 'absolute imports', 'Real infrastructure recommended', 'testing policy', 'error handling standards', 'security best practices', 'documentation standards', or 'workflow design standards'."
+description: "Kailash gold standards: absolute imports, parameter passing, error handling, Tier 2/3 real infrastructure (NO mocking), security, docs."
 ---
 
 # Kailash Gold Standards - Mandatory Best Practices
 
 These are **required** patterns that prevent bugs, ensure consistency, and maintain code quality.
+
+## When to Use
+
+Use gold-standards when asking about best practices, standards, gold standards, mandatory rules, required patterns, absolute imports, testing policy, error handling standards, security best practices, documentation standards, or workflow design standards. Covers absolute imports, parameter passing, error handling, Tier 2/3 testing with real infrastructure (NO mocking per `rules/testing.md`), workflow design, custom node development, security, documentation, and test creation.
 
 ## Sub-File Index
 

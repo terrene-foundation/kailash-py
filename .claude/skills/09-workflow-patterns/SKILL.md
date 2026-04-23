@@ -1,11 +1,15 @@
 ---
 name: workflow-patterns
-description: "Industry-specific workflow patterns and templates for finance, healthcare, logistics, manufacturing, retail, and common use cases like AI document processing, API integration, business rules, ETL, RAG, security, and project management. Use when asking about 'workflow examples', 'workflow templates', 'industry workflows', 'finance workflows', 'healthcare workflows', 'logistics workflows', 'manufacturing workflows', 'retail workflows', 'ETL workflows', 'RAG workflows', 'API workflows', 'document processing', 'business rules', or 'workflow patterns'."
+description: "Workflow patterns & industry templates: finance, healthcare, logistics, manufacturing, retail, ETL, RAG, document processing, API."
 ---
 
 # Kailash Workflows - Industry Patterns & Templates
 
 Production-ready workflow patterns and templates for industry-specific use cases and common application patterns.
+
+## When to Use
+
+Use these patterns when asking about workflow examples, workflow templates, industry workflows, finance workflows, healthcare workflows, logistics workflows, manufacturing workflows, retail workflows, ETL workflows, RAG workflows, API workflows, document processing, business rules, or workflow patterns.
 
 ## Industry-Specific Patterns
 

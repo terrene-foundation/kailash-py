@@ -1,11 +1,15 @@
 ---
 name: cheatsheets
-description: "Quick reference cheatsheets for Kailash SDK patterns, nodes, workflows, and best practices. Use when asking about 'quick tips', 'cheat sheet', 'quick reference', 'common mistakes', 'node selection', 'workflow patterns library', 'cycle patterns', 'production patterns', 'performance optimization', 'monitoring', 'security config', 'multi-tenancy', 'distributed transactions', 'saga pattern', 'custom nodes', 'PythonCode data science', 'ollama integration', 'directoryreader patterns', or 'environment variables'."
+description: "Kailash cheatsheets: quick reference for patterns, nodes, workflows, cycles, performance, security, multi-tenancy, saga, custom nodes."
 ---
 
 # Kailash Patterns - Quick Reference Cheatsheets
 
 Comprehensive collection of quick reference guides, common patterns, and best practices for Kailash SDK development.
+
+## When to Use
+
+Use when asking about quick tips, cheat sheet, quick reference, common mistakes, node selection, workflow patterns library, cycle patterns, production patterns, performance optimization, monitoring, security config, multi-tenancy, distributed transactions, saga pattern, custom nodes, PythonCode data science, ollama integration, directoryreader patterns, or environment variables.
 
 ## Overview
 

@@ -1,11 +1,15 @@
 ---
 name: testing-strategies
-description: "Comprehensive testing strategies for Kailash applications including the 3-tier testing approach with Real infrastructure recommended policy for Tiers 2-3. Use when asking about 'testing', 'test strategy', '3-tier testing', 'unit tests', 'integration tests', 'end-to-end tests', 'testing workflows', 'testing DataFlow', 'testing Nexus', 'Real infrastructure recommended', 'real infrastructure', 'test organization', or 'testing best practices'."
+description: "Kailash testing strategies: 3-tier testing, Tier 2/3 real infrastructure (NO mocking per rules/testing.md), regression, coverage."
 ---
 
 # Kailash Testing Strategies
 
-3-tier testing strategy with real infrastructure policy for Kailash applications.
+3-tier testing strategy for Kailash applications. Tier 2/3 require real infrastructure — NO mocking (`@patch`, `MagicMock`, `unittest.mock` are BLOCKED) per `rules/testing.md`.
+
+## When to Use
+
+Use when asking about testing, test strategy, 3-tier testing, unit tests, integration tests, end-to-end tests, testing workflows, testing DataFlow, testing Nexus, real infrastructure, NO mocking, test organization, or testing best practices.
 
 ## Sub-File Index
 
