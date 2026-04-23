@@ -5,6 +5,79 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] — 2026-04-23 — ML integration (W32.a, kailash-ml wave)
+
+### Why
+
+Kaizen agent runs and kailash-ml training runs currently flow telemetry to
+two separate observability surfaces — the Kaizen `TraceExporter` sink and
+the kailash-ml `ExperimentTracker`. Researchers running mixed workflows
+("train classical RF + use RAG agent for feature engineering + fine-tune
+LLM reranker") see two dashboards instead of one. This release unifies
+the surfaces: every Kaizen diagnostic adapter auto-emits to the ambient
+`km.track()` run when present, a shared `SQLiteSink` writes agent traces
+into the same `~/.kailash_ml/ml.db` store `ExperimentTracker` uses, and
+the `CostDelta` wire format is migrated to integer microdollars so
+Kaizen / PACT / AutoML cost flows share one numeric contract.
+
+Agent tool-set construction gains a discovery-driven entry point
+(`kaizen.ml.discover_ml_tools` + `kaizen.ml.engine_info`) so ML-aware
+agents pick up new engines at runtime without hardcoded imports —
+spec `kaizen-ml-integration.md §2.4.5` blocks the direct-import pattern
+as a `rules/specs-authority.md §5b` drift violation.
+
+### Added
+
+- `kaizen.ml` module — public facade for every Kaizen↔kailash-ml
+  integration point (spec `kaizen-ml-integration.md §1.1`):
+  - `CostDelta` / `CostDeltaError` — cross-SDK microdollar wire format
+    with `to_dict` / `from_dict` / `from_usd` helpers. Rejects NaN, Inf,
+    and negative USD at the financial-field gate.
+  - `SQLiteSink` / `SQLiteSinkError` / `default_ml_db_path` /
+    `VALID_AGENT_RUN_STATUSES` — durable `TraceExporter` sink writing
+    `_kml_agent_runs` + `_kml_agent_events` to the canonical
+    `~/.kailash_ml/ml.db` store. N4 canonical fingerprint parity with
+    kailash-rs v3.17.1+.
+  - `resolve_active_tracker` / `emit_metric` / `emit_param` /
+    `emit_artifact` / `is_emit_rank_0` — tracker-bridge helpers used
+    by every diagnostic adapter's auto-emission path. Rank-0-only
+    gate for distributed-training parity with `DLDiagnostics`.
+  - `discover_ml_tools` / `engine_info` / `MLEngineDescriptor` /
+    `MLRegistryUnavailableError` / `MLToolDiscoveryError` —
+    discovery-driven agent tool-set construction routed through
+    `km.engine_info()` / `km.list_engines()` (spec §2.4).
+- `tracker=Optional[ExperimentRun]` kwarg on every Kaizen diagnostic
+  adapter:
+  - `AgentDiagnostics` (`kaizen.observability.agent_diagnostics`)
+  - `LLMDiagnostics` (`kaizen.judges.llm_diagnostics`)
+  - `InterpretabilityDiagnostics` (`kaizen.interpretability.core`)
+- Auto-emission from every `record_*` / `track_*` event-capture method
+  when an ambient tracker is active — NO opt-in flag (spec §1.1 item 2).
+  Metric prefixes locked: `agent.*`, `llm.*`, `interp.*` (spec §3.2).
+
+### Changed
+
+- `AgentDiagnostics.record` / `.record_async` now route captured events
+  through `_auto_emit` before returning. Behavior when no tracker is
+  present is unchanged.
+- `LLMDiagnostics.llm_as_judge` / `.faithfulness` / `.self_consistency`
+  / `.refusal_calibrator` emit scalar metrics to the ambient tracker
+  whenever one resolves at call time.
+- `InterpretabilityDiagnostics.attention_heatmap` / `.logit_lens` /
+  `.probe` emit scalar metrics to the ambient tracker whenever one
+  resolves at call time.
+
+### Related specs
+
+- `specs/kaizen-ml-integration.md` — authoritative spec.
+- `specs/kaizen-observability.md` — TraceExporter + AgentDiagnostics
+  core (unchanged in shape).
+
+### Related issues
+
+- Implements W32 sub-shard 32a per
+  `workspaces/kailash-ml-audit/todos/active/W32-kaizen-align-pact-integrations.md`.
+
 ## [2.11.0] — 2026-04-21 — LLM deployment four-axis abstraction (#498)
 
 ### Why
