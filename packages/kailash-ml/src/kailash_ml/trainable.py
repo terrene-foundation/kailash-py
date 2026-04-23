@@ -746,6 +746,7 @@ class SklearnTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -945,6 +946,7 @@ class TorchTrainable:
             family=self.family_name,
             hyperparameters={"learning_rate": lr, "max_epochs": max_epochs},
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1099,6 +1101,7 @@ class LightningTrainable:
             family=self.family_name,
             hyperparameters={"max_epochs": max_epochs},
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1346,6 +1349,7 @@ class XGBoostTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1598,6 +1602,7 @@ class LightGBMTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1819,6 +1824,7 @@ class UMAPTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -2041,6 +2047,7 @@ class HDBSCANTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
