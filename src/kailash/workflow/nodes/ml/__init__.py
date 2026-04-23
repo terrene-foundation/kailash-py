@@ -239,25 +239,14 @@ class MLTrainingNode(Node):
         )
         t0 = time.monotonic()
         try:
-            # Import lazily so unit tests can patch kailash_ml symbols.
-            from kailash_ml.types import FeatureSchema, FeatureField
-
-            features = [FeatureField(**f) for f in schema.get("features", [])]
-            target_dict = schema.get("target")
-            target = FeatureField(**target_dict) if target_dict else None
-            feature_schema = FeatureSchema(
-                name=schema.get("name", model_name),
-                features=features,
-                target=target,
-            )
-
-            # The actual engine.fit() path is framework-dependent;
-            # engines accept polars DataFrames and return metrics dicts.
-            # Here we exercise the public surface that every ml engine
-            # exposes: load class, fit, evaluate, return.
+            # Delegate the schema construction + training to _run_training —
+            # kailash_ml imports live there so the Node wrapper stays
+            # importable even when the [ml] extra is absent. Tests may
+            # monkey-patch _run_training to inject a deterministic
+            # Protocol-satisfying adapter per rules/testing.md § Tier 2.
             metrics = _run_training(
                 engine_class=engine,
-                schema=feature_schema,
+                schema=schema,
                 data=data,
                 model_spec=model_spec,
                 eval_spec=eval_spec,
@@ -553,19 +542,12 @@ def _run_training(
     """Execute the actual training via the kailash-ml engine surface.
 
     This isolates the engine-coupling logic from the Node wrapper so
-    tests can patch the engine hook without touching the Node class.
-    The implementation delegates to kailash_ml's TrainingPipeline when
-    available (it IS when kailash-ml is installed); otherwise raises
-    the same typed error ``_require_kailash_ml`` raised to surface the
-    missing extra.
+    tests can patch this hook directly without touching the Node class
+    (per rules/testing.md § Protocol-Satisfying Deterministic Adapters).
+    Production delegates to kailash_ml's interop + engine allowlist;
+    otherwise raises the same typed error the guard raised.
     """
-    # The TrainingPipeline construction requires a FeatureStore and
-    # ModelRegistry instance. For the workflow-node surface, we
-    # instantiate thin in-memory defaults from kailash_ml's public
-    # factories. Engines that need richer infra (persistent registry,
-    # real feature store) accept ambient config from the calling
-    # workflow.
-    import polars as pl  # kailash-ml is installed → polars is installed
+    import polars as pl
 
     if data is None:
         raise ValueError(
@@ -574,38 +556,51 @@ def _run_training(
             "specs/kailash-core-ml-integration.md §5.3."
         )
 
-    # Normalise the data input — dict/list of dicts → polars DataFrame
+    # Normalise the data input.
     if isinstance(data, dict):
         df = pl.DataFrame(data)
     elif isinstance(data, list):
         df = pl.DataFrame(data)
     else:
-        df = data  # assume already a polars.DataFrame
+        df = data  # assume polars.DataFrame
 
-    # Split into X / y per the schema's target field.
-    target_name = schema.target.name if schema.target else None
+    # Build a kailash-ml FeatureSchema from the dict representation.
+    # Kept inside the _run_training hook so tests that monkey-patch
+    # _run_training never touch kailash_ml imports (keeping the ML
+    # extra truly optional at test time).
+    from kailash_ml.types import FeatureField, FeatureSchema
+
+    schema_dict = schema if isinstance(schema, dict) else None
+    if schema_dict is not None:
+        features = [FeatureField(**f) for f in schema_dict.get("features", [])]
+        target_dict = schema_dict.get("target")
+        target = FeatureField(**target_dict) if target_dict else None
+        feature_schema = FeatureSchema(
+            name=schema_dict.get("name", "default"),
+            features=features,
+            target=target,
+        )
+    else:
+        feature_schema = schema  # already a FeatureSchema
+
+    target_name = feature_schema.target.name if feature_schema.target else None
     if target_name is None:
         raise ValueError(
             "FeatureSchema.target is required for training. "
             "See specs/kailash-core-ml-integration.md §5.3."
         )
 
-    # Delegate the actual model fit/evaluate to the engine class.
-    # kailash_ml.interop handles the polars->numpy conversion at the
-    # framework boundary.
     from kailash_ml.interop import polars_to_sklearn
 
-    feature_names = [f.name for f in schema.features]
+    feature_names = [f.name for f in feature_schema.features]
     X, y = polars_to_sklearn(
         df, feature_columns=feature_names, target_column=target_name
     )
 
-    # Dynamic engine import with validation (kailash_ml allowlist).
     model_cls = _resolve_engine_class(engine_class)
     model = model_cls(**model_spec)
     model.fit(X, y)
 
-    # Compute requested metrics.
     metrics = _evaluate_model(model, X, y, eval_spec.get("metrics", ["accuracy"]))
     return metrics
 
@@ -692,7 +687,14 @@ def _run_inference(
     # surfaces it.
     model = _resolve_registered_model(model_name, version, tenant_id)
     numpy_X = df.to_numpy() if hasattr(df, "to_numpy") else df
-    return list(model.predict(numpy_X))
+    raw_preds = model.predict(numpy_X)
+    # Coerce numpy scalars / arrays to JSON-serializable primitives so
+    # downstream runtime state passes validation. `.tolist()` is the
+    # stable numpy API for this; if predictions are already a Python
+    # list we fall back to list().
+    if hasattr(raw_preds, "tolist"):
+        return raw_preds.tolist()
+    return list(raw_preds)
 
 
 def _resolve_registered_model(model_name: str, version: str, tenant_id: str) -> Any:
