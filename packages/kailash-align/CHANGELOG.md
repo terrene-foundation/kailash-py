@@ -1,5 +1,30 @@
 # kailash-align Changelog
 
+## [0.6.0] - 2026-04-23
+
+### Added
+
+- **`kailash_align.ml` integration namespace** (W32 §32b amended, M10 Integrations): the spec-mandated integration facade between kailash-align and kailash-ml. Houses the canonical entry points kailash-ml looks up when wiring alignment into the unified ML lifecycle.
+  - Re-exports the four W30 RL bridge adapters under canonical spec §2 table names: `DPOTrainer`, `PPOTrainer`, `RLOOTrainer`, `OnlineDPOTrainer` (storage modules remain at `kailash_align.rl_bridge.{DPOAdapter, PPORLHFAdapter, RLOOAdapter, OnlineDPOAdapter}` for W30-compatible call sites).
+  - `LoRALightningCallback` — `pytorch_lightning.Callback` subclass that emits `align.lora.{train,val}.<metric>` entries to the ambient `ExperimentRun` tracker on every batch. Rank-0-only emission guard per `specs/ml-rl-align-unification.md` §3.5. Tensor/finite coercion strips NaN/Inf before emission so the tracker never receives non-finite aggregates.
+  - `lora_callback_for(trainable) -> Callback | None` — public entry kailash-ml's `MLEngine.fit` looks up to auto-append the callback for alignment LoRA trainables. Returns `None` cleanly when (a) pytorch_lightning is not installed OR (b) the trainable does not declare LoRA semantics (`is_lora_trainable`, `lora_trainable`, or `trainable_kind == "lora"`), so ml can skip wiring without surfacing a coupling error.
+  - `trajectory_from_alignment_run(run: AlignmentResult) -> RLLineage` — converts an alignment run into the W30 cross-SDK provenance schema. Populates `sdk_source="kailash-align"`, `paradigm="rlhf"`, and a sanitized `run_id` derived from the adapter name + version. The return type is the canonical `kailash_ml.rl.RLLineage` (spec §7 single-source mandate); kailash-align does NOT define a parallel `Trajectory` class.
+
+### Architecture
+
+- Dependency direction: `kailash_align.ml` imports from `kailash_ml.rl` (one-way, spec §7). `kailash_ml` MUST NOT import from `kailash_align`. `ml_rl_bridge` from the W30 wave remains the only other align → ml import boundary.
+- `kailash_align.ml` imports `pytorch_lightning` lazily via `importlib` so `import kailash_align.ml` is cheap + safe on a Lightning-less install. The loud-fail on missing Lightning happens at `LoRALightningCallback.__init__`, not at package import; `lora_callback_for` returns `None` silently when Lightning is absent so ml can skip LoRA wiring without coupling errors.
+- `trajectory_from_alignment_run` lazy-imports `kailash_ml.rl.RLLineage` at call time, preserving module-scope independence while matching the spec §5 schema exactly.
+
+### Spec references
+
+- `specs/ml-rl-align-unification.md` v1.0.0 §5 (cross-SDK `RLLineage` schema), §7 (dependency topology, single-source-in-ml), §3.5 (rank-0-only metric emission).
+- `workspaces/kailash-ml-audit/todos/active/W32-kaizen-align-pact-integrations.md` §32b (amended 2026-04-23): LoRA Lightning callback + trajectory unification entry point, align namespace re-exports.
+
+### Notes
+
+- Spec-deviation (specs-authority.md MUST Rule 6): the 32b todo refers to the unified schema as "Trajectory" in prose. The W30 implementation named it `RLLineage` to match spec §5 field names. `trajectory_from_alignment_run` retains the caller-facing vocabulary while returning the actual W30 dataclass — no parallel `Trajectory` class is defined in kailash-align (would violate spec §7 single-source mandate).
+
 ## [0.5.0] - 2026-04-23
 
 ### Added
