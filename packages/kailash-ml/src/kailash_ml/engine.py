@@ -39,6 +39,65 @@ from kailash_ml.errors import ReferenceNotFoundError
 logger = logging.getLogger(__name__)
 
 
+def _build_auto_callbacks(
+    *,
+    user_callbacks: Optional[list],
+    enable_checkpointing: bool,
+) -> Optional[list]:
+    """Prepend a NON-OVERRIDABLE `last.ckpt` ModelCheckpoint to user callbacks.
+
+    Per ``specs/ml-engines-v2.md`` §3.2 MUST 7 / W20b invariant 3, every
+    Lightning-routed fit MUST persist a ``last.ckpt`` artifact rooted at
+    the ambient run's artifact directory. The user cannot remove this
+    callback; their own callbacks are appended AFTER the engine's so any
+    user-supplied ModelCheckpoint coexists instead of displacing the
+    engine guarantee.
+
+    The import is lazy and failure-soft: when ``lightning.pytorch`` is
+    unavailable (classical-only install or ``enable_checkpointing=False``
+    opt-out), this function returns the user's callback list unchanged.
+    sklearn / xgboost / lightgbm adapters ignore the callbacks list so
+    the injection is a no-op outside DL paths.
+    """
+    if not enable_checkpointing:
+        return list(user_callbacks) if user_callbacks else None
+
+    dirpath: Optional[str] = None
+    try:
+        from kailash_ml.tracking import get_current_run
+
+        current_run = get_current_run()
+        if current_run is not None:
+            artifact_root = getattr(current_run, "artifact_uri", None) or getattr(
+                current_run, "artifact_root", None
+            )
+            if artifact_root is not None:
+                dirpath = str(artifact_root)
+    except Exception:
+        # Logger-touching calls inside finalizer contexts are unsafe; the
+        # dirpath fallback is whatever Lightning chooses.
+        logger.debug("engine.auto_checkpoint.run_context_unavailable", exc_info=True)
+
+    try:
+        from lightning.pytorch.callbacks import ModelCheckpoint
+    except ImportError:
+        # Classical-only install: Lightning is absent and the user won't
+        # consume the callbacks list anyway.
+        return list(user_callbacks) if user_callbacks else None
+
+    auto_checkpoint = ModelCheckpoint(
+        dirpath=dirpath,
+        filename="last",
+        save_last=True,
+        save_top_k=0,
+        every_n_epochs=1,
+    )
+    merged = [auto_checkpoint]
+    if user_callbacks:
+        merged.extend(user_callbacks)
+    return merged
+
+
 def _hash_model_name(model_name: str) -> str:
     """Return an 8-hex SHA-256 fingerprint of ``model_name`` per
     ``rules/observability.md`` §8 + ``rules/event-payload-classification.md``
@@ -1371,6 +1430,18 @@ class MLEngine:
         # it; otherwise fall back to the backend-resolved device count
         # so existing CPU-only adapters keep working unchanged.
         resolved_devices = info.devices if devices == "auto" else devices
+
+        # W20b §3.2 MUST 7: auto-append a `last.ckpt` ModelCheckpoint
+        # rooted at the ambient run artifact path. NON-OVERRIDABLE — the
+        # auto-checkpoint is PREPENDED to any user-supplied callbacks so
+        # a user's custom ModelCheckpoint does not displace the engine's
+        # `last.ckpt` guarantee; it merely sits beside it. The injection
+        # is lazy and lightning-gated so sklearn/xgboost adapters that
+        # don't consume callbacks stay unchanged.
+        merged_callbacks = _build_auto_callbacks(
+            user_callbacks=callbacks,
+            enable_checkpointing=enable_checkpointing,
+        )
         ctx = TrainingContext(
             accelerator=info.accelerator,
             precision=info.precision,
@@ -1382,7 +1453,7 @@ class MLEngine:
             num_nodes=num_nodes,
             enable_checkpointing=enable_checkpointing,
             auto_find_lr=auto_find_lr,
-            callbacks=tuple(callbacks) if callbacks is not None else None,
+            callbacks=tuple(merged_callbacks) if merged_callbacks is not None else None,
         )
 
         # Delegate to the trainable's Lightning-wrapped fit path
