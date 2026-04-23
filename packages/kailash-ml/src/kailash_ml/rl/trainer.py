@@ -154,13 +154,18 @@ def _make_callback() -> Any:
             return True
 
         def _capture(self) -> None:
-            """Copy metrics from the backend logger into ``snapshot``.
+            """Copy metrics from the backend logger + ep_info_buffer.
 
-            SB3 exposes metrics as ``self.logger.name_to_value`` (tensorboard-
-            compatible). Metric keys differ slightly per algorithm:
-            * rollout/ep_rew_mean (+ ep_len_mean) — all algos
-            * train/approx_kl — PPO, TRPO, SAC (entropy coef)
-            * train/clip_fraction — PPO
+            SB3 logs metrics via ``self.logger.name_to_value`` but these
+            are dumped AFTER ``_on_rollout_end`` fires for on-policy
+            algorithms. As a belt-and-braces signal, we also read
+            ``self.model.ep_info_buffer`` which is the deque of completed
+            episode (reward, length) pairs — populated immediately.
+
+            Metric keys differ per algorithm:
+            * ``rollout/ep_rew_mean`` + ``rollout/ep_len_mean`` — all algos
+            * ``train/approx_kl`` — PPO, TRPO, SAC (entropy coef)
+            * ``train/clip_fraction`` — PPO
             """
             import math
 
@@ -177,14 +182,38 @@ def _make_callback() -> Any:
                     return None
                 return val
 
+            # Prefer the episode-info buffer (populated immediately on
+            # episode completion); fall back to the logger (populated on
+            # dump which is after _on_rollout_end for PPO).
             rew_mean = _get("rollout/ep_rew_mean")
+            len_mean = _get("rollout/ep_len_mean")
+            rew_std: float | None = None
+            len_std: float | None = None
+            buf = getattr(getattr(self, "model", None), "ep_info_buffer", None)
+            if buf is not None and len(buf) > 0:
+                try:
+                    import numpy as np
+
+                    rewards = np.array([float(ep["r"]) for ep in buf if "r" in ep])
+                    lengths = np.array([float(ep["l"]) for ep in buf if "l" in ep])
+                    if rewards.size > 0 and np.isfinite(rewards).all():
+                        rew_mean = float(np.mean(rewards))
+                        rew_std = float(np.std(rewards))
+                    if lengths.size > 0 and np.isfinite(lengths).all():
+                        len_mean = float(np.mean(lengths))
+                        len_std = float(np.std(lengths))
+                except Exception:  # pragma: no cover - defensive
+                    pass
+
             if rew_mean is not None:
                 self.snapshot["reward_mean"] = rew_mean
-                # reward_curve: sample every rollout-end at the current step.
                 self.reward_curve.append((int(self.num_timesteps), rew_mean))
-
-            if (len_mean := _get("rollout/ep_len_mean")) is not None:
+            if rew_std is not None:
+                self.snapshot["reward_std"] = rew_std
+            if len_mean is not None:
                 self.snapshot["ep_len_mean"] = len_mean
+            if len_std is not None:
+                self.snapshot["ep_len_std"] = len_std
             if (kl := _get("train/approx_kl")) is not None:
                 self.snapshot["kl"] = kl
             if (clip := _get("train/clip_fraction")) is not None:
