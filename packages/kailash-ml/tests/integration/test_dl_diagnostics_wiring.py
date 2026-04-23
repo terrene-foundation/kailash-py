@@ -401,7 +401,7 @@ def test_run_diagnostic_checkpoint_returns_diag_and_findings() -> None:
 @pytest.mark.integration
 def test_diagnose_classifier_returns_diag_and_findings() -> None:
     """High-level wrapper for classifier diagnostics — F.cross_entropy path."""
-    from kailash_ml.diagnostics import diagnose_classifier
+    from kailash_ml.diagnostics.dl import diagnose_classifier
 
     torch.manual_seed(13)
     # 3-class classifier
@@ -429,7 +429,7 @@ def test_diagnose_classifier_returns_diag_and_findings() -> None:
 @pytest.mark.integration
 def test_diagnose_regressor_returns_diag_and_findings() -> None:
     """High-level wrapper for regressor diagnostics — F.mse_loss path."""
-    from kailash_ml.diagnostics import diagnose_regressor
+    from kailash_ml.diagnostics.dl import diagnose_regressor
 
     torch.manual_seed(17)
     model = nn.Sequential(nn.Linear(5, 6), nn.ReLU(), nn.Linear(6, 1))
