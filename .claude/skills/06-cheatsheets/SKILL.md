@@ -160,4 +160,4 @@ Use this skill when you need:
 For cheatsheet-related questions, invoke:
 
 - `pattern-expert` - Pattern selection and usage
-- ``decide-framework` skill` - Choose appropriate patterns for your use case
+- `decide-framework` skill - Choose appropriate patterns for your use case

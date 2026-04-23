@@ -271,4 +271,4 @@ For Nexus-specific questions, invoke:
 
 - `nexus-specialist` - Nexus implementation and deployment
 - `release-specialist` - Production deployment patterns
-- ``decide-framework` skill` - When to use Nexus vs other approaches
+- `decide-framework` skill - When to use Nexus vs other approaches
