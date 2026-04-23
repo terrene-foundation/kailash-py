@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
@@ -149,6 +149,21 @@ from pact.mcp import (
     McpGovernanceMiddleware,
     McpInvocationResult,
     McpToolPolicy,
+)
+
+# --- kailash-ml integration (W32.c) ---
+from pact.ml import (
+    AdmissionDecision,
+    ClearanceDecision,
+    ClearanceRequirement,
+    CrossTenantDecision,
+    GovernanceAdmissionError,
+    GovernanceClearanceError,
+    GovernanceCrossTenantError,
+    MLGovernanceContext,
+    check_cross_tenant_op,
+    check_engine_method_clearance,
+    check_trial_admission,
 )
 from pact.work import WorkResult, WorkSubmission
 
@@ -290,4 +305,16 @@ __all__ = [
     "McpGovernanceMiddleware",
     "McpInvocationResult",
     "McpToolPolicy",
+    # kailash-ml integration (W32.c)
+    "AdmissionDecision",
+    "ClearanceDecision",
+    "ClearanceRequirement",
+    "CrossTenantDecision",
+    "GovernanceAdmissionError",
+    "GovernanceClearanceError",
+    "GovernanceCrossTenantError",
+    "MLGovernanceContext",
+    "check_cross_tenant_op",
+    "check_engine_method_clearance",
+    "check_trial_admission",
 ]
