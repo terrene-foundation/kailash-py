@@ -195,7 +195,7 @@ Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agent
 
 ## LLM Wire Layer (`kaizen.llm.LlmClient`)
 
-Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: `esperie-enterprise/kailash-rs#406` + `#393` + `#394`.
+Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: `esperie/kailash-rs#406` + `#393` + `#394`.
 
 ## Full Documentation
 

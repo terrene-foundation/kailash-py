@@ -38,7 +38,7 @@ pip install kailash-dataflow
 ```
 
 ```python
-from kailash.dataflow import DataFlow
+from dataflow import DataFlow
 
 # Development (SQLite)
 db = DataFlow("sqlite:///dev.db")

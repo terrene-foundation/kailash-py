@@ -132,7 +132,7 @@ SSRF regression tests MUST exist for each new wire-send method — assert `Endpo
 - **Wire shapers are byte-identical** for fixed input (stricter than the general "semantics match" rule — the JSON body sent to the provider must be the same bytes from both SDKs)
 - Implementation idioms may differ (Pydantic classmethods on Python, typed constructors on Rust)
 
-Every new preset / wire shaper on the Python side files a cross-SDK issue on `esperie-enterprise/kailash-rs` (or vice versa).
+Every new preset / wire shaper on the Python side files a cross-SDK issue on `esperie/kailash-rs` (or vice versa).
 
 ## Error taxonomy
 
@@ -182,4 +182,4 @@ File naming convention enforced: Tier 2 files are `test_<lowercase_subject>_wiri
 - `specs/kaizen-llm-deployments.md` — authoritative spec (#498 S9 ship)
 - #498 S1–S9: four-axis abstraction + 24 presets + from_env + cross-SDK parity + CHANGELOG + migration guide
 - #462: `embed()` wire-send method for OpenAI + Ollama (precedent for `complete()`)
-- Cross-SDK: `esperie-enterprise/kailash-rs#406` (deployment), `#393` (embed), `#394` (errors)
+- Cross-SDK: `esperie/kailash-rs#406` (deployment), `#393` (embed), `#394` (errors)
