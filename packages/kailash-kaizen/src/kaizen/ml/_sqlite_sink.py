@@ -336,7 +336,9 @@ class SQLiteSink:
                         started_at,
                         None,
                         "RUNNING",
-                        int(event.cost_microdollars or 0),
+                        # Start at 0 — every event (including this first one)
+                        # accumulates through the UPDATE in _insert_event.
+                        0,
                     ),
                 )
             except sqlite3.Error as e:

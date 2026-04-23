@@ -71,7 +71,16 @@ def test_agent_diagnostics_stores_tracker_for_lazy_resolution() -> None:
 
 
 @pytest.mark.unit
-def test_llm_diagnostics_stores_tracker_for_lazy_resolution() -> None:
+def test_llm_diagnostics_stores_tracker_for_lazy_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ``LLMDiagnostics`` auto-constructs an ``LLMJudge`` when no judge is
+    # supplied, and ``LLMJudge.resolve_judge_model`` requires an env var.
+    # Provide a test-only value so the unit test does not depend on the
+    # developer's .env — per ``rules/env-models.md`` the name comes from
+    # the environment, never hardcoded in source.
+    monkeypatch.setenv("KAIZEN_JUDGE_MODEL", "test-only-judge-model")
+
     from kaizen.judges.llm_diagnostics import LLMDiagnostics
 
     class _StubTracker:
