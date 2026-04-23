@@ -77,7 +77,7 @@ async def test_schedule_survives_process_restart(tmp_path) -> None:
     # --- First "process" — register schedule, then close ConnectionManager
     conn1 = ConnectionManager(conn_url)
     await conn1.initialize()
-    monitor1 = DriftMonitor(conn1)
+    monitor1 = DriftMonitor(conn1, tenant_id="test")
     await _seed_reference(monitor1)
     schedule_id = await monitor1.schedule_monitoring(
         "fraud",
@@ -90,7 +90,7 @@ async def test_schedule_survives_process_restart(tmp_path) -> None:
     # --- Simulate restart — fresh ConnectionManager on the SAME DB file
     conn2 = ConnectionManager(conn_url)
     await conn2.initialize()
-    monitor2 = DriftMonitor(conn2)
+    monitor2 = DriftMonitor(conn2, tenant_id="test")
     schedules = await monitor2.list_schedules(model_name="fraud")
     try:
         assert len(schedules) == 1
@@ -114,7 +114,7 @@ async def test_scheduler_dispatches_after_restart(tmp_path) -> None:
 
     conn1 = ConnectionManager(conn_url)
     await conn1.initialize()
-    monitor1 = DriftMonitor(conn1)
+    monitor1 = DriftMonitor(conn1, tenant_id="test")
     await _seed_reference(monitor1)
     schedule_id = await monitor1.schedule_monitoring(
         "fraud",
@@ -126,7 +126,7 @@ async def test_scheduler_dispatches_after_restart(tmp_path) -> None:
 
     conn2 = ConnectionManager(conn_url)
     await conn2.initialize()
-    monitor2 = DriftMonitor(conn2)
+    monitor2 = DriftMonitor(conn2, tenant_id="test")
     try:
         await _seed_reference(monitor2)
         # Fresh monitor has no in-process data source for the recovered
@@ -165,7 +165,7 @@ async def test_dispatch_without_data_source_logs_warn(tmp_path, caplog) -> None:
 
     conn1 = ConnectionManager(conn_url)
     await conn1.initialize()
-    monitor1 = DriftMonitor(conn1)
+    monitor1 = DriftMonitor(conn1, tenant_id="test")
     await _seed_reference(monitor1)
     await monitor1.schedule_monitoring(
         "fraud",
@@ -176,7 +176,7 @@ async def test_dispatch_without_data_source_logs_warn(tmp_path, caplog) -> None:
 
     conn2 = ConnectionManager(conn_url)
     await conn2.initialize()
-    monitor2 = DriftMonitor(conn2)
+    monitor2 = DriftMonitor(conn2, tenant_id="test")
     try:
         with caplog.at_level(
             logging.WARNING, logger="kailash_ml.engines.drift_monitor"
@@ -216,7 +216,7 @@ async def test_atomic_claim_prevents_double_dispatch(tmp_path) -> None:
     # replicas start from an identical view of the DB.
     conn0 = ConnectionManager(conn_url)
     await conn0.initialize()
-    monitor0 = DriftMonitor(conn0)
+    monitor0 = DriftMonitor(conn0, tenant_id="test")
     await _seed_reference(monitor0)
     schedule_id = await monitor0.schedule_monitoring(
         "fraud",
@@ -229,7 +229,7 @@ async def test_atomic_claim_prevents_double_dispatch(tmp_path) -> None:
     # Replica A
     conn_a = ConnectionManager(conn_url)
     await conn_a.initialize()
-    monitor_a = DriftMonitor(conn_a)
+    monitor_a = DriftMonitor(conn_a, tenant_id="test")
     await _seed_reference(monitor_a)
     a_calls: list[datetime] = []
 
@@ -242,7 +242,7 @@ async def test_atomic_claim_prevents_double_dispatch(tmp_path) -> None:
     # Replica B
     conn_b = ConnectionManager(conn_url)
     await conn_b.initialize()
-    monitor_b = DriftMonitor(conn_b)
+    monitor_b = DriftMonitor(conn_b, tenant_id="test")
     await _seed_reference(monitor_b)
     b_calls: list[datetime] = []
 

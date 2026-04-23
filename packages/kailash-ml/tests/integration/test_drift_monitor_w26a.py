@@ -60,7 +60,7 @@ async def conn():
 async def test_drift_monitor_categorical_uses_chi2_and_jsd(conn) -> None:
     """A string feature with drift MUST populate chi2 + jsd + new_category."""
     tracker = _RecordingTracker()
-    monitor = DriftMonitor(conn, tracker=tracker)
+    monitor = DriftMonitor(conn, tenant_id="test", tracker=tracker)
 
     ref = pl.DataFrame({"country": ["US"] * 200 + ["UK"] * 200})
     cur = pl.DataFrame({"country": ["FR"] * 400})
@@ -81,7 +81,7 @@ async def test_drift_monitor_categorical_uses_chi2_and_jsd(conn) -> None:
 @pytest.mark.integration
 async def test_drift_monitor_continuous_uses_ks_psi_jsd(conn) -> None:
     """A float feature gets KS + PSI + JSD; chi² is not computed."""
-    monitor = DriftMonitor(conn)
+    monitor = DriftMonitor(conn, tenant_id="test")
     rng = np.random.default_rng(0)
 
     ref = pl.DataFrame({"age": rng.normal(35, 5, 500).tolist()})
@@ -102,7 +102,7 @@ async def test_drift_monitor_emits_tracker_metrics(conn) -> None:
     """Spec §6.4 + W26 invariant 4 — every computed statistic lands
     under ``drift/{feature}/{statistic}``, plus a ``.../alert`` sentinel."""
     tracker = _RecordingTracker()
-    monitor = DriftMonitor(conn, tracker=tracker)
+    monitor = DriftMonitor(conn, tenant_id="test", tracker=tracker)
     rng = np.random.default_rng(0)
 
     ref = pl.DataFrame({"x": rng.normal(0, 1, 500).tolist()})
@@ -128,7 +128,7 @@ async def test_drift_monitor_per_column_threshold_override(conn) -> None:
     thresholds = DriftThresholds(
         column_overrides={"x": {"psi": 100.0, "ks_pvalue": 1e-12, "jsd": 100.0}},
     )
-    monitor = DriftMonitor(conn, thresholds=thresholds)
+    monitor = DriftMonitor(conn, tenant_id="test", thresholds=thresholds)
     rng = np.random.default_rng(0)
 
     ref = pl.DataFrame({"x": rng.normal(0, 1, 500).tolist()})
@@ -146,7 +146,7 @@ async def test_drift_monitor_zero_variance_reference_emits_stability_note(
 ) -> None:
     """Zero-variance reference → per-feature ``stability_note``; the rest
     of the features still report normally."""
-    monitor = DriftMonitor(conn)
+    monitor = DriftMonitor(conn, tenant_id="test")
     rng = np.random.default_rng(0)
 
     ref = pl.DataFrame(

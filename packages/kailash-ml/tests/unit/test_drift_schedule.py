@@ -51,7 +51,7 @@ async def conn():
 
 @pytest.fixture
 async def monitor(conn):
-    mon = DriftMonitor(conn)
+    mon = DriftMonitor(conn, tenant_id="test")
     ref_data = pl.DataFrame(
         {
             "feature_a": np.random.normal(0, 1, 100).tolist(),
@@ -67,7 +67,7 @@ class TestScheduleMonitoringContract:
 
     @pytest.mark.asyncio
     async def test_schedule_requires_reference(self, conn):
-        mon = DriftMonitor(conn)
+        mon = DriftMonitor(conn, tenant_id="test")
         with pytest.raises(ValueError, match="No reference set"):
             await mon.schedule_monitoring(
                 "unknown-model",

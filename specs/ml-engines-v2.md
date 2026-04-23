@@ -1207,7 +1207,7 @@ Every store, registry, tracker, and monitor in kailash-ml MUST be tenant-aware. 
 
 #### 1. Every Primitive Constructor MUST Accept `tenant_id`
 
-`FeatureStore`, `ModelRegistry`, `ExperimentTracker`, `DriftMonitor`, and `InferenceServer` MUST all accept `tenant_id: str | None` as a constructor kwarg. The Engine MUST propagate its `tenant_id` into every primitive it constructs.
+`FeatureStore`, `ModelRegistry`, `ExperimentTracker`, and `InferenceServer` MUST all accept `tenant_id: str | None` as a constructor kwarg. `DriftMonitor` is stricter per `ml-drift.md §4.1` + `rules/tenant-isolation.md`: it requires a NON-EMPTY `tenant_id: str` (no `None`, no `""`) and raises `TenantRequiredError` when either is supplied — empty-tenant fallback is BLOCKED because cross-tenant reference/report collisions are silent data-leak vectors. The Engine MUST propagate its `tenant_id` into every primitive it constructs.
 
 ```python
 # DO — tenant propagated through the Engine

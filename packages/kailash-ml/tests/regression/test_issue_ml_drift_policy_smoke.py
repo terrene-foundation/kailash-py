@@ -28,7 +28,7 @@ async def test_drift_policy_round_trip_through_sqlite(tmp_path) -> None:
     cm = ConnectionManager(f"sqlite:///{db_path}")
     await cm.initialize()
     try:
-        monitor = DriftMonitor(cm)
+        monitor = DriftMonitor(cm, tenant_id="test")
 
         start = datetime(2026, 3, 2, 0, 0, 0, tzinfo=timezone.utc)
         rows = [

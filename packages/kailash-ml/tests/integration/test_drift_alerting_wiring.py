@@ -106,12 +106,12 @@ async def test_check_drift_dispatches_alerts_end_to_end(tmp_path) -> None:
         max_alerts_per_hour=5,
     )
 
-    monitor = DriftMonitor(conn, alerts=cfg)
+    monitor = DriftMonitor(conn, tenant_id="acme", alerts=cfg)
     await monitor.set_reference_data("fraud", _make_reference_df(), _FEATURES)
 
     drifted = _make_drifted_df()
     for _ in range(10):
-        await monitor.check_drift("fraud", drifted, tenant_id="acme")
+        await monitor.check_drift("fraud", drifted)
 
     # Cooldown keeps dispatch count at 1 (rate-limit would cap at 5 if
     # cooldown were 0). Window here is [1, 5].
@@ -153,9 +153,9 @@ async def test_tracker_event_channel_emits_through_live_monitor(tmp_path) -> Non
         max_alerts_per_hour=5,
     )
 
-    monitor = DriftMonitor(conn, alerts=cfg)
+    monitor = DriftMonitor(conn, tenant_id="acme", alerts=cfg)
     await monitor.set_reference_data("fraud", _make_reference_df(), _FEATURES)
-    await monitor.check_drift("fraud", _make_drifted_df(), tenant_id="acme")
+    await monitor.check_drift("fraud", _make_drifted_df())
 
     # Alert fired → one alert metric + one alert event.
     alert_metrics = [m for m in tracker.metrics if m[0] == "drift.alert.feature"]
@@ -198,9 +198,9 @@ async def test_webhook_channel_posts_alert_payload(tmp_path, httpserver) -> None
         cooldown_seconds=60,
         max_alerts_per_hour=5,
     )
-    monitor = DriftMonitor(conn, alerts=cfg)
+    monitor = DriftMonitor(conn, tenant_id="acme", alerts=cfg)
     await monitor.set_reference_data("fraud", _make_reference_df(), _FEATURES)
-    await monitor.check_drift("fraud", _make_drifted_df(), tenant_id="acme")
+    await monitor.check_drift("fraud", _make_drifted_df())
 
     # Inspect the captured POST.
     requests = httpserver.log
@@ -227,7 +227,7 @@ async def test_monitor_without_alerts_kwarg_does_not_dispatch(tmp_path) -> None:
     conn = ConnectionManager(f"sqlite:///{db_path}")
     await conn.initialize()
 
-    monitor = DriftMonitor(conn)  # no alerts kwarg
+    monitor = DriftMonitor(conn, tenant_id="acme")  # no alerts kwarg
     await monitor.set_reference_data("fraud", _make_reference_df(), _FEATURES)
     report = await monitor.check_drift("fraud", _make_drifted_df())
 

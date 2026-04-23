@@ -37,7 +37,7 @@ async def conn():
 
 @pytest.fixture
 async def monitor(conn: ConnectionManager) -> DriftMonitor:
-    mon = DriftMonitor(conn)
+    mon = DriftMonitor(conn, tenant_id="acme")
     ref_data = pl.DataFrame(
         {
             "feature_a": np.random.normal(0, 1, 100).tolist(),
@@ -75,7 +75,6 @@ async def test_schedule_monitoring_writes_row(
         timedelta(seconds=120),
         AsyncMock(),
         actor_id="agent-42",
-        tenant_id="acme",
     )
     row = await _fetch_schedule(conn, schedule_id)
     assert row is not None
@@ -83,6 +82,7 @@ async def test_schedule_monitoring_writes_row(
     assert row["interval_seconds"] == 120
     # SQLite stores enabled as INTEGER 0/1 — bool check at the dict layer
     assert bool(row["enabled"]) is True
+    # W26.e: tenant_id comes from the monitor's constructor, not a kwarg.
     assert row["tenant_id"] == "acme"
     assert row["created_by_actor_id"] == "agent-42"
     assert row["next_run_at"] is not None
@@ -181,19 +181,38 @@ async def test_list_schedules_enabled_only_filter(
 
 
 @pytest.mark.asyncio
-async def test_list_schedules_filters_by_tenant(
-    monitor: DriftMonitor,
+async def test_list_schedules_filters_by_monitor_tenant(
+    conn: ConnectionManager,
 ) -> None:
-    id_acme = await monitor.schedule_monitoring(
-        "fraud", timedelta(seconds=60), AsyncMock(), tenant_id="acme"
+    """W26.e: each DriftMonitor is bound to one tenant. list_schedules
+    always filters by the monitor's tenant — cross-tenant lookups require
+    constructing a second monitor."""
+    ref_data = pl.DataFrame(
+        {
+            "feature_a": np.random.normal(0, 1, 100).tolist(),
+            "feature_b": np.random.normal(5, 2, 100).tolist(),
+        }
     )
-    id_bob = await monitor.schedule_monitoring(
-        "fraud", timedelta(seconds=60), AsyncMock(), tenant_id="bob"
+    mon_acme = DriftMonitor(conn, tenant_id="acme")
+    mon_bob = DriftMonitor(conn, tenant_id="bob")
+    await mon_acme.set_reference_data("fraud", ref_data, ["feature_a", "feature_b"])
+    await mon_bob.set_reference_data("fraud", ref_data, ["feature_a", "feature_b"])
+
+    id_acme = await mon_acme.schedule_monitoring(
+        "fraud", timedelta(seconds=60), AsyncMock()
     )
-    acme_rows = await monitor.list_schedules(tenant_id="acme")
-    bob_rows = await monitor.list_schedules(tenant_id="bob")
+    id_bob = await mon_bob.schedule_monitoring(
+        "fraud", timedelta(seconds=60), AsyncMock()
+    )
+
+    acme_rows = await mon_acme.list_schedules()
+    bob_rows = await mon_bob.list_schedules()
     assert [r["schedule_id"] for r in acme_rows] == [id_acme]
     assert [r["schedule_id"] for r in bob_rows] == [id_bob]
+    # Extra assertion: cross-tenant isolation — acme cannot see bob's row
+    # and vice versa even though both live in the same table.
+    assert id_bob not in [r["schedule_id"] for r in acme_rows]
+    assert id_acme not in [r["schedule_id"] for r in bob_rows]
 
 
 @pytest.mark.asyncio

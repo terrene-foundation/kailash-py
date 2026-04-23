@@ -187,7 +187,8 @@ result = await pipeline.train(
 ```python
 from kailash_ml import DriftMonitor
 
-monitor = DriftMonitor(conn)
+# W26.e: tenant_id is REQUIRED at construction. One monitor per tenant.
+monitor = DriftMonitor(conn, tenant_id="acme")
 await monitor.initialize()
 await monitor.set_reference("model_v1", reference_df)
 report = await monitor.check_drift("model_v1", current_df)

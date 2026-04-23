@@ -47,14 +47,14 @@ async def test_w26d_drift_alerts_smoke(tmp_path) -> None:
         cooldown_seconds=60,
         max_alerts_per_hour=5,
     )
-    monitor = DriftMonitor(conn, alerts=cfg)
+    monitor = DriftMonitor(conn, tenant_id="t1", alerts=cfg)
 
     rng = np.random.RandomState(42)
     ref = pl.DataFrame({"x": rng.normal(0, 1, 500).tolist()})
     drifted = pl.DataFrame({"x": rng.normal(3.0, 1, 500).tolist()})
 
     await monitor.set_reference_data("m", ref, ["x"])
-    await monitor.check_drift("m", drifted, tenant_id="t1")
+    await monitor.check_drift("m", drifted)
 
     assert len(channel.received) == 1
     alert = channel.received[0]

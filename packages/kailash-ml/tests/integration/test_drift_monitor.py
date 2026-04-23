@@ -32,7 +32,7 @@ async def conn():
 
 @pytest.fixture
 async def monitor(conn: ConnectionManager) -> DriftMonitor:
-    return DriftMonitor(conn)
+    return DriftMonitor(conn, tenant_id="test")
 
 
 # ---------------------------------------------------------------------------

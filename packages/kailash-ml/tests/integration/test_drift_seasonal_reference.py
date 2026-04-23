@@ -93,7 +93,7 @@ async def conn(tmp_path):
 
 @pytest.fixture
 async def monitor(conn: ConnectionManager) -> DriftMonitor:
-    return DriftMonitor(conn)
+    return DriftMonitor(conn, tenant_id="test")
 
 
 @pytest.fixture
