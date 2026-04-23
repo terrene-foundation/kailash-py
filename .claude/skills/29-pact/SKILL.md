@@ -1,6 +1,6 @@
 ---
 name: 29-pact
-description: "PACT governance: D/T/R accountability, operating envelopes, clearance, verification gradient, governed agents, MCP governance."
+description: "PACT governance. Use for D/T/R, envelopes, clearance, governed agents, verification gradient, MCP governance."
 ---
 
 # PACT Governance Skills

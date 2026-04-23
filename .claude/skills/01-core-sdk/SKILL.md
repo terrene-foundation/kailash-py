@@ -1,6 +1,6 @@
 ---
 name: core-sdk
-description: "Kailash Core SDK fundamentals. Use for WorkflowBuilder, nodes, connections, runtime, parameters, async, cycles, MCP, OpenTelemetry tracing."
+description: "Kailash Core SDK. Use for WorkflowBuilder, nodes, connections, runtime, async, cycles, MCP, OpenTelemetry tracing."
 ---
 
 # Kailash Core SDK - Foundational Skills

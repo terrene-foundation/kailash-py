@@ -1,6 +1,6 @@
 ---
 name: nexus
-description: "Kailash Nexus: multi-channel API+CLI+MCP platform. Use for workflow deployment, sessions, K8s probes, OpenAPI, CSRF, security headers."
+description: "Kailash Nexus: API+CLI+MCP platform. Use for workflow deploy, sessions, K8s probes, OpenAPI, CSRF, security headers."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework

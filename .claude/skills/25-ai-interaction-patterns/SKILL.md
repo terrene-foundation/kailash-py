@@ -1,6 +1,6 @@
 ---
 name: ai-interaction-patterns
-description: "AI interaction design patterns: wayfinding, prompt UX, human-in-the-loop, trust, transparency, AI identity, context, generative UI."
+description: "AI UX patterns. Use for prompt UX, wayfinding, HITL, trust, disclosure, AI identity, memory UX, generative UI."
 ---
 
 # AI Interaction Patterns

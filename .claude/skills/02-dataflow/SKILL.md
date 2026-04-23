@@ -1,6 +1,6 @@
 ---
 name: dataflow
-description: "Kailash DataFlow: zero-config DB framework. Use for database, CRUD, bulk, migrations, multi-tenancy, PostgreSQL/MySQL/MongoDB/pgvector, fabric engine."
+description: "Kailash DataFlow. Use for DB, CRUD, bulk, migrations, multi-tenancy, PostgreSQL/MySQL/MongoDB/pgvector, fabric engine."
 ---
 
 # Kailash DataFlow - Zero-Config Database Framework
