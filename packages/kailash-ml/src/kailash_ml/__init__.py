@@ -651,6 +651,14 @@ __all__ = [
     # Group 2 — Engine primitives + MLError hierarchy
     "Engine",
     "Trainable",
+    # Phase 1 family adapters (specs/ml-engines.md §3.0)
+    "SklearnTrainable",
+    "XGBoostTrainable",
+    "LightGBMTrainable",
+    "TorchTrainable",
+    "LightningTrainable",
+    "UMAPTrainable",
+    "HDBSCANTrainable",
     "TrainingResult",
     "MLError",
     "TrackingError",

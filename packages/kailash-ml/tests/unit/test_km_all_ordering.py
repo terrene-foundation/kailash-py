@@ -39,6 +39,14 @@ EXPECTED_GROUP_1 = (
 EXPECTED_GROUP_2 = (
     "Engine",
     "Trainable",
+    # Phase 1 family adapters (specs/ml-engines.md §3.0)
+    "SklearnTrainable",
+    "XGBoostTrainable",
+    "LightGBMTrainable",
+    "TorchTrainable",
+    "LightningTrainable",
+    "UMAPTrainable",
+    "HDBSCANTrainable",
     "TrainingResult",
     "MLError",
     "TrackingError",
@@ -75,9 +83,9 @@ EXPECTED_ALL = (
 
 
 def test_all_has_expected_total_symbol_count() -> None:
-    """``__all__`` MUST have exactly 41 symbols (40 spec + erase_subject)."""
-    assert len(kailash_ml.__all__) == 41, (
-        f"expected 41 symbols (per §15.9 + W15), "
+    """``__all__`` MUST have exactly 48 symbols (40 §15.9 + erase_subject + 7 Phase-1 adapters)."""
+    assert len(kailash_ml.__all__) == 48, (
+        f"expected 48 symbols (§15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 adapters), "
         f"got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
