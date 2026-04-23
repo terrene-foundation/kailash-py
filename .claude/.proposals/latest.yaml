@@ -37,6 +37,25 @@ codify_session: |
 
 status: pending_review
 submitted_date: "2026-04-23T08:00:00+08:00"
+reviewed_date: "2026-04-23T14:30:00+08:00"
+reviewed_by: loom/sync Gate 1 (sync-reviewer agent) — partial (entries 1-14 only)
+reviewed_notes: |
+  Entries 1-14 reviewed 2026-04-23T14:30: 75/76 files classified
+  global (1 SKIP = proposal yaml). 0 variant-py overlays. 0 regressions.
+  See sync-manifest.yaml convention "Global skills/rules: PYTHON
+  examples by default" for rationale on Python-content-in-global
+  placements. Cross-SDK alignment notes queued for next kailash-rs
+  sync cycle (Rule 6a __all__ ≡ pub use; async pair ≡ block_on panic;
+  end-to-end regression; fake-handoff-field).
+
+  Entries 15-20 APPENDED AFTER initial review (deferred-codify cycle
+  landed later same day): kaizen SKILL.md refactor + skill desc slims,
+  nexus-specialist FastAPI reword, 10 rules extraction to guides,
+  dataflow-classification sibling sync, worktree-branch-rename leak
+  candidate rule, commands out-of-scope flag. Per artifact-flow.md
+  "Reset Status on Append", status reset to pending_review for
+  re-classification of the new entries. Entries 1-14 classifications
+  stand.
 
 changes:
   - id: parallel-opus-burst-size-limit-waves-of-three
