@@ -77,20 +77,33 @@ def _feature_source_cache_key(
 build_cache_key = _feature_source_cache_key
 
 
-def _import_feature_group_class() -> "Any":
-    """Import ``FeatureGroup`` from kailash-ml, or raise a loud error.
+def _validate_feature_group_shape(feature_group: "Any") -> None:
+    """Validate the feature_group exposes the FeatureGroup-shaped surface.
 
-    Deferred so callers who never invoke ``ml_feature_source`` do not
-    need kailash-ml installed.
+    Duck-typed: any object with a non-empty ``.name`` attribute and a
+    callable ``.materialize`` method satisfies the contract, whether it
+    comes from ``kailash_ml.engines.feature_store.FeatureGroup`` or from
+    an in-repo adapter. This keeps DataFlow from taking a hard import
+    dependency on kailash-ml's concrete class (spec § 2.2) while still
+    failing loudly on objects that cannot plausibly serve as a feature
+    group.
     """
-    try:
-        from kailash_ml.engines.feature_store import FeatureGroup  # type: ignore
-    except ImportError as exc:  # pragma: no cover — depends on user's install
+    if feature_group is None:
         raise FeatureSourceError(
-            "dataflow.ml_feature_source requires kailash-ml>=1.0.0. "
-            "Install via: pip install kailash-ml>=1.0.0"
-        ) from exc
-    return FeatureGroup
+            "dataflow.ml_feature_source: feature_group MUST not be None"
+        )
+    if not hasattr(feature_group, "name"):
+        raise FeatureSourceError(
+            "dataflow.ml_feature_source: feature_group has no .name attribute. "
+            "Pass an instance of kailash_ml.engines.feature_store.FeatureGroup "
+            "(requires kailash-ml>=1.0.0) or an equivalent adapter exposing "
+            ".name and .materialize(...)."
+        )
+    if not callable(getattr(feature_group, "materialize", None)):
+        raise FeatureSourceError(
+            "dataflow.ml_feature_source: feature_group has no callable "
+            ".materialize(...) method. Upgrade kailash-ml to >=1.0.0."
+        )
 
 
 def _is_multi_tenant_group(feature_group: "Any") -> bool:
@@ -191,9 +204,10 @@ def ml_feature_source(
             "pass either point_in_time OR since/until, not both"
         )
 
-    # Defer importing FeatureGroup — raises FeatureSourceError with an
-    # actionable message if kailash-ml is missing.
-    _import_feature_group_class()
+    # Validate shape (duck-typed) so single-tenant callers without
+    # kailash-ml installed still get a sensible error when passing a
+    # non-FeatureGroup object.
+    _validate_feature_group_shape(feature_group)
 
     group_name = _group_name(feature_group)
 
