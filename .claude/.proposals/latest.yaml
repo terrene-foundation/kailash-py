@@ -390,6 +390,38 @@ changes:
       cross-artifact consistency audit (a9d4bada) run as part of /cc-
       audit.
 
+  - id: cc-audit-content-critical-fixes
+    type: both
+    severity: HIGH
+    target: agents/frameworks/dataflow-specialist.md, agents/frameworks/kaizen-specialist.md, rules/cross-sdk-inspection.md, skills/04-kaizen/kaizen-llm-deployment.md
+    section: "commit 2dd6f10a — CRITICAL findings from /cc-audit deep content audit"
+    summary: |
+      Two CRITICAL content-quality fixes surfaced by deep content audit
+      (agent ac23a812):
+
+      C1 — agents/frameworks/dataflow-specialist.md line 41 cited
+      `from kailash.dataflow import DataFlow` (raises ImportError).
+      Corrected to `from dataflow import DataFlow` matching canonical
+      namespace used in all skills + remainder of same file.
+
+      C2 — `esperie-enterprise/kailash-rs` in 3 files
+      (kaizen-specialist.md, cross-sdk-inspection.md, kaizen-llm-
+      deployment.md) was BOTH a factual error (canonical org per
+      rules/git.md is `esperie`) AND a Foundation-independence
+      concern per rules/independence.md — the "-enterprise" suffix
+      implies commercial coupling where none exists.
+
+      C3 (skills/04-kaizen/SKILL.md — 3,438-char description, 670-line
+      body) is recorded as deferred to next codify cycle; requires
+      structural refactor beyond scope of this commit.
+    classification_suggestion: global
+    rationale: |
+      All three are correctness/compliance fixes with no variant-axis
+      implications: the `from dataflow import DataFlow` namespace is
+      canonical Python, and the `esperie/kailash-rs` org path is a
+      rule-citation that every CLI variant of every language must
+      carry identically. Ship to all targets on next /sync.
+
 deferred:
   - topic: clean-up-pending-journal-entries
     description: |
