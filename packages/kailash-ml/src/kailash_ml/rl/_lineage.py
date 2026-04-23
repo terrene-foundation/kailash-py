@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Literal, get_args
+from typing import Any, Literal
 
 __all__ = ["RLLineage"]
 
@@ -143,7 +143,7 @@ class RLLineage:
         return payload
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "RLLineage":
+    def from_dict(cls, payload: Any) -> "RLLineage":
         """Round-trip complement of :meth:`to_dict`.
 
         Parses ``created_at`` back into a ``datetime`` via

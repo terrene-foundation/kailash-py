@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from kailash_ml.rl.protocols import RLLifecycleProtocol
@@ -72,7 +72,7 @@ class FeatureNotAvailableError(Exception):
 
 def register_bridge_adapter(
     name: str,
-    adapter_cls: type["RLLifecycleProtocol"],
+    adapter_cls: Any,
 ) -> None:
     """Register a bridge adapter class under ``name``.
 
