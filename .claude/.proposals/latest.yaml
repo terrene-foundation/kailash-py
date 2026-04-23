@@ -672,7 +672,131 @@ changes:
       Commands are owned by loom (single source of truth).
       BUILD repo cannot edit. Flagging for loom-side action.
 
-deferred:
+  # ---------------------------------------------------------------
+  # Release-blocker fixes discovered during PR #611 CI cycle (2026-04-23)
+  # These patterns were surfaced by fixing CI on the release branch
+  # AFTER the M1 codify cycle + deferred-codify cycle were sealed.
+  # ---------------------------------------------------------------
+
+  - id: submodule-shadowing-callable-module-pep562
+    type: rule
+    severity: MEDIUM
+    target: rules/patterns.md (candidate new §) OR rules/orphan-detection.md §6 extension
+    section: "new pattern — top-level callable + same-name submodule coexistence via PEP 562"
+    summary: |
+      When a package exports BOTH a top-level callable `pkg.foo`
+      (imported from `_wrappers` / similar) AND has a subpackage
+      `pkg/foo/` of the same name, Python's import machinery
+      UNCONDITIONALLY sets `pkg.foo` to the subpackage module object
+      the moment ANYTHING runs `from pkg.foo import <X>` — silently
+      shadowing the callable. In test-collection order, this
+      manifests as `AssertionError: pkg.foo MUST be callable (got
+      module)` after an unrelated test imports the subpackage.
+
+      Fix (PEP 562): install a `_CallableModule(ModuleType)` subclass
+      on the subpackage's own module object via
+      `sys.modules[__name__].__class__ = _CallableModule`. The
+      subclass forwards `__call__` to the intended callable. Both
+      surfaces coexist: `from pkg.foo import Klass` still works;
+      `pkg.foo(...)` survives submodule import.
+
+      Evidence: kailash-ml 1.1.0 release cycle — `km.dashboard`
+      callable (from `_wrappers.dashboard`) was shadowed by the
+      `kailash_ml/dashboard/` subpackage after `test_dashboard.py`
+      ran before `test_km_eager_imports.py` in Python 3.14 CI
+      collection order. Fixed at commit `8914de3b` via
+      `_CallableDashboardModule(ModuleType)`.
+
+      Candidate rule text: "MUST: when a package exports a top-level
+      callable with the same name as a subpackage, the subpackage's
+      `__init__.py` MUST install a PEP 562 callable-module subclass
+      so both surfaces coexist. BLOCKED rationalizations: 'users will
+      always import from one place' / 'test order is stable' /
+      'we can rename one of them later'."
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable pattern (Rust has similar dual-name
+      issues via `use pkg::foo` vs `pkg::foo` module). Language-
+      neutral principle at the rule level; Python-specific
+      implementation detail (PEP 562) at the example level. Global
+      rule with Python-example variant overlay possible.
+
+  - id: threading-lock-factory-not-class-py311
+    type: rule
+    severity: LOW
+    target: rules/python-environment.md (new § Python version gotchas) OR skills/06-cheatsheets/ entry
+    section: "new § 'threading.Lock / RLock are factories, not classes (Py3.11+)'"
+    summary: |
+      `threading.Lock` and `threading.RLock` are factory functions,
+      not classes, in Python 3.11+. Code using them as type
+      predicates — `isinstance(x, threading.Lock)` — raises
+      `TypeError: isinstance() arg 2 must be a type, a tuple of
+      types, or a union` at runtime.
+
+      Fix: obtain the actual lock type by calling the factory
+      once: `_LOCK_TYPES = (type(threading.Lock()), type(threading.RLock()))`,
+      then use `isinstance(x, _LOCK_TYPES)`. Module-scope constant
+      avoids repeated factory calls per isinstance check.
+
+      Evidence: kailash-pact 0.10.0 release cycle — `pact/ml/__init__.py:412`
+      used `isinstance(lock, threading.Lock)` which blocked all 5
+      PACT ML bridge integration tests on Python 3.11+ with
+      `TypeError`. Fixed at commit `5655dd59`.
+
+      Candidate rule text (concise, likely a cheatsheet entry
+      rather than a full MUST rule): "When runtime-checking lock
+      types, use `type(threading.Lock())` / `type(threading.RLock())`
+      — the unqualified names are factories in Py3.11+ and cannot
+      be used as `isinstance` predicates."
+    classification_suggestion: global
+    rationale: |
+      Python-specific gotcha; language variant. Could ship as a
+      python-environment.md § OR as a 06-cheatsheets entry
+      "Common Python 3.11+ Gotchas". Low severity because it's a
+      cheatsheet-level reminder, not a systemic architectural rule.
+
+  - id: bi-directional-sibling-package-ci-install
+    type: rule
+    severity: MEDIUM
+    target: rules/deployment.md § "Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules" — extend with bi-directional clause
+    section: "extend existing rule with bi-directional at bridge boundary clause"
+    summary: |
+      The existing rule (`rules/deployment.md` § "Sibling-Package CI
+      Installs Root SDK Editable") mandates that sub-package CI jobs
+      install the root SDK editable when sub-package tests import
+      unreleased core modules. But the rule was authored for the
+      one-way case (sub-package → core).
+
+      At BRIDGE boundaries (e.g. `kailash-ml` ↔ `kailash-align` RL
+      bridge; `kailash-dataflow` ↔ `kailash-ml` fabric bridge),
+      BOTH directions need the reciprocal editable install:
+      - kailash-ml's integration tests import `kailash_align` via
+        `test_rl_align_cross_sdk_wiring.py` — needs
+        `uv pip install -e packages/kailash-align[dev]` in
+        test-kailash-ml.yml.
+      - kailash-align's tests import `kailash_ml.rl.align_adapter` —
+        needs `uv pip install -e packages/kailash-ml` in
+        test-kailash-align.yml.
+
+      Evidence: PR #611 CI cascade — ml-specialist fixed the align→ml
+      direction at commit `e7c5a33b`; the reciprocal ml→align
+      direction surfaced next at commit `c59c30da`. Both directions
+      needed the same discipline.
+
+      Candidate rule extension: "MUST: At any cross-package bridge
+      where both packages import each other's modules (even
+      transitively through a shared bridge module), BOTH sibling
+      CI jobs MUST install BOTH packages editable. The
+      uni-directional form of this rule is insufficient at bridge
+      boundaries. BLOCKED rationalizations: 'the bridge module is
+      in one direction only' / 'we'll add the reverse install when
+      tests fail on it' / 'editable installs are dev-only'."
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Any monorepo with cross-package bridge
+      modules (kailash-rs workspaces, kailash-rb gems,
+      kailash-prism crates) has the same bi-directional install
+      need. Extension to an existing global rule; ships as-is.
   - topic: clean-up-pending-journal-entries
     description: |
       100+ pending journal entries accumulated in
