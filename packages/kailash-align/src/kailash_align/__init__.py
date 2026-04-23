@@ -5,6 +5,18 @@ from __future__ import annotations
 
 from kailash_align._version import __version__
 
+# Eager imports for symbols flagged by CodeQL
+# py/modification-of-default-value when declared in __all__ via lazy
+# __getattr__ only. Per rules/orphan-detection.md §6, module-scope
+# public imports and __all__ must be consistent — CodeQL flags the
+# drift where a name appears in __all__ but no module-scope import
+# resolves it. These modules are cheap to import (no torch / no
+# transformers load) so eager-import is safe.
+from kailash_align.merge import AdapterMerger
+from kailash_align.bridge import BridgeConfig, KaizenModelBridge
+from kailash_align.onprem import OnPremModelCache
+from kailash_align.config import OnPremConfig
+
 __all__ = [
     "__version__",
     # Core
