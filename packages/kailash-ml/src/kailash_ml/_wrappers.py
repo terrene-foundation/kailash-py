@@ -497,9 +497,7 @@ def diagnose(
             algo=subject if isinstance(subject, str) else "ppo", tracker=tracker
         )
     if kind == "rag":
-        return (
-            RAGDiagnostics(tracker=tracker) if tracker is not None else RAGDiagnostics()
-        )
+        return RAGDiagnostics(tracker=tracker)
     if kind == "classical_classifier":
         if data is None:
             raise ValueError(

@@ -61,12 +61,62 @@ class MLDashboard:
         artifact_root: str = "./mlartifacts",
         host: str = "127.0.0.1",
         port: int = 5000,
+        tenant_id: str | None = None,
+        title: str = "Kailash ML",
+        enable_control: bool = False,
+        auth: str | None = None,
+        cors_origins: tuple[str, ...] | None = None,
     ) -> None:
+        """Initialize the dashboard orchestrator.
+
+        Args:
+            db_url: Database URL for the experiment store.
+            artifact_root: Root directory for artifact storage.
+            host: Bind address for the dashboard server.
+            port: Bind port for the dashboard server.
+            tenant_id: Optional tenant_id pinned on the dashboard instance.
+                When set, every view filters to rows / runs / models
+                scoped to this tenant (propagated to ``DashboardApp``).
+            title: Human-readable page title surfaced in the HTML views.
+            enable_control: Mount the WebSocket control routes (write
+                operations — pause / resume / checkpoint). The CLI
+                refuses non-loopback binds without ``auth``; this flag is
+                consumed by the CLI wrapper in addition to being stored
+                here for introspection.
+            auth: Auth-policy URL (e.g. ``nexus://URL``) required when
+                binding to a non-loopback host. Consumed by the CLI
+                wrapper; stored here for introspection.
+            cors_origins: Tuple of permitted CORS origins. Consumed by
+                the CLI wrapper; stored here for introspection.
+        """
         self._db_url = db_url
         self._artifact_root = artifact_root
         self._host = host
         self._port = port
+        self._tenant_id = tenant_id
+        self._title = title
+        self._enable_control = enable_control
+        self._auth = auth
+        self._cors_origins: tuple[str, ...] = cors_origins or ()
         self._dashboard_app: Any | None = None
+
+        # auth / cors_origins / enable_control are currently CLI-surface
+        # configuration consumed by the cli.py wrapper; plumbing them
+        # through the dashboard middleware layer is tracked as a P1
+        # follow-up (see specs/ml-dashboard.md §8.3). Emit a single
+        # DEBUG line on construction so operators can observe non-default
+        # values via log introspection; a WARN would clutter normal runs.
+        if enable_control or auth is not None or self._cors_origins:
+            logger.debug(
+                "mldashboard.init.cli_config",
+                extra={
+                    "enable_control": enable_control,
+                    "auth_configured": auth is not None,
+                    "cors_origin_count": len(self._cors_origins),
+                    "tenant_id": tenant_id,
+                    "title": title,
+                },
+            )
 
     def serve(self, host: str | None = None, port: int | None = None) -> None:
         """Start the dashboard server (blocking).
@@ -88,6 +138,7 @@ class MLDashboard:
         dashboard_app = DashboardApp(
             db_url=self._db_url,
             artifact_root=self._artifact_root,
+            tenant_id=self._tenant_id if self._tenant_id is not None else "dashboard",
         )
 
         async def _lifespan_app() -> Any:
@@ -129,6 +180,7 @@ class MLDashboard:
         self._dashboard_app = DashboardApp(
             db_url=self._db_url,
             artifact_root=self._artifact_root,
+            tenant_id=self._tenant_id if self._tenant_id is not None else "dashboard",
         )
         await self._dashboard_app.initialize()
 

@@ -368,6 +368,15 @@ class DecisionTransformerAdapter(AlgorithmAdapter):
     buffer_kind = "dataset"
 
     def __init__(self, **kwargs: Any) -> None:  # noqa: D401 — override signature
+        # Explicit super().__init__() call before the refuse-raise: keeps
+        # the class structurally well-formed (MRO + object init) for
+        # static analysis (CodeQL py/missing-call-to-init) even though
+        # every instance path ends in the FeatureNotYetSupportedError
+        # below. The base init is keyword-only; pass env= unchanged if the
+        # caller supplied it, else None. The partially-initialised instance
+        # is discarded by the raise that follows — the super() call exists
+        # solely to satisfy the init-chain contract.
+        super().__init__(env=kwargs.get("env"))
         # DT doesn't fit the AlgorithmAdapter shape — we refuse at construction
         # so callers don't see a partially-built adapter.
         raise FeatureNotYetSupportedError(

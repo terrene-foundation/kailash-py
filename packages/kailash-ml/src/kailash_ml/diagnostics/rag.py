@@ -214,6 +214,7 @@ class RAGDiagnostics:
         max_leaderboard_history: int = 256,
         sensitive: bool = False,
         run_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> None:
         if max_history < 1:
             raise ValueError("max_history must be >= 1")
@@ -231,6 +232,12 @@ class RAGDiagnostics:
         self._judge = judge
         self._sensitive = sensitive
         self.run_id: str = run_id if run_id is not None else uuid.uuid4().hex
+        # Optional duck-typed tracker for future metric/figure emission.
+        # Stored for parity with DLDiagnostics / RLDiagnostics; consumers
+        # that want to route evaluation metrics to an ExperimentRun
+        # construct RAGDiagnostics(tracker=run) and later emit via
+        # tracker.log_metric(key, value).
+        self._tracker = tracker
 
         # Bounded in-memory storage per rules analysis §1.4 — streaming
         # RAG eval loops must not grow without bound.

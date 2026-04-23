@@ -1891,6 +1891,7 @@ def run_diagnostic_checkpoint(
     val_losses: Optional[list[float]] = None,
     show: bool = True,
     batch_adapter: Optional[Callable[[Any], tuple[Any, ...]]] = None,
+    tracker: Optional[Any] = None,
 ) -> tuple[DLDiagnostics, dict[str, Any]]:
     """Run a short instrumented diagnostic pass on a TRAINED model.
 
@@ -1920,6 +1921,11 @@ def run_diagnostic_checkpoint(
             plotly is available; silently skipped when plotly is missing.
         batch_adapter: Optional ``batch -> (loss_fn_args...)`` translator
             for non-standard batch shapes.
+        tracker: Optional duck-typed tracker (``ExperimentRun`` or any
+            object with ``log_figure(figure, name, *, step)``). When
+            provided, the returned ``DLDiagnostics`` is constructed with
+            ``tracker=tracker`` so later ``as_lightning_callback()`` /
+            manual plot emission can route figures to the tracker.
 
     Returns:
         ``(diag, findings)`` so the caller can inspect the DataFrames and
@@ -1935,7 +1941,7 @@ def run_diagnostic_checkpoint(
     if n_batches < 1:
         raise ValueError("n_batches must be >= 1")
 
-    diag = DLDiagnostics(model)
+    diag = DLDiagnostics(model, tracker=tracker)
     diag.track_gradients().track_activations().track_dead_neurons()
 
     # Replay real training history into the dashboard if provided.
@@ -2028,6 +2034,7 @@ def diagnose_classifier(
     val_losses: Optional[list[float]] = None,
     show: bool = True,
     forward_returns_tuple: bool = False,
+    tracker: Optional[Any] = None,
 ) -> tuple[DLDiagnostics, dict[str, Any]]:
     """Convenience wrapper for ``(x, y)`` cross-entropy classifiers.
 
@@ -2071,6 +2078,7 @@ def diagnose_classifier(
         train_losses=train_losses,
         val_losses=val_losses,
         show=show,
+        tracker=tracker,
     )
 
 
@@ -2084,6 +2092,7 @@ def diagnose_regressor(
     val_losses: Optional[list[float]] = None,
     show: bool = True,
     forward_returns_tuple: bool = False,
+    tracker: Optional[Any] = None,
 ) -> tuple[DLDiagnostics, dict[str, Any]]:
     """Convenience wrapper for ``(x, y)`` MSE regressors.
 
@@ -2119,4 +2128,5 @@ def diagnose_regressor(
         train_losses=train_losses,
         val_losses=val_losses,
         show=show,
+        tracker=tracker,
     )

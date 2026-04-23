@@ -68,6 +68,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         control_protocol: Optional[Any] = None,
         mcp_servers: Optional[List[Dict[str, Any]]] = None,
         hook_manager: Optional[Any] = None,
+        checkpoint_manager: Optional[Any] = None,
     ):
         """Initialize BaseAgent.
 
@@ -82,6 +83,12 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             mcp_servers: Optional MCP server configurations. None = auto-connect builtin.
                         Set to [] to disable MCP.
             hook_manager: Optional HookManager instance for lifecycle hooks.
+            checkpoint_manager: Optional checkpoint manager for persisting
+                intermediate agent state (AgentCheckpointManager or
+                compatible). The manager is stored on the instance as
+                ``self.checkpoint_manager`` so strategies/hooks that opt
+                into checkpointing can discover it via duck-typing.
+                ``None`` disables checkpointing for this agent.
         """
         # Auto-convert domain config to BaseAgentConfig
         if not isinstance(config, BaseAgentConfig):
@@ -103,6 +110,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
         # Control protocol
         self.control_protocol = control_protocol
+
+        # Checkpoint manager (optional) — strategies/hooks that opt into
+        # checkpointing discover this via ``self.checkpoint_manager``.
+        # ``None`` disables checkpointing for this agent.
+        self.checkpoint_manager = checkpoint_manager
 
         # MCP initialization
         # When mcp_servers is not specified (None), auto-inject the builtin
