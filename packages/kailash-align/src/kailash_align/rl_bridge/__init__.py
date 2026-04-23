@@ -70,6 +70,14 @@ except ImportError as exc:  # pragma: no cover — optional-extra guard
         "'pip install kailash-align[rl-bridge]'."
     ) from exc
 
+# Eager re-exports so `from kailash_align.rl_bridge import DPOAdapter`
+# resolves at module-scope (orphan-detection.md §6 — every public symbol in
+# `__all__` MUST be module-scope importable).
+from kailash_align.rl_bridge._dpo import DPOAdapter
+from kailash_align.rl_bridge._online_dpo import OnlineDPOAdapter
+from kailash_align.rl_bridge._ppo_rlhf import PPORLHFAdapter
+from kailash_align.rl_bridge._rloo import RLOOAdapter
+
 
 def register_bridge_adapters() -> None:
     """Register the v1-scope bridge adapters into ``BRIDGE_ADAPTERS``.
@@ -87,31 +95,14 @@ def register_bridge_adapters() -> None:
     * ``rloo`` — REINFORCE Leave-One-Out via ``RLOOTrainer``
     * ``online-dpo`` — online preference-pair via ``OnlineDPOTrainer``
 
-    Adapter imports are deferred inside this function so the scaffold
-    module can land ahead of the concrete adapter files without a
-    cyclic-import failure at collection time. Once all four adapters
-    exist on disk (commits 2-4 of W30 Shard 2) this function is a
-    pure registry-population call.
+    The adapter classes themselves are eager module-scope imports
+    above (orphan-detection.md §6 compliance); this function is a pure
+    registry-population call.
     """
-    from kailash_align.rl_bridge._dpo import DPOAdapter
-    from kailash_align.rl_bridge._online_dpo import OnlineDPOAdapter
-    from kailash_align.rl_bridge._ppo_rlhf import PPORLHFAdapter
-    from kailash_align.rl_bridge._rloo import RLOOAdapter
-
     register_bridge_adapter("dpo", DPOAdapter)
     register_bridge_adapter("ppo-rlhf", PPORLHFAdapter)
     register_bridge_adapter("rloo", RLOOAdapter)
     register_bridge_adapter("online-dpo", OnlineDPOAdapter)
-
-    # Top-level re-exports for ``from kailash_align.rl_bridge import DPOAdapter``.
-    globals().update(
-        {
-            "DPOAdapter": DPOAdapter,
-            "PPORLHFAdapter": PPORLHFAdapter,
-            "RLOOAdapter": RLOOAdapter,
-            "OnlineDPOAdapter": OnlineDPOAdapter,
-        }
-    )
 
     logger.info(
         "align.rl_bridge.init",

@@ -103,20 +103,11 @@ class DPOAdapter(_BridgeAdapterBase):
 
         # Validate the temperature separation contract from spec §3.4b
         # eagerly so misconfiguration surfaces at construction time, not
-        # deep inside TRL's trainer loop.
-        if not isinstance(ref_temperature, (int, float)):
-            raise ValueError(
-                f"DPOAdapter.ref_temperature must be numeric "
-                f"(got {type(ref_temperature).__name__!r})"
-            )
+        # deep inside TRL's trainer loop. Type-annotation narrows both
+        # params to `float`; only value-bounds checks are needed.
         if ref_temperature <= 0:
             raise ValueError(
                 f"DPOAdapter.ref_temperature must be > 0 " f"(got {ref_temperature!r})"
-            )
-        if not isinstance(sampling_temperature, (int, float)):
-            raise ValueError(
-                f"DPOAdapter.sampling_temperature must be numeric "
-                f"(got {type(sampling_temperature).__name__!r})"
             )
         if sampling_temperature < 0:
             raise ValueError(
