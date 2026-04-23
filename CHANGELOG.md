@@ -15,6 +15,40 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.9.0 — 2026-04-23 — ML integration foundations (W31.a + W31.d)
+
+**Ships the kailash-core pieces of the kailash-ml 1.0.0 wave.** Per `specs/kailash-core-ml-integration.md`, 2.9.0 adds:
+
+**New surfaces**
+
+- **`kailash.diagnostics.protocols`** expansion:
+  - `RLDiagnostic` Protocol (`record_episode`, `record_eval`, `record_policy_step`) — shared by classical RL (SB3/d3rlpy) and RLHF (kailash-align) metric emitters. Conformance is structural; an implementation satisfying both `Diagnostic` and the three `record_*` methods satisfies `RLDiagnostic` at runtime via `isinstance(..., RLDiagnostic)`.
+  - `DiagnosticReport` frozen dataclass with `{schema_version: "1.0", events, summary, rollup, tenant_id, actor_id}`. `schema_version` is a `Literal["1.0"]` — a 2.0 bump requires a new literal plus forward-compat shims. Round-trip via `to_dict()` / `from_dict()` preserves byte shape.
+- **`kailash.workflow.nodes.ml`** — three string-name-addressable workflow nodes:
+  - `MLTrainingNode` — train via a kailash-ml engine; required params `engine`, `schema`, `model_spec`, `eval_spec`, `tenant_id`, `actor_id`; emits `kailash_ml_train_duration_seconds` at end of run.
+  - `MLInferenceNode` — run batch inference via the InferenceServer; required params `model_name`, `version`, `input_ref`, `tenant_id`; emits `kailash_ml_inference_latency_ms`.
+  - `MLRegistryPromoteNode` — promote a model through registry tiers; required params `model_name`, `from_tier`, `to_tier`, `tenant_id`, `actor_id`; audit row written via the ambient `km.track()` run.
+  - All three raise `RuntimeError` with an actionable install hint when `kailash-ml` is not installed (per `rules/dependencies.md` § "Optional Extras with Loud Failure"). `tenant_id` and `actor_id` are strict — silent fallback to `"default"` is BLOCKED (per `rules/tenant-isolation.md` §2).
+- **`kailash.observability.ml`** — ML-lifecycle metrics module with bounded-cardinality tenant labels:
+  - `record_train_duration(engine_name, model_name, tenant_id, duration_s)` → `kailash_ml_train_duration_seconds` (Histogram, buckets 1s-4h).
+  - `record_inference_latency(model_name, version, tenant_id, latency_ms)` → `kailash_ml_inference_latency_ms` (Histogram, buckets 1ms-2.5s).
+  - `record_drift_alert(feature_name, severity, tenant_id, count)` → `kailash_ml_drift_alerts_total` (Counter).
+  - Top-N-by-traffic tenant bucketing (default N=100, configurable via `KAILASH_ML_METRICS_TOP_TENANTS`). Tenants beyond the top-N bucket as `"_other"` so Prometheus cardinality stays bounded per `rules/tenant-isolation.md` §4.
+  - OpenTelemetry bridge: when `opentelemetry-api` is installed, the same metrics emit via the OTel SDK under identical names + labels.
+  - No-op fallback when `prometheus_client` is absent emits a loud startup `UserWarning` AND returns an explanatory body from `metrics_endpoint_body()` pointing to `pip install kailash[observability]` (per `rules/zero-tolerance.md` § "Fake metrics").
+
+**Dependency changes**
+
+- `[project.optional-dependencies].ml` bumped to `kailash-ml>=1.1.0`.
+
+**Migration path**
+
+- 2.8.x users: `src/kailash/diagnostics/protocols.py` existing `Diagnostic` / `JudgeCallable` / `TraceEvent` are unchanged. `RLDiagnostic` + `DiagnosticReport` are additive.
+- `kailash.workflow.nodes.ml` is a NEW subpackage — zero migration for non-ML users. The nodes register on import via `@register_node()`, so `WorkflowBuilder.add_node("MLTrainingNode", ...)` resolves at the first `import kailash` after upgrade.
+- `kailash.observability.ml` is a NEW module — zero migration for non-ML users. Existing observability surfaces unchanged.
+
+No breaking changes.
+
 ### kailash 2.8.12 — 2026-04-21 (closes #573) — `immutable_audit_log` orphan removed
 
 **Cross-SDK orphan-check mirroring kailash-rs#461 / PR #466.** `src/kailash/trust/immutable_audit_log.py` defined `ImmutableAuditLog` (541 LOC) as a deque-based append-only log with SHA-256 hash chaining. Grep across `src/` + `packages/*/src/` + `tests/` + `packages/*/tests/` returned zero production or test consumers — the module was a pure facade per `rules/orphan-detection.md` §1, never wired into any call site. The canonical audit-storage surface is `kailash.trust.audit_store` (`InMemoryAuditStore` + `AuditStoreProtocol`), which has real production consumers.
