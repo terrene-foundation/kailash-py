@@ -133,6 +133,14 @@ from kailash_ml.trainable import (
     UMAPTrainable,
     XGBoostTrainable,
 )
+
+# W30 spec §8 — top-level re-exports of the cross-SDK RL bridge surface so
+# kailash-align version-floor tests (and any bridge adapter) can import from
+# `kailash_ml` directly. Eager imports per orphan-detection.md §6 + CodeQL
+# py/modification-of-default-value guard.
+from kailash_ml.rl._lineage import RLLineage
+from kailash_ml.rl.align_adapter import FeatureNotAvailableError
+from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -416,6 +424,12 @@ __all__ = [
     # km.seed() + SeedReport (W5 — reproducibility surface)
     "seed",
     "SeedReport",
+    # W30 cross-SDK RL bridge surface (spec §2, §5.1, §7, §8 — kailash-align
+    # version-floor tests import these from kailash_ml directly).
+    "RLLifecycleProtocol",
+    "PolicyArtifactRef",
+    "RLLineage",
+    "FeatureNotAvailableError",
     # kailash-ml 2.0 kernel (Phase 2 — scaffolded, filled in Phase 3+)
     "MLEngine",
     "BackendInfo",
