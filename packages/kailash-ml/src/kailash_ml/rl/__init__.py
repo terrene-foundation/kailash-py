@@ -1,23 +1,43 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Reinforcement learning module -- SB3-backed trainer, env/policy registries.
+"""Reinforcement learning module — SB3-backed trainer + registries + rl_train.
 
-Requires ``pip install kailash-ml[rl]`` (stable-baselines3, gymnasium).
+Public surface (W29):
+
+* :class:`RLTrainer` — SB3 lifecycle wrapper (manager-shape).
+* :class:`EnvironmentRegistry` — Gymnasium env registrations.
+* :class:`PolicyRegistry` — policy specs, trained versions, reward fns.
+* :func:`rl_train` — module-level entry backing ``km.rl_train``
+  (top-level re-export lives in W33 per the split-ownership rule).
+
+The module deliberately avoids a module-scope ``import stable_baselines3``
+or ``import gymnasium`` — those dependencies live behind the ``[rl]``
+extra. Importing this package without the extra is safe; every method
+that requires SB3/gymnasium imports them lazily and raises a typed
+``ImportError`` when missing (``rules/dependencies.md`` § "Optional
+Extras with Loud Failure").
+
+Requires ``pip install kailash-ml[rl]``.
 """
 from __future__ import annotations
 
-__all__ = ["RLTrainer", "EnvironmentRegistry", "PolicyRegistry"]
+# Eager re-exports. Per ``rules/orphan-detection.md`` §6, module-scope
+# public symbols MUST appear in ``__all__``; lazy ``__getattr__`` is
+# reserved for symbols whose backend imports are expensive. These four
+# are cheap (no SB3 touch at import time).
+from kailash_ml.rl._rl_train import rl_train
+from kailash_ml.rl.envs import EnvironmentRegistry, EnvironmentSpec
+from kailash_ml.rl.policies import PolicyRegistry, PolicySpec, PolicyVersion
+from kailash_ml.rl.trainer import RLTrainer, RLTrainingConfig, RLTrainingResult
 
-
-def __getattr__(name: str):  # noqa: N807
-    _map = {
-        "RLTrainer": "kailash_ml.rl.trainer",
-        "EnvironmentRegistry": "kailash_ml.rl.env_registry",
-        "PolicyRegistry": "kailash_ml.rl.policy_registry",
-    }
-    if name in _map:
-        import importlib
-
-        module = importlib.import_module(_map[name])
-        return getattr(module, name)
-    raise AttributeError(f"module 'kailash_ml.rl' has no attribute {name!r}")
+__all__ = [
+    "EnvironmentRegistry",
+    "EnvironmentSpec",
+    "PolicyRegistry",
+    "PolicySpec",
+    "PolicyVersion",
+    "RLTrainer",
+    "RLTrainingConfig",
+    "RLTrainingResult",
+    "rl_train",
+]

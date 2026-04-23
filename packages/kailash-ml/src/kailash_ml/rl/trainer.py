@@ -1,8 +1,25 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""RLTrainer -- Stable-Baselines3 wrapper for RL training lifecycle.
+"""RLTrainer — Stable-Baselines3 wrapper for the RL training lifecycle.
 
-Requires ``pip install kailash-ml[rl]`` (stable-baselines3, gymnasium, torch).
+Per W29:
+
+* Manager-shape class (`rules/facade-manager-detection.md`): wiring-test
+  required (see ``tests/integration/test_rl_trainer_wiring.py``).
+* Cross-algorithm ``RLTrainingResult`` parity: every run populates a
+  metrics dict with ``reward_mean``, ``reward_std``, ``ep_len_mean``,
+  ``ep_len_std``, ``kl``, and ``clip_frac``; non-applicable metrics
+  surface as ``None`` with a documented reason rather than hallucinated
+  zeros (``rules/zero-tolerance.md`` Rule 2).
+* Error hierarchy: every failure path raises from :mod:`kailash_ml.errors`
+  (W29 invariant #7).
+
+The substrate is Stable-Baselines3 + Gymnasium (Decision 8 carve-out —
+RL is NOT Lightning-routed). The imports are all local inside methods so
+``from kailash_ml.rl.trainer import RLTrainer`` works without the ``[rl]``
+extra installed; tests without ``[rl]`` can still exercise import guards.
+
+Requires ``pip install kailash-ml[rl]`` (stable-baselines3, gymnasium).
 """
 from __future__ import annotations
 
@@ -12,16 +29,41 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kailash_ml.errors import RLError
+
 logger = logging.getLogger(__name__)
 
-__all__ = ["RLTrainer", "RLTrainingConfig", "RLTrainingResult"]
+__all__ = [
+    "RLTrainer",
+    "RLTrainingConfig",
+    "RLTrainingResult",
+    "METRIC_KEYS",
+]
+
+
+# --- Cross-algorithm metric parity (W29 invariant #4) ----------------------
+
+# Every RLTrainingResult.metrics MUST expose exactly these keys. Values
+# that are not applicable to the algorithm surface as ``None``; non-finite
+# values are BLOCKED by the adapter's callback.
+METRIC_KEYS: tuple[str, ...] = (
+    "reward_mean",
+    "reward_std",
+    "ep_len_mean",
+    "ep_len_std",
+    "kl",
+    "clip_frac",
+)
+
+
+# --- Configuration + result dataclasses -----------------------------------
 
 
 @dataclass
 class RLTrainingConfig:
     """Configuration for RL training."""
 
-    algorithm: str = "PPO"  # "PPO", "SAC", "DQN", "A2C", "TD3", "DDPG"
+    algorithm: str = "PPO"
     policy_type: str = "MlpPolicy"
     total_timesteps: int = 100_000
     hyperparameters: dict[str, Any] = field(default_factory=dict)
@@ -45,7 +87,13 @@ class RLTrainingConfig:
 
 @dataclass
 class RLTrainingResult:
-    """Result of an RL training run."""
+    """Result of an RL training run.
+
+    The ``metrics`` dict carries the W29 invariant #4 keys:
+    ``reward_mean``, ``reward_std``, ``ep_len_mean``, ``ep_len_std``,
+    ``kl``, ``clip_frac``. Metrics not applicable to the algorithm are
+    ``None`` (never hallucinated zero — per zero-tolerance Rule 2).
+    """
 
     policy_name: str
     algorithm: str
@@ -53,8 +101,11 @@ class RLTrainingResult:
     mean_reward: float
     std_reward: float
     training_time_seconds: float
+    metrics: dict[str, float | None] = field(default_factory=dict)
     artifact_path: str | None = None
     eval_history: list[dict[str, Any]] = field(default_factory=list)
+    reward_curve: list[tuple[int, float]] = field(default_factory=list)
+    env_name: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -64,45 +115,106 @@ class RLTrainingResult:
             "mean_reward": self.mean_reward,
             "std_reward": self.std_reward,
             "training_time_seconds": self.training_time_seconds,
+            "metrics": dict(self.metrics),
             "artifact_path": self.artifact_path,
+            "eval_history": list(self.eval_history),
+            "reward_curve": list(self.reward_curve),
+            "env_name": self.env_name,
         }
 
 
-from kailash_ml.rl.policy_registry import _SB3_ALGORITHMS as _ALGO_MAP
+# --- Metric-capture callback ----------------------------------------------
 
 
-def _import_algo(algorithm: str) -> Any:
-    """Lazily import an SB3 algorithm class."""
-    algo_path = _ALGO_MAP.get(algorithm)
-    if algo_path is None:
-        raise ValueError(
-            f"Unknown algorithm '{algorithm}'. Supported: {sorted(_ALGO_MAP)}"
-        )
+def _make_callback() -> Any:
+    """Construct a ``stable_baselines3.common.callbacks.BaseCallback``.
+
+    Kept as a lazy factory so ``kailash_ml.rl.trainer`` imports without
+    SB3 installed. The callback samples the backend logger after each
+    rollout + each eval and stores the metrics on ``self.snapshot`` so
+    ``RLTrainer.train`` can write them into the ``RLTrainingResult``.
+    """
     try:
-        import importlib
-
-        module_path, cls_name = algo_path.rsplit(".", 1)
-        module = importlib.import_module(module_path)
-        return getattr(module, cls_name)
-    except ImportError as exc:
+        from stable_baselines3.common.callbacks import BaseCallback
+    except ImportError as exc:  # pragma: no cover - exercised only without [rl]
         raise ImportError(
-            "stable-baselines3 is required for RL training. "
+            "stable-baselines3 is required for RL. "
             "Install with: pip install kailash-ml[rl]"
         ) from exc
 
+    class _KailashRLCallback(BaseCallback):  # type: ignore[misc]
+        """Capture the canonical RL metrics from the backend logger."""
+
+        def __init__(self) -> None:
+            super().__init__(verbose=0)
+            self.snapshot: dict[str, float | None] = {k: None for k in METRIC_KEYS}
+            self.reward_curve: list[tuple[int, float]] = []
+
+        def _on_step(self) -> bool:  # pragma: no cover — trivial
+            return True
+
+        def _capture(self) -> None:
+            """Copy metrics from the backend logger into ``snapshot``.
+
+            SB3 exposes metrics as ``self.logger.name_to_value`` (tensorboard-
+            compatible). Metric keys differ slightly per algorithm:
+            * rollout/ep_rew_mean (+ ep_len_mean) — all algos
+            * train/approx_kl — PPO, TRPO, SAC (entropy coef)
+            * train/clip_fraction — PPO
+            """
+            import math
+
+            src = getattr(self.logger, "name_to_value", {}) or {}
+
+            def _get(key: str) -> float | None:
+                if key not in src:
+                    return None
+                try:
+                    val = float(src[key])
+                except (TypeError, ValueError):
+                    return None
+                if not math.isfinite(val):
+                    return None
+                return val
+
+            rew_mean = _get("rollout/ep_rew_mean")
+            if rew_mean is not None:
+                self.snapshot["reward_mean"] = rew_mean
+                # reward_curve: sample every rollout-end at the current step.
+                self.reward_curve.append((int(self.num_timesteps), rew_mean))
+
+            if (len_mean := _get("rollout/ep_len_mean")) is not None:
+                self.snapshot["ep_len_mean"] = len_mean
+            if (kl := _get("train/approx_kl")) is not None:
+                self.snapshot["kl"] = kl
+            if (clip := _get("train/clip_fraction")) is not None:
+                self.snapshot["clip_frac"] = clip
+
+        def _on_rollout_end(self) -> None:  # pragma: no cover — SB3-internal
+            self._capture()
+
+        def _on_training_end(self) -> None:  # pragma: no cover — SB3-internal
+            self._capture()
+
+    return _KailashRLCallback()
+
+
+# --- Trainer --------------------------------------------------------------
+
 
 class RLTrainer:
-    """[P2: Experimental] Reinforcement learning trainer wrapping Stable-Baselines3.
+    """Reinforcement learning trainer wrapping Stable-Baselines3.
 
-    Provides a high-level interface for training, evaluating, and saving
-    RL policies using SB3 algorithms on Gymnasium environments.
+    Manager-shape class per ``rules/facade-manager-detection.md``. The
+    trainer takes explicit ``env_registry`` + ``policy_registry`` so the
+    framework dependency is visible at construction (no global lookups).
 
     Parameters
     ----------
     env_registry:
         EnvironmentRegistry for resolving environment names.
     policy_registry:
-        PolicyRegistry for storing trained policies.
+        PolicyRegistry for storing trained policies + reward functions.
     root_dir:
         Root directory for saving model artifacts.
     """
@@ -113,10 +225,14 @@ class RLTrainer:
         policy_registry: Any | None = None,
         *,
         root_dir: str | Path = ".kailash_ml/rl_artifacts",
+        tenant_id: str | None = None,
     ) -> None:
         self._env_registry = env_registry
         self._policy_registry = policy_registry
         self._root = Path(root_dir)
+        self._tenant_id = tenant_id
+
+    # ------------------------------------------------------------------
 
     def train(
         self,
@@ -131,71 +247,120 @@ class RLTrainer:
         env_name:
             Gymnasium environment name (e.g. ``"CartPole-v1"``).
         policy_name:
-            Name to register the trained policy under.
+            Name under which the trained policy is registered.
         config:
-            Training configuration. Uses defaults if None.
+            Training configuration. Uses defaults if ``None``.
 
         Returns
         -------
         RLTrainingResult
+            Populated with the W29 metric-parity keys.
         """
         config = config or RLTrainingConfig()
-
-        # Create environment
         env = self._make_env(env_name)
 
-        # Import algorithm
-        algo_cls = _import_algo(config.algorithm)
+        try:
+            from kailash_ml.rl.algorithms import load_adapter_class
+        except ImportError:  # pragma: no cover — keeps import path clear
+            raise
 
-        # Build hyperparameters
+        adapter_cls = load_adapter_class(config.algorithm)
         hp = dict(config.hyperparameters)
-        if config.seed is not None:
-            hp["seed"] = config.seed
-        hp["verbose"] = config.verbose
+        hp.setdefault("verbose", config.verbose)
 
-        # Create model
-        model = algo_cls(config.policy_type, env, **hp)
+        adapter = adapter_cls(
+            env=env,
+            policy=config.policy_type,
+            hyperparameters=hp,
+            seed=config.seed,
+            tenant_id=self._tenant_id,
+        )
+        callback = _make_callback()
 
-        # Train
+        logger.info(
+            "rl_trainer.train.start",
+            extra={
+                "algorithm": config.algorithm,
+                "env": env_name,
+                "total_timesteps": config.total_timesteps,
+                "policy_name": policy_name,
+                "tenant_id": self._tenant_id,
+                "mode": "real",
+            },
+        )
+
         start = time.perf_counter()
-        model.learn(total_timesteps=config.total_timesteps)
+        try:
+            model = adapter.learn(config.total_timesteps, callback=callback)
+        except Exception as exc:
+            logger.exception(
+                "rl_trainer.train.error",
+                extra={
+                    "algorithm": config.algorithm,
+                    "env": env_name,
+                    "tenant_id": self._tenant_id,
+                },
+            )
+            raise RLError(
+                reason="train_failed",
+                algorithm=config.algorithm,
+                env=env_name,
+                cause=str(exc),
+                tenant_id=self._tenant_id,
+            ) from exc
         training_time = time.perf_counter() - start
 
-        # Evaluate
         mean_reward, std_reward = self._evaluate(model, env, config.n_eval_episodes)
+        artifact_path = self._save_model(model, adapter, policy_name, config)
 
-        # Save artifact
-        artifact_path = self._save_model(model, policy_name, config)
+        # Metrics parity — every RLTrainingResult carries the full key set;
+        # missing keys default to None (W29 invariant #4).
+        metrics = dict(callback.snapshot)
+        # reward_mean / ep_len_mean may be missing for very short runs;
+        # fall back to the evaluation mean/std which are always populated.
+        if metrics.get("reward_mean") is None:
+            metrics["reward_mean"] = mean_reward
+        metrics["reward_std"] = std_reward
+        for required in METRIC_KEYS:
+            metrics.setdefault(required, None)
 
-        # Register with policy registry
-        if self._policy_registry is not None:
-            from kailash_ml.rl.policy_registry import PolicyVersion
-
-            versions = self._policy_registry.list_versions(policy_name)
-            next_version = max((v.version for v in versions), default=0) + 1
-            pv = PolicyVersion(
-                name=policy_name,
-                version=next_version,
-                algorithm=config.algorithm,
-                artifact_path=str(artifact_path),
-                mean_reward=mean_reward,
-                std_reward=std_reward,
-                total_timesteps=config.total_timesteps,
-                metadata=config.to_dict(),
-            )
-            self._policy_registry.register_version(pv)
-
-        env.close()
-
-        return RLTrainingResult(
+        result = RLTrainingResult(
             policy_name=policy_name,
             algorithm=config.algorithm,
             total_timesteps=config.total_timesteps,
             mean_reward=mean_reward,
             std_reward=std_reward,
             training_time_seconds=training_time,
+            metrics=metrics,
             artifact_path=str(artifact_path) if artifact_path else None,
+            reward_curve=list(callback.reward_curve),
+            env_name=env_name,
         )
+
+        if self._policy_registry is not None:
+            self._register_trained(policy_name, result, config)
+
+        try:
+            env.close()
+        except Exception:  # pragma: no cover — cleanup path
+            logger.warning(
+                "rl_trainer.env_close_failed",
+                extra={"env": env_name, "tenant_id": self._tenant_id},
+            )
+
+        logger.info(
+            "rl_trainer.train.ok",
+            extra={
+                "algorithm": config.algorithm,
+                "env": env_name,
+                "mean_reward": mean_reward,
+                "training_time_s": training_time,
+                "tenant_id": self._tenant_id,
+            },
+        )
+        return result
+
+    # ------------------------------------------------------------------
 
     def evaluate(
         self,
@@ -203,14 +368,15 @@ class RLTrainer:
         env_name: str,
         n_episodes: int = 10,
     ) -> tuple[float, float]:
-        """Evaluate a trained model on an environment.
-
-        Returns (mean_reward, std_reward).
-        """
+        """Evaluate a trained model on an environment."""
         env = self._make_env(env_name)
-        result = self._evaluate(model, env, n_episodes)
-        env.close()
-        return result
+        try:
+            return self._evaluate(model, env, n_episodes)
+        finally:
+            try:
+                env.close()
+            except Exception:  # pragma: no cover
+                pass
 
     def load_and_evaluate(
         self,
@@ -219,28 +385,38 @@ class RLTrainer:
         version: int | None = None,
         n_episodes: int = 10,
     ) -> tuple[float, float]:
-        """Load a policy from registry and evaluate it."""
+        """Load a policy from the registry and evaluate it."""
         if self._policy_registry is None:
-            raise ValueError("PolicyRegistry required for load_and_evaluate")
+            raise RLError(reason="policy_registry_required", op="load_and_evaluate")
         model = self._policy_registry.load_model(policy_name, version)
         return self.evaluate(model, env_name, n_episodes)
 
+    # ------------------------------------------------------------------
+
     def _make_env(self, env_name: str) -> Any:
-        """Create an environment, using registry if available."""
+        """Resolve an environment via the registry, falling back to gym."""
         if self._env_registry is not None and env_name in self._env_registry:
             return self._env_registry.make(env_name)
-
         try:
             import gymnasium as gym
         except ImportError as exc:
             raise ImportError(
-                "gymnasium is required for RL. Install with: pip install kailash-ml[rl]"
+                "gymnasium is required for RL. "
+                "Install with: pip install kailash-ml[rl]"
             ) from exc
-        return gym.make(env_name)
+        try:
+            return gym.make(env_name)
+        except Exception as exc:
+            raise RLError(
+                reason="env_not_resolvable",
+                env_name=env_name,
+                tenant_id=self._tenant_id,
+                cause=str(exc),
+            ) from exc
 
     @staticmethod
     def _evaluate(model: Any, env: Any, n_episodes: int) -> tuple[float, float]:
-        """Run evaluation episodes and return (mean_reward, std_reward)."""
+        """Run evaluation episodes and return ``(mean_reward, std_reward)``."""
         import numpy as np
 
         rewards: list[float] = []
@@ -255,21 +431,84 @@ class RLTrainer:
                 done = terminated or truncated
             rewards.append(episode_reward)
 
+        if not rewards:
+            return 0.0, 0.0
         return float(np.mean(rewards)), float(np.std(rewards))
 
     def _save_model(
-        self, model: Any, policy_name: str, config: RLTrainingConfig
+        self,
+        model: Any,
+        adapter: Any,
+        policy_name: str,
+        config: RLTrainingConfig,
     ) -> Path | None:
-        """Save model to disk."""
+        """Persist the trained model; returns the saved path."""
         save_dir = config.save_path or self._root / policy_name
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
         model_path = save_dir / "model"
-        model.save(str(model_path))
-        logger.info("Saved RL model to %s.", model_path)
+        try:
+            model.save(str(model_path))
+        except Exception as exc:
+            raise RLError(
+                reason="model_save_failed",
+                policy_name=policy_name,
+                path=str(model_path),
+                cause=str(exc),
+                tenant_id=self._tenant_id,
+            ) from exc
+        logger.info(
+            "rl_trainer.save.ok",
+            extra={
+                "policy_name": policy_name,
+                "artifact_path": str(model_path),
+                "tenant_id": self._tenant_id,
+            },
+        )
         return model_path
+
+    def _register_trained(
+        self,
+        policy_name: str,
+        result: RLTrainingResult,
+        config: RLTrainingConfig,
+    ) -> None:
+        from kailash_ml.rl.policies import PolicySpec, PolicyVersion
+
+        # Register a spec if one doesn't exist so future load_model works.
+        if self._policy_registry.get_spec(policy_name) is None:
+            spec = PolicySpec(
+                name=policy_name,
+                algorithm=config.algorithm,
+                policy_type=config.policy_type,
+                hyperparameters=dict(config.hyperparameters),
+            )
+            self._policy_registry.register_spec(spec)
+        versions = self._policy_registry.list_versions(policy_name)
+        next_version = max((v.version for v in versions), default=0) + 1
+        pv = PolicyVersion(
+            name=policy_name,
+            version=next_version,
+            algorithm=config.algorithm,
+            artifact_path=result.artifact_path or "",
+            mean_reward=result.mean_reward,
+            std_reward=result.std_reward,
+            total_timesteps=result.total_timesteps,
+            metadata={
+                **config.to_dict(),
+                "env_name": result.env_name,
+                "metrics": dict(result.metrics),
+            },
+        )
+        self._policy_registry.register_version(pv)
 
     @staticmethod
     def supported_algorithms() -> list[str]:
-        """Return list of supported SB3 algorithm names."""
-        return sorted(_ALGO_MAP)
+        """Return the list of supported algorithm names.
+
+        Delegates to the adapter registry so the list stays in sync with
+        the actual adapter layer.
+        """
+        from kailash_ml.rl.algorithms import supported_algorithm_names
+
+        return supported_algorithm_names()
