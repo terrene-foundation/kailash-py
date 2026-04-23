@@ -755,6 +755,80 @@ changes:
       "Common Python 3.11+ Gotchas". Low severity because it's a
       cheatsheet-level reminder, not a systemic architectural rule.
 
+  - id: type-checking-eager-block-for-lazy-getattr-exports
+    type: rule
+    severity: LOW
+    target: rules/orphan-detection.md §6 extension OR new rules/dependencies.md § entry
+    section: "new pattern — reconcile __all__ completeness with lazy __getattr__ for heavy deps"
+    summary: |
+      When a package uses `__getattr__` to lazy-load heavy optional
+      deps (torch, vllm, etc.), `__all__` entries for those symbols
+      still need to be statically resolvable for CodeQL
+      `py/undefined-export`, pyright, mypy, and Sphinx autodoc.
+
+      Eager-importing them defeats the lazy design. Removing from
+      `__all__` breaks `from pkg import *`.
+
+      Fix: add a `TYPE_CHECKING` block at module scope importing the
+      heavy symbols. Static analyzers resolve through it; runtime
+      dispatch stays in `__getattr__`:
+
+          if TYPE_CHECKING:
+              from pkg.heavy_module import HeavySymbol
+          __all__ = ["HeavySymbol", ...]
+          def __getattr__(name):
+              if name == "HeavySymbol":
+                  from pkg.heavy_module import HeavySymbol
+                  return HeavySymbol
+
+      Evidence: commit `7943b3a1` closed 17 py/undefined-export
+      findings in kailash-align/__init__.py without forcing torch
+      import at `import kailash_align`.
+    classification_suggestion: global
+    rationale: |
+      Language-neutral pattern (Python-specific syntax; Rust +
+      Ruby + JS have analogous patterns). Low severity because it's
+      a niche fix for heavy-optional-dep packages.
+
+  - id: architectural-codeql-deferral-with-tracking-issue
+    type: rule
+    severity: LOW
+    target: rules/zero-tolerance.md Rule 1a extension — "deferral disposition"
+    section: "clarify when scanner findings can defer with tracking-issue + documented rationale"
+    summary: |
+      zero-tolerance Rule 1a mandates scanner-surface symmetry
+      (PR-scan findings treated like main-scan findings). But for
+      findings that are provably runtime-safe (e.g. CodeQL
+      `py/unsafe-cyclic-import` where all cycles are TYPE_CHECKING-
+      guarded), a documented deferral with tracking issue is a
+      LEGITIMATE disposition distinct from "silent dismissal".
+
+      Deferral criteria (all required):
+      1. Finding is runtime-safe (verified by reading the guard code)
+      2. Fix requires architectural refactor out of release-scope
+      3. Tracking issue filed with full acceptance criteria
+      4. Issue linked from release PR body
+      5. Release-specialist agrees (or user overrides "full fix")
+
+      Evidence: PR #611 release cycle — 17 cyclic-import findings
+      deferred via issue #612 after ml-specialist round 1 verified
+      all cycles use TYPE_CHECKING; 23 other CodeQL errors fixed
+      directly (wrong-arguments, undefined-export, uninitialized-
+      locals, warnings).
+
+      Candidate rule text: "MUST NOT silently dismiss scanner
+      findings. MAY defer with: (a) verified runtime-safety
+      analysis, (b) tracking issue with acceptance criteria, (c)
+      link from release PR body. Without (a) and (b), deferral IS
+      silent dismissal — BLOCKED."
+    classification_suggestion: global
+    rationale: |
+      Meta-rule about scanner-finding disposition. Applies across
+      SDKs + languages. Current Rule 1a is clear on "fix don't
+      dismiss"; this extension clarifies the legitimate
+      documented-deferral disposition without opening the door to
+      dismissal.
+
   - id: bi-directional-sibling-package-ci-install
     type: rule
     severity: MEDIUM
