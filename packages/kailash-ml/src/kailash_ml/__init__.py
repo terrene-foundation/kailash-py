@@ -173,8 +173,10 @@ from kailash_ml.diagnostics import (
 )
 
 # Tracker primitives (Group 5) — eager-import so ``from kailash_ml
-# import ExperimentTracker, ExperimentRun`` resolves without a
-# lazy-__getattr__ hop (CodeQL py/modification-of-default-value gate).
+# import ExperimentTracker, ExperimentRun, ModelRegistry`` resolves
+# without a lazy-__getattr__ hop (CodeQL
+# py/modification-of-default-value gate).
+from kailash_ml.engines.model_registry import ModelRegistry
 from kailash_ml.tracking import erase_subject  # W15 GDPR surface (Group 1)
 from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.tracker import ExperimentTracker
@@ -548,14 +550,6 @@ def __getattr__(name: str):  # noqa: N807
         import importlib
 
         return importlib.import_module("kailash_ml.metrics")
-    if name == "ModelRegistry":
-        # ModelRegistry is in the canonical __all__ (Group 5) but its
-        # engine module pulls ONNX + sklearn + polars at import time,
-        # so we keep it behind the lazy path and register it here.
-        import importlib
-
-        module = importlib.import_module("kailash_ml.engines.model_registry")
-        return module.ModelRegistry
     if name in _engine_map:
         import importlib
 
