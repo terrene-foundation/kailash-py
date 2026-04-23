@@ -1782,22 +1782,29 @@ class MLEngine:
 
         _validate_identifier(model_name)
 
-        # Retrieve the actual model object. Trainables attached via
-        # result._trainable are the canonical handle; some test paths
-        # may pass the model directly via result.model. We look in
-        # both slots and fall back to a helpful error if neither is
-        # populated.
+        # Retrieve the actual model object. W33c canonical path:
+        # every Trainable.fit() return site attaches `trainable=self`
+        # to the TrainingResult; each Trainable exposes `.model` as
+        # the fitted-model handle (see `trainable.py` + `ml-registry.md`
+        # §5.6.1). Fallback paths (``result.model`` / ``result._model``
+        # / legacy ``result._trainable``) remain for direct-user-
+        # construction tests and cross-SDK replay shapes.
+        trainable_attached = getattr(result, "trainable", None)
+        legacy_trainable = getattr(result, "_trainable", None)
         model_obj = (
             getattr(result, "model", None)
             or getattr(result, "_model", None)
-            or getattr(getattr(result, "_trainable", None), "model", None)
-            or getattr(getattr(result, "trainable", None), "model", None)
+            or (trainable_attached.model if trainable_attached is not None else None)
+            or (legacy_trainable.model if legacy_trainable is not None else None)
         )
         if model_obj is None:
             raise ValueError(
                 "register(result=...) could not locate the trained model. "
                 "Attach the fitted model on result.model or pass a "
-                "TrainingResult whose trainable exposes .model."
+                "TrainingResult whose trainable exposes .model. "
+                "(W33c: framework Trainables populate result.trainable "
+                "automatically — if you are seeing this error from a "
+                "km.train(...) -> km.register(...) chain, that is a bug.)"
             )
 
         # Framework key for the ONNX bridge. Prefer the explicit
