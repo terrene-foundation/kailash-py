@@ -265,6 +265,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get parameter schema for agent contract (required by Node base class)."""
         parameters = {}
+        # Pre-initialize to silence CodeQL py/uninitialized-local — every
+        # runtime path that reaches the NodeParameter construction below
+        # reassigns is_required, but static analysis cannot prove the
+        # loop body runs before the read.
+        is_required = True
 
         if hasattr(self.signature, "input_fields"):
             for field in self.signature.input_fields:
