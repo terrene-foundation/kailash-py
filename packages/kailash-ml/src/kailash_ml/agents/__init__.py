@@ -8,6 +8,19 @@ tools are dumb data endpoints.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Eager for static analyzers (CodeQL py/undefined-export, pyright, mypy,
+    # Sphinx autodoc). Runtime loading stays lazy via __getattr__ below so
+    # kailash-ml users don't pay the kaizen-import cost without [agents] extra.
+    from kailash_ml.agents.data_scientist import DataScientistAgent
+    from kailash_ml.agents.drift_analyst import DriftAnalystAgent
+    from kailash_ml.agents.experiment_interpreter import ExperimentInterpreterAgent
+    from kailash_ml.agents.feature_engineer import FeatureEngineerAgent
+    from kailash_ml.agents.model_selector import ModelSelectorAgent
+    from kailash_ml.agents.retraining_decision import RetrainingDecisionAgent
+
 __all__ = [
     "DataScientistAgent",
     "FeatureEngineerAgent",

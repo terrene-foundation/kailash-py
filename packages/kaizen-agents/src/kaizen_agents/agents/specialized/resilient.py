@@ -58,15 +58,11 @@ class ResilientConfig:
     models: List[str] = field(default_factory=lambda: ["gpt-4", "gpt-3.5-turbo"])
 
     # LLM configuration
-    llm_provider: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
-    )
+    llm_provider: str = field(default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai"))
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
     )
-    max_tokens: int = field(
-        default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "300"))
-    )
+    max_tokens: int = field(default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "300")))
 
     # Technical configuration
     timeout: int = 30
@@ -76,9 +72,7 @@ class ResilientConfig:
     def __post_init__(self):
         """Validate configuration."""
         if not self.models:
-            raise ValueError(
-                "ResilientConfig requires at least one model in fallback chain"
-            )
+            raise ValueError("ResilientConfig requires at least one model in fallback chain")
 
 
 class ResilientAgent(BaseAgent):
@@ -204,17 +198,15 @@ class ResilientAgent(BaseAgent):
         if config.timeout and (
             not config.provider_config or "timeout" not in config.provider_config
         ):
-            provider_cfg = (
-                config.provider_config.copy() if config.provider_config else {}
-            )
+            provider_cfg = config.provider_config.copy() if config.provider_config else {}
             provider_cfg["timeout"] = config.timeout
             config = replace(config, provider_config=provider_cfg)
 
         # Create strategies for each model in fallback chain
         strategies = []
-        for model in config.models:
-            # Each model gets its own strategy
-            # In production, configure each with different models
+        for _ in config.models:
+            # Each model gets its own strategy.
+            # In production, configure each with different models.
             strategy = AsyncSingleShotStrategy()
             strategies.append(strategy)
 
@@ -309,8 +301,6 @@ async def query_with_fallback(
     if models is None:
         models = ["gpt-4", "gpt-3.5-turbo"]
 
-    agent = ResilientAgent(
-        models=models, llm_provider=llm_provider, temperature=temperature
-    )
+    agent = ResilientAgent(models=models, llm_provider=llm_provider, temperature=temperature)
 
     return await agent.run_async(query=query)
