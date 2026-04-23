@@ -125,12 +125,14 @@ workflow.add_connection("process", "output", "loop", "feedback")
 
 ## CRITICAL Gotchas
 
-| Rule                          | Why                        |
-| ----------------------------- | -------------------------- |
-| ❌ NEVER use raw SQL          | Use DataFlow instead       |
-| ✅ ALWAYS call `.build()`     | Before `runtime.execute()` |
-| ❌ NEVER use relative imports | Use absolute imports       |
-| ❌ NEVER mock in Tier 2-3     | Use real infrastructure    |
+| Rule                                                  | Why                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| ❌ NEVER use raw SQL                                  | Use DataFlow instead                                   |
+| ✅ ALWAYS call `.build()`                             | Before `runtime.execute()`                             |
+| ❌ NEVER use relative imports                         | Use absolute imports                                   |
+| ❌ NEVER mock in Tier 2-3                             | Use real infrastructure                                |
+| ❌ NEVER train sklearn/torch directly                 | Use `km.train(...)` (skill 34-kailash-ml)              |
+| ✅ Cap parallel worktrees at 3 concurrent Opus agents | Beyond 3, budget exhaustion & merge conflicts dominate |
 
 ## When to Use This Skill
 

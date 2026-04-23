@@ -52,6 +52,15 @@ workflow.add_node("Search", "search", {"index": "vectors"})
 workflow.add_node("Generate", "generate", {"model": os.environ["LLM_MODEL"]})
 ```
 
+### ML Training Workflow (W31a spec nodes)
+
+```python
+# Train → promote through registry tiers in one workflow (skill 34-kailash-ml is authority)
+workflow.add_node("MLTrainingNode", "train", {"engine": "sklearn", "model_name": "churn", "task": "classification"})
+workflow.add_node("MLRegistryPromoteNode", "promote", {"model_name": "churn", "tier": "staging"})
+workflow.add_connection("train", "model_uri", "promote", "model_uri")
+```
+
 ## Pattern Structure
 
 Each sub-file includes: overview, architecture, nodes used, configuration, example code, best practices, testing strategies.

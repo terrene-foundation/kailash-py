@@ -19,13 +19,19 @@ Decision guides for selecting the right frameworks, runtimes, databases, nodes, 
 
 ## Framework Selection Matrix
 
-| Need                  | Framework    | Why                       |
-| --------------------- | ------------ | ------------------------- |
-| **Custom workflows**  | Core SDK     | Full control, 140+ nodes  |
-| **Database CRUD**     | DataFlow     | Auto-generated nodes      |
-| **Multi-channel API** | Nexus        | API + CLI + MCP instantly |
-| **AI agents**         | Kaizen       | Signature-based agents    |
-| **All of above**      | Combine them | They work together        |
+| Need                  | Framework     | Why                                                                   |
+| --------------------- | ------------- | --------------------------------------------------------------------- |
+| **Custom workflows**  | Core SDK      | Full control, 140+ nodes                                              |
+| **Database CRUD**     | DataFlow      | Auto-generated nodes                                                  |
+| **Multi-channel API** | Nexus         | API + CLI + MCP instantly                                             |
+| **AI agents**         | Kaizen        | Signature-based agents                                                |
+| **ML lifecycle**      | kailash-ml    | Engine-first `km.*` surface, 18 engines (see skill **34-kailash-ml**) |
+| **LLM fine-tuning**   | kailash-align | LoRA/SFT/DPO, serving pipeline                                        |
+| **All of above**      | Combine them  | They work together                                                    |
+
+## Async/Sync Public-Surface Consistency (M1)
+
+New async-authoritative entry points MUST be async all the way down. `km.train` and `km.register` are both `async def` — use `await` directly; do not add sync wrappers that mix event-loop-hosting with driver execution. Sync call-sites wrap via `asyncio.run(...)` at the edge only.
 
 ## Runtime Selection Flow
 

@@ -22,7 +22,7 @@ Kailash's MCP module provides:
 ## Quick Start
 
 ```python
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 
 # Create MCP server
 server = MCPServer(name="my-server")
@@ -106,7 +106,7 @@ Use MCP when you need to:
 ### With Core SDK (Workflow Tools)
 
 ```python
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from kailash.workflow.builder import WorkflowBuilder
 
 server = MCPServer(name="workflow-server")
@@ -134,7 +134,7 @@ app.start()  # Includes MCP server
 ### With DataFlow (Database Access)
 
 ```python
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from dataflow import DataFlow
 
 server = MCPServer(name="db-server")
@@ -149,7 +149,7 @@ def get_users():
 ### With Kaizen (Agent Tools)
 
 ```python
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from kaizen.core.base_agent import BaseAgent
 
 server = MCPServer(name="agent-server")

@@ -23,6 +23,7 @@ These are **required** patterns that prevent bugs, ensure consistency, and maint
   - Mocking ONLY in Tier 1 unit tests; Tiers 2-3 use real databases, APIs, infrastructure
 - **[gold-testing](gold-testing.md)** - 3-tier strategy, deterministic tests, resource cleanup
 - **[gold-test-creation](gold-test-creation.md)** - TDD, one assertion focus, AAA pattern
+- **Release-blocking regression tier** (W33b) — every public km.\* surface has a fingerprint test + an e2e `execute(...)` pattern that round-trips from workflow → node → engine → registry. See skill **34-kailash-ml** for the exact contract. Release PRs block on this tier independently of unit/integration status.
 
 ### Error Handling
 

@@ -83,6 +83,10 @@ app.start()
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
 
+### M1 ML Integration (`nexus.ml`)
+
+The `nexus.ml` module wires kailash-ml dashboards and serving handles onto a Nexus app: `MLDashboard(auth="nexus")` reuses Nexus's validator adapter and contextvars, and `mount_ml_endpoints(nexus, serve_handle)` registers REST + MCP + WebSocket routes in one call. Live on branch `feat/kailash-ml-1.0.0-m1-foundations` (landed in `60081fed`). For ML-specific behavior, use skill **34-kailash-ml** as the authority.
+
 ## Key Concepts
 
 ### Zero-Config Platform
