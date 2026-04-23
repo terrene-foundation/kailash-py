@@ -1,5 +1,44 @@
 # kailash-ml Changelog
 
+## [1.1.0] - 2026-04-23 — M1 Wave W30 Shard 1: cross-SDK RL Protocol + align-bridge dispatch + lineage
+
+Lands the ml-side of the kailash-ml <-> kailash-align Protocol bridge per `specs/ml-rl-align-unification.md` (v1.0.0, promoted 2026-04-23). Shard 1 of 3 in W30 — Shard 2 (kailash-align 0.5.0 bridge adapters) and Shard 3 (integration tests) follow after this ships. Concrete RLHF adapters (DPO, PPO-RLHF, RLOO, OnlineDPO, KTO, SimPO, CPO, GRPO, ORPO, BCO) ship with kailash-align 0.5.0 behind the `[rl-bridge]` extra.
+
+### Added
+
+- **`kailash_ml.rl.protocols.RLLifecycleProtocol`** — `@runtime_checkable` Protocol describing the shared cross-SDK contract every RL adapter satisfies (classical SB3/d3rlpy AND RLHF TRL via kailash-align). Class-level attrs: `name`, `paradigm`, `buffer_kind`. Instance attrs: `run_id`, `tenant_id`, `device`. Lifecycle methods: `build`, `learn`, `save`, `load`, `checkpoint`, `resume`. Telemetry: `emit_metric`. See spec §2.1.
+- **`kailash_ml.rl.protocols.PolicyArtifactRef`** — frozen dataclass referenced by `save`/`load` round-trip. Fields: `path`, `sha`, `algorithm`, `policy_class`, `created_at`, `tenant_id`. See spec §2.1.
+- **`kailash_ml.rl._lineage.RLLineage`** — frozen dataclass for run provenance (spec §5.1). Fields: `run_id`, `experiment_name`, `tenant_id`, `base_model_ref`, `reference_model_ref`, `reward_model_ref`, `dataset_ref`, `env_spec`, `algorithm`, `paradigm`, `parent_run_id`, `sdk_source`, `sdk_version`, `created_at`. `paradigm` and `sdk_source` are `Literal`-enforced at runtime via `__post_init__`. Round-trips cleanly through `to_dict()` + `from_dict()` (datetime via ISO-8601). Exported at module scope as `kailash_ml.rl.RLLineage`.
+- **`kailash_ml.rl.align_adapter`** — lazy bridge-dispatch module per spec §3.1 + §7. Provides:
+  - `BRIDGE_ADAPTERS: dict[str, type[RLLifecycleProtocol]]` — module-scope registry; starts empty. `kailash_align.rl_bridge` populates it at its own import time via `register_bridge_adapter`.
+  - `register_bridge_adapter(name, cls)` — idempotent insert; raises `ValueError` when re-registering a different class under the same name (cross-SDK drift guard).
+  - `resolve_bridge_adapter(name)` — returns the adapter class; lazily imports `kailash_align.rl_bridge` on first access. Raises `FeatureNotAvailableError` with `"kailash-align[rl-bridge]"` in the message when align is not installed, per `rules/dependencies.md` § "Optional Extras with Loud Failure".
+  - `FeatureNotAvailableError` — typed error carrying `algo_name`; named after the missing extra. NOT a `RLError` subclass — cross-cutting infrastructure concern, not an RL-algorithm failure.
+- **`kailash_ml.rl.RLTrainingResult.lineage` + `.device`** — two new Optional fields on `RLTrainingResult` per spec §3.2 (result parity) + §5.2 (tracker parity). Both default to `None` so existing classical callers continue working unmodified; the W30 dispatcher populates them for new runs. `to_dict()` serialises both when present.
+- **Bridge dispatch wired into `km.rl_train`** (spec §3.1): algorithm-name resolution is now classical-first (`kailash_ml.rl.algorithms.load_adapter_class`) then bridge (`kailash_ml.rl.align_adapter.resolve_bridge_adapter`). Successful runs populate `RLLineage` with `sdk_source="kailash-ml"` (classical) or `"kailash-align"` (bridge). `km.rl_train` gains RLHF kwargs (`reference_model`, `reward_model`, `preference_dataset`, `device`, `experiment_name`, `parent_run_id`) per spec §3.1 step 2. Missing-required-kwarg validation (e.g. `algo="dpo"` without `preference_dataset`) raises `ValueError` with an actionable message; silent fallback is blocked per `rules/zero-tolerance.md` Rule 3.
+- **27 Tier-1 unit tests** at `packages/kailash-ml/tests/unit/rl/`:
+  - `test_rl_protocols.py` — `@runtime_checkable` validation, duck-typed `isinstance` conformance, `PolicyArtifactRef` frozen invariant.
+  - `test_rl_lineage.py` — `to_dict`/`from_dict` round-trip, Literal enforcement, JSON compatibility, frozen invariant.
+  - `test_align_adapter_dispatch.py` — registry idempotency + conflict guard, `FeatureNotAvailableError` shape, end-to-end `km.rl_train` dispatch through `resolve_bridge_adapter` (behavioural test, not grep — satisfies `rules/orphan-detection.md` §2).
+
+### Observability
+
+- `rl.bridge.register`, `rl.bridge.resolve.start`, `rl.bridge.resolve.ok`, `rl.bridge.resolve.fail` structured log events with `algo`, `adapter_cls`, `tenant_id` fields (per `rules/observability.md` §2 + §3).
+- `rl_train.dispatch.classical` / `rl_train.dispatch.bridge` events at `km.rl_train` entry so operators can tell classical and RLHF runs apart in log aggregators.
+- Every log line carries `mode="real"` per `rules/observability.md` §3.
+
+### Dependency topology
+
+No new runtime deps in kailash-ml. `kailash_ml.rl.align_adapter` imports `kailash_align` LAZILY inside `resolve_bridge_adapter`; module-scope grep for `^from kailash_align\|^import kailash_align` across `packages/kailash-ml/src/` returns empty. Users who install only `pip install kailash-ml[rl]` and call `algo="dpo"` get a typed `FeatureNotAvailableError` naming the `[rl-bridge]` extra. See spec §7.
+
+### Breaking changes
+
+None. `RLTrainingResult.lineage` and `.device` default to `None`; existing classical callers that construct `RLTrainingResult(...)` positionally continue working. The `km.rl_train` kwarg additions are all keyword-only and optional.
+
+### Spec
+
+- `specs/ml-rl-align-unification.md` v1.0.0 (promoted 2026-04-23) — §2 (Protocol), §3.1 (dispatch), §3.2 (result parity), §3.3 (DPO-family kwarg validation), §5 (lineage), §7 (dependency topology).
+
 ## [0.17.0] - 2026-04-20 — RAGDiagnostics adapter for retrieval + generation evaluation
 
 PR#2 of 7 for the MLFP diagnostics donation plan (kailash-py #567). Lands the second concrete `Diagnostic` Protocol adapter, extending `DLDiagnostics` (0.16.0) with retrieval-augmented-generation evaluation: IR metrics, LLM-as-judge faithfulness, retriever leaderboards, and an extras-gated ragas / trulens-eval backend.
