@@ -509,6 +509,17 @@ class SklearnTrainable:
         self._is_fitted = False
         self._last_module: Any = None
 
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        Exposed so `MLEngine.register(result)` can locate the trained
+        model via ``result.trainable.model`` without each adapter
+        duplicating the lookup convention. For sklearn the model IS
+        the estimator.
+        """
+        return self._estimator
+
     # -- Protocol methods ------------------------------------------------
 
     def to_lightning_module(self) -> Any:
@@ -819,6 +830,15 @@ class TorchTrainable:
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
 
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For Torch the model IS the raw ``torch.nn.Module`` supplied at
+        construction and mutated in-place by the Lightning trainer.
+        """
+        return self._model
+
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
             raise RuntimeError(
@@ -1007,6 +1027,15 @@ class LightningTrainable:
         self._batch_size = batch_size
         self._task = task
         self._is_fitted = False
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For Lightning the model IS the wrapped LightningModule supplied
+        at construction.
+        """
+        return self._module
         self._feature_names: tuple[str, ...] = ()
 
     def to_lightning_module(self) -> Any:
@@ -1173,6 +1202,14 @@ class XGBoostTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For XGBoost the model IS the sklearn-compatible estimator.
+        """
+        return self._estimator
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -1417,6 +1454,14 @@ class LightGBMTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For LightGBM the model IS the sklearn-compatible estimator.
+        """
+        return self._estimator
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -1671,6 +1716,15 @@ class UMAPTrainable:
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
 
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For UMAP the model IS the fitted reducer (a ``umap.UMAP``
+        instance after fit).
+        """
+        return self._reducer
+
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
             raise RuntimeError(
@@ -1890,6 +1944,14 @@ class HDBSCANTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For HDBSCAN the model IS the fitted clusterer.
+        """
+        return self._clusterer
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
