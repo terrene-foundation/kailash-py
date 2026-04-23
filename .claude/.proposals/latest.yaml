@@ -1,623 +1,422 @@
 source_repo: kailash-py
-codify_date: "2026-04-20"
+codify_date: "2026-04-23"
 codify_session: |
-  Session 2026-04-20 afternoon/evening — issue #567 MLFP diagnostics
-  upstream Session 3b + #579 analysis.
+  Session 2026-04-23 — kailash-ml 1.0.0 M1 foundations release wave (W30 +
+  W31/W32 M10 + W33 wrappers + W33b/c regression). Branch
+  `feat/kailash-ml-1.0.0-m1-foundations`. Merged 6 M10 shards across 7
+  packages (kailash 2.9.0, kailash-dataflow 2.1.0, kailash-nexus 2.2.0,
+  kailash-kaizen 2.12.0, kailash-align 0.6.0, kailash-pact 0.10.0,
+  kailash-ml 1.0.0). W33 shipped `km.*` top-level wrappers; W33c shipped
+  `km.register`; W33b landed the canonical README end-to-end regression
+  test that caught a `km.train → km.register` pipeline break.
 
-  Shipped seven PRs since the noon codify distributed:
-    - PR #571 (DLDiagnostics, merged 21:19) — session 3a reference adapter
-    - PR #574 (AlignmentDiagnostics, RECOVERY) — parallel agent wrote absolute
-      paths into MAIN; branch zero-commit; recovery required
-    - PR #575 (RAGDiagnostics) — parallel worktree, clean
-    - PR #576 (InterpretabilityDiagnostics) — parallel worktree, clean
-    - PR #577 (CI fix: root kailash editable) — unblocked #574/#575/#576
-    - PR #578 (PACT absorb, REJECTED MLFP) — frozen dataclasses into PactEngine
-    - PR #580 (LLMDiagnostics + Judges) — PR#5 of 7, IN FLIGHT (CI running)
-    - PR #581 (docs: #579 analysis) — /analyze for ToolRegistry gap
+  Eight institutional lessons emerged and are codified this cycle. (1)
+  Anthropic throttles simultaneous Opus worktree-agent launches — 6 Opus
+  agents launched in one burst ALL died at 34–45s with rate-limit errors;
+  waves of ≤3 succeeded. (2) Parallel worktrees branched from different
+  base SHAs merged cleanly ONLY because packages didn't overlap; no
+  structural defense existed. (3) 3 of 6 shards used harness-default
+  `worktree-agent-<hash>` branch names instead of the prompt-specified
+  `feat/<shard>` names. (4) Orchestrator-side amending of todo text at
+  launch time (version bumps to reflect shipped state, symbol counts to
+  reflect spec changes) saved two failed shards. (5) End-to-end README
+  regression test caught a pipeline break invisible to per-primitive
+  unit + integration tests. (6) `TrainingResult(frozen=True)` without a
+  `trainable` field shipped to main despite passing every unit test —
+  the dataclass was structurally a stub because it couldn't support the
+  next primitive's contract. (7) `km.train` async but `km.register` sync
+  (with internal `asyncio.run()`) crashed in every pytest-asyncio /
+  Nexus / Jupyter caller. (8) Parallel shards on different base SHAs
+  each edited the same `__init__.py::__all__`; merge silently picked
+  one side, dropping the other's additions.
 
-  Cross-SDK issues filed:
-    - kailash-rs#468 — B1 canonical audit-chain fingerprint (blocker for PR#6)
-    - kailash-rs#496 — #579 ToolRegistry discovery tax parity
-
-  Three new institutional failure modes emerged this session:
-
-  1. **Orphan-write recovery** — A parallel worktree agent (PR#3 align) wrote
-     to absolute paths that resolved to the MAIN checkout instead of its
-     worktree cwd. Branch had zero commits → worktree auto-cleaned → files
-     were sitting uncommitted in MAIN. Parent orchestrator had to create
-     `recovery/` branch, commit orphaned files, and fill missing deliverables
-     (tests, spec, pyproject bump, CHANGELOG). This extends the existing
-     "Worktree Prompts Use Relative Paths Only" rule with a recovery protocol.
-
-  2. **Sub-package CI must install root kailash editable for unreleased core
-     modules** — PR#0 (#570) landed `kailash.diagnostics.protocols` but not
-     on PyPI yet. Sub-package CI jobs (kailash-ml Base/DL/RL, kailash-align
-     Unit/Inter-Package) install only `packages/<pkg>[dev]` which transitively
-     pulls `kailash>=2.8.9` FROM PyPI — missing the new module. Every PR
-     importing the Protocol failed at collection until PR#577 prepended
-     `uv pip install -e "."` to each install block. Single-point generalizable
-     pattern: whenever `src/kailash/<new_module>` ships, every sub-package
-     CI install step MUST install root kailash editable FIRST.
-
-  3. **Tier 2 Protocol-satisfying non-mock adapters** — `DeterministicJudge`
-     in `tests/integration/judges/test_judges_wiring.py` is a real class
-     that satisfies the `JudgeCallable` Protocol at runtime (isinstance
-     holds) and produces deterministic output via length-based scoring.
-     It has no MagicMock / AsyncMock surface. This is a valid Tier 2
-     pattern distinct from mocking — the class IS a real implementation,
-     just one whose output is deterministic from the input. Pattern
-     generalizes to any Protocol-typed dependency where real production
-     implementations require API keys / network / GPU.
+  Each pattern is codified against an existing rule file (no new rule
+  files needed — all 8 slot into existing institutional-knowledge
+  locations). Prior proposal (2026-04-20, status=distributed) was
+  archived by the parent orchestrator before this codify cycle started.
 
 status: pending_review
-submitted_date: "2026-04-20T23:30:00+08:00"
+submitted_date: "2026-04-23T08:00:00+08:00"
 
 changes:
-  - id: ci-install-root-editable-for-unreleased-core-modules
+  - id: parallel-opus-burst-size-limit-waves-of-three
     type: rule
     severity: MEDIUM
-    target: rules/deployment.md
-    section: "new § 'Sibling-Package CI Must Install Root SDK Editable For Unreleased Core Modules'"
+    target: rules/worktree-isolation.md
+    section: "new § 'Parallel-Launch Burst Size Limit (Waves of ≤3)' as Rule 4"
     summary: |
-      When a new public module lands in `src/kailash/` (or the equivalent
-      core SDK module tree) and has not yet been released to PyPI, every
-      sibling-package CI job that imports from it MUST install the root
-      kailash editable (`uv pip install -e "."`) BEFORE installing the
-      sub-package's own dev extras.
+      Anthropic's server-side throttle kills 4-6 simultaneous Opus
+      worktree agents launched in one burst. All 6 in the M10 launch
+      died at 34-45s with `API Error: Server is temporarily limiting
+      requests for this user` BEFORE any of them committed. Fallback
+      to waves of 3 succeeded.
 
-      Sibling-package CI workflows that install only
-      `packages/<pkg>[dev]` pick up `kailash>=X.Y.Z` transitively via
-      the sub-package's declared dep on the SDK — which resolves against
-      PyPI, where the NEW module is not yet published. The build succeeds
-      (installs stable kailash from PyPI) but test collection fails with
-      `ModuleNotFoundError: No module named 'kailash.<new_module>'`
-      because the tests import the new module that exists only in the
-      local editable source tree.
+      Rule mandates parent orchestrators launch worktree agents in
+      waves of ≤3 for Opus-tier models. BLOCKED rationalizations
+      enumerated (API docs don't say hard limit / rate limits only on
+      sustained load / we can retry / waves halve throughput /
+      earlier 4-agent tests worked).
 
-      The fix is mechanical and one-line:
-
-      ```yaml
-      - name: Install kailash-<subpkg>[dev]
-        run: |
-          uv venv .venv
-          # Install root kailash first so kailash.<new_module> resolves
-          # (not yet on PyPI; PR#<N> of issue #<M> depends on it).
-          uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
-      ```
-
-      The pattern is: every `uv pip install -e "packages/..."` block in
-      every sibling-package CI workflow MUST be preceded by
-      `uv pip install -e "."`. No exceptions — even workflows that
-      previously passed silently "work" because they happened to not
-      import the new module.
-
-      The comment in the CI step explaining why is mandatory
-      institutional knowledge: future contributors must understand that
-      the leading `uv pip install -e "."` is NOT redundant with the
-      sub-package's declared `kailash>=X.Y.Z` dep.
+      Evidence: session 2026-04-23 M10 launch — 6 agents
+      (ab9c2f7213c4a82ab, ae2f048829aa941a2, af15e0f9c3f2d16a3,
+      a823d7ed912137852, a0e76f0996d1d9a4e, ad10591aa614deeae) all
+      rate-limited in first burst; waves of 3 (a506217c8640af1c0,
+      a0831fc0ca6b9f6ae, a1027b84cb7c4f9d2 + aa7fb6a6, a69473b3,
+      aaecc695) all completed.
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. Rust SDK has the same pattern: workspace-member
-      CI tests install the member crate which depends on `kailash-core = "X.Y.Z"`
-      from crates.io. If the fix to a shared crate hasn't been published yet,
-      member tests fail at compile. Binding CI workflows (`python.yml`,
-      `nodejs.yml`) have the same failure mode when a core crate changes
-      and the binding's Cargo.lock is pinned to an older core-crate version.
-      The rule is language-agnostic; the fix is "install-from-repo-first".
-    evidence:
-      session: "2026-04-20 afternoon (issue #567 Session 3b)"
-      prs:
-        - "#570 landed kailash.diagnostics.protocols in src/kailash/"
-        - "#571 shipped the Coverage-job fix only (partial)"
-        - "#574, #575, #576 all failed CI at collection with ModuleNotFoundError"
-        - "#577 extended the fix to Base, DL, RL, Unit, Inter-Package CI jobs across test-kailash-ml.yml + test-kailash-align.yml"
-      ci_logs_reference: "gh run view 24671160888 --log-failed (showed 5 matrix jobs failing)"
+      Cross-SDK applicable. Rust worktree orchestration would hit the
+      same throttle — Anthropic's limit is session-level, not
+      language-level. No variant overlay needed; the orchestrator
+      launch pattern is identical.
 
-  - id: orphan-write-recovery-from-worktree-miss
+  - id: pre-flight-merge-base-check-before-worktree-launch
     type: rule
     severity: MEDIUM
-    target: rules/agents.md
-    section: "extend § 'Worktree Prompts Use Relative Paths Only' with a recovery protocol"
+    target: rules/worktree-isolation.md
+    section: "new § 'Pre-Flight Merge-Base Check Before Worktree Launch' as Rule 5"
     summary: |
-      When an `isolation: "worktree"` agent reports completion but the
-      branch has zero commits AND the worktree has been auto-cleaned,
-      the parent orchestrator MUST inspect the MAIN checkout for orphaned
-      untracked files before concluding the work was lost. Absolute-path
-      writes from the agent resolve to the MAIN checkout cwd — the files
-      are NOT lost; they are orphaned, uncommitted, and reachable via
-      `git status` on the parent.
+      `git worktree add` without an explicit base defaults to whatever
+      branch HEAD was last set. For long-running sessions where new
+      shards merge during the session, stale bases drift silently.
+      5 of 6 M10 shards branched from 899ce3e5 (pre-W30 merge); only
+      1 branched from feat tip 41a217dc. Worked this time because
+      packages didn't overlap; permanent failure mode until
+      structurally prevented.
 
-      Recovery protocol (the four steps PR#574 followed):
-
-      ```bash
-      # Step 1 — detect the orphan
-      git worktree list | grep <expected-branch>          # empty if cleaned
-      git log <expected-branch> --oneline | head -5       # zero agent commits
-      git status --short                                   # orphan files visible as "??" entries
-      find . -path .claude/worktrees -prune -o -name "<expected-file>" -print  # confirm
-
-      # Step 2 — create a recovery branch from main
-      git checkout -b recovery/<original-branch-name>
-
-      # Step 3 — commit the orphaned work with provenance
-      git add <orphaned files>
-      git -c core.hooksPath=/dev/null commit -m "feat(...): recovered from failed parallel worktree agent"
-
-      # Step 4 — fill missing deliverables (tests, specs, pyproject bumps,
-      #         CHANGELOG entries) that the agent truncated before writing
-      #         Each fix = its own commit. Final PR body notes the recovery.
-      ```
-
-      The PR title MUST use the `recovery/` branch prefix so git log
-      grep surfaces this class of rescue. The PR body MUST explicitly
-      note the orphan-write failure mode for future-session
-      institutional knowledge.
-
-      This is BLOCKED without recovery: silently abandoning the orphaned
-      files and re-launching the agent. Re-launch WILL produce another
-      set of orphans (the agent doesn't know about the first attempt);
-      now the MAIN checkout has double the orphan surface and the next
-      session must resolve two partial adapters.
+      Rule mandates orchestrator pins base SHA at worktree creation
+      AND verifies `git merge-base <new-branch> <target-branch>`
+      equals the current tip of `<target-branch>` at launch time.
+      BLOCKED: "worktree defaults handle the base" / "git rebases at
+      merge time" / "packages don't overlap" / "worked this time".
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. Rust worktrees exhibit the same auto-cleanup
-      behavior (`git worktree prune` after zero-commit window). The
-      recovery steps are identical; only the build-verification command
-      differs (`cargo check` vs `pytest --collect-only`).
-    evidence:
-      session: "2026-04-20 Session 3b (issue #567)"
-      pr: "#574 recovery/pr3-alignment-diagnostics"
-      files_recovered:
-        - "packages/kailash-align/src/kailash_align/diagnostics/alignment.py (1129 LOC)"
-      deliverables_filled_post_recovery:
-        - "__init__.py (facade)"
-        - "pyproject.toml version bump 0.3.2 → 0.4.0"
-        - "CHANGELOG.md 0.4.0 entry"
-        - "16 Tier 1 unit tests"
-        - "6 Tier 2 integration tests"
-        - "specs/alignment-diagnostics.md"
-        - "specs/_index.md Alignment section update"
+      Cross-SDK applicable. `git worktree` semantics are language-
+      agnostic. Rust and Ruby BUILD repos exhibit the same failure
+      mode.
 
-  - id: tier2-protocol-deterministic-adapters-not-mocks
+  - id: worktree-branch-name-matches-prompt-declaration
     type: rule
     severity: LOW
+    target: rules/worktree-isolation.md
+    section: "new § 'Worktree Branch Name MUST Match Prompt Declaration' as Rule 6"
+    summary: |
+      3 of 6 shards in the M10 launch ended up on branches like
+      `worktree-agent-aa7fb6a6` instead of `feat/w31-core-ml-nodes-
+      observability` because the harness default assigned hash-based
+      names when the orchestrator prompt didn't force creation with
+      `-b <branch>`. Post-merge grep for `feat/w31-*` missed those
+      three.
+
+      Rule mandates orchestrator passes `-b <branch>` explicitly AND
+      the agent prompt verifies `git rev-parse --abbrev-ref HEAD`
+      matches the declared name before first commit. BLOCKED: "names
+      are bookkeeping" / "harness defaults are fine" / "prompt
+      mentions name, agent sets it" / "hash names are more unique".
+
+      Evidence: honored — feat/w31-core-ml-nodes-observability,
+      feat/w31b-dataflow-ml-bridge, feat/w31c-nexus-ml-bridge,
+      feat/w33b-migration-readme-regression. Defaulted —
+      worktree-agent-aa7fb6a6, worktree-agent-a69473b3,
+      worktree-agent-aaecc695, worktree-agent-aa8e8995,
+      worktree-agent-af0e8132.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Branch-name discipline is `git log --grep`
+      hygiene; language-agnostic.
+
+  - id: orchestrator-amends-stale-todo-at-launch
+    type: rule
+    severity: LOW
+    target: rules/specs-authority.md
+    section: "new § 'Orchestrator MUST Amend Todo Text At Launch When Spec Has Moved' as Rule 5c"
+    summary: |
+      Todos are written at /todos time against state-of-repo-then; by
+      /implement time the state has moved. Orchestrator MUST cross-
+      check todo claims (version bumps, __all__ counts, spec refs)
+      against current canonical spec + package state before launch,
+      amend IN THE TODO TEXT, and prompt the agent with the amended
+      version. Launching a stale todo burns the agent's budget and
+      risks outright shard failure (tag collision, symbol mismatch).
+
+      Evidence: W32-32b todo said "bump align 0.5.0" but W30.3
+      already shipped 0.5.0; amended to 0.6.0 at launch saved a
+      failed shard. W33 todo said __all__ = 34 symbols; spec §15.9
+      says 41; amended at launch per §5b specs-over-todo preference;
+      agent landed 41 correctly.
+
+      BLOCKED: "agent is smart enough to re-derive" / "todo was
+      approved, amending is scope creep" / "let the agent hit the
+      conflict" / "spec will be re-read at implement time".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. The orchestrator-side launch-time cross-
+      check pattern is language-agnostic.
+
+  - id: end-to-end-pipeline-regression-test-above-unit-integration
+    type: rule
+    severity: MEDIUM
     target: rules/testing.md
-    section: "§ 'Tier 2 (Integration): Real infrastructure recommended' — new exception clause"
+    section: "new § 'End-to-End Pipeline Regression Tests Above Unit + Integration'"
     summary: |
-      A class that satisfies a `typing.Protocol` at runtime (i.e.
-      `isinstance(x, TheProtocol)` returns `True`) and produces
-      deterministic output from its inputs is NOT a mock. It is a real
-      implementation of the Protocol whose output happens to be
-      deterministic. Tier 2 integration tests MAY use such adapters
-      for Protocol-typed dependencies where real production
-      implementations require API keys, network, or GPU that CI cannot
-      provide.
+      Every canonical pipeline the docs teach (README Quick Start,
+      tutorial flow, advertised 3-line example) MUST have a Tier-2-
+      or-above regression test that executes the DOCS-EXACT code
+      against real infrastructure and asserts the final user-visible
+      outcome. Unit tests per primitive cannot catch handoff-field
+      gaps because each primitive's unit test constructs fixtures
+      with the fields THAT primitive needs.
 
-      The distinction from a prohibited mock:
+      Evidence: kailash-ml 1.0.0 W33b —
+      test_readme_quickstart_executes_end_to_end at
+      packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py
+      caught km.train → km.register pipeline broken (TrainingResult
+      had no `trainable` field → km.register couldn't resolve .model
+      for ONNX export). Every unit test of fit() passed; every unit
+      test of register() passed; end-to-end chain raised ValueError
+      on every fresh install.
 
-      - **Mock** (BLOCKED at Tier 2): `unittest.mock.MagicMock()`,
-        `AsyncMock()`, `patch(...)`, or any auto-generated stub whose
-        methods do not actually implement the Protocol contract — they
-        just record calls. The `isinstance(mock, SomeProtocol)` check
-        returns `False` because MagicMock does not claim to satisfy
-        the Protocol.
-
-      - **Deterministic adapter** (PERMITTED at Tier 2): a hand-written
-        class that:
-        1. Declares all Protocol-required methods with correct signatures
-        2. Returns real values of the Protocol-required types
-        3. Passes `isinstance(adapter, TheProtocol)` at runtime
-        4. Produces deterministic output (same input → same output)
-        5. Is imported + exercised through the framework facade, not a
-           mock library
-
-      Example pattern (`DeterministicJudge` for `JudgeCallable` Protocol
-      in `kaizen.judges`):
-
-      ```python
-      class DeterministicJudge:
-          """Real JudgeCallable implementation for Tier 2 tests."""
-          judge_model: str = "deterministic-test-judge"
-
-          def __init__(self) -> None:
-              self.calls: list[JudgeInput] = []
-
-          async def __call__(self, judge_input: JudgeInput) -> JudgeResult:
-              self.calls.append(judge_input)
-              raw = min(len(judge_input.candidate_a) / 200.0, 1.0)
-              return JudgeResult(
-                  score=raw, winner=None,
-                  reasoning=f"Deterministic score={raw:.2f}",
-                  judge_model=self.judge_model,
-                  cost_microdollars=150,
-                  prompt_tokens=10, completion_tokens=15,
-              )
-
-      @pytest.mark.integration
-      def test_facade_satisfies_protocol() -> None:
-          judge = DeterministicJudge()
-          assert isinstance(judge, JudgeCallable)  # Protocol check holds
-      ```
-
-      BLOCKED rationalizations:
-
-      - "MagicMock can be made to pass isinstance via spec=..."
-        (technically true, but the methods are still auto-generated
-        stubs that do not actually implement the Protocol contract —
-        the test is still mock-based)
-      - "It's the same as a mock if the output is scripted"
-        (no — the Protocol contract is the scripting surface, not
-        a mock framework's `side_effect` or `return_value`)
-
-      The rule distinguishes Tier 2 test-doubles from mocks by the
-      Protocol-conformance criterion, not by whether the backing store
-      is real. A real PostgreSQL + a DeterministicJudge are both Tier 2-
-      legal; a mocked PostgreSQL + a real OpenAI call is Tier 2 illegal.
+      Rule mandates regression test per documented pipeline in
+      tests/regression/ with @pytest.mark.regression and grep-able
+      name (includes "quickstart" / "readme" / tutorial name).
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. Rust traits with `pub trait Foo { ... }`
-      plus a `struct DeterministicFoo` that implements `Foo` are the
-      direct analogue. `isinstance` is not a thing in Rust, but the
-      type system enforces the contract at compile time, which is
-      stronger than Python's runtime check. Rust Tier 2 tests that
-      construct a `DeterministicFoo` and pass it as `impl Foo` are
-      semantically identical to this rule.
-    evidence:
-      session: "2026-04-20 Session 3b PR#5"
-      pr: "#580 (feat/567-llm-judges-diagnostics)"
-      file: "packages/kailash-kaizen/tests/integration/judges/test_judges_wiring.py"
-      tests: "7 Tier 2 tests passing via DeterministicJudge (non-mock)"
-      protocol: "kailash.diagnostics.protocols.JudgeCallable (landed PR#0/#570)"
+      Cross-SDK applicable. The "every primitive tests its own
+      fixture" failure mode is language-agnostic. Rust and Python
+      both need end-to-end regression tests per canonical pipeline.
 
-  - id: cross-sdk-protocol-upstream-playbook
-    type: skill
-    severity: LOW
-    target: skills/30-claude-code-patterns/sdk-upstream-donation.md (NEW file)
-    section: "new skill file"
-    summary: |
-      Capture the 7-PR pattern used for issue #567 (MLFP diagnostics
-      upstream to kailash-ml/kaizen/align/pact) as a reusable playbook
-      for future cross-SDK Protocol-based external contributions.
-
-      Structure:
-
-      1. **Pre-implementation blockers** — cross-SDK canonical-value
-         reconciliation (audit-chain fingerprint, event-payload format,
-         any shared contract that drifted across SDKs). Each blocker
-         gets a separate PR before protocols land.
-
-      2. **PR#0: Protocols + JSON Schema** — land the cross-SDK contract
-         in `src/kailash/<domain>/protocols.py` with zero runtime logic
-         and zero optional deps. The JSON Schema at
-         `schemas/<concept>.v1.json` is the language-neutral source
-         of truth for Rust/Python parity.
-
-      3. **Risk-ascending domain adapters** — per-framework concrete
-         implementations (PR#1..#N) in risk order: easy first
-         (read-only helpers), med next (LLM-calling), high last
-         (governance-sensitive). Each adapter:
-
-         - Implements the Protocol at runtime (`isinstance` holds)
-         - Uses framework-first routing (no raw openai / raw SQL)
-         - Ships Tier 1 + Tier 2 tests, facade-import required
-         - Gets its own spec file + `specs/_index.md` entry
-         - Bumps the owning sub-package's version + CHANGELOG
-
-      4. **Reject parallel facades, absorb capabilities** — when the
-         external contribution includes a "DomainDiagnostics" class
-         that duplicates SDK primitives with weaker invariants
-         (bypasses `GovernanceEngine._lock`, non-frozen dataclasses,
-         fail-open on errors), REJECT it. Absorb the four useful
-         capabilities as first-class methods on the existing primitive
-         with the SDK's thread-safety + fail-closed contract intact.
-
-      5. **Cross-SDK parity issues** — for every PR, file an issue
-         on the sibling SDK referencing the originating PR. The
-         sibling SDK's implementation IS a separate PR that lands on
-         its own cadence but MUST reference the Protocol + Schema.
-
-      6. **Attribution** — if the external contribution is
-         Apache-licensed, root `NOTICE` file gets an attribution entry
-         per Apache-2.0 §4(d). Ship as a blocker PR before any adapter
-         lands.
-
-      7. **Session planning** — 7 PRs ≠ 7 sessions. Parallel-worktree
-         opportunities across different sub-packages reduce wall time
-         (3 parallel = 1 session for LOW-risk fan-out). HIGH-risk PRs
-         (governance absorption, cross-SDK fingerprint) stay sequential.
-
-      The skill file teaches future agents the pattern, not just the
-      specific #567 case. It references the SYNTHESIS-proposal.md as
-      a worked example.
-    classification_suggestion: global
-    rationale: |
-      Cross-SDK external contributions are a recurring operational
-      pattern, not a one-off. Having a codified playbook prevents
-      re-deriving the architecture every time an external framework
-      wants to donate code to Kailash. The specific #567 case proves
-      the pattern works; the skill generalizes it.
-    evidence:
-      issue: "kailash-py#567 — MLFP diagnostics donation (7,300 LOC)"
-      sessions: "Session 1 (blockers + PR#0) + Session 2 (PR#1) + Session 3a (PR#1 gate) + Session 3b (PR#2/#3/#4/#7 parallel + PR#5 sequential)"
-      outcome: "6 of 7 PRs merged in 2 sessions (PR#6 pending cross-SDK B1 acceptance)"
-      plan_file: "workspaces/issue-567-mlfp-diagnostics/02-plans/SYNTHESIS-proposal.md"
-
-  - id: build-repo-release-discipline
+  - id: fake-integration-via-missing-handoff-field
     type: rule
     severity: HIGH
-    target: rules/build-repo-release-discipline.md (NEW FILE)
-    section: "new rule file"
+    target: rules/zero-tolerance.md
+    section: "extend § 'Rule 2: No Stubs' with 'Fake integration via missing handoff field' example"
     summary: |
-      New rule mandates that BUILD repo sessions (kailash-py, kailash-rs)
-      MUST proceed through `/release` to PyPI / crates.io in the same
-      session that merges code. "Done" means installable from the
-      package index, not merged to main. Release scope for the session
-      = modified package + every sibling package whose main is ahead
-      of the package index by ≥1 bump.
+      Extends the existing zero-tolerance §2 BLOCKED examples list
+      (fake encryption, fake transaction, fake health, fake
+      classification, fake tenant isolation, fake metrics) with a
+      new pattern: a frozen dataclass on a pipeline's critical path
+      that omits the field the NEXT primitive needs to consume it.
 
-      Full rule already landed at `.claude/rules/build-repo-release-discipline.md`
-      in this session (local-active). Classification suggestion: global
-      because kailash-rs has identical failure mode (crate versions on
-      crates.io lag main). Variant overlays may differ on tooling syntax
-      (`pip install` vs `cargo install`, `twine` vs `cargo publish`) but
-      the structural rule is language-agnostic.
+      TrainingResult(frozen=True) without `trainable` or `.model`
+      ships to main passing every unit test (each constructs its own
+      TrainingResult with the fields IT needs) while the advertised
+      3-line README pipeline breaks on every fresh install. The
+      dataclass IS structurally a stub.
 
-      Core MUST clauses:
-        1. Every merge triggers a release cycle in the same session
-        2. Package-index installability is the done gate
-           (`pip install <pkg>==<new> && python -c "from <pkg> import <surface>"`)
-        3. Release scope enumerated before first merge of the session
-           (main-vs-pypi table per package, cached in working memory)
-        4. Release authorization is the only structural gate (human
-           approves scope; agent owns enumeration)
-
-      Core MUST NOT clauses:
-        1. Report done / complete / shipped at admin-merge
-        2. Defer release to next session / next batch
-        3. Release only the modified package (ignore stale siblings)
-        4. Report done after `/release` returns success but before
-           clean-venv install + import of new surface succeeds
-
-      BLOCKED rationalizations enumerated: "PR merged work complete",
-      "Tests pass on main user can install from source", "Release is a
-      follow-up task", "Waiting for user to batch releases for efficiency",
-      "Consumer can add BUILD repo as editable dep", "CI green on main
-      means feature is live", "release-specialist is a separate agent".
+      Evidence: kailash-ml 1.0.0 W33b — TrainingResult shipped in
+      W31+W33; km.register landed in W33c with no way to resolve
+      .model; canonical Quick Start raised ValueError until W33b
+      added trainable=self at every Trainable.fit() return site and
+      landed packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py.
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable at 100% fidelity. kailash-rs has the identical
-      failure mode: crate versions published to crates.io lag main.
-      The rule applies verbatim with s/PyPI/crates.io/, s/pip install/
-      cargo install/, s/twine/cargo publish/. Variant overlay ONLY if
-      the release-runbook commands diverge enough to warrant a separate
-      file; structurally the rule is identical.
+      Cross-SDK applicable. The frozen-dataclass handoff-field gap
+      is language-agnostic (Rust struct equivalent). No variant
+      overlay needed; the existing zero-tolerance §2 example list
+      is global.
 
-      This is the single highest-leverage institutional fix of the
-      2026-04-21 session. All other rules assume code lands on main;
-      this rule closes the gap between main and consumer-observable
-      state, which is where every prior "we shipped it but users don't
-      see it" incident has actually lived.
-    evidence:
-      session: "2026-04-21"
-      user_directive: |
-        "what happened??? we didn't do anything? ... MLFP is unblocked
-        for coursework (core SDK works, kailash-ml 0.15.2 has the core
-        engines) but the Protocol-based integration the issue #567
-        process produced isn't consumable here yet. Next template bump
-        carrying a kaizen/pact/align PyPI release will bring them through."
-
-        Followed by: "please /codify for build repo to never to stop at
-        CI merge, MUST BE release! Never say or report done after CI
-        merge, ALWAYS prepare for release and proceed!"
-      release_gap_at_session_start: |
-        main vs PyPI (before 2026-04-21 session):
-          kailash: 2.8.12 main → 2.8.11 PyPI (1 patch behind)
-          kailash-kaizen: 2.9.0 main → 2.7.5 PyPI (3 minor behind)
-          kailash-ml: 0.17.0 main → 0.15.2 PyPI (2 minor behind)
-          kailash-align: 0.4.0 main → 0.3.2 PyPI (1 minor behind)
-          kailash-pact: 0.9.0 main → 0.8.2 PyPI (1 minor behind)
-          kailash-mcp: 0.2.8 main → 0.2.7 PyPI (1 patch behind)
-        7 PRs of issue #567 MLFP diagnostics had merged across 3 prior
-        sessions; zero had reached PyPI.
-      release_cycle_execution: |
-        Wave 1: 5 packages (kailash 2.8.12, mcp 0.2.8, ml 0.17.0,
-          align 0.4.0, pact 0.9.0) — tagged 2026-04-21T05:41-05:44,
-          published via tag-triggered publish-pypi.yml OIDC trusted
-          publisher, clean-venv install + import verified for each.
-        Wave 2: kailash-kaizen 2.10.1 (after PR #587 merged at
-          2026-04-21T05:49:16Z) — TestPyPI + production + clean-venv
-          install + observability surface import + security-fix
-          presence check all green.
-        Outcome: every BUILD-main version now matches production PyPI.
-      memory_entry: "feedback_build_repo_release.md (persistent, indexed in MEMORY.md)"
-
-  - id: kailash-ml-1.0.0-spec-convergence-r8
-    type: specs_promotion
-    layer: Layer-4 (domain knowledge)
-    title: "21 ml-* specs promoted from draft to canonical; 8-persona Round 8 convergence across 2 consecutive clean rounds"
+  - id: paired-public-surface-consistent-async-ness
+    type: rule
+    severity: MEDIUM
+    target: rules/patterns.md
+    section: "new § 'Paired Public Surface — Consistent Async-ness' after § 'Async vs Sync Runtime'"
     summary: |
-      Phase-A through Phase-H iterative spec-convergence cycle for kailash-ml 1.0.0.
-      Eight-persona /redteam panel (cross-spec, closure, newbie-UX, feasibility,
-      industry-parity, TBD-triage, senior-practitioner, spec-compliance) executed
-      across Rounds 1-8 with four 4-by-4 batch waves per round to avoid rate-limit
-      throttling. Rounds 7 and 8 achieved 0 CRIT + 0 HIGH + 0 MED across all 8
-      personas — two consecutive clean rounds satisfying the convergence exit
-      criterion. Specs promoted from `workspaces/kailash-ml-audit/specs-draft/` +
-      `supporting-specs-draft/` to canonical `specs/` at Round-8 merge time.
-    changes:
-      - path: "specs/ml-engines-v2.md"
-        disposition: NEW (replaces legacy specs/ml-engines.md)
-        summary: "MLEngine 1.0.0 — zero-arg construction, 8-method surface, km.* convenience wrappers, canonical Quick Start (§16 SHA-256 fingerprint contract c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00)"
-      - path: "specs/ml-engines-v2-addendum.md"
-        disposition: NEW
-        summary: "Classical-ML surface + EngineInfo/MethodSignature/ParamSpec/ClearanceRequirement frozen dataclasses + LineageGraph/LineageNode/LineageEdge + §E11.3 18-engine discovery registry"
-      - path: "specs/ml-tracking.md"
-        disposition: UPDATE (full v2 rewrite)
-        summary: "ExperimentTracker.create() async factory + ~/.kailash_ml/ml.db canonical + get_current_run() contextvar accessor + 8 _kml_* CREATE TABLE + MLError(Exception) at kailash_ml.errors with 11 typed children + ParamValueError multi-inherit"
-      - path: "specs/ml-registry.md"
-        disposition: NEW
-        summary: "ModelRegistry v2 — RegisterResult.artifact_uris: dict[str, str] + onnx_status Literal + is_golden release-gate + §7.1.1 v1.x @property back-compat shim + §7.1.2 Single-Format-Per-Row DDL Invariant + §5.6 ONNX export probe"
-      - path: "specs/ml-serving.md"
-        disposition: NEW
-        summary: "InferenceServer + ServeHandle, REST+MCP via Nexus, §4.1 batch padding_strategy, §5.2 streaming backpressure (abort_on_disconnect + max_buffered_chunks), §2.5.3 pickle-fallback gate"
-      - path: "specs/ml-autolog.md"
-        disposition: NEW
-        summary: "sklearn/lightgbm/PyTorch Lightning auto-logging contract + DDP rank-0-only emission hardcoded per Decision 4 + metric namespace discipline + non-intrusive patching"
-      - path: "specs/ml-diagnostics.md"
-        disposition: UPDATE (deep rewrite)
-        summary: "DLDiagnostics cross-SDK Diagnostic Protocol + torch-hook training instrumentation + SystemMetricsCollector stub with DL-GAP-2 v1.1 deferral note"
-      - path: "specs/ml-dashboard.md"
-        disposition: NEW
-        summary: "MLDashboard CLI + km.dashboard() non-blocking launcher + Streamlit panels for runs/models/serving/drift"
-      - path: "specs/ml-feature-store.md"
-        disposition: NEW
-        summary: "Polars-native FeatureStore + ConnectionManager backend + point-in-time queries + _kml_feature_groups DDL + ml_context envelope kwarg"
-      - path: "specs/ml-drift.md"
-        disposition: NEW
-        summary: "DriftMonitor KS/chi2/PSI/Jensen-Shannon + reference-vs-current + scheduled monitoring + feature-level reports + retraining hooks"
-      - path: "specs/ml-automl.md"
-        disposition: NEW
-        summary: "AutoMLEngine agent-infused search (grid/random/bayesian/successive-halving) + cost budget + human-approval gate + PACT envelope"
-      - path: "specs/ml-backends.md"
-        disposition: UPDATE (v2 matrix)
-        summary: "6 first-class backends (cpu/cuda/mps/rocm/xpu/tpu) + native-first XPU probe per Decision 5 + backend-compat-matrix.yaml data per Decision 6 + CPU+MPS BLOCKING CI per Decision 7"
-      - path: "specs/ml-rl-core.md"
-        disposition: NEW
-        summary: "RLTrainer + EnvironmentRegistry + PolicyRegistry + km.rl_train() + Stable-Baselines3 + Gymnasium + [rl] extra"
-      - path: "specs/ml-rl-algorithms.md"
-        disposition: NEW
-        summary: "PPO/SAC/DQN/A2C/TD3/DDPG baselines + MaskablePPO + Decision Transformer + hyperparameter presets + algorithm-family contracts"
-      - path: "specs/ml-rl-align-unification.md"
-        disposition: NEW
-        summary: "kailash-ml.rl ↔ kailash-align shared trajectory schema + GRPO/RLOO/PPO-LM interop + reward-hacking signal"
-      - path: "specs/kailash-core-ml-integration.md"
-        disposition: NEW
-        summary: "Core SDK ↔ ML bridge: extras alias pip install kailash[ml], kailash.ml namespace re-export, workflow-node adapters (Decision 14 MAJOR 1.0.0)"
-      - path: "specs/dataflow-ml-integration.md"
-        disposition: NEW
-        summary: "DataFlow ↔ ML bridge: TrainingContext, lineage_dataset_hash sha256:<64hex>, multi-tenant feature-group classification, ML-event subscribers"
-      - path: "specs/nexus-ml-integration.md"
-        disposition: NEW
-        summary: "Nexus ↔ ML bridge: ml-endpoints mount (REST+MCP+WS), UserContext preservation through ServeHandle, dashboard embed"
-      - path: "specs/kaizen-ml-integration.md"
-        disposition: NEW
-        summary: "Kaizen ↔ ML bridge: §2.4 Agent Tool Discovery via km.engine_info() binding §E11.3 MUST 1, SQLiteSink TraceExporter on ~/.kailash_ml/ml.db, shared CostTracker, _kml_agent_traces + _kml_agent_trace_events DDL"
-      - path: "specs/align-ml-integration.md"
-        disposition: NEW
-        summary: "Align ↔ ML bridge: fine-tuning-as-training-engine via LightningModule wrap, LoRA Lightning callback, RL ↔ alignment trajectory unification"
-      - path: "specs/pact-ml-integration.md"
-        disposition: NEW
-        summary: "PACT ↔ ML bridge: ml_context envelope kwarg, ClearanceRequirement tuple on engine methods, governance-gated AutoML + registry, MultiTenantOpError for cross-tenant admin export (Decision 12)"
-      - path: "specs/_index.md"
-        disposition: UPDATE
-        summary: "Replaced 5-row ML Lifecycle section with 16 ml-* rows across 4 sub-sections (Engine Core / Experiment-Registry-Serving / AutoML-Drift-Feature-Dashboard / RL) + NEW ML Integrations section with 6 supporting specs + retained ml-integration.md Legacy row"
-      - path: "packages/kailash-ml/README.md"
-        disposition: UPDATE (Quick Start rewrite)
-        summary: "Replaced 6-import primitive Quick Start with canonical engine-first body from ml-readme-quickstart-body-draft; fingerprint c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00 pinned; Tier-2 test_readme_quickstart_fingerprint_matches_spec guard spec'd at ml-engines-v2 §16.3"
-      - path: "specs/ml-engines.md"
-        disposition: DELETE (replaced by ml-engines-v2.md)
-        summary: "Legacy single-file engines spec retired; all content split across ml-engines-v2 + ml-engines-v2-addendum per rules/specs-authority.md §8 (300-line split rule)"
-    user_approved_decisions:
-      decisions_count: 14
-      citations_count: 129
-      spec_files_with_citations: 13
-      list:
-        - D1 — Status vocabulary FINISHED-only (hard-migrate SUCCESS/COMPLETED at install, no bridge)
-        - D2 — GDPR erasure audit-immutable (sha256:<8hex> fingerprints, never delete audit row)
-        - D3 — Cross-SDK Rust status enum 4-member {RUNNING,FINISHED,FAILED,KILLED} byte-identical
-        - D4 — DDP/FSDP/DeepSpeed rank-0-only hardcoded (torch.distributed.get_rank() == 0)
-        - D5 — XPU dual-path (torch.xpu native + ipex fallback, native-first probe order)
-        - D6 — backend-compat-matrix.yaml as data (packages/kailash-ml/data/, km.doctor reads)
-        - D7 — GPU CI runner CPU+MPS BLOCKING now, CUDA BLOCKING when self-hosted runner lands
-        - D8 — Lightning hard lock-in, NO escape hatch, raw training loops raise UnsupportedTrainerError
-        - D9 — Rust ExperimentTracker async contract start_run()/end_run() explicit (AsyncDrop not stable)
-        - D10 — Single canonical spec per domain, Rust-specific clauses in loom/.claude/variants/rs/
-        - D11 — Legacy namespace sunset at kailash-ml 3.0; 2.x DeprecationWarning; 1.x back-compat shim
-        - D12 — Cross-tenant admin export MultiTenantOpError in 1.0.0; PACT-gated post-1.0 spec
-        - D13 — Extras naming hyphens across all specs ([rl-offline], [autolog-lightning], etc.)
-        - D14 — Package version at merge kailash-ml 1.0.0 MAJOR (SQLiteTrackerBackend deleted, two registries merged, status vocab migration, mandatory tenant_id+actor_id+audit)
-    convergence_evidence:
-      rounds_executed: 8
-      final_round_verdict: "0 CRIT + 0 HIGH + 0 MED across all 8 personas"
-      consecutive_clean_rounds: 2
-      persona_convergence_milestones:
-        - "Newbie UX: 3 consecutive clean rounds (R6+R7+R8)"
-        - "TBD re-triage: 5 consecutive clean rounds (R4+R5+R6+R7+R8)"
-        - "Spec-compliance: 3 consecutive clean rounds (R6+R7+R8) + 7/7 G-REG + 4/4 H-REG"
-        - "Industry parity: 4 consecutive stable rounds (R5+R6+R7+R8) at 24/25 GREEN"
-        - "Senior-practitioner: CERTIFIED R4-R8, trajectory A10-3 HIGH → A11-NEW-1 MED → A11-NEW-2 MED → MED-R7-1 MED → ∅ (terminated)"
-        - "Cross-spec + Closure + Feasibility: 2 consecutive clean (R7+R8)"
-      canonical_fingerprints:
-        readme_quickstart_sha256: "c962060cf467cc732df355ec9e1212cfb0d7534a3eed4480b511adad5a9ceb00"
-      deferred_v1_1:
-        - "SystemMetricsCollector (industry-parity #7 PARTIAL, DL-GAP-2)"
-        - "ModelCard generator, cost dashboard, DatasetVersion surface"
-        - "Inference-time explainability, quantization/pruning/distillation primitives"
-        - "BYO-judge leaderboard, identity-provider binding"
-    cross_sdk:
-      kailash_rs_issue: "#502"
-      status: "parity issue updated with 7-package wave context; spec overlay path via loom/.claude/variants/rs/specs/ml-*.md post /sync"
-    release_wave:
-      package_count: 7
-      packages:
-        - "kailash 2.9.0 (ml extras alias)"
-        - "kailash-pact 0.10.0 (ml_context envelope kwarg + ClearanceRequirement)"
-        - "kailash-nexus 2.2.0 (ml-endpoints mount)"
-        - "kailash-kaizen 2.12.0 (§2.4 Agent Tool Discovery + SQLiteSink)"
-        - "kailash-align 0.5.0 (ml-unification)"
-        - "kailash-dataflow 2.1.0 (TrainingContext + lineage_dataset_hash)"
-        - "kailash-ml 1.0.0 (the 21-spec body)"
-    reasoning: |
-      This /codify cycle is an exceptional-scope spec promotion rather than a
-      typical rule/skill codification. The 21 spec files constitute the complete
-      authoritative contract for kailash-ml 1.0.0 MAJOR — every behavior, DDL
-      table, km.* verb signature, dataclass shape, and cross-framework
-      integration surface is pinned at spec level before /implement begins.
-      Loom /sync classification: Layer-4 domain knowledge, specific to kailash-py
-      BUILD repo. The specs themselves remain local (specs/ is BUILD-repo-only);
-      loom/ classifier reviews whether any patterns from the Round-8 convergence
-      protocol (8-persona panel + 4-by-4 rate-limit batching + iterative
-      Phase-A-through-H shard plan) warrant promotion to CO methodology artifacts.
-      Specifically, the "narrowing trajectory" pattern (HIGH → MED → ∅ across
-      rounds) is a convergence signal worth codifying in CO rules.
+      When two top-level functions form a canonical user pipeline
+      (train/register, fit/predict, encrypt/decrypt, publish/subscribe,
+      login/logout), BOTH MUST be either async OR sync. Mixing
+      async with sync-wrapping-asyncio.run() is BLOCKED — the sync
+      wrapper raises `RuntimeError: This event loop is already
+      running` in every pytest-asyncio / Nexus / Jupyter caller.
 
-# Deferred follow-ups (not new rules, but session-level action items):
+      Evidence: kailash-ml 1.0.0 W33/W33c — km.train async (W33),
+      km.register landed sync (W33c) with internal asyncio.run().
+      Canonical 3-line Quick Start crashed in every async context.
+      Fix commit fdd3040e converted km.register to async def.
+
+      BLOCKED rationalizations: "both shapes for flexibility" /
+      "asyncio.run handles wrapping" / "sync is a convenience" /
+      "async caller is rare" / "we'll document the requirement".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable at the pattern level. Rust equivalent:
+      canonical pipelines should be consistent about async-ness —
+      don't mix `async fn` with `fn` that calls `block_on()`, as
+      `block_on()` panics inside an active runtime. Variant
+      overlay could refine examples but the structural rule is
+      language-agnostic.
+
+  - id: merge-time-all-reconciliation-across-shard-base-shas
+    type: rule
+    severity: MEDIUM
+    target: rules/orphan-detection.md
+    section: "new § 'Merge-Time __all__ Reconciliation Across Shard Base-SHAs' as Rule 6a"
+    summary: |
+      When two parallel-worktree shards each edit the same
+      __init__.py::__all__ AND the shards branched from different
+      base SHAs, git's 3-way merge picks one side arbitrarily — the
+      other shard's additions silently orphan.
+
+      Rule mandates merge-time reconciliation protocol: (1) prefer
+      HEAD (newest canonical structure), (2) preserve invariants
+      from older base (enumerate symbols / counts / semantic groups
+      the older shard depended on), (3) update count-dependent
+      tests in the same commit, (4) re-run module-scope import
+      check from §6.
+
+      Evidence: kailash-ml-audit 2026-04-23 — W33 (base 41a217dc)
+      landed 6-group canonical __all__; W31 (base 899ce3e5) added
+      7 Trainable adapters. Fix commit fa300831 merged structure +
+      invariants, reconciled test_km_all_ordering.py count.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Rust `pub use` re-export reconciliation
+      across parallel worktrees exhibits the identical failure mode
+      when two shards edit the same crate's prelude / mod.rs re-
+      export list.
+
+  # ---------------------------------------------------------------
+  # Non-M1-pattern structural fixes landed during codify cycle
+  # ---------------------------------------------------------------
+
+  - id: agent-m1-body-updates-release-ml-todo-analyst
+    type: agent
+    severity: LOW
+    target: agents/release/release-specialist.md, agents/frameworks/ml-specialist.md, agents/management/todo-manager.md, agents/analysis/analyst.md, agents/frameworks/{dataflow,nexus,kaizen,pact,align}-specialist.md
+    section: "9 agent files absorbed M1 patterns + integration surface pointers"
+    summary: |
+      codify(agents) commit e7e42765: release-specialist +55 (atomic
+      release wave), ml-specialist +59 (km.* + async + TrainingResult.
+      trainable + MIGRATION + 7 Phase-1 adapters), todo-manager +35
+      (amend-in-place), analyst +30 (E2E regression tier), 5 framework
+      specialists +4-5 each (pointers to {pkg}.ml integration surfaces
+      landed this session).
+    classification_suggestion: global
+    rationale: |
+      Agent bodies are the HOW layer for applying M1 patterns; all 9
+      files are global-scope per existing classification (no variant
+      overlays). Pointers to new integration surfaces (kailash.ml,
+      dataflow.ml, nexus.ml, kaizen.ml, pact.ml, align.ml) are SDK-
+      source-specific and apply to Python variant only but the pointer
+      sentences themselves are language-neutral.
+
+  - id: skill-m1-new-subfiles-release-wave-km-canonical
+    type: skill
+    severity: LOW
+    target: skills/34-kailash-ml/m1-release-wave.md (NEW), skills/10-deployment-git/multi-package-release-wave.md (NEW), skills/30-claude-code-patterns/worktree-orchestration.md (Rules 6/7/8), skills/16-validation-patterns/SKILL.md, skills/12-testing-strategies/SKILL.md
+    section: "2 new sub-files + 3 SKILL.md additions for M1 patterns"
+    summary: |
+      codify(skills) commit a6c8ecba: new 34-kailash-ml/m1-release-
+      wave.md (140 LOC — 48-symbol __all__, async pair, trainable
+      handle, MIGRATION sunset, 7 integration surfaces), new 10-
+      deployment-git/multi-package-release-wave.md (140 LOC — reverse
+      dep-graph, per-pkg version owner, sole CHANGELOG owner, rollback
+      tree, pre-flight build/twine/TestPyPI), 30-claude-code-patterns/
+      worktree-orchestration.md +105 (Rules 6/7/8 for burst/base-SHA/
+      branch-name), 16-validation-patterns +35 (E2E regression tier),
+      12-testing-strategies +3 (pointer).
+    classification_suggestion: global
+    rationale: |
+      Progressive disclosure (SKILL.md stays slim, detail in sub-
+      files) matches the existing pattern for 34-kailash-ml. The two
+      new sub-files are Python-specific by content (km.* is kailash-
+      ml Python surface; release wave enumerates Python pyproject.toml
+      files) and belong in a py variant if loom classifies the parent
+      SKILL.md as global-with-variant-overlays for other languages.
+
+  - id: staleness-refresh-agent-critical-fixes
+    type: agent
+    severity: MEDIUM
+    target: agents/open-source-strategist.md (YAML), agents/quality/security-reviewer.md (dedup), agents/quality/gold-standards-validator.md (license framing), agents/frontend/flutter-specialist.md (dedup), agents/implementation/{pattern-expert,build-fix}.md (cross-refs)
+    section: "staleness sweep — structural fixes commits 6ed03816 + 9c8d8807"
+    summary: |
+      6 agents last-modified 2026-04-04 (19 days stale) refreshed.
+      CRITICAL fixes: (1) malformed YAML frontmatter in open-source-
+      strategist.md (broken tools list bleeding into body), (2)
+      duplicate section "10" in security-reviewer.md (PACT + Auth both
+      numbered 10), (3) stale "Kailash RS proprietary" framing in 2
+      agents — both SDKs Foundation-owned per rules/independence.md.
+      Plus dedup in flutter-specialist, framework-first cross-refs in
+      pattern-expert and build-fix. Net -23 LOC.
+    classification_suggestion: global
+    rationale: |
+      YAML frontmatter fix + license framing fix are correctness bugs
+      that any downstream USE repo also inherits (artifacts sync as-
+      is). Critical to land in next /sync cycle.
+
+  - id: staleness-refresh-skill-critical-import-path
+    type: skill
+    severity: HIGH
+    target: skills/05-kailash-mcp/SKILL.md (import path), skills/03-nexus/SKILL.md, skills/06-cheatsheets/SKILL.md, skills/08-nodes-reference/SKILL.md, skills/09-workflow-patterns/SKILL.md, skills/13-architecture-decisions/SKILL.md, skills/17-gold-standards/SKILL.md
+    section: "staleness sweep — skills commits aadb3a7c + c5d747ca"
+    summary: |
+      CRITICAL import path fix: skills/05-kailash-mcp/SKILL.md cited
+      `kailash.mcp_server` (old); MCP was refactored into own package
+      at `packages/kailash-mcp/` with canonical import `kailash_mcp`.
+      Every downstream user following this skill hit ModuleNotFound
+      until now. Plus M1 integration pointers added to 03-nexus (nexus
+      .ml), 06-cheatsheets (km.train gotcha + worktree cap-at-3), 08-
+      nodes-reference (ML nodes row), 09-workflow-patterns (ML
+      workflow example), 13-architecture-decisions (kailash-ml/align
+      rows + async/sync note), 17-gold-standards (release-blocking
+      regression pointer). Doubled-backtick rendering bug fixed in 3
+      skills. Net +56/-33.
+    classification_suggestion: global
+    rationale: |
+      The MCP import path fix is a correctness bug that breaks every
+      downstream consumer who follows the skill verbatim; ship to all
+      targets. Integration pointers are Python-specific in content
+      (kailash.observability.ml is a Python module path) but the
+      pointer sentences themselves are language-neutral; loom may want
+      per-language variant overlays for the concrete import strings.
+
+  - id: dead-reference-cleanup-cross-artifact-audit
+    type: both
+    severity: LOW
+    target: commands/codify.md, skills/02-dataflow/*.md (7 files), skills/13-architecture-decisions/decide-framework.md
+    section: "dead references surfaced by /cc-audit, commit 0d37d7d5"
+    summary: |
+      9 dead cross-references fixed: (1) commands/codify.md cited
+      agents/_subagent-guide.md (never existed) → replaced with rules/
+      cc-artifacts.md pointer + ml-specialist exemplar, (2) 7 skills/
+      02-dataflow/*.md cited skills/dataflow-specialist.md (stale
+      path) → agents/frameworks/dataflow-specialist.md, (3) skills/
+      13-architecture-decisions/decide-framework.md cited agents/
+      framework-advisor.md (renamed) → agents/implementation/pattern-
+      expert.md. No content changes; path updates only.
+    classification_suggestion: global
+    rationale: |
+      Path references are language-neutral; ship to all targets. All
+      these dead refs predate the M1 session but were surfaced by the
+      cross-artifact consistency audit (a9d4bada) run as part of /cc-
+      audit.
+
 deferred:
-  - topic: specs-authority-full-sibling-sweep
-    description: |
-      Rules/specs-authority.md §5b mandates that every spec edit
-      triggers a full sibling-spec re-derivation. This session added
-      specs/kaizen-judges.md + specs/kaizen-evaluation.md without
-      running the full `specs/kaizen-*.md` sibling sweep. Next session
-      MUST do: `ls specs/kaizen-*.md` → enumerate → grep each sibling
-      for references to the new specs' dataclasses / invariants
-      (`LLMJudge`, `JudgeCallable`, `LLMDiagnostics`, `CostTracker`,
-      `JudgeBudgetExhaustedError`) → re-derive assertions for every
-      match. Flag any cross-spec drift as HIGH.
-    priority: next-session
-    owner: any reviewer at PR#580 gate
-  - topic: pr6-agent-diagnostics-blocked
-    status: closed
-    closed_date: "2026-04-21"
-    closed_by: "PR #587 (feat/567-pr6-mlfp-observability) merged at commit 0cd0babd; kaizen-kaizen 2.10.1 released to PyPI 2026-04-21T05:53:26Z; cross-SDK fingerprint parity verified against kailash-rs#468 commit e29d0bad (byte-identical)."
-    description: |
-      PR#6 (AgentDiagnostics + TraceExporter → kaizen.observability)
-      shipped 2026-04-21. Cross-SDK canonical audit-chain fingerprint
-      parity (kailash-rs#468 N4 form) verified byte-identical at commit
-      e29d0bad. Rust-side wiring (kaizen-rs port) tracked separately at
-      kailash-rs#497 (still open, not in scope for kailash-py).
-    priority: closed
-    owner: closed
   - topic: clean-up-pending-journal-entries
     description: |
-      Multiple pending journal entries from morning + afternoon session
-      hooks sit in `.pending/` waiting for promotion or deletion:
-        - workspaces/kailash-ml-gpu-stack/journal/.pending/ (7 entries from 09:20 UTC)
-        - workspaces/issue-567-mlfp-diagnostics/journal/.pending/ (8 entries from
-          my session, timestamps 1776685733872–1776692760378)
-      Each is a scaffold from SessionEnd hook firing on journal-worthy
-      commits. Next session: review, promote worthwhile entries,
-      delete the rest.
+      100+ pending journal entries accumulated in
+      workspaces/kailash-ml-audit/journal/.pending/ across this
+      session (timestamps 1776787965452 through 1776906067060).
+      Each is a scaffold from SessionEnd hook firing on journal-
+      worthy commits. Next session: review, promote worthwhile
+      entries, delete the rest.
     priority: next-session
     owner: any codify cycle
+
+  - topic: feat-branch-pypi-release-cycle
+    description: |
+      feat/kailash-ml-1.0.0-m1-foundations branch carries 7 version
+      bumps (kailash 2.9.0, kailash-dataflow 2.1.0, kailash-nexus
+      2.2.0, kailash-kaizen 2.12.0, kailash-align 0.6.0, kailash-
+      pact 0.10.0, kailash-ml 1.0.0) all local-only. Per
+      build-repo-release-discipline.md, release cycle owed. Human-
+      gated structural gate pending.
+    priority: next-session
+    owner: release-specialist
+
+  - topic: worktree-cleanup
+    description: |
+      9 locked worktrees under .claude/worktrees/ from W30 + wave1 +
+      wave2 + W33 agents; each holds its branch's ref. Safe to
+      `git worktree remove --force` once all processes exit.
+    priority: next-session
+    owner: any session
