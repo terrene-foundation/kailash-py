@@ -51,7 +51,10 @@ import re
 import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
+
+if TYPE_CHECKING:
+    import polars as pl  # type-checker-only; runtime import is lazy inside methods
 
 from kailash_ml._result import TrainingResult
 from kailash_ml.errors import fingerprint_classified_value
