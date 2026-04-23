@@ -7,7 +7,7 @@ Use ``from kailash_ml import FeatureStore`` to load a specific engine.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
@@ -99,6 +99,74 @@ def train(
     engine = MLEngine()
     # engine.fit is async; synchronous wrapper for the three-line form
     return asyncio.run(engine.fit(df, target=target, family=family, **kwargs))
+
+
+# W33c: km.register top-level wrapper per specs/ml-engines-v2.md §15.4 +
+# specs/ml-registry.md §7.4. Closes the canonical Quick Start chain:
+#
+#     result = km.train(df, target="y")
+#     registered = km.register(result, name="demo")
+#
+# Sync wrapper around MLEngine.register() matching `km.train`'s pattern
+# for notebook / three-line-hello-world ergonomics. Advanced callers
+# needing async composition (inside an existing event loop) MUST use
+# `MLEngine().register(...)` directly.
+def register(
+    training_result: TrainingResult,
+    *,
+    name: Optional[str] = None,
+    alias: Optional[str] = None,
+    stage: str = "staging",
+    format: str = "onnx",
+    **kwargs: Any,
+) -> Any:
+    """Register a trained model in the default engine's registry.
+
+        import kailash_ml as km
+        result = km.train(df, target="churned")
+        registered = km.register(result, name="churn-model")
+
+    Dispatches to the cached default `MLEngine()`, reusing the ONNX-
+    default artifact format and staging lifecycle from §6 / §7 of
+    `specs/ml-engines-v2.md`.
+
+    Resolves the fitted model via `training_result.trainable.model`
+    (populated by every `Trainable.fit()` return site — see
+    `trainable.py`). Callers constructing a `TrainingResult` literally
+    (tests, cross-SDK replay) MUST attach `trainable=...` OR set one of
+    `result.model` / `result._model` for the engine's lookup chain.
+
+    Args:
+        training_result: The envelope returned by ``km.train(...)`` /
+            ``engine.fit(...)``. Must carry the ``trainable`` back-
+            reference (framework paths set this automatically).
+        name: Registry-visible model name. Defaults to the family-
+            derived synthesised name.
+        alias: Optional lifecycle alias ("champion", "challenger",
+            etc.). Chained as a second registry call per §7.4.
+        stage: Registry stage — "staging" (default), "shadow", or
+            "production".
+        format: Artifact format — "onnx" (default), "pickle", or "both"
+            per §6 MUST 1.
+        **kwargs: Forwarded to ``MLEngine.register()`` (e.g. ``actor_id``,
+            ``tenant_id``, ``metadata`` when the engine adds them).
+
+    Returns:
+        ``RegisterResult`` per `specs/ml-registry.md` §7.1.
+    """
+    import asyncio
+
+    engine = MLEngine()
+    return asyncio.run(
+        engine.register(
+            training_result,
+            name=name,
+            alias=alias,
+            stage=stage,
+            format=format,
+            **kwargs,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +352,7 @@ __all__ = [
     "UMAPTrainable",
     "HDBSCANTrainable",
     "train",
+    "register",
     "track",
     "doctor",
     "resolve_torch_wheel",
