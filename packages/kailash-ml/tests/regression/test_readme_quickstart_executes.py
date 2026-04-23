@@ -30,14 +30,15 @@ import pytest
 
 
 @pytest.mark.regression
-def test_readme_quickstart_km_train_then_km_register_executes() -> None:
+@pytest.mark.asyncio
+async def test_readme_quickstart_km_train_then_km_register_executes() -> None:
     """Regression: the canonical 3-line Quick Start must execute end-to-end.
 
     Per `specs/ml-engines-v2.md` §16:
 
         import kailash_ml as km
-        result = km.train(df, target="churned")
-        registered = km.register(result, name="demo")
+        result = await km.train(df, target="churned")
+        registered = await km.register(result, name="demo")
 
     Before W33c this raised ValueError because `result.trainable` was
     not populated. After W33c the pipeline completes and returns a
@@ -57,7 +58,7 @@ def test_readme_quickstart_km_train_then_km_register_executes() -> None:
 
     # Step 1: train — must succeed and produce a TrainingResult whose
     # `.trainable` field is a fitted SklearnTrainable.
-    result = km.train(df, target="churned")
+    result = await km.train(df, target="churned")
     assert result is not None, "km.train returned None"
     assert result.trainable is not None, (
         "W33c regression: result.trainable is None — framework training "
@@ -70,7 +71,7 @@ def test_readme_quickstart_km_train_then_km_register_executes() -> None:
 
     # Step 2: register — must succeed and return a RegisterResult with
     # an ONNX artifact URI populated (default format="onnx").
-    registered = km.register(result, name="w33c_readme_quickstart")
+    registered = await km.register(result, name="w33c_readme_quickstart")
     assert registered is not None, "km.register returned None"
     assert registered.name == "w33c_readme_quickstart"
     assert registered.version >= 1

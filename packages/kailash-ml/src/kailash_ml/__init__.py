@@ -254,7 +254,7 @@ except ImportError:
 # for notebook / three-line-hello-world ergonomics. Advanced callers
 # needing async composition (inside an existing event loop) MUST use
 # `MLEngine().register(...)` directly.
-def register(
+async def register(
     training_result: TrainingResult,
     *,
     name: Optional[str] = None,
@@ -297,18 +297,14 @@ def register(
     Returns:
         ``RegisterResult`` per `specs/ml-registry.md` §7.1.
     """
-    import asyncio
-
     engine = MLEngine()
-    return asyncio.run(
-        engine.register(
-            training_result,
-            name=name,
-            alias=alias,
-            stage=stage,
-            format=format,
-            **kwargs,
-        )
+    return await engine.register(
+        training_result,
+        name=name,
+        alias=alias,
+        stage=stage,
+        format=format,
+        **kwargs,
     )
 
 
