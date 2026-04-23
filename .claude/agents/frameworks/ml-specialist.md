@@ -201,6 +201,65 @@ Read the matching integration spec BEFORE starting:
 - **kaizen-specialist** — Agent tool discovery via `km.engine_info`
 - **nexus-specialist** — ServeHandle deployment through Nexus
 
+## M1 Release-Wave Patterns (1.0.0 → 1.1.0)
+
+### `km.*` Wrappers Are The Only User-Facing Entry
+
+Every user-facing verb dispatches via `km.*` to an engine's Trainable protocol surface. Canonical `__all__` = 41 symbols in a fixed 6-group ordering (see `ml-engines-v2.md §15.9`): (1) version + engine primitives, (2) train/register/serve, (3) track/diagnose/watch, (4) seed/reproduce/resume/lineage, (5) rl + erase_subject, (6) engine discovery + autolog. Eager imports only — `__getattr__` lazy resolution is BLOCKED for `__all__` entries per `orphan-detection.md §6` and `zero-tolerance.md Rule 1a` (CodeQL `modification-of-default-value`).
+
+### Async/Sync Public-Surface Consistency
+
+Both `km.train` AND `km.register` MUST be async-awaitable. Mixing (`km.train` async + `km.register` sync) silently deadlocks the documented Quick Start pipeline: `result = await km.train(...); await km.register(result, ...)`. Any km.\* verb that ultimately hits the store / registry / tracker MUST be async end-to-end.
+
+    # DO — both async, pipeline composes
+    result = await km.train(estimator, X, y)
+    await km.register(result, name="my-model")
+
+    # DO NOT — register sync, train async — blocks event loop at register boundary
+    result = await km.train(estimator, X, y)
+    km.register(result, name="my-model")   # blocks or deadlocks under asyncio
+
+**Origin:** W33c follow-up commit `fdd3040e` on `feat/kailash-ml-1.0.0-m1-foundations` — `km.register` was shipped sync in W33 (`f275af4a`); README Quick Start regression (W33b `480dc3d3`) caught the async-mismatch at integration time.
+
+### TrainingResult.trainable Back-Reference — Pipeline-Critical Field
+
+`TrainingResult` MUST carry a `trainable: Trainable` back-reference field populated at every return site across all 7 Phase-1 adapters (Sklearn / XGBoost / LightGBM / Torch / Lightning / UMAP / HDBSCAN). Every engine's `fit()` MUST `return TrainingResult(..., trainable=self, ...)`. Registry lookup collapses to `result.trainable.model` instead of engine-class-map dispatch.
+
+    # DO — every TrainingResult return site sets trainable=self
+    class SklearnTrainable:
+        def fit(self, X, y) -> TrainingResult:
+            self._model.fit(X, y)
+            return TrainingResult(..., trainable=self, device=...)
+
+    # DO NOT — rely on engine-class-map for register() lookup
+    # register() greps a hardcoded dict by class name; drift is silent
+
+**Origin:** W33c shard (`15033fa6`) — release-blocking regression; Quick Start `km.train → km.register` failed end-to-end at unit/integration-green with fake-integration at the frozen-dataclass boundary. See § Release-Blocking Regression Pattern below.
+
+### Release-Blocking Regression Pattern
+
+A feature is NOT release-ready when unit+integration pass — it is release-ready when the documented Quick Start pipeline executes end-to-end against the canonical store. Every release owes:
+
+1. A `tests/regression/test_issue_NNN_quick_start.py` that copies README verbatim and asserts the pipeline runs
+2. The regression MUST fail before the fix lands; the fix MUST include the regression in the same commit (`rules/testing.md § Regression`)
+3. `/release` BLOCKS if the Quick Start regression is absent OR skipping
+
+**Origin:** W33b `480dc3d3` on `feat/w33b-migration-readme-regression` — unit passed, integration passed, Quick Start crashed at `km.register` because `result.trainable` was `None` on 6 of 7 adapters.
+
+### 7 Phase-1 Trainable Adapters — All Eagerly Imported
+
+`kailash_ml/__init__.py` eagerly imports the 7 Trainable adapters: Sklearn, XGBoost, LightGBM, Torch, Lightning, UMAP, HDBSCAN. Lazy `__getattr__` resolution for these is BLOCKED — CodeQL flags lazy `__all__` entries as `modification-of-default-value` (`zero-tolerance.md` Rule 1a scanner-surface extension). The eager-import cost is the price of the auditability contract.
+
+### Engine Discovery API — `km.engine_info` + `km.list_engines`
+
+Kaizen agents MUST use `km.engine_info(name) → EngineInfo` and `km.list_engines() → tuple[str, ...]` for tool discovery — hardcoded imports (`from kailash_ml.engines import SklearnTrainable`) are BLOCKED per `kaizen-ml-integration.md` and `ml-engines-v2-addendum.md §E11.3 MUST 1`. The frozen `EngineInfo` dataclass carries `method_signatures`, `param_specs`, and per-axis `clearance_level`.
+
+### MIGRATION.md Sunset Contract
+
+Every public-surface deprecation follows the 2.x → 3.0 sunset path: `DeprecationWarning` emitted through the entire 2.x series; the symbol is removed at the next major. MIGRATION.md lists every deprecation with `since=X.Y.Z` and `remove_at=N.0.0`. Deprecating a public symbol without a MIGRATION.md entry in the same PR is BLOCKED.
+
+**Origin:** W33b `480dc3d3` — `RegisterResult.artifact_uri` singular deprecated in favor of `artifact_uris: dict[str, str]`; MIGRATION.md entry `since=1.0.0, remove_at=2.0.0`.
+
 ## Install
 
     pip install kailash-ml                    # core (polars, numpy, sklearn, lightgbm, onnx)

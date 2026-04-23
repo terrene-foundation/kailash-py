@@ -68,6 +68,61 @@ Version locations (check all — varies per project):
 - `__init__.py` with `__version__`
 - README.md version badge
 
+### 3a. Multi-Package Atomic Release Wave
+
+When ONE session bumps N packages across a cross-cutting feature (e.g. M10 = 7 packages — kailash, dataflow, nexus, kaizen, ml, align, pact), the wave MUST be orchestrated as a single atomic release, not N independent releases. Pre-flight + ordering are NOT optional.
+
+**Publish order — reverse dep graph (deepest deps first):**
+
+    kailash (core) → kailash-dataflow → kailash-nexus → kailash-kaizen
+                  → kailash-ml → kailash-align (depends on align+kaizen+ml)
+                  → kailash-pact (governance layer)
+
+**Pre-flight (MUST, before any `twine upload`):**
+
+1. `python -m build` each package; verify wheels + sdists produced
+2. `twine check dist/*.whl dist/*.tar.gz` — zero warnings
+3. TestPyPI dry-run for EACH package in dep order; install in a clean `/tmp/verify` venv; import-and-version-check
+4. Only then begin PyPI uploads in dep order
+
+**Sole-owner rules per package:**
+
+- Version owner: exactly ONE agent/session bumps `pyproject.toml` + `__init__.py::__version__` + `CHANGELOG.md` per package per session
+- CHANGELOG sole-owner rule: parallel agents touching the same package MUST receive "do NOT edit CHANGELOG" in their prompt; version owner writes the entry
+- Cross-package dep bumps: if dataflow depends on `kailash>=2.9.0`, the dataflow bump PR carries that dep update; the kailash bump PR does NOT
+
+**Rollback decision tree (if any stage fails):**
+
+- Pre-flight fails → fix in branch; no PyPI touched; zero rollback needed
+- TestPyPI upload succeeds, install fails → yank TestPyPI, fix, re-run; PyPI untouched
+- PyPI for package k uploads but package k+1 fails → STOP the wave; k stays published (PyPI cannot be unpublished cleanly); hotfix k with a `.post1` or bump k+1 and resume
+- Never `twine upload --skip-existing` as a recovery tool — it masks actual upload drift
+
+```python
+# DO — single atomic wave with sole-owner ownership + pre-flight
+# W34 prep: kailash 2.9.0, dataflow 2.1.0, nexus 2.2.0, kaizen 2.12.0,
+#           ml 1.1.0, align 0.6.0, pact 0.10.0 — all on one branch
+for pkg in ordered_packages:
+    subprocess.run(["python", "-m", "build"], cwd=pkg, check=True)
+    subprocess.run(["twine", "check", f"{pkg}/dist/*.whl"], check=True)
+# Then TestPyPI dry-run each; only then PyPI in dep order.
+
+# DO NOT — "I'll just publish ml first, see if it works"
+# If ml 1.1.0 depends on kailash 2.9.0 features, it installs and crashes
+# on import because kailash 2.9.0 is not yet on PyPI.
+```
+
+**BLOCKED rationalizations:**
+
+- "Let's publish kailash-ml first, we can publish kailash after"
+- "TestPyPI is optional for a minor bump"
+- "The CHANGELOG merge conflict resolves itself at merge time"
+- "Parallel agents on the same package will each write their section"
+
+**Why:** A 7-package wave where package k+1 depends on package k's new surface fails with `ImportError` on every user's machine if k+1 ships before k hits PyPI. Parallel CHANGELOG writes race on the same file; git picks one, silently discarding the other's release notes. Pre-flight + TestPyPI is the only structural defense against "release looked green but 40% of downstream users see ImportError".
+
+**Origin:** Session 2026-04-23 kailash-ml 1.0.0 M1 — `feat/kailash-ml-1.0.0-m1-foundations` shipped 6 merged shards (W31a+d `7fca825d`, W31b `3d0ec507`, W31c `91bb0383`, W32a `de60e383`, W32b `09bc2cac`, W32c `84bd67f4`) + W33 `847dc671` + W33b `670e0ab9` + W33c `9e854149` bumping 7 packages. W34 PyPI publish is a structural human gate (see `autonomous-execution.md` § Structural vs Execution Gates). The 6-wave parallel launch hit Anthropic rate-limit throttle on the first attempt; fell back to 2 waves of 3 agents each — inform `/todos` sizing (see todo-manager § Parallel-Burst Rate Limit).
+
 ### 4. Publishing
 
 ```bash
