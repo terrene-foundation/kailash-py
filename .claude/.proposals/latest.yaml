@@ -422,6 +422,237 @@ changes:
       rule-citation that every CLI variant of every language must
       carry identically. Ship to all targets on next /sync.
 
+  # ---------------------------------------------------------------
+  # Deferred-codify backlog landed 2026-04-23 (session continuation)
+  # ---------------------------------------------------------------
+
+  - id: kaizen-skill-structural-refactor-plus-10-skill-description-slims
+    type: skill
+    severity: HIGH
+    target: skills/04-kaizen/SKILL.md, skills/04-kaizen/kaizen-key-concepts.md (NEW), skills/04-kaizen/kaizen-wrapper-composition.md (NEW), skills/04-kaizen/kaizen-provider-config-v25.md (NEW), skills/{01-core-sdk,02-dataflow,03-nexus,06-cheatsheets,07-development-guides,09-workflow-patterns,17-gold-standards,25-ai-interaction-patterns,29-pact,31-error-troubleshooting,12-testing-strategies}/SKILL.md
+    section: "CC-audit C3 + H1 + H2 — kaizen SKILL.md progressive-disclosure split + 11 skill descriptions ≤120 chars + testing-strategies alignment"
+    summary: |
+      Resolved the three highest-impact cc-audit findings that were
+      deferred during the M1 codify cycle.
+
+      C3 — skills/04-kaizen/SKILL.md: description 3,438 chars →
+      112 chars (target ≤120 per rules/cc-artifacts.md §1); body
+      670 lines → 247 lines via progressive-disclosure split to 3
+      new sub-files (kaizen-key-concepts 124 LOC, kaizen-wrapper-
+      composition 117 LOC, kaizen-provider-config-v25 66 LOC).
+      All advanced topic groups relocated (signature/BaseAgent
+      concepts, 6 autonomy subsystems, 9 pipeline patterns,
+      AgentRegistry, wrapper stacking, provider capability
+      protocols, LLM-based routing, SPEC-02/05/10 convergence,
+      BaseAgentConfig fields, Azure env vars, anti-patterns) —
+      zero content deletion, index + top-5-pattern body only
+      remains in SKILL.md.
+
+      H1 — 10 other oversized skill descriptions slimmed from
+      500-858 chars → ≤120 chars each (selection-hook only).
+      Original keyword lists preserved in each skill body's
+      "When to Use" section. Aggregate savings: ~6k chars per
+      agent-selection turn.
+
+      H2 — skills/12-testing-strategies/SKILL.md description +
+      body now say "Tier 2/3 real infra (NO mocking)"; table's
+      Tier 2/3 Mocking column changed from "Real infra
+      recommended" to "BLOCKED — real infra only" to align with
+      rules/testing.md § Tier 2 "NO mocking (@patch, MagicMock,
+      unittest.mock — BLOCKED)". Also fixed skills/17-gold-
+      standards/gold-mocking-policy.md description and body for
+      the same alignment.
+
+      Delivery: worktree agent deferred-a1 at branch
+      feat/deferred-a1-kaizen-refactor (merged from c451d1db
+      base after mid-session rebase). 9 incremental wip commits
+      per worktree-isolation.md §5 commit-discipline.
+    classification_suggestion: global
+    rationale: |
+      Skill description slims and structural refactor are
+      language-neutral token-efficiency wins. H2 alignment
+      tightens a skill description to match the canonical rule
+      and ships to all targets.
+
+  - id: nexus-specialist-description-fastapi-contradiction-reword
+    type: agent
+    severity: LOW
+    target: agents/frameworks/nexus-specialist.md
+    section: "CC-audit H3 — description 'FastAPI/Flask BLOCKED' → 'direct FastAPI/Flask BLOCKED (use Nexus; Nexus itself uses FastAPI internally)'"
+    summary: |
+      Resolved cc-audit H3 contradiction. Line 3 description said
+      "FastAPI/Flask BLOCKED" while lines 135/196 of the same file
+      correctly describe Nexus's internal use of FastAPI
+      transports (HTTPTransport wraps FastAPI/Starlette). The
+      "BLOCKED" phrasing confused generalist agents about whether
+      they should use Nexus at all.
+
+      Reword clarifies: direct FastAPI/Flask is BLOCKED (use
+      Nexus); Nexus's internal use of FastAPI is the correct
+      implementation, not a contradiction. Commit 59b2d1b8.
+    classification_suggestion: global
+    rationale: |
+      Agent description accuracy; language-neutral; ships to all
+      targets on next /sync.
+
+  - id: ten-rules-extraction-to-guides-rule-authoring-200-line-budget
+    type: rule
+    severity: HIGH
+    target: |
+      rules/testing.md (511→260), rules/observability.md (305→224),
+      rules/zero-tolerance.md (284→145), rules/agent-reasoning.md (273→185),
+      rules/specs-authority.md (261→190), rules/agents.md (232→198),
+      rules/dependencies.md (228→154), rules/python-environment.md (227→137),
+      rules/worktree-isolation.md (225→148), rules/security.md (221→187),
+      guides/rule-extracts/{testing,observability,zero-tolerance,agent-reasoning,specs-authority,agents,dependencies,python-environment,worktree-isolation,security}.md (10 NEW)
+    section: "rules/rule-authoring.md MUST NOT 'Rules longer than 200 lines' — extract reference material into a guide"
+    summary: |
+      10 rule files exceeded the 200-line budget after M1
+      additions. Each rule extracted to a companion guide at
+      .claude/guides/rule-extracts/{name}.md.
+
+      Each rule retains: frontmatter (paths:), opening paragraph,
+      every MUST/MUST NOT clause with one DO/DO NOT example,
+      BLOCKED rationalizations verbatim, Why: line ≤2 sentences,
+      one-line Origin pointer, and "See .claude/guides/rule-
+      extracts/<name>.md for ..." pointer near the top.
+
+      Each guide holds: extended DO/DO NOT examples beyond the
+      representative one, extended BLOCKED rationalization lists,
+      session numbers + PR numbers + dates, multi-paragraph Why
+      rationale, post-mortem prose, relationships to other rules,
+      audit/detection protocols.
+
+      Slot markers (<!-- slot:... -->) preserved verbatim per
+      rules/rule-authoring.md §8 cross-CLI parity.
+
+      Aggregate: 10 rules 2,767 → 1,828 LOC (34% reduction);
+      10 guides +1,230 LOC net-new. Total institutional knowledge
+      preserved; rules now fit the budget.
+
+      NOTE: testing.md (260) and observability.md (224) remain
+      modestly over the 200-line budget — each is a CRIT baseline
+      rule with 8-10 MUST clauses; further trimming would require
+      splitting clauses across multiple files (structural redesign
+      out of scope for this cycle). Flagged as deferred below.
+
+      Delivery: worktree agent deferred-a3 (rules/{agents,
+      dependencies,python-environment,worktree-isolation,security}
+      + their guides, 6 wip commits on feat/deferred-a3-rules-
+      extraction-batch2). Orchestrator-direct for rules/{testing,
+      observability,zero-tolerance,agent-reasoning,specs-authority}
+      + their guides (commit 1bdf4a6d on MAIN after agent
+      deferred-a2 correctly refused on base-drift + branch-name-
+      drift per worktree-isolation.md §5/§6 — the harness
+      primitive did not honor the declared branch/base; A2's
+      self-check fired as designed).
+    classification_suggestion: global
+    rationale: |
+      Rule extraction to guides is language-neutral and applies
+      to all targets. The extracted guides are pure reference
+      content; rules stay at the canonical MUST-clause anchor.
+      Every target repo benefits from the tighter rule budget
+      (load cost at session-start).
+
+  - id: dataflow-classification-sibling-rule-dead-ref-fix
+    type: rule
+    severity: LOW
+    target: rules/dataflow-classification.md (copied from loom/.claude/rules/)
+    section: "Fix dead-ref from rules/event-payload-classification.md lines 7, 143 to rules/dataflow-classification.md"
+    summary: |
+      rules/event-payload-classification.md referenced
+      rules/dataflow-classification.md as its "read/list/mutation-
+      return redaction" sibling but the sibling rule did NOT exist
+      in kailash-py/.claude/rules/ (it exists at loom/.claude/
+      rules/dataflow-classification.md as the canonical source of
+      truth). Dead cross-reference caused agents to fail the
+      follow-up read and either fall back to partial understanding
+      or emit hallucinated content.
+
+      Fix: copied loom/.claude/rules/dataflow-classification.md
+      (153 LOC) to kailash-py/.claude/rules/dataflow-classification.md
+      verbatim, restoring reference integrity. Commit 59b2d1b8.
+
+      This is an anticipated /sync-down from loom; the file
+      already exists at loom, so this proposal entry is
+      informational — loom's Gate 1 reviewer will recognize the
+      file as already-classified-as-global at loom and need only
+      acknowledge the in-flight BUILD-side copy.
+    classification_suggestion: global
+    rationale: |
+      Already global at loom (Foundation-owned rule about DataFlow
+      classification). No variant axis; ships to all targets.
+
+  - id: worktree-branch-rename-leak-to-main-candidate-rule
+    type: rule
+    severity: MEDIUM
+    target: rules/worktree-isolation.md (candidate new §7)
+    section: "candidate new MUST Rule — ref-manipulation commands by worktree agents MUST NOT propagate to MAIN after worktree cleanup"
+    summary: |
+      Novel failure mode surfaced during deferred-codify cycle
+      (2026-04-23): a worktree agent (deferred-a2) was sent a
+      SendMessage'd `git branch -m <new-name>` instruction to
+      rename its branch. Between the SendMessage and the agent's
+      execution turn, the worktree was auto-cleaned (zero-commit
+      safeguard). The agent's bash commands ran in the MAIN
+      checkout (fallback to parent dir when worktree path
+      disappeared). The `git branch -m` renamed MAIN's current
+      branch (feat/kailash-ml-1.0.0-m1-foundations →
+      feat/deferred-a2-rules-extraction-batch1). A2 self-checked,
+      detected the drift, and refused to edit.
+
+      Current Rule 5 (incremental commit discipline) prevents
+      zero-commit auto-clean data loss but does NOT prevent the
+      adjacent failure where a pre-commit ref-manipulation
+      command (branch rename, reset, checkout) leaks into MAIN
+      after the worktree dissolves.
+
+      Candidate extension: "Rule 7 — Worktree Agents MUST NOT
+      Run Ref-Manipulation Commands Before First Commit. `git
+      branch -m`, `git reset --hard`, `git checkout -b`, `git
+      update-ref` issued by a worktree agent BEFORE the agent
+      has landed ≥1 commit MUST be considered suspect — if the
+      worktree is subsequently cleaned (intentionally or via
+      truncation), those ref changes propagate to whichever
+      checkout holds the branch, which is typically MAIN. The
+      orchestrator's resume-protocol MUST be issued as an
+      atomic 'commit the no-op first, then rename' sequence
+      rather than 'rename, then proceed.'"
+
+      Not drafting the rule in this commit — needs one more
+      occurrence to confirm it's a pattern not a one-off, and
+      the rule requires DO/DO NOT examples + BLOCKED
+      rationalizations per rule-authoring.md meta-rule.
+      Flagging for next codify cycle.
+    classification_suggestion: global
+    rationale: |
+      Worktree-isolation failure modes are language-neutral;
+      the failure mode affects any orchestrator using git
+      worktrees to parallelize agents. Candidate rule applies
+      cross-SDK unchanged.
+
+  - id: commands-out-of-scope-for-build-repo-flagged-for-loom
+    type: command
+    severity: LOW
+    target: commands/{ai,api,db,design,i-audit,i-harden,i-polish,learn,release,sdk,test,validate}.md (12 missing description:), commands/{redteam,sync}.md (over 150 lines)
+    section: "NOT fixed in this cycle — commands are loom-scope per kailash-py CLAUDE.md 'Do NOT edit commands/*.md locally'"
+    summary: |
+      12 commands missing `description:` frontmatter (ai, api, db,
+      design, i-audit, i-harden, i-polish, learn, release, sdk,
+      test, validate) and 2 commands over 150 lines (redteam.md
+      156, sync.md 157) were in the original deferred backlog.
+
+      Per kailash-py/CLAUDE.md: "Do NOT edit commands/*.md
+      locally; loom owns them, synced downstream." These items
+      are recorded here so loom's Gate 1 reviewer can queue them
+      as loom-side edits in the next /sync cycle.
+
+      No files touched in this BUILD repo for this entry.
+    classification_suggestion: global
+    rationale: |
+      Commands are owned by loom (single source of truth).
+      BUILD repo cannot edit. Flagging for loom-side action.
+
 deferred:
   - topic: clean-up-pending-journal-entries
     description: |
@@ -449,6 +680,30 @@ deferred:
     description: |
       9 locked worktrees under .claude/worktrees/ from W30 + wave1 +
       wave2 + W33 agents; each holds its branch's ref. Safe to
-      `git worktree remove --force` once all processes exit.
+      `git worktree remove --force` once all processes exit. Plus 3
+      new deferred-codify worktrees (agent-a42b1033, agent-a80c56f1,
+      agent-af68e53f) from this session's Wave A.
     priority: next-session
     owner: any session
+
+  - topic: testing-observability-rules-still-modestly-over-200-lines
+    description: |
+      After the 10-rule extraction to guides, testing.md (260) and
+      observability.md (224) remain 12–30% over the 200-line budget.
+      Each is a CRIT baseline rule with 8–10 MUST clauses; further
+      trimming requires structural redesign (splitting clauses across
+      sub-rule files or moving some MUST clauses to skills).
+      Candidate for a dedicated refactor cycle.
+    priority: next-session
+    owner: any codify cycle
+
+  - topic: worktree-branch-rename-leak-candidate-rule-7
+    description: |
+      Novel failure mode surfaced 2026-04-23 — pre-commit ref-
+      manipulation by a worktree agent leaks to MAIN if the worktree
+      is cleaned between agent turns. See changes[] entry
+      `worktree-branch-rename-leak-to-main-candidate-rule` for full
+      context. Need one more occurrence to confirm pattern before
+      drafting as a MUST rule.
+    priority: next-session
+    owner: any codify cycle
