@@ -65,6 +65,7 @@ from typing import Any, Optional
 
 from kailash.diagnostics.protocols import TraceEvent, TraceEventStatus, TraceEventType
 
+from kaizen.ml._tracker_bridge import emit_metric, resolve_active_tracker
 from kaizen.observability.trace_exporter import TraceExporter, _hash_tenant_id
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,13 @@ class AgentDiagnostics:
         run_id: Correlation identifier. Auto-generated when ``None``.
         tenant_id: Optional tenant scope forwarded to the exporter and
             stamped onto every structured log line.
+        tracker: Optional ambient ``km.track()`` run handle (typed as
+            ``Optional[ExperimentRun]`` per
+            ``specs/kaizen-ml-integration.md §2.1``). When supplied, or
+            when a run is ambient via
+            :func:`kailash_ml.tracking.get_current_run`, every captured
+            TraceEvent auto-emits ``agent.*`` metrics to the tracker
+            per spec §3.1 — NO opt-in flag.
         max_history: Bounded FIFO buffer for per-event rollup data.
             Events beyond this count are evicted; the exporter still
             receives every event regardless.
@@ -184,6 +192,7 @@ class AgentDiagnostics:
         exporter: Optional[TraceExporter] = None,
         run_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
         max_history: int = _DEFAULT_MAX_HISTORY,
     ) -> None:
         if max_history < 1:
@@ -193,6 +202,7 @@ class AgentDiagnostics:
 
         self.run_id: str = run_id if run_id is not None else uuid.uuid4().hex
         self._tenant_id = tenant_id
+        self._tracker = tracker  # lazy — resolved at every record() per spec §2.2
         self._max_history = max_history
 
         self._exporter: TraceExporter = (
@@ -264,16 +274,48 @@ class AgentDiagnostics:
         Callers MAY also call :meth:`TraceExporter.export` directly;
         this wrapper is a convenience for code paths that want both
         sink-side and in-session rollup tracking.
+
+        Per ``specs/kaizen-ml-integration.md §3.1`` item 2: when an
+        ambient ``km.track()`` run is active (or an explicit tracker
+        was passed at construction), this method auto-emits ``agent.*``
+        metrics to the tracker — NO opt-in flag.
         """
         fingerprint = self._exporter.export(event)
         self._capture(event)
+        self._auto_emit(event)
         return fingerprint
 
     async def record_async(self, event: TraceEvent) -> str:
         """Async counterpart of :meth:`record`."""
         fingerprint = await self._exporter.export_async(event)
         self._capture(event)
+        self._auto_emit(event)
         return fingerprint
+
+    def _auto_emit(self, event: TraceEvent) -> None:
+        """Route captured metrics to an ambient ``km.track()`` run.
+
+        Spec §3.2 locks metric prefixes for agent diagnostics at
+        ``agent.*``. Spec §3.1 mandates auto-emission whenever an
+        ambient tracker is present. This method is the single emission
+        point so every captured event feeds the same contract.
+        """
+        tracker = resolve_active_tracker(self._tracker)
+        if tracker is None:
+            return
+        emit_metric(tracker, "agent.cost_microdollars", event.cost_microdollars)
+        if event.duration_ms is not None:
+            emit_metric(tracker, "agent.duration_ms", float(event.duration_ms))
+        if event.prompt_tokens is not None:
+            emit_metric(tracker, "agent.prompt_tokens", float(event.prompt_tokens))
+        if event.completion_tokens is not None:
+            emit_metric(
+                tracker, "agent.completion_tokens", float(event.completion_tokens)
+            )
+        # One counter metric per event type (spec §3.2 — bounded cardinality
+        # via the TraceEventType enum, per ``rules/tenant-isolation.md §4``).
+        emit_metric(tracker, f"agent.events.{event.event_type.value}", 1.0)
+        emit_metric(tracker, "agent.turns", 1.0)
 
     def _capture(self, event: TraceEvent) -> None:
         self._events.append(
