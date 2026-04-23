@@ -78,10 +78,14 @@ See ``specs/ml-diagnostics.md`` for the full API contract and
 """
 from __future__ import annotations
 
-from kailash_ml.diagnostics.dl import (
-    DLDiagnostics,
+from kailash_ml.diagnostics.classical import (
+    ClassifierReport,
+    RegressorReport,
     diagnose_classifier,
     diagnose_regressor,
+)
+from kailash_ml.diagnostics.dl import (
+    DLDiagnostics,
     run_diagnostic_checkpoint,
 )
 from kailash_ml.diagnostics.rag import RAGDiagnostics
@@ -143,6 +147,8 @@ __all__ = [
     "RLDiagnostics",
     "RLDiagnosticFinding",
     "RAGDiagnostics",
+    "ClassifierReport",
+    "RegressorReport",
     "run_diagnostic_checkpoint",
     "diagnose_classifier",
     "diagnose_regressor",
