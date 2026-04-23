@@ -91,8 +91,30 @@ dl-gpu = [
 rl = [
     "kailash-ml[dl]",
     "stable-baselines3>=2.3",
+    "sb3-contrib>=2.3",
     "gymnasium>=0.29",
 ]
+# Offline RL — d3rlpy for CQL, IQL, TD3+BC per specs/ml-rl-core.md §1.2.
+rl-offline = [
+    "kailash-ml[rl]",
+    "d3rlpy>=2.6",
+]
+# Vectorized envs via envpool per specs/ml-rl-core.md §1.2 RC-01.
+rl-envpool = [
+    "kailash-ml[rl]",
+    "envpool>=0.8",
+]
+# Distributed RL via ray[rllib] per specs/ml-rl-core.md §1.2 RC-03.
+rl-distributed = [
+    "kailash-ml[rl]",
+    "ray[rllib]>=2.30",
+]
+# Inference server gRPC channel adapter — loud ImportError without.
+grpc = ["grpcio>=1.60"]
+# Real GP + Expected-Improvement path for BayesianSearchStrategy.
+# Without [automl-bayes], BayesianSearchStrategy falls back to a
+# deterministic EI surrogate (tested) per rules/dependencies.md.
+automl-bayes = ["scikit-optimize>=0.9"]
 agents = [
     "kailash-kaizen>=2.7.5",
 ]
@@ -122,8 +144,8 @@ dashboard = [
     "uvicorn>=0.27",
 ]
 interop = ["pandas>=2.0"]
-all = ["kailash-ml[dl,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
-all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
+all = ["kailash-ml[dl,xgb,catboost,stats,rl,rl-offline,rl-envpool,rl-distributed,grpc,automl-bayes,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
+all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,rl-offline,rl-envpool,rl-distributed,grpc,automl-bayes,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
