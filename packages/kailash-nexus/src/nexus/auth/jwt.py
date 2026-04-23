@@ -22,6 +22,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+# Cross-engine propagation surface per specs/nexus-ml-integration.md §§2–3.
+# JWT middleware sets these on every validated request so kailash-ml,
+# kailash-dataflow, and kailash-kaizen engines read the ambient tenant/actor
+# without the caller extracting claims manually.
+from nexus.context import _current_actor_id, _current_tenant_id
+
 logger = logging.getLogger(__name__)
 
 # Re-export JWTConfig for backward compatibility
@@ -157,12 +163,24 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     # api_key_validator can return a user dict or True
                     if isinstance(result, dict):
                         user = self._validator.create_user_from_payload(result)
+                        ak_tenant_id = result.get("tenant_id")
+                        ak_actor_id = result.get("sub") or result.get("user_id")
                     else:
                         user = AuthenticatedUser(user_id="apikey", roles=["api"])
+                        ak_tenant_id = None
+                        ak_actor_id = "apikey"
                     request.state.user = user
                     request.state.token = api_key
                     request.state.token_payload = {"type": "api_key"}
-                    return await call_next(request)
+                    # Cross-engine propagation mirrors the JWT-validated path; see
+                    # specs/nexus-ml-integration.md §2.2 for the reset-in-finally invariant.
+                    tenant_token = _current_tenant_id.set(ak_tenant_id)
+                    actor_token = _current_actor_id.set(ak_actor_id)
+                    try:
+                        return await call_next(request)
+                    finally:
+                        _current_actor_id.reset(actor_token)
+                        _current_tenant_id.reset(tenant_token)
                 except Exception as e:
                     logger.warning("API key validation failed: %s", e)
                     return JSONResponse(
@@ -208,7 +226,16 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 except Exception:
                     logger.exception("on_token_validated hook failed")
 
-            return await call_next(request)
+            # Cross-engine tenant/actor propagation per specs/nexus-ml-integration.md §2.2.
+            # Reset in `finally:` — a raise inside call_next must NOT leak into the next
+            # request on the same worker, or the next tenant sees prior-tenant data.
+            tenant_token = _current_tenant_id.set(payload.get("tenant_id"))
+            actor_token = _current_actor_id.set(payload.get("sub"))
+            try:
+                return await call_next(request)
+            finally:
+                _current_actor_id.reset(actor_token)
+                _current_tenant_id.reset(tenant_token)
 
         except ExpiredTokenError:
             return JSONResponse(
