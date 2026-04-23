@@ -1109,6 +1109,16 @@ class TrainingResult:
     feature_importance: dict[str, float] | None = None
     seed_report: SeedReport | None = None  # from km.seed() — see §11.2 MUST 2
 
+    # Live Trainable back-reference (W33c — enables km.register pipeline).
+    # Populated by every framework Trainable.fit() return site; consumed
+    # by MLEngine.register() to locate the fitted model via
+    # `training_result.trainable.model` per ml-registry.md §5.6.1.
+    # Excluded from to_dict()/from_dict() wire payloads because a live
+    # Python Trainable reference is not cross-SDK or registry-
+    # serializable. Direct-user-construction paths (tests, cross-SDK
+    # replay) MAY leave it None; framework paths MUST populate it.
+    trainable: Any | None = None
+
     # BACK-COMPAT mirrors — populated automatically from `device`. Introduced 1.0.0;
     # REMOVED at 2.0.0. New code MUST read from `self.device`.
     device_used: str = field(init=False)   # == device.backend_name, e.g. "cuda:0", "mps", "cpu"

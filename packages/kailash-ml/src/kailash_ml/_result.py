@@ -15,7 +15,7 @@ reader per `ml-engines.md` §10.1).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Any, Mapping, Optional
 
 from kailash_ml._device_report import DeviceReport
@@ -97,6 +97,27 @@ class TrainingResult:
     # adapters populate `.device.fallback_reason="cuml_eviction"` per
     # revised-stack.md § "CRITICAL-1 disposition".
     device: Optional[DeviceReport] = None
+
+    # --- Trainable back-reference (W33c — km.register pipeline) ------------
+    # Live reference to the fitted Trainable that produced this result. Set
+    # by every framework training path (`trainable.py` return sites) so
+    # `MLEngine.register(result=...)` can locate the fitted model via
+    # ``result.trainable.model`` without a round-trip through the registry.
+    # Required by `specs/ml-registry.md` §5.6.1 (ONNX export probe reads
+    # ``training_result.trainable.model``) and by the canonical Quick Start
+    # ``km.train(...) -> km.register(result, ...)`` chain in
+    # `specs/ml-engines-v2.md` §16.
+    #
+    # None is permitted for direct-user-construction paths (tests that
+    # instantiate TrainingResult with literal fields, from_dict payloads
+    # pre-dating this field). Framework training paths MUST populate it —
+    # the `register()` method raises if the lookup chain (``result.model``,
+    # ``result._model``, ``result._trainable.model``, ``result.trainable.model``)
+    # returns None. Excluded from ``to_dict()``/``from_dict()`` wire
+    # serialization: a live Python Trainable reference is not a stable
+    # wire payload (cross-SDK and registry-persistence consumers use
+    # ``artifact_uris`` + ``family`` instead).
+    trainable: Optional[Any] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         # Populated-required-field check (§4.2 MUST 1).
@@ -205,9 +226,16 @@ class TrainingResult:
         Only shallow conversion: nested Mapping objects become plain
         dicts; dataclass fields (split_info / calibration) keep their
         type. The cross-SDK loader handles nested types.
+
+        The `trainable` back-reference (W33c) is EXCLUDED: a live Python
+        Trainable instance is not a stable wire payload (cross-SDK and
+        registry persistence rely on ``artifact_uris`` + ``family``).
         """
         out: dict[str, Any] = {}
         for f in fields(self):
+            # W33c: trainable is an in-process handle, not wire-serializable.
+            if f.name == "trainable":
+                continue
             value = getattr(self, f.name)
             if isinstance(value, Mapping):
                 out[f.name] = dict(value)
