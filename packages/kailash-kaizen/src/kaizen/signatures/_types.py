@@ -20,8 +20,18 @@ imports it eagerly from this leaf module — never reaching back into
 
 The concrete :class:`kaizen.signatures.enterprise.SignatureComposition`
 satisfies this protocol structurally (it exposes ``.signatures``).
-``isinstance(x, SignatureCompositionProtocol)`` works because the
-protocol is :func:`runtime_checkable`.
+
+The protocol is :func:`runtime_checkable` so static analyzers see a
+valid runtime type, but the canonical runtime check inside
+:mod:`core` remains ``hasattr(sig, "signatures")``. ``isinstance(x,
+SignatureCompositionProtocol)`` is available technically but is NOT
+recommended in security-sensitive paths: any duck-typed object with
+a ``.signatures`` attribute would pass, which is exactly the
+auth-bypass shape documented in ``rules/orphan-detection.md``.
+Where the caller needs an admission check against the concrete
+class (e.g. kaizen memory / kaizen-agents dataflow integration
+sites that pin ``isinstance(db, DataFlow)``), keep the concrete
+``isinstance(x, SignatureComposition)`` — not the Protocol.
 """
 from __future__ import annotations
 
@@ -42,6 +52,8 @@ class SignatureCompositionProtocol(Protocol):
     """
 
     signatures: Any
+
+
 """The ordered collection of constituent :class:`Signature` instances.
 
 ``Any`` rather than a precise type so this protocol stays free of
