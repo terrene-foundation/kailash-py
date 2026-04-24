@@ -26,7 +26,7 @@ shard (W33). Callers do:
 """
 from __future__ import annotations
 
-from kailash_ml.serving.serve_handle import ServeHandle, ServeStatus
+from kailash_ml.serving._types import InferenceServerProtocol, ServeHandle, ServeStatus
 from kailash_ml.serving.server import (
     ALLOWED_CHANNELS,
     ALLOWED_RUNTIMES,
@@ -40,6 +40,7 @@ __all__ = [
     # Server lifecycle
     "InferenceServer",
     "InferenceServerConfig",
+    "InferenceServerProtocol",
     "ServeHandle",
     "ServeStatus",
     # Constants

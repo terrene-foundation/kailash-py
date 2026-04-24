@@ -55,10 +55,10 @@ from kailash_ml.errors import (
     ModelLoadError,
     ModelNotFoundError,
 )
+from kailash_ml.serving._types import ServeHandle, ServeStatus
 from kailash_ml.serving.channels._base import ChannelBinding, InferenceCallback
 from kailash_ml.serving.channels.mcp import bind_mcp
 from kailash_ml.serving.channels.rest import bind_rest
-from kailash_ml.serving.serve_handle import ServeHandle, ServeStatus
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
