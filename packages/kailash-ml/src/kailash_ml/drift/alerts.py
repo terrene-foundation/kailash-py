@@ -35,10 +35,9 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
-if TYPE_CHECKING:  # pragma: no cover - import cycle guard
-    from kailash_ml.engines.drift_monitor import DriftReport, FeatureDriftResult
+from kailash_ml.drift._types import DriftReport, FeatureDriftResult
 
 logger = logging.getLogger(__name__)
 

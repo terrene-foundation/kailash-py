@@ -20,90 +20,13 @@ MUST stay importable on every platform / extras combination (§10.1).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from kailash_ml.autolog._registry import FrameworkIntegration
-
+# AutologConfig and FrameworkIntegration moved to ``_types.py`` to break
+# the static cycle with ``_registry.py``. Re-exported here so callers
+# importing from ``kailash_ml.autolog.config`` continue to resolve.
+from kailash_ml.autolog._types import AutologConfig, FrameworkIntegration
 
 __all__ = ["AutologConfig", "AutologHandle"]
-
-
-@dataclass(frozen=True)
-class AutologConfig:
-    """Immutable configuration snapshot for a single ``km.autolog()`` block.
-
-    Constructed inside :func:`kailash_ml.autolog.autolog` from the
-    positional + keyword arguments the user supplied. Passed to every
-    :meth:`FrameworkIntegration.attach` call so each integration reads
-    from a consistent, non-mutating view — mutating the config mid-block
-    would produce cross-framework state divergence.
-
-    Frozen per ``specs/ml-autolog.md §4.0 MUST``.
-    """
-
-    frameworks: tuple[str, ...] = ("auto",)
-    """Positional framework names or ``("auto",)`` for sys.modules-based
-    detection (§4.1). When not ``("auto",)``, every entry MUST resolve to
-    a registered integration per §4.2 — unknown names raise
-    :class:`~kailash.ml.errors.AutologUnknownFrameworkError`.
-    """
-
-    log_models: bool = True
-    """Emit ``log_model()`` on fit-exit for fitted estimators /
-    checkpoints / boosters (§2.1)."""
-
-    log_datasets: bool = True
-    """Emit schema fingerprint for training data (§2.1)."""
-
-    log_figures: bool = True
-    """Emit figures (confusion matrix, classification report, feature
-    importance) via ``log_figure`` (§2.1)."""
-
-    log_system_metrics: bool = False
-    """Emit CPU / GPU util + memory per step. Requires ``psutil``; off
-    by default per §2.1."""
-
-    system_metrics_interval_s: int = 5
-    """Seconds between system-metrics samples when
-    :attr:`log_system_metrics` is True. Locked to 5s per Phase-B Round
-    2b §A.2 SAFE-DEFAULT A-05."""
-
-    sample_rate_steps: int = 1
-    """Emit per-step metrics every Nth step. 1 = every step. Ignored
-    by epoch-level metrics per §2.1. Per Phase-B A-03, default stays at
-    1 for epoch-level; step-level integrations apply 1-in-10 sampling
-    on long runs."""
-
-    disable: tuple[str, ...] = ()
-    """Framework names to skip even if detected. Unknown names raise
-    :class:`~kailash.ml.errors.AutologUnknownFrameworkError` per §4.3.
-    """
-
-    disable_metrics: tuple[str, ...] = ()
-    """Glob patterns for metric keys to drop at emit time (§5.2).
-    Each integration is responsible for honoring these at its own
-    ``log_metric`` call sites.
-    """
-
-    tokens_per_second_window: int = 128
-    """Rolling-window size for the HF Trainer
-    ``tokens_per_second_rolling_128`` metric per §3.1.2. MUST NOT be
-    < 8 (too volatile) or > 4096 (hides regressions) — validated at
-    config-construction time."""
-
-    def __post_init__(self) -> None:
-        # Range-check the rolling window per §3.1.2 MUST rule 2. Done at
-        # construction time (not emit time) so the user sees the error
-        # loudly at `async with km.autolog(...)` rather than on first
-        # metric emit.
-        if not 8 <= self.tokens_per_second_window <= 4096:
-            raise ValueError(
-                "tokens_per_second_window must be between 8 and 4096 "
-                f"(got {self.tokens_per_second_window}); < 8 is too "
-                "volatile, > 4096 hides regressions per "
-                "ml-autolog.md §3.1.2"
-            )
 
 
 @dataclass(frozen=True)

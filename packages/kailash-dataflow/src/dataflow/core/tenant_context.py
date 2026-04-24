@@ -11,10 +11,13 @@ import time
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-if TYPE_CHECKING:
-    from .engine import DataFlow
+# ``DataFlowProtocol`` breaks the static cycle with ``core.engine``.
+# The concrete ``DataFlow`` class structurally satisfies the Protocol
+# so existing callers see no behaviour change. See ``dataflow/_types.py``
+# for the rationale.
+from dataflow._types import DataFlowProtocol as DataFlow  # noqa: F401
 
 logger = logging.getLogger("dataflow.tenant_context")
 

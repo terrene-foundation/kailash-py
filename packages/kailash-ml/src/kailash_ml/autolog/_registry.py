@@ -21,15 +21,14 @@ would be an orphan; the context manager is its consumer.
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, List, Sequence, Type
+from typing import List, Sequence, Type
 
-if TYPE_CHECKING:
-    from kailash_ml.autolog.config import AutologConfig
-    from kailash_ml.tracking import ExperimentRun
-
+# FrameworkIntegration ABC moved to ``_types.py`` to break the static
+# cycle with ``config.py``. Re-exported here for backward compatibility.
+from kailash_ml.autolog._types import AutologConfig, FrameworkIntegration
 
 __all__ = [
+    "AutologConfig",
     "FrameworkIntegration",
     "register_integration",
     "unregister_integration",
@@ -38,140 +37,6 @@ __all__ = [
 
 
 logger = logging.getLogger(__name__)
-
-
-class FrameworkIntegration(ABC):
-    """Abstract base for every framework autolog integration.
-
-    Every concrete integration (Lightning, sklearn, lightgbm,
-    transformers, xgboost, statsmodels, polars) MUST subclass and
-    implement :meth:`is_available`, :meth:`attach`, :meth:`detach`.
-
-    Lifecycle per ``specs/ml-autolog.md §3.2``:
-
-    1. :meth:`is_available` — classmethod checked by
-       :func:`~kailash_ml.autolog.autolog` during auto-detect (§4.1).
-       MUST inspect ``sys.modules`` — NOT import the framework (surprise
-       imports of torch/transformers cost tens of seconds).
-    2. :meth:`attach` — called on ``__aenter__`` with the ambient
-       :class:`~kailash_ml.tracking.ExperimentRun` and the frozen
-       :class:`~kailash_ml.autolog.config.AutologConfig`. Installs hooks
-       / callbacks / wrappers within the block's scope. Double-attach
-       without an intervening :meth:`detach` raises
-       :class:`~kailash.ml.errors.AutologDoubleAttachError`.
-    3. :meth:`detach` — called on ``__aexit__`` (inside ``finally:`` —
-       runs even if the user's ``async with`` body raised). Idempotent.
-
-    Subclasses MUST define a unique :attr:`name` class attribute used by
-    :func:`register_integration` and by the spec-mandated typed error
-    messages (§4.2 / §4.3).
-    """
-
-    name: ClassVar[str]
-    """Unique registration name for this integration. Used by
-    :func:`~kailash_ml.autolog.autolog` for explicit framework
-    selection per §4.2 + §4.3."""
-
-    def __init__(self) -> None:
-        self._attached = False
-
-    @classmethod
-    @abstractmethod
-    def is_available(cls) -> bool:
-        """Return True iff this framework's hook surface is importable.
-
-        MUST inspect ``sys.modules`` only per §4.1 — importing the
-        framework here produces surprise-imports that violate the
-        "zero overhead when unused" contract.
-
-        Raising :class:`ImportError` from this method is BLOCKED per
-        §10.1 MUST. Unavailable frameworks return ``False``; they do
-        NOT raise.
-        """
-
-    @abstractmethod
-    def attach(self, run: "ExperimentRun", config: "AutologConfig") -> None:
-        """Install callbacks / hooks / wrappers for this framework.
-
-        Called on ``async with autolog():`` entry. The integration
-        captures references to ``run`` and ``config`` so the hooks it
-        installs can emit metrics / params / artifacts against the
-        ambient run.
-
-        Double-attach is BLOCKED per §3.2. Concrete subclasses SHOULD
-        delegate the guard to :meth:`_guard_double_attach` at the top
-        of their override.
-
-        :raises AutologDoubleAttachError: if ``attach`` is called twice
-            without an intervening :meth:`detach`.
-        :raises AutologAttachError: if the framework refuses the hook
-            installation (e.g. API version mismatch); the framework's
-            original exception is preserved as ``__cause__``.
-        """
-
-    @abstractmethod
-    def detach(self) -> None:
-        """Remove callbacks / hooks / wrappers installed by
-        :meth:`attach`.
-
-        Idempotent per §3.2 — calling detach on an already-detached
-        integration is a no-op (NOT an error). This is what makes
-        :meth:`kailash_ml.autolog.config.AutologHandle.stop` safe to
-        call multiple times.
-
-        MUST run inside the context manager's ``finally:`` even if the
-        user's ``async with`` body raised an exception per §3.2.
-        """
-
-    async def flush(self, run: "ExperimentRun") -> None:
-        """Drain any buffered log events to the tracker.
-
-        Called by the autolog context manager between ``yield`` and
-        :meth:`detach` — the event loop is still running, so integrations
-        MAY ``await`` their tracker calls here even when the user's
-        instrumented code path was sync (e.g. scikit-learn's
-        ``estimator.fit(X, y)``).
-
-        Default implementation is a no-op. Integrations whose hook
-        surface is natively async (Lightning's ``pl.Callback`` which
-        receives the run via an injected tracker reference) leave this
-        untouched. Integrations whose hook surface is sync (sklearn
-        wrapping ``BaseEstimator.fit``, statsmodels wrapping
-        ``Results.summary``) override to drain an in-memory buffer.
-
-        Per ``rules/zero-tolerance.md`` Rule 3 — failures here raise
-        loudly; silent-swallow of buffered events is BLOCKED.
-        """
-        return None
-
-    def _guard_double_attach(self) -> None:
-        """Helper for subclasses — raise
-        :class:`~kailash.ml.errors.AutologDoubleAttachError` when
-        called on an already-attached instance; flip the flag otherwise.
-
-        Concrete :meth:`attach` overrides call this as their first
-        statement.
-        """
-        from kailash.ml.errors import AutologDoubleAttachError
-
-        if self._attached:
-            raise AutologDoubleAttachError(
-                reason=(
-                    f"FrameworkIntegration {self.name!r} is already "
-                    "attached; detach() must be called before a second "
-                    "attach(). Check for nested `async with "
-                    "km.autolog(): ...` blocks."
-                )
-            )
-        self._attached = True
-
-    def _mark_detached(self) -> None:
-        """Helper for subclasses — flip the attached flag back to
-        False so a subsequent :meth:`attach` on the same instance is
-        valid. Concrete :meth:`detach` overrides call this in their
-        ``finally:`` block.
-        """
-        self._attached = False
 
 
 # Registered integration CLASSES (not instances). The context manager

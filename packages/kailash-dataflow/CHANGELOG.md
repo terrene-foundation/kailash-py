@@ -1,5 +1,19 @@
 # DataFlow Changelog
 
+## [2.1.2] — 2026-04-24 — Cyclic-import refactor (issue #612)
+
+### Changed
+
+- **CodeQL `py/unsafe-cyclic-import` hardening** — extracted `dataflow._types` to break the 3-way static cycle between `core/tenant_context.py`, `core/engine.py`, and `features/express.py`. `DataFlowProtocol` (new) captures the structural surface `tenant_context` needs (`multi_tenant`, `connection_manager`, `cache_backend`) without importing the concrete `DataFlow` class. All classification, tenant-isolation, and event-payload contracts preserved — sec-review on PR #616 verified no mutation-return redaction or `format_record_id_for_event` call sites were disturbed. `isinstance(db, DataFlow)` admission gates in kaizen/memory + kaizen-agents/integrations preserved (structural-invariant test at `tests/regression/test_issue_612_protocol_isinstance_invariant.py` enforces this).
+
+## [2.1.1] — 2026-04-24 — Security patch (issue #613) — retroactive entry
+
+### Fixed
+
+- **Clear-text password logging** (`py/clear-text-logging-sensitive-data`) — dataflow adapters (`adapters/postgresql.py`, `adapters/mysql.py`, `adapters/mongodb.py`, `adapters/factory.py`, `fabric/webhooks.py`) previously logged URL-derived fields that included credentials. Structural fix: drop URL-derived fields from log arguments entirely; canonical event names survive for triage per `rules/observability.md` § 6. Per-PR custom CodeQL sanitizer packs are not reliably honored across releases, so the fix is source-side rather than scanner-configuration. Regression test: `packages/kailash-dataflow/tests/regression/test_codeql_clear_text_logging_613.py`.
+
+_(This entry was missed in the 2.1.1 release commit on PR #615 — the version bumps landed on pyproject.toml + `__init__.py` but the CHANGELOG edit failed silently in the parallel-Edit batch. Added here in PR #616 alongside the 2.1.2 entry to restore the audit trail.)_
+
 ## [2.1.0] - 2026-04-23 — W31.b kailash-ml bridge (`dataflow.ml`)
 
 ### Added

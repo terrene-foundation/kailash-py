@@ -37,12 +37,14 @@ from typing import (
 
 from kailash.utils.annotations import get_namespace_annotations
 
-if TYPE_CHECKING:
-    # ``SignatureComposition`` lives in ``signatures.enterprise`` which itself
-    # imports from this module — guard the import to avoid a cycle while
-    # still giving type checkers the resolved name for the forward refs in
-    # method signatures below.
-    from kaizen.signatures.enterprise import SignatureComposition
+# ``SignatureComposition`` lives in ``signatures.enterprise`` which itself
+# imports from this module. Instead of a TYPE_CHECKING back-edge, use a
+# Protocol that captures the only shape ``core`` needs (a ``.signatures``
+# attribute). The concrete class structurally satisfies this Protocol at
+# runtime. See ``_types.py`` for the rationale.
+from kaizen.signatures._types import (
+    SignatureCompositionProtocol as SignatureComposition,
+)
 
 logger = logging.getLogger(__name__)
 
