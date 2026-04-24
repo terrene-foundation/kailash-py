@@ -19,6 +19,7 @@ the alerting surface contract closed by W26.d.
 """
 from __future__ import annotations
 
+from kailash_ml.drift._types import DriftReport, FeatureDriftResult
 from kailash_ml.drift.alerts import (
     AlertChannel,
     AlertConfig,
@@ -52,7 +53,9 @@ __all__ = [
     "DriftAlertDispatcher",
     "DriftMonitorReferencePolicy",
     "DriftPolicyMode",
+    "DriftReport",
     "DriftThresholds",
+    "FeatureDriftResult",
     "JSD_SMOOTH_EPS",
     "KL_SMOOTH_EPS",
     "MIN_BIN_COUNT",
