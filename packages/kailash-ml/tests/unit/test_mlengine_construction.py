@@ -93,8 +93,17 @@ class TestMLEngineDeferredBodies:
         result2 = await engine.setup(df, target="y")
         assert result2.schema_hash == result.schema_hash
 
-    def test_km_train_three_line_hello_world_works(self):
-        """Top-level `km.train(df, target='y')` runs end-to-end per spec §5.1."""
+    @pytest.mark.asyncio
+    async def test_km_train_three_line_hello_world_works(self):
+        """Top-level `km.train(df, target='y')` runs end-to-end per spec §5.1.
+
+        ``km.train`` is ``async def`` per ``rules/patterns.md`` § "Paired
+        Public Surface — Consistent Async-ness" (W33c) — the canonical
+        pipeline ``result = await km.train(...); registered = await
+        km.register(result, ...)`` composes across Kaizen / Nexus /
+        Jupyter event-loop contexts. Synchronous invocation returns a
+        coroutine, not a ``TrainingResult``; this test MUST await.
+        """
         import polars as pl
         from kailash_ml import train
 
@@ -105,7 +114,7 @@ class TestMLEngineDeferredBodies:
                 "y": [i % 2 for i in range(40)],
             }
         )
-        result = train(df, target="y")
+        result = await train(df, target="y")
         # Per specs/ml-backends.md §5.1 sklearn runs on CPU
         assert result.accelerator == "cpu"
         assert result.precision == "32-true"

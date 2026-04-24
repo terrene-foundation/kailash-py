@@ -1,11 +1,15 @@
 ---
 name: gold-standards
-description: "Mandatory best practices and gold standards for Kailash SDK development including absolute imports, parameter passing, error handling, testing policies (Real infrastructure recommended in Tiers 2-3), workflow design, custom node development, security, documentation, and test creation. Use when asking about 'best practices', 'standards', 'gold standards', 'mandatory rules', 'required patterns', 'absolute imports', 'Real infrastructure recommended', 'testing policy', 'error handling standards', 'security best practices', 'documentation standards', or 'workflow design standards'."
+description: "Kailash gold standards: imports, param passing, error handling, Tier 2/3 NO mocking, security, docs, workflow design."
 ---
 
 # Kailash Gold Standards - Mandatory Best Practices
 
 These are **required** patterns that prevent bugs, ensure consistency, and maintain code quality.
+
+## When to Use
+
+Use gold-standards when asking about best practices, standards, gold standards, mandatory rules, required patterns, absolute imports, testing policy, error handling standards, security best practices, documentation standards, or workflow design standards. Covers absolute imports, parameter passing, error handling, Tier 2/3 testing with real infrastructure (NO mocking per `rules/testing.md`), workflow design, custom node development, security, documentation, and test creation.
 
 ## Sub-File Index
 
@@ -23,6 +27,7 @@ These are **required** patterns that prevent bugs, ensure consistency, and maint
   - Mocking ONLY in Tier 1 unit tests; Tiers 2-3 use real databases, APIs, infrastructure
 - **[gold-testing](gold-testing.md)** - 3-tier strategy, deterministic tests, resource cleanup
 - **[gold-test-creation](gold-test-creation.md)** - TDD, one assertion focus, AAA pattern
+- **Release-blocking regression tier** (W33b) — every public km.\* surface has a fingerprint test + an e2e `execute(...)` pattern that round-trips from workflow → node → engine → registry. See skill **34-kailash-ml** for the exact contract. Release PRs block on this tier independently of unit/integration status.
 
 ### Error Handling
 

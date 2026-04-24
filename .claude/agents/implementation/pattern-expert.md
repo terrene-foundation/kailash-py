@@ -17,6 +17,8 @@ Pattern specialist for Kailash SDK core patterns — workflows, nodes, parameter
 4. Resolve parameter passing problems
 5. Ensure correct node and connection usage
 
+**Framework-first binding**: Before rolling your own pattern, check `rules/framework-first.md` for the work-domain → framework mapping (DataFlow / Nexus / Kaizen / MCP / ML / Align / PACT). Core SDK is the foundation layer; escalate to the matching specialist when the domain fits a higher abstraction.
+
 ## Critical Rules
 
 1. **ALWAYS `runtime.execute(workflow.build())`** — NEVER `workflow.execute(runtime)`

@@ -1,9 +1,21 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for DriftMonitor.schedule_monitoring()."""
+"""Tier-1 tests for DriftMonitor.schedule_monitoring() pre-dispatch contract.
+
+W26.c (spec §5) — the scheduler surface is now persistence-first. These
+tests exercise the input-validation + reference-required contract that
+holds BEFORE any DB write happens. Persistence + restart-recovery lives
+under tests/integration/test_drift_scheduler_restart.py against a real
+ConnectionManager; the unit tier here just covers the raise-before-persist
+paths that never reach the database.
+
+The legacy in-process ``active_schedules`` property is now deprecated.
+New code uses ``list_schedules`` against the persisted table. The
+deprecated shim is covered separately in the integration suite so its
+backward-compat guarantee stays behavioural, not mocked.
+"""
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
@@ -15,13 +27,13 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 
 @pytest.fixture
 async def conn():
-    """Create a mock ConnectionManager with transaction support."""
+    """Mock ConnectionManager — only the raise-before-persist paths run
+    through this, so a thin AsyncMock is sufficient for Tier 1."""
     mock = AsyncMock()
     mock.fetchone = AsyncMock(return_value=None)
     mock.execute = AsyncMock()
     mock.fetch = AsyncMock(return_value=[])
 
-    # Transaction context manager mock
     tx_mock = AsyncMock()
     tx_mock.execute = AsyncMock()
     tx_mock.fetchone = AsyncMock(return_value=None)
@@ -39,8 +51,7 @@ async def conn():
 
 @pytest.fixture
 async def monitor(conn):
-    """Create a DriftMonitor with reference set."""
-    mon = DriftMonitor(conn)
+    mon = DriftMonitor(conn, tenant_id="test")
     ref_data = pl.DataFrame(
         {
             "feature_a": np.random.normal(0, 1, 100).tolist(),
@@ -51,25 +62,12 @@ async def monitor(conn):
     return mon
 
 
-class TestScheduleMonitoring:
-    @pytest.mark.asyncio
-    async def test_schedule_creates_task(self, monitor):
-        data_fn = AsyncMock(
-            return_value=pl.DataFrame(
-                {
-                    "feature_a": np.random.normal(0, 1, 50).tolist(),
-                    "feature_b": np.random.normal(5, 2, 50).tolist(),
-                }
-            )
-        )
-
-        await monitor.schedule_monitoring("test-model", timedelta(seconds=100), data_fn)
-        assert "test-model" in monitor.active_schedules
-        await monitor.shutdown()
+class TestScheduleMonitoringContract:
+    """Input-validation contract — runs before the DB is touched."""
 
     @pytest.mark.asyncio
     async def test_schedule_requires_reference(self, conn):
-        mon = DriftMonitor(conn)
+        mon = DriftMonitor(conn, tenant_id="test")
         with pytest.raises(ValueError, match="No reference set"):
             await mon.schedule_monitoring(
                 "unknown-model",
@@ -87,70 +85,28 @@ class TestScheduleMonitoring:
             )
 
     @pytest.mark.asyncio
-    async def test_cancel_monitoring(self, monitor):
-        await monitor.schedule_monitoring(
-            "test-model", timedelta(seconds=100), AsyncMock()
-        )
-        cancelled = await monitor.cancel_monitoring("test-model")
-        assert cancelled is True
-        assert "test-model" not in monitor.active_schedules
-
-    @pytest.mark.asyncio
-    async def test_cancel_nonexistent(self, monitor):
-        cancelled = await monitor.cancel_monitoring("nonexistent")
-        assert cancelled is False
-
-    @pytest.mark.asyncio
-    async def test_shutdown_cancels_all(self, monitor):
-        await monitor.schedule_monitoring(
-            "test-model", timedelta(seconds=100), AsyncMock()
-        )
-        assert len(monitor.active_schedules) == 1
-        await monitor.shutdown()
-        assert len(monitor.active_schedules) == 0
-
-    @pytest.mark.asyncio
-    async def test_reschedule_replaces_task(self, monitor):
-        await monitor.schedule_monitoring(
-            "test-model", timedelta(seconds=100), AsyncMock()
-        )
-        old_tasks = dict(monitor._scheduled_tasks)
-
-        await monitor.schedule_monitoring(
-            "test-model", timedelta(seconds=200), AsyncMock()
-        )
-        new_tasks = dict(monitor._scheduled_tasks)
-        assert old_tasks["test-model"] is not new_tasks["test-model"]
-        await monitor.shutdown()
-
-    @pytest.mark.asyncio
-    async def test_drift_callback_invoked(self, monitor, conn):
-        # Create drifted data
-        drifted_data = pl.DataFrame(
-            {
-                "feature_a": np.random.normal(10, 1, 50).tolist(),  # big shift
-                "feature_b": np.random.normal(5, 2, 50).tolist(),
-            }
-        )
-        data_fn = AsyncMock(return_value=drifted_data)
-        callback = AsyncMock()
-
-        spec = DriftSpec(on_drift_detected=callback)
-        await monitor.schedule_monitoring(
-            "test-model", timedelta(seconds=1), data_fn, spec
-        )
-
-        # Wait for at least one check cycle
-        await asyncio.sleep(1.5)
-        await monitor.shutdown()
-
-        # data_fn should have been called at least once
-        assert data_fn.call_count >= 1
-
-    @pytest.mark.asyncio
     async def test_drift_spec_defaults(self):
         spec = DriftSpec()
         assert spec.feature_columns is None
         assert spec.psi_threshold is None
         assert spec.ks_threshold is None
         assert spec.on_drift_detected is None
+
+    @pytest.mark.asyncio
+    async def test_cancel_schedule_nonexistent_returns_false(self, monitor):
+        """Missing schedule_id returns False, does not raise."""
+        result = await monitor.cancel_schedule("does-not-exist")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_register_data_source_accepts_callable(self, monitor):
+        """register_data_source is a plain in-memory registration."""
+        monitor.register_data_source("abc123", AsyncMock())
+        assert "abc123" in monitor._data_sources
+
+    @pytest.mark.asyncio
+    async def test_register_spec_accepts_spec(self, monitor):
+        """register_spec is a plain in-memory registration."""
+        spec = DriftSpec(psi_threshold=0.3)
+        monitor.register_spec("abc123", spec)
+        assert monitor._scheduled_specs["abc123"] is spec

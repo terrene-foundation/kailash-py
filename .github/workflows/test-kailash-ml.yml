@@ -1,5 +1,12 @@
 name: Test kailash-ml
 
+# IT-1 note: CUDA jobs run on [self-hosted, cuda, gpu] runners with
+# continue-on-error: true until the runner is provisioned and verified
+# green via gpu-smoke.yml.  Once green, flip to blocking by removing
+# the `continue-on-error: true  # IT-1: non-blocking until runner live`
+# line from each CUDA job.  Grep pattern for the flip:
+#   grep -n 'continue-on-error: true.*IT-1' .github/workflows/test-kailash-ml.yml
+
 on:
   push:
     branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
@@ -22,6 +29,7 @@ on:
           - base
           - dl
           - rl
+          - cuda
           - all
 
 permissions:
@@ -131,8 +139,16 @@ jobs:
           # released to PyPI yet, so a transitive `kailash>=2.8.9` resolve
           # from PyPI would miss the module the integration tests import.
           uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
-          uv pip install pytest-cov --python .venv/bin/python
+          uv pip install -e "packages/kailash-ml[dl,dev,stats]" --python .venv/bin/python
+          # kailash-ml integration tests import `kailash_align` via
+          # test_rl_align_cross_sdk_wiring.py (cross-SDK RL protocol wiring).
+          # Install kailash-align editable so the test collects cleanly.
+          # Per rules/deployment.md § "Sibling-Package CI Installs Root
+          # SDK Editable For Unreleased Core Modules" — the same discipline
+          # applies bi-directionally at the bridge boundary.
+          uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
+          # pytest-httpserver for test_drift_alerting_wiring webhook tests
+          uv pip install pytest-cov pytest-httpserver --python .venv/bin/python
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/unit/ \
             packages/kailash-ml/tests/integration/ \
@@ -207,3 +223,149 @@ jobs:
             packages/kailash-ml/tests/ \
             -m 'rl or reinforcement_learning' \
             --maxfail=5 -q --timeout=120
+
+  # ---------------------------------------------------------------------------
+  # CUDA jobs — runs on [self-hosted, cuda, gpu] runner (IT-1)
+  #
+  # These jobs are currently NON-BLOCKING (continue-on-error: true) because
+  # the self-hosted GPU runner has not been provisioned yet.
+  #
+  # To flip CUDA from non-blocking to blocking once the runner is live:
+  #   1. Run gpu-smoke.yml manually and confirm it passes green.
+  #   2. Remove the line `continue-on-error: true  # IT-1: non-blocking until runner live`
+  #      from the test-cuda and test-cuda-dl jobs below.
+  #   Grep pattern:  grep -n 'continue-on-error: true.*IT-1' .github/workflows/test-kailash-ml.yml
+  #
+  # Runner registration (human steps):
+  #   See docs/ci/self-hosted-runner.md for the full provisioning guide.
+  #   Required labels: self-hosted, cuda, gpu
+  #   Required secret:  RUNNER_TOKEN  (GitHub org secret, rotated per schedule)
+  # ---------------------------------------------------------------------------
+
+  test-cuda:
+    name: CUDA smoke (km.doctor + DeviceReport)
+    needs: version-check
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.variant == 'cuda' || inputs.variant == 'all')
+    # IT-1: route to self-hosted GPU runner once provisioned.
+    # Keep this runs-on value — as soon as the runner registers with these
+    # labels, GitHub will assign jobs here automatically.
+    runs-on: [self-hosted, cuda, gpu]
+    # IT-1: non-blocking until runner live — remove this line to make blocking
+    continue-on-error: true # IT-1: non-blocking until runner live
+    timeout-minutes: 30
+
+    steps:
+      - name: Pre-run cleanup
+        shell: bash
+        run: |
+          rm -rf .venv
+          echo "Pre-run cleanup complete."
+
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Verify CUDA host
+        shell: bash
+        run: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader,nounits
+
+      - name: Install kailash-ml[dl,dev] + root kailash editable
+        run: |
+          uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
+          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+
+      - name: km.doctor gpu — assert CUDA DeviceReport populated
+        run: |
+          .venv/bin/python - <<'PYEOF'
+          import io, json
+          from kailash_ml.doctor import doctor
+          buf = io.StringIO()
+          code = doctor(as_json=True, out=buf)
+          payload = json.loads(buf.getvalue())
+          print(json.dumps(payload, indent=2))
+          assert code == 0, f"km.doctor exit {code}"
+          by_name = {b["backend"]: b for b in payload["backends"]}
+          assert "cuda" in by_name, f"cuda not found: {list(by_name)}"
+          assert by_name["cuda"]["status"] == "ok", by_name["cuda"]
+          assert by_name["cuda"]["devices"] >= 1, by_name["cuda"]
+          print(f"PASS: {by_name['cuda']['devices']} CUDA GPU(s) ok")
+          PYEOF
+
+      - name: Test CUDA-gated unit + integration tests
+        timeout-minutes: 20
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/unit/ \
+            packages/kailash-ml/tests/integration/ \
+            -m 'cuda or gpu' \
+            --maxfail=5 -q --timeout=120
+
+      - name: Post-run cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -rf .venv
+          echo "Post-run cleanup complete."
+
+  test-cuda-dl:
+    name: CUDA deep learning (torch training on GPU)
+    needs: version-check
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.variant == 'cuda' || inputs.variant == 'all')
+    # IT-1: route to self-hosted GPU runner once provisioned.
+    runs-on: [self-hosted, cuda, gpu]
+    # IT-1: non-blocking until runner live — remove this line to make blocking
+    continue-on-error: true # IT-1: non-blocking until runner live
+    timeout-minutes: 45
+
+    steps:
+      - name: Pre-run cleanup
+        shell: bash
+        run: |
+          rm -rf .venv
+          echo "Pre-run cleanup complete."
+
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Verify CUDA host
+        shell: bash
+        run: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader,nounits
+
+      - name: Install kailash-ml[dl,dev] + root kailash editable
+        run: |
+          uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
+          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+
+      - name: Test DL on CUDA (torch + GPU-backed tests)
+        timeout-minutes: 35
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/ \
+            -m '(dl or deep_learning) and (cuda or gpu)' \
+            --maxfail=5 -q --timeout=300
+
+      - name: Post-run cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -rf .venv
+          echo "Post-run cleanup complete."

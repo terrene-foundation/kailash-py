@@ -1,6 +1,6 @@
 ---
 name: nexus-specialist
-description: "Nexus specialist. Use proactively for HTTP/API/websocket/gateway/middleware/login/session — FastAPI/Flask BLOCKED."
+description: "Nexus specialist. Use proactively for HTTP/API/websocket/gateway/middleware/login/session — direct FastAPI/Flask BLOCKED (use Nexus; Nexus itself uses FastAPI internally)."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -191,6 +191,10 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 
 - `.claude/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
 
+## ML Integration Surface (nexus 2.2.0+, M10 W31c)
+
+`nexus.ml` — bridge module exposing `km.ServeHandle` via Nexus's REST + MCP + CLI channels. See `specs/nexus-ml-integration.md` for the contract. Every ML serving route flows through a ServeHandle adapter, NOT a bespoke FastAPI handler. Origin: `feat/w31c-nexus-ml-bridge` merged at `91bb0383`.
+
 ## Related Agents
 
 - **dataflow-specialist**: Database integration with Nexus platform
@@ -198,6 +202,7 @@ Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.bas
 - **pattern-expert**: Core SDK workflows for Nexus registration
 - **`decide-framework` skill**: Choose between Core SDK and Nexus
 - **release-specialist**: Production deployment and scaling
+- **ml-specialist**: ServeHandle deployment through Nexus channels
 
 ## Full Documentation
 

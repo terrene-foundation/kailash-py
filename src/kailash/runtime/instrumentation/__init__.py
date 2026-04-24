@@ -15,6 +15,15 @@ All instrumentation degrades gracefully when ``opentelemetry`` is not installed.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Eager for static analyzers; runtime stays lazy via __getattr__ below
+    # so importing kailash.runtime.instrumentation doesn't force OTel load.
+    from kailash.runtime.instrumentation.database import DatabaseInstrumentor
+    from kailash.runtime.instrumentation.dataflow import DataFlowInstrumentor
+    from kailash.runtime.instrumentation.nodes import NodeInstrumentor
+
 __all__ = [
     "NodeInstrumentor",
     "DataFlowInstrumentor",

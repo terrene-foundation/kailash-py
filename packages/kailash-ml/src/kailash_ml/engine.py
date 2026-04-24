@@ -34,8 +34,68 @@ from typing import Any, Mapping, Optional, Union
 from kailash_ml._device import BackendInfo, detect_backend
 from kailash_ml._results import PredictionResult, ServeResult
 from kailash_ml.engines import _engine_sql as _sql
+from kailash_ml.errors import ReferenceNotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+def _build_auto_callbacks(
+    *,
+    user_callbacks: Optional[list],
+    enable_checkpointing: bool,
+) -> Optional[list]:
+    """Prepend a NON-OVERRIDABLE `last.ckpt` ModelCheckpoint to user callbacks.
+
+    Per ``specs/ml-engines-v2.md`` §3.2 MUST 7 / W20b invariant 3, every
+    Lightning-routed fit MUST persist a ``last.ckpt`` artifact rooted at
+    the ambient run's artifact directory. The user cannot remove this
+    callback; their own callbacks are appended AFTER the engine's so any
+    user-supplied ModelCheckpoint coexists instead of displacing the
+    engine guarantee.
+
+    The import is lazy and failure-soft: when ``lightning.pytorch`` is
+    unavailable (classical-only install or ``enable_checkpointing=False``
+    opt-out), this function returns the user's callback list unchanged.
+    sklearn / xgboost / lightgbm adapters ignore the callbacks list so
+    the injection is a no-op outside DL paths.
+    """
+    if not enable_checkpointing:
+        return list(user_callbacks) if user_callbacks else None
+
+    dirpath: Optional[str] = None
+    try:
+        from kailash_ml.tracking import get_current_run
+
+        current_run = get_current_run()
+        if current_run is not None:
+            artifact_root = getattr(current_run, "artifact_uri", None) or getattr(
+                current_run, "artifact_root", None
+            )
+            if artifact_root is not None:
+                dirpath = str(artifact_root)
+    except Exception:
+        # Logger-touching calls inside finalizer contexts are unsafe; the
+        # dirpath fallback is whatever Lightning chooses.
+        logger.debug("engine.auto_checkpoint.run_context_unavailable", exc_info=True)
+
+    try:
+        from lightning.pytorch.callbacks import ModelCheckpoint
+    except ImportError:
+        # Classical-only install: Lightning is absent and the user won't
+        # consume the callbacks list anyway.
+        return list(user_callbacks) if user_callbacks else None
+
+    auto_checkpoint = ModelCheckpoint(
+        dirpath=dirpath,
+        filename="last",
+        save_last=True,
+        save_top_k=0,
+        every_n_epochs=1,
+    )
+    merged = [auto_checkpoint]
+    if user_callbacks:
+        merged.extend(user_callbacks)
+    return merged
 
 
 def _hash_model_name(model_name: str) -> str:
@@ -68,6 +128,7 @@ __all__ = [
     "ModelNotFoundError",
     "OnnxExportError",
     "SchemaDriftError",
+    "UnsupportedTrainerError",
 ]
 
 
@@ -162,6 +223,30 @@ class SchemaDriftError(_EngineError):
         self.after = after
 
 
+class UnsupportedTrainerError(_EngineError):
+    """Raised when a Trainable bypasses the Lightning training loop.
+
+    Per `ml-engines-v2.md` §3.2 MUST 2 (Decision 8 hard lock-in), raw
+    training loops (custom `for epoch in range(...)`, hand-rolled
+    optimizer stepping) are BLOCKED at ``MLEngine.fit()`` dispatch
+    time. A Trainable MUST delegate to ``L.Trainer(...).fit(module, ...)``
+    as its terminal step; custom logic lives inside the wrapped
+    ``LightningModule``'s ``training_step`` / ``validation_step``.
+    """
+
+    def __init__(self, family: str, reason: str) -> None:
+        super().__init__(
+            f"Trainer for family {family!r} is not supported: {reason}. "
+            f"Per ml-engines-v2.md §3.2 MUST 2, custom training loops are "
+            f"BLOCKED; Trainable.fit() MUST terminate in "
+            f"L.Trainer(...).fit(module, ...). Wrap the family as a "
+            f"LightningModule adapter (see SklearnLightningAdapter, "
+            f"XGBoostLightningAdapter, etc.)."
+        )
+        self.family = family
+        self.reason = reason
+
+
 # ---------------------------------------------------------------------------
 # Support types
 # ---------------------------------------------------------------------------
@@ -181,24 +266,25 @@ class Patience:
 
 
 # ---------------------------------------------------------------------------
-# Default store resolution
+# Default store resolution — MUST Rule 1b (ml-engines-v2.md §2.1): single
+# authority chain routed through kailash_ml._env.resolve_store_url. Hand-
+# rolled os.environ.get(...) at this site would silently diverge from the
+# tracker / registry / feature-store resolution chain; use the shared helper.
 # ---------------------------------------------------------------------------
 
 
-_DEFAULT_STORE_DIR = pathlib.Path.home() / ".kailash_ml"
-_DEFAULT_DB_PATH = _DEFAULT_STORE_DIR / "ml.db"
+from kailash_ml._env import resolve_store_url as _resolve_store_url
 
 
 def _default_store_url() -> str:
-    """Return the default SQLite store URL, honoring an env override.
+    """Return the default store URL via the shared authority chain.
 
-    `KAILASH_ML_STORE_URL` lets CI and test runs point the Engine at a
-    throwaway location without patching the Engine itself.
+    Delegates entirely to :func:`kailash_ml._env.resolve_store_url` so
+    every engine / tracker / registry / feature-store resolves the same
+    URL from the same precedence (explicit kwarg > ``KAILASH_ML_STORE_URL``
+    > legacy ``KAILASH_ML_TRACKER_DB`` > ``sqlite:///~/.kailash_ml/ml.db``).
     """
-    override = os.environ.get("KAILASH_ML_STORE_URL")
-    if override:
-        return override
-    return f"sqlite:///{_DEFAULT_DB_PATH}"
+    return _resolve_store_url(None)
 
 
 # ---------------------------------------------------------------------------
@@ -462,10 +548,20 @@ class MLEngine:
         # override is supplied, the engine uses it as-is (§2.1 MUST 3).
         self._feature_store = feature_store
         self._registry = registry
+        # `_tracker` is the user-facing Optional[ExperimentRun] handle
+        # per §2.2 (HIGH-8: NOT an ExperimentTracker instance). The
+        # engine-owned ExperimentTracker lives in `_experiment_tracker`
+        # and is constructed lazily by
+        # :meth:`_ensure_default_primitives_async` per §2.1 MUST 2.
         self._tracker = tracker
         self._trainer = trainer
         self._artifact_store = artifact_store
         self._connection_manager = connection_manager
+        # Engine-owned ExperimentTracker (§2.1 MUST 2 six-primitive
+        # composition). None until `_ensure_default_primitives_async`
+        # runs; DI cannot replace this slot directly because its
+        # construction is async-only (ExperimentTracker.create).
+        self._experiment_tracker: Any = None
 
         # Resolve the backend at construction time so that BackendInfo
         # is always available on the instance. For `accelerator="auto"`
@@ -556,6 +652,131 @@ class MLEngine:
                 else f"<injected:{type(store).__name__}>"
             )
         return self._resolved_store_url
+
+    @property
+    def engine_info(self) -> Mapping[str, bool]:
+        """Observability snapshot of which DI slots are currently wired.
+
+        Returns a frozen mapping ``{slot_name: bool}`` reporting whether
+        each §2.1 MUST 2 primitive is populated. This is the
+        observability handle ``/redteam`` uses to verify the
+        six-primitive composition contract end-to-end: every slot is
+        ``False`` immediately after construction, ``True`` after
+        :meth:`_ensure_default_primitives_async` runs. DI overrides are
+        reflected as ``True`` from ``__init__`` since the engine
+        accepted the injection without constructing a default.
+
+        The returned mapping is deliberately read-only — callers MUST
+        NOT mutate it.
+        """
+        return {
+            "connection_manager": self._connection_manager is not None,
+            "artifact_store": self._artifact_store is not None,
+            "registry": self._registry is not None,
+            "feature_store": self._feature_store is not None,
+            "trainer": self._trainer is not None,
+            "experiment_tracker": self._experiment_tracker is not None,
+        }
+
+    # ------------------------------------------------------------------
+    # §2.1 MUST 2 — six-primitive default composition
+    # ------------------------------------------------------------------
+
+    async def _ensure_default_primitives_async(self) -> None:
+        """Construct any DI slot still ``None`` with its canonical default.
+
+        Unifies the scattered lazy-construction paths
+        (``_get_registry``, ``_ensure_registry_for_read``,
+        ``_acquire_connection``, ``_resolve_artifact_store``) into a
+        single entry point. Every slot-fill is idempotent — a second
+        call is a no-op. DI-injected primitives are honored as-is per
+        §2.1 MUST 3; the default path NEVER wraps or replaces an
+        injected instance.
+
+        Construction order (respects dependency chain):
+
+        1. ``ConnectionManager`` — built from :attr:`store_url`; the
+           SQLite directory is created here so zero-arg construction
+           stays filesystem-pure until first async entry.
+        2. ``ArtifactStore`` — ``LocalFileArtifactStore`` rooted at
+           ``KAILASH_ML_ARTIFACT_ROOT`` (defaults to
+           ``~/.kailash_ml/artifacts``).
+        3. ``ModelRegistry`` — wraps the ConnectionManager + ArtifactStore
+           via :class:`kailash_ml.engines.model_registry.ModelRegistry`.
+        4. ``FeatureStore`` — wraps the ConnectionManager; registered
+           feature tables carry the default ``kml_feat_`` prefix.
+        5. ``TrainingPipeline`` — binds (feature_store, registry).
+        6. ``ExperimentTracker`` — constructed via
+           :meth:`ExperimentTracker.create` with the engine's tenant_id
+           as the default tenant so every auto-logged run carries the
+           engine's tenancy envelope.
+
+        Raises:
+            Any error from the underlying primitive constructors is
+            surfaced as-is (they are typed per their own specs). The
+            engine does NOT wrap them — caller debugging follows the
+            native exception back to the failing primitive.
+        """
+        # 1. ConnectionManager
+        if self._connection_manager is None:
+            from kailash.db.connection import ConnectionManager
+
+            url = self.store_url
+            if url.startswith("sqlite:///"):
+                db_path = pathlib.Path(url[len("sqlite:///") :])
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+            cm = ConnectionManager(url)
+            await cm.initialize()
+            self._connection_manager = cm
+
+        # 2. ArtifactStore
+        if self._artifact_store is None:
+            from kailash_ml.engines.model_registry import LocalFileArtifactStore
+
+            root = pathlib.Path(
+                os.environ.get(
+                    "KAILASH_ML_ARTIFACT_ROOT",
+                    str(pathlib.Path.home() / ".kailash_ml" / "artifacts"),
+                )
+            )
+            root.mkdir(parents=True, exist_ok=True)
+            self._artifact_store = LocalFileArtifactStore(root_dir=root)
+
+        # 3. ModelRegistry
+        if self._registry is None:
+            from kailash_ml.engines.model_registry import ModelRegistry
+
+            self._registry = ModelRegistry(
+                self._connection_manager,
+                artifact_store=self._artifact_store,
+            )
+
+        # 4. FeatureStore
+        if self._feature_store is None:
+            from kailash_ml.engines.feature_store import FeatureStore
+
+            fs = FeatureStore(self._connection_manager)
+            await fs.initialize()
+            self._feature_store = fs
+
+        # 5. TrainingPipeline
+        if self._trainer is None:
+            from kailash_ml.engines.training_pipeline import TrainingPipeline
+
+            self._trainer = TrainingPipeline(
+                self._feature_store,
+                self._registry,
+            )
+
+        # 6. ExperimentTracker — async-only factory, so it can only
+        # land here (construction outside __init__).
+        if self._experiment_tracker is None:
+            from kailash_ml.tracking.tracker import ExperimentTracker
+
+            self._experiment_tracker = await ExperimentTracker.create(
+                self.store_url,
+                default_tenant_id=self._tenant_id,
+            )
 
     # ------------------------------------------------------------------
     # The eight public methods (§2.1 MUST 5)
@@ -1075,6 +1296,14 @@ class MLEngine:
         hp_search: str = "none",
         n_trials: int = 0,
         metric: Optional[str] = None,
+        # --- Lightning distribution passthrough (ml-engines-v2.md §3.2 MUST 6) ---
+        strategy: Any = None,
+        devices: Any = "auto",
+        num_nodes: int = 1,
+        # --- Lightning checkpoint + LR discovery (§3.2 MUST 7 / MUST 8) ---
+        enable_checkpointing: bool = True,
+        auto_find_lr: bool = False,
+        callbacks: Optional[list] = None,
     ) -> Any:
         """Train a single family through the Lightning-wrapped Trainable adapter.
 
@@ -1091,6 +1320,14 @@ class MLEngine:
         (§3 MUST 2 — custom training loops BLOCKED at the adapter
         boundary). `tenant_id` is propagated from Engine into TrainingResult
         per §4.2 MUST 3.
+
+        Lightning passthrough kwargs (``strategy``, ``devices``,
+        ``num_nodes``, ``enable_checkpointing``, ``auto_find_lr``,
+        ``callbacks``) flow into the ``TrainingContext`` the trainable
+        receives; the adapter is responsible for lifting them into the
+        concrete ``L.Trainer(strategy=…, devices=…, num_nodes=…,
+        enable_checkpointing=…, callbacks=…)`` invocation per §2.2 +
+        §3.2 MUST 6-8.
         """
         # Validate family/trainable mutually-exclusive per §2.3
         if family is not None and trainable is not None:
@@ -1129,18 +1366,94 @@ class MLEngine:
         if trainable is None:
             trainable = _build_trainable_from_family(family, target=target)
 
+        # Raw-loop detection (§3.2 MUST 2; Decision 8 hard lock-in).
+        # Trainables that mark themselves as raw-loop (custom for-epoch
+        # trainer bypassing L.Trainer) are BLOCKED at dispatch time.
+        # The lightweight marker `_raw_loop=True` is the structural hook
+        # family adapters opt into when their fit() doesn't terminate in
+        # `L.Trainer(...).fit(module, ...)`. Lightning-module verification
+        # (via `to_lightning_module()`) lives in _train_lightning.
+        if getattr(trainable, "_raw_loop", False) is True:
+            fam_name = (
+                family
+                if family is not None
+                else getattr(trainable, "family_name", type(trainable).__name__)
+            )
+            raise UnsupportedTrainerError(
+                family=fam_name,
+                reason=(
+                    "trainable is marked _raw_loop=True (custom training "
+                    "loop bypassing L.Trainer)"
+                ),
+            )
+
+        # Schema-drift detection (§2.3). When setup() produced a schema
+        # hash AND data was supplied directly here, verify the fit-time
+        # schema matches. Skip the check when either side is absent —
+        # drift is defined as "two known schemas differ", not "one is
+        # missing". The hash inputs MUST match setup() exactly (target,
+        # ignored_columns, feature_store_name) or the comparison is
+        # meaningless; see §2.1 MUST 6 canonicalisation.
+        if self._setup_result is not None:
+            setup_hash = getattr(self._setup_result, "schema_hash", None)
+            setup_target = getattr(self._setup_result, "target", None)
+            setup_ignore = list(
+                getattr(self._setup_result, "ignored_columns", ()) or ()
+            )
+            setup_fs_name = (
+                getattr(self._setup_result, "feature_store_name", None)
+                or "engine_default"
+            )
+            if setup_hash is not None and setup_target is not None:
+                # Normalise incoming data to the polars DataFrame shape
+                # setup() saw; _compute_schema_hash reads columns/schema
+                # attrs on the frame.
+                drift_df = self._to_polars_dataframe(data)
+                fit_hash = MLEngine._compute_schema_hash(
+                    df=drift_df,
+                    target=setup_target,
+                    ignore=setup_ignore,
+                    feature_store_name=setup_fs_name,
+                )
+                if fit_hash != setup_hash:
+                    raise SchemaDriftError(before=setup_hash, after=fit_hash)
+
         # Build TrainingContext from Engine's resolved backend so the
-        # trainable does NOT re-resolve (§3.2 MUST 4).
+        # trainable does NOT re-resolve (§3.2 MUST 4). Lightning
+        # passthrough kwargs flow through context so the trainable's
+        # Lightning adapter can lift them onto L.Trainer(...) per
+        # §3.2 MUST 6-8.
         from kailash_ml.trainable import TrainingContext
 
         info = self._backend_info or detect_backend()
+        # When caller supplies `devices` explicitly (non-"auto"), honor
+        # it; otherwise fall back to the backend-resolved device count
+        # so existing CPU-only adapters keep working unchanged.
+        resolved_devices = info.devices if devices == "auto" else devices
+
+        # W20b §3.2 MUST 7: auto-append a `last.ckpt` ModelCheckpoint
+        # rooted at the ambient run artifact path. NON-OVERRIDABLE — the
+        # auto-checkpoint is PREPENDED to any user-supplied callbacks so
+        # a user's custom ModelCheckpoint does not displace the engine's
+        # `last.ckpt` guarantee; it merely sits beside it. The injection
+        # is lazy and lightning-gated so sklearn/xgboost adapters that
+        # don't consume callbacks stay unchanged.
+        merged_callbacks = _build_auto_callbacks(
+            user_callbacks=callbacks,
+            enable_checkpointing=enable_checkpointing,
+        )
         ctx = TrainingContext(
             accelerator=info.accelerator,
             precision=info.precision,
-            devices=info.devices,
+            devices=resolved_devices,
             device_string=info.device_string,
             backend=info.backend,
             tenant_id=self._tenant_id,
+            strategy=strategy,
+            num_nodes=num_nodes,
+            enable_checkpointing=enable_checkpointing,
+            auto_find_lr=auto_find_lr,
+            callbacks=tuple(merged_callbacks) if merged_callbacks is not None else None,
         )
 
         # Delegate to the trainable's Lightning-wrapped fit path
@@ -1697,9 +2010,12 @@ class MLEngine:
             # monitor's current-window stats as a side effect of its
             # comparison against the reference window.
             await drift_monitor.check_drift(model_name, data)
-        except ValueError as exc:
+        except (ValueError, ReferenceNotFoundError) as exc:
             # No reference set is expected for first-call live runs —
             # log at INFO, do not raise (the evaluation itself succeeded).
+            # W26.b: check_drift now raises typed ReferenceNotFoundError;
+            # legacy ValueError retained for backward-compat with older
+            # monitor builds.
             logger.info(
                 "evaluate.drift.no_reference",
                 extra={
@@ -1782,22 +2098,29 @@ class MLEngine:
 
         _validate_identifier(model_name)
 
-        # Retrieve the actual model object. Trainables attached via
-        # result._trainable are the canonical handle; some test paths
-        # may pass the model directly via result.model. We look in
-        # both slots and fall back to a helpful error if neither is
-        # populated.
+        # Retrieve the actual model object. W33c canonical path:
+        # every Trainable.fit() return site attaches `trainable=self`
+        # to the TrainingResult; each Trainable exposes `.model` as
+        # the fitted-model handle (see `trainable.py` + `ml-registry.md`
+        # §5.6.1). Fallback paths (``result.model`` / ``result._model``
+        # / legacy ``result._trainable``) remain for direct-user-
+        # construction tests and cross-SDK replay shapes.
+        trainable_attached = getattr(result, "trainable", None)
+        legacy_trainable = getattr(result, "_trainable", None)
         model_obj = (
             getattr(result, "model", None)
             or getattr(result, "_model", None)
-            or getattr(getattr(result, "_trainable", None), "model", None)
-            or getattr(getattr(result, "trainable", None), "model", None)
+            or (trainable_attached.model if trainable_attached is not None else None)
+            or (legacy_trainable.model if legacy_trainable is not None else None)
         )
         if model_obj is None:
             raise ValueError(
                 "register(result=...) could not locate the trained model. "
                 "Attach the fitted model on result.model or pass a "
-                "TrainingResult whose trainable exposes .model."
+                "TrainingResult whose trainable exposes .model. "
+                "(W33c: framework Trainables populate result.trainable "
+                "automatically — if you are seeing this error from a "
+                "km.train(...) -> km.register(...) chain, that is a bug.)"
             )
 
         # Framework key for the ONNX bridge. Prefer the explicit
@@ -2811,9 +3134,10 @@ class MLEngine:
         root = pathlib.Path(
             os.environ.get(
                 "KAILASH_ML_ARTIFACT_ROOT",
-                str(_DEFAULT_STORE_DIR / "artifacts"),
+                str(pathlib.Path.home() / ".kailash_ml" / "artifacts"),
             )
         )
+        root.mkdir(parents=True, exist_ok=True)
         self._artifact_store = LocalFileArtifactStore(root_dir=root)
         return self._artifact_store
 

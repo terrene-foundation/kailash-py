@@ -38,7 +38,7 @@ pip install kailash-dataflow
 ```
 
 ```python
-from kailash.dataflow import DataFlow
+from dataflow import DataFlow
 
 # Development (SQLite)
 db = DataFlow("sqlite:///dev.db")
@@ -128,11 +128,16 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Data Fabric Engine**: External source integration, derived products, auto-generated endpoints
 - **Observability**: 908 structured log calls, 13 Prometheus families, correlation ID propagation
 
+## ML Integration Surface (dataflow 2.1.0+, M10 W31b)
+
+`dataflow.ml` — bridge module wiring DataFlow models into the `km.feature_store` point-in-time query surface. See `specs/dataflow-ml-integration.md` for the authoritative contract. Every feature-store model uses `ConnectionManager` + DataFlow models (NOT Express, which cannot express window functions). Origin: `feat/w31b-dataflow-ml-bridge` merged at `3d0ec507`.
+
 ## Related Agents
 
 - **nexus-specialist**: Integrate DataFlow with multi-channel platform
 - **pattern-expert**: Core SDK workflow patterns with DataFlow nodes
 - **testing-specialist**: 3-tier testing with real database infrastructure
+- **ml-specialist**: `km.feature_store` uses DataFlow models via `ConnectionManager`
 
 ## Full Documentation
 

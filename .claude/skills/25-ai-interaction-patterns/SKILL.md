@@ -1,6 +1,6 @@
 ---
 name: ai-interaction-patterns
-description: "AI-specific interaction design patterns covering wayfinding, prompt UX, human-in-the-loop controls, trust & transparency, AI identity, and context management. Based on Shape of AI (shapeof.ai). Use when asking about 'AI UX', 'AI interaction', 'prompt UX', 'AI trust', 'AI disclosure', 'AI avatar', 'AI personality', 'AI memory UX', 'action plan UX', 'stream of thought', 'AI citations', 'AI controls', 'AI wayfinding', 'AI suggestions', 'gallery pattern', 'follow-up pattern', 'draft mode', 'AI variations', 'AI consent', 'AI caveat', 'human-in-the-loop', 'AI transparency', 'AI state', 'prompt design', 'AI onboarding', or 'generative UI'."
+description: "AI UX patterns. Use for prompt UX, wayfinding, HITL, trust, disclosure, AI identity, memory UX, generative UI."
 ---
 
 # AI Interaction Patterns
@@ -8,6 +8,10 @@ description: "AI-specific interaction design patterns covering wayfinding, promp
 AI-specific UX patterns for designing interfaces where users interact with AI models. Covers the full interaction lifecycle: from first prompt to output verification, memory persistence, and trust building.
 
 **Source**: Based on [Shape of AI](https://www.shapeof.ai) pattern library (CC-BY-NC-SA) by Emily Campbell.
+
+## When to Use
+
+Use these patterns when asking about AI UX, AI interaction, prompt UX, AI trust, AI disclosure, AI avatar, AI personality, AI memory UX, action plan UX, stream of thought, AI citations, AI controls, AI wayfinding, AI suggestions, gallery pattern, follow-up pattern, draft mode, AI variations, AI consent, AI caveat, human-in-the-loop, AI transparency, AI state, prompt design, AI onboarding, or generative UI.
 
 ## How This Differs from Other UI/UX Skills
 

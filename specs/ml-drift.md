@@ -76,6 +76,8 @@ class DriftMonitor:
         ...
 ```
 
+**Implementation note (W26.e, 2026-04-23):** the current Python implementation accepts direct kwargs rather than the `DriftMonitorConfig` wrapping: `DriftMonitor(conn, *, tenant_id: str, psi_threshold=0.2, ks_threshold=0.05, thresholds=None, tracker=None, alerts=None, performance_threshold=0.1)`. `tenant_id` is a REQUIRED non-empty string — empty string raises `TenantRequiredError`, non-string raises `TypeError` (see §9). The `DriftMonitorConfig` dataclass wrapping in §2.1 is a forward-looking ergonomic surface to be introduced together with the full `MLEngine.monitor(...)` facade work (§2.2); the tenant-scoping contract in §4.1 + §11.2.2 is already enforced end-to-end by the current kwargs surface.
+
 ### 2.2 Canonical Construction Through MLEngine
 
 ```python

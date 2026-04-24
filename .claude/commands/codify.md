@@ -80,7 +80,7 @@ Using as many subagents as required, peruse `docs/`, especially `docs/00-authori
 
 Improve agents in their canonical locations.
 
-- Reference `.claude/agents/_subagent-guide.md` for agent format
+- Reference `rules/cc-artifacts.md` for agent format (desc <120 chars, body <400 lines, frontmatter + trigger phrases); see `agents/frameworks/ml-specialist.md` as an example
 - Identify which existing agent(s) should absorb the new knowledge
 - If no existing agent covers the domain, create a new agent in the appropriate directory
 

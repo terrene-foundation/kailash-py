@@ -20,6 +20,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    # Eager for static analyzers (CodeQL py/undefined-export, pyright, mypy).
+    # Runtime stays lazy via __getattr__ below so importing kailash.trust.agents
+    # does not force pynacl load.
+    from kailash.trust.agents.pseudo_agent import (
+        AuthProvider,
+        PseudoAgent,
+        PseudoAgentConfig,
+        PseudoAgentFactory,
+    )
+    from kailash.trust.agents.trusted_agent import (
+        TrustedAgent,
+        TrustedAgentConfig,
+        TrustedSupervisorAgent,
+    )
+
 # Lazy imports — these modules depend on pynacl transitively through
 # eatp.operations / eatp.chain crypto functions.
 

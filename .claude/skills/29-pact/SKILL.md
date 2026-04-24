@@ -1,11 +1,15 @@
 ---
 name: 29-pact
-description: "PACT governance framework -- D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations. Use when asking about 'governance', 'D/T/R', 'operating envelope', 'knowledge clearance', 'verification gradient', 'GovernanceEngine', 'PactGovernedAgent', 'access enforcement', 'organizational governance', 'PACT', 'governed agent', 'clearance', 'bridges', 'KSP', 'monotonic tightening', 'MCP governance', 'McpGovernanceEnforcer', 'McpGovernanceMiddleware', 'McpAuditTrail', 'McpToolPolicy', 'MCP tool policy', 'default-deny MCP', or 'governed MCP tools'."
+description: "PACT governance. Use for D/T/R, envelopes, clearance, governed agents, verification gradient, MCP governance."
 ---
 
 # PACT Governance Skills
 
 Quick reference for PACT organizational governance patterns.
+
+## When to Use
+
+Use PACT when asking about governance, D/T/R, operating envelope, knowledge clearance, verification gradient, `GovernanceEngine`, `PactGovernedAgent`, access enforcement, organizational governance, PACT, governed agent, clearance, bridges, KSP, monotonic tightening, MCP governance, `McpGovernanceEnforcer`, `McpGovernanceMiddleware`, `McpAuditTrail`, `McpToolPolicy`, MCP tool policy, default-deny MCP, or governed MCP tools.
 
 ## Install
 

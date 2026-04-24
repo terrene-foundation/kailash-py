@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.2.0] - 2026-04-23 — ML bridge: tenant/actor ContextVars, MLDashboard auth, ml-endpoint mount (W31.c)
+
+### Added
+
+- **`nexus.context` module**: request-scoped `ContextVar`s for cross-engine tenant/actor propagation. `JWTMiddleware` now sets `_current_tenant_id` from the `tenant_id` JWT claim (optional) and `_current_actor_id` from the `sub` claim (required) on every validated request, with reset-in-`finally` so an exception inside `call_next` cannot leak state into the next request on the same worker. Downstream engines (kailash-ml, kailash-dataflow, kailash-kaizen) read ambient context via `get_current_tenant_id()` / `get_current_actor_id()` without extracting JWT claims themselves. Per `specs/nexus-ml-integration.md` §§2–3.
+- **`nexus.ml.MLDashboard`**: Nexus-auth adapter for `kailash_ml.dashboard.MLDashboard(auth="nexus")`. Reuses the Nexus instance's JWT config (issuer / audience / JWKS URL / public key) via `MLDashboard.from_nexus(nexus)` so the dashboard does NOT store key material independently. Returns a frozen `DashboardPrincipal(actor_id, tenant_id, scopes)` on verification. Per spec §4.
+- **`nexus.ml.mount_ml_endpoints(nexus, serve_handle)`**: mounts REST + MCP + WebSocket routes for a kailash-ml `ServeHandle` behind Nexus. Ambient tenant/actor from the JWT middleware's ContextVars propagate into every `predict()` call; endpoint registration is lazy (works before `start()`). Routes: `POST /ml/predict`, `GET /ml/describe`, `GET /ml/healthz`, `POST /ml/mcp/predict`, WebSocket `/ml/ws`. Per spec §5 + §1.1 item 4.
+- **`nexus.ml.dashboard_embed(port)`**: returns an HTML iframe snippet for embedding the ML dashboard behind Nexus auth.
+
+### Changed
+
+- `JWTMiddleware.dispatch` now sets `nexus.context._current_tenant_id` / `_current_actor_id` ContextVars on both the JWT-validated path and the API-key path, with matching reset tokens released in `finally:`. No signature change, no new required claims — `tenant_id` is optional, `sub` is already mandatory per RFC 7519 §4.1.2.
+
+### Migration
+
+- 2.1.x → 2.2.0 is additive. `JWTMiddleware.__init__` is unchanged. `JWTValidator` gains no new required config. Users relying on `specs/nexus-auth.md` §9.1 behavior are unaffected. Optional: switch from `request.state.user.tenant_id` extraction to `get_current_tenant_id()` (simpler, same value, not required).
+
 ## [2.1.1] - 2026-04-19 — CRITICAL hotfix: lifespan crash on FastAPI router dispatch method (#531, PR #533)
 
 ### Fixed

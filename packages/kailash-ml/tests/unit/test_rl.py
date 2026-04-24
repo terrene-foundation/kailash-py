@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from kailash_ml.rl.policy_registry import PolicyRegistry, PolicySpec, PolicyVersion
+from kailash_ml.rl.policies import PolicyRegistry, PolicySpec, PolicyVersion
 
 
 class TestPolicySpec:
@@ -57,9 +57,11 @@ class TestPolicyRegistry:
         assert len(reg) == 1
 
     def test_register_invalid_algorithm(self):
+        from kailash_ml.errors import RLError
+
         reg = PolicyRegistry()
         spec = PolicySpec(name="bad", algorithm="NONEXISTENT")
-        with pytest.raises(ValueError, match="Unknown algorithm"):
+        with pytest.raises(RLError, match="unknown_algorithm"):
             reg.register_spec(spec)
 
     def test_register_version(self):
@@ -110,9 +112,11 @@ class TestPolicyRegistry:
 
     def test_supported_algorithms(self):
         algos = PolicyRegistry.supported_algorithms()
-        assert "PPO" in algos
-        assert "SAC" in algos
-        assert "DQN" in algos
+        # 1.0 canonical names are lowercased; uppercase aliases resolve
+        # via the adapter registry but are not in the supported list.
+        assert "ppo" in algos
+        assert "sac" in algos
+        assert "dqn" in algos
 
     def test_contains(self):
         reg = PolicyRegistry()
@@ -135,7 +139,7 @@ class TestRLTrainerImportGuard:
 
 class TestEnvironmentRegistryImportGuard:
     def test_env_registry_importable(self):
-        from kailash_ml.rl.env_registry import EnvironmentRegistry, EnvironmentSpec
+        from kailash_ml.rl.envs import EnvironmentRegistry, EnvironmentSpec
 
         spec = EnvironmentSpec(name="Test-v0", entry_point="test:TestEnv")
         assert spec.name == "Test-v0"

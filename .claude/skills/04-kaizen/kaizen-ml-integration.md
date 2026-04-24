@@ -50,7 +50,7 @@ features = FeatureStore(conn)
 registry = ModelRegistry(conn)
 pipeline = TrainingPipeline(registry)
 server = InferenceServer(registry)
-monitor = DriftMonitor(conn)
+monitor = DriftMonitor(conn, tenant_id="acme")  # W26.e: tenant_id is required
 ```
 
 ## Type Contracts (kailash_ml.types)

@@ -98,12 +98,6 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 3. **Responsive**: Use `ResponsiveBuilder` for different layouts per breakpoint
 4. **Components**: Extend existing components rather than building from scratch
 
-## Skill References
-
-- **[flutter-patterns](../../.claude/skills/11-frontend-integration/flutter-patterns.md)** - Implementation patterns and code examples
-- **[flutter-integration-quick](../../.claude/skills/11-frontend-integration/flutter-integration-quick.md)** - Quick API setup
-- **[frontend-developer](../../.claude/skills/11-frontend-integration/frontend-developer.md)** - General frontend patterns
-
 ## Related Agents
 
 - **nexus-specialist**: Backend API integration via Nexus
@@ -112,32 +106,13 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 - **uiux-designer**: Design system and UX guidance
 - **react-specialist**: Cross-platform pattern comparison
 
-## Full Documentation
+## Skill References
 
-When this guidance is insufficient, consult:
-
-- `.claude/skills/19-flutter-patterns/SKILL.md` - Flutter patterns and design systems
-- `.claude/skills/19-flutter-patterns/flutter-design-system.md` - Design system guide
-- `.claude/skills/19-flutter-patterns/creating-design-system.md` - Creating design systems
-- `.claude/skills/19-flutter-patterns/flutter-testing-patterns.md` - Testing strategies
-- `.claude/skills/23-uiux-design-principles/SKILL.md` - UI/UX design principles (CRITICAL)
-- Flutter docs: https://docs.flutter.dev/
-- Riverpod docs: https://riverpod.dev/
-- Go Router docs: https://pub.dev/packages/go_router
-
----
-
-**Use this agent when:**
-
-- Building mobile apps for Kailash workflows
-- Creating Flutter UI for Nexus/DataFlow/Kaizen
-- Setting up Riverpod state management
-- Integrating with Kailash backend APIs
-- Building cross-platform (iOS/Android/Web/Desktop) apps
-
-**CRITICAL Before UI Implementation:**
-
-1. Check component showcase for existing components
-2. Import from design_system.dart
-3. Use AppCard, AppButton, AppInput instead of building from scratch
-4. Test in both light and dark themes
+- `skills/11-frontend-integration/flutter-patterns.md` — implementation patterns and code examples
+- `skills/11-frontend-integration/flutter-integration-quick.md` — quick API setup
+- `skills/11-frontend-integration/frontend-developer.md` — general frontend patterns
+- `skills/19-flutter-patterns/SKILL.md` — Flutter patterns and design systems
+- `skills/19-flutter-patterns/flutter-design-system.md` — design system guide
+- `skills/19-flutter-patterns/creating-design-system.md` — creating design systems
+- `skills/19-flutter-patterns/flutter-testing-patterns.md` — testing strategies
+- `skills/23-uiux-design-principles/SKILL.md` — UI/UX design principles (CRITICAL)

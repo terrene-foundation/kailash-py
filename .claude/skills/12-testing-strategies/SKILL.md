@@ -1,11 +1,15 @@
 ---
 name: testing-strategies
-description: "Comprehensive testing strategies for Kailash applications including the 3-tier testing approach with Real infrastructure recommended policy for Tiers 2-3. Use when asking about 'testing', 'test strategy', '3-tier testing', 'unit tests', 'integration tests', 'end-to-end tests', 'testing workflows', 'testing DataFlow', 'testing Nexus', 'Real infrastructure recommended', 'real infrastructure', 'test organization', or 'testing best practices'."
+description: "Kailash testing: 3-tier, Tier 2/3 real infra (NO mocking per rules/testing.md), regression, coverage."
 ---
 
 # Kailash Testing Strategies
 
-3-tier testing strategy with real infrastructure policy for Kailash applications.
+3-tier testing strategy for Kailash applications. Tier 2/3 require real infrastructure — NO mocking (`@patch`, `MagicMock`, `unittest.mock` are BLOCKED) per `rules/testing.md`.
+
+## When to Use
+
+Use when asking about testing, test strategy, 3-tier testing, unit tests, integration tests, end-to-end tests, testing workflows, testing DataFlow, testing Nexus, real infrastructure, NO mocking, test organization, or testing best practices.
 
 ## Sub-File Index
 
@@ -13,11 +17,11 @@ description: "Comprehensive testing strategies for Kailash applications includin
 
 ## 3-Tier Strategy
 
-| Tier            | Scope               | Mocking                | Speed      | Infrastructure             |
-| --------------- | ------------------- | ---------------------- | ---------- | -------------------------- |
-| 1 - Unit        | Functions, classes  | Allowed                | <1s/test   | None                       |
-| 2 - Integration | Workflows, DB, APIs | Real infra recommended | 1-10s/test | Real DB, real runtime      |
-| 3 - E2E         | Complete user flows | Real infra recommended | 10s+/test  | Real HTTP, real everything |
+| Tier            | Scope               | Mocking                       | Speed      | Infrastructure             |
+| --------------- | ------------------- | ----------------------------- | ---------- | -------------------------- |
+| 1 - Unit        | Functions, classes  | Allowed                       | <1s/test   | None                       |
+| 2 - Integration | Workflows, DB, APIs | **BLOCKED — real infra only** | 1-10s/test | Real DB, real runtime      |
+| 3 - E2E         | Complete user flows | **BLOCKED — real infra only** | 10s+/test  | Real HTTP, real everything |
 
 ### Real Infrastructure Policy (Tiers 2-3)
 
@@ -84,6 +88,10 @@ def test_null_byte_exists_in_source():
 
 See `rules/testing.md` "MUST: Behavioral Regression Tests Over
 Source-Grep" for the full rule and rationale.
+
+## Release-Blocking Regression Tier (Above Tier 3 E2E)
+
+Unit and integration tests per primitive cannot observe the handoff between primitives; each primitive's tests construct test fixtures with exactly the fields it needs, and the chain between A → B fails only when A's real output is missing a field B actually needs. For every pipeline the docs teach (README Quick Start, tutorial, `specs/*.md` canonical example), add a regression test that executes the docs-exact code against real infrastructure AND asserts a deterministic fingerprint over the output. Flipped fingerprints block release. See `skills/16-validation-patterns/SKILL.md` § "End-to-End Pipeline Regression Above Unit/Integration" for the full pattern + kailash-ml 1.0.0 W33b evidence, and `rules/testing.md` § "End-to-End Pipeline Regression Tests Above Unit + Integration" for the MUST clause.
 
 ## Optional Dependency Testing
 

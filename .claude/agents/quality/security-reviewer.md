@@ -65,19 +65,7 @@ Anti-self-modification (frozen GovernanceContext), monotonic tightening, fail-cl
 
 > See `rules/pact-governance.md` for full MUST/MUST NOT rules.
 
-## Review Output Format
-
-### CRITICAL (Must fix before commit)
-
-### HIGH (Should fix before merge)
-
-### MEDIUM (Fix in next iteration)
-
-### LOW (Consider fixing)
-
-### PASSED CHECKS
-
-### 10. Auth Middleware Patterns (v3.8)
+### 11. Auth Middleware Patterns (v3.8)
 
 Apply when reviewing Nexus auth middleware. Hardened through v3.8 red team:
 
@@ -90,6 +78,14 @@ Apply when reviewing Nexus auth middleware. Hardened through v3.8 red team:
 - [ ] **A7 — Engines must delegate, not reimplement**: Higher-level engines must delegate to primitives to inherit validation. Reimplementing query building skips input validation.
 - [ ] **A8 — Budget checks must include reservations**: `is_over_budget()` must check `committed + reserved > allocated`.
 - [ ] **A9 — Debug derives on auth types must redact secrets**: Auth config types must NOT expose hashes/secrets via Debug.
+
+## Review Output Format
+
+- **CRITICAL** — Must fix before commit
+- **HIGH** — Should fix before merge
+- **MEDIUM** — Fix in next iteration
+- **LOW** — Consider fixing
+- **PASSED CHECKS** — What was verified clean
 
 ## Related Agents
 

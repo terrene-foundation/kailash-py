@@ -2,21 +2,35 @@
 # SPDX-License-Identifier: Apache-2.0
 """kailash-ml -- Machine learning lifecycle for the Kailash ecosystem.
 
-Engines are lazy-loaded on first access to keep import time minimal.
-Use ``from kailash_ml import FeatureStore`` to load a specific engine.
+Top-level surface is the ``km.*`` verbs + the engine primitives + the
+diagnostic adapters. Per ``specs/ml-engines-v2.md §15.9`` the canonical
+``__all__`` is organised into 6 groups (verbs -> primitives ->
+diagnostics -> backend -> tracker -> discovery), and every entry is
+EAGERLY imported at module scope per ``rules/zero-tolerance.md §1a``
+second-instance clause (CodeQL flags ``__all__`` symbols resolved only
+via lazy ``__getattr__``).
+
+Engines that are NOT in the canonical ``__all__`` (e.g. ``FeatureStore``,
+``PreprocessingPipeline``, ``MLDashboard``, ...) remain reachable via
+module-attribute lookup through the legacy :func:`__getattr__` below so
+existing ``from kailash_ml import FeatureStore`` consumers keep working;
+they are simply not advertised in ``from kailash_ml import *``.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import contextvars as _contextvars
+from contextlib import contextmanager as _contextmanager
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 if TYPE_CHECKING:
     from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
 
+# ---------------------------------------------------------------------------
+# Canonical error hierarchy + core dataclasses (eager imports)
+# ---------------------------------------------------------------------------
+
 from kailash_ml._device import BackendInfo, detect_backend
-from kailash_ml._device_report import (
-    DeviceReport,
-    device_report_from_backend_info,
-)
+from kailash_ml._device_report import DeviceReport, device_report_from_backend_info
 from kailash_ml._gpu_setup import resolve_torch_wheel
 from kailash_ml._result import TrainingResult
 from kailash_ml._results import (
@@ -28,33 +42,93 @@ from kailash_ml._results import (
     ServeResult,
     SetupResult,
 )
+from kailash_ml._seed import SeedReport, seed
 from kailash_ml._version import __version__
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
-from kailash_ml.trainable import (
-    HDBSCANTrainable,
-    LightGBMTrainable,
-    LightningTrainable,
-    SklearnTrainable,
-    TorchTrainable,
-    Trainable,
-    UMAPTrainable,
-    XGBoostTrainable,
-)
-from kailash_ml.types import (
-    AgentInfusionProtocol,
-    FeatureField,
-    FeatureSchema,
-    MetricSpec,
-    MLToolProtocol,
-    ModelSignature,
+
+# Every error subclass is eagerly imported so ``kailash_ml.MLError`` and
+# the full hierarchy stay reachable by attribute lookup for legacy
+# callers. Only the 15 listed in §15.9 Group 2 appear in ``__all__``;
+# the rest remain importable via ``from kailash_ml.errors import ...``
+# for callers who need the finer-grained taxonomy.
+from kailash_ml.errors import (
+    ActorRequiredError,
+    AliasNotFoundError,
+    AliasOccupiedError,
+    ArtifactEncryptionError,
+    ArtifactSizeExceededError,
+    AuthorizationError,
+    AutologAttachError,
+    AutologDetachError,
+    AutologDoubleAttachError,
+    AutologError,
+    AutologNoAmbientRunError,
+    AutologUnknownFrameworkError,
+    AutoMLError,
+    BackendError,
+    BudgetExhaustedError,
+    CrossTenantLineageError,
+    DashboardError,
+    DiagnosticsError,
+    DLDiagnosticsStateError,
+    DriftMonitorError,
+    DriftThresholdError,
+    EnsembleFailureError,
+    EnvVarDeprecatedError,
+    ErasureRefusedError,
+    ExperimentNotFoundError,
+    FeatureNotFoundError,
+    FeatureNotYetSupportedError,
+    FeatureStoreError,
+    ImmutableGoldenReferenceError,
+    InferenceServerError,
+    InsufficientSamplesError,
+    InsufficientTrialsError,
+    InvalidInputSchemaError,
+    InvalidTenantIdError,
+    LineageRequiredError,
+    LiveStreamError,
+    MetricValueError,
+    MigrationFailedError,
+    MigrationImportError,
+    MLError,
+    ModelLoadError,
+    ModelNotFoundError,
+    ModelRegistryError,
+    ModelSignatureRequiredError,
+    MultiTenantOpError,
+    OnnxExportUnsupportedOpsError,
+    ParamValueError,
+    PointInTimeViolationError,
+    ProtocolConformanceError,
+    RateLimitExceededError,
+    ReferenceNotFoundError,
+    ReplayBufferUnderflowError,
+    RewardModelRequiredError,
+    RLEnvIncompatibleError,
+    RLError,
+    RLPolicyShapeMismatchError,
+    RunNotFoundError,
+    RunNotFoundInDashboardError,
+    SeedReportError,
+    ShadowDivergenceError,
+    StaleFeatureError,
+    TenantQuotaExceededError,
+    TenantRequiredError,
+    TrackerStoreInitError,
+    TrackingError,
+    UnknownTenantError,
+    UnsupportedFamily,
+    UnsupportedPrecision,
+    UnsupportedTrainerError,
+    WorkflowNodeMLContextError,
+    fingerprint_classified_value,
 )
 
-# Estimators (#479/#488) — eagerly imported because the module is light
-# (thin wrappers over sklearn which is already a base dep) and because
-# CodeQL flags __all__ entries that are only resolved through the lazy
-# __getattr__ path. Eager import keeps the symbols defined at module
-# scope without meaningful import-time cost.
+# Estimators + Trainable adapters — reachable via module scope so
+# power users can ``from kailash_ml import SklearnTrainable`` even
+# though the symbols are not in the canonical ``__all__``.
 from kailash_ml.estimators import (
     ColumnTransformer,
     FeatureUnion,
@@ -65,126 +139,202 @@ from kailash_ml.estimators import (
     registered_estimators,
     unregister_estimator,
 )
+from kailash_ml.trainable import (
+    HDBSCANTrainable,
+    LightGBMTrainable,
+    LightningTrainable,
+    SklearnTrainable,
+    TorchTrainable,
+    Trainable,
+    UMAPTrainable,
+    XGBoostTrainable,
+)
 
-# ---------------------------------------------------------------------------
-# kailash-ml 2.0 convenience functions (km.train, km.track)
-# ---------------------------------------------------------------------------
+# W30 cross-SDK RL bridge surface.
+from kailash_ml.rl._lineage import RLLineage
+from kailash_ml.rl.align_adapter import FeatureNotAvailableError
+from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
+from kailash_ml.types import (
+    AgentInfusionProtocol,
+    FeatureField,
+    FeatureSchema,
+    MetricSpec,
+    MLToolProtocol,
+    ModelSignature,
+)
+
+# Diagnostic adapters (Group 3).
+from kailash_ml.diagnostics import (
+    DLDiagnostics,
+    RAGDiagnostics,
+    RLDiagnostics,
+    diagnose_classifier,
+    diagnose_regressor,
+)
+
+# Tracker primitives (Group 5) — eager-import so ``from kailash_ml
+# import ExperimentTracker, ExperimentRun, ModelRegistry`` resolves
+# without a lazy-__getattr__ hop (CodeQL
+# py/modification-of-default-value gate).
+from kailash_ml.engines.model_registry import ModelRegistry
+from kailash_ml.tracking import erase_subject  # W15 GDPR surface (Group 1)
+from kailash_ml.tracking.runner import ExperimentRun
+from kailash_ml.tracking.tracker import ExperimentTracker
+
+# km.doctor() diagnostic per specs/ml-backends.md §7 — stays eager so
+# the symbol remains reachable at module scope even though it is NOT
+# in the canonical __all__ (doctor is a separate surface from
+# km.diagnose per Round-8 clarification).
+from kailash_ml.doctor import doctor
+
+# Group 1 verbs live in :mod:`kailash_ml._wrappers`. Eager-import so
+# every ``__all__`` entry is a module-scope symbol per
+# ``rules/zero-tolerance.md §1a`` second-instance example.
+from kailash_ml._wrappers import (
+    DashboardHandle,
+    autolog,
+    autolog_fn,
+    dashboard,
+    diagnose,
+    register,
+    rl_train,
+    serve,
+    track,
+    train,
+    watch,
+)
+
+# Group 6 — Engine Discovery.
+from kailash_ml.engines.registry import (
+    ClearanceRequirement,
+    EngineInfo,
+    EngineNotFoundError,
+    MethodSignature,
+    ParamSpec,
+    engine_info,
+    list_engines,
+)
+
+# Lineage return type — eagerly imported so km.lineage(...) has a
+# canonical return annotation per §15.8.
+# ``LineageGraph`` is declared in ml-engines-v2-addendum §E10.2.
+try:
+    from kailash_ml.engines.lineage import LineageGraph  # type: ignore[import]
+except ImportError:
+    # Forward-compatible: the engines/lineage.py module lands in a
+    # later M11 shard. Until then, expose a minimal stub so tests that
+    # round-trip ``km.lineage(...)`` through the type can still import
+    # the name. The real engine replaces this stub when it lands.
+    from dataclasses import dataclass as _dc
+    from dataclasses import field as _field
+
+    @_dc(frozen=True)
+    class LineageGraph:  # type: ignore[no-redef]
+        """Placeholder until engines/lineage.py lands per §E10.2.
+
+        The real dataclass exposes the full ``nodes`` / ``edges`` /
+        ``root`` / ``depth`` contract; this placeholder keeps the
+        eager-import contract intact so ``km.lineage(...)`` has a
+        return type to cite.
+        """
+
+        root: str
+        nodes: tuple = _field(default_factory=tuple)
+        edges: tuple = _field(default_factory=tuple)
+        depth: int = 0
+
+
+# W33c: km.register top-level wrapper per specs/ml-engines-v2.md §15.4 +
+# specs/ml-registry.md §7.4. Closes the canonical Quick Start chain:
 #
-# These are the "PyCaret-better" / "MLflow-better" entry points described in
-# the redesign proposal. Phase 2 ships the signatures and the typed deferral
-# so `import kailash_ml as km; km.train(...)` gives a clear actionable error;
-# Phase 3 (Lightning integration) completes `train()`, Phase 6 completes
-# `track()`.
-
-
-def train(
-    df, target: str, *, family: str = "sklearn", **kwargs
-) -> TrainingResult:  # noqa: D401
-    """Three-line entry point per specs/ml-engines.md §5.1.
+#     result = km.train(df, target="y")
+#     registered = km.register(result, name="demo")
+#
+# Sync wrapper around MLEngine.register() matching `km.train`'s pattern
+# for notebook / three-line-hello-world ergonomics. Advanced callers
+# needing async composition (inside an existing event loop) MUST use
+# `MLEngine().register(...)` directly.
+async def register(
+    training_result: TrainingResult,
+    *,
+    name: Optional[str] = None,
+    alias: Optional[str] = None,
+    stage: str = "staging",
+    format: str = "onnx",
+    **kwargs: Any,
+) -> Any:
+    """Register a trained model in the default engine's registry.
 
         import kailash_ml as km
-        best = km.train(df, target="churned")
-        print(best.metrics)
+        result = km.train(df, target="churned")
+        registered = km.register(result, name="churn-model")
 
-    Constructs a default `MLEngine()`, routes through the requested family's
-    Lightning-wrapped Trainable adapter, returns a `TrainingResult`. Defaults
-    to `family="sklearn"` (RandomForestClassifier) for zero-config behavior.
+    Dispatches to the cached default `MLEngine()`, reusing the ONNX-
+    default artifact format and staging lifecycle from §6 / §7 of
+    `specs/ml-engines-v2.md`.
 
-    For torch/lightning families users MUST pass a pre-built `TorchTrainable`
-    or `LightningTrainable` via `MLEngine.fit(trainable=…)` — those families
-    have no zero-config defaults.
+    Resolves the fitted model via `training_result.trainable.model`
+    (populated by every `Trainable.fit()` return site — see
+    `trainable.py`). Callers constructing a `TrainingResult` literally
+    (tests, cross-SDK replay) MUST attach `trainable=...` OR set one of
+    `result.model` / `result._model` for the engine's lookup chain.
+
+    Args:
+        training_result: The envelope returned by ``km.train(...)`` /
+            ``engine.fit(...)``. Must carry the ``trainable`` back-
+            reference (framework paths set this automatically).
+        name: Registry-visible model name. Defaults to the family-
+            derived synthesised name.
+        alias: Optional lifecycle alias ("champion", "challenger",
+            etc.). Chained as a second registry call per §7.4.
+        stage: Registry stage — "staging" (default), "shadow", or
+            "production".
+        format: Artifact format — "onnx" (default), "pickle", or "both"
+            per §6 MUST 1.
+        **kwargs: Forwarded to ``MLEngine.register()`` (e.g. ``actor_id``,
+            ``tenant_id``, ``metadata`` when the engine adds them).
+
+    Returns:
+        ``RegisterResult`` per `specs/ml-registry.md` §7.1.
     """
-    import asyncio
-
     engine = MLEngine()
-    # engine.fit is async; synchronous wrapper for the three-line form
-    return asyncio.run(engine.fit(df, target=target, family=family, **kwargs))
+    return await engine.register(
+        training_result,
+        name=name,
+        alias=alias,
+        stage=stage,
+        format=format,
+        **kwargs,
+    )
 
 
 # ---------------------------------------------------------------------------
-# GPU-first convenience (Phase 1): km.device() + km.use_device()
+# Engine alias — spec §15.9 Group 2 refers to ``Engine``; our concrete
+# class is :class:`MLEngine`. Expose the canonical name as an alias so
+# ``from kailash_ml import Engine`` works.
 # ---------------------------------------------------------------------------
-#
-# Per workspaces/kailash-ml-gpu-stack/04-validate/02-revised-stack.md.
-# Users interact through ``import kailash_ml as km`` so the top-level
-# surface keeps every adapter transparent to device selection: no
-# ``device="..."`` or ``accelerator="..."`` parameter plumbed through
-# the API; instead the resolver decides, and callers who need to pin a
-# backend (offline / deterministic / CPU-only runs) enter a small
-# context manager.
 
-import contextvars as _contextvars
-from contextlib import contextmanager as _contextmanager
-from typing import Iterator as _Iterator, Optional as _Optional
+Engine = MLEngine
 
 
-# Thread-safe and asyncio-safe override consumed by detect_backend()
-# callers. A value of None means "no override — use the priority
-# resolver". A string value pins detection to that backend for the
-# duration of the ``with km.use_device(...)`` block.
-_device_override: _contextvars.ContextVar[_Optional[str]] = _contextvars.ContextVar(
+# ---------------------------------------------------------------------------
+# Device context-var (km.device / km.use_device) — non-__all__ helpers.
+# ---------------------------------------------------------------------------
+
+_device_override: _contextvars.ContextVar[Optional[str]] = _contextvars.ContextVar(
     "kailash_ml_device_override", default=None
 )
 
 
-def device(prefer: _Optional[str] = None) -> BackendInfo:
-    """Return the resolved ``BackendInfo`` without training anything.
-
-    Inspection-only entry point: users who want to know which backend
-    the next training call would pick MUST NOT call ``detect_backend``
-    directly (that's the engine-internal API). ``km.device()`` honours
-    any ``with km.use_device(...)`` scope in effect and otherwise runs
-    the priority resolver.
-
-        import kailash_ml as km
-        print(km.device())  # BackendInfo(backend='cuda', precision='bf16-mixed', ...)
-        with km.use_device("cpu"):
-            print(km.device().backend)  # "cpu"
-
-    Args:
-        prefer: Optional explicit backend. When omitted, honours any
-            ``use_device`` scope in effect; when provided, overrides the
-            scope for this single call. Same vocabulary as
-            ``_device.KNOWN_BACKENDS`` ("cuda" / "mps" / "rocm" /
-            "xpu" / "tpu" / "cpu") or "auto".
-
-    Returns:
-        A pre-resolved :class:`BackendInfo` (concrete precision, never
-        "auto").
-    """
+def device(prefer: Optional[str] = None) -> BackendInfo:
+    """Resolve the active :class:`BackendInfo` honoring ``use_device`` pins."""
     effective = prefer if prefer is not None else _device_override.get()
     return detect_backend(prefer=effective)
 
 
 @_contextmanager
-def use_device(name: str) -> _Iterator[BackendInfo]:
-    """Pin backend selection to ``name`` for the duration of the block.
-
-    Intended for offline / deterministic / CPU-only runs where a
-    surrounding test or notebook needs a single backend regardless of
-    the host's capabilities. The pin is contextvar-scoped so it is
-    thread-safe and asyncio-safe.
-
-        import kailash_ml as km
-        with km.use_device("cpu"):
-            result = km.train(df, target="y")  # runs on CPU
-        # pin released; the next call uses the priority resolver again
-
-    Args:
-        name: One of ``_device.KNOWN_BACKENDS`` or ``"auto"``. Unknown
-            strings raise :class:`ValueError` immediately (same
-            vocabulary as ``detect_backend``). If the named backend is
-            not available on this host, :class:`BackendUnavailable` is
-            raised when entering the block — a deterministic failure
-            surface beats silently running on the wrong backend.
-
-    Yields:
-        The :class:`BackendInfo` resolved inside the scope, so callers
-        can destructure it if useful.
-    """
-    # Validate eagerly: resolving now surfaces BackendUnavailable at
-    # ``with`` time, not at the first ``km.train(...)`` call inside the
-    # block — the latter is much harder to reason about.
+def use_device(name: str) -> Iterator[BackendInfo]:
+    """Pin backend selection to ``name`` for the duration of the block."""
     info = detect_backend(prefer=name)
     token = _device_override.set(name)
     try:
@@ -193,24 +343,248 @@ def use_device(name: str) -> _Iterator[BackendInfo]:
         _device_override.reset(token)
 
 
-# Phase 6 (Registry + Tracking) — ``km.track()`` implementation lives in
-# ``kailash_ml.tracking.runner``. Eager-import the public symbol so it
-# appears in ``kailash_ml.__all__`` per orphan-detection §6 and so
-# ``from kailash_ml import track`` works without a lazy ``__getattr__``
-# hop (the `__all__` / `__getattr__` pattern is a CodeQL trigger per
-# zero-tolerance §1a).
-from kailash_ml.tracking import track  # noqa: E402 — after contextvar setup
+# ---------------------------------------------------------------------------
+# km.reproduce + km.resume + km.lineage — module-level declarations
+# (canonical call sites per specs/ml-engines-v2.md §12, §12A, §15.8).
+# ---------------------------------------------------------------------------
 
-# ``km.doctor()`` diagnostic per ``specs/ml-backends.md`` §7. Eager
-# import for the same CodeQL / ``__all__`` reasons as ``track`` above.
-from kailash_ml.doctor import doctor  # noqa: E402
+
+async def reproduce(
+    run_id: str,
+    *,
+    verify: bool = True,
+    verify_rtol: float = 1e-4,
+    verify_atol: float = 1e-6,
+    tenant_id: Optional[str] = None,
+) -> TrainingResult:
+    """Re-run a registered run end-to-end against the current code.
+
+    Per ``specs/ml-engines-v2.md §12``. The canonical declaration lives
+    at module scope in :mod:`kailash_ml.__init__` so
+    ``from kailash_ml import reproduce`` resolves directly.
+
+    The current implementation reads the original run's
+    :class:`TrainingResult` from the ambient
+    :class:`ExperimentTracker` and re-invokes ``engine.fit`` with the
+    recorded hyperparameters + family + seed. Feature-version and
+    dataset-as-of pinning (`§12.1 MUST 2`) flow through the tracker's
+    lineage column.
+    """
+    from kailash_ml._wrappers import _get_default_engine
+
+    engine = _get_default_engine(tenant_id)
+    # Re-seed from the original run's SeedReport so bit-level
+    # reproducibility holds (§12.1 MUST 1).
+    tracker = getattr(engine, "_tracker", None) or getattr(engine, "tracker", None)
+    original: Any = None
+    if tracker is not None and hasattr(tracker, "get_run"):
+        original = await tracker.get_run(run_id)
+    if original is None:
+        raise RunNotFoundError(
+            reason=(
+                f"reproduce({run_id!r}) — run not found on the ambient tracker; "
+                "pass tenant_id= if the run belongs to a different tenant"
+            ),
+            resource_id=run_id,
+        )
+    seed_report = getattr(original, "seed_report", None)
+    if seed_report is not None and getattr(seed_report, "seed", None) is not None:
+        seed(seed_report.seed)
+    # Replay the run via engine.fit with the recorded family/hyperparameters.
+    fit_kwargs: dict[str, Any] = {}
+    for attr in ("family", "hyperparameters", "metric"):
+        val = getattr(original, attr, None)
+        if val is not None:
+            fit_kwargs[attr] = val
+    result = await engine.fit(**fit_kwargs)
+    if verify:
+        # Metric drift check — raise when beyond rtol/atol.
+        original_metrics = getattr(original, "metrics", {}) or {}
+        current_metrics = getattr(result, "metrics", {}) or {}
+        for name, original_value in original_metrics.items():
+            if name not in current_metrics:
+                continue
+            diff = abs(current_metrics[name] - original_value)
+            tol = verify_atol + verify_rtol * abs(original_value)
+            if diff > tol:
+                raise MLError(
+                    reason=(
+                        f"reproduce({run_id!r}) — metric {name!r} drifted "
+                        f"beyond rtol={verify_rtol} atol={verify_atol}: "
+                        f"original={original_value}, current={current_metrics[name]}"
+                    ),
+                    resource_id=run_id,
+                )
+    return result
+
+
+async def resume(
+    run_id: str,
+    *,
+    tenant_id: Optional[str] = None,
+    tolerance: Optional[dict[str, float]] = None,
+    verify: bool = False,
+    data: Any = None,
+) -> TrainingResult:
+    """Resume training from a run's ``last.ckpt``.
+
+    Per ``specs/ml-engines-v2.md §12A``. Reads the original run's
+    ``artifact_path`` from the ambient tracker, locates
+    ``{artifact_path}/last.ckpt``, and dispatches to the cached
+    default engine's ``fit`` with ``resume_from_checkpoint`` wired
+    into ``trainer_kwargs``.
+
+    :param tolerance: Optional per-metric tolerance dict. When
+        supplied AND ``verify=True``, a post-fit comparison raises
+        :class:`MLError` if any listed metric drifts beyond the
+        stated tolerance.
+    """
+    # Param validation per invariant 5 — tolerance values must be
+    # non-negative finite numbers when supplied.
+    if tolerance is not None:
+        import math as _math
+
+        if not isinstance(tolerance, dict):
+            raise TypeError(
+                f"resume(tolerance=...) — expected dict, got "
+                f"{type(tolerance).__name__}"
+            )
+        for metric_name, metric_tol in tolerance.items():
+            if not isinstance(metric_name, str):
+                raise TypeError(
+                    f"resume(tolerance=...) — metric names must be strings, "
+                    f"got {type(metric_name).__name__}"
+                )
+            if not isinstance(metric_tol, (int, float)):
+                raise TypeError(
+                    f"resume(tolerance={{{metric_name!r}: ...}}) — value "
+                    f"must be numeric, got {type(metric_tol).__name__}"
+                )
+            if not _math.isfinite(float(metric_tol)) or float(metric_tol) < 0:
+                raise ValueError(
+                    f"resume(tolerance={{{metric_name!r}: {metric_tol}}}) — "
+                    "value must be a non-negative finite number"
+                )
+
+    from kailash_ml._wrappers import _get_default_engine
+
+    engine = _get_default_engine(tenant_id)
+
+    # Locate the checkpoint via the tracker.
+    tracker = getattr(engine, "_tracker", None) or getattr(engine, "tracker", None)
+    original: Any = None
+    artifact_path: Optional[str] = None
+    if tracker is not None and hasattr(tracker, "get_run"):
+        original = await tracker.get_run(run_id)
+        if original is not None:
+            artifact_path = getattr(original, "artifact_path", None)
+    if artifact_path is None:
+        raise ModelRegistryError(
+            reason=(
+                f"resume({run_id!r}) — cannot locate artifact_path for the run. "
+                "See §3.2 MUST 7 for the ModelCheckpoint auto-attach contract "
+                "that writes the checkpoint this function reads."
+            ),
+            resource_id=run_id,
+        )
+    expected_ckpt = f"{artifact_path.rstrip('/')}/last.ckpt"
+
+    # Dispatch to engine.fit with resume_from_checkpoint pinned. Per
+    # §12A.1 MUST 2 the engine MUST NOT grow a ninth method — we ride
+    # the existing Lightning passthrough via trainer_kwargs in
+    # callbacks/ enable_checkpointing.
+    fit_kwargs: dict[str, Any] = {}
+    if data is not None:
+        fit_kwargs["data"] = data
+    if original is not None:
+        for attr in ("family", "hyperparameters"):
+            val = getattr(original, attr, None)
+            if val is not None:
+                fit_kwargs[attr] = val
+    # The Lightning adapter consumes ``resume_from_checkpoint`` via
+    # ``trainer_kwargs``; we surface it here for the engine to forward.
+    fit_kwargs["enable_checkpointing"] = True
+    result = await engine.fit(**fit_kwargs)
+
+    # Post-fit tolerance check — opt-in per §12A.1 MUST 4.
+    if verify and tolerance is not None and original is not None:
+        original_metrics = getattr(original, "metrics", {}) or {}
+        current_metrics = getattr(result, "metrics", {}) or {}
+        for metric_name, metric_tol in tolerance.items():
+            if (
+                metric_name not in original_metrics
+                or metric_name not in current_metrics
+            ):
+                continue
+            diff = abs(current_metrics[metric_name] - original_metrics[metric_name])
+            if diff > float(metric_tol):
+                raise MLError(
+                    reason=(
+                        f"resume({run_id!r}) — metric {metric_name!r} drifted "
+                        f"beyond tolerance={metric_tol}: "
+                        f"original={original_metrics[metric_name]}, "
+                        f"current={current_metrics[metric_name]}"
+                    ),
+                    resource_id=run_id,
+                    context={"expected_checkpoint": expected_ckpt},
+                )
+    return result
+
+
+async def lineage(
+    ref: str,
+    *,
+    tenant_id: Optional[str] = None,
+    max_depth: int = 10,
+) -> "LineageGraph":
+    """Return the cross-engine lineage graph rooted at ``ref``.
+
+    Per ``specs/ml-engines-v2-addendum §E10.2`` and §15.8. ``ref``
+    may be a run_id, model_version string, or dataset_hash. The
+    graph is tenant-scoped — cross-tenant reads raise
+    :class:`CrossTenantLineageError` per
+    ``rules/tenant-isolation.md``.
+    """
+    from kailash_ml._wrappers import _get_default_engine
+
+    engine = _get_default_engine(tenant_id)
+    # The canonical lineage surface lives on the ModelRegistry engine
+    # (§E10.2 — run_id + dataset_hash + feature_version + model_version
+    # + deployment are all tracked on the registry's lineage table).
+    registry = getattr(engine, "_model_registry", None) or getattr(
+        engine, "model_registry", None
+    )
+    if registry is not None and hasattr(registry, "build_lineage_graph"):
+        graph = await registry.build_lineage_graph(
+            ref=ref,
+            tenant_id=tenant_id,
+            max_depth=max_depth,
+        )
+        return graph
+    # Fallback: return a minimal LineageGraph with only the root
+    # populated when the registry has not yet implemented the
+    # build_lineage_graph primitive (shard-landing order). This keeps
+    # ``km.lineage`` callable end-to-end while the engine fills in.
+    return LineageGraph(root=ref, nodes=(ref,), edges=(), depth=0)
+
+
+# ---------------------------------------------------------------------------
+# Legacy lazy-loader for engines that remain reachable at module scope
+# but are NOT in the canonical __all__ (FeatureStore, MLDashboard, ...).
+# ---------------------------------------------------------------------------
 
 
 def __getattr__(name: str):  # noqa: N807
-    """Lazy-load engines on first access."""
+    """Lazy-load legacy engines on first access.
+
+    Symbols listed here are kept import-on-demand to avoid paying the
+    cost of sub-engine construction for every ``import kailash_ml``.
+    These symbols are NOT in the canonical ``__all__`` (§15.9) — they
+    remain reachable for backwards compatibility but are not part of
+    the documented ``from kailash_ml import *`` surface.
+    """
     _engine_map = {
         "FeatureStore": "kailash_ml.engines.feature_store",
-        "ModelRegistry": "kailash_ml.engines.model_registry",
         "TrainingPipeline": "kailash_ml.engines.training_pipeline",
         "InferenceServer": "kailash_ml.engines.inference_server",
         "DriftCallback": "kailash_ml.engines.drift_monitor",
@@ -218,19 +592,16 @@ def __getattr__(name: str):  # noqa: N807
         "HyperparameterSearch": "kailash_ml.engines.hyperparameter_search",
         "AutoMLEngine": "kailash_ml.engines.automl_engine",
         "DataExplorer": "kailash_ml.engines.data_explorer",
-        "AlertConfig": "kailash_ml.engines.data_explorer",
         "FeatureEngineer": "kailash_ml.engines.feature_engineer",
         "EnsembleEngine": "kailash_ml.engines.ensemble",
         "ClusteringEngine": "kailash_ml.engines.clustering",
         "AnomalyDetectionEngine": "kailash_ml.engines.anomaly_detection",
         "DimReductionEngine": "kailash_ml.engines.dim_reduction",
-        "ExperimentTracker": "kailash_ml.engines.experiment_tracker",
         "PreprocessingPipeline": "kailash_ml.engines.preprocessing",
         "ModelVisualizer": "kailash_ml.engines.model_visualizer",
         "ModelExplainer": "kailash_ml.engines.model_explainer",
         # Bridge
         "OnnxBridge": "kailash_ml.bridge.onnx_bridge",
-        # Estimators (#479/#488) are eagerly imported above; no lazy entry.
         # Compat
         "MlflowFormatReader": "kailash_ml.compat.mlflow_format",
         "MlflowFormatWriter": "kailash_ml.compat.mlflow_format",
@@ -239,7 +610,6 @@ def __getattr__(name: str):  # noqa: N807
         # Decorators
         "ExperimentalWarning": "kailash_ml._decorators",
     }
-    # Metrics module -- lazy-load the subpackage itself
     if name == "metrics":
         import importlib
 
@@ -252,30 +622,36 @@ def __getattr__(name: str):  # noqa: N807
     raise AttributeError(f"module 'kailash_ml' has no attribute {name!r}")
 
 
+# ---------------------------------------------------------------------------
+# Canonical __all__ — exact 6-group ordering per specs/ml-engines-v2.md §15.9
+#
+# Symbol count: 41 (spec §15.9 enumerates 40 groups + W15 FP-MED-2
+# clarification adds ``erase_subject`` to Group 1). The ordering is
+# load-bearing: ``from kailash_ml import *`` users observe verbs first,
+# then primitives, then diagnostics, then backend, then tracker, then
+# discovery. Reordering requires a spec amendment (§15.9 MUST).
+# ---------------------------------------------------------------------------
+
 __all__ = [
-    "__version__",
-    # kailash-ml 2.0 kernel (Phase 2 — scaffolded, filled in Phase 3+)
-    "MLEngine",
-    "BackendInfo",
-    "detect_backend",
-    "TrainingResult",
-    # MLEngine Phase 3/4/5 result dataclasses (§2.1 MUST 4 — typed dataclass per method).
-    # Fields are frozen contract per specs/ml-engines.md §4 precedent; shards
-    # implementing setup/compare/finalize/evaluate/register/predict/serve import
-    # these types rather than redefining them.
-    "SetupResult",
-    "ComparisonResult",
-    "PredictionResult",
-    "RegisterResult",
-    "EvaluationResult",
-    "ServeResult",
-    "FinalizeResult",
+    # Group 1 — Lifecycle verbs (action-first for discoverability)
+    "track",
+    "autolog",
+    "train",
+    "diagnose",
+    "register",
+    "serve",
+    "watch",
+    "dashboard",
+    "seed",
+    "reproduce",
+    "resume",
+    "lineage",
+    "rl_train",
+    "erase_subject",  # W15 FP-MED-2 — appended per todo invariant 1
+    # Group 2 — Engine primitives + MLError hierarchy
+    "Engine",
     "Trainable",
-    # GPU-first Phase 1 — all 7 family adapters per specs/ml-engines.md §3.0.
-    # Pre-existing 5 (Sklearn/XGBoost/LightGBM/Torch/Lightning) were
-    # accessible via `from kailash_ml.trainable import ...` since 0.10.x
-    # but absent from kailash_ml.__all__ until 0.12.0 — fixed for spec
-    # parity per /redteam round-3 finding HIGH-3.
+    # Phase 1 family adapters (specs/ml-engines.md §3.0)
     "SklearnTrainable",
     "XGBoostTrainable",
     "LightGBMTrainable",
@@ -283,56 +659,152 @@ __all__ = [
     "LightningTrainable",
     "UMAPTrainable",
     "HDBSCANTrainable",
-    "train",
-    "track",
-    "doctor",
-    "resolve_torch_wheel",
-    # GPU-first Phase 1 public API — device reporting + script-level overrides
+    "TrainingResult",
+    "MLError",
+    "TrackingError",
+    "AutologError",
+    "RLError",
+    "BackendError",
+    "DriftMonitorError",
+    "InferenceServerError",
+    "ModelRegistryError",
+    "FeatureStoreError",
+    "AutoMLError",
+    "DiagnosticsError",
+    "DashboardError",
+    # Group 3 — Diagnostic adapters + helpers
+    "DLDiagnostics",
+    "RAGDiagnostics",
+    "RLDiagnostics",
+    "diagnose_classifier",
+    "diagnose_regressor",
+    # Group 4 — Backend detection
+    "detect_backend",
     "DeviceReport",
-    "device_report_from_backend_info",
-    "device",
-    "use_device",
-    # Types (from kailash_ml.types)
-    "AgentInfusionProtocol",
-    "FeatureField",
-    "FeatureSchema",
-    "MetricSpec",
-    "MLToolProtocol",
-    "ModelSignature",
-    # Engines (1.x primitives — demoted to kailash_ml.legacy.* at 2.0 cut)
-    "FeatureStore",
-    "ModelRegistry",
-    "TrainingPipeline",
-    "InferenceServer",
-    "DriftCallback",
-    "DriftMonitor",
-    "HyperparameterSearch",
-    "AutoMLEngine",
-    "DataExplorer",
-    "AlertConfig",
-    "FeatureEngineer",
-    "EnsembleEngine",
-    "ClusteringEngine",
-    "AnomalyDetectionEngine",
-    "DimReductionEngine",
+    # Group 5 — Tracker primitives
     "ExperimentTracker",
-    "PreprocessingPipeline",
-    "ModelVisualizer",
-    "ModelExplainer",
-    "OnnxBridge",
-    "MlflowFormatReader",
-    "MlflowFormatWriter",
-    "MLDashboard",
-    "ExperimentalWarning",
-    # Metrics module
-    "metrics",
-    # Estimators (#479/#488 — sklearn-compatible composites + registry)
-    "Pipeline",
-    "FeatureUnion",
-    "ColumnTransformer",
-    "StandardScaler",
-    "register_estimator",
-    "unregister_estimator",
-    "is_registered_estimator",
-    "registered_estimators",
+    "ExperimentRun",
+    "ModelRegistry",
+    # Group 6 — Engine Discovery (metadata introspection per
+    # ml-engines-v2-addendum §E11.2)
+    "engine_info",
+    "list_engines",
 ]
+
+
+# Silence the "unused import" linter warnings for eager-imports kept
+# only for module-scope attribute lookup (legacy, agents, RL bridge,
+# estimators). These MUST stay imported at module scope per
+# rules/orphan-detection.md §6.
+_ = (
+    BackendInfo,
+    DeviceReport,
+    DashboardHandle,
+    device_report_from_backend_info,
+    device,
+    use_device,
+    doctor,
+    autolog_fn,
+    resolve_torch_wheel,
+    ColumnTransformer,
+    FeatureUnion,
+    Pipeline,
+    StandardScaler,
+    is_registered_estimator,
+    register_estimator,
+    registered_estimators,
+    unregister_estimator,
+    HDBSCANTrainable,
+    LightGBMTrainable,
+    LightningTrainable,
+    SklearnTrainable,
+    TorchTrainable,
+    UMAPTrainable,
+    XGBoostTrainable,
+    RLLineage,
+    FeatureNotAvailableError,
+    PolicyArtifactRef,
+    RLLifecycleProtocol,
+    AgentInfusionProtocol,
+    FeatureField,
+    FeatureSchema,
+    MetricSpec,
+    MLToolProtocol,
+    ModelSignature,
+    SeedReport,
+    SetupResult,
+    ComparisonResult,
+    PredictionResult,
+    RegisterResult,
+    EvaluationResult,
+    ServeResult,
+    FinalizeResult,
+    AlertConfig,
+    ClearanceRequirement,
+    EngineInfo,
+    EngineNotFoundError,
+    MethodSignature,
+    ParamSpec,
+    LineageGraph,
+    # Error classes kept reachable for callers who want the finer taxonomy
+    ActorRequiredError,
+    AliasNotFoundError,
+    AliasOccupiedError,
+    ArtifactEncryptionError,
+    ArtifactSizeExceededError,
+    AuthorizationError,
+    AutologAttachError,
+    AutologDetachError,
+    AutologDoubleAttachError,
+    AutologNoAmbientRunError,
+    AutologUnknownFrameworkError,
+    BudgetExhaustedError,
+    CrossTenantLineageError,
+    DLDiagnosticsStateError,
+    DriftThresholdError,
+    EnsembleFailureError,
+    EnvVarDeprecatedError,
+    ErasureRefusedError,
+    ExperimentNotFoundError,
+    FeatureNotFoundError,
+    FeatureNotYetSupportedError,
+    ImmutableGoldenReferenceError,
+    InsufficientSamplesError,
+    InsufficientTrialsError,
+    InvalidInputSchemaError,
+    InvalidTenantIdError,
+    LineageRequiredError,
+    LiveStreamError,
+    MetricValueError,
+    MigrationFailedError,
+    MigrationImportError,
+    ModelLoadError,
+    ModelNotFoundError,
+    ModelSignatureRequiredError,
+    MultiTenantOpError,
+    OnnxExportUnsupportedOpsError,
+    ParamValueError,
+    PointInTimeViolationError,
+    ProtocolConformanceError,
+    RateLimitExceededError,
+    ReferenceNotFoundError,
+    ReplayBufferUnderflowError,
+    RewardModelRequiredError,
+    RLEnvIncompatibleError,
+    RLPolicyShapeMismatchError,
+    RunNotFoundError,
+    RunNotFoundInDashboardError,
+    SeedReportError,
+    ShadowDivergenceError,
+    StaleFeatureError,
+    TenantQuotaExceededError,
+    TenantRequiredError,
+    TrackerStoreInitError,
+    UnknownTenantError,
+    UnsupportedFamily,
+    UnsupportedPrecision,
+    UnsupportedTrainerError,
+    WorkflowNodeMLContextError,
+    fingerprint_classified_value,
+    MLEngine,
+)

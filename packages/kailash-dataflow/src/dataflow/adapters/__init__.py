@@ -15,19 +15,14 @@ from .mysql import MySQLAdapter
 from .postgresql import PostgreSQLAdapter
 from .sqlite import SQLiteAdapter
 
-
-def __getattr__(name: str):
-    """Lazy-load adapters that require optional driver packages."""
-    if name == "MongoDBAdapter":
-        from .mongodb import MongoDBAdapter
-
-        return MongoDBAdapter
-    if name == "PostgreSQLVectorAdapter":
-        from .postgresql_vector import PostgreSQLVectorAdapter
-
-        return PostgreSQLVectorAdapter
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
+# MongoDB + pgvector adapter modules import cleanly without their optional
+# driver packages (motor / pgvector) — the ImportError is deferred to
+# .connect() time. Eager-importing the class objects here lets CodeQL
+# py/modification-of-default-value resolve the __all__ entries per
+# rules/orphan-detection.md §6; the driver check still fires at first
+# connect for users without the optional extra.
+from .mongodb import MongoDBAdapter
+from .postgresql_vector import PostgreSQLVectorAdapter
 
 __all__ = [
     "BaseAdapter",

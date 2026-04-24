@@ -33,12 +33,11 @@ import os
 import shutil
 import sqlite3
 import sys
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-__all__ = ["doctor", "main"]
+__all__ = ["doctor", "main", "run_subcommand"]
 
 
 # ---------------------------------------------------------------------------
@@ -326,10 +325,10 @@ def _precision_for_backend(probe: BackendProbe) -> Optional[str]:
     # output identical to what TrainingPipeline / InferenceServer would
     # report at runtime.
     try:
-        from kailash_ml._device import (
+        from kailash_ml._device import (  # noqa: PLC0415
             detect_backend,
             resolve_precision,
-        )  # noqa: PLC0415
+        )
 
         info = detect_backend(prefer=probe.backend)
         return resolve_precision(info, requested="auto")
@@ -912,6 +911,99 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
     return doctor(require=args.require, as_json=args.json)
+
+
+def run_subcommand(name: str, *, matrix_path: Optional[Path] = None) -> dict[str, Any]:
+    """Run a named :command:`km doctor` subcommand and return a dict result.
+
+    Subcommands surface specific slices of the full :func:`doctor`
+    report by consuming the ``backend-compat-matrix.yaml`` package-data
+    file at runtime. Adding a new subcommand is intentionally cheap:
+    declare a case here that reads the matrix and returns a JSON-like
+    dict. Per ``specs/ml-backends.md § GPU Arch Cutoff``, the matrix
+    file has its own semver so ops can patch new GPUs/macOS bumps
+    without a kailash-ml release.
+
+    Args:
+        name: Subcommand name. Currently supported:
+
+            - ``"gpu"`` — enumerate every matrix entry with probe
+              status for GPU backends (cuda / mps / rocm / xpu / tpu).
+            - ``"matrix"`` — return the raw compatibility matrix as a
+              dict (no probes).
+            - ``"backends"`` — list every backend key the matrix knows
+              about.
+
+        matrix_path: Optional override for the shipped
+            ``backend-compat-matrix.yaml`` location. Used in tests.
+
+    Returns:
+        A JSON-serializable dict. The ``subcommand`` key echoes
+        ``name`` so callers can dispatch on the response.
+
+    Raises:
+        ValueError: when ``name`` is not a known subcommand. The error
+            message enumerates the valid options so users see the full
+            set even before reading the source.
+    """
+    from kailash_ml._compat_matrix import load_matrix
+
+    matrix = load_matrix(matrix_path)
+
+    if name == "matrix":
+        return {
+            "subcommand": "matrix",
+            "format_version": matrix.format_version,
+            "updated": matrix.updated,
+            "backends": {
+                key: {
+                    "name": entry.name,
+                    "min_torch_version": entry.min_torch_version,
+                    "archs": list(entry.archs) if entry.archs else None,
+                    "platform_requirement": entry.platform_requirement,
+                    "install_hint": entry.install_hint,
+                    "gotchas": list(entry.gotchas),
+                    **entry.extra,
+                }
+                for key, entry in matrix.backends.items()
+            },
+        }
+
+    if name == "backends":
+        return {
+            "subcommand": "backends",
+            "format_version": matrix.format_version,
+            "backends": sorted(matrix.backends.keys()),
+        }
+
+    if name == "gpu":
+        # GPU-only slice of the matrix: every backend except `cpu`.
+        gpu_keys = [k for k in matrix.backends if k != "cpu"]
+        return {
+            "subcommand": "gpu",
+            "format_version": matrix.format_version,
+            "gpu_backends": {
+                key: {
+                    "name": matrix.backends[key].name,
+                    "min_torch_version": matrix.backends[key].min_torch_version,
+                    "archs": (
+                        list(matrix.backends[key].archs)
+                        if matrix.backends[key].archs
+                        else None
+                    ),
+                    "platform_requirement": matrix.backends[key].platform_requirement,
+                    "install_hint": matrix.backends[key].install_hint,
+                    "gotchas": list(matrix.backends[key].gotchas),
+                    **matrix.backends[key].extra,
+                }
+                for key in gpu_keys
+            },
+        }
+
+    valid = ("gpu", "matrix", "backends")
+    raise ValueError(
+        f"unknown doctor subcommand {name!r}; valid options: {', '.join(valid)}"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover — console-script shim only

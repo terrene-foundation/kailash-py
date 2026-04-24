@@ -13,6 +13,9 @@ __pycache__/
 
 # ML runtime artifacts (experiment tracking, models)
 .kailash_ml/
+# CatBoost training artifacts (runtime output from ML tests)
+catboost_info/
+packages/*/catboost_info/
 
 # DataFlow migration runtime history (generated per-run, never committed)
 packages/kailash-dataflow/src/dataflow/migrations/performance_data/

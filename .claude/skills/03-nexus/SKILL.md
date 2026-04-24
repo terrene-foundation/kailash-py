@@ -1,11 +1,15 @@
 ---
 name: nexus
-description: "Kailash Nexus - zero-config multi-channel platform for deploying workflows as API + CLI + MCP simultaneously. Use when asking about 'Nexus', 'multi-channel', 'platform deployment', 'API deployment', 'CLI deployment', 'MCP deployment', 'unified sessions', 'workflow deployment', 'production deployment', 'API gateway', 'FastAPI alternative', 'session management', 'health monitoring', 'enterprise platform', 'plugins', 'event system', or 'workflow registration'. Also covers K8s integration: 'K8s probes', 'healthz', 'readyz', 'startup probe', 'ProbeManager', 'ProbeState', 'OpenAPI', 'openapi.json', 'OpenApiGenerator', 'security headers', 'CSRF middleware', 'CSRFMiddleware', 'SecurityHeadersMiddleware', 'middleware presets', 'Preset', or 'HSTS'."
+description: "Kailash Nexus: API+CLI+MCP platform. Use for workflow deploy, sessions, K8s probes, OpenAPI, CSRF, security headers."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework
 
 Nexus is a zero-config multi-channel platform built on Kailash Core SDK that deploys workflows as API + CLI + MCP simultaneously.
+
+## When to Use
+
+Use Nexus when asking about Nexus, multi-channel, platform deployment, API deployment, CLI deployment, MCP deployment, unified sessions, workflow deployment, production deployment, API gateway, FastAPI alternative, session management, health monitoring, enterprise platform, plugins, event system, or workflow registration. Also covers K8s integration: K8s probes, healthz, readyz, startup probe, `ProbeManager`, `ProbeState`, OpenAPI, `openapi.json`, `OpenApiGenerator`, security headers, CSRF middleware, `CSRFMiddleware`, `SecurityHeadersMiddleware`, middleware presets, `Preset`, and HSTS.
 
 ## Features
 
@@ -82,6 +86,10 @@ app.start()
 - **[nexus-auth-plugin](nexus-auth-plugin.md)** - NexusAuthPlugin unified auth (JWT, RBAC, SSO, rate limiting, tenant, audit)
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
+
+### M1 ML Integration (`nexus.ml`)
+
+The `nexus.ml` module wires kailash-ml dashboards and serving handles onto a Nexus app: `MLDashboard(auth="nexus")` reuses Nexus's validator adapter and contextvars, and `mount_ml_endpoints(nexus, serve_handle)` registers REST + MCP + WebSocket routes in one call. Live on branch `feat/kailash-ml-1.0.0-m1-foundations` (landed in `60081fed`). For ML-specific behavior, use skill **34-kailash-ml** as the authority.
 
 ## Key Concepts
 
@@ -267,4 +275,4 @@ For Nexus-specific questions, invoke:
 
 - `nexus-specialist` - Nexus implementation and deployment
 - `release-specialist` - Production deployment patterns
-- ``decide-framework` skill` - When to use Nexus vs other approaches
+- `decide-framework` skill - When to use Nexus vs other approaches

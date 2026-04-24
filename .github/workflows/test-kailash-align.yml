@@ -96,6 +96,12 @@ jobs:
           # Install root kailash first so kailash.diagnostics.protocols resolves
           # (not yet on PyPI; PR#2-#4 of issue #567 depend on it)
           uv pip install -e "." --python .venv/bin/python
+          # Install kailash-ml editable so kailash_ml.rl.align_adapter
+          # resolves. The sub-package module landed in the kailash-ml 1.0
+          # milestone branch and is not yet on PyPI; align tests import it
+          # directly per `rules/deployment.md` § "Sibling-Package CI
+          # Installs Root SDK Editable For Unreleased Core Modules".
+          uv pip install -e "packages/kailash-ml" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
 
       - name: Lint (ruff)
@@ -144,6 +150,9 @@ jobs:
         run: |
           uv venv .venv
           uv pip install -e "." --python .venv/bin/python
+          # See unit-test install step — kailash_ml.rl.align_adapter is
+          # unreleased; install editable from the source tree.
+          uv pip install -e "packages/kailash-ml" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev,rlhf]" --python .venv/bin/python
 
       - name: Test GPU

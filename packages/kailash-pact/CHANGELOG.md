@@ -1,5 +1,59 @@
 # PACT Changelog
 
+## [0.10.0] - 2026-04-23
+
+### Added
+
+- **PACT × kailash-ml governance methods (W32.c)** — new `pact.ml`
+  module shipping the three governance methods required by the
+  kailash-ml 1.0.0 engine surface per `specs/pact-ml-integration.md`:
+  - `check_trial_admission(engine, *, tenant_id, actor_id, trial_config,
+budget_microdollars, latency_budget_ms, fairness_constraints=None,
+...) -> AdmissionDecision` — pre-trial admission gate for
+    `AutoMLEngine.run()` / `HyperparameterSearch.search()` / every
+    agent-driven tuning sweep. Validates budget / latency against the
+    governance envelope, fails CLOSED on probe exception per PACT
+    MUST Rule 4, and emits an audit row with a `sha256:<8hex>` payload
+    fingerprint (cross-SDK contract per
+    `rules/event-payload-classification.md` MUST Rule 2).
+  - `check_engine_method_clearance(engine, *, tenant_id, actor_id,
+engine_name, method_name, clearance_required, held_dimensions=None,
+...) -> ClearanceDecision` — per-method D/T/R clearance gate called
+    at every `MLEngine` mutation entry point (`fit` / `predict` /
+    `promote` / `delete` / `archive` / `rollback`).
+  - `check_cross_tenant_op(engine, *, actor_id, src_tenant_id,
+dst_tenant_id, operation, clearance_required, ...) ->
+CrossTenantDecision` — v1.0 always-denied contract per spec
+    IT-4 / Decision 12. Full bilateral clearance evaluation lands in
+    v1.1. The v1.0 always-denied path is a REAL implementation (frozen
+    decision, audit row, typed errors for invalid inputs) -- removing
+    it would remove the audit trail and fail-open.
+- **Frozen decision dataclasses** in `pact.ml`:
+  `AdmissionDecision`, `ClearanceDecision`, `CrossTenantDecision`
+  (all `frozen=True` per PACT MUST Rule 1).
+- **Typed error hierarchy** for programmer-error inputs:
+  `GovernanceAdmissionError`, `GovernanceClearanceError`,
+  `GovernanceCrossTenantError`. Denials are DATA, not exceptions.
+- **`ClearanceRequirement` decorator** and `MLGovernanceContext`
+  frozen dataclass — the `ml_context` kwarg plumbed through every
+  MLEngine mutation method. Per `rules/security.md` § Multi-Site
+  Kwarg Plumbing, the kwarg is security-relevant; silently defaulting
+  it would defeat governance, so the decorator raises `PactError` when
+  it is missing.
+- **Audit row schema** (`specs/pact-ml-integration.md` §5):
+  `decision_id`, `method`, `tenant_id` (indexed per
+  `rules/tenant-isolation.md` §5), `actor_id`, `admitted_or_cleared`,
+  `binding_constraint`, `reason`, `decided_at`, `payload_fingerprint`,
+  `audit_correlation_id` (links PACT rows 1:1 with kailash-ml
+  `_kml_audit` rows).
+
+### Cross-SDK Parity
+
+- The `sha256:<8hex>` payload fingerprint format is identical to
+  kailash-rs `crates/kailash-pact/src/engines/governance.rs` (spec §7).
+  Forensic correlation across polyglot deployments relies on this
+  stable shape.
+
 ## [0.9.0] - 2026-04-20
 
 ### Added

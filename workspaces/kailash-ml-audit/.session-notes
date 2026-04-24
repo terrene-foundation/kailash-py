@@ -1,0 +1,98 @@
+# Session Notes — 2026-04-22 (W22.b)
+
+## Where we are
+
+kailash-ml 1.0.0 `/implement` phase, branch
+`feat/kailash-ml-1.0.0-m1-foundations`, local only. **W22.b** landed
+this session: engine-boundary auto-attach of
+`DLDiagnostics.as_lightning_callback()` in
+`TrainingPipeline._train_lightning`. Next shard is **W23.a** — autolog
+for sklearn + lightgbm + Lightning + torch per `specs/ml-autolog.md`.
+
+## What W22.b delivered
+
+1. `DLDiagnostics.is_available() -> bool` classmethod in
+   `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py` — probes
+   both `torch` and `lightning.pytorch`; returns False if either import
+   fails. Used as the availability gate by `_train_lightning`.
+2. `_is_dl_diagnostics_callback: bool = True` sentinel on the nested
+   `_DLDiagnosticsCallback` class. The nested class cannot be
+   referenced by name from outside `as_lightning_callback`, so the
+   sentinel is the isinstance-equivalent for de-duplication at the
+   engine boundary.
+3. Auto-attach block in `_train_lightning` (between `trainer_kwargs`
+   assembly and `L.Trainer(**trainer_kwargs)`). Appends the DL callback
+   iff `DLDiagnostics.is_available()` AND
+   `kailash_ml.tracking.get_current_run()` is not None; de-dupes
+   against caller-supplied DL callbacks (caller's instance wins).
+   INFO log line `training_pipeline.lightning.dl_diagnostics_attached`
+   on append, `_skipped_duplicate` on de-dup.
+4. Tier-1 unit tests —
+   `packages/kailash-ml/tests/unit/test_w22b_train_lightning_autoattach.py`
+   (8 tests): no-run skip, dl-unavailable skip, positive auto-attach,
+   sentinel presence, caller-supplied de-dup (caller wins), non-DL
+   user-callback composition, is_available() probe both branches.
+5. Tier-2 wiring test —
+   `packages/kailash-ml/tests/integration/test_w22b_autoattach_wiring.py`
+   (2 tests): real 1-epoch `L.Trainer.fit` via `_train_lightning` with
+   a sync duck-typed tracker as the ambient run — asserts `loss_curves`
+   emitted with plotly Figure per `specs/ml-diagnostics.md §4.1` duck
+   typing.
+
+Spec mandate closed: `specs/ml-diagnostics.md §5.3 Engine-boundary
+auto-attach` ("W22 invariant 4 — callback appended by MLEngine.fit").
+Test sweep: `66 passed, 1 warning` across W20/W22/W22.a/W22.b/DL-wiring.
+
+## Read first for W23.a
+
+1. `specs/ml-autolog.md` — whole file; covers sklearn / lightgbm /
+   Lightning / torch monkey-patch targets, ambient-run detection
+   contract, metric namespace discipline (`train/{metric}`,
+   `val/{metric}`), and the opt-in `km.autolog(flavor=...)` entry.
+2. `workspaces/kailash-ml-audit/02-plans/01-master-34-wave-plan.md`
+   §W23 — 6 invariants (per-flavor enable, silent skip when
+   `ambient_run is None`, namespace discipline, extras gating,
+   unpatch on opt-out, rank-0-only for Lightning).
+3. `packages/kailash-ml/src/kailash_ml/tracking/__init__.py` —
+   `get_current_run()` is the single detection source (same accessor
+   W22.b used).
+
+## In-flight state
+
+- The sync-tracker stub via `_current_run.set(tracker)` in W22.b's
+  Tier-2 wiring avoids the async bridge trap. A real `ExperimentRun`
+  plumbed through the auto-attach path would hit the
+  `asyncio.run()` → `RuntimeError` fallback and drop emissions
+  (documented in W22.a traps). W23.a does NOT need to fix this — the
+  autolog path writes metrics, not figures, and the tracker's
+  `log_metric` has the same async shape so the same workaround
+  applies.
+- Tier-2 wiring registers `_TinyTupleModule` via `sys.modules` under
+  `kailash_ml._w22b_tiny.*` so `_shared.validate_model_class`
+  allowlist stays intact. Any future Tier-2 pipeline test that needs
+  a tuple-aware Lightning module can copy this pattern — the
+  alternative (monkey-patching the allowlist) weakens a security
+  gate for test convenience.
+
+## Traps carried over from W22.a
+
+- `tracker.log_figure` is `async def` on real `ExperimentRun` but the
+  callback uses `asyncio.run(coro)` — this RAISES `RuntimeError:
+  asyncio.run() cannot be called from a running event loop` if
+  Lightning is driven from inside an async parent. The defensive
+  `result.close()` branch handles it but SILENTLY DROPS the
+  emission. A real-tracker Tier-2 needs an event-loop-aware bridge
+  (e.g., `asyncio.run_coroutine_threadsafe` to a dedicated worker
+  loop). Out of scope for W22.b; flag if W22.c re-opens it.
+- `MLEngine` has no `close()` method. Broader engine-suite runs
+  segfault during aiosqlite teardown when many tests run together;
+  use per-file invocation or the `managed_engines` factory fixture.
+- `DLDiagnostics.plot_*()` methods don't return `None` on empty
+  logs — they return minimal plotly Figures. Tests that only assert
+  `.calls` length can pass without detecting "emitted but empty";
+  assert `figure_type == "Figure"` if substance matters.
+
+## Commits this session
+
+- `47361d57` W22.a — pre-session baseline (already present at entry)
+- (pending) W22.b — engine auto-attach + tests

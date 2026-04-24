@@ -144,3 +144,33 @@ When deployed by `/redteam`, the analyst MUST:
 4. Run the 9 verification checks against the codebase via AST/grep
 5. Produce `workspaces/<project>/.spec-coverage-v2.md` (assertion table per spec section)
 6. Re-derive every check from scratch — NEVER trust prior round outputs
+
+## Release-Blocking End-to-End Regression Analysis
+
+When assessing feature completeness, the analyst MUST distinguish three levels of "passing":
+
+| Level             | What passes                                              | Still-missing failure mode                                             |
+| ----------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Unit-green        | Each function returns the contract it advertises         | Fake-integration at frozen-dataclass boundary; field exists, is `None` |
+| Integration-green | Named components interoperate against real infra         | Documented public-surface pipeline (README Quick Start) still crashes  |
+| Pipeline-green    | README Quick Start executes end-to-end, no manual wiring | — (this is the release gate)                                           |
+
+The release gate is pipeline-green — NOT unit+integration-green. Every feature owes a `tests/regression/test_issue_NNN_quick_start.py` that copies the README verbatim and asserts successful execution. Absence of a Quick Start regression at `/redteam` is a HIGH finding regardless of unit/integration test counts.
+
+    # DO — flag as HIGH: "7/7 adapter unit tests pass, but Quick Start
+    # crashes at km.register because TrainingResult.trainable is None
+    # on 6 of 7 adapters — fake-integration at the frozen-dataclass boundary"
+
+    # DO NOT — grade as APPROVE based on suite-level green
+    # "189 tests pass" is meaningless if the documented user journey fails.
+
+**BLOCKED responses:**
+
+- "All tests pass — ship it"
+- "README works in the dev's environment, that's the pipeline check"
+- "Integration tests cover the pipeline"
+- "Unit+integration green = release-ready"
+
+**Why:** Fake-integration patterns (a field exists on a frozen dataclass but is populated at only some return sites) pass every unit and integration test because those tests exercise ONE return path at a time. The Quick Start regression is the only test that exercises the full documented pipeline; its absence means every release ships with a non-zero probability that the documented user journey silently crashes for users. Evidence: kailash-ml W33c (2026-04-23, `15033fa6` on `feat/kailash-ml-1.0.0-m1-foundations`) — 6 engine unit suites + 6 integration suites all passed; `km.train() → km.register()` crashed end-to-end because `TrainingResult.trainable` was set on Sklearn's return site only. W33b regression (`480dc3d3`) caught it before v1.1.0 ship.
+
+**Origin:** Session 2026-04-23 M1 release wave. Pattern 5 of 8 from the kailash-ml-audit session notes — generalizable to any release: the "release-blocking end-to-end regression" is the minimum viable release gate.

@@ -418,15 +418,22 @@ class DashboardApp:
 
     This is used by :class:`~kailash_ml.dashboard.MLDashboard` to create the
     full application stack from a database URL.
+
+    W26.e — accepts an optional ``tenant_id`` to scope the embedded
+    :class:`DriftMonitor`. Defaults to ``"dashboard"`` for single-tenant
+    dashboards; production multi-tenant deployments SHOULD supply the
+    tenant scope explicitly per ``rules/tenant-isolation.md``.
     """
 
     def __init__(
         self,
         db_url: str,
         artifact_root: str = "./mlartifacts",
+        tenant_id: str = "dashboard",
     ) -> None:
         self._db_url = db_url
         self._artifact_root = artifact_root
+        self._tenant_id = tenant_id
         self._conn: Any | None = None
         self._tracker: Any | None = None
         self._registry: Any | None = None
@@ -460,7 +467,7 @@ class DashboardApp:
         try:
             from kailash_ml.engines.drift_monitor import DriftMonitor
 
-            self._drift_monitor = DriftMonitor(self._conn)
+            self._drift_monitor = DriftMonitor(self._conn, tenant_id=self._tenant_id)
         except Exception:
             logger.debug("DriftMonitor not available for dashboard.", exc_info=True)
             self._drift_monitor = None

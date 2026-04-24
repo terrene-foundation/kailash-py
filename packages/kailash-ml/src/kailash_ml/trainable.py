@@ -113,6 +113,11 @@ class TrainingContext:
     Carries the Engine's resolved accelerator / precision / tenant /
     tracker binding — Trainables MUST NOT re-resolve these themselves
     (ml-engines.md §3.2 MUST 4).
+
+    The Lightning passthrough block (``strategy``, ``num_nodes``,
+    ``enable_checkpointing``, ``auto_find_lr``, ``callbacks``) carries
+    the W20 ``MLEngine.fit()`` kwargs into the TrainingPipeline /
+    Trainable adapter per ``ml-engines-v2.md`` §3.2 MUST 6-8.
     """
 
     accelerator: str
@@ -123,6 +128,15 @@ class TrainingContext:
     tenant_id: Optional[str] = None
     tracker_run_id: Optional[str] = None
     trial_number: Optional[int] = None
+    # Lightning passthrough (ml-engines-v2.md §3.2 MUST 6-8 / §2.2).
+    # `strategy` is typed Any because concrete values are `str | None |
+    # lightning.pytorch.strategies.Strategy` and importing lightning at
+    # module-load time would force the `[dl]` extra.
+    strategy: Any = None
+    num_nodes: int = 1
+    enable_checkpointing: bool = True
+    auto_find_lr: bool = False
+    callbacks: Optional[tuple] = None
 
 
 class Predictions:
@@ -509,6 +523,17 @@ class SklearnTrainable:
         self._is_fitted = False
         self._last_module: Any = None
 
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        Exposed so `MLEngine.register(result)` can locate the trained
+        model via ``result.trainable.model`` without each adapter
+        duplicating the lookup convention. For sklearn the model IS
+        the estimator.
+        """
+        return self._estimator
+
     # -- Protocol methods ------------------------------------------------
 
     def to_lightning_module(self) -> Any:
@@ -746,6 +771,7 @@ class SklearnTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -817,6 +843,15 @@ class TorchTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For Torch the model IS the raw ``torch.nn.Module`` supplied at
+        construction and mutated in-place by the Lightning trainer.
+        """
+        return self._model
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -945,6 +980,7 @@ class TorchTrainable:
             family=self.family_name,
             hyperparameters={"learning_rate": lr, "max_epochs": max_epochs},
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1005,7 +1041,20 @@ class LightningTrainable:
         self._batch_size = batch_size
         self._task = task
         self._is_fitted = False
+        # Empty tuple default so downstream predict() code paths that
+        # read self._feature_names before fit() has been called get a
+        # consistent shape rather than AttributeError. Populated during
+        # fit() from _split_xy(data, target).
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For Lightning the model IS the wrapped LightningModule supplied
+        at construction.
+        """
+        return self._module
 
     def to_lightning_module(self) -> Any:
         return self._module
@@ -1099,6 +1148,7 @@ class LightningTrainable:
             family=self.family_name,
             hyperparameters={"max_epochs": max_epochs},
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1170,6 +1220,14 @@ class XGBoostTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For XGBoost the model IS the sklearn-compatible estimator.
+        """
+        return self._estimator
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -1346,6 +1404,7 @@ class XGBoostTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1413,6 +1472,14 @@ class LightGBMTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For LightGBM the model IS the sklearn-compatible estimator.
+        """
+        return self._estimator
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -1598,6 +1665,7 @@ class LightGBMTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1665,6 +1733,15 @@ class UMAPTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For UMAP the model IS the fitted reducer (a ``umap.UMAP``
+        instance after fit).
+        """
+        return self._reducer
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -1819,6 +1896,7 @@ class UMAPTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:
@@ -1884,6 +1962,14 @@ class HDBSCANTrainable:
         self._is_fitted = False
         self._last_module: Any = None
         self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For HDBSCAN the model IS the fitted clusterer.
+        """
+        return self._clusterer
 
     def to_lightning_module(self) -> Any:
         if self._last_module is None:
@@ -2041,6 +2127,7 @@ class HDBSCANTrainable:
             family=self.family_name,
             hyperparameters=dict(hyperparameters or {}),
             device=device_report,
+            trainable=self,
         )
 
     def predict(self, X: pl.DataFrame) -> Predictions:

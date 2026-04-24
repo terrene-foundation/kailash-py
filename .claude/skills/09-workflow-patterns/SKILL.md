@@ -1,11 +1,15 @@
 ---
 name: workflow-patterns
-description: "Industry-specific workflow patterns and templates for finance, healthcare, logistics, manufacturing, retail, and common use cases like AI document processing, API integration, business rules, ETL, RAG, security, and project management. Use when asking about 'workflow examples', 'workflow templates', 'industry workflows', 'finance workflows', 'healthcare workflows', 'logistics workflows', 'manufacturing workflows', 'retail workflows', 'ETL workflows', 'RAG workflows', 'API workflows', 'document processing', 'business rules', or 'workflow patterns'."
+description: "Workflow templates: finance, healthcare, logistics, manufacturing, retail, ETL, RAG, document processing, API."
 ---
 
 # Kailash Workflows - Industry Patterns & Templates
 
 Production-ready workflow patterns and templates for industry-specific use cases and common application patterns.
+
+## When to Use
+
+Use these patterns when asking about workflow examples, workflow templates, industry workflows, finance workflows, healthcare workflows, logistics workflows, manufacturing workflows, retail workflows, ETL workflows, RAG workflows, API workflows, document processing, business rules, or workflow patterns.
 
 ## Industry-Specific Patterns
 
@@ -50,6 +54,15 @@ workflow.add_connection("transform", "output", "load", "data")
 workflow.add_node("Embed", "embed", {"model": "text-embedding-ada-002"})
 workflow.add_node("Search", "search", {"index": "vectors"})
 workflow.add_node("Generate", "generate", {"model": os.environ["LLM_MODEL"]})
+```
+
+### ML Training Workflow (W31a spec nodes)
+
+```python
+# Train → promote through registry tiers in one workflow (skill 34-kailash-ml is authority)
+workflow.add_node("MLTrainingNode", "train", {"engine": "sklearn", "model_name": "churn", "task": "classification"})
+workflow.add_node("MLRegistryPromoteNode", "promote", {"model_name": "churn", "tier": "staging"})
+workflow.add_connection("train", "model_uri", "promote", "model_uri")
 ```
 
 ## Pattern Structure

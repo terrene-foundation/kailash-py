@@ -75,6 +75,8 @@ from typing import Any, Optional, Sequence
 
 import polars as pl
 
+from kaizen.ml._tracker_bridge import emit_metric, resolve_active_tracker
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -325,6 +327,7 @@ class InterpretabilityDiagnostics:
         run_id: Optional[str] = None,
         local_files_only: bool = True,
         allow_download: bool = False,
+        tracker: Optional[Any] = None,
     ) -> None:
         if not isinstance(model_name, str):
             raise TypeError(
@@ -355,6 +358,11 @@ class InterpretabilityDiagnostics:
         # Lazy-loaded model handles.
         self._model: Any = None
         self._tokenizer: Any = None
+
+        # Ambient tracker binding — spec §2.1. Lazy resolution at each
+        # emission site per §2.2 (the adapter may be constructed before
+        # the ``async with km.track(...)`` scope opens).
+        self._tracker: Optional[Any] = tracker
 
         # Bounded-memory time-series storage per analysis. Lists of
         # dicts converted to polars on demand.
@@ -606,6 +614,14 @@ class InterpretabilityDiagnostics:
             matrix=matrix,
         )
         self._attention_log.append(record)
+        # Auto-emit — spec §3.1 / §3.2 namespace = ``interp.*``.
+        _tracker = resolve_active_tracker(self._tracker)
+        if _tracker is not None:
+            emit_metric(
+                _tracker, "interp.attention_entropy", float(_matrix_entropy(matrix))
+            )
+            emit_metric(_tracker, "interp.attention_layer", float(layer))
+            emit_metric(_tracker, "interp.attention_head", float(head))
         logger.info(
             "interp.attention_heatmap.ok",
             extra={
@@ -746,6 +762,11 @@ class InterpretabilityDiagnostics:
                 "mode": "real",
             }
         )
+        # Auto-emit — spec §3.1 / §3.2 namespace = ``interp.*``.
+        _tracker = resolve_active_tracker(self._tracker)
+        if _tracker is not None:
+            emit_metric(_tracker, "interp.logit_lens_n_layers", float(n_layers))
+            emit_metric(_tracker, "interp.logit_lens_top_k", float(top_k))
         logger.info(
             "interp.logit_lens.ok",
             extra={
@@ -859,6 +880,12 @@ class InterpretabilityDiagnostics:
             "mode": "real",
         }
         self._probe_log.append(row)
+        # Auto-emit — spec §3.1 item 2; §3.2 namespace = ``interp.*``.
+        _tracker = resolve_active_tracker(self._tracker)
+        if _tracker is not None:
+            emit_metric(_tracker, "interp.probe_cv_accuracy", float(cv_accuracy))
+            emit_metric(_tracker, "interp.probe_layer", float(layer))
+            emit_metric(_tracker, "interp.probe_n_prompts", float(len(prompts)))
         logger.info(
             "interp.probe.ok",
             extra={
@@ -1077,3 +1104,36 @@ def _fingerprint_prompt(prompt: str) -> str:
     ``rules/event-payload-classification.md``.
     """
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:8]
+
+
+def _matrix_entropy(matrix: Any) -> float:
+    """Shannon entropy of a 2D attention matrix (pure math).
+
+    Per ``rules/agent-reasoning.md`` Permitted Deterministic Logic:
+    this is structural output formatting, NOT agent reasoning — the
+    auto-emit path needs a scalar metric per attention head and
+    entropy is the standard summary. NaN / Inf are clamped to ``0.0``
+    so ``emit_metric`` does not reject the value at the finite gate.
+    """
+    import math as _math
+
+    try:
+        total = 0.0
+        rows = 0
+        for row in matrix:
+            row_sum = sum(float(p) for p in row if float(p) > 0)
+            if row_sum <= 0:
+                continue
+            rows += 1
+            for p in row:
+                p = float(p)
+                if p <= 0:
+                    continue
+                norm = p / row_sum
+                total -= norm * _math.log(norm)
+        if rows == 0:
+            return 0.0
+        entropy = total / rows
+        return entropy if _math.isfinite(entropy) else 0.0
+    except Exception:
+        return 0.0

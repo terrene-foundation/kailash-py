@@ -583,7 +583,7 @@ Use `dataflow-specialist` subagent when:
 ### Related Documentation
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L211-L224)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L211-L224)
 
 ## Examples
 

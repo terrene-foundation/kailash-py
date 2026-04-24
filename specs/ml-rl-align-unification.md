@@ -1,8 +1,8 @@
 # Spec (draft) — ML RL + Align TRL Cross-SDK Unification
 
-Version: 1.0.0 (draft)
+Version: 1.0.0
 
-**Status:** DRAFT — round-2 Phase-A spec authoring. Not yet authoritative.
+**Status:** AUTHORITATIVE (promoted from DRAFT 2026-04-23, user-approved spec-led W30 path).
 **Packages:** `kailash-ml` (target: 1.0.0) + `kailash-align` (target: 0.5.0+).
 **Modules:** `kailash_ml.rl.protocols` (shared Protocol), `kailash_ml.rl.align_adapter`, `kailash_align.rl_bridge`.
 **Parent specs:** `ml-rl-core-draft.md`, `ml-rl-algorithms-draft.md`.
@@ -427,3 +427,4 @@ These are flagged for `/todos` review, NOT silent defaults:
 Spec revisions:
 
 - **2026-04-21 DRAFT** — initial draft defining the RLLifecycleProtocol, dispatch, lineage fields, test contract, and open design decisions.
+- **2026-04-23 v1.0.0** — promoted to authoritative; open decisions D1–D5 resolved as documented; W30 implementation in flight across 3 shards (kailash-ml owner).

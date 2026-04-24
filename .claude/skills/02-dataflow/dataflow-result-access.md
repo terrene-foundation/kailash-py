@@ -170,7 +170,7 @@ user_name = users_list[0]["name"]  # Works
 ## Documentation References
 
 ### Primary Sources
-- **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L991-L1001)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../dataflow-specialist.md#L991-L1001)
 
 ### Related Documentation
 

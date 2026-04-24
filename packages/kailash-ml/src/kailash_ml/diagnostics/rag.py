@@ -214,6 +214,7 @@ class RAGDiagnostics:
         max_leaderboard_history: int = 256,
         sensitive: bool = False,
         run_id: Optional[str] = None,
+        tracker: Optional[Any] = None,
     ) -> None:
         if max_history < 1:
             raise ValueError("max_history must be >= 1")
@@ -231,6 +232,12 @@ class RAGDiagnostics:
         self._judge = judge
         self._sensitive = sensitive
         self.run_id: str = run_id if run_id is not None else uuid.uuid4().hex
+        # Optional duck-typed tracker for future metric/figure emission.
+        # Stored for parity with DLDiagnostics / RLDiagnostics; consumers
+        # that want to route evaluation metrics to an ExperimentRun
+        # construct RAGDiagnostics(tracker=run) and later emit via
+        # tracker.log_metric(key, value).
+        self._tracker = tracker
 
         # Bounded in-memory storage per rules analysis §1.4 — streaming
         # RAG eval loops must not grow without bound.
@@ -1442,15 +1449,12 @@ def _try_trulens_evaluate(
     # must have set trulens's provider before invoking trulens_scores().
     # We return the module-level helper stubs; extending this to real
     # feedback runs requires the caller to register their Provider.
-    try:
-        _provider_cls = Provider  # referenced so it's not a dead import
-        _ground_cls = Groundedness
-    except Exception as exc:  # pragma: no cover
-        logger.warning(
-            "ragdiagnostics.trulens_error",
-            extra={"rag_error": str(exc), "mode": "real"},
-        )
-        return None
+    # Reference the imported symbols so they are not flagged as dead
+    # imports. If the names somehow become unbound at runtime, the
+    # subsequent dict construction raises NameError loudly — the
+    # previous try/except wrapper swallowed a case that CodeQL
+    # py/unreachable-statement correctly flagged as impossible.
+    assert Provider is not None and Groundedness is not None  # noqa: S101
 
     # Without a caller-supplied Provider, we compute a neutral
     # placeholder (0.0) per row so the DataFrame schema is stable; the

@@ -651,6 +651,11 @@ class QueryInterceptor:
         if query_type in ["INSERT", "UPDATE", "DELETE"]:
             # This is a simplified implementation
             query_str = str(parsed)
+            # Initialize match to None for static-analysis friendliness:
+            # even though the outer `if` guarantees one of the three branches
+            # below fires, CodeQL py/uninitialized-local flags the `if match`
+            # below as reading a potentially-unbound name.
+            match = None
             if query_type == "INSERT":
                 match = re.search(r"INSERT\s+INTO\s+(\w+)", query_str, re.IGNORECASE)
             elif query_type == "UPDATE":

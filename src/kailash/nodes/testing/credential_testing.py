@@ -222,6 +222,7 @@ class CredentialTestingNode(Node):
             }
 
         # Generate credentials based on type
+        result: dict = {}
         if credential_type == "oauth2":
             result = self._generate_oauth2_credentials(
                 scenario, mock_data, validation_rules, ttl_seconds

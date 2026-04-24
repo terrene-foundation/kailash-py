@@ -30,20 +30,30 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal, Optional, Protocol, runtime_checkable
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    Mapping,
+    Optional,
+    Protocol,
+    runtime_checkable,
+)
 
 logger_name = __name__  # deliberately NOT binding a logger at module scope —
 # zero-side-effect import is the contract for a protocol-only module.
 
 __all__ = [
     "Diagnostic",
+    "DiagnosticReport",
     "JudgeCallable",
     "JudgeInput",
     "JudgeResult",
     "JudgeWinner",
+    "RLDiagnostic",
     "TraceEvent",
     "TraceEventType",
     "TraceEventStatus",
@@ -430,3 +440,152 @@ class Diagnostic(Protocol):
     def __enter__(self) -> "Diagnostic": ...
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Optional[bool]: ...
     def report(self) -> dict[str, Any]: ...
+
+
+# ---------------------------------------------------------------------------
+# RLDiagnostic Protocol (kailash 2.9.0, spec §2.2)
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class RLDiagnostic(Protocol):
+    """Diagnostic adapter specialised for reinforcement-learning runs.
+
+    Satisfied by both classical RL (SB3/d3rlpy wrappers) and RLHF
+    (kailash-align adapters) — the shared cross-family surface for
+    metric emission in RL training loops.
+
+    Per ``specs/kailash-core-ml-integration.md`` §2.2: an implementation
+    satisfying both ``Diagnostic`` and the three ``record_*`` methods
+    below satisfies ``RLDiagnostic`` at runtime. Conformance is
+    structural, not nominal.
+
+    Cross-SDK parity: ``kailash-rs`` MUST expose the same method names
+    and argument names at ``crates/kailash/src/diagnostics/protocols.rs``.
+    """
+
+    name: ClassVar[str]
+
+    def record_episode(
+        self,
+        *,
+        step: int,
+        episode_reward: float,
+        episode_length: int,
+        metrics: Optional[Mapping[str, float]] = None,
+    ) -> None:
+        """Record end-of-episode summary.
+
+        ``metrics`` carries ad-hoc environment info (e.g., custom reward
+        components, environment-specific observations that the adapter
+        flattens to a float-keyed mapping).
+        """
+        ...
+
+    def record_eval(
+        self,
+        *,
+        step: int,
+        mean_reward: float,
+        std_reward: float,
+        n_episodes: int,
+    ) -> None:
+        """Record periodic evaluation results against a held-out set."""
+        ...
+
+    def record_policy_step(
+        self,
+        *,
+        step: int,
+        policy_loss: float,
+        value_loss: Optional[float] = None,
+        entropy: Optional[float] = None,
+        kl_from_ref: Optional[float] = None,
+    ) -> None:
+        """Record per-optimizer-step policy metrics.
+
+        Shared by classical PPO/SAC (value_loss + entropy) and RLHF
+        DPO/PPO (kl_from_ref). Any single call MAY set only the fields
+        its algorithm produces; ``None`` means "not applicable to this
+        algorithm family".
+        """
+        ...
+
+
+# ---------------------------------------------------------------------------
+# DiagnosticReport (kailash 2.9.0, spec §2.3)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DiagnosticReport:
+    """Standardised result returned by ``Diagnostic.report()``.
+
+    Frozen so a report can be safely shared across threads and
+    serialized without risk of silent mutation after fingerprinting.
+
+    Per ``specs/kailash-core-ml-integration.md`` §2.3:
+
+      - ``schema_version`` is a ``Literal["1.0"]`` — kailash 2.9.0 locks
+        the report shape so downstream consumers (dashboards, cross-SDK
+        subscribers) deserialize safely. A 2.0 bump requires a new
+        literal (``Literal["2.0"]``) plus forward-compat shims.
+      - ``events`` is an immutable ``tuple`` so the sequence cannot be
+        appended after the report crosses a thread / serialization
+        boundary.
+      - ``summary`` carries numeric aggregates (counts, p50/p95, etc.).
+      - ``rollup`` carries string aggregates (status, winner, etc.).
+
+    Optional ``tenant_id`` and ``actor_id`` pin the report to a tenant
+    and actor when the upstream diagnostic session had them; per
+    ``rules/tenant-isolation.md`` §5 audit rows, the report forwards
+    these identifiers alongside the metric body.
+    """
+
+    schema_version: Literal["1.0"]
+    events: tuple[TraceEvent, ...]
+    summary: Mapping[str, float]
+    rollup: Mapping[str, str]
+    tenant_id: Optional[str] = None
+    actor_id: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict with canonical shape.
+
+        Matches the contract consumed by kailash-rs subscribers — event
+        list round-trips via ``TraceEvent.to_dict()``; summary/rollup
+        round-trip as plain dicts.
+        """
+        return {
+            "schema_version": self.schema_version,
+            "events": [event.to_dict() for event in self.events],
+            "summary": dict(self.summary),
+            "rollup": dict(self.rollup),
+            "tenant_id": self.tenant_id,
+            "actor_id": self.actor_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DiagnosticReport":
+        """Deserialize from the canonical dict shape.
+
+        Raises:
+            KeyError: If ``schema_version``, ``events``, ``summary``, or
+                ``rollup`` is absent.
+            ValueError: If ``schema_version`` is not ``"1.0"``.
+        """
+        schema_version = data["schema_version"]
+        if schema_version != "1.0":
+            raise ValueError(
+                f"DiagnosticReport.schema_version must be '1.0', got {schema_version!r}. "
+                f"Newer schemas require a forward-compat shim."
+            )
+        events = tuple(TraceEvent.from_dict(e) for e in data["events"])
+        return cls(
+            schema_version="1.0",
+            events=events,
+            summary=dict(data["summary"]),
+            rollup=dict(data["rollup"]),
+            tenant_id=data.get("tenant_id"),
+            actor_id=data.get("actor_id"),
+        )

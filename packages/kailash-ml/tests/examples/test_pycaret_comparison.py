@@ -88,7 +88,7 @@ async def tracker(conn: ConnectionManager, tmp_path) -> ExperimentTracker:
 
 @pytest.fixture
 async def drift_monitor(conn: ConnectionManager) -> DriftMonitor:
-    return DriftMonitor(conn)
+    return DriftMonitor(conn, tenant_id="test")
 
 
 @pytest.fixture

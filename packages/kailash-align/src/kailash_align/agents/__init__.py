@@ -8,24 +8,20 @@ tools are dumb data endpoints.
 """
 from __future__ import annotations
 
+# Eager imports for CodeQL py/modification-of-default-value —
+# rules/orphan-detection.md §6 mandates that every __all__ entry resolve
+# to a module-scope import. Each sub-module lazy-imports kaizen at call
+# time via `_import_kaizen()`, so importing the module object here does
+# NOT pull in kailash-kaizen; the ImportError is still raised later when
+# the agent is instantiated without the [agents] extra.
+from kailash_align.agents.strategist import AlignmentStrategistAgent
+from kailash_align.agents.data_curation import DataCurationAgent
+from kailash_align.agents.training_config import TrainingConfigAgent
+from kailash_align.agents.eval_interpreter import EvalInterpreterAgent
+
 __all__ = [
     "AlignmentStrategistAgent",
     "DataCurationAgent",
     "TrainingConfigAgent",
     "EvalInterpreterAgent",
 ]
-
-
-def __getattr__(name: str):  # noqa: N807
-    _map = {
-        "AlignmentStrategistAgent": "kailash_align.agents.strategist",
-        "DataCurationAgent": "kailash_align.agents.data_curation",
-        "TrainingConfigAgent": "kailash_align.agents.training_config",
-        "EvalInterpreterAgent": "kailash_align.agents.eval_interpreter",
-    }
-    if name in _map:
-        import importlib
-
-        module = importlib.import_module(_map[name])
-        return getattr(module, name)
-    raise AttributeError(f"module 'kailash_align.agents' has no attribute {name!r}")
