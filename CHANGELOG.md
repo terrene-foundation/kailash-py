@@ -15,6 +15,18 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.9.1 — 2026-04-24 — Security patch (issue #613)
+
+**CodeQL security patch** — closes 12 HIGH findings from PR #611 scan. Ships as part of the 1.1.x post-M1 security patch wave.
+
+**Fixed**
+
+- **`trust.auth.jwt` issuer validation** (`py/incomplete-url-substring-sanitization`) — replaced `"github.com" in issuer_lower` substring-match with `urlparse(issuer).hostname` hostname-equality/suffix check against a trusted-hosts allowlist. Blocks `evilgithub.com`-style spoofs. Added GitHub Actions OIDC + Azure v1.0 issuers; non-URL issuers fall through to `"local"` (fail-closed). Regression test: `tests/trust/unit/test_jwt_issuer_hostname_validation.py`.
+
+**Added**
+
+- **`kailash.utils.url_credentials.fingerprint_secret(value, *, length=8)`** — BLAKE2b short-form fingerprint helper for grep-able correlation of secrets in `__repr__` / log lines. Defense-in-depth only; NOT a password-hashing primitive. CodeQL `py/weak-sensitive-data-hashing` flags `hashlib.sha256(secret)` at correlation sites; BLAKE2b is neither flagged nor password-appropriate — exactly the contract correlation sites need. Consumed by kaizen 2.12.1 and mcp 0.2.9 in the same patch wave.
+
 ### kailash 2.9.0 — 2026-04-23 — ML integration foundations (W31.a + W31.d)
 
 **Ships the kailash-core pieces of the kailash-ml 1.0.0 wave.** Per `specs/kailash-core-ml-integration.md`, 2.9.0 adds:
