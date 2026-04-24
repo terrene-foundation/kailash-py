@@ -5,6 +5,12 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.1] — 2026-04-24 — Security patch (issue #613)
+
+### Changed
+
+- **`kaizen.llm.auth.azure` correlation fingerprint** (`py/weak-sensitive-data-hashing`) — migrated `hashlib.sha256(api_key)` to `kailash.utils.url_credentials.fingerprint_secret(api_key)` (BLAKE2b, 8-char) at two sites (`CachedToken.from_raw` line 84, `AzureEntra.__init__` line 181). The value is NOT used for verification — only grep-able correlation in `__repr__` / log lines — so BLAKE2b is architecturally correct AND satisfies the CodeQL scanner. No migration required; neither fingerprint is persisted. Same-class sibling fix in kailash-mcp 0.2.9 per `rules/agents.md` fix-immediately rule.
+
 ## [2.12.0] — 2026-04-23 — ML integration (W32.a, kailash-ml wave)
 
 ### Why

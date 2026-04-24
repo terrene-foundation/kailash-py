@@ -5,6 +5,12 @@ All notable changes to the Kailash MCP package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.9] — 2026-04-24 — Security patch (issue #613)
+
+### Changed
+
+- **`kailash_mcp.auth.providers` correlation fingerprints** (`py/weak-sensitive-data-hashing`) — migrated `hashlib.sha256(api_key)` and `hashlib.sha256(token)` to `kailash.utils.url_credentials.fingerprint_secret(...)` (BLAKE2b, 8-char) at two sites (`APIKeyAuth.authenticate` line 199, `BearerTokenAuth._validate_opaque_token` line 335). Same rationale as kaizen 2.12.1 — the values are correlation-only `user_id` labels emitted AFTER raw-credential verification already succeeded; BLAKE2b satisfies both the scanner and the architectural intent. No migration required; neither fingerprint is persisted. Sibling fix landed same PR per `rules/agents.md` fix-immediately rule.
+
 ## [0.2.8] - 2026-04-21 — MCP elicitation error code cross-SDK parity (#572)
 
 ### Fixed

@@ -354,23 +354,68 @@ class JWTValidator:
             raw_claims=payload,
         )
 
+    # Mapping of trusted issuer hostnames (and their required subdomains)
+    # to provider labels. Using a hostname-equality / hostname-suffix match
+    # against ``urlparse(issuer).hostname`` closes the substring bypass that
+    # CodeQL's ``py/incomplete-url-substring-sanitization`` flagged — e.g.
+    # a crafted ``https://evilgithub.com/foo`` or
+    # ``https://attacker.example/?host=login.microsoftonline.com`` would
+    # satisfy the old substring test but is NOT a real Microsoft / Google /
+    # Apple / GitHub issuer. The hostname match below rejects both.
+    _ISSUER_PROVIDERS = (
+        ("login.microsoftonline.com", "azure"),
+        ("sts.windows.net", "azure"),  # legacy Azure v1.0 issuer
+        ("accounts.google.com", "google"),
+        ("appleid.apple.com", "apple"),
+        ("github.com", "github"),
+        ("api.github.com", "github"),
+        ("token.actions.githubusercontent.com", "github"),  # GitHub Actions OIDC
+    )
+
+    @staticmethod
+    def _matches_trusted_host(host: str, trusted: str) -> bool:
+        """Return True when host is exactly trusted OR a subdomain of trusted.
+
+        A suffix match REQUIRES a leading ``.`` separator, so
+        ``evilgithub.com`` does NOT match ``github.com`` but
+        ``api.github.com`` does.
+        """
+        host = host.lower()
+        trusted = trusted.lower()
+        return host == trusted or host.endswith("." + trusted)
+
     def _determine_provider(self, issuer: str) -> str:
-        """Determine auth provider from JWT issuer."""
+        """Determine auth provider from JWT issuer URL.
+
+        Parses the issuer as a URL and matches the hostname against a
+        trusted-host allowlist. A substring match on the raw issuer
+        string is BLOCKED — ``"github.com" in "https://evilgithub.com/..."``
+        returns True and silently promotes an attacker-controlled issuer
+        to ``"github"`` provider trust. See CodeQL rule
+        ``py/incomplete-url-substring-sanitization`` and
+        ``rules/security.md`` § Input Validation.
+        """
         if not issuer:
             return "local"
 
-        issuer_lower = issuer.lower()
+        # Parse the issuer as a URL. If it is not a URL (no scheme /
+        # netloc), fall through to ``"local"`` — we only grant
+        # provider trust to issuers whose hostname we can verify.
+        try:
+            from urllib.parse import urlparse
 
-        if "login.microsoftonline.com" in issuer_lower:
-            return "azure"
-        elif "accounts.google.com" in issuer_lower:
-            return "google"
-        elif "appleid.apple.com" in issuer_lower:
-            return "apple"
-        elif "github.com" in issuer_lower:
-            return "github"
-        else:
+            parsed = urlparse(issuer)
+        except (ValueError, AttributeError):
             return "local"
+
+        host = parsed.hostname
+        if not host:
+            return "local"
+
+        for trusted, provider in self._ISSUER_PROVIDERS:
+            if self._matches_trusted_host(host, trusted):
+                return provider
+        return "local"
 
     # --- Token Creation Methods ---
 

@@ -74,9 +74,14 @@ class MongoDBAdapter(BaseAdapter):
         self._db: Optional[Any] = None
         self._connected = False
 
-        logger.info(
-            f"MongoDBAdapter initialized with connection string: {self._sanitize_connection_string(connection_string)}"
-        )
+        # Emit initialization INFO without any URL-derived field.
+        # See the connect() method's docstring for the rationale —
+        # CodeQL's ``py/clear-text-logging-sensitive-data`` rule
+        # traces taint from ``connection_string`` through every
+        # derived value including the masked form, so we emit a
+        # non-parametric INFO here and rely on the connect() INFO
+        # (which does not touch the URL) for operator visibility.
+        logger.info("mongodb.adapter_initialized")
 
     @property
     def adapter_type(self) -> str:
@@ -154,9 +159,13 @@ class MongoDBAdapter(BaseAdapter):
             await self._client.admin.command("ping")
 
             self._connected = True
-            logger.info(
-                "mongodb.connected_to_mongodb_database", extra={"db_name": db_name}
-            )
+            # Drop ``db_name`` from the log extra — when it is parsed
+            # from the connection string via ``urlparse(...).path`` it
+            # inherits the URL's taint per CodeQL's taint analysis for
+            # ``py/clear-text-logging-sensitive-data``. Operators already
+            # know which database they configured; the INFO here only
+            # confirms the ping succeeded.
+            logger.info("mongodb.connected_to_mongodb_database")
 
         except Exception as e:
             logger.error(

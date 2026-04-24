@@ -130,24 +130,21 @@ class AdapterFactory:
             # Create adapter instance
             adapter = adapter_class(connection_string, **final_config)
 
-            # Mask credentials before logging — the connection string
-            # contains the password in the userinfo and possibly in
-            # query params. ``mask_url`` from dataflow.utils.masking
-            # routes through the same canonical 6-key sensitive set
-            # used by every other masking helper in the codebase, AND
-            # is declared as a CodeQL sanitizer barrier in
-            # ``.github/codeql/sanitizers.qll`` so the
-            # ``py/clear-text-logging-sensitive-data`` rule recognizes
-            # the call as a taint sink-cleansing operation.
-            from dataflow.utils.masking import mask_url, safe_log_value
-
-            logger.info(
-                "factory.created_adapter_for",
-                extra={
-                    "db_type": safe_log_value(db_type),
-                    "connection_string": mask_url(connection_string),
-                },
-            )
+            # Log the adapter creation without including any value
+            # derived from ``connection_string``. CodeQL's
+            # ``py/clear-text-logging-sensitive-data`` rule traces
+            # taint from the connection string through every derived
+            # field (including the detected ``db_type`` scheme) and
+            # flags the log sink regardless of masking helpers. The
+            # custom sanitizer barrier in
+            # ``.github/codeql/sanitizers/sanitizers.model.yml`` was
+            # not reliably honored across CodeQL releases; the
+            # structural defense is to emit a non-parametric INFO
+            # here and rely on the adapter's own connection-pool INFO
+            # (emitted after successful ``connect()``) for operator
+            # visibility. The database type is already knowable from
+            # the adapter class name appearing in subsequent log lines.
+            logger.info("factory.created_adapter")
             return adapter
 
         except Exception as e:
