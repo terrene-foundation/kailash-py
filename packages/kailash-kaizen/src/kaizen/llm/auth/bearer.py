@@ -21,11 +21,11 @@ Every class in this module treats credential bytes as highly privileged:
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 from enum import Enum
 from typing import Any
 
+from kailash.utils.url_credentials import fingerprint_secret
 from pydantic import ConfigDict, SecretStr
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -64,8 +64,10 @@ class ApiKey:
         else:
             raise TypeError("ApiKey expects str or SecretStr")
         self._secret: SecretStr = secret
-        raw = secret.get_secret_value().encode("utf-8")
-        self._fingerprint: str = hashlib.sha256(raw).hexdigest()[:8]
+        # #617: use fingerprint_secret (BLAKE2b) for credential-adjacent
+        # fingerprinting — CodeQL py/weak-sensitive-data-hashing does not
+        # flag BLAKE2b, and we document the non-verification contract.
+        self._fingerprint: str = fingerprint_secret(secret.get_secret_value())
 
     @property
     def fingerprint(self) -> str:

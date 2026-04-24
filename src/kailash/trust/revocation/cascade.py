@@ -19,6 +19,30 @@ Idempotency:
     ``RevocationResult(success=True, events=[], revoked_agents=[])``.
     This is checked via TrustStore — if the chain is already soft-deleted
     (inactive), the agent is considered already revoked.
+
+Cross-SDK parity (EATP D6 — kailash-py#595 / kailash-rs ISS-04):
+    The Python implementation cascades via BFS (queue-based traversal in
+    ``CascadeRevocationManager.cascade_revoke``); the Rust implementation
+    at ``crates/eatp/src/delegation.rs`` cascades via DFS recursion. Both
+    traversal orders MUST produce the SAME SET of revoked descendants for
+    any delegation tree — the result set is order-independent. Only the
+    event emission order may differ (BFS yields breadth-level-order events,
+    DFS yields depth-level-order events). Consumers of ``RevocationResult``
+    MUST NOT rely on event ordering for cross-SDK correlation; correlate
+    on ``event.target_id`` + ``event.affected_agents`` as a set.
+
+    Parity contract (enforced by
+    ``tests/regression/test_cascade_revocation_cross_sdk_parity.py``):
+
+    1. Given an identical delegation tree seeded on both SDKs and a revoke
+       of the same root node, ``set(py.revoked_agents) ==
+       set(rust.revoked_agents)`` regardless of traversal order.
+    2. Idempotency behavior is identical: a second revoke of the same
+       agent returns ``success=True, events=[], revoked_agents=[]`` on
+       both sides.
+    3. Partial-failure rollback contract is identical: if any chain
+       deletion fails, all prior deletions roll back, and
+       ``success=False`` with error details.
 """
 
 from __future__ import annotations
@@ -29,6 +53,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from kailash.trust.chain import TrustLineageChain
+from kailash.trust.chain_store import TrustStore
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.revocation.broadcaster import (
     CascadeRevocationManager,
@@ -38,7 +63,6 @@ from kailash.trust.revocation.broadcaster import (
     RevocationBroadcaster,
     RevocationEvent,
 )
-from kailash.trust.chain_store import TrustStore
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +97,9 @@ class RevocationResult:
         }
 
 
-async def _snapshot_chains(store: TrustStore, agent_ids: set[str]) -> Dict[str, TrustLineageChain]:
+async def _snapshot_chains(
+    store: TrustStore, agent_ids: set[str]
+) -> Dict[str, TrustLineageChain]:
     """Take deep-copy snapshots of chains for rollback support.
 
     Args:
@@ -111,7 +137,9 @@ async def _rollback_chains(
     """
     for aid in deleted_agents:
         if aid not in snapshots:
-            logger.warning(f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore")
+            logger.warning(
+                f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore"
+            )
             continue
         try:
             await store.store_chain(snapshots[aid])
@@ -209,7 +237,9 @@ async def cascade_revoke(
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
             errors[affected_id] = error_msg
-            logger.error(f"[REVOKE] Failed to soft-delete chain for agent '{affected_id}': {error_msg}")
+            logger.error(
+                f"[REVOKE] Failed to soft-delete chain for agent '{affected_id}': {error_msg}"
+            )
 
     # If any errors occurred, roll back all successful deletions
     if errors:

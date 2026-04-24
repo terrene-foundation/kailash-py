@@ -29,13 +29,13 @@ uses `socket.getaddrinfo` for resolution, Rust uses hyper's resolver.
 
 from __future__ import annotations
 
-import hashlib
 import ipaddress
 import logging
 import socket
 from typing import Iterable
 from urllib.parse import urlparse
 
+from kailash.utils.url_credentials import fingerprint_secret
 from kaizen.llm.errors import InvalidEndpoint
 
 logger = logging.getLogger(__name__)
@@ -46,10 +46,15 @@ def _url_fingerprint(raw: str | None) -> str:
 
     Must match the shape used by `errors._fingerprint` so log entries can be
     correlated with the fingerprint stored on the raised `InvalidEndpoint`.
+
+    #617: migrated from hashlib.sha256 to fingerprint_secret (BLAKE2b) to
+    stay aligned with errors._fingerprint after the same migration. The
+    two helpers MUST use the same algorithm or log-to-exception correlation
+    breaks.
     """
     if not raw:
         return "none"
-    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:8]
+    return fingerprint_secret(raw)
 
 
 def _reject(reason: str, url: str | None) -> None:

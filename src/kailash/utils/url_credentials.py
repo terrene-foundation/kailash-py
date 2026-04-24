@@ -420,6 +420,23 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
         >>> fingerprint_secret("") == fingerprint_secret("")
         True
 
+    Collision-stability and per-tenant uniqueness caveats (issue #617 MEDIUM-2):
+
+    * Fingerprints ARE collision-stable across installs intentionally — two
+      tenants with the same API key produce the same 8-char fingerprint
+      whether on the same process, across processes, or across multi-node
+      deployments. This is required for cross-node log correlation: a
+      trace spanning several services that all touch the same secret
+      produces correlatable log lines.
+    * Fingerprints MUST NOT be treated as per-tenant-unique identifiers.
+      If two tenants provision the same API key (rare but possible for
+      shared upstream credentials), their fingerprints collide. Use
+      ``tenant_id`` separately for tenant identity.
+    * Fingerprints MUST NOT be treated as secrets. They are derived
+      deterministically from the plaintext with no secret keying material;
+      anyone who knows the plaintext can reproduce the fingerprint. Do
+      not use fingerprints for access control or verification.
+
     Args:
         value: The secret (api_key, token, bearer) to fingerprint.
             An empty string produces an all-zero fingerprint.

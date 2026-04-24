@@ -30,11 +30,11 @@ Security invariants enforced here:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from typing import Any, Callable, Dict, Optional
 
+from kailash.utils.url_credentials import fingerprint_secret
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.auth.gcp import GcpOauth
@@ -65,8 +65,12 @@ _PRESET_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 def _fingerprint(raw: str) -> str:
     """8-char non-reversible tag — matches the cross-SDK contract (see
     ``rules/event-payload-classification.md`` §2 and DataFlow's
-    ``format_record_id_for_event``)."""
-    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:8]
+    ``format_record_id_for_event``).
+
+    #617: migrated from SHA-256 → fingerprint_secret (BLAKE2b) to close
+    CodeQL py/weak-sensitive-data-hashing consistently across kaizen/llm.
+    """
+    return fingerprint_secret(raw)
 
 
 def _validate_preset_name(name: Any) -> str:

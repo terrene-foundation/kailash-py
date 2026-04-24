@@ -5,6 +5,19 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.3] — 2026-04-25 — Security sweep (#614 + #617)
+
+Patch bump — defense-in-depth tightening of tenant-id log hygiene and credential-adjacent fingerprinting. No API changes.
+
+### Fixed
+
+- **Raw `tenant_id` leak in `kaizen.judges.llm_diagnostics`** (#614 item 1+2). Five structured log emissions (`kaizen.llm_diagnostics.init` + 4 call-trace lines) shipped `tenant_id` as a plaintext extras key `"llm_diag_tenant_id"`, bleeding tenant identity into log aggregators whose access surface is strictly wider than the production database (per `rules/observability.md` §8 + `rules/tenant-isolation.md` §4). All 5 sites now route through `_hash_tenant_id(tenant_id)` (shared helper in `kaizen.observability.trace_exporter`, SHA-256 `sha256:<8hex>` — cross-SDK contract with `format_record_id_for_event` per `rules/event-payload-classification.md` §2). Regression test: `tests/unit/test_issue_614_tenant_id_no_raw_leak.py` (11 tests, source + behavioral + symlink-rejection).
+- **SHA-256 → BLAKE2b sweep across `kaizen.llm.*`** (#617). Five credential-adjacent call sites migrated from `hashlib.sha256` to `kailash.utils.url_credentials.fingerprint_secret` (BLAKE2b) — closes CodeQL `py/weak-sensitive-data-hashing` consistently across the package and eliminates intent-drift between "BLAKE2b here / SHA-256 there". Sites: `kaizen/llm/auth/bearer.py::ApiKey.__init__`, `kaizen/llm/errors.py::_fingerprint`, `kaizen/llm/presets.py::_fingerprint`, `kaizen/llm/from_env.py::_fingerprint_selector`, `kaizen/llm/auth/gcp.py::CachedToken.__post_init__`. Regression test: `tests/unit/test_issue_617_fingerprint_sweep.py` (15 tests, source + direct-call-per-site + docstring-enhancement).
+
+### Changed
+
+- **`fingerprint_secret` docstring** (#617 MEDIUM-2) — added collision-stability + per-tenant-uniqueness + not-a-secret caveats at `src/kailash/utils/url_credentials.py`. Fingerprints ARE collision-stable across installs (intentional — enables cross-node trace correlation) and MUST NOT be treated as per-tenant-unique identifiers or as secrets.
+
 ## [2.12.2] — 2026-04-24 — Cyclic-import refactor (issue #612)
 
 ### Changed

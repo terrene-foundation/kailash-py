@@ -40,7 +40,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 import polars as pl
-
 from kailash.diagnostics.protocols import JudgeInput, JudgeResult
 from kaizen.judges._judge import LLMJudge
 from kaizen.judges._wrappers import (
@@ -50,6 +49,7 @@ from kaizen.judges._wrappers import (
     SelfConsistencyReport,
 )
 from kaizen.ml._tracker_bridge import emit_metric, resolve_active_tracker
+from kaizen.observability.trace_exporter import _hash_tenant_id
 
 if TYPE_CHECKING:  # pragma: no cover
     import plotly.graph_objects as go_types  # noqa: F401
@@ -222,7 +222,7 @@ class LLMDiagnostics:
                 "llm_diag_judge_model": self._judge.judge_model,
                 "llm_diag_budget_microdollars": self._judge.budget_microdollars,
                 "llm_diag_max_history": max_history,
-                "llm_diag_tenant_id": tenant_id,
+                "llm_diag_tenant_hash": _hash_tenant_id(tenant_id),
                 "llm_diag_sensitive": sensitive,
                 "mode": "real",
             },
@@ -356,7 +356,7 @@ class LLMDiagnostics:
                 "llm_diag_rubric": rubric,
                 "llm_diag_judge_model": entry.judge_model,
                 "llm_diag_cost_microdollars": entry.cost_microdollars,
-                "llm_diag_tenant_id": self._tenant_id,
+                "llm_diag_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "mode": "real",
             },
         )
@@ -414,7 +414,7 @@ class LLMDiagnostics:
                 "llm_diag_n_chunks": n_chunks,
                 "llm_diag_judge_model": entry.judge_model,
                 "llm_diag_cost_microdollars": entry.cost_microdollars,
-                "llm_diag_tenant_id": self._tenant_id,
+                "llm_diag_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "mode": "real",
             },
         )
@@ -468,7 +468,7 @@ class LLMDiagnostics:
                 "llm_diag_mean_score": report.mean_score,
                 "llm_diag_stdev_score": report.stdev_score,
                 "llm_diag_cost_microdollars": report.total_cost_microdollars,
-                "llm_diag_tenant_id": self._tenant_id,
+                "llm_diag_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "mode": "real",
             },
         )
@@ -524,7 +524,7 @@ class LLMDiagnostics:
                 "llm_diag_label": label,
                 "llm_diag_over_refusal_rate": entry.over_refusal_rate,
                 "llm_diag_under_refusal_rate": entry.under_refusal_rate,
-                "llm_diag_tenant_id": self._tenant_id,
+                "llm_diag_tenant_hash": _hash_tenant_id(self._tenant_id),
                 "mode": "real",
             },
         )

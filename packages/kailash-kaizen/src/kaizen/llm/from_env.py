@@ -324,10 +324,14 @@ def _require_env(*candidates: str) -> str:
 
 
 def _fingerprint_selector(selector: str) -> str:
-    """8-char fingerprint for log-injection-safe selector names."""
-    import hashlib
+    """8-char fingerprint for log-injection-safe selector names.
 
-    return hashlib.sha256(selector.encode("utf-8")).hexdigest()[:8]
+    #617: migrated from SHA-256 → fingerprint_secret (BLAKE2b) to close
+    CodeQL py/weak-sensitive-data-hashing consistently across kaizen/llm.
+    """
+    from kailash.utils.url_credentials import fingerprint_secret
+
+    return fingerprint_secret(selector)
 
 
 __all__ = [

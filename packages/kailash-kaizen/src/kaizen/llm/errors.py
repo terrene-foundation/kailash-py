@@ -34,9 +34,10 @@ idiom favours subclassing over a single sum-type.
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Optional
+
+from kailash.utils.url_credentials import fingerprint_secret
 
 
 def _fingerprint(raw: str | bytes, length: int = 8) -> str:
@@ -49,9 +50,12 @@ def _fingerprint(raw: str | bytes, length: int = 8) -> str:
     same forensic query. At ~1000 unique tags, birthday collision is
     ~0.01%, vs the 35% collision rate of the prior 4-char form.
     """
-    if isinstance(raw, str):
-        raw = raw.encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()[:length]
+    # #617: migrated from SHA-256 → BLAKE2b-based fingerprint_secret to
+    # close the CodeQL py/weak-sensitive-data-hashing rule class consistently
+    # across all kaizen/llm sites, keeping the 8-hex cross-SDK shape stable.
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    return fingerprint_secret(raw, length=length)
 
 
 # Credential-pattern scrub applied defensively to `ProviderError.body_snippet`

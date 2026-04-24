@@ -15,6 +15,15 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.9.2 — 2026-04-25 — 1.1.2 patch wave (docstring + cross-SDK)
+
+**Docstring + docstring-only changes** — no behavior change in `src/kailash/`. Ships alongside `kailash-dataflow 2.2.0` (public API expose, #601) + `kailash-kaizen 2.12.3` (security sweep, #614 + #617).
+
+**Changed**
+
+- **`fingerprint_secret` docstring enhancement** (#617 MEDIUM-2) at `src/kailash/utils/url_credentials.py`. Added caveat section naming: (a) fingerprints are collision-stable across installs intentionally (cross-node trace correlation requirement); (b) MUST NOT be treated as per-tenant-unique identifiers; (c) MUST NOT be treated as secrets (not keyed; anyone with plaintext reproduces the fingerprint). No behavior change.
+- **`cascade_revoke` cross-SDK parity docstring** (#595) at `src/kailash/trust/revocation/cascade.py`. Added § "Cross-SDK parity (EATP D6)" clause pinning: Python BFS and Rust DFS produce identical SET of revoked descendants for any delegation tree (result set is order-independent; only event emission order may differ). Consumers MUST NOT rely on event ordering for cross-SDK correlation. Regression test: `tests/regression/test_issue_595_cascade_revocation_cross_sdk_parity.py` (6 tests: linear / binary-tree / star / diamond / order-invariant / idempotent-re-revoke).
+
 ### kailash 2.9.1 — 2026-04-24 — Security patch (issue #613)
 
 **CodeQL security patch** — closes all HIGH findings from PR #611 scan across three rule classes (`py/clear-text-logging-sensitive-data`, `py/incomplete-url-substring-sanitization`, `py/weak-sensitive-data-hashing`). Scope grew mid-review: reviewer flagged a sibling `mysql.py:105-107` site (same bug class as postgresql.py) that the initial scan did not surface; closed in the same PR per `rules/agents.md` fix-immediately. Ships as part of the 1.1.x post-M1 security patch wave.

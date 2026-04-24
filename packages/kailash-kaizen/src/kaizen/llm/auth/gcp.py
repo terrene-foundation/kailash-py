@@ -33,13 +33,14 @@ Inlining the OAuth2 token-fetch flow is BLOCKED by zero-tolerance Rule 4.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from kailash.utils.url_credentials import fingerprint_secret
 
 try:
     from google.auth import default as _google_auth_default
@@ -50,9 +51,8 @@ except ImportError:  # pragma: no cover - optional-extra guard
     _GoogleAuthRequest = None
     _google_service_account = None
 
-from pydantic import SecretStr
-
 from kaizen.llm.errors import AuthError, LlmClientError, MissingCredential
+from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +99,11 @@ class CachedToken:
         if not isinstance(self.token, SecretStr):
             raise TypeError("CachedToken.token must be a SecretStr")
         if not self.fingerprint:
-            raw = self.token.get_secret_value().encode("utf-8")
+            # #617: BLAKE2b via fingerprint_secret (consistent cross-kaizen)
             object.__setattr__(
                 self,
                 "fingerprint",
-                hashlib.sha256(raw).hexdigest()[:8],
+                fingerprint_secret(self.token.get_secret_value()),
             )
 
     def is_expired(self, *, now_epoch: Optional[float] = None) -> bool:
@@ -183,9 +183,7 @@ class GcpOauth:
         # so a key file rotated on disk is picked up by the next refresh.
         if isinstance(service_account_key, dict):
             if not service_account_key:
-                raise AuthError(
-                    "GcpOauth service_account_key dict must not be empty"
-                )
+                raise AuthError("GcpOauth service_account_key dict must not be empty")
             self._service_account_info: Optional[dict] = dict(service_account_key)
             self._service_account_path: Optional[str] = None
         elif isinstance(service_account_key, str):
@@ -207,14 +205,10 @@ class GcpOauth:
             resolved_scopes = list(DEFAULT_SCOPES)
         else:
             if not isinstance(scopes, list) or not scopes:
-                raise AuthError(
-                    "GcpOauth.scopes must be a non-empty list of strings"
-                )
+                raise AuthError("GcpOauth.scopes must be a non-empty list of strings")
             for s in scopes:
                 if not isinstance(s, str) or not s:
-                    raise AuthError(
-                        "GcpOauth.scopes entries must be non-empty strings"
-                    )
+                    raise AuthError("GcpOauth.scopes entries must be non-empty strings")
             resolved_scopes = list(scopes)
         self._scopes: list[str] = resolved_scopes
         self._cached_token: Optional[CachedToken] = None
@@ -318,9 +312,7 @@ class GcpOauth:
         creds = await loop.run_in_executor(None, self._build_credentials)
         # Refresh runs in executor because google-auth uses requests
         # internally (blocking IO).
-        await loop.run_in_executor(
-            None, lambda: creds.refresh(_GoogleAuthRequest())
-        )
+        await loop.run_in_executor(None, lambda: creds.refresh(_GoogleAuthRequest()))
         token_value = getattr(creds, "token", None)
         expiry = getattr(creds, "expiry", None)
         if not token_value:

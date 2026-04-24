@@ -10,8 +10,7 @@ field (str, repr, args).
 
 from __future__ import annotations
 
-import hashlib
-
+from kailash.utils.url_credentials import fingerprint_secret
 from kaizen.llm.errors import Invalid, InvalidEndpoint, MissingCredential, ProviderError
 
 
@@ -24,7 +23,8 @@ def test_auth_error_invalid_does_not_echo_raw_key() -> None:
     assert "classified" not in s
     assert "payload" not in s
     # The fingerprint MUST be present for correlation.
-    expected_fp = hashlib.sha256(raw.encode()).hexdigest()[:8]
+    # #617: migrated from hashlib.sha256 to fingerprint_secret (BLAKE2b).
+    expected_fp = fingerprint_secret(raw)
     assert expected_fp in s
     # The `fingerprint` attribute is public for forensic correlation.
     assert err.fingerprint == expected_fp

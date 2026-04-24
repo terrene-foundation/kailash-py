@@ -1,5 +1,13 @@
 # DataFlow Changelog
 
+## [2.2.0] — 2026-04-25 — Public API expose for read-time classification (#601)
+
+Cross-SDK parity with kailash-rs PR #580 (closes #514). Minor bump — new public surface, no breaking changes.
+
+### Added
+
+- **`apply_read_classification` + `format_record_id_for_event` on public API** (#601) — cross-SDK parity with kailash-rs PR #580 (closes #514). Both helpers now importable from the top-level `dataflow.classification` module; `__all__` lists them under the "Read-time helpers" group. `apply_read_classification(fields, record, caller_clearance=None)` is the module-level form of `ClassificationPolicy.apply_masking_to_record` — accepts a `Dict[str, FieldClassification]` (typically `policy.get_model_fields(model_name)`), mutates the record dict in place, and honors the ambient `clearance_context` when `caller_clearance is None`. The full masking matrix (REDACT / HASH / LAST_FOUR / ENCRYPT / NONE-defaults-to-REDACT) is exercised by 19 Tier-1 tests at `tests/unit/test_apply_read_classification.py`. Sub-module `__version__` bumped to `0.2.0`.
+
 ## [2.1.2] — 2026-04-24 — Cyclic-import refactor (issue #612)
 
 ### Changed
