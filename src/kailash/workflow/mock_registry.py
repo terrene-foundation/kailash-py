@@ -13,6 +13,7 @@ class MockNode(Node):
         self, node_id: str | None = None, name: str | None = None, **kwargs: Any
     ):
         """Initialize mock node."""
+        super().__init__(**kwargs)
         self.node_id = node_id
         self.name = name or node_id
         self.config = kwargs.copy()
