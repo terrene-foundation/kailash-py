@@ -6,7 +6,7 @@ auto-optimization, and enhanced AI agent capabilities built on top of the
 proven Kailash SDK infrastructure.
 """
 
-__version__ = "2.12.1"
+__version__ = "2.12.2"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 

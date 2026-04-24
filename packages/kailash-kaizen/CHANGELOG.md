@@ -5,6 +5,13 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.2] — 2026-04-24 — Cyclic-import refactor (issue #612)
+
+### Changed
+
+- **CodeQL `py/unsafe-cyclic-import` hardening** — extracted `kaizen.signatures._types` to break the `signatures/core.py` ↔ `signatures/enterprise.py` static cycle. `SignatureCompositionProtocol` (new) captures the structural shape `core` needs (`.signatures` attribute) without importing `enterprise`; concrete `SignatureComposition` in `enterprise.py` satisfies the Protocol structurally. The protocol is `@runtime_checkable` for static-analyzer compatibility but the canonical runtime check in `core.py` remains `hasattr(sig, "signatures")` — NOT isinstance against the Protocol. Docstring now pins the discouragement against `isinstance(x, SignatureCompositionProtocol)` in security-sensitive paths per sec-review on PR #616.
+- **Regression invariant** — new `tests/regression/test_issue_612_protocol_isinstance_invariant.py` greps production trees for `isinstance(..., *Protocol)` and fails loudly; prevents a future session from swapping a concrete admission check (`isinstance(db, DataFlow)`) to a Protocol-based one.
+
 ## [2.12.1] — 2026-04-24 — Security patch (issue #613)
 
 ### Changed

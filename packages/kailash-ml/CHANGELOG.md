@@ -1,5 +1,16 @@
 # kailash-ml Changelog
 
+## [1.1.1] — 2026-04-24 — Cyclic-import refactor (issue #612)
+
+### Changed
+
+- **CodeQL `py/unsafe-cyclic-import` hardening** — extracted `_types.py` modules for three sub-packages to break static import cycles (runtime was already TYPE_CHECKING-safe). Nine cycle-flagged findings closed.
+  - `kailash_ml.serving._types` — `ServeStatus`, `ServeHandle`, `InferenceServerProtocol` moved out of the `server.py` ↔ `serve_handle.py` cycle. `serve_handle.py` now a thin re-export shim.
+  - `kailash_ml.drift._types` — `FeatureDriftResult`, `DriftReport` moved out of the `engines/drift_monitor.py` ↔ `drift/alerts.py` cycle. Both sides import from the leaf; `drift/__init__.py` re-exports for backward compatibility.
+  - `kailash_ml.autolog._types` — `AutologConfig`, `FrameworkIntegration` moved out of the `autolog/config.py` ↔ `autolog/_registry.py` cycle.
+
+No public-API surface changes — every previous import path still resolves.
+
 ## [1.1.0] - 2026-04-23 — M1 Wave W30 Shard 1: cross-SDK RL Protocol + align-bridge dispatch + lineage
 
 Lands the ml-side of the kailash-ml <-> kailash-align Protocol bridge per `specs/ml-rl-align-unification.md` (v1.0.0, promoted 2026-04-23). Shard 1 of 3 in W30 — Shard 2 (kailash-align 0.5.0 bridge adapters) and Shard 3 (integration tests) follow after this ships. Concrete RLHF adapters (DPO, PPO-RLHF, RLOO, OnlineDPO, KTO, SimPO, CPO, GRPO, ORPO, BCO) ship with kailash-align 0.5.0 behind the `[rl-bridge]` extra.
