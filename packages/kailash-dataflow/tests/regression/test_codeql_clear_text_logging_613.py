@@ -9,12 +9,15 @@ connection_string) OR secret-named attributes (secret_env). These are
 Tier-1 structural invariant tests — if a future refactor re-introduces
 the leak, the grep fails loudly.
 
-Scope — the 6 HIGH findings closed by the fix:
+Scope — the clear-text-logging HIGH findings closed by this PR:
   1. postgresql.py:98-100 (3 findings) — host/port/database in logger.info
   2. factory.py:146                    — connection_string in logger.info
   3. mongodb.py:78                     — sanitized connection_string in f-string
   4. mongodb.py:158                    — db_name in logger.info extra
   5. webhooks.py:539                   — webhook_config.secret_env in logger.error
+  6. mysql.py:105-107 (3 findings)     — host/port/database in logger.info
+     (sibling of postgresql.py; added same PR per rules/agents.md
+      fix-immediately after reviewer flagged it at PR-gate time)
 """
 
 from __future__ import annotations
@@ -73,6 +76,23 @@ class TestMongoDBAdapterLogHygiene:
         # db_name is derived from urlparse(connection_string).path and
         # inherits the URL's CodeQL taint.
         assert 'extra={"db_name": db_name}' not in src
+
+
+class TestMySQLAdapterLogHygiene:
+    PATH = "packages/kailash-dataflow/src/dataflow/adapters/mysql.py"
+
+    def test_connection_pool_created_log_does_not_echo_url_fields(self) -> None:
+        src = _read(self.PATH)
+        # Mirror of TestPostgresqlAdapterLogHygiene — mysql.py carried the
+        # identical bug class (host/port/database in the INFO log) and
+        # closes it with the same structural defense: drop URL-derived
+        # fields, keep the canonical event name for operator triage.
+        assert "safe_log_value(self.host)" not in src
+        assert "safe_log_value(self.port)" not in src
+        assert "safe_log_value(self.database)" not in src
+        assert 'host=%s port=%s database=%s"' not in src
+        # The canonical event name survives.
+        assert '"mysql.connection_pool.created"' in src
 
 
 class TestWebhooksLogHygiene:
