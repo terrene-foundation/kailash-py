@@ -1,98 +1,53 @@
-# Session Notes — 2026-04-22 (W22.b)
+# Session Notes — 2026-04-24
 
 ## Where we are
 
-kailash-ml 1.0.0 `/implement` phase, branch
-`feat/kailash-ml-1.0.0-m1-foundations`, local only. **W22.b** landed
-this session: engine-boundary auto-attach of
-`DLDiagnostics.as_lightning_callback()` in
-`TrainingPipeline._train_lightning`. Next shard is **W23.a** — autolog
-for sklearn + lightgbm + Lightning + torch per `specs/ml-autolog.md`.
+1.1.x post-M1 patch wave SHIPPED. PRs #615 (security) + #616 (cyclic
+imports) merged; 5 packages on PyPI (kailash 2.9.1, dataflow 2.1.2,
+kaizen 2.12.2, mcp 0.2.9, ml 1.1.1). 126 pending journals bulk-deleted.
+Follow-up issues filed: #614, #617, kailash-rs#588.
 
-## What W22.b delivered
+## Read first
 
-1. `DLDiagnostics.is_available() -> bool` classmethod in
-   `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py` — probes
-   both `torch` and `lightning.pytorch`; returns False if either import
-   fails. Used as the availability gate by `_train_lightning`.
-2. `_is_dl_diagnostics_callback: bool = True` sentinel on the nested
-   `_DLDiagnosticsCallback` class. The nested class cannot be
-   referenced by name from outside `as_lightning_callback`, so the
-   sentinel is the isinstance-equivalent for de-duplication at the
-   engine boundary.
-3. Auto-attach block in `_train_lightning` (between `trainer_kwargs`
-   assembly and `L.Trainer(**trainer_kwargs)`). Appends the DL callback
-   iff `DLDiagnostics.is_available()` AND
-   `kailash_ml.tracking.get_current_run()` is not None; de-dupes
-   against caller-supplied DL callbacks (caller's instance wins).
-   INFO log line `training_pipeline.lightning.dl_diagnostics_attached`
-   on append, `_skipped_duplicate` on de-dup.
-4. Tier-1 unit tests —
-   `packages/kailash-ml/tests/unit/test_w22b_train_lightning_autoattach.py`
-   (8 tests): no-run skip, dl-unavailable skip, positive auto-attach,
-   sentinel presence, caller-supplied de-dup (caller wins), non-DL
-   user-callback composition, is_available() probe both branches.
-5. Tier-2 wiring test —
-   `packages/kailash-ml/tests/integration/test_w22b_autoattach_wiring.py`
-   (2 tests): real 1-epoch `L.Trainer.fit` via `_train_lightning` with
-   a sync duck-typed tracker as the ambient run — asserts `loss_curves`
-   emitted with plotly Figure per `specs/ml-diagnostics.md §4.1` duck
-   typing.
-
-Spec mandate closed: `specs/ml-diagnostics.md §5.3 Engine-boundary
-auto-attach` ("W22 invariant 4 — callback appended by MLEngine.fit").
-Test sweep: `66 passed, 1 warning` across W20/W22/W22.a/W22.b/DL-wiring.
-
-## Read first for W23.a
-
-1. `specs/ml-autolog.md` — whole file; covers sklearn / lightgbm /
-   Lightning / torch monkey-patch targets, ambient-run detection
-   contract, metric namespace discipline (`train/{metric}`,
-   `val/{metric}`), and the opt-in `km.autolog(flavor=...)` entry.
-2. `workspaces/kailash-ml-audit/02-plans/01-master-34-wave-plan.md`
-   §W23 — 6 invariants (per-flavor enable, silent skip when
-   `ambient_run is None`, namespace discipline, extras gating,
-   unpatch on opt-out, rank-0-only for Lightning).
-3. `packages/kailash-ml/src/kailash_ml/tracking/__init__.py` —
-   `get_current_run()` is the single detection source (same accessor
-   W22.b used).
+1. `git log main --oneline -20` — all session work is here; #615 + #616
+   merge commits (`62850169`, `05235946`) are the anchors.
+2. GitHub issues #614 / #617 — next patch-cycle candidates (kaizen
+   tenant-id hashing + SHA-256 credential-adjacent sweep).
+3. `workspaces/kailash-ml-audit/journal-triage-report.md` — untracked;
+   classification of the 126 deleted journals + 4 "promote" candidates
+   that were already captured in proposal 1-25.
+4. `rules/build-repo-release-discipline.md` — session hit + followed the
+   "merge ≠ done, PyPI is the done gate" rule; scope-enumeration +
+   installability verification patterns proven here.
 
 ## In-flight state
 
-- The sync-tracker stub via `_current_run.set(tracker)` in W22.b's
-  Tier-2 wiring avoids the async bridge trap. A real `ExperimentRun`
-  plumbed through the auto-attach path would hit the
-  `asyncio.run()` → `RuntimeError` fallback and drop emissions
-  (documented in W22.a traps). W23.a does NOT need to fix this — the
-  autolog path writes metrics, not figures, and the tracker's
-  `log_metric` has the same async shape so the same workaround
-  applies.
-- Tier-2 wiring registers `_TinyTupleModule` via `sys.modules` under
-  `kailash_ml._w22b_tiny.*` so `_shared.validate_model_class`
-  allowlist stays intact. Any future Tier-2 pipeline test that needs
-  a tuple-aware Lightning module can copy this pattern — the
-  alternative (monkey-patching the allowlist) weakens a security
-  gate for test convenience.
+- `workspaces/kailash-ml-audit/journal-triage-report.md` is untracked
+  — a one-shot session artifact; commit, move to `journal/archive/`,
+  or delete. Not part of any release.
+- `deploy/deployment-config.md` was bumped for the 5 new PyPI versions
+  (release-specialist commit `7f433368`, already on main).
+- Loom proposal `.claude/.proposals/latest.yaml` is `distributed` from
+  last session — the 25 codify entries are already synced to the USE
+  template. Safe to archive when next codify runs.
 
-## Traps carried over from W22.a
+## Traps
 
-- `tracker.log_figure` is `async def` on real `ExperimentRun` but the
-  callback uses `asyncio.run(coro)` — this RAISES `RuntimeError:
-  asyncio.run() cannot be called from a running event loop` if
-  Lightning is driven from inside an async parent. The defensive
-  `result.close()` branch handles it but SILENTLY DROPS the
-  emission. A real-tracker Tier-2 needs an event-loop-aware bridge
-  (e.g., `asyncio.run_coroutine_threadsafe` to a dedicated worker
-  loop). Out of scope for W22.b; flag if W22.c re-opens it.
-- `MLEngine` has no `close()` method. Broader engine-suite runs
-  segfault during aiosqlite teardown when many tests run together;
-  use per-file invocation or the `managed_engines` factory fixture.
-- `DLDiagnostics.plot_*()` methods don't return `None` on empty
-  logs — they return minimal plotly Figures. Tests that only assert
-  `.calls` length can pass without detecting "emitted but empty";
-  assert `figure_type == "Figure"` if substance matters.
-
-## Commits this session
-
-- `47361d57` W22.a — pre-session baseline (already present at entry)
-- (pending) W22.b — engine auto-attach + tests
+- Edit tool loses Read-tracking across many-file Reads: `Read(limit=N)`
+  followed by Edit sometimes errors "File has not been read yet".
+  Workaround: full Read without `limit` before each Edit, or smaller
+  Edit batches.
+- `git pull` on main produced stuck mid-merge state after this session's
+  multi-PR merges. Fix: `git reset --hard origin/main` (preserve
+  untracked first); `git merge --abort` alone did not clear the index.
+- BLAKE2b in `kailash.utils.url_credentials.fingerprint_secret` trips
+  `py/weak-sensitive-data-hashing` on CodeQL — alert #10861 DISMISSED
+  as documented false-positive. New BLAKE2b on credential-named vars
+  will re-trip.
+- Python 3.11/3.12 + pydantic-core SecretStr: construction-based tests
+  of `AzureEntra(api_key=...)` crash with `SystemError: error return
+  without exception set`. Use structural grep tests for migration
+  verification.
+- Worktree without `.venv`: hooks bypassed via
+  `git -c core.hooksPath=/dev/null commit` (documented in 5+ commits
+  this session). Follow-up: fix pre-commit stash/restore for worktree.
