@@ -17,7 +17,7 @@ The changelog has been reorganized into individual files for better management. 
 
 ### kailash 2.9.1 — 2026-04-24 — Security patch (issue #613)
 
-**CodeQL security patch** — closes 12 HIGH findings from PR #611 scan. Ships as part of the 1.1.x post-M1 security patch wave.
+**CodeQL security patch** — closes all HIGH findings from PR #611 scan across three rule classes (`py/clear-text-logging-sensitive-data`, `py/incomplete-url-substring-sanitization`, `py/weak-sensitive-data-hashing`). Scope grew mid-review: reviewer flagged a sibling `mysql.py:105-107` site (same bug class as postgresql.py) that the initial scan did not surface; closed in the same PR per `rules/agents.md` fix-immediately. Ships as part of the 1.1.x post-M1 security patch wave.
 
 **Fixed**
 
