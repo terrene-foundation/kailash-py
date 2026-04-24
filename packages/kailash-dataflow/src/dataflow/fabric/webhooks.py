@@ -534,9 +534,17 @@ class WebhookReceiver:
         # 2. Resolve the per-source secret
         secret = os.environ.get(webhook_config.secret_env, "")
         if not secret:
+            # Log the source name ONLY — CodeQL's
+            # ``py/clear-text-logging-sensitive-data`` rule flags any
+            # attribute read whose name contains ``secret``, including
+            # ``webhook_config.secret_env`` which stores the NAME of
+            # an env var (e.g. ``"STRIPE_WEBHOOK_SECRET"``) and never
+            # its value. Operators can derive the expected env var name
+            # from the WebhookConfig for the source; omitting it from
+            # the log keeps the rule clean while preserving the action
+            # signal (which source's configuration is broken).
             logger.error(
-                "Webhook secret env var '%s' not set for source '%s'",
-                webhook_config.secret_env,
+                "Webhook secret env var not set for source '%s'",
                 source_name,
             )
             metrics.record_webhook(source=source_name, accepted=False)

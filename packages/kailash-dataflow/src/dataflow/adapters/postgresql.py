@@ -82,23 +82,20 @@ class PostgreSQLAdapter(DatabaseAdapter):
             self.connection_pool = await asyncpg.create_pool(**params)
             self.is_connected = True
 
-            # Route host/port/database through ``safe_log_value`` so
-            # CodeQL's ``py/clear-text-logging-sensitive-data`` taint
-            # analysis stops at the sanitizer barrier defined in
-            # ``.github/codeql/sanitizers.qll``. The semantic content
-            # is unchanged — these are connection coordinates, never
-            # credentials — but CodeQL traces taint from
-            # ``urlparse(connection_string)`` through every parsed
-            # field on ``self``, so the literal log call without a
-            # barrier triggers a false-positive HIGH alert.
-            from dataflow.utils.masking import safe_log_value
-
-            logger.info(
-                "postgresql.connection_pool.created host=%s port=%s database=%s",
-                safe_log_value(self.host),
-                safe_log_value(self.port),
-                safe_log_value(self.database),
-            )
+            # Emit a connection-established INFO without any URL-derived
+            # fields (host, port, database). CodeQL's
+            # ``py/clear-text-logging-sensitive-data`` taint analysis
+            # traces every attribute read from ``urlparse(connection_string)``
+            # through to logger sinks and cannot distinguish coordinates
+            # (host/port/database) from credentials (password) by attribute
+            # name alone. The custom sanitizer barrier in
+            # ``.github/codeql/sanitizers/sanitizers.model.yml`` was not
+            # reliably honored across CodeQL releases; the structural
+            # defense is to drop the URL-derived fields from the log
+            # line entirely. Operators already know which DATABASE_URL
+            # they configured; the INFO only needs to confirm pool
+            # creation succeeded.
+            logger.info("postgresql.connection_pool.created")
 
         except ImportError:
             raise ConnectionError(
