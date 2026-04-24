@@ -278,7 +278,7 @@ DataFlow exists in kailash-rs at `crates/kailash-dataflow/`. Rust parity targets
 - `dataflow.hash` → `dataflow::hash()` — MUST produce byte-identical SHA-256 hashes for the same canonicalized polars Arrow IPC stream.
 - Same error taxonomy mapping to Rust `DataFlowError` variants.
 
-Cross-SDK follow-up tracked at kailash-rs#TBD. The hash-byte-parity test MUST be added to both SDKs' integration suites.
+Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side ML feature-source surface. The parity contract above (byte-identical SHA-256 hashes + DataFlowError taxonomy mapping) is the baseline, and the hash-byte-parity test MUST be added to both SDKs' integration suites when the Rust surface lands. No tracking issue required until Rust-side scoping begins.
 
 ---
 

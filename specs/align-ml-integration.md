@@ -294,7 +294,7 @@ kailash-align does NOT have a Rust equivalent today (LLM training is Python-firs
 - Every `rl.*` key emitted by an align adapter MUST match the key emitted by the corresponding classical-RL adapter in kailash-rs where semantically equivalent.
 - Every `align.*` key is Python-only; Rust MAY adopt the same names if kailash-align gains a Rust presence in the future.
 
-Cross-SDK follow-up tracked at kailash-rs#TBD (likely post-1.0).
+Cross-SDK follow-up is deferred post-1.0 per `rules/zero-tolerance.md` Rule 1 Exception clause. kailash-rs does not currently ship an `align` equivalent; if/when a Rust kailash-align surface lands, the metric-key contract above is the parity baseline. No tracking issue required until the Rust surface is scoped.
 
 ---
 

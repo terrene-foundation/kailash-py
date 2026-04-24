@@ -131,7 +131,7 @@ The same three `record_*` method names MUST exist on the kailash-rs side at `cra
 - Same fingerprint format (`sha256:<8hex>`).
 - Same `DiagnosticReport` serialized shape (`schema_version`, `events`, `summary`, `rollup`).
 
-Cross-SDK follow-up tracked at kailash-rs#TBD.
+Cross-SDK follow-up is deferred until kailash-rs scopes the `DiagnosticReport` trait at `crates/kailash/src/diagnostics/protocols.rs`. The shape above is the parity contract — a future Rust-side issue may be filed when the trait is proposed. No tracking issue required until Rust-side scoping begins.
 
 ---
 
@@ -530,7 +530,7 @@ Every surface ships with kailash-rs 3.18.0 parity targets:
 - `kailash/src/tracking/migrations/` — same version-numbered migrations.
 - `kailash/src/observability/ml.rs` — same Prometheus metric names, same bounded-cardinality discipline.
 
-Cross-SDK follow-up tracked at kailash-rs#TBD.
+Cross-SDK follow-up is deferred until kailash-rs scopes the corresponding Rust modules. kailash-rs does maintain ML crates today (`kailash-ml`, `kailash-ml-core`, `kailash-ml-metrics`) but the observability + tracking parity contract above is post-1.0 scope. A Rust-side parity issue will be filed when the Rust modules are proposed; until then, this spec is the parity baseline.
 
 ---
 

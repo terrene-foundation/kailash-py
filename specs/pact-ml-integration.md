@@ -290,7 +290,7 @@ PACT's `GovernanceEngine` exists in kailash-rs at `crates/kailash-pact/src/engin
 - Audit row column names and types.
 - `sha256:<8hex>` fingerprint format (per `rules/event-payload-classification.md` §2).
 
-Cross-SDK follow-up tracked at kailash-rs#TBD (file at kailash-pact 0.10.0 release time).
+Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side PACT ML hook surface. The parity contract above (method signatures + audit row shape + fingerprint format) is the baseline. kailash-pact 0.10.0 shipped 2026-04-21 on the Python side; a Rust-side parity issue will be filed if/when the Rust surface is proposed.
 
 **Why:** PACT is a Terrene Foundation peer standard (per `rules/terrene-naming.md` § "Canonical Terminology"). A Python `check_trial_admission` decision MUST correlate byte-identically with a Rust `check_trial_admission` decision so cross-SDK audit queries return consistent results.
 

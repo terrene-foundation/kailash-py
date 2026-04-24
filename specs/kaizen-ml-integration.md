@@ -557,7 +557,7 @@ Kaizen exists in kailash-rs at `crates/kailash-kaizen/`. Cross-SDK parity target
 - `SQLiteSink` table schema: identical column names and types.
 - Rank-0-only emission rule: identical discipline (Rust equivalent: check `torch::distributed::get_rank()` via pyo3 bridge or analogue).
 
-Cross-SDK follow-up tracked at kailash-rs#TBD.
+Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side Kaizen surface. The parity contract above (CostDelta + SQLiteSink + rank-0 discipline) is the baseline. No tracking issue required until Rust-side scoping begins.
 
 ---
 

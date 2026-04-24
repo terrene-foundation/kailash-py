@@ -305,7 +305,7 @@ Nexus exists in kailash-rs at `crates/kailash-nexus/`. Rust's `tokio::task_local
 - Same audit row shape on inference requests.
 - Same `sha256:<8hex>` fingerprint for request payloads.
 
-Cross-SDK follow-up tracked at kailash-rs#TBD (file at release time).
+Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side Nexus ML inference surface. The parity contract above (JWT claims + audit row shape + fingerprint format) is the baseline. No tracking issue required until Rust-side scoping begins.
 
 ---
 
