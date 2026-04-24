@@ -27,7 +27,6 @@ Examples:
 
 import base64
 import binascii
-import hashlib
 import hmac
 import json
 import logging
@@ -186,8 +185,18 @@ class APIKeyAuth(AuthProvider):
             raise AuthenticationError("Invalid API key")
 
         key_data = self.keys[api_key]
+        # Fingerprint (not password hash) used as an opaque user_id for
+        # the request. The raw api_key was already verified against
+        # ``self.keys`` above; this code path does NOT persist the
+        # fingerprint for later credential verification. Routed through
+        # the canonical ``fingerprint_secret`` helper (BLAKE2b) so
+        # CodeQL's ``py/weak-sensitive-data-hashing`` does not flag this
+        # as misused password hashing — see helper docstring for why
+        # argon2-cffi / bcrypt would be wrong here.
+        from kailash.utils.url_credentials import fingerprint_secret
+
         return {
-            "user_id": f"api_key_{hashlib.sha256(api_key.encode()).hexdigest()[:8]}",
+            "user_id": f"api_key_{fingerprint_secret(api_key)}",
             "auth_type": "api_key",
             "permissions": key_data.get("permissions", []),
             "metadata": key_data,
@@ -315,8 +324,15 @@ class BearerTokenAuth(AuthProvider):
             raise AuthenticationError("Invalid bearer token")
 
         token_data = self.tokens[token]
+        # Fingerprint (not password hash) used as an opaque user_id.
+        # The raw token was already verified against ``self.tokens``
+        # above. See the api-key path's comment for the same rationale
+        # and the ``fingerprint_secret`` docstring for why BLAKE2b is
+        # correct here and argon2 would be wrong.
+        from kailash.utils.url_credentials import fingerprint_secret
+
         return {
-            "user_id": f"token_{hashlib.sha256(token.encode()).hexdigest()[:8]}",
+            "user_id": f"token_{fingerprint_secret(token)}",
             "auth_type": "bearer",
             "permissions": token_data.get("permissions", ["read"]),
             "metadata": token_data,

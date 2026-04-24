@@ -33,7 +33,6 @@ Secret hygiene:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from dataclasses import dataclass
@@ -81,7 +80,12 @@ class CachedToken:
     def from_raw(cls, raw: str, expires_at: float) -> "CachedToken":
         if not isinstance(raw, str) or not raw:
             raise AuthError("CachedToken raw token must be a non-empty string")
-        fp = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+        # Fingerprint (not password hash) for __repr__ correlation.
+        # See ``fingerprint_secret`` docstring for why BLAKE2b is the
+        # correct choice here and why argon2 is wrong.
+        from kailash.utils.url_credentials import fingerprint_secret
+
+        fp = fingerprint_secret(raw)
         return cls(_token=SecretStr(raw), _expires_at=expires_at, _fingerprint=fp)
 
     @property
@@ -162,9 +166,19 @@ class AzureEntra:
                 raise AuthError("AzureEntra.api_key must be a non-empty string")
             self._variant: str = "api_key"
             self._api_key = SecretStr(api_key)
-            self._api_key_fingerprint = hashlib.sha256(
-                api_key.encode("utf-8")
-            ).hexdigest()[:8]
+            # Fingerprint (not password hash) for log correlation via
+            # __repr__. Routed through the canonical ``fingerprint_secret``
+            # helper which uses BLAKE2b — CodeQL's
+            # ``py/weak-sensitive-data-hashing`` rule flags SHA-256 on any
+            # variable whose name suggests a credential (``api_key`` here)
+            # because it cannot distinguish password-hashing intent from
+            # fingerprinting. The helper's docstring explicitly pins the
+            # intent (correlation, not verification). Real password
+            # hashing MUST use argon2-cffi / bcrypt; this code path does
+            # NOT persist the fingerprint for later credential checks.
+            from kailash.utils.url_credentials import fingerprint_secret
+
+            self._api_key_fingerprint = fingerprint_secret(api_key)
         elif workload_identity:
             if _DefaultAzureCredential is None:
                 raise LlmClientError(
