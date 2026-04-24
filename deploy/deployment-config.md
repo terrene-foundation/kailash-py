@@ -17,17 +17,17 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.9.0           |
-| kailash-dataflow | `dataflow-v*`      | 2.1.0           |
-| kailash-kaizen   | `kaizen-v*`        | 2.12.0          |
+| kailash (core)   | `v*`               | 2.9.1           |
+| kailash-dataflow | `dataflow-v*`      | 2.1.2           |
+| kailash-kaizen   | `kaizen-v*`        | 2.12.2          |
 | kailash-nexus    | `nexus-v*`         | 2.2.0           |
 | kailash-pact     | `pact-v*`          | 0.10.0          |
-| kailash-ml       | `ml-v*`            | 1.1.0           |
+| kailash-ml       | `ml-v*`            | 1.1.1           |
 | kailash-align    | `align-v*`         | 0.6.0           |
-| kailash-mcp      | `mcp-v*`           | 0.2.8           |
+| kailash-mcp      | `mcp-v*`           | 0.2.9           |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-24 (M1 release wave — PR #611). kailash-ml reached 1.0 GA via ml-v1.0.0 intermediate tag, then 1.1.0 same-day with the M1 shards. Smoke-test verified: all 8 versions install + import from clean Python 3.12 venv.
+Last updated: 2026-04-24 (1.1.x post-M1 security+cyclic-import patch wave — PRs #615 + #616). 5 packages released: kailash 2.9.1, kailash-dataflow 2.1.2, kailash-kaizen 2.12.2, kailash-mcp 0.2.9, kailash-ml 1.1.1. Smoke-test verified: all 5 versions install + import from clean Python 3.12 venv.
 
 ## Release Runbook
 
