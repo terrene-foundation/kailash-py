@@ -17,9 +17,9 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.9.1           |
-| kailash-dataflow | `dataflow-v*`      | 2.1.2           |
-| kailash-kaizen   | `kaizen-v*`        | 2.12.2          |
+| kailash (core)   | `v*`               | 2.9.2           |
+| kailash-dataflow | `dataflow-v*`      | 2.2.0           |
+| kailash-kaizen   | `kaizen-v*`        | 2.12.3          |
 | kailash-nexus    | `nexus-v*`         | 2.2.0           |
 | kailash-pact     | `pact-v*`          | 0.10.0          |
 | kailash-ml       | `ml-v*`            | 1.1.1           |
@@ -27,7 +27,7 @@
 | kailash-mcp      | `mcp-v*`           | 0.2.9           |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-24 (1.1.x post-M1 security+cyclic-import patch wave — PRs #615 + #616). 5 packages released: kailash 2.9.1, kailash-dataflow 2.1.2, kailash-kaizen 2.12.2, kailash-mcp 0.2.9, kailash-ml 1.1.1. Smoke-test verified: all 5 versions install + import from clean Python 3.12 venv.
+Last updated: 2026-04-25 (1.1.2 wave — public API expose for read-time classification + tenant-id log hygiene + SHA-256 → BLAKE2b sweep). 3 packages released: kailash 2.9.2 (docstrings), kailash-dataflow 2.2.0 (#601 public API), kailash-kaizen 2.12.3 (#614 + #617 security sweep). Closed without code: #594 / #597 / #610 / #609 (cross-SDK parity-research closures). Deferred to next shard: #607 (SecurityDefinerBuilder port) + #605 (PACT N4/N5 conformance runner). Smoke-test verified: all 3 versions install + import from clean Python 3.12 venv with new public surfaces (`apply_read_classification`, `format_record_id_for_event`, BLAKE2b ApiKey fingerprint).
 
 ## Release Runbook
 
