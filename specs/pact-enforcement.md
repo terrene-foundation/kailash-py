@@ -553,3 +553,81 @@ All governance data structures are frozen to prevent post-construction mutation.
 | `Address`              | `@dataclass(frozen=True)`                    |
 | `RoleDefinition`       | `@dataclass(frozen=True)`                    |
 | All constraint configs | Pydantic `frozen=True`                       |
+
+---
+
+## 21. Cross-SDK Conformance Runner (N4/N5)
+
+### 21.1 Purpose
+
+Cross-SDK byte-equality contract for the PACT N4 (`TieredAuditEvent`) and N5 (`Evidence`) canonical-JSON shapes. The Python and Rust SDKs MUST emit byte-identical JSON for the same input domain object so polyglot deployments can correlate audit + governance evidence across services without per-SDK normalisation.
+
+### 21.2 Public Surface
+
+Module: `pact.conformance` (kailash-pact >= 0.10.0).
+
+```python
+from pact.conformance import (
+    ConformanceRunner,         # drives vectors through canonical-JSON path
+    RunnerReport,              # aggregate result; PASSED / FAILED / UNSUPPORTED counts
+    VectorOutcome,             # per-vector record with sha256 fingerprints
+    VectorStatus,              # PASSED | FAILED | UNSUPPORTED
+    load_vectors_from_dir,     # parse + validate every *.json under a directory
+    parse_vector,              # parse a single decoded JSON dict
+    main,                      # CLI entry (registered as `pact-conformance-runner`)
+)
+```
+
+CLI entry point (registered via `[project.scripts]`):
+
+```
+pact-conformance-runner <vector_dir> [--json] [--verbose]
+
+Exit codes:
+  0  -- every vector PASSED or UNSUPPORTED (UNSUPPORTED is soft skip)
+  1  -- one or more vectors FAILED
+  2  -- usage / I/O / parse error before runner could attempt any vector
+```
+
+`--json` reserves stdout for a machine-readable payload (`{"total": N, "passed": N, "failed": N, "unsupported": N, "vectors": [...]}`); per-vector progress and the failure diff body live on stderr regardless of mode so CI can pipe stdout to `jq` without filtering.
+
+### 21.3 Vendored Vector Contract
+
+Cross-SDK conformance vectors are vendored byte-identical from the kailash-rs source of truth (`kailash-rs/crates/kailash-pact/tests/conformance/vectors/`) into `packages/kailash-pact/tests/fixtures/conformance/{n4,n5}/`. The vendored-vector contract:
+
+1. **Vendored vectors are immutable in this repo.** Edits to a vector MUST happen in kailash-rs first, then re-vendor.
+2. **Refresh procedure**: `cp ~/repos/.../kailash-rs/crates/kailash-pact/tests/conformance/vectors/n4_*.json packages/kailash-pact/tests/fixtures/conformance/n4/` (and likewise for `n5_*`). Update the README's "Vendored from kailash-rs commit" SHA in the same commit.
+3. **Source-SHA tracking**: `packages/kailash-pact/tests/fixtures/conformance/README.md` records the kailash-rs commit SHA the snapshot was taken at, so the audit trail tracks contract drift.
+4. **Drift surfaces as test failure**: A divergence between the Rust source and the Python vendored copy fails the Tier 2 integration suite (`tests/integration/conformance/test_full_vector_suite.py`) with sha256 fingerprints in every outcome for cross-SDK forensic correlation.
+
+Inventory (vendored from kailash-rs `95916caa66d698d2d7c2755a4b5f3e61019af74e`):
+
+- N4 (5 vectors): `n4_audit_zone1_pseudo`, `n4_audit_zone2_guardian`, `n4_audit_zone3_cognate`, `n4_audit_zone3_continuous_insight`, `n4_audit_zone4_delegated`.
+- N5 (2 vectors): `n5_evidence_blocked`, `n5_evidence_verdict_v1`.
+
+### 21.4 Canonical-JSON Encoder Contract
+
+`pact.conformance.canonical_json_dumps` MUST emit:
+
+- Field-ordered separators matching `serde_json::to_string` exactly (`","`, `":"` -- no spaces).
+- Keys in dict insertion order (CPython 3.7+ semantics; struct field declaration order MUST be preserved). `sort_keys=False`.
+- Non-ASCII bytes preserved as-is (`ensure_ascii=False`).
+- The same encoder for every `canonical_json()` method on every domain type in the module (`TieredAuditEvent`, `Evidence`).
+
+The Rust serde shape is the source of truth; the Python encoder is a faithful re-implementation that MUST round-trip byte-for-byte.
+
+### 21.5 BET-6 Phase 02 Falsifiability Status
+
+BET-6 Phase 02 (cross-SDK contract parity for the Python SDK) is now FALSIFIABLE with this runner. Prior to shards A+B+C+D the Python SDK had no harness that could detect drift between Rust and Python canonicalisation; a regression in the Python encoder would land silently. With the runner + vendored vectors:
+
+- Tier 1 unit tests (61 tests in `packages/kailash-pact/tests/unit/conformance/`) pin the runner mechanics + canonical encoder behaviour.
+- Tier 2 integration tests (4 tests in `packages/kailash-pact/tests/integration/conformance/`) exercise every vendored vector through a real `PactEngine` (real `GovernanceEngine`).
+- The `pact-conformance-runner` CLI surfaces the same contract for CI matrix jobs and downstream consumers without writing a Python harness.
+
+Any regression in the canonical-JSON encoder, in `TieredAuditEvent.from_verdict`, in `Evidence.from_verdict`, or in the durability-tier-from-posture mapping fails the Tier 2 suite immediately with sha256 fingerprints surfacing the exact byte divergence.
+
+### 21.6 Cross-SDK Reference
+
+- Source of truth runner: `kailash-rs/crates/kailash-pact/tests/conformance_vectors.rs`
+- Source of truth vectors: `kailash-rs/crates/kailash-pact/tests/conformance/vectors/`
+- Originating issue: kailash-py #605 (this SDK), kailash-rs #317 (Rust SDK).
