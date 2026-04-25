@@ -55,11 +55,11 @@ def test_symbols_re_exported_at_top_level_pact() -> None:
         ), f"pact.__all__ missing {name} (orphan-detection.md Rule 6)"
 
 
-def test_version_bumped_to_0_10_0() -> None:
+def test_version_bumped_to_0_11_0() -> None:
     """Version consistency -- zero-tolerance.md Rule 5."""
     import pact
 
-    assert pact.__version__ == "0.10.0"
+    assert pact.__version__ == "0.11.0"
 
 
 def test_admission_decision_is_frozen_dataclass() -> None:
@@ -143,7 +143,6 @@ def test_cross_tenant_decision_is_frozen_dataclass() -> None:
 def test_error_hierarchy_inherits_pacterror() -> None:
     """All governance errors inherit from PactError (pact-governance.md MUST NOT)."""
     from kailash.trust.pact.exceptions import PactError
-
     from pact.ml import (
         GovernanceAdmissionError,
         GovernanceClearanceError,

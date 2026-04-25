@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-pact"
-version = "0.10.0"
+version = "0.11.0"
 description = "PACT governance framework — D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -27,7 +27,7 @@ classifiers = [
 readme = "README.md"
 keywords = ["governance", "pact", "agent", "trust", "D/T/R", "envelopes", "clearance", "EATP", "AI"]
 dependencies = [
-    "kailash>=2.8.9",
+    "kailash>=2.11.0",
     "click>=8.0",
     "fastapi>=0.109",
     "slowapi>=0.1.9",

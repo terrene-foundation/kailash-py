@@ -1,5 +1,38 @@
 # PACT Changelog
 
+## [0.11.0] — 2026-04-25 — PACT N4/N5 conformance runner (#605)
+
+Cross-SDK parity with `kailash-rs#317`. Minor bump — new public surface; closes Envoy Phase 02 BET-6 gate (cross-SDK contract parity for Python is now falsifiable).
+
+### Added
+
+- **`pact.conformance` subpackage** (#605 shards A–D) — full PACT N4/N5 conformance vector runner. Public surface:
+  - `ConformanceVector`, `ExpectedVerdict` dataclasses (vector schema)
+  - `load_vectors(vector_dir)` — JSON fixture loader with schema validation
+  - `parse_vector(json_obj)` — strict parser; rejects unrecognised contracts at parse-time with `ConformanceVectorError`
+  - `ConformanceRunner` — drives a `GovernanceEngine` through every vector; produces `RunnerReport` with per-vector PASSED / FAILED / UNSUPPORTED outcome + canonical-JSON byte-equality diff
+  - `render_failure_report(report)` — human-readable diff renderer
+- **`pact-conformance-runner` CLI** (shard C) — entry point: `pact-conformance-runner <vector_dir> [--json] [--verbose]`. Exit code 0 if all PASSED, 1 if any FAILED (UNSUPPORTED counts as PASSED). Stdout is JSON with `--json`, human-readable otherwise; stderr for progress.
+- **Vendored N4/N5 vectors** (shard D.1) at `tests/fixtures/conformance/{n4,n5}/*.json` — 5 N4 + 2 N5 vectors, byte-identical copies from `kailash-rs` commit `95916caa66d698d2d7c2755a4b5f3e61019af74e` (snapshot 2026-04-25). Refresh procedure documented in `tests/fixtures/conformance/README.md`.
+- **65 tests pass** — 26 vector loader + 19 runner Tier 1 cases + 16 CLI Tier 1 + 4 Tier 2 integration (real `GovernanceEngine` + real `PactEngine` against vendored vectors).
+- **Specs**: `specs/pact-enforcement.md` § 21 — public surface contract, vendored-vector refresh procedure, BET-6 status.
+
+### BET-6 Phase 02
+
+Python runner validates byte-for-byte against all 7 real Rust conformance vectors. Cross-SDK governance-semantics parity is now falsifiable. Phase 02 BLOCKER cleared.
+
+### Cross-SDK API gaps surfaced
+
+Two known divergences from the cross-SDK contract (documented in PR #624 body for reviewer triage):
+
+1. `kailash.trust.pact.GovernanceVerdict.level: str` uses legacy snake_case; canonical contract is `zone: GradientZone` enum (PascalCase JSON values like `"AutoApproved"`). Runner owns the cross-SDK shape internally.
+2. `kailash.trust.posture.TrustPosture` enum values use legacy semantic labels; canonical Rust values are snake_case variant names. Runner uses internal `PactPostureLevel` enum.
+
+### Related
+
+- Cross-SDK: `esperie/kailash-rs#317`
+- Issues: closes #605 (all 4 shards landed across PRs #622 + #624)
+
 ## [0.10.0] - 2026-04-23
 
 ### Added

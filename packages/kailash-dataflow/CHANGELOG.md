@@ -1,5 +1,26 @@
 # DataFlow Changelog
 
+## [2.3.0] — 2026-04-25 — SecurityDefinerBuilder + RLS posture audit (#607)
+
+Cross-SDK parity with kailash-rs PR #579 + #590. Minor bump — new public surface, no breaking changes.
+
+### Added
+
+- **`dataflow.migration.security_definer.SecurityDefinerBuilder`** (#607) — port of the Rust `SecurityDefinerBuilder` for declaring pre-auth `SECURITY DEFINER` carveouts on top of row-scoped RLS policies. Cross-SDK byte-identical SQL emission for the same builder chain. Builder API mirrors the Rust signature exactly: `.primary_lookup_column(col)` for explicit WHERE column, `.active_column(col)` for opt-in `is_active` guard (default off), `ALLOWED_PG_TYPES` allowlist matching Rust (`smallserial`, `inet`, `cidr`, `citext`, `interval` plus baseline types). Every emitted DDL identifier routes through `dataflow.adapters.dialect.quote_identifier()` per `rules/dataflow-identifier-safety.md`. Returns parameterless emitted SQL strings ready for execution in numbered migrations.
+- **Cross-SDK test vectors** at `tests/fixtures/security_definer_vectors.json` — shared fixture file consumed by both SDKs to assert byte-identical SQL output for the same builder chain. 4 parametrized regression tests at `tests/regression/test_issue_607_cross_sdk_vectors.py`.
+- **Tier 1 + Tier 2 tests** — 36 unit tests at `tests/unit/migration/test_security_definer_builder.py` (allowlist, validation, builder chains, emission shape) + 7 integration tests at `tests/integration/migration/test_security_definer_builder_integration.py` against real PostgreSQL with RLS enabled (helper + role grants + revoke-from-public + minimum-disclosure return columns).
+- **RLS posture audit + carveout pattern docs** (#607 items 1+2) — new advanced guide at `docs/advanced/rls-security-definer-preauth-carveout.md` (200 lines) + quickstart pointer + `specs/security-data.md` § 11.5 audit (DataFlow `@db.model` tables ship without RLS by default — only `RowLevelSecurityProvider.create_tenant_policy()` emits RLS DDL, never `USING(true)`) + § 11.6 SECURITY DEFINER public-surface contract.
+
+### Deferred
+
+- Item 3 of #607 (`rls=` flag on `@db.model` for declarative auto-emit of `ENABLE ROW LEVEL SECURITY` + tenant-scoped policy) — out of scope per issue brief; warrants its own PR with its own Tier 2 test surface.
+
+### Related
+
+- Cross-SDK: `kailash-rs#579` (v1) + `#590` (v2 refinements)
+- Reference impl: STP migration `0027_users_rls_policy.sql`
+- Issues: closes #607 items 1+2 (item 3 follow-up)
+
 ## [2.2.0] — 2026-04-25 — Public API expose for read-time classification (#601)
 
 Cross-SDK parity with kailash-rs PR #580 (closes #514). Minor bump — new public surface, no breaking changes.
