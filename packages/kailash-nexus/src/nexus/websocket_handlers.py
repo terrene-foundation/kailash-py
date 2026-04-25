@@ -286,20 +286,40 @@ class MessageHandler:
         """
         return None
 
-    async def on_message(self, conn: Connection, msg: Dict[str, Any]) -> None:
+    async def on_message(self, conn: Connection, msg: Dict[str, Any]) -> Any:
         """Called for each JSON-decoded message from the client.
 
         ``msg`` is a dict parsed from the client's JSON frame. For
         non-JSON text frames :meth:`on_text` is called instead.
         Override in subclass.
+
+        **Return value handling (issue #618):** If this method returns a
+        non-``None`` value, the registry sends it back to the same
+        client on the same connection as a unicast reply:
+
+        - ``dict`` / ``list`` → JSON-encoded text frame via
+          :meth:`Connection.send_json`.
+        - ``str`` → raw text frame via :meth:`Connection.send_text`.
+        - ``bytes`` → decoded as UTF-8 and sent as text frame; raises
+          :class:`UnicodeDecodeError` only if the bytes are not valid
+          UTF-8 (logged at WARN, frame dropped).
+        - ``None`` → no auto-reply; the handler is free to call
+          ``await conn.send_*`` explicitly.
+
+        Cross-SDK parity: kailash-rs#589 implements the same
+        return-value-as-reply contract on the Rust side.
         """
         return None
 
-    async def on_text(self, conn: Connection, text: str) -> None:
+    async def on_text(self, conn: Connection, text: str) -> Any:
         """Called for each non-JSON text frame from the client.
 
         Default implementation logs at DEBUG and drops the frame.
         Override to handle raw text protocols.
+
+        **Return value handling (issue #618):** Same contract as
+        :meth:`on_message` — non-``None`` return values are auto-sent
+        back to the same client.
         """
         logger.debug(
             "ws.handler.text_frame_dropped",
@@ -584,7 +604,7 @@ class MessageHandlerRegistry:
         handler: MessageHandler, conn: Connection, msg: Dict[str, Any]
     ) -> None:
         try:
-            await handler.on_message(conn, msg)
+            reply = await handler.on_message(conn, msg)
         except Exception:  # noqa: BLE001
             logger.exception(
                 "ws.handler.on_message_error",
@@ -593,19 +613,83 @@ class MessageHandlerRegistry:
                     "connection_id": conn.connection_id,
                 },
             )
+            return
+        await MessageHandlerRegistry._deliver_reply(conn, reply)
 
     @staticmethod
     async def _safe_on_text(
         handler: MessageHandler, conn: Connection, text: str
     ) -> None:
         try:
-            await handler.on_text(conn, text)
+            reply = await handler.on_text(conn, text)
         except Exception:  # noqa: BLE001
             logger.exception(
                 "ws.handler.on_text_error",
                 extra={
                     "path": conn.path,
                     "connection_id": conn.connection_id,
+                },
+            )
+            return
+        await MessageHandlerRegistry._deliver_reply(conn, reply)
+
+    # ------------------------------------------------------------------
+    # on_message return-value delivery (issue #618 + cross-SDK kailash-rs#589)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _deliver_reply(conn: Connection, reply: Any) -> None:
+        """Deliver a non-None ``on_message`` / ``on_text`` return value.
+
+        Tenant-safe by construction: dispatch is scoped to ``conn`` —
+        the same socket the client sent the request on. No broadcast
+        leakage; the reply CAN ONLY reach the originating client.
+
+        Type contract:
+        - ``None``  → no-op (handler did its own send, or doesn't reply)
+        - ``dict`` / ``list`` → JSON via ``send_json``
+        - ``str`` → raw text via ``send_text``
+        - ``bytes`` → UTF-8 decoded then ``send_text``; on
+          ``UnicodeDecodeError`` log WARN and drop
+        - any other type → ``send_json`` (best-effort
+          ``json.dumps(default=str)``); ``TypeError`` logged at WARN.
+        """
+        if reply is None:
+            return
+        if isinstance(reply, (dict, list)):
+            await conn.send_json(reply)
+            return
+        if isinstance(reply, str):
+            await conn.send_text(reply)
+            return
+        if isinstance(reply, (bytes, bytearray)):
+            try:
+                text = bytes(reply).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                logger.warning(
+                    "ws.handler.reply_bytes_not_utf8",
+                    extra={
+                        "path": conn.path,
+                        "connection_id": conn.connection_id,
+                        "error": str(exc),
+                    },
+                )
+                return
+            await conn.send_text(text)
+            return
+        # Fallback for arbitrary serializable objects (numbers, bools,
+        # custom dataclasses with default=str). Same shape as send_json
+        # so handlers that return a typed object behave like dict.
+        try:
+            await conn.send_json(reply)
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "ws.handler.reply_unserializable",
+                extra={
+                    "path": conn.path,
+                    "connection_id": conn.connection_id,
+                    "type": type(reply).__name__,
+                    "error": str(exc),
                 },
             )
 
@@ -622,6 +706,67 @@ class MessageHandlerRegistry:
         if handler is None:
             raise KeyError(f"no websocket handler registered at {path!r}")
         await handler.broadcast_event(event)
+
+    async def send_to(self, path: str, connection_id: str, payload: Any) -> bool:
+        """Send ``payload`` to a single tracked connection (issue #618).
+
+        External-publisher unicast: scoped to the exact connection
+        identified by (``path``, ``connection_id``). Tenant-safe by
+        construction — the dispatch reaches ONLY the named socket;
+        every other connection on the same path is unaffected.
+
+        Args:
+            path: URL path the connection was registered on (e.g.
+                ``"/events"``). MUST match a registered handler.
+            connection_id: The :attr:`Connection.connection_id`
+                returned by ``on_connect`` for the target client.
+            payload: JSON-serializable value (sent via
+                :meth:`Connection.send_json`), :class:`str` (sent via
+                :meth:`Connection.send_text`), or :class:`bytes`
+                (UTF-8 decoded then sent as text frame).
+
+        Returns:
+            ``True`` if the frame was successfully handed to the
+            socket; ``False`` if the path has no registered handler,
+            the connection_id is unknown, the connection is already
+            closed, or the send raised. The registry prunes dead
+            connections on the next receive cycle in either case.
+        """
+        path_conns = self._connections_by_path.get(path)
+        if path_conns is None:
+            logger.debug(
+                "ws.send_to.unknown_path",
+                extra={"path": path, "connection_id": connection_id},
+            )
+            return False
+        conn = path_conns.get(connection_id)
+        if conn is None:
+            logger.debug(
+                "ws.send_to.unknown_connection_id",
+                extra={"path": path, "connection_id": connection_id},
+            )
+            return False
+        if not conn.alive:
+            return False
+        # Reuse the shared delivery contract so external send_to and
+        # on_message return-value reply produce identical wire frames.
+        if isinstance(payload, str):
+            return await conn.send_text(payload)
+        if isinstance(payload, (bytes, bytearray)):
+            try:
+                text = bytes(payload).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                logger.warning(
+                    "ws.send_to.bytes_not_utf8",
+                    extra={
+                        "path": path,
+                        "connection_id": connection_id,
+                        "error": str(exc),
+                    },
+                )
+                return False
+            return await conn.send_text(text)
+        return await conn.send_json(payload)
 
     # ------------------------------------------------------------------
     # Internals used by MessageHandler

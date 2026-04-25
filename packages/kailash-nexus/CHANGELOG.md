@@ -1,5 +1,21 @@
 # Nexus Changelog
 
+## [2.3.0] - 2026-04-25 — WebSocket per-connection unicast + on_message reply delivery (#618)
+
+### Added
+
+- **`MessageHandler.on_message` / `on_text` return values are auto-delivered (#618)**: when a class-based WebSocket handler returns a non-`None` value from `on_message` or `on_text`, the registry sends it back to the originating client on the same connection — no need for the handler to call `await conn.send_json(...)` explicitly. Type contract: `dict`/`list` → JSON via `send_json`, `str` → raw text via `send_text`, `bytes` → UTF-8 decoded then `send_text` (invalid UTF-8 logged at WARN and dropped), `None` → no auto-reply (handler-owned send). Tenant-safe by construction — the auto-reply CAN ONLY reach the originating socket. Cross-SDK parity with `kailash-rs#589`.
+- **`Nexus.websocket_send_to(path, connection_id, payload) -> bool` (#618)**: per-connection unicast push from external publishers. Use this when an external producer (DataFlow change stream, message-queue consumer, scheduled job) needs to address ONE specific client by its `connection_id`, not the broadcast set. Dispatch is scoped to the named connection — no other client receives the frame, so per-tenant push is safe by construction. Returns `False` (no raise) for unknown path, unknown `connection_id`, or already-closed socket. Mirrors `MessageHandlerRegistry.send_to` with the same name on the `Nexus` facade for parity with `websocket_broadcast`.
+- **`MessageHandlerRegistry.send_to(path, connection_id, payload)`**: the registry-level primitive. Reuses `Connection.send_json` / `send_text` so the wire frame matches `on_message` auto-replies bit-for-bit.
+
+### Changed
+
+- `MessageHandler.on_message` / `on_text` return type widened from `None` to `Any` (with documented per-shape delivery semantics). Backward-compatible — handlers returning `None` continue to behave as before.
+
+### Migration
+
+- 2.2.x → 2.3.0 is additive. No required handler changes. Handlers that already call `await conn.send_json(...)` and return `None` keep working unchanged. Handlers that previously had to duplicate their reply payload (return + explicit send) MAY now drop the explicit send and rely on the return-value contract.
+
 ## [2.2.0] - 2026-04-23 — ML bridge: tenant/actor ContextVars, MLDashboard auth, ml-endpoint mount (W31.c)
 
 ### Added
