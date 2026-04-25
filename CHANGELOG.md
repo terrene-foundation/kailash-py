@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — issue-603]
+
+### Added
+
+- **`BudgetTracker.set_threshold_callback(threshold_pct, callback)`** at `src/kailash/trust/constraints/budget_tracker.py` — public API for registering a one-shot callback that fires when budget utilization first reaches a caller-supplied fraction of allocated budget. Distinct from the existing `on_threshold()` (which fires only at hardcoded 80/95/100% marks). Callback fires when `(committed + reserved) / allocated >= threshold_pct` after a successful `reserve()` or `record()` call. Multiple callbacks may be registered at the same threshold (registration order preserved); each (threshold, handle) fires AT MOST ONCE per BudgetTracker instance. Returns an integer handle for symmetric removal via `unregister_threshold_callback(handle)`. Thread-safe under existing `self._lock`; predicate evaluated under lock, callbacks dispatched outside the lock to prevent re-entrancy deadlock. Callback exceptions are logged at WARNING via `logger.exception` and never propagate to `record()`/`reserve()` callers. Motivation: Envoy Phase 01 Grant Moment trigger — operator wires "you've used 80% of your budget" notification to drive escalation. Cross-SDK alignment with `kailash-rs#30`.
+- **`BudgetEvent` payload extended** with optional `threshold_pct: Optional[float]`, `committed_microdollars: Optional[int]`, `reserved_microdollars: Optional[int]` fields. Custom-threshold events carry the registered fraction; legacy `threshold_80` / `threshold_95` / `exhausted` events now also carry their corresponding fraction (0.80 / 0.95 / 1.00) for cross-callback uniformity. `to_dict()` / `from_dict()` are backward-compatible — older payloads without these keys deserialize cleanly with the new fields set to `None`.
+- **Tier 1 unit tests** at `tests/trust/unit/test_budget_tracker_callbacks.py` (27 tests) covering happy path, registration order, multi-threshold ordering, exception isolation, once-only firing, threshold-pct validation (NaN/Inf/0/1/boundary), claimed-amount predicate, unregister semantics, allocated-zero edge case, and `_max_callbacks` limit.
+- **Tier 2 integration tests** at `tests/trust/integration/test_budget_tracker_callbacks.py` (5 tests) exercising callback dispatch under concurrent `reserve()`/`record()` workers (16-thread + 50-thread scenarios), callback-exception isolation under load, multi-threshold independence under load, and end-to-end Grant Moment scenario. NO mocking — all tests use real `threading` primitives.
+
+### Related
+
+- Cross-SDK: `esperie/kailash-rs#30` (Rust `BudgetTracker::set_threshold_callback`).
+
 ## Note: Changelog Reorganized
 
 The changelog has been reorganized into individual files for better management. Please see:
