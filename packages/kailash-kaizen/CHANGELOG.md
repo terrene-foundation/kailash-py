@@ -5,6 +5,12 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — issue-602]
+
+### Added
+
+- **`kaizen.orchestration.OrchestrationRuntime`** (issue #602 / kailash-rs ISS-27 cross-SDK parity) — strategy-driven multi-agent coordinator mirroring the Rust `kaizen-agents::orchestration::runtime::OrchestrationRuntime` shape. Builder-style `add_agent` / `strategy` / `coordinator` / `config` setters; async `run(input)` returns `OrchestrationResult` with the same five-field shape as the Rust struct (`agent_results`, `final_output`, `total_iterations`, `total_tokens`, `duration_ms`). Sequential / Parallel / Hierarchical / Pipeline strategies dispatch through a single `agent_invoker` seam — Protocol-conforming agents need only implement `name` + `run_async` to participate. New surface: `OrchestrationRuntime`, `OrchestrationStrategy` (frozen dataclass + `sequential() / parallel() / hierarchical(name) / pipeline(steps)` factories), `OrchestrationStrategyKind` StrEnum (lowercase values match Rust serde), `OrchestrationConfig`, `OrchestrationResult`, `OrchestrationError`, `Coordinator` Protocol, `AgentLike` Protocol, `SharedMemoryCoordinator` (default in-memory backed by `SharedMemoryPool`), `PipelineStep`, `PipelineInputSource`. Coexists with — does NOT replace — `kaizen_agents.patterns.OrchestrationRuntime` (registry/lifecycle runtime for 10-100 agent fleets) and `kaizen.trust.orchestration.TrustAwareOrchestrationRuntime` (trust-policy enforcement). Tier-1: 37 unit tests in `tests/unit/orchestration/test_runtime.py`. Tier-2: 9 integration tests in `tests/integration/orchestration/test_runtime_e2e.py` exercising the runtime end-to-end through the real `SharedMemoryPool` coordinator + `TestCrossSdkShapeParity` locking the result-field set against the Rust struct shape. Spec: `specs/kaizen-agents-governance.md` § 19.6.
+
 ## [2.12.3] — 2026-04-25 — Security sweep (#614 + #617)
 
 Patch bump — defense-in-depth tightening of tenant-id log hygiene and credential-adjacent fingerprinting. No API changes.
