@@ -584,3 +584,83 @@ Both Python (`kailash-py`) and Rust (`kailash-rs`) SDKs implement the EATP spec 
 - Hook types and abort semantics
 
 Cross-SDK issues are tracked with `cross-sdk` label per `rules/cross-sdk-inspection.md`.
+
+## 21. Algorithm Agility (Scaffold #604, awaiting mint ISS-31)
+
+The signed-record surface threads an `AlgorithmIdentifier` metadata field
+through every producer/verifier so that when mint **ISS-31** stabilises
+the canonical wire-format value space, only the `__post_init__`
+validation and canonical serialiser change. The threading itself
+(producer → record → verifier) is already in place and does NOT need to
+be re-touched per site.
+
+### 21.1 Public surface
+
+`kailash.trust.signing.algorithm_id`:
+
+- `ALGORITHM_DEFAULT: str = "ed25519+sha256"` — the only value supported
+  in this scaffold. Any other value passed to `AlgorithmIdentifier(...)`
+  raises `NotImplementedError` with a message that names the issue
+  (`#604`) AND the spec gate (`mint ISS-31`).
+- `class AlgorithmIdentifier` — frozen dataclass with single attribute
+  `algorithm: str = ALGORITHM_DEFAULT`.
+- `coerce_algorithm_id(alg_id)` — canonical helper for threading
+  `Optional[AlgorithmIdentifier]` so call sites do not have to
+  re-implement the `alg_id or AlgorithmIdentifier()` defaulting pattern.
+
+### 21.2 Threaded surface (this scaffold)
+
+This shard threads only the `SignedEnvelope` storage record + sign /
+verify pair in `kailash.trust.pact.envelopes`:
+
+- `SignedEnvelope.algorithm: str = ALGORITHM_DEFAULT` — new dataclass
+  field. Backward-compatible (existing call sites that omit it inherit
+  the default).
+- `SignedEnvelope.to_dict()` — emits `"algorithm": "ed25519+sha256"`. The
+  serialised dict's keys, when sorted, MUST be:
+  `["algorithm", "envelope", "expires_at", "signature", "signed_at",
+  "signed_by"]`. Lexicographic ordering is the canonical wire shape and
+  enables deterministic JSON canonicalisation.
+- `SignedEnvelope.from_dict()` — accepts dicts with **missing or empty**
+  `"algorithm"` keys (legacy / pre-#604 records), defaulting them to
+  `ALGORITHM_DEFAULT`. Non-default non-empty values raise
+  `NotImplementedError`.
+- `SignedEnvelope.verify()` — same algorithm-agility branching as
+  `from_dict()`: empty → accept-and-warn-once; non-default → raise
+  before any crypto work; default → verify normally.
+
+### 21.3 Legacy-record warning contract
+
+Empty algorithm field on parse OR verify emits **one** `DeprecationWarning`
+per process containing the literal substring:
+
+> `scaffold for #604; wire format pending mint ISS-31`
+
+The substring is grep-able across log archives so future agents can
+correlate stale records. Emission is coordinated by the module-level
+`_LEGACY_SIGNED_ENVELOPE_WARNED` guard so a single legacy record
+passing through `from_dict()` then `verify()` warns at most once.
+
+### 21.4 Sites NOT yet threaded (next-shard work)
+
+The full inventory lives at
+`workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`.
+Layer-1 primitive pairs still pending:
+
+- `src/kailash/trust/envelope.py::sign_envelope` / `verify_envelope`
+- `src/kailash/trust/signing/timestamping.py::RFC3161TimestampManager`
+  (`create_anchor` / `verify_anchor` + `TimestampToken` storage)
+- `src/kailash/trust/signing/crl.py::CRLMetadata.sign` / `verify_signature`
+- `src/kailash/trust/messaging/{signer,verifier}.py::MessageEnvelope`
+
+Layer-2 stores (audit_store, chain_store, key_manager) inherit threading
+once their underlying Layer-1 primitives carry the field.
+
+### 21.5 Cross-SDK alignment
+
+Cross-SDK sibling: `esperie/kailash-rs#33`. Wire format awaits
+`terrene-foundation/mint` ISS-31. When mint stabilises, ONLY the
+`AlgorithmIdentifier.__post_init__` validation and the canonical
+serialiser change. The threading remains intact.
+
+Origin: GitHub issue terrene-foundation/kailash-py#604.
