@@ -31,8 +31,15 @@ codify_session: |
   the structural defense was missing. Together they close the loop the
   kaizen 2.13.1 hotfix exposed.
 
-status: pending_review
+status: distributed
 submitted_date: "2026-04-25T18:30:00+08:00"
+reviewed_date: "2026-04-25T19:50:00+08:00"
+distributed_date: "2026-04-25T19:50:00+08:00"
+sdk_version: "2.10.0"
+loom_version: "2.8.30"
+classification:
+  init-py-module-scope-imports-honor-manifest: global
+  clean-venv-check-surfaces-latent-failures-not-just-pr-diff: global
 
 changes:
   - id: init-py-module-scope-imports-honor-manifest
