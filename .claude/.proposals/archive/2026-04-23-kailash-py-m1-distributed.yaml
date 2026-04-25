@@ -1,0 +1,936 @@
+source_repo: kailash-py
+codify_date: "2026-04-23"
+codify_session: |
+  Session 2026-04-23 — kailash-ml 1.0.0 M1 foundations release wave (W30 +
+  W31/W32 M10 + W33 wrappers + W33b/c regression). Branch
+  `feat/kailash-ml-1.0.0-m1-foundations`. Merged 6 M10 shards across 7
+  packages (kailash 2.9.0, kailash-dataflow 2.1.0, kailash-nexus 2.2.0,
+  kailash-kaizen 2.12.0, kailash-align 0.6.0, kailash-pact 0.10.0,
+  kailash-ml 1.0.0). W33 shipped `km.*` top-level wrappers; W33c shipped
+  `km.register`; W33b landed the canonical README end-to-end regression
+  test that caught a `km.train → km.register` pipeline break.
+
+  Eight institutional lessons emerged and are codified this cycle. (1)
+  Anthropic throttles simultaneous Opus worktree-agent launches — 6 Opus
+  agents launched in one burst ALL died at 34–45s with rate-limit errors;
+  waves of ≤3 succeeded. (2) Parallel worktrees branched from different
+  base SHAs merged cleanly ONLY because packages didn't overlap; no
+  structural defense existed. (3) 3 of 6 shards used harness-default
+  `worktree-agent-<hash>` branch names instead of the prompt-specified
+  `feat/<shard>` names. (4) Orchestrator-side amending of todo text at
+  launch time (version bumps to reflect shipped state, symbol counts to
+  reflect spec changes) saved two failed shards. (5) End-to-end README
+  regression test caught a pipeline break invisible to per-primitive
+  unit + integration tests. (6) `TrainingResult(frozen=True)` without a
+  `trainable` field shipped to main despite passing every unit test —
+  the dataclass was structurally a stub because it couldn't support the
+  next primitive's contract. (7) `km.train` async but `km.register` sync
+  (with internal `asyncio.run()`) crashed in every pytest-asyncio /
+  Nexus / Jupyter caller. (8) Parallel shards on different base SHAs
+  each edited the same `__init__.py::__all__`; merge silently picked
+  one side, dropping the other's additions.
+
+  Each pattern is codified against an existing rule file (no new rule
+  files needed — all 8 slot into existing institutional-knowledge
+  locations). Prior proposal (2026-04-20, status=distributed) was
+  archived by the parent orchestrator before this codify cycle started.
+
+status: distributed
+submitted_date: "2026-04-23T08:00:00+08:00"
+reviewed_date: "2026-04-23T14:30:00+08:00"
+distributed_date: "2026-04-25T05:15:00Z"
+distributed_notes: |
+  All 25 entries distributed across loom 2.8.27 (entries 1-20), 2.8.28
+  (entries 21-25), and 2.8.29 (frontmatter regression sweep + Validator 14
+  follow-up). Gate 2 finalized 2026-04-25: kailash-coc-claude-py
+  3.5.17→3.5.18 + SDK pin sweep (9 packages to PyPI tips) + uv sync ✓;
+  kailash-coc-py 1.0.1→1.0.2 (VERSION only — multi-CLI template has no
+  root pyproject.toml). The status=pending_review state was stale from
+  a manual reset during release setup (commit ecca92bf); not from
+  unreviewed changes.
+reviewed_by: loom/sync Gate 1 (sync-reviewer agent) — partial (entries 1-14 only)
+reviewed_notes: |
+  Entries 1-14 reviewed 2026-04-23T14:30: 75/76 files classified
+  global (1 SKIP = proposal yaml). 0 variant-py overlays. 0 regressions.
+  See sync-manifest.yaml convention "Global skills/rules: PYTHON
+  examples by default" for rationale on Python-content-in-global
+  placements. Cross-SDK alignment notes queued for next kailash-rs
+  sync cycle (Rule 6a __all__ ≡ pub use; async pair ≡ block_on panic;
+  end-to-end regression; fake-handoff-field).
+
+  Entries 15-20 APPENDED AFTER initial review (deferred-codify cycle
+  landed later same day): kaizen SKILL.md refactor + skill desc slims,
+  nexus-specialist FastAPI reword, 10 rules extraction to guides,
+  dataflow-classification sibling sync, worktree-branch-rename leak
+  candidate rule, commands out-of-scope flag. Per artifact-flow.md
+  "Reset Status on Append", status reset to pending_review for
+  re-classification of the new entries. Entries 1-14 classifications
+  stand.
+
+changes:
+  - id: parallel-opus-burst-size-limit-waves-of-three
+    type: rule
+    severity: MEDIUM
+    target: rules/worktree-isolation.md
+    section: "new § 'Parallel-Launch Burst Size Limit (Waves of ≤3)' as Rule 4"
+    summary: |
+      Anthropic's server-side throttle kills 4-6 simultaneous Opus
+      worktree agents launched in one burst. All 6 in the M10 launch
+      died at 34-45s with `API Error: Server is temporarily limiting
+      requests for this user` BEFORE any of them committed. Fallback
+      to waves of 3 succeeded.
+
+      Rule mandates parent orchestrators launch worktree agents in
+      waves of ≤3 for Opus-tier models. BLOCKED rationalizations
+      enumerated (API docs don't say hard limit / rate limits only on
+      sustained load / we can retry / waves halve throughput /
+      earlier 4-agent tests worked).
+
+      Evidence: session 2026-04-23 M10 launch — 6 agents
+      (ab9c2f7213c4a82ab, ae2f048829aa941a2, af15e0f9c3f2d16a3,
+      a823d7ed912137852, a0e76f0996d1d9a4e, ad10591aa614deeae) all
+      rate-limited in first burst; waves of 3 (a506217c8640af1c0,
+      a0831fc0ca6b9f6ae, a1027b84cb7c4f9d2 + aa7fb6a6, a69473b3,
+      aaecc695) all completed.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Rust worktree orchestration would hit the
+      same throttle — Anthropic's limit is session-level, not
+      language-level. No variant overlay needed; the orchestrator
+      launch pattern is identical.
+
+  - id: pre-flight-merge-base-check-before-worktree-launch
+    type: rule
+    severity: MEDIUM
+    target: rules/worktree-isolation.md
+    section: "new § 'Pre-Flight Merge-Base Check Before Worktree Launch' as Rule 5"
+    summary: |
+      `git worktree add` without an explicit base defaults to whatever
+      branch HEAD was last set. For long-running sessions where new
+      shards merge during the session, stale bases drift silently.
+      5 of 6 M10 shards branched from 899ce3e5 (pre-W30 merge); only
+      1 branched from feat tip 41a217dc. Worked this time because
+      packages didn't overlap; permanent failure mode until
+      structurally prevented.
+
+      Rule mandates orchestrator pins base SHA at worktree creation
+      AND verifies `git merge-base <new-branch> <target-branch>`
+      equals the current tip of `<target-branch>` at launch time.
+      BLOCKED: "worktree defaults handle the base" / "git rebases at
+      merge time" / "packages don't overlap" / "worked this time".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. `git worktree` semantics are language-
+      agnostic. Rust and Ruby BUILD repos exhibit the same failure
+      mode.
+
+  - id: worktree-branch-name-matches-prompt-declaration
+    type: rule
+    severity: LOW
+    target: rules/worktree-isolation.md
+    section: "new § 'Worktree Branch Name MUST Match Prompt Declaration' as Rule 6"
+    summary: |
+      3 of 6 shards in the M10 launch ended up on branches like
+      `worktree-agent-aa7fb6a6` instead of `feat/w31-core-ml-nodes-
+      observability` because the harness default assigned hash-based
+      names when the orchestrator prompt didn't force creation with
+      `-b <branch>`. Post-merge grep for `feat/w31-*` missed those
+      three.
+
+      Rule mandates orchestrator passes `-b <branch>` explicitly AND
+      the agent prompt verifies `git rev-parse --abbrev-ref HEAD`
+      matches the declared name before first commit. BLOCKED: "names
+      are bookkeeping" / "harness defaults are fine" / "prompt
+      mentions name, agent sets it" / "hash names are more unique".
+
+      Evidence: honored — feat/w31-core-ml-nodes-observability,
+      feat/w31b-dataflow-ml-bridge, feat/w31c-nexus-ml-bridge,
+      feat/w33b-migration-readme-regression. Defaulted —
+      worktree-agent-aa7fb6a6, worktree-agent-a69473b3,
+      worktree-agent-aaecc695, worktree-agent-aa8e8995,
+      worktree-agent-af0e8132.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Branch-name discipline is `git log --grep`
+      hygiene; language-agnostic.
+
+  - id: orchestrator-amends-stale-todo-at-launch
+    type: rule
+    severity: LOW
+    target: rules/specs-authority.md
+    section: "new § 'Orchestrator MUST Amend Todo Text At Launch When Spec Has Moved' as Rule 5c"
+    summary: |
+      Todos are written at /todos time against state-of-repo-then; by
+      /implement time the state has moved. Orchestrator MUST cross-
+      check todo claims (version bumps, __all__ counts, spec refs)
+      against current canonical spec + package state before launch,
+      amend IN THE TODO TEXT, and prompt the agent with the amended
+      version. Launching a stale todo burns the agent's budget and
+      risks outright shard failure (tag collision, symbol mismatch).
+
+      Evidence: W32-32b todo said "bump align 0.5.0" but W30.3
+      already shipped 0.5.0; amended to 0.6.0 at launch saved a
+      failed shard. W33 todo said __all__ = 34 symbols; spec §15.9
+      says 41; amended at launch per §5b specs-over-todo preference;
+      agent landed 41 correctly.
+
+      BLOCKED: "agent is smart enough to re-derive" / "todo was
+      approved, amending is scope creep" / "let the agent hit the
+      conflict" / "spec will be re-read at implement time".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. The orchestrator-side launch-time cross-
+      check pattern is language-agnostic.
+
+  - id: end-to-end-pipeline-regression-test-above-unit-integration
+    type: rule
+    severity: MEDIUM
+    target: rules/testing.md
+    section: "new § 'End-to-End Pipeline Regression Tests Above Unit + Integration'"
+    summary: |
+      Every canonical pipeline the docs teach (README Quick Start,
+      tutorial flow, advertised 3-line example) MUST have a Tier-2-
+      or-above regression test that executes the DOCS-EXACT code
+      against real infrastructure and asserts the final user-visible
+      outcome. Unit tests per primitive cannot catch handoff-field
+      gaps because each primitive's unit test constructs fixtures
+      with the fields THAT primitive needs.
+
+      Evidence: kailash-ml 1.0.0 W33b —
+      test_readme_quickstart_executes_end_to_end at
+      packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py
+      caught km.train → km.register pipeline broken (TrainingResult
+      had no `trainable` field → km.register couldn't resolve .model
+      for ONNX export). Every unit test of fit() passed; every unit
+      test of register() passed; end-to-end chain raised ValueError
+      on every fresh install.
+
+      Rule mandates regression test per documented pipeline in
+      tests/regression/ with @pytest.mark.regression and grep-able
+      name (includes "quickstart" / "readme" / tutorial name).
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. The "every primitive tests its own
+      fixture" failure mode is language-agnostic. Rust and Python
+      both need end-to-end regression tests per canonical pipeline.
+
+  - id: fake-integration-via-missing-handoff-field
+    type: rule
+    severity: HIGH
+    target: rules/zero-tolerance.md
+    section: "extend § 'Rule 2: No Stubs' with 'Fake integration via missing handoff field' example"
+    summary: |
+      Extends the existing zero-tolerance §2 BLOCKED examples list
+      (fake encryption, fake transaction, fake health, fake
+      classification, fake tenant isolation, fake metrics) with a
+      new pattern: a frozen dataclass on a pipeline's critical path
+      that omits the field the NEXT primitive needs to consume it.
+
+      TrainingResult(frozen=True) without `trainable` or `.model`
+      ships to main passing every unit test (each constructs its own
+      TrainingResult with the fields IT needs) while the advertised
+      3-line README pipeline breaks on every fresh install. The
+      dataclass IS structurally a stub.
+
+      Evidence: kailash-ml 1.0.0 W33b — TrainingResult shipped in
+      W31+W33; km.register landed in W33c with no way to resolve
+      .model; canonical Quick Start raised ValueError until W33b
+      added trainable=self at every Trainable.fit() return site and
+      landed packages/kailash-ml/tests/regression/test_readme_quickstart_executes.py.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. The frozen-dataclass handoff-field gap
+      is language-agnostic (Rust struct equivalent). No variant
+      overlay needed; the existing zero-tolerance §2 example list
+      is global.
+
+  - id: paired-public-surface-consistent-async-ness
+    type: rule
+    severity: MEDIUM
+    target: rules/patterns.md
+    section: "new § 'Paired Public Surface — Consistent Async-ness' after § 'Async vs Sync Runtime'"
+    summary: |
+      When two top-level functions form a canonical user pipeline
+      (train/register, fit/predict, encrypt/decrypt, publish/subscribe,
+      login/logout), BOTH MUST be either async OR sync. Mixing
+      async with sync-wrapping-asyncio.run() is BLOCKED — the sync
+      wrapper raises `RuntimeError: This event loop is already
+      running` in every pytest-asyncio / Nexus / Jupyter caller.
+
+      Evidence: kailash-ml 1.0.0 W33/W33c — km.train async (W33),
+      km.register landed sync (W33c) with internal asyncio.run().
+      Canonical 3-line Quick Start crashed in every async context.
+      Fix commit fdd3040e converted km.register to async def.
+
+      BLOCKED rationalizations: "both shapes for flexibility" /
+      "asyncio.run handles wrapping" / "sync is a convenience" /
+      "async caller is rare" / "we'll document the requirement".
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable at the pattern level. Rust equivalent:
+      canonical pipelines should be consistent about async-ness —
+      don't mix `async fn` with `fn` that calls `block_on()`, as
+      `block_on()` panics inside an active runtime. Variant
+      overlay could refine examples but the structural rule is
+      language-agnostic.
+
+  - id: merge-time-all-reconciliation-across-shard-base-shas
+    type: rule
+    severity: MEDIUM
+    target: rules/orphan-detection.md
+    section: "new § 'Merge-Time __all__ Reconciliation Across Shard Base-SHAs' as Rule 6a"
+    summary: |
+      When two parallel-worktree shards each edit the same
+      __init__.py::__all__ AND the shards branched from different
+      base SHAs, git's 3-way merge picks one side arbitrarily — the
+      other shard's additions silently orphan.
+
+      Rule mandates merge-time reconciliation protocol: (1) prefer
+      HEAD (newest canonical structure), (2) preserve invariants
+      from older base (enumerate symbols / counts / semantic groups
+      the older shard depended on), (3) update count-dependent
+      tests in the same commit, (4) re-run module-scope import
+      check from §6.
+
+      Evidence: kailash-ml-audit 2026-04-23 — W33 (base 41a217dc)
+      landed 6-group canonical __all__; W31 (base 899ce3e5) added
+      7 Trainable adapters. Fix commit fa300831 merged structure +
+      invariants, reconciled test_km_all_ordering.py count.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Rust `pub use` re-export reconciliation
+      across parallel worktrees exhibits the identical failure mode
+      when two shards edit the same crate's prelude / mod.rs re-
+      export list.
+
+  # ---------------------------------------------------------------
+  # Non-M1-pattern structural fixes landed during codify cycle
+  # ---------------------------------------------------------------
+
+  - id: agent-m1-body-updates-release-ml-todo-analyst
+    type: agent
+    severity: LOW
+    target: agents/release/release-specialist.md, agents/frameworks/ml-specialist.md, agents/management/todo-manager.md, agents/analysis/analyst.md, agents/frameworks/{dataflow,nexus,kaizen,pact,align}-specialist.md
+    section: "9 agent files absorbed M1 patterns + integration surface pointers"
+    summary: |
+      codify(agents) commit e7e42765: release-specialist +55 (atomic
+      release wave), ml-specialist +59 (km.* + async + TrainingResult.
+      trainable + MIGRATION + 7 Phase-1 adapters), todo-manager +35
+      (amend-in-place), analyst +30 (E2E regression tier), 5 framework
+      specialists +4-5 each (pointers to {pkg}.ml integration surfaces
+      landed this session).
+    classification_suggestion: global
+    rationale: |
+      Agent bodies are the HOW layer for applying M1 patterns; all 9
+      files are global-scope per existing classification (no variant
+      overlays). Pointers to new integration surfaces (kailash.ml,
+      dataflow.ml, nexus.ml, kaizen.ml, pact.ml, align.ml) are SDK-
+      source-specific and apply to Python variant only but the pointer
+      sentences themselves are language-neutral.
+
+  - id: skill-m1-new-subfiles-release-wave-km-canonical
+    type: skill
+    severity: LOW
+    target: skills/34-kailash-ml/m1-release-wave.md (NEW), skills/10-deployment-git/multi-package-release-wave.md (NEW), skills/30-claude-code-patterns/worktree-orchestration.md (Rules 6/7/8), skills/16-validation-patterns/SKILL.md, skills/12-testing-strategies/SKILL.md
+    section: "2 new sub-files + 3 SKILL.md additions for M1 patterns"
+    summary: |
+      codify(skills) commit a6c8ecba: new 34-kailash-ml/m1-release-
+      wave.md (140 LOC — 48-symbol __all__, async pair, trainable
+      handle, MIGRATION sunset, 7 integration surfaces), new 10-
+      deployment-git/multi-package-release-wave.md (140 LOC — reverse
+      dep-graph, per-pkg version owner, sole CHANGELOG owner, rollback
+      tree, pre-flight build/twine/TestPyPI), 30-claude-code-patterns/
+      worktree-orchestration.md +105 (Rules 6/7/8 for burst/base-SHA/
+      branch-name), 16-validation-patterns +35 (E2E regression tier),
+      12-testing-strategies +3 (pointer).
+    classification_suggestion: global
+    rationale: |
+      Progressive disclosure (SKILL.md stays slim, detail in sub-
+      files) matches the existing pattern for 34-kailash-ml. The two
+      new sub-files are Python-specific by content (km.* is kailash-
+      ml Python surface; release wave enumerates Python pyproject.toml
+      files) and belong in a py variant if loom classifies the parent
+      SKILL.md as global-with-variant-overlays for other languages.
+
+  - id: staleness-refresh-agent-critical-fixes
+    type: agent
+    severity: MEDIUM
+    target: agents/open-source-strategist.md (YAML), agents/quality/security-reviewer.md (dedup), agents/quality/gold-standards-validator.md (license framing), agents/frontend/flutter-specialist.md (dedup), agents/implementation/{pattern-expert,build-fix}.md (cross-refs)
+    section: "staleness sweep — structural fixes commits 6ed03816 + 9c8d8807"
+    summary: |
+      6 agents last-modified 2026-04-04 (19 days stale) refreshed.
+      CRITICAL fixes: (1) malformed YAML frontmatter in open-source-
+      strategist.md (broken tools list bleeding into body), (2)
+      duplicate section "10" in security-reviewer.md (PACT + Auth both
+      numbered 10), (3) stale "Kailash RS proprietary" framing in 2
+      agents — both SDKs Foundation-owned per rules/independence.md.
+      Plus dedup in flutter-specialist, framework-first cross-refs in
+      pattern-expert and build-fix. Net -23 LOC.
+    classification_suggestion: global
+    rationale: |
+      YAML frontmatter fix + license framing fix are correctness bugs
+      that any downstream USE repo also inherits (artifacts sync as-
+      is). Critical to land in next /sync cycle.
+
+  - id: staleness-refresh-skill-critical-import-path
+    type: skill
+    severity: HIGH
+    target: skills/05-kailash-mcp/SKILL.md (import path), skills/03-nexus/SKILL.md, skills/06-cheatsheets/SKILL.md, skills/08-nodes-reference/SKILL.md, skills/09-workflow-patterns/SKILL.md, skills/13-architecture-decisions/SKILL.md, skills/17-gold-standards/SKILL.md
+    section: "staleness sweep — skills commits aadb3a7c + c5d747ca"
+    summary: |
+      CRITICAL import path fix: skills/05-kailash-mcp/SKILL.md cited
+      `kailash.mcp_server` (old); MCP was refactored into own package
+      at `packages/kailash-mcp/` with canonical import `kailash_mcp`.
+      Every downstream user following this skill hit ModuleNotFound
+      until now. Plus M1 integration pointers added to 03-nexus (nexus
+      .ml), 06-cheatsheets (km.train gotcha + worktree cap-at-3), 08-
+      nodes-reference (ML nodes row), 09-workflow-patterns (ML
+      workflow example), 13-architecture-decisions (kailash-ml/align
+      rows + async/sync note), 17-gold-standards (release-blocking
+      regression pointer). Doubled-backtick rendering bug fixed in 3
+      skills. Net +56/-33.
+    classification_suggestion: global
+    rationale: |
+      The MCP import path fix is a correctness bug that breaks every
+      downstream consumer who follows the skill verbatim; ship to all
+      targets. Integration pointers are Python-specific in content
+      (kailash.observability.ml is a Python module path) but the
+      pointer sentences themselves are language-neutral; loom may want
+      per-language variant overlays for the concrete import strings.
+
+  - id: dead-reference-cleanup-cross-artifact-audit
+    type: both
+    severity: LOW
+    target: commands/codify.md, skills/02-dataflow/*.md (7 files), skills/13-architecture-decisions/decide-framework.md
+    section: "dead references surfaced by /cc-audit, commit 0d37d7d5"
+    summary: |
+      9 dead cross-references fixed: (1) commands/codify.md cited
+      agents/_subagent-guide.md (never existed) → replaced with rules/
+      cc-artifacts.md pointer + ml-specialist exemplar, (2) 7 skills/
+      02-dataflow/*.md cited skills/dataflow-specialist.md (stale
+      path) → agents/frameworks/dataflow-specialist.md, (3) skills/
+      13-architecture-decisions/decide-framework.md cited agents/
+      framework-advisor.md (renamed) → agents/implementation/pattern-
+      expert.md. No content changes; path updates only.
+    classification_suggestion: global
+    rationale: |
+      Path references are language-neutral; ship to all targets. All
+      these dead refs predate the M1 session but were surfaced by the
+      cross-artifact consistency audit (a9d4bada) run as part of /cc-
+      audit.
+
+  - id: cc-audit-content-critical-fixes
+    type: both
+    severity: HIGH
+    target: agents/frameworks/dataflow-specialist.md, agents/frameworks/kaizen-specialist.md, rules/cross-sdk-inspection.md, skills/04-kaizen/kaizen-llm-deployment.md
+    section: "commit 2dd6f10a — CRITICAL findings from /cc-audit deep content audit"
+    summary: |
+      Two CRITICAL content-quality fixes surfaced by deep content audit
+      (agent ac23a812):
+
+      C1 — agents/frameworks/dataflow-specialist.md line 41 cited
+      `from kailash.dataflow import DataFlow` (raises ImportError).
+      Corrected to `from dataflow import DataFlow` matching canonical
+      namespace used in all skills + remainder of same file.
+
+      C2 — `esperie-enterprise/kailash-rs` in 3 files
+      (kaizen-specialist.md, cross-sdk-inspection.md, kaizen-llm-
+      deployment.md) was BOTH a factual error (canonical org per
+      rules/git.md is `esperie`) AND a Foundation-independence
+      concern per rules/independence.md — the "-enterprise" suffix
+      implies commercial coupling where none exists.
+
+      C3 (skills/04-kaizen/SKILL.md — 3,438-char description, 670-line
+      body) is recorded as deferred to next codify cycle; requires
+      structural refactor beyond scope of this commit.
+    classification_suggestion: global
+    rationale: |
+      All three are correctness/compliance fixes with no variant-axis
+      implications: the `from dataflow import DataFlow` namespace is
+      canonical Python, and the `esperie/kailash-rs` org path is a
+      rule-citation that every CLI variant of every language must
+      carry identically. Ship to all targets on next /sync.
+
+  # ---------------------------------------------------------------
+  # Deferred-codify backlog landed 2026-04-23 (session continuation)
+  # ---------------------------------------------------------------
+
+  - id: kaizen-skill-structural-refactor-plus-10-skill-description-slims
+    type: skill
+    severity: HIGH
+    target: skills/04-kaizen/SKILL.md, skills/04-kaizen/kaizen-key-concepts.md (NEW), skills/04-kaizen/kaizen-wrapper-composition.md (NEW), skills/04-kaizen/kaizen-provider-config-v25.md (NEW), skills/{01-core-sdk,02-dataflow,03-nexus,06-cheatsheets,07-development-guides,09-workflow-patterns,17-gold-standards,25-ai-interaction-patterns,29-pact,31-error-troubleshooting,12-testing-strategies}/SKILL.md
+    section: "CC-audit C3 + H1 + H2 — kaizen SKILL.md progressive-disclosure split + 11 skill descriptions ≤120 chars + testing-strategies alignment"
+    summary: |
+      Resolved the three highest-impact cc-audit findings that were
+      deferred during the M1 codify cycle.
+
+      C3 — skills/04-kaizen/SKILL.md: description 3,438 chars →
+      112 chars (target ≤120 per rules/cc-artifacts.md §1); body
+      670 lines → 247 lines via progressive-disclosure split to 3
+      new sub-files (kaizen-key-concepts 124 LOC, kaizen-wrapper-
+      composition 117 LOC, kaizen-provider-config-v25 66 LOC).
+      All advanced topic groups relocated (signature/BaseAgent
+      concepts, 6 autonomy subsystems, 9 pipeline patterns,
+      AgentRegistry, wrapper stacking, provider capability
+      protocols, LLM-based routing, SPEC-02/05/10 convergence,
+      BaseAgentConfig fields, Azure env vars, anti-patterns) —
+      zero content deletion, index + top-5-pattern body only
+      remains in SKILL.md.
+
+      H1 — 10 other oversized skill descriptions slimmed from
+      500-858 chars → ≤120 chars each (selection-hook only).
+      Original keyword lists preserved in each skill body's
+      "When to Use" section. Aggregate savings: ~6k chars per
+      agent-selection turn.
+
+      H2 — skills/12-testing-strategies/SKILL.md description +
+      body now say "Tier 2/3 real infra (NO mocking)"; table's
+      Tier 2/3 Mocking column changed from "Real infra
+      recommended" to "BLOCKED — real infra only" to align with
+      rules/testing.md § Tier 2 "NO mocking (@patch, MagicMock,
+      unittest.mock — BLOCKED)". Also fixed skills/17-gold-
+      standards/gold-mocking-policy.md description and body for
+      the same alignment.
+
+      Delivery: worktree agent deferred-a1 at branch
+      feat/deferred-a1-kaizen-refactor (merged from c451d1db
+      base after mid-session rebase). 9 incremental wip commits
+      per worktree-isolation.md §5 commit-discipline.
+    classification_suggestion: global
+    rationale: |
+      Skill description slims and structural refactor are
+      language-neutral token-efficiency wins. H2 alignment
+      tightens a skill description to match the canonical rule
+      and ships to all targets.
+
+  - id: nexus-specialist-description-fastapi-contradiction-reword
+    type: agent
+    severity: LOW
+    target: agents/frameworks/nexus-specialist.md
+    section: "CC-audit H3 — description 'FastAPI/Flask BLOCKED' → 'direct FastAPI/Flask BLOCKED (use Nexus; Nexus itself uses FastAPI internally)'"
+    summary: |
+      Resolved cc-audit H3 contradiction. Line 3 description said
+      "FastAPI/Flask BLOCKED" while lines 135/196 of the same file
+      correctly describe Nexus's internal use of FastAPI
+      transports (HTTPTransport wraps FastAPI/Starlette). The
+      "BLOCKED" phrasing confused generalist agents about whether
+      they should use Nexus at all.
+
+      Reword clarifies: direct FastAPI/Flask is BLOCKED (use
+      Nexus); Nexus's internal use of FastAPI is the correct
+      implementation, not a contradiction. Commit 59b2d1b8.
+    classification_suggestion: global
+    rationale: |
+      Agent description accuracy; language-neutral; ships to all
+      targets on next /sync.
+
+  - id: ten-rules-extraction-to-guides-rule-authoring-200-line-budget
+    type: rule
+    severity: HIGH
+    target: |
+      rules/testing.md (511→260), rules/observability.md (305→224),
+      rules/zero-tolerance.md (284→145), rules/agent-reasoning.md (273→185),
+      rules/specs-authority.md (261→190), rules/agents.md (232→198),
+      rules/dependencies.md (228→154), rules/python-environment.md (227→137),
+      rules/worktree-isolation.md (225→148), rules/security.md (221→187),
+      guides/rule-extracts/{testing,observability,zero-tolerance,agent-reasoning,specs-authority,agents,dependencies,python-environment,worktree-isolation,security}.md (10 NEW)
+    section: "rules/rule-authoring.md MUST NOT 'Rules longer than 200 lines' — extract reference material into a guide"
+    summary: |
+      10 rule files exceeded the 200-line budget after M1
+      additions. Each rule extracted to a companion guide at
+      .claude/guides/rule-extracts/{name}.md.
+
+      Each rule retains: frontmatter (paths:), opening paragraph,
+      every MUST/MUST NOT clause with one DO/DO NOT example,
+      BLOCKED rationalizations verbatim, Why: line ≤2 sentences,
+      one-line Origin pointer, and "See .claude/guides/rule-
+      extracts/<name>.md for ..." pointer near the top.
+
+      Each guide holds: extended DO/DO NOT examples beyond the
+      representative one, extended BLOCKED rationalization lists,
+      session numbers + PR numbers + dates, multi-paragraph Why
+      rationale, post-mortem prose, relationships to other rules,
+      audit/detection protocols.
+
+      Slot markers (<!-- slot:... -->) preserved verbatim per
+      rules/rule-authoring.md §8 cross-CLI parity.
+
+      Aggregate: 10 rules 2,767 → 1,828 LOC (34% reduction);
+      10 guides +1,230 LOC net-new. Total institutional knowledge
+      preserved; rules now fit the budget.
+
+      NOTE: testing.md (260) and observability.md (224) remain
+      modestly over the 200-line budget — each is a CRIT baseline
+      rule with 8-10 MUST clauses; further trimming would require
+      splitting clauses across multiple files (structural redesign
+      out of scope for this cycle). Flagged as deferred below.
+
+      Delivery: worktree agent deferred-a3 (rules/{agents,
+      dependencies,python-environment,worktree-isolation,security}
+      + their guides, 6 wip commits on feat/deferred-a3-rules-
+      extraction-batch2). Orchestrator-direct for rules/{testing,
+      observability,zero-tolerance,agent-reasoning,specs-authority}
+      + their guides (commit 1bdf4a6d on MAIN after agent
+      deferred-a2 correctly refused on base-drift + branch-name-
+      drift per worktree-isolation.md §5/§6 — the harness
+      primitive did not honor the declared branch/base; A2's
+      self-check fired as designed).
+    classification_suggestion: global
+    rationale: |
+      Rule extraction to guides is language-neutral and applies
+      to all targets. The extracted guides are pure reference
+      content; rules stay at the canonical MUST-clause anchor.
+      Every target repo benefits from the tighter rule budget
+      (load cost at session-start).
+
+  - id: dataflow-classification-sibling-rule-dead-ref-fix
+    type: rule
+    severity: LOW
+    target: rules/dataflow-classification.md (copied from loom/.claude/rules/)
+    section: "Fix dead-ref from rules/event-payload-classification.md lines 7, 143 to rules/dataflow-classification.md"
+    summary: |
+      rules/event-payload-classification.md referenced
+      rules/dataflow-classification.md as its "read/list/mutation-
+      return redaction" sibling but the sibling rule did NOT exist
+      in kailash-py/.claude/rules/ (it exists at loom/.claude/
+      rules/dataflow-classification.md as the canonical source of
+      truth). Dead cross-reference caused agents to fail the
+      follow-up read and either fall back to partial understanding
+      or emit hallucinated content.
+
+      Fix: copied loom/.claude/rules/dataflow-classification.md
+      (153 LOC) to kailash-py/.claude/rules/dataflow-classification.md
+      verbatim, restoring reference integrity. Commit 59b2d1b8.
+
+      This is an anticipated /sync-down from loom; the file
+      already exists at loom, so this proposal entry is
+      informational — loom's Gate 1 reviewer will recognize the
+      file as already-classified-as-global at loom and need only
+      acknowledge the in-flight BUILD-side copy.
+    classification_suggestion: global
+    rationale: |
+      Already global at loom (Foundation-owned rule about DataFlow
+      classification). No variant axis; ships to all targets.
+
+  - id: worktree-branch-rename-leak-to-main-candidate-rule
+    type: rule
+    severity: MEDIUM
+    target: rules/worktree-isolation.md (candidate new §7)
+    section: "candidate new MUST Rule — ref-manipulation commands by worktree agents MUST NOT propagate to MAIN after worktree cleanup"
+    summary: |
+      Novel failure mode surfaced during deferred-codify cycle
+      (2026-04-23): a worktree agent (deferred-a2) was sent a
+      SendMessage'd `git branch -m <new-name>` instruction to
+      rename its branch. Between the SendMessage and the agent's
+      execution turn, the worktree was auto-cleaned (zero-commit
+      safeguard). The agent's bash commands ran in the MAIN
+      checkout (fallback to parent dir when worktree path
+      disappeared). The `git branch -m` renamed MAIN's current
+      branch (feat/kailash-ml-1.0.0-m1-foundations →
+      feat/deferred-a2-rules-extraction-batch1). A2 self-checked,
+      detected the drift, and refused to edit.
+
+      Current Rule 5 (incremental commit discipline) prevents
+      zero-commit auto-clean data loss but does NOT prevent the
+      adjacent failure where a pre-commit ref-manipulation
+      command (branch rename, reset, checkout) leaks into MAIN
+      after the worktree dissolves.
+
+      Candidate extension: "Rule 7 — Worktree Agents MUST NOT
+      Run Ref-Manipulation Commands Before First Commit. `git
+      branch -m`, `git reset --hard`, `git checkout -b`, `git
+      update-ref` issued by a worktree agent BEFORE the agent
+      has landed ≥1 commit MUST be considered suspect — if the
+      worktree is subsequently cleaned (intentionally or via
+      truncation), those ref changes propagate to whichever
+      checkout holds the branch, which is typically MAIN. The
+      orchestrator's resume-protocol MUST be issued as an
+      atomic 'commit the no-op first, then rename' sequence
+      rather than 'rename, then proceed.'"
+
+      Not drafting the rule in this commit — needs one more
+      occurrence to confirm it's a pattern not a one-off, and
+      the rule requires DO/DO NOT examples + BLOCKED
+      rationalizations per rule-authoring.md meta-rule.
+      Flagging for next codify cycle.
+    classification_suggestion: global
+    rationale: |
+      Worktree-isolation failure modes are language-neutral;
+      the failure mode affects any orchestrator using git
+      worktrees to parallelize agents. Candidate rule applies
+      cross-SDK unchanged.
+
+  - id: commands-out-of-scope-for-build-repo-flagged-for-loom
+    type: command
+    severity: LOW
+    target: commands/{ai,api,db,design,i-audit,i-harden,i-polish,learn,release,sdk,test,validate}.md (12 missing description:), commands/{redteam,sync}.md (over 150 lines)
+    section: "NOT fixed in this cycle — commands are loom-scope per kailash-py CLAUDE.md 'Do NOT edit commands/*.md locally'"
+    summary: |
+      12 commands missing `description:` frontmatter (ai, api, db,
+      design, i-audit, i-harden, i-polish, learn, release, sdk,
+      test, validate) and 2 commands over 150 lines (redteam.md
+      156, sync.md 157) were in the original deferred backlog.
+
+      Per kailash-py/CLAUDE.md: "Do NOT edit commands/*.md
+      locally; loom owns them, synced downstream." These items
+      are recorded here so loom's Gate 1 reviewer can queue them
+      as loom-side edits in the next /sync cycle.
+
+      No files touched in this BUILD repo for this entry.
+    classification_suggestion: global
+    rationale: |
+      Commands are owned by loom (single source of truth).
+      BUILD repo cannot edit. Flagging for loom-side action.
+
+  # ---------------------------------------------------------------
+  # Release-blocker fixes discovered during PR #611 CI cycle (2026-04-23)
+  # These patterns were surfaced by fixing CI on the release branch
+  # AFTER the M1 codify cycle + deferred-codify cycle were sealed.
+  # ---------------------------------------------------------------
+
+  - id: submodule-shadowing-callable-module-pep562
+    type: rule
+    severity: MEDIUM
+    target: rules/patterns.md (candidate new §) OR rules/orphan-detection.md §6 extension
+    section: "new pattern — top-level callable + same-name submodule coexistence via PEP 562"
+    summary: |
+      When a package exports BOTH a top-level callable `pkg.foo`
+      (imported from `_wrappers` / similar) AND has a subpackage
+      `pkg/foo/` of the same name, Python's import machinery
+      UNCONDITIONALLY sets `pkg.foo` to the subpackage module object
+      the moment ANYTHING runs `from pkg.foo import <X>` — silently
+      shadowing the callable. In test-collection order, this
+      manifests as `AssertionError: pkg.foo MUST be callable (got
+      module)` after an unrelated test imports the subpackage.
+
+      Fix (PEP 562): install a `_CallableModule(ModuleType)` subclass
+      on the subpackage's own module object via
+      `sys.modules[__name__].__class__ = _CallableModule`. The
+      subclass forwards `__call__` to the intended callable. Both
+      surfaces coexist: `from pkg.foo import Klass` still works;
+      `pkg.foo(...)` survives submodule import.
+
+      Evidence: kailash-ml 1.1.0 release cycle — `km.dashboard`
+      callable (from `_wrappers.dashboard`) was shadowed by the
+      `kailash_ml/dashboard/` subpackage after `test_dashboard.py`
+      ran before `test_km_eager_imports.py` in Python 3.14 CI
+      collection order. Fixed at commit `8914de3b` via
+      `_CallableDashboardModule(ModuleType)`.
+
+      Candidate rule text: "MUST: when a package exports a top-level
+      callable with the same name as a subpackage, the subpackage's
+      `__init__.py` MUST install a PEP 562 callable-module subclass
+      so both surfaces coexist. BLOCKED rationalizations: 'users will
+      always import from one place' / 'test order is stable' /
+      'we can rename one of them later'."
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable pattern (Rust has similar dual-name
+      issues via `use pkg::foo` vs `pkg::foo` module). Language-
+      neutral principle at the rule level; Python-specific
+      implementation detail (PEP 562) at the example level. Global
+      rule with Python-example variant overlay possible.
+
+  - id: threading-lock-factory-not-class-py311
+    type: rule
+    severity: LOW
+    target: rules/python-environment.md (new § Python version gotchas) OR skills/06-cheatsheets/ entry
+    section: "new § 'threading.Lock / RLock are factories, not classes (Py3.11+)'"
+    summary: |
+      `threading.Lock` and `threading.RLock` are factory functions,
+      not classes, in Python 3.11+. Code using them as type
+      predicates — `isinstance(x, threading.Lock)` — raises
+      `TypeError: isinstance() arg 2 must be a type, a tuple of
+      types, or a union` at runtime.
+
+      Fix: obtain the actual lock type by calling the factory
+      once: `_LOCK_TYPES = (type(threading.Lock()), type(threading.RLock()))`,
+      then use `isinstance(x, _LOCK_TYPES)`. Module-scope constant
+      avoids repeated factory calls per isinstance check.
+
+      Evidence: kailash-pact 0.10.0 release cycle — `pact/ml/__init__.py:412`
+      used `isinstance(lock, threading.Lock)` which blocked all 5
+      PACT ML bridge integration tests on Python 3.11+ with
+      `TypeError`. Fixed at commit `5655dd59`.
+
+      Candidate rule text (concise, likely a cheatsheet entry
+      rather than a full MUST rule): "When runtime-checking lock
+      types, use `type(threading.Lock())` / `type(threading.RLock())`
+      — the unqualified names are factories in Py3.11+ and cannot
+      be used as `isinstance` predicates."
+    classification_suggestion: global
+    rationale: |
+      Python-specific gotcha; language variant. Could ship as a
+      python-environment.md § OR as a 06-cheatsheets entry
+      "Common Python 3.11+ Gotchas". Low severity because it's a
+      cheatsheet-level reminder, not a systemic architectural rule.
+
+  - id: type-checking-eager-block-for-lazy-getattr-exports
+    type: rule
+    severity: LOW
+    target: rules/orphan-detection.md §6 extension OR new rules/dependencies.md § entry
+    section: "new pattern — reconcile __all__ completeness with lazy __getattr__ for heavy deps"
+    summary: |
+      When a package uses `__getattr__` to lazy-load heavy optional
+      deps (torch, vllm, etc.), `__all__` entries for those symbols
+      still need to be statically resolvable for CodeQL
+      `py/undefined-export`, pyright, mypy, and Sphinx autodoc.
+
+      Eager-importing them defeats the lazy design. Removing from
+      `__all__` breaks `from pkg import *`.
+
+      Fix: add a `TYPE_CHECKING` block at module scope importing the
+      heavy symbols. Static analyzers resolve through it; runtime
+      dispatch stays in `__getattr__`:
+
+          if TYPE_CHECKING:
+              from pkg.heavy_module import HeavySymbol
+          __all__ = ["HeavySymbol", ...]
+          def __getattr__(name):
+              if name == "HeavySymbol":
+                  from pkg.heavy_module import HeavySymbol
+                  return HeavySymbol
+
+      Evidence: commit `7943b3a1` closed 17 py/undefined-export
+      findings in kailash-align/__init__.py without forcing torch
+      import at `import kailash_align`.
+    classification_suggestion: global
+    rationale: |
+      Language-neutral pattern (Python-specific syntax; Rust +
+      Ruby + JS have analogous patterns). Low severity because it's
+      a niche fix for heavy-optional-dep packages.
+
+  - id: architectural-codeql-deferral-with-tracking-issue
+    type: rule
+    severity: LOW
+    target: rules/zero-tolerance.md Rule 1a extension — "deferral disposition"
+    section: "clarify when scanner findings can defer with tracking-issue + documented rationale"
+    summary: |
+      zero-tolerance Rule 1a mandates scanner-surface symmetry
+      (PR-scan findings treated like main-scan findings). But for
+      findings that are provably runtime-safe (e.g. CodeQL
+      `py/unsafe-cyclic-import` where all cycles are TYPE_CHECKING-
+      guarded), a documented deferral with tracking issue is a
+      LEGITIMATE disposition distinct from "silent dismissal".
+
+      Deferral criteria (all required):
+      1. Finding is runtime-safe (verified by reading the guard code)
+      2. Fix requires architectural refactor out of release-scope
+      3. Tracking issue filed with full acceptance criteria
+      4. Issue linked from release PR body
+      5. Release-specialist agrees (or user overrides "full fix")
+
+      Evidence: PR #611 release cycle — 17 cyclic-import findings
+      deferred via issue #612 after ml-specialist round 1 verified
+      all cycles use TYPE_CHECKING; 23 other CodeQL errors fixed
+      directly (wrong-arguments, undefined-export, uninitialized-
+      locals, warnings).
+
+      Candidate rule text: "MUST NOT silently dismiss scanner
+      findings. MAY defer with: (a) verified runtime-safety
+      analysis, (b) tracking issue with acceptance criteria, (c)
+      link from release PR body. Without (a) and (b), deferral IS
+      silent dismissal — BLOCKED."
+    classification_suggestion: global
+    rationale: |
+      Meta-rule about scanner-finding disposition. Applies across
+      SDKs + languages. Current Rule 1a is clear on "fix don't
+      dismiss"; this extension clarifies the legitimate
+      documented-deferral disposition without opening the door to
+      dismissal.
+
+  - id: bi-directional-sibling-package-ci-install
+    type: rule
+    severity: MEDIUM
+    target: rules/deployment.md § "Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules" — extend with bi-directional clause
+    section: "extend existing rule with bi-directional at bridge boundary clause"
+    summary: |
+      The existing rule (`rules/deployment.md` § "Sibling-Package CI
+      Installs Root SDK Editable") mandates that sub-package CI jobs
+      install the root SDK editable when sub-package tests import
+      unreleased core modules. But the rule was authored for the
+      one-way case (sub-package → core).
+
+      At BRIDGE boundaries (e.g. `kailash-ml` ↔ `kailash-align` RL
+      bridge; `kailash-dataflow` ↔ `kailash-ml` fabric bridge),
+      BOTH directions need the reciprocal editable install:
+      - kailash-ml's integration tests import `kailash_align` via
+        `test_rl_align_cross_sdk_wiring.py` — needs
+        `uv pip install -e packages/kailash-align[dev]` in
+        test-kailash-ml.yml.
+      - kailash-align's tests import `kailash_ml.rl.align_adapter` —
+        needs `uv pip install -e packages/kailash-ml` in
+        test-kailash-align.yml.
+
+      Evidence: PR #611 CI cascade — ml-specialist fixed the align→ml
+      direction at commit `e7c5a33b`; the reciprocal ml→align
+      direction surfaced next at commit `c59c30da`. Both directions
+      needed the same discipline.
+
+      Candidate rule extension: "MUST: At any cross-package bridge
+      where both packages import each other's modules (even
+      transitively through a shared bridge module), BOTH sibling
+      CI jobs MUST install BOTH packages editable. The
+      uni-directional form of this rule is insufficient at bridge
+      boundaries. BLOCKED rationalizations: 'the bridge module is
+      in one direction only' / 'we'll add the reverse install when
+      tests fail on it' / 'editable installs are dev-only'."
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Any monorepo with cross-package bridge
+      modules (kailash-rs workspaces, kailash-rb gems,
+      kailash-prism crates) has the same bi-directional install
+      need. Extension to an existing global rule; ships as-is.
+  - topic: clean-up-pending-journal-entries
+    description: |
+      100+ pending journal entries accumulated in
+      workspaces/kailash-ml-audit/journal/.pending/ across this
+      session (timestamps 1776787965452 through 1776906067060).
+      Each is a scaffold from SessionEnd hook firing on journal-
+      worthy commits. Next session: review, promote worthwhile
+      entries, delete the rest.
+    priority: next-session
+    owner: any codify cycle
+
+  - topic: feat-branch-pypi-release-cycle
+    description: |
+      feat/kailash-ml-1.0.0-m1-foundations branch carries 7 version
+      bumps (kailash 2.9.0, kailash-dataflow 2.1.0, kailash-nexus
+      2.2.0, kailash-kaizen 2.12.0, kailash-align 0.6.0, kailash-
+      pact 0.10.0, kailash-ml 1.0.0) all local-only. Per
+      build-repo-release-discipline.md, release cycle owed. Human-
+      gated structural gate pending.
+    priority: next-session
+    owner: release-specialist
+
+  - topic: worktree-cleanup
+    description: |
+      9 locked worktrees under .claude/worktrees/ from W30 + wave1 +
+      wave2 + W33 agents; each holds its branch's ref. Safe to
+      `git worktree remove --force` once all processes exit. Plus 3
+      new deferred-codify worktrees (agent-a42b1033, agent-a80c56f1,
+      agent-af68e53f) from this session's Wave A.
+    priority: next-session
+    owner: any session
+
+  - topic: testing-observability-rules-still-modestly-over-200-lines
+    description: |
+      After the 10-rule extraction to guides, testing.md (260) and
+      observability.md (224) remain 12–30% over the 200-line budget.
+      Each is a CRIT baseline rule with 8–10 MUST clauses; further
+      trimming requires structural redesign (splitting clauses across
+      sub-rule files or moving some MUST clauses to skills).
+      Candidate for a dedicated refactor cycle.
+    priority: next-session
+    owner: any codify cycle
+
+  - topic: worktree-branch-rename-leak-candidate-rule-7
+    description: |
+      Novel failure mode surfaced 2026-04-23 — pre-commit ref-
+      manipulation by a worktree agent leaks to MAIN if the worktree
+      is cleaned between agent turns. See changes[] entry
+      `worktree-branch-rename-leak-to-main-candidate-rule` for full
+      context. Need one more occurrence to confirm pattern before
+      drafting as a MUST rule.
+    priority: next-session
+    owner: any codify cycle
