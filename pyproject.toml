@@ -98,6 +98,14 @@ ml = [
 align = [
     "kailash-align>=0.3.2",
 ]
+# Cryptographic extras (audited reference implementations)
+# Trust Vault SLIP-0039 Shamir secret-sharing wrapper — see issue #606.
+# Module import succeeds without this extra; call-site raises RuntimeError
+# with an actionable install hint per dependencies.md "loud failure at call
+# site" pattern.
+shamir = [
+    "shamir-mnemonic>=0.3",
+]
 # Secret backends (vendor-specific SDKs)
 vault = [
     "hvac>=2.1.0",
