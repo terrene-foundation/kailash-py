@@ -50,6 +50,55 @@ pip install kailash-pact[kaizen]
 - [Cookbook](docs/cookbook.md) — Common patterns
 - [YAML Schema](docs/yaml-schema.md) — Org definition format
 
+## Cross-SDK Conformance (PACT N4/N5)
+
+The PACT N6 cross-SDK conformance contract pins byte-for-byte canonical JSON
+across language SDKs. The Python implementation lives in `pact.conformance`
+and drives the same vector files the Rust SDK does.
+
+### Run the runner programmatically
+
+```python
+from pact.conformance import ConformanceRunner, load_vectors_from_dir
+
+vectors = load_vectors_from_dir(
+    "/path/to/kailash-rs/crates/kailash-pact/tests/conformance/vectors"
+)
+report = ConformanceRunner().run(vectors)
+if not report.all_passed:
+    raise SystemExit(report.render_failure_report())
+print(f"PACT conformance: {report.passed}/{report.total} passed")
+```
+
+### Run via pytest
+
+The Tier 1 unit tests at
+`tests/unit/conformance/test_runner.py::test_runner_passes_against_real_cross_sdk_vectors`
+auto-discover the `kailash-rs` sibling checkout and exercise every vector.
+The test SKIPS gracefully when the sibling repo is absent, so unit-only CI
+hosts do not fail.
+
+```bash
+pytest packages/kailash-pact/tests/unit/conformance/ -v
+```
+
+### Vector schema
+
+Each vector is a JSON document at `crates/kailash-pact/tests/conformance/vectors/`
+with:
+
+- `id`: unique identifier (sort key)
+- `contract`: `"N4"` (TieredAuditEvent canonicalisation) or `"N5"` (Evidence canonicalisation)
+- `input.verdict`: `{zone, reason, action, role_address, details}`
+- `input.posture`: required for N4 (`PseudoAgent`, `Supervised`, `SharedPlanning`, `ContinuousInsight`, `Delegated`)
+- `input.fixed_event_id` / `input.fixed_timestamp`: required for determinism
+- `expected.canonical_json`: the byte-for-byte JSON the SDK MUST emit
+- `expected.tier` / `durable` / `requires_signature` / `requires_replication`: optional N4 invariants
+
+The runner compares actual vs expected via byte equality (NOT JSON-equal); a
+single-byte drift surfaces as a `FAILED` outcome with both SHA-256
+fingerprints populated for forensic correlation.
+
 ## License
 
 Apache 2.0 — Terrene Foundation
