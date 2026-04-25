@@ -23,6 +23,15 @@ import uuid
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from kaizen.l3.plan.errors import ExecutionError
+from kaizen.l3.plan.suspension import (
+    BudgetExceededReason,
+    CircuitBreakerTrippedReason,
+    EnvelopeViolationReason,
+    ExplicitCancellationReason,
+    HumanApprovalGateReason,
+    SuspensionReason,
+    SuspensionRecord,
+)
 from kaizen.l3.plan.types import (
     EdgeType,
     Plan,
@@ -138,10 +147,24 @@ class PlanExecutor:
         events.extend(self._determine_terminal_state(plan))
         return events
 
-    def suspend(self, plan: Plan) -> list[PlanEvent]:
+    def suspend(
+        self,
+        plan: Plan,
+        reason: SuspensionReason | None = None,
+    ) -> list[PlanEvent]:
         """Suspend an executing plan.
 
         Precondition: plan.state must be EXECUTING.
+
+        Args:
+            plan: The plan to suspend.
+            reason: Optional :class:`SuspensionReason` explaining why
+                the plan is being suspended. When supplied, the
+                executor attaches a :class:`SuspensionRecord` to
+                ``plan.suspension`` capturing the resume frontier
+                (PACT N3). When omitted, ``plan.suspension`` is left
+                untouched — useful for callers whose terminal-state
+                logic emits the record (HumanApprovalGate path).
         """
         if plan.state != PlanState.EXECUTING:
             raise ExecutionError(
@@ -149,13 +172,39 @@ class PlanExecutor:
                 details={"plan_id": plan.plan_id, "state": plan.state.value},
             )
 
+        if reason is not None:
+            plan.suspension = SuspensionRecord.from_plan(reason, plan)
         plan.state = PlanState.SUSPENDED
         return [PlanEvent.plan_suspended()]
+
+    def suspend_for_circuit_breaker(
+        self,
+        plan: Plan,
+        breaker_id: str,
+        triggering_node: str,
+    ) -> list[PlanEvent]:
+        """Suspend an executing plan because a circuit breaker tripped.
+
+        Convenience wrapper around :meth:`suspend` for the
+        ``CircuitBreakerTripped`` variant. Required because the
+        breaker-trip signal originates outside the executor's hot
+        loop (downstream tool/agent registry) — the caller emits
+        the suspension with the breaker id so the resume path knows
+        which breaker to re-check.
+        """
+        reason: SuspensionReason = CircuitBreakerTrippedReason(
+            breaker_id=breaker_id,
+            triggering_node=triggering_node,
+        )
+        return self.suspend(plan, reason=reason)
 
     def resume(self, plan: Plan) -> list[PlanEvent]:
         """Resume a suspended plan.
 
-        Precondition: plan.state must be SUSPENDED.
+        Precondition: plan.state must be SUSPENDED. Clears
+        ``plan.suspension`` (PACT N3: the suspension record is consumed
+        by resume; downstream callers that need the record for audit
+        MUST capture it before calling ``resume()``).
         """
         if plan.state != PlanState.SUSPENDED:
             raise ExecutionError(
@@ -164,12 +213,32 @@ class PlanExecutor:
             )
 
         plan.state = PlanState.EXECUTING
+        plan.suspension = None
         return [PlanEvent.plan_resumed()]
 
-    def cancel(self, plan: Plan) -> list[PlanEvent]:
+    def cancel(
+        self,
+        plan: Plan,
+        reason: str = "caller-initiated",
+        resume_hint: str = "",
+    ) -> list[PlanEvent]:
         """Cancel a plan (executing or suspended).
 
-        Terminal states (Completed, Failed, Cancelled) raise error.
+        Always attaches an :class:`ExplicitCancellationReason`
+        :class:`SuspensionRecord` to ``plan.suspension`` BEFORE
+        transitioning to Cancelled (PACT N3: cancellation is one of
+        the five suspension reasons; the record persists post-cancel
+        for audit).
+
+        Args:
+            plan: The plan to cancel.
+            reason: Human-readable cancellation reason (default
+                ``"caller-initiated"``).
+            resume_hint: Hint describing when/why a resume could
+                happen, even though the plan is now Cancelled
+                (default empty string for no-hint).
+
+        Terminal states (Completed, Failed, Cancelled) raise.
         """
         terminal_states = {PlanState.COMPLETED, PlanState.FAILED, PlanState.CANCELLED}
         if plan.state in terminal_states:
@@ -177,6 +246,14 @@ class PlanExecutor:
                 f"Cannot cancel a plan in terminal state {plan.state.value}",
                 details={"plan_id": plan.plan_id, "state": plan.state.value},
             )
+
+        # PACT N3: attach SuspensionRecord BEFORE the cascade so
+        # running/ready/pending lists capture the pre-cancel snapshot.
+        cancel_reason: SuspensionReason = ExplicitCancellationReason(
+            reason=reason,
+            resume_hint=resume_hint,
+        )
+        plan.suspension = SuspensionRecord.from_plan(cancel_reason, plan)
 
         events: list[PlanEvent] = []
 
@@ -286,6 +363,13 @@ class PlanExecutor:
             events.append(
                 PlanEvent.node_blocked(node.node_id, dimension="envelope", detail=error)
             )
+            # PACT N3: capture EnvelopeViolation snapshot as soon as the
+            # block fires. The terminal-state path may overwrite this with
+            # a HumanApprovalGate record if HELD nodes are present after
+            # the cascade — that is intentional: HELD takes precedence in
+            # the suspension classification because the human-approval
+            # gate is the actionable resume path.
+            self._record_envelope_violation(plan, node, error or "")
             # Cascade: skip downstream data-dependent nodes
             events.extend(self._cascade_block(plan, node.node_id))
         elif retryable:
@@ -298,6 +382,58 @@ class PlanExecutor:
             )
 
         return events
+
+    def _record_envelope_violation(
+        self,
+        plan: Plan,
+        node: PlanNode,
+        detail: str,
+    ) -> None:
+        """Attach an :class:`EnvelopeViolationReason` SuspensionRecord.
+
+        Called when a node's envelope-violation result fires.
+        Does NOT change plan state — that is the
+        :meth:`_determine_terminal_state` responsibility.
+        """
+        reason: SuspensionReason = EnvelopeViolationReason(
+            dimension="envelope",
+            detail=detail,
+            triggering_node=node.node_id,
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
+
+    def _record_budget_exceeded(
+        self,
+        plan: Plan,
+        node: PlanNode,
+        dimension: str,
+        usage_pct: float,
+    ) -> None:
+        """Attach a :class:`BudgetExceededReason` SuspensionRecord."""
+        reason: SuspensionReason = BudgetExceededReason(
+            dimension=dimension,
+            usage_pct=usage_pct,
+            triggering_node=node.node_id,
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
+
+    def _record_human_approval_gate(
+        self,
+        plan: Plan,
+        held_node: PlanNode,
+    ) -> None:
+        """Attach a :class:`HumanApprovalGateReason` SuspensionRecord.
+
+        Called by :meth:`_determine_terminal_state` when the plan
+        finishes its execution loop with at least one HELD node.
+        ``held_node`` is the first lexicographic HELD node; the record
+        names it as the resume gate.
+        """
+        reason: SuspensionReason = HumanApprovalGateReason(
+            held_node=held_node.node_id,
+            reason=held_node.error or "Held — awaiting human approval",
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
 
     def _handle_retryable_failure(
         self,
@@ -516,6 +652,7 @@ class PlanExecutor:
 
         - All required completed -> COMPLETED
         - Any node HELD (none FAILED/SKIPPED among required) -> SUSPENDED
+          (attaches HumanApprovalGate SuspensionRecord)
         - Required nodes FAILED or SKIPPED -> FAILED
         - Otherwise (pending nodes, no running) -> SUSPENDED
         """
@@ -549,6 +686,12 @@ class PlanExecutor:
             if held_nodes:
                 # HELD nodes take precedence — plan is suspended awaiting resolution
                 plan.state = PlanState.SUSPENDED
+                # PACT N3: HumanApprovalGate variant. HELD takes
+                # precedence over a previously recorded
+                # EnvelopeViolation because the actionable resume
+                # path is the human-approval gate, not the envelope.
+                first_held = sorted(held_nodes, key=lambda n: n.node_id)[0]
+                self._record_human_approval_gate(plan, first_held)
                 events.append(PlanEvent.plan_suspended())
             elif failed_nodes:
                 plan.state = PlanState.FAILED
@@ -681,10 +824,20 @@ class AsyncPlanExecutor:
         await self._emit_many(terminal_events, events)
         return events
 
-    async def suspend(self, plan: Plan) -> list[PlanEvent]:
+    async def suspend(
+        self,
+        plan: Plan,
+        reason: SuspensionReason | None = None,
+    ) -> list[PlanEvent]:
         """Suspend an executing plan.
 
         Precondition: plan.state must be EXECUTING.
+
+        Args:
+            plan: The plan to suspend.
+            reason: Optional :class:`SuspensionReason`. When supplied,
+                attaches a :class:`SuspensionRecord` capturing the
+                resume frontier (PACT N3).
         """
         if plan.state != PlanState.EXECUTING:
             raise ExecutionError(
@@ -692,15 +845,34 @@ class AsyncPlanExecutor:
                 details={"plan_id": plan.plan_id, "state": plan.state.value},
             )
 
+        if reason is not None:
+            plan.suspension = SuspensionRecord.from_plan(reason, plan)
         plan.state = PlanState.SUSPENDED
         events: list[PlanEvent] = []
         await self._emit(PlanEvent.plan_suspended(), events)
         return events
 
+    async def suspend_for_circuit_breaker(
+        self,
+        plan: Plan,
+        breaker_id: str,
+        triggering_node: str,
+    ) -> list[PlanEvent]:
+        """Suspend an executing plan because a circuit breaker tripped.
+
+        Convenience wrapper for the ``CircuitBreakerTripped`` variant.
+        """
+        reason: SuspensionReason = CircuitBreakerTrippedReason(
+            breaker_id=breaker_id,
+            triggering_node=triggering_node,
+        )
+        return await self.suspend(plan, reason=reason)
+
     async def resume(self, plan: Plan) -> list[PlanEvent]:
         """Resume a suspended plan.
 
-        Precondition: plan.state must be SUSPENDED.
+        Precondition: plan.state must be SUSPENDED. Clears
+        ``plan.suspension`` (PACT N3).
         """
         if plan.state != PlanState.SUSPENDED:
             raise ExecutionError(
@@ -709,12 +881,22 @@ class AsyncPlanExecutor:
             )
 
         plan.state = PlanState.EXECUTING
+        plan.suspension = None
         events: list[PlanEvent] = []
         await self._emit(PlanEvent.plan_resumed(), events)
         return events
 
-    async def cancel(self, plan: Plan) -> list[PlanEvent]:
+    async def cancel(
+        self,
+        plan: Plan,
+        reason: str = "caller-initiated",
+        resume_hint: str = "",
+    ) -> list[PlanEvent]:
         """Cancel a plan (executing or suspended).
+
+        Always attaches an :class:`ExplicitCancellationReason`
+        :class:`SuspensionRecord` to ``plan.suspension`` BEFORE
+        transitioning to Cancelled (PACT N3).
 
         Terminal states (Completed, Failed, Cancelled) raise error.
         """
@@ -728,6 +910,14 @@ class AsyncPlanExecutor:
                 f"Cannot cancel a plan in terminal state {plan.state.value}",
                 details={"plan_id": plan.plan_id, "state": plan.state.value},
             )
+
+        # PACT N3: attach SuspensionRecord BEFORE the cascade so
+        # running/ready/pending lists capture the pre-cancel snapshot.
+        cancel_reason: SuspensionReason = ExplicitCancellationReason(
+            reason=reason,
+            resume_hint=resume_hint,
+        )
+        plan.suspension = SuspensionRecord.from_plan(cancel_reason, plan)
 
         events: list[PlanEvent] = []
 
@@ -848,6 +1038,38 @@ class AsyncPlanExecutor:
                 node.transition_to(PlanNodeState.RUNNING)
                 node.transition_to(PlanNodeState.FAILED)
                 node.error = f"Envelope blocked: {verdict.detail}"
+                # PACT N3: classify the BLOCKED suspension cause —
+                # if the verdict reports a numeric budget overflow
+                # (requested > available with a known dimension),
+                # it is a BudgetExceeded suspension; otherwise it is
+                # a structural EnvelopeViolation (classification,
+                # clearance, dimension-policy mismatch).
+                is_budget_overflow = (
+                    verdict.requested is not None
+                    and verdict.available is not None
+                    and verdict.requested > verdict.available
+                    and verdict.dimension is not None
+                )
+                if is_budget_overflow:
+                    # Pre-block usage_pct may be slightly under 1.0;
+                    # compute requested/available ratio as a proxy.
+                    usage_pct = (
+                        verdict.requested / verdict.available
+                        if verdict.available > 0
+                        else 1.0
+                    )
+                    self._record_budget_exceeded(
+                        plan,
+                        node,
+                        verdict.dimension or "financial",
+                        usage_pct,
+                    )
+                else:
+                    self._record_envelope_violation(
+                        plan,
+                        node,
+                        verdict.detail or "envelope blocked",
+                    )
                 await self._emit(
                     PlanEvent.node_blocked(
                         node.node_id,
@@ -863,6 +1085,20 @@ class AsyncPlanExecutor:
             if verdict.tag == "HELD":
                 node.transition_to(PlanNodeState.RUNNING)
                 node.transition_to(PlanNodeState.HELD)
+                # PACT N3: HELD on the envelope path means a budget
+                # threshold was hit — record BudgetExceeded with the
+                # verdict's reported usage. The terminal-state path
+                # may overwrite this with HumanApprovalGate (HELD
+                # nodes always trigger that variant) — both signals
+                # are operationally meaningful; precedence is owned
+                # by _determine_terminal_state.
+                if verdict.dimension is not None and verdict.current_usage is not None:
+                    self._record_budget_exceeded(
+                        plan,
+                        node,
+                        verdict.dimension,
+                        verdict.current_usage,
+                    )
                 await self._emit(
                     PlanEvent.node_held(
                         node.node_id,
@@ -902,6 +1138,11 @@ class AsyncPlanExecutor:
             # G8: Envelope violation -> ALWAYS Blocked
             node.transition_to(PlanNodeState.FAILED)
             node.error = error
+            # PACT N3: callback-reported envelope violation —
+            # classify as EnvelopeViolation. The terminal-state path
+            # may upgrade to HumanApprovalGate if the cascade leaves
+            # HELD nodes.
+            self._record_envelope_violation(plan, node, error or "")
             await self._emit(
                 PlanEvent.node_blocked(
                     node.node_id, dimension="envelope", detail=error
@@ -1148,11 +1389,53 @@ class AsyncPlanExecutor:
 
         return events
 
+    def _record_envelope_violation(
+        self,
+        plan: Plan,
+        node: PlanNode,
+        detail: str,
+    ) -> None:
+        """Attach an :class:`EnvelopeViolationReason` SuspensionRecord."""
+        reason: SuspensionReason = EnvelopeViolationReason(
+            dimension="envelope",
+            detail=detail,
+            triggering_node=node.node_id,
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
+
+    def _record_budget_exceeded(
+        self,
+        plan: Plan,
+        node: PlanNode,
+        dimension: str,
+        usage_pct: float,
+    ) -> None:
+        """Attach a :class:`BudgetExceededReason` SuspensionRecord."""
+        reason: SuspensionReason = BudgetExceededReason(
+            dimension=dimension,
+            usage_pct=usage_pct,
+            triggering_node=node.node_id,
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
+
+    def _record_human_approval_gate(
+        self,
+        plan: Plan,
+        held_node: PlanNode,
+    ) -> None:
+        """Attach a :class:`HumanApprovalGateReason` SuspensionRecord."""
+        reason: SuspensionReason = HumanApprovalGateReason(
+            held_node=held_node.node_id,
+            reason=held_node.error or "Held — awaiting human approval",
+        )
+        plan.suspension = SuspensionRecord.from_plan(reason, plan)
+
     def _determine_terminal_state(self, plan: Plan) -> list[PlanEvent]:
         """Determine the final state of the plan after execution loop ends.
 
         - All required completed -> COMPLETED
         - Any node HELD (none FAILED/SKIPPED among required) -> SUSPENDED
+          (attaches HumanApprovalGate SuspensionRecord)
         - Required nodes FAILED or SKIPPED -> FAILED
         - Otherwise (pending nodes, no running) -> SUSPENDED
         """
@@ -1186,6 +1469,12 @@ class AsyncPlanExecutor:
             if held_nodes:
                 # HELD nodes take precedence — plan is suspended awaiting resolution
                 plan.state = PlanState.SUSPENDED
+                # PACT N3: HumanApprovalGate variant. HELD takes
+                # precedence over a previously recorded
+                # EnvelopeViolation because the actionable resume
+                # path is the human-approval gate, not the envelope.
+                first_held = sorted(held_nodes, key=lambda n: n.node_id)[0]
+                self._record_human_approval_gate(plan, first_held)
                 events.append(PlanEvent.plan_suspended())
             elif failed_nodes:
                 plan.state = PlanState.FAILED

@@ -5,6 +5,40 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] — 2026-04-25 — PlanSuspension cross-SDK parity (#598)
+
+Minor bump — new public API surface for L3 plan suspension. PACT N3 mandates resumable plan suspension; the kailash-rs SDK has shipped `SuspensionReason` + `SuspensionRecord` since the L3 landing, but the Python SDK had no equivalent and any cross-SDK plan serialization round-trip lost the suspension cause and resume frontier. This release closes that gap.
+
+### Added
+
+- **`kaizen.l3.plan.suspension` module** — five-variant `SuspensionReason` tagged union (frozen dataclasses + `Literal` `kind` discriminator) plus `SuspensionRecord` capturing the resume frontier:
+  - `HumanApprovalGateReason(held_node, reason)` — node entered Held gradient zone
+  - `CircuitBreakerTrippedReason(breaker_id, triggering_node)` — downstream dependency tripped
+  - `BudgetExceededReason(dimension, usage_pct, triggering_node)` — envelope dimension hit threshold (default 90%)
+  - `EnvelopeViolationReason(dimension, detail, triggering_node)` — envelope check rejected for non-budget reason (clearance, classification, dimension policy). Python-only today; cross-SDK parity for the 5th variant tracked in a sibling kailash-rs issue.
+  - `ExplicitCancellationReason(reason, resume_hint)` — caller-initiated cancel
+- **`SuspensionRecord.from_plan(reason, plan)`** — partitions plan node states into `running_nodes` / `ready_nodes` / `pending_nodes` (sorted lex for cross-SDK comparison stability), captures `suspended_at` UTC timestamp, and accepts an opaque `resume_context` payload.
+- **`Plan.suspension: Optional[SuspensionRecord]`** — present while the plan is in `SUSPENDED` state, cleared on `resume()`. Round-trips through `Plan.to_dict` / `Plan.from_dict`.
+- **`PlanExecutor.suspend(plan, reason=...)` / `AsyncPlanExecutor.suspend(plan, reason=...)`** — optional `reason` kwarg attaches the record at suspend time.
+- **`PlanExecutor.suspend_for_circuit_breaker(plan, breaker_id, triggering_node)`** + async variant — convenience wrapper for the `CircuitBreakerTripped` variant; required because the breaker-trip signal originates outside the executor's hot loop.
+- **`PlanExecutor.cancel(plan, reason="...", resume_hint="...")`** + async variant — always attaches `ExplicitCancellationReason` BEFORE cascading node-skip transitions, so `running_nodes` / `ready_nodes` / `pending_nodes` capture the pre-cancel snapshot.
+- **Wire format helpers** — `suspension_reason_to_dict` / `suspension_reason_from_dict` / `suspension_reason_label` matching Rust serde `#[serde(tag = "kind", rename_all = "snake_case")]`. Cross-SDK forensic correlation works without a third-party tagged-union library.
+
+### Changed
+
+- **`PlanExecutor.resume(plan)` / `AsyncPlanExecutor.resume(plan)`** — now clears `plan.suspension` (PACT N3: the suspension record is consumed by resume; downstream callers that need the record for audit MUST capture it before calling `resume()`).
+- **`AsyncPlanExecutor._execute_node` BLOCKED-verdict path** — classifies the suspension cause as `BudgetExceededReason` when the verdict reports a numeric overflow (`requested > available` on a known dimension) and `EnvelopeViolationReason` otherwise (structural rejection: clearance, classification, dimension policy).
+- **Both executors' `_determine_terminal_state`** — when the loop ends with one or more HELD nodes, attaches `HumanApprovalGateReason` for the lexicographically-first HELD node. Takes precedence over a previously-recorded `EnvelopeViolation` because the actionable resume path is the human-approval gate.
+
+### Cross-SDK Parity
+
+Wire-format `kind` tags (`human_approval_gate`, `circuit_breaker_tripped`, `budget_exceeded`, `envelope_violation`, `explicit_cancellation`) are reserved across SDKs. Field shapes match `kailash-rs/crates/kailash-kaizen/src/l3/core/plan/types.rs:267-396`. The `envelope_violation` variant is the Python SDK's 5th; a follow-up kailash-rs issue tracks adding it for full parity.
+
+### Tests
+
+- 30 Tier 1 unit tests at `tests/unit/l3/plan/test_suspension.py` — variant construction, frozen-dataclass invariant, label stability, wire-format round-trip, parametrized cross-SDK vector table.
+- 12 Tier 2 integration tests at `tests/integration/l3/test_suspension_emission.py` — drives each of the 5 trigger conditions end-to-end through `PlanExecutor` / `AsyncPlanExecutor`, asserts `plan.suspension.reason` is the right variant, asserts `Plan.to_dict` / `from_dict` round-trips the suspension field.
+
 ## [2.12.3] — 2026-04-25 — Security sweep (#614 + #617)
 
 Patch bump — defense-in-depth tightening of tenant-id log hygiene and credential-adjacent fingerprinting. No API changes.
