@@ -1342,32 +1342,93 @@ class SignedEnvelope:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dict suitable for JSON encoding.
 
+        Includes the ``algorithm`` field (issue #604 scaffold) so the wire
+        format records which algorithm produced the signature. Lexicographic
+        key ordering is preserved when keys are sorted (e.g., via
+        ``sorted(d.keys())``) for deterministic JSON canonicalisation.
+
         Returns:
             A dict with all fields. The envelope is serialized via
-            model_dump(mode='json'). Datetimes as ISO 8601.
+            ``model_dump(mode='json')``. Datetimes as ISO 8601.
         """
         return {
+            "algorithm": self.algorithm,
             "envelope": self.envelope.model_dump(mode="json"),
+            "expires_at": self.expires_at.isoformat(),
             "signature": self.signature,
             "signed_at": self.signed_at.isoformat(),
             "signed_by": self.signed_by,
-            "expires_at": self.expires_at.isoformat(),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SignedEnvelope:
         """Deserialize from a dict.
 
+        Algorithm-agility handling (issue #604 scaffold) parallels
+        :meth:`verify`:
+
+        - Missing or empty ``"algorithm"`` key (legacy / pre-#604 record) →
+          accept AND emit a one-time DeprecationWarning per process whose
+          text contains the literal "scaffold for #604; wire format pending
+          mint ISS-31". The reconstructed envelope's ``algorithm`` field
+          defaults to :data:`ALGORITHM_DEFAULT` so a subsequent ``to_dict``
+          round-trip emits the canonical value.
+        - Non-default ``"algorithm"`` (anything other than
+          :data:`ALGORITHM_DEFAULT`) → raise ``NotImplementedError``. Mint
+          ISS-31 will lift this restriction.
+        - ``"algorithm"`` equal to :data:`ALGORITHM_DEFAULT` → pass through.
+
+        The same module-level guard (``_LEGACY_SIGNED_ENVELOPE_WARNED``)
+        coordinates parse-time and verify-time warning emission so the
+        DeprecationWarning fires at most once per process across BOTH
+        surfaces — important because a single legacy record typically
+        passes through ``from_dict`` then ``verify`` in the same call site.
+
         Args:
-            data: Dict as produced by to_dict().
+            data: Dict as produced by ``to_dict()``. Pre-#604 dicts without
+                an ``"algorithm"`` key are accepted with a one-time warning.
 
         Returns:
             A SignedEnvelope instance.
 
         Raises:
-            KeyError: If required fields are missing.
+            KeyError: If required fields other than ``"algorithm"`` are
+                missing.
             ValueError: If field values are invalid.
+            NotImplementedError: If ``"algorithm"`` is set to a non-default
+                non-empty value (pending mint ISS-31).
         """
+        # Algorithm-agility scaffold (issue #604) — runs BEFORE other field
+        # parsing so a non-default algorithm fails loudly rather than
+        # paying the cost of envelope reconstruction.
+        global _LEGACY_SIGNED_ENVELOPE_WARNED
+        algorithm_raw = data.get("algorithm", "")
+        algorithm: str
+        if algorithm_raw == "":
+            # Legacy / pre-#604 record: accept AND warn once per process.
+            # The "scaffold for #604; wire format pending mint ISS-31"
+            # substring is required by the issue brief so future agents
+            # can grep-find it across log archives.
+            if not _LEGACY_SIGNED_ENVELOPE_WARNED:
+                _LEGACY_SIGNED_ENVELOPE_WARNED = True
+                _warnings.warn(
+                    "SignedEnvelope.from_dict received dict with empty/missing "
+                    "algorithm (legacy record); defaulting to "
+                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
+                    "format pending mint ISS-31.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            algorithm = ALGORITHM_DEFAULT
+        elif algorithm_raw != ALGORITHM_DEFAULT:
+            raise NotImplementedError(
+                f"SignedEnvelope.algorithm={algorithm_raw!r} awaits mint "
+                f"ISS-31 spec. Only {ALGORITHM_DEFAULT!r} is supported in "
+                f"this scaffold (issue #604, cross-SDK kailash-rs#33)."
+            )
+        else:
+            algorithm = algorithm_raw
+
         envelope = ConstraintEnvelopeConfig(**data["envelope"])
 
         signed_at_raw = data["signed_at"]
@@ -1388,6 +1449,7 @@ class SignedEnvelope:
             signed_at=signed_at,
             signed_by=data["signed_by"],
             expires_at=expires_at,
+            algorithm=algorithm,
         )
 
 
