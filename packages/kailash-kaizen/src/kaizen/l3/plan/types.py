@@ -304,6 +304,12 @@ class Plan:
     """A directed acyclic graph of agent tasks with dependency edges.
 
     The plan is the unit of L3 execution.
+
+    PACT N3: when the plan transitions to ``SUSPENDED`` state, the
+    executor MUST attach a :class:`SuspensionRecord` (cross-SDK parity
+    with kailash-rs ``Plan.suspension`` field) capturing why the plan
+    suspended and the execution frontier needed to resume from the
+    exact suspension point. The field is cleared on successful resume.
     """
 
     plan_id: str
@@ -315,6 +321,10 @@ class Plan:
     state: PlanState
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     modified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # PACT N3: present while the plan is suspended; cleared on resume.
+    # Typed ``Any`` to avoid a circular import — concrete type is
+    # ``kaizen.l3.plan.suspension.SuspensionRecord | None``.
+    suspension: Any = None
 
     def transition_to(self, new_state: PlanState) -> None:
         """Validate and apply a plan state transition.
@@ -333,6 +343,12 @@ class Plan:
         self.modified_at = datetime.now(UTC)
 
     def to_dict(self) -> dict[str, Any]:
+        # Local import to avoid circular dependency
+        # (suspension.py imports PlanNodeState from this module).
+        suspension_dict: dict[str, Any] | None = None
+        if self.suspension is not None:
+            # SuspensionRecord has a to_dict() method
+            suspension_dict = self.suspension.to_dict()
         return {
             "plan_id": self.plan_id,
             "name": self.name,
@@ -343,10 +359,17 @@ class Plan:
             "state": self.state.value,
             "created_at": self.created_at.isoformat(),
             "modified_at": self.modified_at.isoformat(),
+            "suspension": suspension_dict,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Plan:
+        suspension_payload = data.get("suspension")
+        suspension: Any = None
+        if suspension_payload is not None:
+            from kaizen.l3.plan.suspension import SuspensionRecord
+
+            suspension = SuspensionRecord.from_dict(suspension_payload)
         return cls(
             plan_id=data["plan_id"],
             name=data["name"],
@@ -365,6 +388,7 @@ class Plan:
                 if isinstance(data.get("modified_at"), str)
                 else data.get("modified_at", datetime.now(UTC))
             ),
+            suspension=suspension,
         )
 
 

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] — 2026-04-25 — MCP transports (#600) + BudgetTracker threshold callback (#603)
+
+Minor bump — two new public API surfaces in kailash core. Ships with `kailash-nexus 2.3.0` (#618 per-connection unicast) and `kailash-kaizen 2.13.0` (#598 PlanSuspension + #602 OrchestrationRuntime parity).
+
+### Added
+
+- **`BudgetTracker.set_threshold_callback(threshold_pct, callback)`** at `src/kailash/trust/constraints/budget_tracker.py` — public API for registering a one-shot callback that fires when budget utilization first reaches a caller-supplied fraction of allocated budget. Distinct from the existing `on_threshold()` (which fires only at hardcoded 80/95/100% marks). Callback fires when `(committed + reserved) / allocated >= threshold_pct` after a successful `reserve()` or `record()` call. Multiple callbacks may be registered at the same threshold (registration order preserved); each (threshold, handle) fires AT MOST ONCE per BudgetTracker instance. Returns an integer handle for symmetric removal via `unregister_threshold_callback(handle)`. Thread-safe under existing `self._lock`; predicate evaluated under lock, callbacks dispatched outside the lock to prevent re-entrancy deadlock. Callback exceptions are logged at WARNING via `logger.exception` and never propagate to `record()`/`reserve()` callers. Motivation: Envoy Phase 01 Grant Moment trigger — operator wires "you've used 80% of your budget" notification to drive escalation. Cross-SDK alignment with `kailash-rs#30`.
+- **`BudgetEvent` payload extended** with optional `threshold_pct: Optional[float]`, `committed_microdollars: Optional[int]`, `reserved_microdollars: Optional[int]` fields. Custom-threshold events carry the registered fraction; legacy `threshold_80` / `threshold_95` / `exhausted` events now also carry their corresponding fraction (0.80 / 0.95 / 1.00) for cross-callback uniformity. `to_dict()` / `from_dict()` are backward-compatible — older payloads without these keys deserialize cleanly with the new fields set to `None`.
+- **Tier 1 unit tests** at `tests/trust/unit/test_budget_tracker_callbacks.py` (27 tests) covering happy path, registration order, multi-threshold ordering, exception isolation, once-only firing, threshold-pct validation (NaN/Inf/0/1/boundary), claimed-amount predicate, unregister semantics, allocated-zero edge case, and `_max_callbacks` limit.
+- **Tier 2 integration tests** at `tests/trust/integration/test_budget_tracker_callbacks.py` (5 tests) exercising callback dispatch under concurrent `reserve()`/`record()` workers (16-thread + 50-thread scenarios), callback-exception isolation under load, multi-threshold independence under load, and end-to-end Grant Moment scenario. NO mocking — all tests use real `threading` primitives.
+
+### Related
+
+- Cross-SDK: `esperie/kailash-rs#30` (Rust `BudgetTracker::set_threshold_callback`).
+
 ## Note: Changelog Reorganized
 
 The changelog has been reorganized into individual files for better management. Please see:
@@ -14,6 +29,24 @@ The changelog has been reorganized into individual files for better management. 
 - **[sdk-users/6-reference/changelogs/releases/](sdk-users/6-reference/changelogs/releases/)** - Individual release changelogs
 
 ## Recent Releases
+
+### kailash 2.10.0 — 2026-04-25 — MCP transport primitives (stdio / SSE / HTTP) (#600)
+
+**Added** — closes #600
+
+- **`kailash.channels.mcp.Transport`** — abstract base for MCP client transports. Three concrete implementations ship in this module:
+  - **`StdioTransport`** — bidirectional JSON-RPC over a local subprocess (LSP-style `Content-Length` framing). Allowlist gate on the spawned command; `allowed_commands=` parameter enforces explicit allowlist; spawning falls back to `TransportError` if the executable is not in the list.
+  - **`SseTransport`** — HTTP POST + Server-Sent Events stream. Connects to a remote SSE-exposed MCP server. POSTs requests to `{base}/message`; reads inline JSON OR `data: <json>` SSE events. Per-message reply path supported.
+  - **`HttpTransport`** — single-shot request/response. POSTs the JSON-RPC body and parses the JSON response inline. `receive()` raises `NotImplementedError` because HTTP has no unsolicited server-push.
+- **`validate_url(raw_url, *, allow_private=False)`** — SSRF guard shared across all HTTP-class transports. Rejects non-`http`/`https` schemes; rejects loopback, link-local, multicast, and RFC-1918 private hosts unless `allow_private=True` is passed (intended for trusted internal endpoints). Raises `TransportError`.
+- **Exception hierarchy:** `TransportError` (base) and `ProtocolError` (framing/format errors). All transport methods raise these — never bare `Exception`.
+
+**Tier 1 + Tier 2 coverage:**
+
+- 35 unit tests at `tests/unit/channels/test_mcp_transports.py` cover URL validation, exception hierarchy, transport construction guards, and per-transport contract.
+- 4 integration tests at `tests/integration/channels/test_mcp_transports_real.py` execute against real infrastructure (subprocess echo for stdio, `aiohttp` test server for sse + http) — NO mocking per `rules/testing.md` § 3-Tier Testing.
+
+**Cross-SDK parity:** mirrors `kailash-rs/crates/kailash-mcp/src/transport/{stdio,sse}.rs` semantic shape for parity (kailash-rs ISS-20 / EATP D6).
 
 ### kailash 2.9.2 — 2026-04-25 — 1.1.2 patch wave (docstring + cross-SDK)
 

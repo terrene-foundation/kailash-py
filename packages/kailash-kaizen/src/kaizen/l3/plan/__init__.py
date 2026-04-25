@@ -12,6 +12,18 @@ from kaizen.l3.plan.errors import (
 )
 from kaizen.l3.plan.executor import AsyncPlanExecutor, PlanExecutor
 from kaizen.l3.plan.modification import apply_modification, apply_modifications
+from kaizen.l3.plan.suspension import (
+    BudgetExceededReason,
+    CircuitBreakerTrippedReason,
+    EnvelopeViolationReason,
+    ExplicitCancellationReason,
+    HumanApprovalGateReason,
+    SuspensionReason,
+    SuspensionRecord,
+    suspension_reason_from_dict,
+    suspension_reason_label,
+    suspension_reason_to_dict,
+)
 from kaizen.l3.plan.types import (
     EdgeType,
     Plan,
@@ -51,4 +63,15 @@ __all__ = [
     # Modification
     "apply_modification",
     "apply_modifications",
+    # Suspension (PACT N3)
+    "BudgetExceededReason",
+    "CircuitBreakerTrippedReason",
+    "EnvelopeViolationReason",
+    "ExplicitCancellationReason",
+    "HumanApprovalGateReason",
+    "SuspensionReason",
+    "SuspensionRecord",
+    "suspension_reason_from_dict",
+    "suspension_reason_label",
+    "suspension_reason_to_dict",
 ]

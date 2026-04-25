@@ -686,6 +686,37 @@ class Nexus:
         """
         await self._ws_message_handlers.broadcast_event(path, event)
 
+    async def websocket_send_to(
+        self, path: str, connection_id: str, payload: Any
+    ) -> bool:
+        """Send ``payload`` to a single tracked WebSocket connection.
+
+        Issue #618 — per-connection unicast push from external
+        publishers. Use this when an external producer (DataFlow
+        change stream, message-queue consumer, scheduled job) needs
+        to address ONE specific client by its
+        :attr:`~nexus.websocket_handlers.Connection.connection_id`,
+        not the broadcast set. Dispatch is scoped to the named
+        connection — no other client receives the frame, so per-
+        tenant push is safe by construction.
+
+        Args:
+            path: URL path the target connection was registered on.
+            connection_id: ``connection_id`` returned to the handler's
+                ``on_connect``.
+            payload: JSON-serializable dict/list, raw ``str``, or
+                UTF-8 ``bytes``.
+
+        Returns:
+            ``True`` if the frame was sent; ``False`` if the path has
+            no registered handler, the connection_id is unknown, or
+            the socket is already closed / the send failed.
+
+        Cross-SDK parity: kailash-rs#589 ships the equivalent Rust
+        primitive.
+        """
+        return await self._ws_message_handlers.send_to(path, connection_id, payload)
+
     @property
     def websocket_handlers(self):
         """Read-only access to the class-based message handler registry."""
