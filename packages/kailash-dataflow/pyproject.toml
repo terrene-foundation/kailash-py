@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "2.2.0"
+version = "2.3.0"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -24,7 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "kailash>=2.8.9",
+    "kailash>=2.11.0",
     "sqlalchemy>=2.0.0",
     "alembic>=1.12.0",
     "asyncpg>=0.28.0",

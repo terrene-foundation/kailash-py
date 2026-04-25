@@ -25,7 +25,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "kailash>=2.8.9",
+    "kailash>=2.11.0",
     "kailash-ml>=0.11.0",
     "kailash-kaizen>=2.7.5",
     "torch>=2.2,<3.0",

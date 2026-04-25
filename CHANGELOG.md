@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] — 2026-04-25 — Algorithm-agility scaffold (#604) + SLIP-0039 Shamir wrapper (#606)
+
+Minor bump — two new public modules in `kailash.trust`. Ships alongside `kailash-dataflow 2.3.0` (#607 SecurityDefinerBuilder) and `kailash-pact 0.11.0` (#605 PACT N4/N5 conformance runner). All three are additive; lockstep dep pins updated to `kailash>=2.11.0` across every framework package.
+
+### Added
+
+- **`kailash.trust.signing.algorithm_id`** (#604) — new module exposing the `AlgorithmIdentifier` frozen dataclass + `ALGORITHM_DEFAULT = "ed25519+sha256"` constant + `coerce_algorithm_id(alg_id)` canonical helper. Threaded through `SignedEnvelope` (storage record + `to_dict`/`from_dict`/`verify` triplet) so the algorithm metadata survives JSON round-trip on the wire. Legacy records (pre-#604, no `algorithm` key) are accepted with a one-time `DeprecationWarning` per process containing the literal substring `"scaffold for #604; wire format pending mint ISS-31"`. Non-default values raise `NotImplementedError` until mint ISS-31 stabilises the canonical wire format. Other Layer-1 sites (timestamping, CRL, message envelopes) tracked in inventory at `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`. Cross-SDK: `esperie/kailash-rs#33`.
+- **`kailash.trust.vault`** (#606) — new package with the SLIP-0039 Shamir secret-sharing wrapper for Trust Vault key backup. Public surface: `ShamirRitual` frozen dataclass + `generate` / `reconstruct` / `serialize_shard` / `deserialize_shard` / `rotate_holders` lazy-import helpers + `back_up_vault_key` stub raising `NotImplementedError("Trust Vault Shamir binding awaits mint ISS-37")`. Lazy-import contract: module imports cleanly without the optional dep; call site raises `RuntimeError` with `pip install kailash[shamir]` install hint when absent.
+- **New optional extra `[shamir]`** in root `pyproject.toml` pinning `shamir-mnemonic>=0.3` (latest published: 0.3.0). Install via `pip install kailash[shamir]`.
+- **Tier 1 + Tier 2 regression tests** — `tests/regression/test_issue_604_alg_id_threading.py` (13 cases) + `tests/regression/test_issue_606_shamir_wrapper.py` (12 cases) + `tests/integration/trust/test_shamir_round_trip.py` (7 cases against real `shamir-mnemonic`).
+- **Spec updates**: `specs/trust-crypto.md` § 21 (algorithm agility) + § 30 (SLIP-0039 wrapper); `specs/trust-eatp.md` § 12 (SignedEnvelope.algorithm field); `specs/security-data.md` (Trust Vault backup posture).
+
+### Related
+
+- Cross-SDK: `esperie/kailash-rs#33` (alg_id), follow-up needed on Rust side for #606 Shamir scaffold.
+- Spec gates: `terrene-foundation/mint` ISS-31 (alg_id wire format), ISS-37 (Trust Vault binding).
+- Issues: closes part of #604 (SignedEnvelope only — Layer-1 follow-up shards pending), closes #606 (scaffold; binding gated on ISS-37).
+
 ## [2.10.0] — 2026-04-25 — MCP transports (#600) + BudgetTracker threshold callback (#603)
 
 Minor bump — two new public API surfaces in kailash core. Ships with `kailash-nexus 2.3.0` (#618 per-connection unicast) and `kailash-kaizen 2.13.0` (#598 PlanSuspension + #602 OrchestrationRuntime parity).
