@@ -1,0 +1,112 @@
+{
+  "_comment": [
+    "Cross-SDK byte-shape vectors for SecurityDefinerBuilder.",
+    "Both kailash-py and kailash-rs MUST produce byte-identical SQL when",
+    "fed the same builder chain. This fixture is the contract.",
+    "",
+    "Vector schema:",
+    "  name: human-readable identifier (used in test IDs)",
+    "  builder: { fluent calls, in chain order }",
+    "  expected: array of 4 strings — [create, comment, revoke, grant]",
+    "",
+    "Drift detection: kailash-py runs",
+    "  packages/kailash-dataflow/tests/regression/test_issue_607_cross_sdk_vectors.py",
+    "  to load + assert. kailash-rs runs the equivalent in",
+    "  crates/kailash-dataflow/tests/security_definer_builder.rs (see kailash-rs#579).",
+    "",
+    "If either SDK drifts, the affected test fails loudly. Origin: kailash-py#607,",
+    "kailash-rs#579, kailash-rs#590."
+  ],
+  "vectors": [
+    {
+      "name": "canonical_multi_tenant",
+      "_comment": [
+        "Canonical multi-tenant recipe — every invariant emitted, every",
+        "fluent setter exercised. This is the byte-shape kailash-rs's",
+        "Tier 1 'snapshot_matches_recipe_byte_shape' test pins."
+      ],
+      "builder": {
+        "function_name": "resolve_user_by_email",
+        "search_path": "app",
+        "authenticator_role": "app_role",
+        "user_table": "users",
+        "password_column": "password_hash",
+        "tenant_column": "tenant_id",
+        "active_column": "is_active",
+        "params": [
+          ["p_email", "text"],
+          ["p_tenant_id", "bigint"]
+        ],
+        "return_columns": [
+          ["id", "bigint"],
+          ["email", "text"],
+          ["password_hash", "text"],
+          ["is_active", "boolean"]
+        ]
+      },
+      "expected": [
+        "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_email\" text, \"p_tenant_id\" bigint)\nRETURNS TABLE (\"id\" bigint, \"email\" text, \"password_hash\" text, \"is_active\" boolean)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\", \"email\", \"password_hash\", \"is_active\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_email\n    AND \"tenant_id\" = p_tenant_id\n    AND \"is_active\" = true\n  LIMIT 1;\n$$",
+        "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel. Multi-tenant filter inside body prevents T8 cross-tenant reads.'",
+        "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) FROM PUBLIC",
+        "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) TO \"app_role\""
+      ]
+    },
+    {
+      "name": "single_tenant_no_active",
+      "_comment": [
+        "Single-tenant deployment without an activity column — the",
+        "minimum-viable SECURITY DEFINER. The body has only the primary",
+        "lookup predicate; no tenant_id, no is_active."
+      ],
+      "builder": {
+        "function_name": "resolve_user_by_email",
+        "search_path": "app",
+        "authenticator_role": "app_role",
+        "user_table": "users",
+        "password_column": "password_hash",
+        "params": [
+          ["p_email", "text"]
+        ],
+        "return_columns": [
+          ["id", "bigint"],
+          ["email", "text"],
+          ["password_hash", "text"]
+        ]
+      },
+      "expected": [
+        "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_email\" text)\nRETURNS TABLE (\"id\" bigint, \"email\" text, \"password_hash\" text)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\", \"email\", \"password_hash\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_email\n  LIMIT 1;\n$$",
+        "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel.'",
+        "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text) FROM PUBLIC",
+        "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text) TO \"app_role\""
+      ]
+    },
+    {
+      "name": "primary_lookup_column_override",
+      "_comment": [
+        "Override scenario — the param name is `p_user_email` (would",
+        "derive `user_email` by stripping `p_`), but the actual schema",
+        "column is `email`. The override pins it correctly."
+      ],
+      "builder": {
+        "function_name": "resolve_user_by_email",
+        "search_path": "app",
+        "authenticator_role": "app_role",
+        "user_table": "users",
+        "password_column": "password_hash",
+        "primary_lookup_column": "email",
+        "params": [
+          ["p_user_email", "text"]
+        ],
+        "return_columns": [
+          ["id", "bigint"]
+        ]
+      },
+      "expected": [
+        "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_user_email\" text)\nRETURNS TABLE (\"id\" bigint)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_user_email\n  LIMIT 1;\n$$",
+        "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel.'",
+        "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text) FROM PUBLIC",
+        "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text) TO \"app_role\""
+      ]
+    }
+  ]
+}
