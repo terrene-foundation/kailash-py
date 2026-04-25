@@ -1,11 +1,22 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 """
-Proxy module: kaizen.orchestration -> kaizen_agents.patterns
+kaizen.orchestration — multi-agent orchestration surface.
 
-Registers sys.modules aliases so that mock.patch targets like
-``kaizen.orchestration.patterns.blackboard.A2A_AVAILABLE``
-resolve to the real kaizen_agents.patterns.patterns module.
+This module hosts:
+
+- ``OrchestrationRuntime`` (cross-SDK parity with kailash-rs
+  ``kaizen-agents::orchestration::runtime``) — strategy-driven multi-agent
+  coordination with Sequential / Parallel / Hierarchical / Pipeline
+  strategies. See ``kaizen.orchestration.runtime``.
+- Re-exports + ``sys.modules`` aliases that point
+  ``kaizen.orchestration.patterns.*`` at the real
+  ``kaizen_agents.patterns.patterns.*`` modules so existing ``mock.patch``
+  targets continue to resolve.
+
+The proxy aliases predate the runtime module; they are preserved verbatim
+so tests that patch ``kaizen.orchestration.patterns.blackboard.A2A_AVAILABLE``
+keep working.
 """
 
 import sys
@@ -19,3 +30,35 @@ sys.modules.setdefault("kaizen.orchestration.patterns", _pp)
 sys.modules.setdefault("kaizen.orchestration.patterns.blackboard", _bb)
 sys.modules.setdefault("kaizen.orchestration.patterns.ensemble", _en)
 sys.modules.setdefault("kaizen.orchestration.patterns.meta_controller", _mc)
+
+# Public OrchestrationRuntime surface (issue #602 — cross-SDK parity with
+# kailash-rs kaizen-agents::orchestration::runtime). Eager imports so the
+# symbols satisfy `from kaizen.orchestration import *` and Sphinx autodoc per
+# rules/orphan-detection.md §6.
+from kaizen.orchestration.runtime import (  # noqa: E402
+    AgentLike,
+    Coordinator,
+    OrchestrationConfig,
+    OrchestrationError,
+    OrchestrationResult,
+    OrchestrationRuntime,
+    OrchestrationStrategy,
+    OrchestrationStrategyKind,
+    PipelineInputSource,
+    PipelineStep,
+    SharedMemoryCoordinator,
+)
+
+__all__ = [
+    "AgentLike",
+    "Coordinator",
+    "OrchestrationConfig",
+    "OrchestrationError",
+    "OrchestrationResult",
+    "OrchestrationRuntime",
+    "OrchestrationStrategy",
+    "OrchestrationStrategyKind",
+    "PipelineInputSource",
+    "PipelineStep",
+    "SharedMemoryCoordinator",
+]
