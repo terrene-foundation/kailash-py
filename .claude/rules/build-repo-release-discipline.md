@@ -78,7 +78,9 @@ print(AgentDiagnostics, TraceExporter)
 
 **PyPI cache lag**: `pypi.org/pypi/<pkg>/json` `info.version` field can show the OLD version for up to several minutes after a successful tag-push + publish-workflow-success. Retry the clean-venv install up to 3× with 60s between attempts before declaring release failure. The simple index (`pypi.org/simple/<pkg>/`) can be even slower to reflect the new wheel. If the workflow run shows success and the `.../2.10.1/json` endpoint returns metadata, the release DID happen — trust the verification retry loop.
 
-**Why:** A release can succeed on PyPI metadata but fail on wheel upload, tag collision, or downstream dependency pinning — all of which surface only when a clean install runs the import. The installability check is the "smoke test" that proves the release reached consumers.
+**Latent failures count**: When the clean-venv check fails, the broken pattern is the scope of the hotfix — NOT just the most-recent PR's diff. The same failure may have been latent in main for many sessions, hidden behind editable installs in every dev environment. "It's been working" / "this PR didn't introduce it" / "main was green" are BLOCKED rationalizations. Fix the entire broken pattern in the hotfix; file a follow-up issue ONLY if the fix exceeds one shard (per `autonomous-execution.md` Rule 1). See `dependencies.md` § "MUST: `__init__.py` Module-Scope Imports Honor The Manifest" for the structural defense that prevents the failure class.
+
+**Why:** A release can succeed on PyPI metadata but fail on wheel upload, tag collision, or downstream dependency pinning — all of which surface only when a clean install runs the import. The installability check is the "smoke test" that proves the release reached consumers. Editable installs hide cross-package import dependency gaps; the clean-venv check is the only gate that catches them, and limiting hotfix scope to "what this PR changed" leaves the latent class of failure intact for the next release to re-discover.
 
 ### 3. Release Scope Enumerated Before First Merge Of The Session
 

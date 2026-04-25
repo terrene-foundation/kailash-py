@@ -106,6 +106,40 @@ import redis  # works locally; breaks in fresh venv
 
 `ModuleNotFoundError` / `ImportError` (Python), `cannot find crate` / `unresolved import` (Rust), `Cannot find module` (JS/TS), peer dependency warnings, `pip check` failures — ALL are the SAME class as pre-existing failures in `zero-tolerance.md` Rule 1 and MUST be fixed immediately, not suppressed.
 
+### MUST: `__init__.py` Module-Scope Imports Honor The Manifest
+
+Every unconditional `import X` / `from X import Y` at module scope in any package's `__init__.py` MUST resolve to a package declared in that package's own `pyproject.toml::dependencies`. Imports of co-installed but optional sibling packages (defensive proxy aliases, legacy `mock.patch` shims, integration surfaces that activate only when the sibling is present) MUST be wrapped in `try/except ImportError` AND any alias side-effects (`sys.modules.setdefault`, re-exports, attribute assignments) MUST live in the `else` branch.
+
+```python
+# DO — optional proxy aliases are guarded; clean install still imports
+try:
+    import kaizen_agents.patterns.patterns as _pp
+    import kaizen_agents.patterns.patterns.blackboard as _bb
+except ImportError:
+    pass
+else:
+    sys.modules.setdefault("kaizen.orchestration.patterns", _pp)
+    sys.modules.setdefault("kaizen.orchestration.patterns.blackboard", _bb)
+
+# DO NOT — unconditional import of a non-declared sibling
+import kaizen_agents.patterns.patterns as _pp  # ModuleNotFoundError on clean install
+sys.modules.setdefault("kaizen.orchestration.patterns", _pp)
+```
+
+**BLOCKED rationalizations:**
+
+- "Everyone in dev has the sibling editable-installed"
+- "The proxy is defensive; a clean install will never hit it"
+- "We declared kaizen-agents as an extra, that's enough"
+- "The next CI run will catch it"
+- "It's been in main for months without breaking"
+
+**Why:** Editable installs in dev environments hide cross-package import dependency gaps that surface only on a clean PyPI install. An unconditional module-scope import of a NON-declared sibling raises `ModuleNotFoundError` at the FIRST `import <package>`, blocking every downstream consumer. The `try/except ImportError: pass` pattern is the OPPOSITE of the silent-fallback anti-pattern below — it has no later-use site that could break, and the `else`-branch alias-installation guarantees that when the sibling IS present, the proxy works exactly as before.
+
+This rule is the structural defense that pairs with `build-repo-release-discipline.md` Rule 2 (clean-venv installability is the done gate). Rule 2 catches the failure; this rule prevents it.
+
+Origin: kailash-kaizen 2.13.1 hotfix (commit `9002c002`, 2026-04-25). Four unconditional `kaizen_agents.patterns.*` imports in `kaizen/orchestration/__init__.py` (predating the structural-split refactor #75) raised `ModuleNotFoundError` on every clean `pip install kailash-kaizen` because `kaizen-agents` is not a declared dep. Caught by post-2.13.0 clean-venv check; fixed via `try/except ImportError`.
+
 ### BLOCKED Anti-Patterns
 
 ```python
