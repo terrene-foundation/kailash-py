@@ -583,3 +583,286 @@ class TestConnectionSend:
         ok = await conn.send_text("pong")
         assert ok is True
         assert ws.sent == ["pong"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #618 — on_message return-value delivery
+# ---------------------------------------------------------------------------
+
+
+class TestOnMessageReturnDelivery:
+    """Tier 1 coverage of the on_message return -> auto-reply contract."""
+
+    @pytest.mark.asyncio
+    async def test_dict_return_sent_as_json(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return {"echo": msg.get("hello")}
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        # Two frames sent: handshake "connected" event is NOT (the
+        # registry doesn't emit one — only the transport does). So the
+        # only outbound frame here is the auto-reply.
+        assert ws.sent == ['{"echo": "world"}']
+
+    @pytest.mark.asyncio
+    async def test_list_return_sent_as_json(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return [1, 2, msg["n"]]
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"n": 3})])
+        await reg.handle_connection(ws, "/echo")
+
+        assert ws.sent == ["[1, 2, 3]"]
+
+    @pytest.mark.asyncio
+    async def test_str_return_sent_as_text_frame(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return f"echo: {msg.get('hello')}"
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        assert ws.sent == ["echo: world"]
+
+    @pytest.mark.asyncio
+    async def test_bytes_return_decoded_as_utf8(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return f"bytes: {msg.get('hello')}".encode("utf-8")
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        assert ws.sent == ["bytes: world"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_utf8_bytes_logged_and_dropped(self, caplog):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return b"\xff\xfe\xfa"  # invalid UTF-8
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"x": 1})])
+        with caplog.at_level("WARNING"):
+            await reg.handle_connection(ws, "/echo")
+
+        # Invalid bytes are NOT sent on the wire — silently dropped
+        # except for the WARN log line.
+        assert ws.sent == []
+        assert any(
+            "ws.handler.reply_bytes_not_utf8" in rec.message for rec in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_none_return_no_auto_reply(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                return None  # explicit no-reply
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        assert ws.sent == []
+
+    @pytest.mark.asyncio
+    async def test_handler_can_still_send_explicitly_when_returning_none(self):
+        """Backward compatibility: existing handlers keep working."""
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                await conn.send_json({"explicit": msg.get("hello")})
+                return None
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        # Only the explicit send went out; no duplicate auto-reply.
+        assert ws.sent == ['{"explicit": "world"}']
+
+    @pytest.mark.asyncio
+    async def test_handler_raises_no_reply_sent(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_message(self, conn, msg):
+                raise RuntimeError("boom")
+
+        reg.register("/echo", H)
+        ws = FakeWebSocket([json.dumps({"hello": "world"})])
+        await reg.handle_connection(ws, "/echo")
+
+        # Exception is logged in _safe_on_message; no auto-reply.
+        assert ws.sent == []
+
+    @pytest.mark.asyncio
+    async def test_on_text_return_value_also_delivered(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            async def on_text(self, conn, text):
+                return f"got-text:{text}"
+
+        reg.register("/text", H)
+        ws = FakeWebSocket(["ping"])
+        await reg.handle_connection(ws, "/text")
+
+        assert ws.sent == ["got-text:ping"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #618 — MessageHandlerRegistry.send_to(path, connection_id, payload)
+# ---------------------------------------------------------------------------
+
+
+class TestRegistrySendTo:
+    """External-publisher unicast push to a single tracked connection."""
+
+    @pytest.mark.asyncio
+    async def test_send_to_known_connection_returns_true(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+
+        # Inject a Connection directly (mimics handle_connection's setup
+        # without driving the receive loop).
+        ws = FakeWebSocket([])
+        conn = Connection(ws, "conn-1", "/named")
+        reg._connections_by_path["/named"]["conn-1"] = conn
+
+        ok = await reg.send_to("/named", "conn-1", {"ping": True})
+        assert ok is True
+        assert ws.sent == ['{"ping": true}']
+
+    @pytest.mark.asyncio
+    async def test_send_to_unknown_path_returns_false(self):
+        reg = MessageHandlerRegistry()
+        ok = await reg.send_to("/no-such-path", "conn-1", {"x": 1})
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_send_to_unknown_connection_id_returns_false(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+        ok = await reg.send_to("/named", "no-such-id", {"x": 1})
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_send_to_dead_connection_returns_false(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+        ws = FakeWebSocket([])
+        conn = Connection(ws, "conn-1", "/named")
+        conn._alive = False  # already disconnected
+        reg._connections_by_path["/named"]["conn-1"] = conn
+
+        ok = await reg.send_to("/named", "conn-1", {"ping": True})
+        assert ok is False
+        assert ws.sent == []  # no send attempted
+
+    @pytest.mark.asyncio
+    async def test_send_to_str_payload_uses_text_frame(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+        ws = FakeWebSocket([])
+        conn = Connection(ws, "conn-1", "/named")
+        reg._connections_by_path["/named"]["conn-1"] = conn
+
+        ok = await reg.send_to("/named", "conn-1", "raw-text")
+        assert ok is True
+        assert ws.sent == ["raw-text"]
+
+    @pytest.mark.asyncio
+    async def test_send_to_bytes_payload_decoded_utf8(self):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+        ws = FakeWebSocket([])
+        conn = Connection(ws, "conn-1", "/named")
+        reg._connections_by_path["/named"]["conn-1"] = conn
+
+        ok = await reg.send_to("/named", "conn-1", b"hello-bytes")
+        assert ok is True
+        assert ws.sent == ["hello-bytes"]
+
+    @pytest.mark.asyncio
+    async def test_send_to_only_targets_named_connection(self):
+        """Three connections; send_to reaches exactly one of them."""
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+
+        sockets = {}
+        for cid in ["c1", "c2", "c3"]:
+            ws = FakeWebSocket([])
+            sockets[cid] = ws
+            conn = Connection(ws, cid, "/named")
+            reg._connections_by_path["/named"][cid] = conn
+
+        ok = await reg.send_to("/named", "c2", {"only-for": "c2"})
+        assert ok is True
+        assert sockets["c1"].sent == []
+        assert sockets["c2"].sent == ['{"only-for": "c2"}']
+        assert sockets["c3"].sent == []
+
+    @pytest.mark.asyncio
+    async def test_send_to_invalid_utf8_bytes_returns_false(self, caplog):
+        reg = MessageHandlerRegistry()
+
+        class H(MessageHandler):
+            pass
+
+        reg.register("/named", H)
+        ws = FakeWebSocket([])
+        conn = Connection(ws, "conn-1", "/named")
+        reg._connections_by_path["/named"]["conn-1"] = conn
+
+        with caplog.at_level("WARNING"):
+            ok = await reg.send_to("/named", "conn-1", b"\xff\xfe")
+        assert ok is False
+        assert ws.sent == []
+        assert any("ws.send_to.bytes_not_utf8" in rec.message for rec in caplog.records)
