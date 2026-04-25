@@ -32,6 +32,13 @@ Cross-SDK contract reference:
 
 from __future__ import annotations
 
+from pact.conformance.runner import (
+    ConformanceRunner,
+    RunnerReport,
+    VectorOutcome,
+    VectorStatus,
+    run_vectors,
+)
 from pact.conformance.vectors import (
     ConformanceVector,
     ConformanceVectorError,
@@ -50,6 +57,7 @@ from pact.conformance.vectors import (
 )
 
 __all__ = [
+    # Vector schema + canonical types
     "ConformanceVector",
     "ConformanceVectorError",
     "ConformanceVectorExpected",
@@ -64,4 +72,10 @@ __all__ = [
     "durability_tier_from_posture",
     "load_vectors_from_dir",
     "parse_vector",
+    # Runner
+    "ConformanceRunner",
+    "RunnerReport",
+    "VectorOutcome",
+    "VectorStatus",
+    "run_vectors",
 ]
