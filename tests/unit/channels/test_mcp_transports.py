@@ -44,7 +44,7 @@ class TestValidateUrl:
         ],
     )
     def test_rejects_non_http_scheme(self, url: str) -> None:
-        with pytest.raises(ValueError, match="scheme"):
+        with pytest.raises(TransportError, match="scheme"):
             validate_url(url)
 
     @pytest.mark.parametrize(
@@ -59,7 +59,7 @@ class TestValidateUrl:
         ],
     )
     def test_rejects_private_by_default(self, url: str) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             validate_url(url, allow_private=False)
 
     @pytest.mark.parametrize(
@@ -74,11 +74,11 @@ class TestValidateUrl:
         assert validate_url(url, allow_private=True) == url
 
     def test_rejects_empty(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             validate_url("")
 
     def test_rejects_no_host(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             validate_url("http:///path")
 
 
@@ -91,7 +91,7 @@ class TestHttpTransport:
         assert t.endpoint_url == "https://example.com/mcp"
 
     def test_construct_rejects_private_by_default(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             HttpTransport("http://127.0.0.1/mcp")
 
     def test_construct_allow_private(self) -> None:
@@ -99,7 +99,7 @@ class TestHttpTransport:
         assert t.endpoint_url == "http://127.0.0.1/mcp"
 
     def test_construct_rejects_non_http_scheme(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             HttpTransport("file:///etc/passwd")
 
     def test_is_transport_subclass(self) -> None:
@@ -134,11 +134,11 @@ class TestSseTransport:
         assert t.sse_url == "https://example.com/sse"
 
     def test_construct_rejects_non_http_scheme(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             SseTransport("ftp://example.com")
 
     def test_construct_rejects_private_by_default(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             SseTransport("http://127.0.0.1")
 
     def test_is_transport_subclass(self) -> None:
@@ -154,16 +154,16 @@ class TestStdioTransport:
 
     @pytest.mark.asyncio
     async def test_spawn_rejects_disallowed_command(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             await StdioTransport.spawn(
                 command="/bin/bash",
                 args=["-c", "echo pwned"],
-                allowed=["python3", "node"],
+                allowed_commands=["python3", "node"],
             )
 
     @pytest.mark.asyncio
     async def test_spawn_validates_empty_command(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TransportError):
             await StdioTransport.spawn(command="", args=[])
 
 

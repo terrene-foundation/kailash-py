@@ -76,7 +76,7 @@ class TestStdioTransportReal:
         transport = await StdioTransport.spawn(
             command=sys.executable,
             args=[str(echo_script)],
-            allowed=[sys.executable, "python3", "python"],
+            allowed_commands=[sys.executable, "python3", "python"],
         )
         try:
             request = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"})
@@ -91,8 +91,8 @@ class TestStdioTransportReal:
 
 
 @pytest.fixture
-async def http_echo_server(aiohttp_unused_port):
-    port = aiohttp_unused_port()
+async def http_echo_server(unused_tcp_port_factory):
+    port = unused_tcp_port_factory()
 
     async def handler(request: web.Request) -> web.Response:
         body = await request.text()
@@ -136,8 +136,8 @@ class TestHttpTransportReal:
 
 
 @pytest.fixture
-async def sse_server(aiohttp_unused_port):
-    port = aiohttp_unused_port()
+async def sse_server(unused_tcp_port_factory):
+    port = unused_tcp_port_factory()
 
     async def message_handler(request: web.Request) -> web.Response:
         body = await request.text()

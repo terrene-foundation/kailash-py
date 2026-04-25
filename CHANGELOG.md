@@ -15,6 +15,24 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash [Unreleased — issue-600] — MCP transport primitives (stdio / SSE / HTTP)
+
+**Added** — closes #600
+
+- **`kailash.channels.mcp.Transport`** — abstract base for MCP client transports. Three concrete implementations ship in this module:
+  - **`StdioTransport`** — bidirectional JSON-RPC over a local subprocess (LSP-style `Content-Length` framing). Allowlist gate on the spawned command; `allowed_commands=` parameter enforces explicit allowlist; spawning falls back to `TransportError` if the executable is not in the list.
+  - **`SseTransport`** — HTTP POST + Server-Sent Events stream. Connects to a remote SSE-exposed MCP server. POSTs requests to `{base}/message`; reads inline JSON OR `data: <json>` SSE events. Per-message reply path supported.
+  - **`HttpTransport`** — single-shot request/response. POSTs the JSON-RPC body and parses the JSON response inline. `receive()` raises `NotImplementedError` because HTTP has no unsolicited server-push.
+- **`validate_url(raw_url, *, allow_private=False)`** — SSRF guard shared across all HTTP-class transports. Rejects non-`http`/`https` schemes; rejects loopback, link-local, multicast, and RFC-1918 private hosts unless `allow_private=True` is passed (intended for trusted internal endpoints). Raises `TransportError`.
+- **Exception hierarchy:** `TransportError` (base) and `ProtocolError` (framing/format errors). All transport methods raise these — never bare `Exception`.
+
+**Tier 1 + Tier 2 coverage:**
+
+- 35 unit tests at `tests/unit/channels/test_mcp_transports.py` cover URL validation, exception hierarchy, transport construction guards, and per-transport contract.
+- 4 integration tests at `tests/integration/channels/test_mcp_transports_real.py` execute against real infrastructure (subprocess echo for stdio, `aiohttp` test server for sse + http) — NO mocking per `rules/testing.md` § 3-Tier Testing.
+
+**Cross-SDK parity:** mirrors `kailash-rs/crates/kailash-mcp/src/transport/{stdio,sse}.rs` semantic shape for parity (kailash-rs ISS-20 / EATP D6).
+
 ### kailash 2.9.2 — 2026-04-25 — 1.1.2 patch wave (docstring + cross-SDK)
 
 **Docstring + docstring-only changes** — no behavior change in `src/kailash/`. Ships alongside `kailash-dataflow 2.2.0` (public API expose, #601) + `kailash-kaizen 2.12.3` (security sweep, #614 + #617).
