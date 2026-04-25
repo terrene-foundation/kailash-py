@@ -1,6 +1,6 @@
 # Kailash Kaizen Agents Specification — Governance & Orchestration
 
-Version: 0.9.2
+Version: 0.9.3
 
 Parent domain: Kailash `kaizen-agents` package (Layer 2 — ENGINES). This file covers GovernedSupervisor, PACT governance subsystems, audit integration, event system, journey orchestration, agent lifecycle management, message transport, session management, runtime adapters, orchestration layer, and DataFlow integration. See also `kaizen-agents-core.md` and `kaizen-agents-patterns.md`.
 
@@ -453,6 +453,43 @@ Tool mapping submodules (`runtime_adapters/tool_mapping/`) handle provider-speci
 ### 19.5 Monitor
 
 `orchestration/monitor.py` — Monitors orchestration progress and health.
+
+### 19.6 Strategy-Driven Runtime — Cross-SDK Parity
+
+The `kaizen.orchestration.OrchestrationRuntime` class (added 2026-04-25, issue #602) ships the Python equivalent of the Rust `kaizen-agents::orchestration::runtime::OrchestrationRuntime` shape (kailash-rs ISS-27). This is the canonical strategy-driven multi-agent coordinator and is distinct from `kaizen_agents.patterns.OrchestrationRuntime` (registry/lifecycle/health-monitoring runtime for 10-100 agent fleets) and `kaizen.trust.orchestration.TrustAwareOrchestrationRuntime` (trust-policy enforcement).
+
+**Public surface (`kaizen.orchestration`):**
+
+- `OrchestrationRuntime(strategy, coordinator=None, config=None)` — strategy-driven runtime; builder-style `.add_agent(name, agent)`, `.strategy(s)`, `.coordinator(c)`, `.config(c)` setters all return `self`.
+- `OrchestrationStrategy` — frozen dataclass + classmethod factories: `sequential()`, `parallel()`, `hierarchical(coordinator_name)`, `pipeline(steps)`. Mirrors the Rust enum without exposing an opaque string surface.
+- `OrchestrationStrategyKind` — `StrEnum`; lowercase string values (`"sequential"`, `"parallel"`, `"hierarchical"`, `"pipeline"`) match the Rust serde discriminator.
+- `PipelineStep(agent_name, input_from)` + `PipelineInputSource` — pipeline strategy step descriptors; `PipelineInputSource.from_initial()`, `from_agent_output(name)`, `from_template(template)`.
+- `OrchestrationConfig(max_total_iterations=50, max_agent_calls=100, timeout_secs=None, fail_fast=True, share_conversation_history=False)` — field shape parity with Rust struct.
+- `OrchestrationResult(agent_results, final_output, total_iterations, total_tokens, duration_ms)` — field shape parity with Rust struct; `to_dict()` returns the cross-SDK-stable mapping.
+- `Coordinator` Protocol — `async store(key, value)` / `async retrieve(key) -> Optional`. Mirrors Rust's `Arc<dyn AgentMemory>`.
+- `AgentLike` Protocol — `name` property + `async run_async(**inputs) -> Mapping`. Real `kaizen.core.base_agent.BaseAgent` instances satisfy this Protocol; test/port shims may implement the minimum.
+- `SharedMemoryCoordinator` — default in-memory coordinator backed by `kaizen.memory.shared_memory.SharedMemoryPool`.
+- `OrchestrationError` — typed error subclassing `RuntimeError` for empty-runtime / unknown-coordinator / pipeline-step-references-unknown-agent / max-agent-calls.
+
+**Execution contract:**
+
+- `await runtime.run(input)` returns `OrchestrationResult`. Async-first to match the Rust `async fn run`.
+- `runtime.run_sync(input)` — synchronous convenience that calls `asyncio.run` internally. Per `rules/patterns.md` § "Paired Public Surface — Consistent Async-ness", this MUST NOT be called from inside an active event loop (raises `RuntimeError: This event loop is already running`); CLI/script use only.
+- `OrchestrationConfig.timeout_secs` enforced via `asyncio.wait_for`; on expiry `asyncio.TimeoutError` is raised (preserves the standard library type so existing `except asyncio.TimeoutError` handlers compose).
+- `fail_fast=True` (default) — Sequential / Hierarchical / Pipeline raise `OrchestrationError` on the first agent failure; Parallel cancels in-flight tasks and raises. `fail_fast=False` — Parallel collects all successes and surfaces the first error only when every agent failed.
+
+**Strategy semantics (mirrors Rust `_run_*` helpers):**
+
+| Strategy       | Input handling                                     | Final output                                                          |
+| -------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| Sequential     | Each agent receives prior agent's `response`.      | Last agent's response.                                                |
+| Parallel       | Every agent receives the same input.               | Single agent: lone response. Multi-agent: `--- name ---\n` headers.   |
+| Hierarchical   | Coordinator first; sub-agents receive its response | Coordinator's response (the synthesis).                               |
+| Pipeline       | Per-step input from `PipelineInputSource`          | Last step's response (preserves insertion order).                     |
+
+**Coordinator forwarding:** The default agent invoker forwards the registered `Coordinator` as a `coordinator=` kwarg ONLY when the target callable's signature accepts it (`inspect.signature` opt-in). This is structural plumbing (signature inspection), NOT runtime classification — agents that do not declare the kwarg run in isolation.
+
+**Cross-SDK parity tests:** `tests/integration/orchestration/test_runtime_e2e.py::TestCrossSdkShapeParity` locks the `OrchestrationResult` field set + `OrchestrationStrategyKind` lowercase values against the Rust struct shape. Field divergence between SDKs is caught at test-collection time, not at the wire.
 
 ---
 

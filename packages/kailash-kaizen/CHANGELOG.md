@@ -5,9 +5,9 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.13.0] — 2026-04-25 — PlanSuspension cross-SDK parity (#598)
+## [2.13.0] — 2026-04-25 — PlanSuspension parity (#598) + OrchestrationRuntime parity (#602)
 
-Minor bump — new public API surface for L3 plan suspension. PACT N3 mandates resumable plan suspension; the kailash-rs SDK has shipped `SuspensionReason` + `SuspensionRecord` since the L3 landing, but the Python SDK had no equivalent and any cross-SDK plan serialization round-trip lost the suspension cause and resume frontier. This release closes that gap.
+Minor bump — two cross-SDK parity surfaces land together: L3 plan suspension (PACT N3) and strategy-driven multi-agent orchestration runtime (kailash-rs ISS-27).
 
 ### Added
 
@@ -38,6 +38,14 @@ Wire-format `kind` tags (`human_approval_gate`, `circuit_breaker_tripped`, `budg
 
 - 30 Tier 1 unit tests at `tests/unit/l3/plan/test_suspension.py` — variant construction, frozen-dataclass invariant, label stability, wire-format round-trip, parametrized cross-SDK vector table.
 - 12 Tier 2 integration tests at `tests/integration/l3/test_suspension_emission.py` — drives each of the 5 trigger conditions end-to-end through `PlanExecutor` / `AsyncPlanExecutor`, asserts `plan.suspension.reason` is the right variant, asserts `Plan.to_dict` / `from_dict` round-trips the suspension field.
+
+### Added (#602 — OrchestrationRuntime parity)
+
+- **`kaizen.orchestration.OrchestrationRuntime`** — strategy-driven multi-agent coordinator mirroring the Rust `kaizen-agents::orchestration::runtime::OrchestrationRuntime` shape. Builder-style `add_agent` / `strategy` / `coordinator` / `config` setters; async `run(input)` returns `OrchestrationResult` with the same five-field shape as the Rust struct (`agent_results`, `final_output`, `total_iterations`, `total_tokens`, `duration_ms`). Sequential / Parallel / Hierarchical / Pipeline strategies dispatch through a single `agent_invoker` seam — Protocol-conforming agents need only implement `name` + `run_async` to participate.
+- New surface: `OrchestrationRuntime`, `OrchestrationStrategy` (frozen dataclass + `sequential() / parallel() / hierarchical(name) / pipeline(steps)` factories), `OrchestrationStrategyKind` StrEnum (lowercase values match Rust serde), `OrchestrationConfig`, `OrchestrationResult`, `OrchestrationError`, `Coordinator` Protocol, `AgentLike` Protocol, `SharedMemoryCoordinator` (default in-memory backed by `SharedMemoryPool`), `PipelineStep`, `PipelineInputSource`.
+- Coexists with — does NOT replace — `kaizen_agents.patterns.OrchestrationRuntime` (registry/lifecycle runtime for 10-100 agent fleets) and `kaizen.trust.orchestration.TrustAwareOrchestrationRuntime` (trust-policy enforcement).
+- Tier 1: 37 unit tests in `tests/unit/orchestration/test_runtime.py`. Tier 2: 9 integration tests in `tests/integration/orchestration/test_runtime_e2e.py` exercising the runtime end-to-end through the real `SharedMemoryPool` coordinator + `TestCrossSdkShapeParity` locking the result-field set against the Rust struct shape.
+- Spec: `specs/kaizen-agents-governance.md` § 19.6.
 
 ## [2.12.3] — 2026-04-25 — Security sweep (#614 + #617)
 
