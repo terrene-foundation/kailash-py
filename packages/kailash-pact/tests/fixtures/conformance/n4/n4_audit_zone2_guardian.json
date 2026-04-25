@@ -1,0 +1,25 @@
+{
+  "id": "n4_audit_zone2_guardian",
+  "contract": "N4",
+  "description": "Supervised posture maps to Zone 2 (Guardian) — durable local file audit.",
+  "input": {
+    "verdict": {
+      "zone": "AutoApproved",
+      "reason": "ok",
+      "action": "ping",
+      "role_address": "D1-R1",
+      "details": {}
+    },
+    "posture": "Supervised",
+    "fixed_event_id": "00000000-0000-4000-8000-000000000001",
+    "fixed_timestamp": "2026-01-01T00:00:00+00:00"
+  },
+  "expected": {
+    "tier": "zone2_guardian",
+    "durable": true,
+    "requires_signature": false,
+    "requires_replication": false,
+    "canonical_json": "{\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"timestamp\":\"2026-01-01T00:00:00+00:00\",\"role_address\":\"D1-R1\",\"posture\":\"supervised\",\"action\":\"ping\",\"zone\":\"AutoApproved\",\"reason\":\"ok\",\"tier\":\"zone2_guardian\",\"tenant_id\":null,\"signature\":null}"
+  },
+  "hash_algo": "sha256"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "n5_evidence_verdict_v1",
+  "contract": "N5",
+  "description": "Evidence produced from an AutoApproved verdict carries the canonical pact.governance.verdict.v1 schema.",
+  "input": {
+    "verdict": {
+      "zone": "AutoApproved",
+      "reason": "ok",
+      "action": "ping",
+      "role_address": "D1-R1",
+      "details": {}
+    },
+    "fixed_timestamp": "2026-01-01T00:00:00+00:00",
+    "evidence_source": "D1-R1"
+  },
+  "expected": {
+    "canonical_json": "{\"schema\":\"pact.governance.verdict.v1\",\"source\":\"D1-R1\",\"timestamp\":\"2026-01-01T00:00:00+00:00\",\"gradient\":\"AutoApproved\",\"action\":\"ping\",\"payload\":{\"details\":{},\"reason\":\"ok\",\"role_address\":\"D1-R1\"}}"
+  },
+  "hash_algo": "sha256"
+}

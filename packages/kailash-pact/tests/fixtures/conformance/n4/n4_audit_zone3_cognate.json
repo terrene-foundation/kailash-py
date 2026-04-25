@@ -1,0 +1,25 @@
+{
+  "id": "n4_audit_zone3_cognate",
+  "contract": "N4",
+  "description": "SharedPlanning posture maps to Zone 3 (Cognate) — durable SQLite with replication intent.",
+  "input": {
+    "verdict": {
+      "zone": "AutoApproved",
+      "reason": "ok",
+      "action": "ping",
+      "role_address": "D1-R1",
+      "details": {}
+    },
+    "posture": "SharedPlanning",
+    "fixed_event_id": "00000000-0000-4000-8000-000000000001",
+    "fixed_timestamp": "2026-01-01T00:00:00+00:00"
+  },
+  "expected": {
+    "tier": "zone3_cognate",
+    "durable": true,
+    "requires_signature": false,
+    "requires_replication": true,
+    "canonical_json": "{\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"timestamp\":\"2026-01-01T00:00:00+00:00\",\"role_address\":\"D1-R1\",\"posture\":\"shared_planning\",\"action\":\"ping\",\"zone\":\"AutoApproved\",\"reason\":\"ok\",\"tier\":\"zone3_cognate\",\"tenant_id\":null,\"signature\":null}"
+  },
+  "hash_algo": "sha256"
+}
