@@ -347,6 +347,16 @@ In-memory audit log with configurable capacity.
 
 **Filtering:** `get_recent_events()` supports filtering by event_type, authority_id, and severity.
 
+### 10.X Trust Vault Backup -- Shamir Secret-Sharing
+
+Trust Vault key material is backed up via SLIP-0039 Shamir secret-sharing per Envoy Phase 01. The default ritual is **3-of-5** -- any three of five holders MUST agree to reconstruct a backed-up vault key. Operational guidance:
+
+- The wrapper API lives in `kailash.trust.vault.shamir`; full surface and contracts in `specs/trust-crypto.md` § Shamir Secret-Sharing.
+- The Trust Vault binding (`kailash.trust.vault.backup.back_up_vault_key`) is a gate-documented stub awaiting **mint ISS-37** (Trust Vault key clearance and rotation envelope). Until ISS-37 stabilises, callers reach `back_up_vault_key` and receive `NotImplementedError` referencing issue #606 + ISS-37; direct callers can use `kailash.trust.vault.shamir.generate(...)` against pre-resolved key bytes.
+- The audited reference library (`shamir-mnemonic>=0.3`) is shipped as the optional `shamir` extra: `pip install kailash[shamir]`. Module import succeeds without the extra; first call site fails loudly with an actionable install hint per `rules/dependencies.md`.
+- Shard contents are NEVER logged at any severity (per `rules/observability.md` MUST Rule 4). When ISS-37 lands, the binding will write an audit anchor capturing ritual parameters, holder distribution policy, and shard count -- but not the shards themselves.
+- The reference implementation is **not constant-time**; production deployments needing side-channel resistance MUST evaluate hardened alternatives before relying on the reference path. See `specs/trust-crypto.md` § Shamir Secret-Sharing for the full security caveat.
+
 ---
 
 ## 11. DataFlow Access Controls
