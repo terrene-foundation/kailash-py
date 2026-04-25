@@ -1,0 +1,20 @@
+{
+  "id": "n5_evidence_blocked",
+  "contract": "N5",
+  "description": "A Blocked verdict still produces a canonical evidence record — blocked decisions are the most important evidence.",
+  "input": {
+    "verdict": {
+      "zone": "Blocked",
+      "reason": "exceeded financial limit",
+      "action": "wire_transfer",
+      "role_address": "D1-R1-T1-R1",
+      "details": {}
+    },
+    "fixed_timestamp": "2026-01-01T00:00:00+00:00",
+    "evidence_source": "D1-R1-T1-R1"
+  },
+  "expected": {
+    "canonical_json": "{\"schema\":\"pact.governance.verdict.v1\",\"source\":\"D1-R1-T1-R1\",\"timestamp\":\"2026-01-01T00:00:00+00:00\",\"gradient\":\"Blocked\",\"action\":\"wire_transfer\",\"payload\":{\"details\":{},\"reason\":\"exceeded financial limit\",\"role_address\":\"D1-R1-T1-R1\"}}"
+  },
+  "hash_algo": "sha256"
+}

@@ -57,7 +57,7 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [pact-addressing.md](pact-addressing.md)                   | D/T/R addressing grammar, organization compilation, GovernanceEngine                                                                                        |
 | [pact-envelopes.md](pact-envelopes.md)                     | Operating envelopes (5 dimensions), clearance, 5-step access enforcement                                                                                    |
-| [pact-enforcement.md](pact-enforcement.md)                 | Audit chain, budget, events, work tracking, MCP governance, stores                                                                                          |
+| [pact-enforcement.md](pact-enforcement.md)                 | Audit chain, budget, events, work tracking, MCP governance, stores, N4/N5 cross-SDK conformance runner                                                      |
 | [pact-absorb-capabilities.md](pact-absorb-capabilities.md) | Absorbed governance-diagnostic capabilities (#567 PR#7): verify_audit_chain, envelope_snapshot, iter_audit_anchors, consumption_report, run_negative_drills |
 
 ## Trust Plane (EATP)

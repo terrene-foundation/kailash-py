@@ -32,6 +32,7 @@ Cross-SDK contract reference:
 
 from __future__ import annotations
 
+from pact.conformance.cli import main
 from pact.conformance.runner import (
     ConformanceRunner,
     RunnerReport,
@@ -78,4 +79,6 @@ __all__ = [
     "VectorOutcome",
     "VectorStatus",
     "run_vectors",
+    # CLI entry point
+    "main",
 ]
