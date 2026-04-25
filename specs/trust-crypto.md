@@ -571,7 +571,94 @@ These invariants are enforced across the entire trust plane (per `rules/trust-pl
 
 ---
 
-## 30. Cross-SDK Alignment
+## 30. Shamir Secret-Sharing (SLIP-0039)
+
+Trust Vault key backup uses Shamir secret-sharing per SLIP-0039 (SatoshiLabs reference standard) via `kailash.trust.vault.shamir`. The wrapper composes the audited reference implementation `shamir-mnemonic` (PyPI) into an ergonomic ritual surface for splitting and reconstructing high-value Trust Vault key material.
+
+### Public Surface
+
+`kailash.trust.vault` re-exports the wrapper API:
+
+- **`ShamirRitual(threshold: int, total_shards: int)`** -- frozen dataclass capturing m-of-n parameters. Validation enforced in `__post_init__`:
+  - `1 <= threshold <= total_shards`
+  - `total_shards <= 16` (SLIP-0039 4-bit member-index field)
+  - `threshold >= 2` when `total_shards > 1` (trivial 1-of-n splits rejected pending mint ISS-37 governance review -- a 1-of-n ritual provides distribution but zero threshold protection, so the wrapper refuses by default)
+- **`generate(secret: bytes, ritual: ShamirRitual, *, passphrase: bytes = b"") -> List[List[str]]`** -- splits the secret into `ritual.total_shards` SLIP-0039 mnemonic shards. Single-group `m`-of-`n` configuration (`group_threshold=1`); multi-group rituals reserved for mint ISS-37.
+- **`reconstruct(shards: List[List[str]], *, passphrase: bytes = b"") -> bytes`** -- recombines threshold-many shards into the original secret.
+- **`serialize_shard(shard: List[str]) -> str`** -- canonical paper-print form (single space-joined dictionary words). Interop surface across SDKs and the form holders write to paper, engrave on metal, or print on cards.
+- **`deserialize_shard(shard: str) -> List[str]`** -- reverse operation, whitespace-tolerant for paper transcription.
+- **`rotate_holders(old_shards: List[List[str]], new_ritual: ShamirRitual, *, passphrase: bytes = b"") -> List[List[str]]`** -- recombine then re-shard. Used when the holder set changes (a holder leaves, a new holder joins, or the ritual is updated). The intermediate secret is `del`-eted before the function returns; rotation SHOULD run on an air-gapped host per Trust Vault operational guidance.
+- **`back_up_vault_key(vault_key: bytes, ritual: ShamirRitual) -> List[List[str]]`** -- Trust Vault binding stub. Awaits mint ISS-37 (Trust Vault key clearance and rotation envelope). The signature is published so callers can compile against it; the body raises `NotImplementedError` referencing issue #606 + ISS-37 until the binding spec lands.
+
+### Optional Extra
+
+Install via:
+
+```
+pip install kailash[shamir]
+```
+
+The audited reference library (`shamir-mnemonic>=0.3`) is shipped as an optional extra so the base `pip install kailash` does not pull in cryptographic mnemonic code most users do not need.
+
+### Lazy-Import Contract
+
+Module import of `kailash.trust.vault.shamir` MUST succeed even without the optional extra installed -- so `__all__` membership, `from kailash.trust.vault import *`, Sphinx autodoc, and static analysers all resolve. The audited library is imported lazily inside each public function via `_require_shamir_mnemonic()`. When the extra is absent, the FIRST call site raises:
+
+```
+RuntimeError: SLIP-0039 Shamir secret-sharing requires the 'shamir'
+optional extra. Install via: pip install kailash[shamir]
+```
+
+This is the "loud failure at call site" pattern from `rules/dependencies.md`. The silent `X = None` fallback anti-pattern is BLOCKED.
+
+### Threshold Convention
+
+The ritual is captured as `(threshold, total_shards)` -- m-of-n. Reconstruction requires AT LEAST `threshold` shards from the originally-generated set; fewer than `threshold` MUST refuse with the underlying SLIP-0039 library's typed exception (propagated unchanged through the wrapper).
+
+### Paper-Print Format
+
+`serialize_shard` produces a single-line whitespace-separated string of SLIP-0039 dictionary words. The format is the cross-SDK interop surface: a shard serialised by Python `kailash-py` round-trips through Rust `kailash-rs` (matching scaffold expected). `deserialize_shard` collapses any run of ASCII whitespace, so transcription artefacts (extra spaces, line breaks) survive the round-trip.
+
+### Rotation Protocol
+
+`rotate_holders(old_shards, new_ritual)`:
+
+1. Reconstruct the secret from `old_shards` via `reconstruct()`.
+2. Re-shard the secret via `generate(secret, new_ritual)`.
+3. `del` the intermediate secret reference before return.
+
+The intermediate secret is held in memory for the duration of the re-shard call. Hardened deployments SHOULD perform rotation in a process that exits immediately afterward to minimize the residence window. To rotate the passphrase as well as the holder set, call `reconstruct()` and `generate()` explicitly.
+
+### Trust Vault Binding (Awaiting Mint ISS-37)
+
+`back_up_vault_key` is published as a gate-documented stub -- the only permitted stub per `rules/zero-tolerance.md` Rule 2 (issue-linked, gate-documented). When mint ISS-37 stabilises:
+
+1. The body resolves the vault key by ID against the mint-issued clearance envelope, validating that the calling agent holds the required `backup` capability.
+2. The resolved key bytes are passed to `kailash.trust.vault.shamir.generate()` under the supplied ritual.
+3. An audit anchor is written to the canonical audit store (per `rules/eatp.md` audit-anchor contract) capturing ritual parameters, holder distribution policy, and shard count. Shard contents are NEVER logged (per `rules/observability.md` MUST Rule 4).
+
+The signature does NOT change when ISS-37 lands; only the body fills in. Callers can compile against `back_up_vault_key` today and observe `NotImplementedError` referencing issue #606 + mint ISS-37 until the binding spec lands.
+
+### Security Caveat
+
+The `shamir-mnemonic` reference implementation is **not constant-time** and is documented by its authors as suitable for correctness verification rather than handling of high-value secrets in adversarial settings. Trust Vault deployments that need side-channel resistance MUST evaluate hardened alternatives before production use. The wrapper exists today to (1) freeze the SLIP-0039 API surface so downstream callers can compile against it and (2) enable end-to-end ritual rehearsal.
+
+### Memory Hygiene
+
+Per `rules/trust-plane-security.md` MUST NOT Rule 3, callers MUST `del` returned secret bytes immediately after use. The wrapper itself does not log shard contents or passphrases at any level (`rules/observability.md` MUST Rule 4). The wrapper does not zeroize the bytes object (Python `bytes` is immutable; in-place clearing is not portable). Hardened deployments needing cryptographic zeroization MUST use a hardened secret-handling library above the wrapper.
+
+### Cross-SDK
+
+A matching scaffold is expected on the Rust SDK (`kailash-rs`) using a parallel audited Rust SLIP-0039 implementation. The serialised paper-print form is the cross-SDK interop surface. Per `rules/cross-sdk-inspection.md` a follow-up issue MUST be filed on `esperie/kailash-rs` if the matching scaffold is not yet present.
+
+### Tests
+
+- Tier 1 regression: `tests/regression/test_issue_606_shamir_wrapper.py` -- ritual validation, frozen invariant, lazy-import absence-path contract, stub error message.
+- Tier 2 integration: `tests/integration/trust/test_shamir_round_trip.py` -- real `shamir-mnemonic` round-trip across multiple shard subsets, threshold-minus-1 reconstruct refusal, paper-print round-trip, holder rotation 3-of-5 -> 2-of-3 + 3-of-5 -> 5-of-7 secret preservation. Per `rules/orphan-detection.md` Rule 2a (Crypto-Pair Round-Trip Through Facade), all crypto operations route through the public `kailash.trust.vault.shamir.<name>` surface, NOT the underlying library directly.
+
+---
+
+## 31. Cross-SDK Alignment
 
 Both Python (`kailash-py`) and Rust (`kailash-rs`) SDKs implement the EATP spec independently (D6). Convention names may differ (Python snake_case) but semantics MUST match. Key alignment points:
 
