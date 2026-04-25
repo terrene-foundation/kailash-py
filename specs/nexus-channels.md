@@ -154,6 +154,32 @@ Server push:
 
 **Resource cleanup:** `__del__` emits `ResourceWarning` if transport was not stopped.
 
+#### 4.4.1 Class-based MessageHandler API
+
+For per-connection state, subscription fanout, or any pattern that exceeds stateless request/response, register a `MessageHandler` subclass at a path via `Nexus.websocket(path)` decorator or `Nexus.register_websocket(path, handler_cls)`. The `MessageHandlerRegistry` (`app.websocket_handlers`) routes incoming frames to the handler's lifecycle hooks and tracks `Connection` objects with isolated `state: SimpleNamespace`.
+
+**Lifecycle hooks (override in subclass, all async):**
+
+- `async on_connect(self, conn)` — fired after handshake; initialize `conn.state.*`.
+- `async on_message(self, conn, msg) -> Any` — fired per JSON-decoded frame; **return value contract** (issue #618):
+  - `None` → no auto-reply (handler-owned `await conn.send_*`).
+  - `dict` / `list` → auto-sent as JSON text frame via `conn.send_json`.
+  - `str` → auto-sent as raw text frame via `conn.send_text`.
+  - `bytes` → UTF-8 decoded then `conn.send_text`; invalid UTF-8 logged at WARN and dropped.
+  - any other → best-effort `conn.send_json` with `default=str`; `TypeError`/`ValueError` logged at WARN.
+- `async on_text(self, conn, text) -> Any` — same return-value contract as `on_message`.
+- `async on_disconnect(self, conn)` — fired after socket close; `conn` already removed from `self.connections`.
+- `async on_event(self, event)` — fanout hook called by `broadcast_event` (NOT by the framework directly).
+
+**Tenant safety:** `on_message` auto-replies are scoped to the originating socket — no broadcast leakage. Per-connection unicast push from external publishers uses `Nexus.websocket_send_to(path, connection_id, payload)` (issue #618), which scopes dispatch to one tracked connection.
+
+**Server-originated dispatch entry points (on `Nexus`):**
+
+- `await app.websocket_broadcast(path, event)` — fires `on_event` on the handler at `path`; raises `KeyError` if no handler is registered. The handler decides which connections receive the event (typically by iterating `self.connections` and filtering by `conn.state`).
+- `await app.websocket_send_to(path, connection_id, payload) -> bool` (issue #618) — sends `payload` to a single tracked connection. Returns `True` on successful send; `False` if path has no handler, `connection_id` is unknown, or the socket is closed / send failed. Payload typing: `dict`/`list` → JSON, `str` → text frame, `bytes` → UTF-8 decoded text frame.
+
+**Cross-SDK parity (issue #618):** Both the `on_message` return-value contract and the `send_to(path, connection_id, payload)` primitive match the Rust kailash-rs#589 surface semantically per EATP D6.
+
 ### 4.5 WebhookTransport
 
 **Module:** `nexus.transports.webhook`
