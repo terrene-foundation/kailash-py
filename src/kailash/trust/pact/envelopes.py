@@ -17,6 +17,7 @@ import hashlib
 import logging
 import math
 import uuid
+import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -36,10 +37,24 @@ from kailash.trust.pact.config import (
 )
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pathutils import normalize_resource_path
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
 
 logger = logging.getLogger(__name__)
 
+# Module-level guard for once-per-process DeprecationWarning emission when a
+# legacy SignedEnvelope (no `algorithm` field — pre-#604 record) is verified.
+# Per zero-tolerance.md Rule 1 + the issue-#604 directive, the warning text MUST
+# contain the literal string "scaffold for #604; wire format pending mint
+# ISS-31" so future agents can grep-find it across log archives.
+_LEGACY_SIGNED_ENVELOPE_WARNED: bool = False
+
 __all__ = [
+    "ALGORITHM_DEFAULT",
+    "AlgorithmIdentifier",
     "EffectiveEnvelopeSnapshot",
     "MonotonicTighteningError",
     "RoleEnvelope",
@@ -48,6 +63,7 @@ __all__ = [
     "check_degenerate_envelope",
     "check_gradient_dereliction",
     "check_passthrough_envelope",
+    "coerce_algorithm_id",
     "compute_effective_envelope",
     "compute_effective_envelope_with_version",
     "default_envelope_for_posture",
@@ -1193,6 +1209,14 @@ class SignedEnvelope:
         expires_at: When this signed envelope expires (default: 90 days
             after signed_at). After expiry, the signature is considered
             invalid and the envelope must be re-signed.
+        algorithm: The algorithm identifier (issue #604 scaffold). Defaults
+            to :data:`kailash.trust.signing.algorithm_id.ALGORITHM_DEFAULT`
+            (``"ed25519+sha256"``). Threaded through every signed-record
+            producer/verifier so that when mint ISS-31 stabilises the
+            canonical wire format, only the validation + canonical
+            serialiser change. Legacy records (pre-#604, no ``algorithm``
+            field) are accepted by :meth:`verify` with a one-time
+            DeprecationWarning per process.
     """
 
     envelope: ConstraintEnvelopeConfig
@@ -1200,15 +1224,31 @@ class SignedEnvelope:
     signed_at: datetime
     signed_by: str
     expires_at: datetime
+    # Issue #604 scaffold: algorithm identifier. Default keeps backward-
+    # compatible construction (existing call sites do not need to pass it),
+    # while every NEW signed record carries the algorithm field so the
+    # round-trip via to_dict/from_dict surfaces it on the wire.
+    algorithm: str = ALGORITHM_DEFAULT
 
     def verify(self, public_key: str) -> bool:
-        """Validate the signature and check expiry.
+        """Validate the signature, algorithm, and expiry.
 
         Uses Ed25519 verification via kailash.trust.signing.crypto.
         Returns False (fail-closed) if:
         - The signature does not match the envelope content
         - The signed envelope has expired (past expires_at)
         - Any unexpected error occurs
+
+        Algorithm handling (issue #604 scaffold):
+        - ``algorithm == ALGORITHM_DEFAULT`` (``"ed25519+sha256"``) →
+          verify normally.
+        - ``algorithm`` is empty / missing equivalent (legacy record) →
+          accept BUT emit a one-time DeprecationWarning per process; the
+          warning text contains the literal "scaffold for #604; wire format
+          pending mint ISS-31" so future agents can grep-find it.
+        - ``algorithm`` is set to any other non-default value → raise
+          NotImplementedError. Mint ISS-31 will lift this restriction; the
+          single permitted scaffold-era stub per zero-tolerance.md Rule 2.
 
         Args:
             public_key: Base64-encoded Ed25519 public key.
@@ -1219,8 +1259,37 @@ class SignedEnvelope:
 
         Raises:
             ImportError: If PyNaCl is not installed.
+            NotImplementedError: If algorithm is non-default and non-empty
+                (pending mint ISS-31). Raised BEFORE any crypto work — the
+                verifier must not give the appearance of approval for an
+                unsupported algorithm even by accident.
         """
-        # Check expiry first (cheap check before crypto)
+        # Algorithm-agility guard (issue #604) — runs BEFORE expiry / crypto
+        # so a non-default algorithm fails loudly, never silently accepted.
+        global _LEGACY_SIGNED_ENVELOPE_WARNED
+        algo = self.algorithm or ""
+        if algo == "":
+            # Legacy record: pre-#604, no algorithm field on disk. Accept
+            # AND warn once per process. The "scaffold for #604; wire format
+            # pending mint ISS-31" text is required per the issue brief.
+            if not _LEGACY_SIGNED_ENVELOPE_WARNED:
+                _LEGACY_SIGNED_ENVELOPE_WARNED = True
+                _warnings.warn(
+                    "SignedEnvelope verified with empty algorithm (legacy "
+                    "record); defaulting to "
+                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
+                    "format pending mint ISS-31.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        elif algo != ALGORITHM_DEFAULT:
+            raise NotImplementedError(
+                f"SignedEnvelope.algorithm={algo!r} awaits mint ISS-31 spec. "
+                f"Only {ALGORITHM_DEFAULT!r} is supported in this scaffold "
+                f"(issue #604, cross-SDK kailash-rs#33)."
+            )
+
+        # Check expiry (cheap check before crypto).
         if datetime.now(UTC) > self.expires_at:
             logger.warning(
                 "SignedEnvelope for '%s' has expired (expires_at=%s)",
@@ -1238,6 +1307,10 @@ class SignedEnvelope:
             payload = serialize_for_signing(self.envelope.model_dump(mode="json"))
             return verify_signature(payload, self.signature, public_key)
         except ImportError:
+            raise
+        except NotImplementedError:
+            # Re-raise the algorithm-agility guard above; do not mask as
+            # fail-closed-False — the caller MUST see the spec gate.
             raise
         except Exception:
             logger.exception(
