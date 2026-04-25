@@ -5,6 +5,16 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.1] — 2026-04-25 — Fix clean-venv ImportError (post-2.13.0 hotfix)
+
+Patch — guards a pre-existing unconditional `import kaizen_agents.patterns.patterns` in `kaizen/orchestration/__init__.py` behind a `try/except ImportError`. The `kaizen-agents` package is NOT a declared dependency of `kailash-kaizen`; the proxies that consumed it were defensive `mock.patch` aliases for legacy test code. Without the guard, `from kaizen.orchestration import OrchestrationRuntime` (the new #602 surface in 2.13.0) raised `ModuleNotFoundError` for any clean-venv install of `kailash-kaizen` without `kaizen-agents` present. The proxy aliases are now installed only when `kaizen-agents` is co-installed.
+
+### Fixed
+
+- **`kaizen.orchestration` clean-venv import**: `import kaizen_agents.patterns.patterns` (and 3 sibling proxy imports) now wrapped in `try/except ImportError`. Surface unaffected when both packages co-installed; clean-venv `kailash-kaizen` install no longer breaks at module load.
+
+This is the structural defense for `rules/dependencies.md` § "Declared = Imported — No Silent Missing Dependencies" — a verification gap caught by the post-release clean-venv install check (per `rules/build-repo-release-discipline.md` Rule 2).
+
 ## [2.13.0] — 2026-04-25 — PlanSuspension parity (#598) + OrchestrationRuntime parity (#602)
 
 Minor bump — two cross-SDK parity surfaces land together: L3 plan suspension (PACT N3) and strategy-driven multi-agent orchestration runtime (kailash-rs ISS-27).
