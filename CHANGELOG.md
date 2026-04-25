@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased — issue-603]
+## [2.10.0] — 2026-04-25 — MCP transports (#600) + BudgetTracker threshold callback (#603)
+
+Minor bump — two new public API surfaces in kailash core. Ships with `kailash-nexus 2.3.0` (#618 per-connection unicast) and `kailash-kaizen 2.13.0` (#598 PlanSuspension + #602 OrchestrationRuntime parity).
 
 ### Added
 
@@ -28,7 +30,7 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### kailash [Unreleased — issue-600] — MCP transport primitives (stdio / SSE / HTTP)
+### kailash 2.10.0 — 2026-04-25 — MCP transport primitives (stdio / SSE / HTTP) (#600)
 
 **Added** — closes #600
 
