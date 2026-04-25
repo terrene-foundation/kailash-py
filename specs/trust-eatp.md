@@ -533,3 +533,20 @@ Project Owner (Genesis Record)
 **Valid dimensions**: `{"operational", "data_access", "financial", "temporal", "communication"}`.
 
 ---
+
+## 12. Algorithm Agility Threading (Scaffold #604)
+
+Signed-record dataclasses now thread an `algorithm: str` field defaulting
+to `"ed25519+sha256"` (the constant `ALGORITHM_DEFAULT`). The full
+contract — including the legacy-record `DeprecationWarning` shape, the
+once-per-process emission guard, and the per-site inventory of remaining
+threading targets — lives in `specs/trust-crypto.md` § 21.
+
+This shard threads `SignedEnvelope` only. Other Layer-1 producer/verifier
+pairs (audit anchors, timestamp tokens, CRL metadata, message envelopes)
+follow in subsequent shards per the inventory at
+`workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`.
+
+Cross-SDK: `esperie/kailash-rs#33`. Wire format: pending mint **ISS-31**.
+
+Origin: terrene-foundation/kailash-py#604.
