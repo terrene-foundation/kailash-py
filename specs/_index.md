@@ -166,3 +166,9 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | File                               | Description                                                         |
 | ---------------------------------- | ------------------------------------------------------------------- |
 | [node-catalog.md](node-catalog.md) | All 138 nodes by category with parameters, outputs, and constraints |
+
+## Tooling & Quality
+
+| File                                     | Description                                                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [spec-drift-gate.md](spec-drift-gate.md) | Mechanical pre-commit + CI check that verifies spec assertions against code; section-context inference, override directives, baseline grace |
