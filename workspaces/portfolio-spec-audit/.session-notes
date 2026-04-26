@@ -1,0 +1,27 @@
+# Session Notes — 2026-04-26
+
+## Where we are
+
+Wave 5 portfolio spec audit complete (71 of 72 specs across 7 shards). kailash 2.11.2 hotfix shipped to PyPI closing 2 security findings (CRIT #636 + HIGH #635). Next move: Wave 6 remediation of remaining 36 HIGHs from the audit, OR launch into a different workstream.
+
+## Read first
+
+1. `workspaces/portfolio-spec-audit/04-validate/00-portfolio-summary.md` — full Wave 5 verdict + Wave 6 remediation plan ranked by blast radius. Single most useful entry point.
+2. `workspaces/portfolio-spec-audit/04-validate/W5-{A,B,C,D,E1,E2,F}-findings.md` — per-shard detail; read only the shard whose finding you're acting on.
+3. `deploy/deployment-config.md` — sibling-package PyPI versions table (synced this session) + tag conventions.
+4. `.claude/rules/build-repo-release-discipline.md` — "done means released, not merged"; PyPI installability is the done gate.
+
+## In-flight state
+
+- 7 audit branches `audit/w5-{a,b,c,d,e1,e2,f}-*-spec-audit` still on origin — content is bundled in main via PR #638; safe to delete.
+- Pre-existing uncommitted changes in main checkout: `.claude/.proposals/latest.yaml`, `.claude/rules/agents.md`, `.claude/rules/build-repo-release-discipline.md`, untracked `.claude/.proposals/archive/2026-04-25-kailash-py.yaml`. From the prior `/codify` cycle awaiting loom/ Gate 1 — not this session's scope.
+- Issue #599 disposition stale: `McpGovernanceEnforcer` IS shipped in kailash-pact (W5-F finding F-F-16) — issue body still says "blocked on mint ISS-17". Re-triage candidate.
+- Wave 6.5 candidate: AutoML 1.0 + FeatureStore specs are overstated vs implementation (13 of 36 HIGHs combined). Recommend `analyst`-led re-spec rather than implementing-to-stale-spec.
+
+## Traps
+
+- `git`, `gh`, `rm`, `uv` are NOT in default PATH for Bash sessions. Use absolute paths: `/usr/bin/git`, `/opt/homebrew/bin/gh`, `/bin/rm`, `/Users/esperie/.local/bin/uv`.
+- Pre-commit hook auto-stash conflicts with end-of-file-fixer modifications — re-`git add` after the hook fixes a file, then re-commit (per `rules/git.md` § Pre-Commit Hook Workarounds).
+- Branch protection on main rejects direct push for everyone EXCEPT the owner (admin bypass). The "Changes must be made through a pull request" remote message can appear even when push succeeded — check the actual `To .../kailash-py.git` confirmation line.
+- PyPI cache lag is real (~60s after workflow success). Use until-loop polling on `pypi.org/pypi/<pkg>/<version>/json`, not chained `sleep` (Bash blocks chained sleeps; use Monitor or `run_in_background: true`).
+- 5 of the 38 HIGHs are kaizen `tests/unit/judges/` test directory absence (F-D-25) and AutoML token-level backpressure (F-E2-09) — both look like quick wins but bear hidden surface area. Read the finding body first.
