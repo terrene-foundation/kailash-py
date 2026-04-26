@@ -538,3 +538,61 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** All 3 nodes exist at `src/kailash/workflow/nodes/ml/__init__.py`. Per spec § 1.1 + spec § 3 they should `raise MLError`-family exceptions on failure paths. Implementation needs verification of error-class usage.
 **Remediation hint:** Grep node bodies for `MLError`-subclass `raise` statements.
 
+
+---
+
+## Spec 11 — `diagnostics-catalog.md` (82 lines)
+
+§ subsections enumerated: 6 (Diagnostic-Protocol Adapters, Cross-SDK TraceEvent Producers, Protocol Contracts, Wiring-Test Naming, Medical-Metaphor Gate, Extension Flow)
+
+### F-E2-66 — `diagnostics-catalog.md` § Diagnostic-Protocol Adapters — All 6 cataloged adapters exist (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Catalog enumerates 6 Diagnostic adapters: `DLDiagnostics`, `RAGDiagnostics`, `AlignmentDiagnostics`, `InterpretabilityDiagnostics`, `LLMJudge`/`LLMDiagnostics`, `AgentDiagnostics`. Plus `GovernanceEngine` extensions (PR#7).
+**Actual state:** All 6 adapter classes verified to exist:
+- `DLDiagnostics` → `packages/kailash-ml/src/kailash_ml/diagnostics/dl.py`
+- `RAGDiagnostics` → `packages/kailash-ml/src/kailash_ml/diagnostics/rag.py`
+- `AlignmentDiagnostics` → `packages/kailash-align/src/kailash_align/diagnostics/alignment.py`
+- `InterpretabilityDiagnostics` → `packages/kailash-kaizen/src/kaizen/interpretability/core.py`
+- `LLMJudge` → `packages/kailash-kaizen/src/kaizen/judges/_judge.py`
+- `AgentDiagnostics` → `packages/kailash-kaizen/src/kaizen/observability/agent_diagnostics.py`
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-67 — `diagnostics-catalog.md` § Cross-SDK TraceEvent Producers — All 3 producers exist (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** 3 producers: `TraceExporter` (kaizen.observability), `AuditAnchor` (kailash.trust.pact.audit), `AuditChain` (kailash.trust.pact.audit).
+**Actual state:**
+- `TraceExporter` → `packages/kailash-kaizen/src/kaizen/observability/trace_exporter.py` ✓
+- `AuditAnchor` → `src/kailash/trust/chain.py` (NOT `kailash.trust.pact.audit` per spec)
+- `AuditChain` → `src/kailash/trust/pact/audit.py` ✓
+**Remediation hint:** Update spec § Cross-SDK TraceEvent Producers to reflect `AuditAnchor` actual location at `kailash.trust.chain`, OR move `AuditAnchor` to `kailash.trust.pact.audit` per spec.
+
+### F-E2-68 — `diagnostics-catalog.md` § Wiring-Test Naming Contract — All 7 wiring tests exist (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Each adapter has Tier 2 wiring test named `test_<lowercase_adapter_name>_wiring.py`. Catalog grep block enumerates 7 expected files.
+**Actual state:** All 7 wiring tests verified to exist via mechanical sweep:
+- `test_agent_diagnostics_wiring.py` → `packages/kailash-kaizen/tests/integration/observability/`
+- `test_dl_diagnostics_wiring.py` → `packages/kailash-ml/tests/integration/`
+- `test_rag_diagnostics_wiring.py` → `packages/kailash-ml/tests/integration/`
+- `test_alignment_diagnostics_wiring.py` → `packages/kailash-align/tests/integration/`
+- `test_interpretability_wiring.py` → `packages/kailash-kaizen/tests/integration/interpretability/`
+- `test_judges_wiring.py` → `packages/kailash-kaizen/tests/integration/judges/`
+- `test_absorb_capabilities_wiring.py` → `packages/kailash-pact/tests/integration/governance/`
+**Remediation hint:** None — confirms compliance. NOTE: spec entries claim `tests/integration/diagnostics/` for kailash-ml/kailash-align tests; actual location is `tests/integration/` (no `diagnostics/` subfolder). Spec should be updated to match actual paths.
+
+### F-E2-69 — `diagnostics-catalog.md` § Medical-Metaphor Gate — Mechanical grep returns empty (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Mechanical grep `rg -i 'stethoscope|x-ray|ecg|flight recorder|langfuse' packages/kailash-ml/src/ packages/kailash-kaizen/src/ packages/kailash-align/src/` MUST return empty per `rules/terrene-naming.md` + SYNTHESIS-proposal PR#6 gate exit criterion (d).
+**Actual state:** Grep returns zero matches across all three packages. Medical-metaphor scrub confirmed.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-70 — `diagnostics-catalog.md` § Wiring-Test Path Drift — Catalog paths inconsistent with actual locations
+
+**Severity:** LOW
+**Spec claim:** Catalog table cells claim `packages/kailash-ml/tests/integration/diagnostics/test_dl_diagnostics_wiring.py` and similar paths under `diagnostics/` / `interpretability/` / `judges/` / `observability/` subfolders.
+**Actual state:** kailash-ml test files (`test_dl_diagnostics_wiring.py`, `test_rag_diagnostics_wiring.py`, `test_alignment_diagnostics_wiring.py`) live at `tests/integration/` (no subfolder), NOT `tests/integration/diagnostics/`. The kaizen tests DO use sub-folders correctly (`observability/`, `interpretability/`, `judges/`).
+**Remediation hint:** Either move kailash-ml + kailash-align integration tests under a `diagnostics/` subfolder, OR update catalog § paths to the flat layout. Path drift here makes the grep pattern in the catalog return false-MISSING.
+
