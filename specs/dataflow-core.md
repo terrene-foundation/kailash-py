@@ -370,7 +370,7 @@ db = DataFlow(
 
 - `TrustAwareQueryExecutor` (`db._trust_executor`): Checks read/write access, records audit events
 - `DataFlowAuditStore` (`db._audit_store`): Persists audit entries with optional Ed25519 signing
-- `TenantTrustManager` (`dataflow.trust.multi_tenant.TenantTrustManager`): Available as a standalone class for cross-tenant delegation verification. NOT attached as a `db.*` facade — no framework hot-path invokes it today (orphan-detection MUST 3). Consumers who need cross-tenant verification instantiate it directly; when a production call site lands in express.py, the facade will be wired in the same PR.
+- ~~`TenantTrustManager`~~: REMOVED on 2026-04-27 (W6-006, finding F-B-05 in Wave 5 audit). The class and its `CrossTenantDelegation` companion were preserved as a standalone import after the `db._tenant_trust_manager` facade was withdrawn on 2026-04-18, but no framework hot-path ever materialised. Per `rules/orphan-detection.md` § 3 ("Removed = Deleted, Not Deprecated"), the source + tests were deleted entirely. **Reason:** 1,599 LOC of class + 1,741 LOC of unit tests verified behaviour the framework never invoked once. **User impact:** consumers using `from dataflow.trust import TenantTrustManager` get `ImportError` after upgrade. **When a production cross-tenant delegation requirement lands**, design the new surface against the framework's hot path (express, query engine) in the SAME PR — do NOT resurrect the orphan from git history without a real call site. Regression test at `tests/regression/test_trust_manager_wiring.py` enforces both the absent-facade AND deleted-class invariants.
 
 ### 21.3 Agent Context
 

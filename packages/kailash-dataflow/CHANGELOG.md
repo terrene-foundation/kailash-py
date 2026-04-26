@@ -1,6 +1,6 @@
 # DataFlow Changelog
 
-## [Unreleased] — DataFlow × ML error-name spec compliance (W6-003 / F-B-23)
+## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006)
 
 ### Changed
 
@@ -9,6 +9,10 @@
 ### Deprecated
 
 - **`MLTenantRequiredError`** — deprecated alias resolves to `TenantRequiredError` via module-level `__getattr__` on both `dataflow.ml` and `dataflow.ml._errors`; access emits a `DeprecationWarning`. The alias is intentionally absent from `__all__` so star-imports pick up only the canonical name. Slated for removal in **kailash-dataflow v3.0** — callers MUST migrate within the v2.x window. Per user `feedback_no_shims`, this is a 1-release back-compat bridge with an explicit removal milestone, NOT a permanent shim.
+
+### Removed
+
+- **Removed unused `TenantTrustManager` per orphan-detection §3 — no production call site existed (closes F-B-05).** The `dataflow.trust.multi_tenant.TenantTrustManager` class and its `CrossTenantDelegation` companion were exposed publicly but no framework hot-path (express read/list, query engine, cache adapter) ever invoked them. The `db._tenant_trust_manager` facade was already withdrawn on 2026-04-18 (Phase-5.11-shaped orphan); the class itself was retained as a standalone import "for when a production call site lands" — that call site never materialised in 9+ days. Per `rules/orphan-detection.md` § 3 ("Removed = Deleted, Not Deprecated"), the source (`packages/kailash-dataflow/src/dataflow/trust/multi_tenant.py`, 585 LOC) and tests (`tests/unit/trust/test_multi_tenant.py` + `test_multi_tenant_thread_safety.py`, 1,741 LOC) were deleted. `dataflow.trust.__init__::__all__` no longer exports `TenantTrustManager` or `CrossTenantDelegation`. Existing regression test `tests/regression/test_trust_manager_wiring.py` was inverted — now asserts BOTH the absent-facade AND the deleted-class invariants (2 tests, both passing). When a production cross-tenant delegation requirement lands, design the new surface against the framework's hot path in the SAME PR — do NOT resurrect the orphan from git history without a real call site. **User impact:** `from dataflow.trust import TenantTrustManager` now raises `ImportError` (acceptable per orphan-detection §3 — silent deprecation banners are the failure mode this rule prevents).
 
 ## [2.3.1] — 2026-04-26 — SecurityDefinerBuilder owner-pinning + COMMENT defense-in-depth (#607 follow-up)
 
