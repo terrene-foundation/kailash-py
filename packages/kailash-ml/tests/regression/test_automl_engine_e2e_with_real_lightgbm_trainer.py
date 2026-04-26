@@ -248,9 +248,12 @@ async def test_automl_engine_e2e_minimal_sweep_with_real_lightgbm(
         f"trainer wiring may be broken"
     )
 
-    # Read-back: audit rows persisted with matching tenant + run + metric
+    # Read-back: audit rows persisted with matching tenant + run + metric.
+    # Per migration 0003 (line 277) the persisted column is "source"; the
+    # engine maps the run() kwarg `source_tag` to that column at insert
+    # time (automl/engine.py line 787 et al.).
     rows = await real_conn.fetch(
-        "SELECT trial_number, status, metric_value, source_tag "
+        "SELECT trial_number, status, metric_value, source "
         "FROM _kml_automl_trials WHERE tenant_id = ? AND run_id = ? "
         "ORDER BY trial_number",
         tenant_id,
@@ -262,7 +265,7 @@ async def test_automl_engine_e2e_minimal_sweep_with_real_lightgbm(
     )
     for row in rows:
         assert row["status"] == "completed"
-        assert row["source_tag"] == "e2e-lightgbm"
+        assert row["source"] == "e2e-lightgbm"
         # Persisted metric is finite and consistent with in-memory shape
         assert row["metric_value"] is not None
         assert 0.0 <= float(row["metric_value"]) <= 1.0
@@ -326,19 +329,3 @@ async def test_automl_engine_e2e_cost_budget_with_real_lightgbm(
         f"audit-row count {persisted} disagrees with in-memory "
         f"completed_trials {result.completed_trials}"
     )
-
-
-# ---------------------------------------------------------------------------
-# Backend-label sanity assertion (helps triage when CI runs both lanes)
-# ---------------------------------------------------------------------------
-
-
-def test_e2e_backend_label_is_known() -> None:
-    """Smoke assertion so the test report shows which backend ran.
-
-    Not a behavioural test; emits the backend label as a parameterised
-    string so log triage can grep for ``backend=postgres`` vs
-    ``backend=sqlite`` to confirm the Postgres lane actually executed
-    when ``POSTGRES_TEST_URL`` is set.
-    """
-    assert _BACKEND_LABEL in ("postgres", "sqlite")

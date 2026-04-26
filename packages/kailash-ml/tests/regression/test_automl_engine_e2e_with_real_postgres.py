@@ -127,7 +127,8 @@ async def test_automl_engine_run_persists_full_audit_row(
 
     Read-back asserts: ``tenant_id``, ``run_id``, ``trial_number``,
     ``status``, ``metric_value``, ``metric_name``, ``direction``,
-    ``source_tag``, ``admission_decision``, ``admission_decision_id``.
+    ``source`` (mapped from the ``source_tag`` kwarg), ``admission_decision``,
+    ``admission_decision_id``.
     Every column the spec requires the engine to persist is verified by
     SELECT — the engine cannot pass this test by setting them
     in-memory only.
@@ -159,9 +160,11 @@ async def test_automl_engine_run_persists_full_audit_row(
     assert result.completed_trials == 3
     assert result.run_id == run_id
 
+    # Per migration 0003 the persisted column is "source"; the engine
+    # maps the run() kwarg `source_tag` to that column at insert time.
     rows = await pg_conn.fetch(
         "SELECT tenant_id, run_id, trial_number, status, metric_value, "
-        "metric_name, direction, source_tag, admission_decision, "
+        "metric_name, direction, source, admission_decision, "
         "admission_decision_id "
         "FROM _kml_automl_trials WHERE tenant_id = ? AND run_id = ? "
         "ORDER BY trial_number",
@@ -179,7 +182,7 @@ async def test_automl_engine_run_persists_full_audit_row(
         assert row["status"] == "completed"
         assert row["metric_name"] == "accuracy"
         assert row["direction"] == "maximize"
-        assert row["source_tag"] == "e2e-postgres-roundtrip"
+        assert row["source"] == "e2e-postgres-roundtrip"
         # admission_decision is one of the four spec-enumerated values
         assert row["admission_decision"] in {
             "admitted",
