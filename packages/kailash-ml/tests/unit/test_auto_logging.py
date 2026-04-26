@@ -374,94 +374,11 @@ class TestHyperparameterSearchAutoLogging:
         assert result.best_metrics.get("accuracy", 0) > 0
 
 
-# ---------------------------------------------------------------------------
-# AutoMLEngine auto-logging
-# ---------------------------------------------------------------------------
-
-
-class TestAutoMLEngineAutoLogging:
-    """Tests for AutoMLEngine.run() with tracker parameter."""
-
-    @pytest.mark.asyncio
-    async def test_automl_with_tracker_creates_parent_run(
-        self,
-        pipeline: TrainingPipeline,
-        tracker: ExperimentTracker,
-        sample_df: pl.DataFrame,
-        sample_schema: FeatureSchema,
-    ) -> None:
-        """AutoML creates a parent run and passes tracker to sub-calls."""
-        from kailash_ml.engines.automl_engine import AutoMLConfig, AutoMLEngine
-        from kailash_ml.engines.hyperparameter_search import HyperparameterSearch
-
-        search = HyperparameterSearch(pipeline)
-        engine = AutoMLEngine(pipeline, search)
-
-        config = AutoMLConfig(
-            task_type="classification",
-            search_strategy="random",
-            search_n_trials=2,
-        )
-
-        result = await engine.run(
-            sample_df,
-            sample_schema,
-            config,
-            EvalSpec(metrics=["accuracy"]),
-            "automl_tracked",
-            tracker=tracker,
-        )
-
-        assert result.best_metrics.get("accuracy", 0) > 0
-
-        # Find the automl parent run
-        runs = await tracker.list_runs("automl_tracked")
-        # There should be an automl parent run with no parent
-        automl_runs = [
-            r for r in runs if r.name == "automl" and r.parent_run_id is None
-        ]
-        assert len(automl_runs) == 1
-        automl_run = automl_runs[0]
-        assert automl_run.status == "COMPLETED"
-
-        # Verify AutoML config params
-        assert automl_run.params["task_type"] == "classification"
-        assert automl_run.params["search_strategy"] == "random"
-
-        # Verify best metrics logged on parent
-        assert "accuracy" in automl_run.metrics
-
-        # Verify child runs were created (candidates + search trials)
-        all_child_runs = await tracker.list_child_runs(automl_run.id)
-        assert len(all_child_runs) > 0
-
-    @pytest.mark.asyncio
-    async def test_automl_without_tracker_backward_compat(
-        self,
-        pipeline: TrainingPipeline,
-        sample_df: pl.DataFrame,
-        sample_schema: FeatureSchema,
-    ) -> None:
-        """AutoML without tracker works exactly as before."""
-        from kailash_ml.engines.automl_engine import AutoMLConfig, AutoMLEngine
-        from kailash_ml.engines.hyperparameter_search import HyperparameterSearch
-
-        search = HyperparameterSearch(pipeline)
-        engine = AutoMLEngine(pipeline, search)
-
-        config = AutoMLConfig(
-            task_type="classification",
-            search_strategy="random",
-            search_n_trials=2,
-        )
-
-        result = await engine.run(
-            sample_df,
-            sample_schema,
-            config,
-            EvalSpec(metrics=["accuracy"]),
-            "automl_no_tracker",
-        )
-
-        assert result.best_metrics.get("accuracy", 0) > 0
-        assert len(result.all_candidates) > 0
+# NOTE: The legacy ``kailash_ml.engines.automl_engine`` module was deleted
+# in W6-018 (todo W6-018-flip-getattr-canonical-automl). Two test methods
+# previously lived here that exercised ``AutoMLEngine(pipeline, search)``
+# (legacy positional API). The canonical surface at
+# ``kailash_ml.automl.AutoMLEngine`` has a structurally different
+# constructor (keyword-only ``config``/``tenant_id``/``actor_id``); auto-
+# logging coverage for the canonical engine lives at
+# ``packages/kailash-ml/tests/integration/test_automl_engine_wiring.py``.
