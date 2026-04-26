@@ -254,3 +254,40 @@ Note: All three server classes present with correct inheritance. All four gatewa
 Note: All dialect, connection management, credential handling, schema migration, execution pipeline, and migration tooling primitives present at spec-named module paths. Two LOW findings: `async` qualifier missing from spec for `check/stamp_schema_version`, and `SCHEMA_VERSION` constant duplication.
 
 ---
+
+# Spec 6: `specs/infra-stores.md`
+
+**Subsections audited:** Store Abstractions (CheckpointStore, EventStore, ExecutionStore + InMemory variant, IdempotencyStore, IdempotentExecutor, DLQ), Task Queue System (SQLTaskMessage, SQLTaskQueue), Worker Registry (SQLWorkerRegistry), Queue Factory (create_task_queue), Store Factory (StoreFactory + Level 0 backends).
+**Verification source:** `src/kailash/infrastructure/`, `src/kailash/middleware/gateway/`.
+
+| Assertion | Method | Expected | Actual | Status |
+|-----------|--------|----------|--------|--------|
+| `class DBCheckpointStore` at `kailash.infrastructure.checkpoint_store` | grep | match | checkpoint_store.py:37 | OK |
+| `class DBEventStoreBackend` at `kailash.infrastructure.event_store` | grep | match | event_store.py:40 | OK |
+| `EventStoreBackend = DBEventStoreBackend` alias | grep | match | event_store.py:263 | OK (see F-A-05) |
+| `class DBExecutionStore` at `kailash.infrastructure.execution_store` | grep | match | execution_store.py:50 | OK |
+| `class InMemoryExecutionStore` | grep | match | execution_store.py:280 | OK |
+| `class DBIdempotencyStore` at `kailash.infrastructure.idempotency_store` | grep | match | idempotency_store.py:46 | OK |
+| `class IdempotentExecutor` at `kailash.infrastructure.idempotency` | grep | match | idempotency.py:20 | OK |
+| `class DBDeadLetterQueue` at `kailash.infrastructure.dlq` | grep | match | dlq.py:49 | OK |
+| `class SQLTaskMessage` at `kailash.infrastructure.task_queue` | grep | match | task_queue.py:36 | OK |
+| `class SQLTaskQueue` | grep | match | task_queue.py:92 | OK |
+| `class SQLWorkerRegistry` at `kailash.infrastructure.worker_registry` | grep | match | worker_registry.py:33 | OK |
+| `def create_task_queue(queue_url=None)` at `kailash.infrastructure.queue_factory` | grep | match | queue_factory.py | OK |
+| `class StoreFactory` at `kailash.infrastructure.factory` | grep | match | factory.py:42 | OK |
+| `class SqliteEventStoreBackend` (Level 0 backend, lazy import) | grep | match | middleware/gateway/event_store_sqlite.py:33 | OK |
+| `class DiskStorage` (Level 0 checkpoint) | grep | match | middleware/gateway/checkpoint_manager.py:96 | OK |
+| `SCHEMA_VERSION = 1` at `kailash.infrastructure.factory` | grep | int 1 | factory.py:39 | OK |
+
+## F-A-05 — `infra-stores.md` § EventStore — `EventStoreBackend` name shadows a Protocol class
+
+**Severity:** LOW
+**Spec claim:** §EventStore declares `class DBEventStoreBackend (aliased as EventStoreBackend)` at `kailash.infrastructure.event_store`.
+**Actual state:** `infrastructure/event_store.py:263` defines `EventStoreBackend = DBEventStoreBackend`. HOWEVER, `middleware/gateway/event_store_backend.py:20` also defines `class EventStoreBackend(Protocol)` — a typing protocol. The two co-exist with the same name, different semantics: one is the implementation alias, one is the structural-typing contract that `DBEventStoreBackend` satisfies. A reader importing `EventStoreBackend` may resolve either path depending on import order.
+**Remediation hint:** Either (a) rename the Protocol to `EventStoreBackendProtocol` (PEP 544 convention), or (b) document the dual-symbol relationship in spec text and `event_store.py`'s module docstring so the relationship is explicit.
+
+**Spec 6 findings:** 0 CRIT / 0 HIGH / 0 MED / 1 LOW.
+
+Note: All store classes, task queue, worker registry, and factory primitives present at spec-named module paths. Single LOW finding: `EventStoreBackend` symbol-name collision between concrete-class alias and Protocol.
+
+---
