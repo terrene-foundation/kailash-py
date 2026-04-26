@@ -64,7 +64,7 @@ per spec § 4.9 Cross-SDK Parity table (kailash-rs#471, kailash-py#572).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Coroutine, Callable, Dict, List
 
 import pytest
 
@@ -96,19 +96,25 @@ class _CapturingTransport:
     None = no response (used for the timeout scenario).
     """
 
+    response_handler: (
+        "Callable[[Dict[str, Any], MCPServer], Coroutine[Any, Any, None]] | None"
+    )
+
     def __init__(self) -> None:
         self.outbound: List[Dict[str, Any]] = []
-        self.server: MCPServer | None = None
-        self.response_handler = None  # type: ignore[assignment]
+        self.server: "MCPServer | None" = None
+        self.response_handler = None
 
     async def send_message(self, message: Dict[str, Any]) -> None:
         """Conforms to ``SendFn`` — receive an outbound JSON-RPC message."""
         self.outbound.append(message)
         # Schedule an asynchronous response so request_input has the
         # opportunity to install its response future before delivery.
-        if self.response_handler is not None and self.server is not None:
+        handler = self.response_handler
+        srv = self.server
+        if handler is not None and srv is not None:
             asyncio.get_running_loop().call_soon(
-                lambda: asyncio.create_task(self.response_handler(message, self.server))
+                lambda: asyncio.create_task(handler(message, srv))
             )
 
 
