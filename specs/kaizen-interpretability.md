@@ -1,6 +1,6 @@
 # Kailash Kaizen Interpretability — Open-Weight LLM Diagnostics Adapter
 
-Version: 2.8.0
+Version: 2.13.1
 Package: `kailash-kaizen`
 Parent domain: Kaizen AI agent framework. This spec covers the post-hoc interpretability adapter that introspects local open-weight language models (Llama / Gemma / Phi / Mistral). It lives alongside other Diagnostic adapters (`specs/ml-diagnostics.md` for `DLDiagnostics`, forthcoming `kaizen-rag.md` for `RAGDiagnostics`, `kaizen-alignment.md` for `AlignmentDiagnostics`, etc.).
 Scope authority: `kaizen.interpretability.InterpretabilityDiagnostics` and the `kaizen.interpretability` facade module; the conformance contract against `kailash.diagnostics.protocols.Diagnostic`; the extras-gating contract for the `[interpretability]` extra.

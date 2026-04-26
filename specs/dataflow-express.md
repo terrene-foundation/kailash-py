@@ -1,6 +1,6 @@
 # Kailash DataFlow — Express API (Async + Sync, Bulk, Validation, File Import)
 
-Version: 2.0.12
+Version: 2.3.1
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: Express async API (`db.express`), Express Sync API (`db.express_sync`), low-level bulk operations, validation framework (field validators invoked on write), file import
