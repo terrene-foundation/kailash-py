@@ -5,6 +5,12 @@ All notable changes to the Kailash MCP package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Tests
+
+- Added Tier-2 integration test for `ElicitationSystem` at `tests/integration/mcp_server/test_elicitation_integration.py` (closes Wave 6 finding F-F-32). Exercises the spec § 4.9 contract end-to-end through the `server.elicitation_system` facade across happy-path / validation-rejection / timeout / cancellation scenarios. The previously spec-cited file did not exist, leaving the orphan-detection contract unsatisfied for the manager-shape `ElicitationSystem` class. 10 tests, all passing.
+
 ## [0.2.10] — 2026-04-26 — JWT iss-claim required when expected_issuer configured (#625)
 
 Patch bump — closes Wave 4 cross-SDK security finding #625 (kailash-rs#599 sibling). Per upstream PyJWT semantics, calling `decode(token, ..., issuer=allowlist)` enforces equality only when the `iss` claim is **present**. A forged token that omits `iss` entirely passes issuer validation regardless of the allowlist. Layering `options={"require": ["exp", "iss"]}` forces presence and closes the bypass.
