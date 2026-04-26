@@ -44,10 +44,31 @@ from kailash_ml.automl import (
 
 @pytest.fixture
 async def sqlite_conn(tmp_path: Path):
-    """Real SQLite ConnectionManager — no mocks, per Tier 2 contract."""
+    """Real SQLite ConnectionManager — no mocks, per Tier 2 contract.
+
+    Applies migration 0003 so the canonical 19-column ``_kml_automl_trials``
+    schema is in place before any trial INSERT. Per W6-020 the engine
+    no longer creates this table inline — operators MUST run the
+    numbered migration ahead of every sweep
+    (``rules/schema-migration.md`` MUST Rule 1).
+    """
+    import importlib
+
+    from kailash_ml.tracking.tracker import _MigrationConnAdapter
+
     db_path = tmp_path / "automl_wiring.db"
     conn = ConnectionManager(f"sqlite:///{db_path}")
     await conn.initialize()
+    # Apply migration 0003 — directly so this fixture does not depend on
+    # the registry walking 0001/0002 first (the 0001/0002 path requires
+    # additional schema fixtures that aren't in scope for AutoML wiring).
+    # The migration helpers expect the (sql, params_tuple) call form so
+    # we wrap the ConnectionManager via the same adapter that
+    # ExperimentTracker.create() uses (W10 tracker bootstrap).
+    mig_mod = importlib.import_module(
+        "kailash.tracking.migrations.0003_automl_trials_schema_alignment"
+    )
+    await mig_mod.Migration().apply(_MigrationConnAdapter(conn))
     try:
         yield conn
     finally:

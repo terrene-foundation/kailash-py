@@ -387,95 +387,94 @@ async def _probe_table_exists(dialect: Any, conn: Any, name: str) -> bool:
     """
     from kailash.db.dialect import DatabaseType
 
+    # Use the ConnectionManager.fetch(sql, *args) varargs form — same
+    # call shape the engine's _insert_trial_row uses, so the engine
+    # works directly against ConnectionManager without a migration-style
+    # adapter (the engine's documented connection contract is
+    # kailash.db.connection.ConnectionManager).
+    fetcher = getattr(conn, "fetch", None) or getattr(conn, "fetchone", None)
+    if fetcher is None:
+        return False
+
     if dialect.database_type == DatabaseType.SQLITE:
-        result = conn.execute(
+        rows = await fetcher(
             "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-            (name,),
+            name,
         )
-        if hasattr(result, "__await__"):
-            result = await result
-        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
-        if fetchone is None:
-            return False
-        row = fetchone()
-        if hasattr(row, "__await__"):
-            row = await row
-        return row is not None
+        return _rows_nonempty(rows)
     if dialect.database_type == DatabaseType.POSTGRESQL:
-        result = conn.execute(
+        rows = await fetcher(
             "SELECT 1 FROM information_schema.tables WHERE table_name = ?",
-            (name,),
+            name,
         )
-        if hasattr(result, "__await__"):
-            result = await result
-        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
-        if fetchone is None:
-            return False
-        row = fetchone()
-        if hasattr(row, "__await__"):
-            row = await row
-        return row is not None
+        return _rows_nonempty(rows)
     if dialect.database_type == DatabaseType.MYSQL:
-        result = conn.execute(
+        rows = await fetcher(
             "SELECT 1 FROM information_schema.tables "
             "WHERE table_schema = DATABASE() AND table_name = ?",
-            (name,),
+            name,
         )
-        if hasattr(result, "__await__"):
-            result = await result
-        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
-        if fetchone is None:
-            return False
-        row = fetchone()
-        if hasattr(row, "__await__"):
-            row = await row
-        return row is not None
+        return _rows_nonempty(rows)
     return False
+
+
+def _rows_nonempty(rows: Any) -> bool:
+    """Normalize ConnectionManager.fetch / .fetchone return into bool."""
+    if rows is None:
+        return False
+    if isinstance(rows, list):
+        return len(rows) > 0
+    return True
 
 
 async def _probe_column_exists(
     dialect: Any, conn: Any, table: str, column: str
 ) -> bool:
-    """Dialect-portable column-existence probe."""
+    """Dialect-portable column-existence probe.
+
+    Uses ``ConnectionManager.fetch(sql, *args)`` varargs — same call
+    shape as the engine's ``_insert_trial_row``.
+    """
     from kailash.db.dialect import DatabaseType
 
+    fetcher = getattr(conn, "fetch", None) or getattr(conn, "fetchone", None)
+    if fetcher is None:
+        return False
+
     if dialect.database_type == DatabaseType.SQLITE:
+        # ``PRAGMA table_info`` is non-parameterizable; the table name
+        # is routed through ``dialect.quote_identifier`` (validated
+        # allowlist) before interpolation per
+        # ``rules/dataflow-identifier-safety.md`` Rule 1.
         quoted = dialect.quote_identifier(table)
-        result = conn.execute(f"PRAGMA table_info({quoted})")
-        if hasattr(result, "__await__"):
-            result = await result
-        fetchall = getattr(result, "fetchall", None) or getattr(conn, "fetchall", None)
-        if fetchall is None:
+        rows = await fetcher(f"PRAGMA table_info({quoted})")
+        if rows is None:
             return False
-        rows = fetchall()
-        if hasattr(rows, "__await__"):
-            rows = await rows
+        # ConnectionManager.fetch returns list[dict]; PRAGMA dict has
+        # ``name`` key for the column name.
         for row in rows or []:
-            name = row[1] if not isinstance(row, dict) else row.get("name")
+            name = (
+                row.get("name")
+                if isinstance(row, dict)
+                else (row[1] if len(row) > 1 else None)
+            )
             if name == column:
                 return True
         return False
     if dialect.database_type in (DatabaseType.POSTGRESQL, DatabaseType.MYSQL):
-        sql = (
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = ? AND column_name = ?"
-        )
         if dialect.database_type == DatabaseType.MYSQL:
             sql = (
                 "SELECT 1 FROM information_schema.columns "
                 "WHERE table_schema = DATABASE() AND table_name = ? "
                 "AND column_name = ?"
             )
-        result = conn.execute(sql, (table, column))
-        if hasattr(result, "__await__"):
-            result = await result
-        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
-        if fetchone is None:
-            return False
-        row = fetchone()
-        if hasattr(row, "__await__"):
-            row = await row
-        return row is not None
+        else:
+            sql = (
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = ? AND column_name = ?"
+            )
+        rows = await fetcher(sql, table, column)
+        return _rows_nonempty(rows)
     return False
 
 
