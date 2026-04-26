@@ -101,3 +101,67 @@ Note: All claims in `core-nodes.md` are present in `src/kailash/nodes/base.py`. 
 Note: All workflow construction classes, connection types, contract types, and validation primitives are present at the spec-claimed module paths with the spec-claimed signatures.
 
 ---
+
+# Spec 3: `specs/core-runtime.md`
+
+**Subsections audited:** §4.1 (LocalRuntime + 3 method subsections), §4.2 (AsyncLocalRuntime + 4 subsections), §4.3 (DistributedRuntime + Worker + TaskQueue), §4.4 (get_runtime factory), §4.5 (Return Structure Contract), §5.1 (CycleBuilder + methods), §5.2 (Convergence ABC + 3 implementations), §5.3 (CyclicWorkflowExecutor), §6.1 (RetryPolicy, RetryStrategy, CircuitBreakerConfig, configure_retry, configure_circuit_breaker, add_fallback, PersistentDLQ, DLQItem, exception allowlist), §7.1 (Exception hierarchy, 30+ classes), §7.3 (ContentAwareExecutionError + content-aware detection), §13 (Key Invariants).
+**Verification source:** `src/kailash/{runtime,workflow,sdk_exceptions}.py`.
+
+| Assertion | Method | Expected | Actual | Status |
+|-----------|--------|----------|--------|--------|
+| `class LocalRuntime` at `kailash.runtime.local` | grep | match | local.py:280 | OK |
+| `class AsyncLocalRuntime(LocalRuntime)` at `kailash.runtime.async_local` | grep | match | async_local.py:430 | OK |
+| `class DistributedRuntime(BaseRuntime)` at `kailash.runtime.distributed` | grep | match | distributed.py:449 | OK |
+| `class BaseRuntime(ABC)` at `kailash.runtime.base` | grep | match | base.py:88 | OK |
+| `class TaskQueue` at `kailash.runtime.distributed` | grep | match | distributed.py:151 | OK |
+| `class Worker` at `kailash.runtime.distributed` | grep | match | distributed.py:582 | OK |
+| `class ExecutionContext` at `kailash.runtime.async_local` | grep | match | async_local.py:87 | OK |
+| `class ExecutionPlan` | grep | match | async_local.py:48 | OK |
+| `class ExecutionLevel` | grep | match | async_local.py:39 | OK |
+| `class ExecutionMetrics` | grep | match | async_local.py:76 | OK |
+| `class ExecutionTracker` at `kailash.runtime.execution_tracker` | grep | match | execution_tracker.py:19 | OK |
+| `class CancellationToken` at `kailash.runtime.cancellation` | grep | match | cancellation.py:31 | OK |
+| `class CycleExecutionMixin` | grep | match | mixins/cycle_execution.py:33 | OK |
+| `class ValidationMixin` | grep | match | mixins/validation.py:31 | OK |
+| `class ConditionalExecutionMixin` | grep | match | mixins/conditional_execution.py:51 | OK |
+| `def get_runtime(context=None, **kwargs)` factory | grep | match | runtime/__init__.py:45 | OK |
+| `class CycleBuilder` at `kailash.workflow.cycle_builder` | grep | match | cycle_builder.py:58 | OK |
+| `class CyclicWorkflowExecutor` | grep | match | cyclic_runner.py:136 | OK |
+| `class CycleConnectionError` | grep | match | cycle_exceptions.py:194 | OK |
+| `class ConvergenceCondition(ABC)` at `kailash.workflow.convergence` | grep | match | convergence.py:14 | OK |
+| `class ExpressionCondition(ConvergenceCondition)` | grep | match | convergence.py:35 | OK |
+| `class CallbackCondition(ConvergenceCondition)` | grep | match | convergence.py:116 | OK |
+| `class MaxIterationsCondition(ConvergenceCondition)` | grep | match | convergence.py:147 | OK |
+| `class RetryStrategy(Enum)` at `kailash.workflow.resilience` | grep | match | resilience.py:19 | OK |
+| `class RetryPolicy` (dataclass) | grep | match | resilience.py:29 | OK |
+| `class CircuitBreakerConfig` (dataclass) | grep | match | resilience.py:69 | OK |
+| `class WorkflowResilience` mixin | grep | match | resilience.py:129 | OK |
+| `class PersistentDLQ` at `kailash.workflow.dlq` | grep | match | dlq.py:66 | OK |
+| `class DLQItem` | grep | match | dlq.py:33 | OK |
+| `MAX_DLQ_ITEMS = 10_000` | grep | constant | dlq.py:23 | OK |
+| `DEFAULT_BASE_DELAY = 60.0` | grep | float 60.0 | dlq.py:26 | OK |
+| `class KailashException(Exception)` | grep | match | sdk_exceptions.py:77 | OK |
+| `class NodeException(KailashException)` | grep | match | sdk_exceptions.py:82 | OK |
+| `class NodeValidationError`, `NodeExecutionError`, `NodeConfigurationError`, `SafetyViolationError`, `CodeExecutionError` | grep | all 5 | sdk_exceptions.py:86, 96, 106, 116, 377 | OK |
+| `class WorkflowException`, `WorkflowValidationError`, `WorkflowExecutionError`, `WorkflowCancelledError`, `CyclicDependencyError`, `ConnectionError`, `CycleConfigurationError`, `KailashWorkflowException` | grep | all 8 | sdk_exceptions.py:127, 131, 141, 406, 151, 159, 169, 399 | OK |
+| `class RuntimeException`, `RuntimeExecutionError`, `ResourceLimitExceededError`, `CircuitBreakerOpenError`, `RetryExhaustedException` | grep | all 5 | sdk_exceptions.py:185, 189, 199, 210, 220 | OK |
+| `class TaskException`, `TaskStateError` | grep | both | sdk_exceptions.py:260, 264 | OK |
+| `class StorageException`, `KailashStorageError` | grep | both | sdk_exceptions.py:275, 279 | OK |
+| `class ExportException`, `ImportException`, `ConfigurationException`, `KailashConfigError`, `ManifestError`, `CLIException`, `VisualizationError`, `TemplateError`, `KailashNotFoundException` | grep | all 9 | sdk_exceptions.py:291, 301, 312, 322, 330, 341, 352, 363, 388 | OK |
+| `class ContentAwareExecutionError` | grep | match | local.py:148 | OK (see F-A-01) |
+| `WorkflowCancelledError(WorkflowExecutionError)` | grep | inherits WorkflowExecutionError | sdk_exceptions.py:406 | OK |
+| Default `LocalRuntime.connection_validation = "warn"` | Read | "warn" | constructor signature | OK |
+| Default `LocalRuntime.conditional_execution = "route_data"` | Read | "route_data" | constructor signature | OK |
+
+## F-A-01 — `core-runtime.md` § 7.1 / 7.3 — `ContentAwareExecutionError` parent-class drift
+
+**Severity:** LOW
+**Spec claim:** §7.3 says `ContentAwareExecutionError` is raised with `node_id` and `failure_data` attached, but the §7.1 exception hierarchy diagram does NOT include `ContentAwareExecutionError`. Spec implies (by structural placement under "RuntimeException" siblings) it should inherit from a `Kailash*` ancestor.
+**Actual state:** `src/kailash/runtime/local.py:148` defines `class ContentAwareExecutionError(Exception)` — inherits from bare `Exception`, NOT `KailashException` or `RuntimeException`. The class is also not exported from `kailash.sdk_exceptions`.
+**Remediation hint:** Either (a) add `ContentAwareExecutionError` to §7.1 hierarchy diagram with explicit `Exception` parent + note, or (b) re-parent the class to `RuntimeException` (or `KailashException`) and re-export from `kailash.sdk_exceptions` so callers can catch via the framework hierarchy.
+
+**Spec 3 findings:** 0 CRIT / 0 HIGH / 0 MED / 1 LOW.
+
+Note: Every spec-claimed runtime class, mixin, exception, and resilience primitive is present at the named module path. `get_runtime` factory present. Cycle and convergence primitives all present. The single LOW finding is documentation drift on `ContentAwareExecutionError`'s parent class.
+
+---
