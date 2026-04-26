@@ -17,13 +17,26 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
 from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
 
 logger = logging.getLogger(__name__)
+
+# Module-level guard for once-per-process DeprecationWarning emission when a
+# legacy CRL (no/empty algorithm — pre-#604 record) is verified. Per
+# zero-tolerance.md Rule 1 + the issue-#604 directive, the warning text MUST
+# contain the literal "scaffold for #604; wire format pending mint ISS-31"
+# substring so future agents can grep-find it across log archives.
+_LEGACY_CRL_WARNED: bool = False
 
 
 @dataclass
@@ -87,7 +100,11 @@ class CRLEntry:
             revoked_at=datetime.fromisoformat(data["revoked_at"]),
             reason=data["reason"],
             revoked_by=data["revoked_by"],
-            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
+            expires_at=(
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
+            ),
         )
 
 
@@ -106,6 +123,14 @@ class CRLMetadata:
         next_update: When the CRL should be refreshed
         entry_count: Number of entries in the CRL
         signature: Optional signature for integrity verification
+        algorithm: The signing-algorithm identifier (issue #604 scaffold).
+            Defaults to :data:`ALGORITHM_DEFAULT` (``"ed25519+sha256"``).
+            Threaded through every signed-record producer/verifier so that
+            when mint ISS-31 stabilises the canonical wire format, only the
+            validation + canonical serialiser change. Legacy records
+            (pre-#604, no/empty ``algorithm``) are accepted by
+            :meth:`CertificateRevocationList.verify_signature` with a
+            one-time DeprecationWarning per process.
     """
 
     crl_id: str
@@ -114,9 +139,15 @@ class CRLMetadata:
     next_update: Optional[datetime] = None
     entry_count: int = 0
     signature: Optional[str] = None
+    # Issue #604 scaffold: signing-algorithm identifier. Default keeps
+    # backward-compatible construction.
+    algorithm: str = ALGORITHM_DEFAULT
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary.
+
+        Includes the ``algorithm`` field (issue #604 scaffold) so the wire
+        format records which signing algorithm produced the CRL signature.
 
         Returns:
             Dictionary representation of the metadata
@@ -128,11 +159,16 @@ class CRLMetadata:
             "next_update": self.next_update.isoformat() if self.next_update else None,
             "entry_count": self.entry_count,
             "signature": self.signature,
+            "algorithm": self.algorithm,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CRLMetadata":
         """Deserialize from dictionary.
+
+        Missing/empty ``algorithm`` (legacy / pre-#604 record) defaults to
+        :data:`ALGORITHM_DEFAULT`. The verify-path warning contract is
+        enforced by :meth:`CertificateRevocationList.verify_signature`.
 
         Args:
             data: Dictionary with CRLMetadata fields
@@ -140,13 +176,23 @@ class CRLMetadata:
         Returns:
             CRLMetadata instance
         """
+        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
+        if not isinstance(algorithm, str):
+            raise TypeError(
+                f"CRLMetadata.algorithm must be str, got " f"{type(algorithm).__name__}"
+            )
         return cls(
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],
             issued_at=datetime.fromisoformat(data["issued_at"]),
-            next_update=(datetime.fromisoformat(data["next_update"]) if data.get("next_update") else None),
+            next_update=(
+                datetime.fromisoformat(data["next_update"])
+                if data.get("next_update")
+                else None
+            ),
             entry_count=data.get("entry_count", 0),
             signature=data.get("signature"),
+            algorithm=algorithm,
         )
 
 
@@ -276,7 +322,9 @@ class CertificateRevocationList:
         self._metadata.entry_count = len(self._entries)
         self._metadata.signature = None  # Invalidate signature on change
 
-        logger.debug(f"Added revocation for delegation_id={delegation_id}, agent_id={agent_id}")
+        logger.debug(
+            f"Added revocation for delegation_id={delegation_id}, agent_id={agent_id}"
+        )
 
         return entry
 
@@ -368,7 +416,11 @@ class CertificateRevocationList:
         if agent_id not in self._agent_index:
             return []
 
-        return [self._entries[del_id] for del_id in self._agent_index[agent_id] if del_id in self._entries]
+        return [
+            self._entries[del_id]
+            for del_id in self._agent_index[agent_id]
+            if del_id in self._entries
+        ]
 
     def list_entries(self, limit: int = 100, offset: int = 0) -> List[CRLEntry]:
         """
@@ -465,7 +517,9 @@ class CertificateRevocationList:
         Returns:
             Count of entries removed
         """
-        expired_ids = [del_id for del_id, entry in self._entries.items() if entry.is_expired()]
+        expired_ids = [
+            del_id for del_id, entry in self._entries.items() if entry.is_expired()
+        ]
 
         for del_id in expired_ids:
             self.remove_revocation(del_id)
@@ -487,22 +541,38 @@ class CertificateRevocationList:
             "entries": [entry.to_dict() for _, entry in sorted_entries],
         }
 
-    def sign(self, private_key: str) -> str:
+    def sign(
+        self,
+        private_key: str,
+        *,
+        alg_id: Optional[AlgorithmIdentifier] = None,
+    ) -> str:
         """
         Sign the CRL for integrity verification.
 
         Creates a cryptographic signature of the CRL contents using the
-        provided private key.
+        provided private key. The canonical algorithm identifier (issue
+        #604 scaffold) is recorded on :attr:`CRLMetadata.algorithm`.
 
         Args:
             private_key: Base64-encoded Ed25519 private key
+            alg_id: Optional algorithm identifier. ``None`` →
+                :data:`ALGORITHM_DEFAULT`. Non-default → raises.
 
         Returns:
             Base64-encoded signature
+
+        Raises:
+            NotImplementedError: If ``alg_id`` is non-default (pending
+                mint ISS-31).
         """
+        # Coerce + validate alg_id BEFORE any crypto work.
+        canonical = coerce_algorithm_id(alg_id)
+
         payload = self._get_signing_payload()
         signature = sign(payload, private_key)
         self._metadata.signature = signature
+        self._metadata.algorithm = canonical.algorithm
 
         logger.debug(f"Signed CRL {self._metadata.crl_id}")
 
@@ -512,14 +582,50 @@ class CertificateRevocationList:
         """
         Verify CRL signature.
 
+        Algorithm-agility (issue #604 scaffold):
+
+        - Examines ``self._metadata.algorithm``.
+        - Empty / missing → emits a one-time ``DeprecationWarning`` per
+          process whose message contains the literal substring
+          ``"scaffold for #604; wire format pending mint ISS-31"`` and
+          proceeds with verification (legacy / pre-#604 record path).
+        - Equal to :data:`ALGORITHM_DEFAULT` → verifies normally.
+        - Any other non-default value → raises ``NotImplementedError``
+          BEFORE any crypto work.
+
         Args:
             public_key: Base64-encoded Ed25519 public key
 
         Returns:
             True if signature is valid, False otherwise
+
+        Raises:
+            NotImplementedError: If ``algorithm`` is non-default
+                non-empty (pending mint ISS-31).
         """
         if self._metadata.signature is None:
             return False
+
+        # Algorithm-agility guard — runs BEFORE any verification work.
+        global _LEGACY_CRL_WARNED
+        algo = self._metadata.algorithm or ""
+        if algo == "":
+            if not _LEGACY_CRL_WARNED:
+                _LEGACY_CRL_WARNED = True
+                _warnings.warn(
+                    "CertificateRevocationList verified with empty algorithm "
+                    "(legacy record); defaulting to "
+                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
+                    "format pending mint ISS-31.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        elif algo != ALGORITHM_DEFAULT:
+            raise NotImplementedError(
+                f"CRLMetadata.algorithm={algo!r} awaits mint ISS-31 spec. "
+                f"Only {ALGORITHM_DEFAULT!r} is supported in this scaffold "
+                f"(issue #604, cross-SDK kailash-rs#33)."
+            )
 
         payload = self._get_signing_payload()
 
@@ -541,7 +647,9 @@ class CertificateRevocationList:
             "entries": [entry.to_dict() for entry in self._entries.values()],
             "agent_index": {k: list(v) for k, v in self._agent_index.items()},
             "cache_ttl_seconds": self._cache_ttl,
-            "last_refresh": (self._last_refresh.isoformat() if self._last_refresh else None),
+            "last_refresh": (
+                self._last_refresh.isoformat() if self._last_refresh else None
+            ),
             "version": "1.0",
         }
 
@@ -606,7 +714,9 @@ class CertificateRevocationList:
             lines.append(f"  Revoked At: {entry.revoked_at.isoformat()}")
             lines.append(f"  Reason: {entry.reason}")
             lines.append(f"  Revoked By: {entry.revoked_by}")
-            lines.append(f"  Expires At: {entry.expires_at.isoformat() if entry.expires_at else 'Never'}")
+            lines.append(
+                f"  Expires At: {entry.expires_at.isoformat() if entry.expires_at else 'Never'}"
+            )
             lines.append("-" * 60)
 
         lines.append("-----END CERTIFICATE REVOCATION LIST-----")
@@ -614,7 +724,9 @@ class CertificateRevocationList:
         return "\n".join(lines)
 
 
-def verify_delegation_with_crl(delegation_id: str, crl: CertificateRevocationList) -> CRLVerificationResult:
+def verify_delegation_with_crl(
+    delegation_id: str, crl: CertificateRevocationList
+) -> CRLVerificationResult:
     """
     Verify a delegation against the CRL.
 
