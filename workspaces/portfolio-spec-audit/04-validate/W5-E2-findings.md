@@ -139,3 +139,59 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** `ml-serving-draft.md §6.5 shadow divergence feed` referenced as sibling; canonical wiring from shadow predictions → DriftMonitor not visible in `engines/drift_monitor.py` (no `record_shadow_divergence(...)` or similar API). `check_drift` accepts current_data but no streaming shadow-prediction integration point.
 **Remediation hint:** Add explicit integration helper `monitor.ingest_shadow(...)` OR document via consumer pattern.
 
+
+---
+
+## Spec 3 — `ml-feature-store.md` (734 lines)
+
+§ subsections enumerated: 12 (1.1-1.2, 2.1, 3.1-3.2, 4.1-4.2, 5.x, 6.x, 7.x, 8, 9.x, 10, 11.x, 12)
+
+### F-E2-18 — `ml-feature-store.md` § 2.1 — `FeatureStore` constructor signature diverges from spec
+
+**Severity:** HIGH
+**Spec claim:** § 2.1 MUST 2 declares `FeatureStore(store: str | ConnectionManager, *, online, tenant_id, table_prefix, registry, ttl_online_seconds)`. Spec mandates `store=` (offline URL) + `online=` (online store URL) at construction; explicit URL-based offline/online parity.
+**Actual state:** `packages/kailash-ml/src/kailash_ml/features/store.py:98` — constructor `FeatureStore(dataflow: DataFlow, *, default_tenant_id: str | None = None)`. Takes a live `DataFlow` instance, not URL strings. No `online=`, no `table_prefix`, no `registry`, no `ttl_online_seconds`. The spec's offline/online parity (Redis URL acceptance) is not modeled at construction.
+**Remediation hint:** Spec should be updated to reflect the DataFlow-bridge integration model (FeatureStore wraps DataFlow rather than owning its own connection), OR the FeatureStore should be extended to accept the spec's URL+online surface as an alternative construction path.
+
+### F-E2-19 — `ml-feature-store.md` § 2.1 MUST 1 — Online store / Redis support absent
+
+**Severity:** HIGH
+**Spec claim:** § 1.1 + § 2.1 declare online feature store with Redis adapter (sub-10ms p95) is in-scope. § 5.x materialization streams offline → online.
+**Actual state:** No Redis or online-store adapter visible in `packages/kailash-ml/src/kailash_ml/features/`. `FeatureStore.get_features()` reads via `dataflow.ml_feature_source` (offline-only DataFlow). No `online=` kwarg, no `OnlineStoreAdapter`, no Redis-backed read path.
+**Remediation hint:** Mark online-store as `(Awaiting M2)` in spec OR implement Redis adapter + offline→online sync in materialization path.
+
+### F-E2-20 — `ml-feature-store.md` § 3.1 — `@feature` decorator absent
+
+**Severity:** HIGH
+**Spec claim:** § 3.1 declares `@feature(entity, dtype, ttl, description)` decorator; § 3.2 MUST 1-3 require `entity=` declaration, content-addressed feature versioning via sha256, TTL.
+**Actual state:** `kailash_ml/features/__init__.py` does not export `feature` decorator. `FeatureField` + `FeatureSchema` dataclasses exist but the polars-Expr-returning `@feature`-decorated function pattern is absent. No content-addressed sha256 versioning hook.
+**Remediation hint:** Add `@feature` decorator OR mark `(Awaiting M2)` and document `FeatureSchema/FeatureField` as the canonical surface.
+
+### F-E2-21 — `ml-feature-store.md` § 4.x — `FeatureGroup` class absent
+
+**Severity:** HIGH
+**Spec claim:** § 4.1 declares `FeatureGroup(name, entity, features, owner, classification)`; § 4.2 MUST 1-3: `register_group()` persists `tenant_id`; classification propagates; `evolve()` is the only mutation path.
+**Actual state:** No `FeatureGroup` class in `kailash_ml/features/`. `FeatureStore.register_group()` method absent; `FeatureGroup.evolve()` absent. No `_kml_feature_groups` table DDL. Classification propagation to TrainingResult via group declaration unverified.
+**Remediation hint:** Add `FeatureGroup` class + DDL + `register_group()` method OR mark `(Awaiting M2)`.
+
+### F-E2-22 — `ml-feature-store.md` § 5.x — Materialization API absent
+
+**Severity:** HIGH
+**Spec claim:** § 5.x declares batch materialization (DataFlow query, polars DF, file → offline) and streaming sync (offline → online).
+**Actual state:** No `materialize()` method on `FeatureStore`; no `ingest()` method (despite § 1.2 referencing `FeatureStore.ingest(df)`). No streaming offline→online sync path. Materialization is currently caller-driven via direct DataFlow writes.
+**Remediation hint:** Add `materialize()` / `ingest()` / `stream_to_online()` methods OR mark `(Awaiting M2)`.
+
+### F-E2-23 — `ml-feature-store.md` § 6.x — Point-in-time join is implemented (positive)
+
+**Severity:** LOW (compliance confirmation, not finding)
+**Spec claim:** § 1.1 + § 6.x require point-in-time joins via `as_of` timestamp; no leakage.
+**Actual state:** `FeatureStore.get_features(schema, timestamp, *, tenant_id, entity_ids)` accepts `timestamp: datetime` kwarg → routes through `dataflow.ml_feature_source(point_in_time=timestamp)`. Point-in-time correctness is enforced at the dataflow binding layer per spec § 6.2.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-24 — `ml-feature-store.md` § 2.1 MUST 1 — Tenant isolation is implemented (positive)
+
+**Severity:** LOW (compliance confirmation, not finding)
+**Spec claim:** § 1.1 + § 4.2 MUST 1 + § 9 — tenant isolation on cache keys, audit rows, query filters; missing tenant_id raises `TenantRequiredError`; cache key includes `tenant_id`.
+**Actual state:** `cache_keys.py:67-126` — `validate_tenant_id()` raises `TenantRequiredError` on None/empty/forbidden sentinels; `make_feature_cache_key` shape is `kailash_ml:{FEATURE_KEY_VERSION}:{tenant_id}:feature:{schema_name}:{version}:{row_key}` per spec § 9.1. `FORBIDDEN_TENANT_SENTINELS` blocks `"default"`, `"global"`, `""`. `_resolve_tenant` is called on every method.
+**Remediation hint:** None — confirms compliance.
+
