@@ -1,8 +1,8 @@
 # W5-A Findings — core + infra + node-catalog
 
 **Specs audited:** 7
-**§ subsections enumerated:** TBD (see per-spec sections)
-**Findings:** CRIT=0 HIGH=0 MED=0 LOW=0 (running tally — updated per commit)
+**§ subsections enumerated:** ~270 individual assertions across 7 specs (see per-spec sections + Final Summary)
+**Findings:** CRIT=0 HIGH=0 MED=0 LOW=7
 **Audit completed:** 2026-04-26
 **Branch:** `audit/w5-a-core-spec-audit`
 **Base SHA:** `6142ea52`
@@ -291,3 +291,76 @@ Note: All dialect, connection management, credential handling, schema migration,
 Note: All store classes, task queue, worker registry, and factory primitives present at spec-named module paths. Single LOW finding: `EventStoreBackend` symbol-name collision between concrete-class alias and Protocol.
 
 ---
+
+# Spec 7: `specs/node-catalog.md`
+
+**Subsections audited:** 21 category sections (Data, Edge, Monitoring, Logic, API, Security, Admin, Auth, Enterprise, Transaction, Transform, Cache, Code, Compliance, Validation, System, Testing, Alerts, Governance, Handler, Base/Mixins) listing 150 unique node headings (138 production nodes + 7 base classes — heading count includes 5 doc-only labels and the duplicated Compliance reference).
+
+**Verification methodology:** Mechanical extraction:
+1. `grep -E "^### [A-Z]" specs/node-catalog.md | sort -u` → 150 unique node headings.
+2. `grep -rEh "^class [A-Z][A-Za-z0-9_]+" src/kailash/nodes/ | extract → sort -u` → 361 actual node classes.
+3. `comm -23 spec actual` → only 3 entries with parenthetical labels (`Node (ABC)`, `EdgeNode (base)`, `EventAwareNode (mixin)`); each verified to exist as a bare class name.
+
+| Assertion | Method | Expected | Actual | Status |
+|-----------|--------|----------|--------|--------|
+| All 150 named nodes resolve to a `class <NodeName>` definition under `src/kailash/nodes/` | `comm -23 /tmp/spec_nodes /tmp/actual_nodes` | 0 unresolved | 0 unresolved (3 parenthetical labels resolved) | OK |
+| `class HandlerNode(AsyncNode)` | grep | match | nodes/handler.py:144 | OK |
+| `class GDPRComplianceNode` (SecurityMixin + PerformanceMixin + LoggingMixin + Node) | grep | match | nodes/compliance/gdpr.py:128 | OK |
+| `class DataRetentionPolicyNode` | grep | match | nodes/compliance/data_retention.py:97 | OK |
+| `class DiscordAlertNode(AlertNode)` | grep | match | nodes/alerts/discord.py:70 | OK |
+| Summary table claims **138 total nodes** (131 production + 7 base) | sum of category counts | 138 | 138 (when Compliance double-listing in body is excluded) | OK (see F-A-06) |
+| `class Node`, `EdgeNode`, `AsyncNode`, `TypedNode`, `AsyncTypedNode`, `CycleAwareNode`, `NodeWithAccessControl`, `AsyncNodeWithAccessControl`, `EventAwareNode` (Base/Mixins, all 9 — note: spec lists 7 in summary count, 9 in body) | grep | all present | all 9 present in /tmp/actual_nodes | OK (see F-A-07) |
+
+## F-A-06 — `node-catalog.md` § Compliance — duplicate "## Compliance (2 nodes)" header
+
+**Severity:** LOW
+**Spec claim:** Summary table line 22 lists "Compliance (2 nodes)" once. The body of the spec contains TWO `## Compliance (2 nodes)` headers — at line 975 (with full content) and line 1072 (which contains only "See [Compliance](#compliance-2-nodes) above.").
+**Actual state:** Verified via `grep -nE "^## Compliance" specs/node-catalog.md` — line 975 and line 1072 both define the same heading.
+**Remediation hint:** Remove the duplicate heading at line 1072–1074 (the cross-reference paragraph is redundant; readers can use the table-of-contents). Keeping the duplicate inflates section counts when readers script-sum body section counts and confuses table-of-contents anchor resolution (Markdown anchor uniqueness rule appends `-1` to the second instance).
+
+## F-A-07 — `node-catalog.md` § Base / Mixins — count drift between summary table (7) and body (9)
+
+**Severity:** LOW
+**Spec claim:** Summary table line 29 lists "Base / Mixins" with count = 7. Body §Base / Mixins lists 9 distinct headings: `Node`, `AsyncNode`, `TypedNode`, `AsyncTypedNode`, `CycleAwareNode`, `NodeWithAccessControl`, `AsyncNodeWithAccessControl`, `EventAwareNode`. (Plus the EdgeNode reference in the Edge section's summary — total varies by counting method.)
+**Actual state:** Body lists 8 explicit base/mixin headings (verified via `grep -E "^### " specs/node-catalog.md` between lines 1118–1149). Summary says 7. Discrepancy: spec body may have evolved but summary table count was not updated.
+**Remediation hint:** Recount Base/Mixins entries in the body and update the summary table to match. If `EdgeNode (base)` is intended as a Base/Mixin item rather than an Edge node, move it from the Edge section to Base/Mixins.
+
+**Spec 7 findings:** 0 CRIT / 0 HIGH / 0 MED / 2 LOW.
+
+Note: Every spec-claimed node class resolves to a real `class` definition under `src/kailash/nodes/` (or `src/kailash/nodes/handler.py` for HandlerNode). Two LOW findings: documentation hygiene — duplicate Compliance header and Base/Mixins summary-vs-body count drift.
+
+---
+
+# Final Summary
+
+**Specs audited:** 7
+**§ subsections enumerated:** core-nodes (6), core-workflows (16), core-runtime (24+), core-servers (7), infra-sql (~40 method/class assertions across 10 sub-sections), infra-stores (~30 across 6 sub-sections), node-catalog (150 nodes across 21 categories) — ~270 individual assertions verified.
+**Total findings:**
+- CRIT: 0
+- HIGH: 0
+- MED: 0
+- LOW: 7 (F-A-01 through F-A-07)
+**Audit completed:** 2026-04-26
+
+## Findings index
+
+| ID | Spec | Severity | Title |
+|----|------|----------|-------|
+| F-A-01 | core-runtime.md | LOW | `ContentAwareExecutionError` parent-class drift |
+| F-A-02 | core-servers.md | LOW | `WorkflowServer.run` missing `host` parameter in spec |
+| F-A-03 | infra-sql.md | LOW | `check/stamp_schema_version` are `async`, spec implies sync |
+| F-A-04 | infra-sql.md | LOW | `SCHEMA_VERSION` constant duplicated across modules |
+| F-A-05 | infra-stores.md | LOW | `EventStoreBackend` symbol-name collision (concrete + Protocol) |
+| F-A-06 | node-catalog.md | LOW | Duplicate `## Compliance (2 nodes)` header in body |
+| F-A-07 | node-catalog.md | LOW | Base/Mixins count drift between summary (7) and body (9) |
+
+## Verdict
+
+The 7 audited specs are **well-aligned with the implementation at SHA `6142ea52`**. No CRIT (security/governance contract orphans), no HIGH (missing public APIs), no MED (missing helpers). All 7 findings are LOW severity — documentation drift / metadata hygiene. No remediation blocks any release; recommend addressing in a single doc-cleanup PR.
+
+The audit covered:
+- 4 core SDK domain specs (Node ABC, WorkflowBuilder, runtime variants, server hierarchy)
+- 2 infrastructure specs (dialect/connection/credential/migration; stores/queues/factories)
+- 1 catalog spec (138 production node classes + base/mixins)
+
+Verification used direct `Grep` + `Read` against `src/kailash/` at SHA `6142ea52` (current HEAD of `main` at audit start). No reliance on prior `.spec-coverage` files or self-reports per `skills/spec-compliance/SKILL.md` § Anti-Patterns.
