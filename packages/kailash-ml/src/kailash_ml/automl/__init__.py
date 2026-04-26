@@ -1,13 +1,14 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""``kailash_ml.automl`` — 1.0.0 AutoML surface.
+"""``kailash_ml.automl`` — canonical 1.0.0 AutoML surface.
 
-This is the new home for the AutoML primitives that ``ml-automl.md``
-§2 declares as the 1.0.0 API. The legacy scaffold at
-``kailash_ml.engines.automl_engine`` is retained for backwards
-compatibility until W32 migrations sweep call sites; eager-import
-parity between the two surfaces is the responsibility of the
-orchestrator (the legacy scaffold is owned by that workstream).
+This is the canonical home for the AutoML primitives that ``ml-automl.md``
+§2 declares as the 1.0.0 API. Top-level ``kailash_ml.AutoMLEngine``
+resolves here through the ``__getattr__`` map in
+``kailash_ml/__init__.py`` so ``from kailash_ml import AutoMLEngine``
+and ``from kailash_ml.automl import AutoMLEngine`` resolve to the SAME
+class (Tier-1 identity test:
+``tests/unit/test_kailash_ml_lazy_map.py::test_kailash_ml_AutoMLEngine_resolves_to_canonical``).
 
 Public surface:
 

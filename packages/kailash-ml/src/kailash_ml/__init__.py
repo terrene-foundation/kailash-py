@@ -590,7 +590,7 @@ def __getattr__(name: str):  # noqa: N807
         "DriftCallback": "kailash_ml.engines.drift_monitor",
         "DriftMonitor": "kailash_ml.engines.drift_monitor",
         "HyperparameterSearch": "kailash_ml.engines.hyperparameter_search",
-        "AutoMLEngine": "kailash_ml.engines.automl_engine",
+        "AutoMLEngine": "kailash_ml.automl.engine",
         "DataExplorer": "kailash_ml.engines.data_explorer",
         "FeatureEngineer": "kailash_ml.engines.feature_engineer",
         "EnsembleEngine": "kailash_ml.engines.ensemble",

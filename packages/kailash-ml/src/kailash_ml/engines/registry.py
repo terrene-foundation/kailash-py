@@ -527,7 +527,7 @@ _register(
     EngineInfo(
         name="AutoMLEngine",
         version=_KML_VERSION,
-        module_path="kailash_ml.engines.automl_engine",
+        module_path="kailash_ml.automl.engine",
         accepts_tenant_id=True,
         emits_to_tracker=True,
         clearance_level=_TRAIN_MED,

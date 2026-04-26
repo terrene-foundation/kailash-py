@@ -9,7 +9,7 @@ This module defines the single canonical ``CostDelta`` shape used by:
 
     * ``kaizen.cost.tracker`` (Kaizen agent cost accumulation)
     * ``kailash_pact.costs`` (PACT governance cost guardrails)
-    * ``kailash_ml.engines.automl_engine`` (``GuardrailConfig.max_llm_cost_usd``)
+    * ``kailash_ml.automl.engine`` (``AutoMLConfig.max_llm_cost_usd``)
 
 A ``CostDelta`` serialized by ANY of the three producers MUST deserialize
 byte-identically on the other two. Round-trip parity is enforced by the
