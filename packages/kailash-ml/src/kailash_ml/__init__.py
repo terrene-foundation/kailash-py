@@ -586,7 +586,10 @@ def __getattr__(name: str):  # noqa: N807
     _engine_map = {
         "FeatureStore": "kailash_ml.engines.feature_store",
         "TrainingPipeline": "kailash_ml.engines.training_pipeline",
-        "InferenceServer": "kailash_ml.engines.inference_server",
+        # `InferenceServer` lazy-loaded from the canonical surface
+        # `kailash_ml.serving.server` after W6-004 deleted the legacy
+        # `engines.inference_server` module (F-E1-28).
+        "InferenceServer": "kailash_ml.serving.server",
         "DriftCallback": "kailash_ml.engines.drift_monitor",
         "DriftMonitor": "kailash_ml.engines.drift_monitor",
         "HyperparameterSearch": "kailash_ml.engines.hyperparameter_search",

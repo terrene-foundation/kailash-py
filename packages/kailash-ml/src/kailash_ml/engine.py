@@ -483,6 +483,89 @@ def _metric_sort_key(metric_name: str, value: float) -> tuple[float, float]:
     return (-float(value), 0.0)
 
 
+async def _score_records_for_evaluate(
+    *,
+    registry: Any,
+    model_name: str,
+    model_version: int,
+    signature: Any,
+    feature_columns: list[str],
+    records: list[dict[str, Any]],
+) -> tuple[list[Any], Optional[list[list[float]]]]:
+    """Load a registered model artifact and score `records` in-process.
+
+    Replaces the W6-004 deletion of `engines.inference_server.InferenceServer`
+    (F-E1-28). The canonical `serving.server.InferenceServer` has a
+    deployment-oriented lifecycle (config envelope, channels) that does
+    not match the per-row scoring `MLEngine.evaluate()` needs; this helper
+    performs the minimal load-artifact + predict path.
+
+    Loads `model.pkl` from the registry, deserializes it, applies feature
+    ordering from the model signature when available, and runs `predict`
+    plus best-effort `predict_proba`. Returns `(y_pred, y_prob)` where
+    `y_prob` is `None` unless every record has a probability vector.
+    """
+    import numpy as np  # local import — avoid hard dep on top of engine.py
+    import polars as pl
+
+    if not records:
+        return [], None
+
+    # Resolve feature ordering — model signature wins over caller-supplied
+    # column order so the array layout matches the trained model's
+    # expectations.
+    if signature is not None:
+        ordered_cols = [f.name for f in signature.input_schema.features]
+    else:
+        ordered_cols = list(feature_columns)
+
+    # Coerce missing/non-numeric features to 0.0 (non-strict mode — same
+    # contract the legacy `predict_batch(strict=False)` honored).
+    patched_records: list[dict[str, Any]] = []
+    for rec in records:
+        patched: dict[str, Any] = {}
+        for col in ordered_cols:
+            val = rec.get(col, 0.0)
+            try:
+                patched[col] = float(val)
+            except (TypeError, ValueError):
+                patched[col] = 0.0
+        patched_records.append(patched)
+
+    # Load + deserialize the artifact. SECURITY: pickle deserialization
+    # executes arbitrary code; only load artifacts from TRUSTED sources
+    # (models trained inside this SDK). Same constraint the legacy
+    # `_get_model` carried.
+    artifact_bytes = await registry.load_artifact(
+        model_name, model_version, "model.pkl"
+    )
+    model = pickle.loads(artifact_bytes)
+
+    df = pl.DataFrame(patched_records)
+    X = df.select(ordered_cols).to_numpy().astype(np.float64)
+
+    raw_predictions = model.predict(X)
+    # Coerce numpy scalars to Python natives so downstream metric helpers
+    # (which accept ArrayLike) get a uniform list[Any].
+    y_pred: list[Any] = [p.item() if hasattr(p, "item") else p for p in raw_predictions]
+
+    y_prob: Optional[list[list[float]]] = None
+    if hasattr(model, "predict_proba"):
+        try:
+            proba = model.predict_proba(X)
+            y_prob = proba.tolist()
+        except Exception as exc:  # noqa: BLE001 — diagnostic
+            logger.debug(
+                "predict_proba failed for %s v%d during evaluate: %s",
+                model_name,
+                model_version,
+                exc,
+            )
+            y_prob = None
+
+    return y_pred, y_prob
+
+
 # ---------------------------------------------------------------------------
 # MLEngine (ml-engines.md §2.1)
 # ---------------------------------------------------------------------------
@@ -1884,33 +1967,28 @@ class MLEngine:
         else:
             metric_names = list(metrics)
 
-        # Score the data. We use the existing InferenceServer primitive
-        # which already knows how to load model artifacts (pickle /
-        # ONNX) from the registry and run them on the submitted rows —
-        # this is the "§7.1 MUST 1 one-line evaluate beats MLflow's
-        # manual-loop baseline" contract in practice.
-        from kailash_ml.engines.inference_server import (
-            InferenceServer as _InferenceServer,
-        )
-
-        inference = _InferenceServer(registry)
-        # polars DataFrame → list of dicts for predict_batch
+        # Score the data in-process. The legacy `engines.inference_server`
+        # primitive was deleted in W6-004 (F-E1-28); the canonical
+        # `serving.server.InferenceServer` has a deployment-oriented
+        # lifecycle (config envelope, channels) that does not match the
+        # in-process per-row scoring `evaluate()` requires. The minimal
+        # load + predict path is inlined here — this is the "§7.1 MUST 1
+        # one-line evaluate beats MLflow's manual-loop baseline" contract
+        # in practice.
         feature_columns = [c for c in data_columns if c != target_column]
         # Use polars' native to_dicts() — fast, typed, preserves order.
         feature_records = data.select(feature_columns).to_dicts()
 
         start = time.perf_counter()
-        predictions_list = await inference.predict_batch(
-            mv.name, feature_records, version=mv.version, strict=False
+        y_pred, y_prob = await _score_records_for_evaluate(
+            registry=registry,
+            model_name=mv.name,
+            model_version=mv.version,
+            signature=mv.signature,
+            feature_columns=feature_columns,
+            records=feature_records,
         )
         elapsed = time.perf_counter() - start
-
-        y_pred = [p.prediction for p in predictions_list]
-        # y_prob for probability metrics, when every prediction
-        # exposes `.probabilities`. We pass only when fully populated.
-        y_prob: Any = None
-        if all(p.probabilities is not None for p in predictions_list):
-            y_prob = [p.probabilities for p in predictions_list]
 
         # y_true: extract the target column as a Python list so the
         # metric helpers (which accept ArrayLike) can coerce it

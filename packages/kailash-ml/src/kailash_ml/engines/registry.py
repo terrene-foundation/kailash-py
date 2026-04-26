@@ -462,25 +462,28 @@ _register(
     EngineInfo(
         name="InferenceServer",
         version=_KML_VERSION,
-        module_path="kailash_ml.engines.inference_server",
+        # W6-004 (F-E1-28): legacy `engines.inference_server` deleted;
+        # canonical surface lives at `serving.server`. Signatures track
+        # the W25 lifecycle (`from_registry`/`start`/`predict`/`stop`).
+        module_path="kailash_ml.serving.server",
         accepts_tenant_id=True,
         emits_to_tracker=True,
         clearance_level=_DATA_MED,
         signatures=(
             _sig(
                 "predict",
-                (_p("X", "pl.DataFrame", kind="positional_or_keyword"),),
-                "PredictionResult",
+                (_p("features", "Mapping[str, Any]", kind="positional_or_keyword"),),
+                "Mapping[str, Any]",
             ),
             _sig(
-                "predict_batch",
-                (_p("X", "pl.DataFrame", kind="positional_or_keyword"),),
-                "list[PredictionResult]",
+                "start",
+                (),
+                "ServeHandle",
             ),
             _sig(
-                "predict_with_shadow",
-                (_p("X", "pl.DataFrame", kind="positional_or_keyword"),),
-                "tuple[PredictionResult, PredictionResult]",
+                "stop",
+                (),
+                "None",
             ),
         ),
     )
