@@ -42,7 +42,7 @@ DEFAULT_MANIFEST_PATH = Path(".spec-drift-gate.toml")
 # ---------------------------------------------------------------------------
 
 CACHE_PATH = Path(".spec-drift-gate-cache.json")
-CACHE_FORMAT_VERSION = "1"
+CACHE_FORMAT_VERSION = "2"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,11 @@ class Manifest:
 ALLOWLIST: dict[str, re.Pattern[str]] = {
     "FR-1": re.compile(r"^## .*?(Surface|Construction|Public API)\b", re.IGNORECASE),
     "FR-2": re.compile(r"^## .*?(Surface|Construction|Public API)\b", re.IGNORECASE),
+    # SDG-202 sweeps share the Surface/Construction/Public API allowlist.
+    "FR-3": re.compile(r"^## .*?(Surface|Construction|Public API)\b", re.IGNORECASE),
     "FR-4": re.compile(r"^## .*?(Errors|Exceptions)\b", re.IGNORECASE),
+    "FR-5": re.compile(r"^## .*?(Surface|Construction|Public API)\b", re.IGNORECASE),
+    "FR-6": re.compile(r"^## .*?(Surface|Construction|Public API)\b", re.IGNORECASE),
     "FR-7": re.compile(r"^## .*?(Test Contract|Tests|Tier .* Tests)\b", re.IGNORECASE),
 }
 
@@ -279,6 +283,15 @@ def parse_overrides(spec_text: str) -> list[OverrideDirective]:
     for line_no, line in enumerate(spec_text.splitlines(), start=1):
         opener = ANY_DIRECTIVE_OPENER_RE.search(line)
         if opener is None:
+            continue
+
+        # Documentation-form mention: when the directive shape is wrapped in
+        # backticks (``\`<!-- spec-assert ... -->\```), the line is illustrating
+        # the syntax, not declaring it. specs/spec-drift-gate.md § 3.2 quotes
+        # its own directives this way. Real directives sit on their own line
+        # (possibly indented), so require the stripped line to actually open
+        # with ``<!--`` before treating the match as a directive.
+        if not line.lstrip().startswith("<!--"):
             continue
 
         # Closed-form match (must include the closing -->):
@@ -384,6 +397,9 @@ SUBSECTION_NEGATION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bAbsent\s+At\s+The\s+Surface\b", re.IGNORECASE),
     re.compile(r"\bSix\s+Missing\b", re.IGNORECASE),
     re.compile(r"\bNamed\s+In\s+v\d+\s+Spec\s+But\s+Absent\b", re.IGNORECASE),
+    # Parenthetical deferral marker — ``(Yet)`` / ``(yet)`` in a subheading
+    # signals "documented future work" and silences sweeps inside the body.
+    re.compile(r"\(Yet\)", re.IGNORECASE),
 )
 
 
@@ -716,6 +732,17 @@ class CacheEntry:
     # bare names and resolved at sweep time.
     functions: frozenset[str]
     error_classes: frozenset[str]
+    # SDG-202 additions:
+    # - ``class_fields`` records ``AnnAssign`` field names per class (FR-5).
+    # - ``decorator_uses`` records the count of each decorator name applied
+    #   inside this file (FR-3). Decorator names are the last dotted segment
+    #   so ``@dataclass`` and ``@dataclasses.dataclass`` both bucket as
+    #   ``dataclass``.
+    # - ``all_exports`` records the ``__all__`` entries declared at module
+    #   scope (FR-6). Empty when ``__all__`` is absent or unparseable.
+    class_fields: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    decorator_uses: tuple[tuple[str, int], ...] = ()
+    all_exports: frozenset[str] = frozenset()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -725,6 +752,11 @@ class CacheEntry:
             "classes": sorted(self.classes),
             "functions": sorted(self.functions),
             "error_classes": sorted(self.error_classes),
+            "class_fields": [
+                [name, list(fields)] for name, fields in self.class_fields
+            ],
+            "decorator_uses": [[name, count] for name, count in self.decorator_uses],
+            "all_exports": sorted(self.all_exports),
         }
 
     @classmethod
@@ -736,6 +768,17 @@ class CacheEntry:
             classes=frozenset(data["classes"]),  # type: ignore[arg-type]
             functions=frozenset(data["functions"]),  # type: ignore[arg-type]
             error_classes=frozenset(data["error_classes"]),  # type: ignore[arg-type]
+            class_fields=tuple(
+                (str(name), tuple(str(f) for f in fields))
+                for name, fields in (data.get("class_fields") or [])  # type: ignore[union-attr]
+            ),
+            decorator_uses=tuple(
+                (str(name), int(count))
+                for name, count in (data.get("decorator_uses") or [])  # type: ignore[union-attr]
+            ),
+            all_exports=frozenset(
+                str(s) for s in (data.get("all_exports") or [])  # type: ignore[union-attr]
+            ),
         )
 
 
@@ -756,7 +799,33 @@ class SymbolIndex:
     classes: set[str] = field(default_factory=set)
     methods: dict[str, set[str]] = field(default_factory=dict)
     error_classes: set[str] = field(default_factory=set)
+    # SDG-202: class_name → set of dataclass field names (FR-5). When the
+    # same class name appears in multiple files (e.g. test fixtures) the
+    # union is what FR-5 consults.
+    class_fields: dict[str, set[str]] = field(default_factory=dict)
+    # decorator-name → total occurrences across every parsed source file
+    # (FR-3). Names are last-dotted-segment so ``dataclass`` covers both
+    # ``@dataclass`` and ``@dataclasses.dataclass``.
+    decorator_counts: dict[str, int] = field(default_factory=dict)
+    # Union of every ``__all__`` entry declared at module scope (FR-6).
+    all_exports: set[str] = field(default_factory=set)
     _entries: list[CacheEntry] = field(default_factory=list)
+
+    def _absorb(self, entry: CacheEntry) -> None:
+        self._entries.append(entry)
+        self.classes.update(entry.classes)
+        self.classes.update(entry.error_classes)
+        for fq in entry.functions:
+            if "." in fq:
+                cls_name, method = fq.split(".", 1)
+                self.methods.setdefault(cls_name, set()).add(method)
+        for class_name, fields_ in entry.class_fields:
+            self.class_fields.setdefault(class_name, set()).update(fields_)
+        for dec_name, count in entry.decorator_uses:
+            self.decorator_counts[dec_name] = (
+                self.decorator_counts.get(dec_name, 0) + count
+            )
+        self.all_exports.update(entry.all_exports)
 
     @classmethod
     def build(
@@ -777,14 +846,7 @@ class SymbolIndex:
                 entry = _parse_python_file(py_file)
                 if entry is None:
                     continue
-                idx._entries.append(entry)
-                idx.classes.update(entry.classes)
-                for fq in entry.functions:
-                    if "." in fq:
-                        cls_name, method = fq.split(".", 1)
-                        idx.methods.setdefault(cls_name, set()).add(method)
-                # Errors are also classes — make them findable via FR-1
-                idx.classes.update(entry.error_classes)
+                idx._absorb(entry)
         for em in errors_modules or ():
             if not em.path.exists():
                 continue
@@ -794,8 +856,7 @@ class SymbolIndex:
                 continue
             if resolved not in seen_paths:
                 seen_paths.add(resolved)
-                idx._entries.append(entry)
-                idx.classes.update(entry.classes)
+                idx._absorb(entry)
             idx.error_classes.update(entry.error_classes)
             idx.error_classes.update(entry.classes)
         return idx
@@ -816,6 +877,10 @@ def _parse_python_file(path: Path) -> CacheEntry | None:
     classes: set[str] = set()
     functions: set[str] = set()  # qualified names "Class.method" + bare names
     error_classes: set[str] = set()
+    # SDG-202: class_name → set of AnnAssign field names (FR-5)
+    class_fields: dict[str, set[str]] = {}
+    # bare decorator name → count of applications in this file (FR-3)
+    decorator_uses: dict[str, int] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             classes.add(node.name)
@@ -824,15 +889,37 @@ def _parse_python_file(path: Path) -> CacheEntry | None:
             for item in node.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     functions.add(f"{node.name}.{item.name}")
+                    for dec in item.decorator_list:
+                        dec_name = _decorator_name(dec)
+                        if dec_name:
+                            decorator_uses[dec_name] = (
+                                decorator_uses.get(dec_name, 0) + 1
+                            )
+                if isinstance(item, ast.AnnAssign) and isinstance(
+                    item.target, ast.Name
+                ):
+                    class_fields.setdefault(node.name, set()).add(item.target.id)
+            for dec in node.decorator_list:
+                dec_name = _decorator_name(dec)
+                if dec_name:
+                    decorator_uses[dec_name] = decorator_uses.get(dec_name, 0) + 1
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # Top-level / nested function (we only consider top-level via the
             # tree.body filter below to avoid pulling in nested helpers).
             pass
 
-    # Top-level functions only (for FR-2 standalone-call resolution).
+    # Top-level functions only (for FR-2 standalone-call resolution AND
+    # decorator counts on module-level callables).
     for top in tree.body:
         if isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef)):
             functions.add(top.name)
+            for dec in top.decorator_list:
+                dec_name = _decorator_name(dec)
+                if dec_name:
+                    decorator_uses[dec_name] = decorator_uses.get(dec_name, 0) + 1
+
+    # __all__ extraction — FR-6 backbone.
+    all_exports: set[str] = _extract_all_exports(tree)
 
     stat = path.stat()
     h = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
@@ -843,7 +930,72 @@ def _parse_python_file(path: Path) -> CacheEntry | None:
         classes=frozenset(classes),
         functions=frozenset(functions),
         error_classes=frozenset(error_classes),
+        class_fields=tuple(
+            (cls_name, tuple(sorted(fields)))
+            for cls_name, fields in sorted(class_fields.items())
+        ),
+        decorator_uses=tuple(sorted(decorator_uses.items())),
+        all_exports=frozenset(all_exports),
     )
+
+
+def _decorator_name(node: ast.expr) -> str | None:
+    """Return the bare last-segment name of a decorator expression.
+
+    ``@dataclass`` → ``"dataclass"``;
+    ``@dataclasses.dataclass`` → ``"dataclass"``;
+    ``@register("foo")`` → ``"register"``;
+    ``@module.cls.bind()`` → ``"bind"``.
+
+    Returns ``None`` for shapes that cannot be resolved to a single name
+    (e.g. lambda decorators, subscript expressions).
+    """
+
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Call):
+        return _decorator_name(node.func)
+    return None
+
+
+def _extract_all_exports(tree: ast.Module) -> set[str]:
+    """Read module-scope ``__all__ = [...]`` assignments.
+
+    Supports list, tuple, and set literals of string constants. Adds /
+    extends operations (``__all__ += [...]``) are recognised too. Anything
+    else (e.g. dynamic ``__all__`` construction) is ignored — FR-6's v1.0
+    contract is "if it's a literal, we check it" per Q9.2 disposition.
+    """
+
+    out: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    out.update(_strings_in_literal(node.value))
+        elif isinstance(node, ast.AugAssign):
+            if (
+                isinstance(node.target, ast.Name)
+                and node.target.id == "__all__"
+                and isinstance(node.op, ast.Add)
+            ):
+                out.update(_strings_in_literal(node.value))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "__all__" and node.value is not None:
+                out.update(_strings_in_literal(node.value))
+    return out
+
+
+def _strings_in_literal(node: ast.expr) -> set[str]:
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return {
+            elt.value
+            for elt in node.elts
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+        }
+    return set()
 
 
 def _load_cache(cache_path: Path) -> dict[str, CacheEntry]:
@@ -916,6 +1068,54 @@ TEST_PATH_RE = re.compile(r"^(?:packages/[\w-]+/)?tests?/[\w./-]+\.py$")
 # Error symbol: matches X*Error or X*Warning (single capitalized word
 # ending in Error/Warning).
 ERROR_NAME_RE = re.compile(r"^[A-Z][a-zA-Z0-9_]*(?:Error|Warning)$")
+
+# SDG-202 ----------------------------------------------------------------
+# FR-5 dataclass-field reference: ``Class.field`` (no parens — the parens
+# variant is FR-2's responsibility). Trailing token must start with a lower
+# letter or underscore so ``Class.NestedClass`` is NOT treated as a field.
+CLASS_FIELD_RE = re.compile(r"^([A-Z][a-zA-Z0-9_]*)\.([a-z_][a-zA-Z0-9_]*)$")
+
+# FR-3 decorator-mention: an inline ``@<name>`` reference. Picked out of a
+# backtick'd token like ``@dataclass`` so we know the spec author intended
+# a decorator citation rather than prose like "@joe handed me the spec".
+DECORATOR_TOKEN_RE = re.compile(r"^@([a-zA-Z_][a-zA-Z0-9_]*)$")
+# FR-3 count phrase — ``applied to N functions``, ``decorated 12 methods``,
+# ``... 7 sites``. The match group captures the integer count.
+DECORATOR_COUNT_PHRASE_RE = re.compile(
+    r"\b(\d+)\s+(?:functions?|methods?|callers?|sites?|call\s+sites?|definitions?|"
+    r"classes?|usages?|applications?|nodes?)\b",
+    re.IGNORECASE,
+)
+
+# FR-6 export-claim trigger — strict literal ``in `__all__``` form only.
+# Other "export" phrasings (W&B export, CSV export, etc.) are widespread
+# in prose and would over-fire; v1.1 will add a tighter symbol-proximity
+# check before broadening the trigger. Q9.2 v1.0 conservative scope.
+EXPORT_PHRASE_RE = re.compile(r"in\s+`__all__`")
+
+# FR-8 workspace-leak patterns. ``W31 31b`` style shorthands are leaks
+# regardless of context. ``workspaces/<dir>/`` paths are leaks UNLESS the
+# line carries a legitimate citation prefix (``Origin:``, ``Citation:``,
+# ``Source:``, ``Per <path>``, ``See <path>``) or sits inside an excluded
+# section (``## Cross-References`` etc., handled by EXCLUSION_PATTERNS).
+WORKSPACE_LEAK_RE = re.compile(r"\bW\d+\s+\d+[a-z]?\b")
+WORKSPACE_PATH_RE = re.compile(r"workspaces/[\w./-]+")
+LEGITIMATE_CITATION_PREFIXES: tuple[str, ...] = (
+    "Origin:",
+    "Citation:",
+    "Source:",
+    "Cross-Reference:",
+    "Per ",
+    "See ",
+    "see ",
+    "see also:",
+    "From:",
+    "Authority:",
+    # v2 spec meta-header convention — used by every realigned spec to
+    # record "DRAFT at workspaces/<draft-path>" before promotion.
+    "Status:",
+    "Supersedes:",
+)
 
 # Inline negation patterns — when these appear within a "negation window"
 # around a backticked symbol, the symbol is treated as informally mentioned
@@ -1021,7 +1221,7 @@ def run_sweeps(
     overrides: list[OverrideDirective],
     cache: SymbolIndex,
 ) -> list[Finding]:
-    """Drive the four day-1 sweeps over *sections*.
+    """Drive every sweep over *sections*.
 
     Override directives at the SAME section as a citation override the
     section's default behaviour: ``spec-assert-skip`` suppresses the finding;
@@ -1081,9 +1281,268 @@ def run_sweeps(
                     findings=findings,
                     line_negated=line_negated,
                 )
+            if line_negated:
+                continue
+            # FR-3: decorator application + count claim. Operates on the
+            # full line because it requires correlating a decorator token
+            # with a count phrase that may sit either side of the @-token.
+            if "FR-3" in section.matched_frs:
+                _sweep_fr3_decorator_count(
+                    line=line,
+                    line_no=line_no,
+                    spec_path=spec_path,
+                    cache=cache,
+                    findings=findings,
+                )
+            # FR-6: __all__ membership. Trigger requires the literal
+            # ``__all__`` mention so prose like "exported under …" does
+            # not over-fire (per Q9.2 v1.0 conservative scope).
+            if "FR-6" in section.matched_frs:
+                _sweep_fr6_all_membership(
+                    line=line,
+                    line_no=line_no,
+                    spec_path=spec_path,
+                    overrides_for_section=overrides_by_section.get(sec_idx, {}),
+                    cache=cache,
+                    findings=findings,
+                )
+
+    # FR-8: workspace-artifact leak detection. Walks the WHOLE document
+    # because a leaked workspace ID is wrong everywhere — section
+    # allowlist does not gate it. Excluded sections (Cross-References,
+    # Origin, Conformance Checklist) and fenced code blocks are silent.
+    _sweep_fr8_workspace_leaks(
+        spec_path=spec_path,
+        spec_text=spec_text,
+        sections=sections,
+        findings=findings,
+    )
 
     findings.sort(key=Finding.sort_key)
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Line-level sweeps (SDG-202).
+# ---------------------------------------------------------------------------
+
+
+def _sweep_fr3_decorator_count(
+    *,
+    line: str,
+    line_no: int,
+    spec_path: Path,
+    cache: SymbolIndex,
+    findings: list[Finding],
+) -> None:
+    """Verify ``@decorator applied to N functions`` style claims.
+
+    Fires only when the line carries BOTH a backticked ``@<name>`` token
+    AND a count phrase like ``5 functions`` / ``12 sites``. Conservative on
+    purpose: prose mentions of decorators without counts (and vice versa)
+    are silent.
+    """
+
+    count_match = DECORATOR_COUNT_PHRASE_RE.search(line)
+    if count_match is None:
+        return
+    expected = int(count_match.group(1))
+
+    decorator_names: list[str] = []
+    for token in BACKTICK_TOKEN_RE.findall(line):
+        m = DECORATOR_TOKEN_RE.match(token.strip())
+        if m is not None:
+            decorator_names.append(m.group(1))
+    if not decorator_names:
+        return
+
+    for dec_name in decorator_names:
+        actual = cache.decorator_counts.get(dec_name, 0)
+        if actual != expected:
+            findings.append(
+                Finding(
+                    spec_path=str(spec_path),
+                    line=line_no,
+                    fr_code="FR-3",
+                    symbol=f"@{dec_name}",
+                    kind="decorator",
+                    message=(
+                        f"FR-3: spec claims {expected} application(s) of "
+                        f"@{dec_name} at {spec_path}:{line_no} but the "
+                        f"source tree has {actual} (counted across all "
+                        f"manifest source roots)"
+                    ),
+                )
+            )
+
+
+def _sweep_fr6_all_membership(
+    *,
+    line: str,
+    line_no: int,
+    spec_path: Path,
+    overrides_for_section: dict[tuple[str, str], OverrideDirective],
+    cache: SymbolIndex,
+    findings: list[Finding],
+) -> None:
+    """Verify ``in `__all__` `` claims against the union of declared exports.
+
+    Only fires when the line literally references ``__all__`` (the strongest
+    trigger). The line's backticked Class-shaped symbols are checked for
+    membership in the union of every package's ``__all__``.
+    """
+
+    if EXPORT_PHRASE_RE.search(line) is None:
+        return
+
+    for token in BACKTICK_TOKEN_RE.findall(line):
+        token = token.strip()
+        if not token:
+            continue
+        # __all__ entries are typically class names (Capitalized) but may
+        # also be lowercase function names. Accept either shape, exclude
+        # the literal ``__all__`` token itself, and skip stop-list noise.
+        if token == "__all__":
+            continue
+        if token in STOP_LIST or token in PROSE_STOP_LIST:
+            continue
+        # Restrict to "looks-like-a-symbol" tokens: a Python identifier.
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", token):
+            continue
+        # Dunder names are language hooks, never canonical exports.
+        if token.startswith("__") and token.endswith("__"):
+            continue
+        if _suppressed(overrides_for_section, "export", token):
+            continue
+        if token in cache.all_exports:
+            continue
+        findings.append(
+            Finding(
+                spec_path=str(spec_path),
+                line=line_no,
+                fr_code="FR-6",
+                symbol=token,
+                kind="export",
+                message=(
+                    f"FR-6: {token} cited at {spec_path}:{line_no} as "
+                    f"exported but not present in any package's "
+                    f"__all__ list (union scan across manifest source roots)"
+                ),
+            )
+        )
+
+
+def _sweep_fr8_workspace_leaks(
+    *,
+    spec_path: Path,
+    spec_text: str,
+    sections: list[Section],
+    findings: list[Finding],
+) -> None:
+    """Catch leaked workspace artefact references in shipped specs.
+
+    ``W31 31b`` shorthand IDs are unconditional leaks — there is no
+    legitimate prose context for them. ``workspaces/<dir>/`` paths are
+    leaks UNLESS the line carries a citation prefix (``Origin:``,
+    ``Citation:``, ``Per <path>``, ``See <path>``) OR sits inside an
+    excluded section heading (``## Cross-References`` and friends, set in
+    EXCLUSION_PATTERNS) OR inside a fenced code block.
+    """
+
+    excluded_ranges: list[tuple[int, int]] = []
+    for section in sections:
+        if _is_excluded(section.heading):
+            excluded_ranges.append((section.heading_line, section.body_end))
+
+    def _is_excluded_line(line_no: int) -> bool:
+        return any(start <= line_no < end for start, end in excluded_ranges)
+
+    def _section_for_line(line_no: int) -> Section | None:
+        for section in sections:
+            if section.heading_line <= line_no < section.body_end:
+                return section
+        return None
+
+    lines = spec_text.splitlines()
+    in_fence = False
+    for line_no, line in enumerate(lines, start=1):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if _is_excluded_line(line_no):
+            continue
+        # Mirror FR-1/2/4/5/7 negation handling so ``### 7.3 Source-Comment
+        # Drift To Clean Up`` and ``### 9.3 No Cross-Process Cost Tracker
+        # (Yet)`` style subsections — and paragraph-level "Until then" /
+        # "v1-spec'd" / "fabricated" markers — silence FR-8 too.
+        section = _section_for_line(line_no)
+        if section is not None and _is_in_negated_subsection(section, line_no):
+            continue
+        if _line_is_negated(lines, line_no):
+            continue
+        # Skip the spec's own provenance footer (lines beginning with
+        # "Origin:" / "Citation:" / "Source:" etc.).
+        if any(stripped.startswith(prefix) for prefix in LEGITIMATE_CITATION_PREFIXES):
+            continue
+        # Inline-cited paths are common in body prose: "see also
+        # workspaces/x/y" — silence when the line carries a prose-level
+        # citation marker.
+        has_citation_marker = any(
+            marker in line
+            for marker in (
+                "Origin:",
+                "Citation:",
+                "Source:",
+                "Cross-Reference:",
+                "see also:",
+                "Authority:",
+            )
+        )
+
+        leak_match = WORKSPACE_LEAK_RE.search(line)
+        if leak_match is not None:
+            leaked = leak_match.group(0)
+            findings.append(
+                Finding(
+                    spec_path=str(spec_path),
+                    line=line_no,
+                    fr_code="FR-8",
+                    symbol=leaked,
+                    kind="workspace_leak",
+                    message=(
+                        f"FR-8: workspace shorthand ID {leaked!r} leaked "
+                        f"into shipped spec at {spec_path}:{line_no} — "
+                        f"either rewrite the prose without the wave/shard "
+                        f"reference or move the line under an excluded "
+                        f"section like ## Cross-References"
+                    ),
+                )
+            )
+
+        if has_citation_marker:
+            continue
+        path_match = WORKSPACE_PATH_RE.search(line)
+        if path_match is not None:
+            leaked = path_match.group(0)
+            findings.append(
+                Finding(
+                    spec_path=str(spec_path),
+                    line=line_no,
+                    fr_code="FR-8",
+                    symbol=leaked,
+                    kind="workspace_path",
+                    message=(
+                        f"FR-8: workspaces/ path {leaked!r} cited at "
+                        f"{spec_path}:{line_no} without an Origin: / "
+                        f"Citation: / Per <path> prefix — promote to an "
+                        f"explicit citation or move under "
+                        f"## Cross-References"
+                    ),
+                )
+            )
 
 
 def _dispatch_token(
@@ -1154,6 +1613,47 @@ def _dispatch_token(
             )
         )
         return
+
+    if "FR-5" in section.matched_frs:
+        m = CLASS_FIELD_RE.match(token)
+        if m is not None:
+            cls_name, field_name = m.group(1), m.group(2)
+            full = f"{cls_name}.{field_name}"
+            if _suppressed(overrides_for_section, "field", full):
+                return
+            # Skip dunder fields (language-mandated) and stop-list classes.
+            if field_name.startswith("__") and field_name.endswith("__"):
+                return
+            if cls_name in STOP_LIST or cls_name in PROSE_STOP_LIST:
+                return
+            # Class must exist; if missing, defer to FR-1's surface so we do
+            # not double-emit (FR-1 already flags missing classes).
+            if cls_name not in cache.classes and cls_name not in cache.error_classes:
+                return
+            # Field present on the class? AnnAssign-only per Q9.2 v1.0 scope
+            # (Pydantic / attrs detection is v1.1). FR-5 stays silent if the
+            # class has zero declared AnnAssign fields — the class is likely
+            # not a dataclass-style record at all.
+            fields_on_class = cache.class_fields.get(cls_name, set())
+            if not fields_on_class:
+                return
+            if field_name not in fields_on_class:
+                findings.append(
+                    Finding(
+                        spec_path=str(spec_path),
+                        line=line_no,
+                        fr_code="FR-5",
+                        symbol=full,
+                        kind="field",
+                        message=(
+                            f"FR-5: field {full} cited at "
+                            f"{spec_path}:{line_no} not declared as AnnAssign "
+                            f"on class {cls_name} (v1.0 scope = AnnAssign-only "
+                            f"per spec § 11.5; Pydantic / attrs detection v1.1)"
+                        ),
+                    )
+                )
+            return
 
     if "FR-2" in section.matched_frs:
         m = METHOD_CALL_RE.match(token)
