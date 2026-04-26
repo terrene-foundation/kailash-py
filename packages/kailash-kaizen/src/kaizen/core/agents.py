@@ -8,8 +8,11 @@ AI programming, built on Core SDK workflow patterns.
 import inspect
 import json
 import logging
+import os
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+from kaizen.errors import EnvModelMissing
 
 # PERFORMANCE OPTIMIZATION: Lazy loading for Kailash imports
 # WorkflowBuilder imports can bring heavy dependencies
@@ -100,15 +103,30 @@ class Agent:
         return self.signature is not None
 
     def _set_default_config(self):
-        """Set default configuration values."""
-        defaults = {
-            "model": "gpt-3.5-turbo",
+        """Set default configuration values.
+
+        Per ``rules/env-models.md``, model identifiers MUST come from ``.env``
+        (``KAIZEN_DEFAULT_MODEL``) — hardcoded literals like ``"gpt-3.5-turbo"``
+        are BLOCKED. If the caller did not supply ``model`` AND the env var
+        is unset, raise :class:`kaizen.errors.EnvModelMissing` with an
+        actionable message rather than silently defaulting to a stale model.
+        Other defaults (temperature, max_tokens, timeout) remain hardcoded
+        because they are not provider-coupled.
+        """
+        if "model" not in self.config or self.config["model"] is None:
+            env_model = os.environ.get("KAIZEN_DEFAULT_MODEL")
+            if not env_model:
+                raise EnvModelMissing(
+                    env_var="KAIZEN_DEFAULT_MODEL", component="CoreAgent"
+                )
+            self.config["model"] = env_model
+
+        non_model_defaults = {
             "temperature": 0.7,
             "max_tokens": 1000,
             "timeout": 30,
         }
-
-        for key, value in defaults.items():
+        for key, value in non_model_defaults.items():
             if key not in self.config or self.config[key] is None:
                 self.config[key] = value
 
@@ -132,9 +150,11 @@ class Agent:
         WorkflowBuilder = _lazy_import_workflow_builder()
         workflow = WorkflowBuilder()
 
-        # Add LLM node using string-based pattern with Core SDK compatible parameters
+        # Add LLM node using string-based pattern with Core SDK compatible parameters.
+        # `_set_default_config` enforces `model` from KAIZEN_DEFAULT_MODEL env var
+        # (rules/env-models.md) — index access is correct here; no hardcoded fallback.
         node_params = {
-            "model": self.config.get("model", "gpt-3.5-turbo"),
+            "model": self.config["model"],
             "timeout": self.config.get("timeout", 30),
         }
 
@@ -496,10 +516,12 @@ class Agent:
             WorkflowBuilder = _lazy_import_workflow_builder()
             workflow = WorkflowBuilder()
 
-            # Build Core SDK compatible parameters with smart provider selection
+            # Build Core SDK compatible parameters with smart provider selection.
+            # Model defaulted from KAIZEN_DEFAULT_MODEL via `_set_default_config`
+            # (rules/env-models.md) — no hardcoded fallback permitted here.
             enhanced_params = {
                 "provider": self._get_provider_for_config(),  # Smart provider selection
-                "model": self.config.get("model", "gpt-3.5-turbo"),
+                "model": self.config["model"],
                 "timeout": self.config.get("timeout", 30),
             }
 
@@ -634,10 +656,12 @@ class Agent:
         WorkflowBuilder = _lazy_import_workflow_builder()
         workflow = WorkflowBuilder()
 
-        # Build LLM parameters for direct execution
+        # Build LLM parameters for direct execution. Model identifier comes from
+        # `_set_default_config` (KAIZEN_DEFAULT_MODEL env var) per
+        # rules/env-models.md — no hardcoded fallback permitted here.
         llm_params = {
             "provider": self._get_provider_for_config(),  # Smart provider selection
-            "model": self.config.get("model", "gpt-3.5-turbo"),
+            "model": self.config["model"],
             "timeout": self.config.get("timeout", 30),
         }
 
@@ -3016,9 +3040,11 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
         WorkflowBuilder = _lazy_import_workflow_builder()
         workflow = WorkflowBuilder()
 
-        # Add communication node with target agent
+        # Add communication node with target agent. Target agent's model was
+        # validated at its `_set_default_config` (KAIZEN_DEFAULT_MODEL env var,
+        # rules/env-models.md) — index access is correct; no hardcoded fallback.
         communication_params = {
-            "model": target_agent.config.get("model", "gpt-3.5-turbo"),
+            "model": target_agent.config["model"],
             "generation_config": {
                 "temperature": target_agent.config.get("temperature", 0.7),
                 "max_tokens": target_agent.config.get("max_tokens", 500),
