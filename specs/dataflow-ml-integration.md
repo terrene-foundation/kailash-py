@@ -10,6 +10,8 @@ Sibling specs: `specs/dataflow-core.md`, `specs/dataflow-express.md`, `specs/dat
 
 Origin: `ml-feature-store-draft.md` §2 mandates "DataFlow lineage integration" + `@feature` consuming `dataflow.transform`. `ml-registry-draft.md` mandates `lineage_dataset_hash` field on every model version. Round-1 theme T6 flagged spec-to-code drift where feature-store specs referenced a DataFlow binding that did not exist. This spec specifies the DataFlow-side surface kailash-ml 1.0.0 consumes.
 
+> **Wave 6.5 deferral note (2026-04-26):** Sections referencing the `@feature` decorator (§ 2.5, § 3) and `FeatureGroup` class as `kailash-ml`-side consumers describe **M2-deferred surfaces**, not 1.1.1-shipped behavior. Per `ml-feature-store.md` v2 § 11, the canonical 1.1.1 `FeatureStore` does NOT export `@feature`, `FeatureGroup`, `FeatureStore.materialize()`, or an online-store adapter. The `dataflow.ml_feature_source(...)` polars binding (§ 2 of this spec) IS shipped and consumed by `kailash_ml.features.FeatureStore.get_features(...)` end-to-end (verified positive at audit finding F-E2-23). When this spec graduates from `(draft)` to a versioned release, the `@feature` / `FeatureGroup` clauses MUST be revisited against ml-feature-store.md M2 deliverables.
+
 ---
 
 ## 1. Scope + Non-Goals

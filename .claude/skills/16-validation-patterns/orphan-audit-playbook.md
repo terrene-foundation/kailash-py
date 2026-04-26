@@ -2,6 +2,8 @@
 
 Detailed audit protocols and extended evidence backing `rules/orphan-detection.md`. The rule holds the load-bearing MUST clauses; this file holds the step-by-step playbooks agents can execute during `/redteam` and `/codify` cycles.
 
+Cf. the spec-drift-gate at `specs/spec-drift-gate.md` for the executable form of FR-6 (`__getattr__` resolution) + FR-7 (test-path existence) sweeps; the gate productionizes the manual checks below at PR time via `scripts/spec_drift_gate.py`.
+
 ## Detection Protocol
 
 Run this 5-step protocol during `/redteam` against every class exposed on the public surface:

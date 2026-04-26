@@ -75,6 +75,23 @@ repos:
       - id: python-check-blanket-noqa
         name: Check for blanket noqa
 
+  # Spec drift gate - Block fabricated symbol/test-path references in specs/
+  # See specs/spec-drift-gate.md and scripts/spec_drift_gate.py
+  - repo: local
+    hooks:
+      - id: spec-drift-gate
+        name: Spec drift gate
+        description: "Block fabricated symbol/test-path references in specs/**.md"
+        # Read-only sweep: never modifies the working tree (sidesteps the
+        # auto-stash interaction documented in rules/git.md § Pre-Commit Hook
+        # Workarounds). Stdlib-only — uses .venv python directly so no extra
+        # virtualenv is provisioned by pre-commit. See SDG-501.
+        entry: .venv/bin/python scripts/spec_drift_gate.py --format human
+        language: system
+        files: ^specs/.*\.md$
+        pass_filenames: true
+        stages: [pre-commit, manual]
+
   # Pytest - Run Tier 1 unit tests only
   - repo: local
     hooks:
@@ -162,7 +179,7 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: weekly
-  skip: [pytest-check, trivy-fs] # Skip resource-intensive hooks in CI
+  skip: [pytest-check, trivy-fs, spec-drift-gate] # Skip resource-intensive hooks in CI (gate runs in dedicated workflow)
   submodules: false
 
 # Default stages

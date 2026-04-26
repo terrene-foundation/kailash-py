@@ -244,7 +244,7 @@ Per approved-decisions.md Decision 12, cross-tenant admin operations raise `Mult
 **Inheritance:** `class MultiTenantOpError(MLError)` — directly under `MLError`, NOT under `ModelRegistryError` alone. The rationale is that cross-tenant admin ops surface across every kailash-ml domain:
 
 - **Registry** — `export_tenant_snapshot()` / `import_tenant_snapshot()` (see `ml-registry-draft.md §13`).
-- **Feature store** — `export_tenant_snapshot()` / `import_tenant_snapshot()` on a FeatureGroup (see `ml-feature-store-draft.md §12`).
+- **Feature store** — `export_tenant_snapshot()` / `import_tenant_snapshot()` on a FeatureGroup (M2-deferred — see `ml-feature-store.md` v2 § 11.1, the canonical 1.1.1 surface does not implement `FeatureGroup` yet).
 - **Serving** — cross-tenant `predict_with_shadow()` and cross-tenant model mirror without PACT D/T/R clearance (see `ml-serving-draft.md §12`).
 - **Tracking** — cross-tenant run compare in `kailash_ml.tracking` admin API (gated post-1.0).
 

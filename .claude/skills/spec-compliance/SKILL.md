@@ -226,3 +226,39 @@ sites that use different variable names for the same concept.
 - Trusting `.test-results` to verify new modules have tests
 - Calling a row "exists: yes" without a grep or AST proof
 - Skipping checks 5-7 because "the suite passes"
+
+## Executable Form: Spec Drift Gate
+
+The protocol above is enforced mechanically by the **Spec Drift Gate** at PR time, replacing the audit-after-the-fact loop (Wave 5 portfolio audit → Wave 6.5 spec realignment) with prevent-at-insertion.
+
+- **Spec contract:** `specs/spec-drift-gate.md`
+- **Implementation:** `scripts/spec_drift_gate.py`
+- **CLI:** `.venv/bin/python scripts/spec_drift_gate.py --help`
+- **Pre-commit hook:** `.pre-commit-config.yaml` (entry `spec-drift-gate`, scoped to `specs/**.md`)
+- **Baseline:** `.spec-drift-baseline.jsonl` (pristine W5/W6.5 backlog; new drift fails)
+
+### When to use which
+
+- **`/redteam` time** — invoke this skill for protocol guidance, judgement-driven audit, and novel drift classes the gate doesn't yet detect.
+- **PR time** — the gate runs automatically (pre-commit + CI). Mechanical, fast, deterministic. Authors get the same coverage without writing a single grep.
+
+### ADR-2 marker convention (quick-ref)
+
+The gate distinguishes assertion from informal mention via section-context inference: `## Surface`, `## Construction`, `## Public API`, `## Errors`, `## Test Contract` sections are scanned; `## Out of Scope`, `## Deferred to M2` are silent. Two override directives:
+
+- `<!-- spec-assert: kind:symbol -->` — force-assert a symbol the section heuristic missed
+- `<!-- spec-assert-skip: kind:symbol reason:"..." -->` — force-skip a symbol the heuristic flagged; `reason:` is REQUIRED
+
+See `specs/spec-drift-gate.md` § 3.2 for the full directive grammar.
+
+### Example: manual sweep → gate equivalent
+
+| Manual mechanical sweep                                         | Gate equivalent                                                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `grep -n 'class.*Error' src/kailash/ml/errors.py`               | FR-4 sweep — emits `FAIL FR-4: <symbol> not found in <errors_module>`          |
+| `find tests -name 'test_*_wiring.py'` per cited test path       | FR-7 sweep — emits `FAIL FR-7: test path '...' does not exist on disk`         |
+| `python -c "import kailash_ml; assert kailash_ml.AutoMLEngine"` | FR-1/B1 sweep — resolves through `__getattr__` map and asserts module identity |
+
+The gate emits each finding with a `fix_hint:` so contributors get an actionable repair path inline.
+
+**Cross-references:** `.claude/skills/16-validation-patterns/orphan-audit-playbook.md` (FR-6/FR-7 origin pattern), `.claude/skills/spec-compliance/SKILL.md` § "The Method" (this section's protocol roots).
