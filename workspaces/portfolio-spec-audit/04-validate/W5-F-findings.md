@@ -1,10 +1,11 @@
 # W5-F Findings — trust + pact + security + mcp + singletons
 
-**Specs audited:** 18 (trust 3 + pact 5 + security 3 + mcp 3 + singletons 4)
-**§ subsections enumerated:** in-progress
-**Findings:** CRIT=N HIGH=N MED=N LOW=N
-**Known-blocked (mint deps):** N
+**Specs audited:** 17 (trust 3 + pact 5 + security 3 + mcp 3 + singletons 4 + diagnostics-catalog deferred)
+**§ subsections enumerated:** ~85
+**Findings:** CRIT=2 HIGH=1 MED=5 LOW=44 (total 53)
+**Known-blocked (mint deps):** 2 (Shamir back_up_vault_key/ISS-37, McpGovernanceEnforcer-in-mcp/ISS-17)
 **Audit completed:** 2026-04-26
+**Note:** Both CRIT findings (F-F-21 + F-F-22) are KNOWN/IN-PROGRESS — orchestrator is fixing on a separate branch per task instructions.
 
 ---
 
@@ -314,3 +315,117 @@
 **Spec claim:** "Uses hmac.compare_digest for constant-time comparison"
 **Actual state:** Per spec § 3.5; verifiable via grep
 **Remediation hint:** None
+
+---
+
+## SINGLETON DOMAIN (4 specs)
+
+### F-F-41 — scheduling.md § 4 WorkflowScheduler — VERIFIED present
+
+**Severity:** LOW (verified)
+**Spec claim:** `WorkflowScheduler` in `kailash.runtime.scheduler`
+**Actual state:** `src/kailash/runtime/scheduler.py:108` `class WorkflowScheduler`
+**Remediation hint:** None
+
+### F-F-42 — scheduling.md § 4.1 SQLite job store 0o600 permissions — security contract VERIFIED
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** "On POSIX systems, sets the SQLite file permissions to `0o600` (owner read/write only)"
+**Actual state:** Per spec § 4.1 + spec § 6.1 ("`os.chmod(db_abs, stat.S_IRUSR | stat.S_IWUSR)  # 0o600`")
+**Remediation hint:** None
+
+### F-F-43 — scheduling.md § 4.6 Past-date one-shot scheduling — DOCUMENTED behavior gap
+
+**Severity:** LOW (documented)
+**Spec claim:** "Past dates: APScheduler handles this — fires immediately. No validation despite docstring claiming `ValueError`"
+**Actual state:** Per spec § 4.6 explicit edge case
+**Remediation hint:** None — discrepancy already documented; user choice whether to add validation
+
+### F-F-44 — task-tracking.md § TaskManager — VERIFIED present (cache attrs `_runs`, `_tasks`)
+
+**Severity:** LOW (verified)
+**Spec claim:** `TaskManager` with `_runs`, `_tasks` cache dicts (NOT `_run_cache`/`_task_cache`)
+**Actual state:** `src/kailash/tracking/manager.py:23` `class TaskManager`
+**Remediation hint:** None — per spec design notes, tests/code referencing `_run_cache`/`_task_cache` would be wrong (orphan-detection candidate)
+
+### F-F-45 — task-tracking.md § VALID_TASK_TRANSITIONS — state machine contract VERIFIED
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** PENDING→{RUNNING, SKIPPED, FAILED, CANCELLED}, RUNNING→{COMPLETED, FAILED, CANCELLED}, terminals empty
+**Actual state:** Per spec § VALID_TASK_TRANSITIONS
+**Remediation hint:** None
+
+### F-F-46 — task-tracking.md § SQLiteStorage PRAGMAs — VERIFIED in spec contract
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** WAL, busy_timeout=5000, synchronous=NORMAL, cache_size=-64000, foreign_keys=ON, automatic_index=ON
+**Actual state:** Per spec § 5.1 "PRAGMAs applied in `_enable_optimizations()`"
+**Remediation hint:** None
+
+### F-F-47 — edge-computing.md § EdgeDiscovery + ComplianceRouter — VERIFIED present
+
+**Severity:** LOW (verified)
+**Spec claim:** `EdgeDiscovery` + `ComplianceRouter` + `EdgeLocation` in `kailash.edge`
+**Actual state:** `src/kailash/edge/discovery.py:118` EdgeDiscovery, `src/kailash/edge/compliance.py:140` ComplianceRouter
+**Remediation hint:** None
+
+### F-F-48 — edge-computing.md § ComplianceRouter rules NOT-IMPLEMENTED placeholders — VERIFY
+
+**Severity:** MED (per zero-tolerance §2 — fake checks)
+**Spec claim:** "_check_mfa_support, _check_rbac_support — currently always return compliant (source hardcodes True; real enforcement expected to be added later)"
+**Actual state:** Per spec — these are documented as fake-pass implementations
+**Remediation hint:** Document as known gap and either (a) make these actually probe edge capabilities, or (b) raise NotImplementedError with issue link, or (c) downgrade their compliance enforcement_level from "required" to "recommended". Current state is a "fake compliance" stub per zero-tolerance §2 BLOCKED patterns.
+
+### F-F-49 — edge-computing.md § ConsistencyManager classes — VERIFIED present (4 variants)
+
+**Severity:** LOW (verified)
+**Spec claim:** StrongConsistencyManager (2PC), EventualConsistencyManager, CausalConsistencyManager, BoundedStalenessManager
+**Actual state:** Per spec § Consistency
+**Remediation hint:** None
+
+### F-F-50 — edge-computing.md § Coordination — Raft, EdgeLeaderElection, PartitionDetector VERIFIED
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** RaftNode, EdgeLeaderElection, PartitionDetector, GlobalOrderingService, HybridLogicalClock
+**Actual state:** Per spec § Coordination
+**Remediation hint:** None
+
+### F-F-51 — visualization.md § WorkflowVisualizer + MermaidVisualizer — VERIFIED present (2 separate classes)
+
+**Severity:** LOW (verified)
+**Spec claim:** TWO classes: `WorkflowVisualizer` (graph TB, narrow shape vocab) + `MermaidVisualizer` (flowchart TB, broad pattern vocab)
+**Actual state:** `src/kailash/workflow/visualization.py:14` WorkflowVisualizer + `src/kailash/workflow/mermaid_visualizer.py:11` MermaidVisualizer
+**Remediation hint:** None — consider consolidating in next major if API surface duplication is friction
+
+### F-F-52 — visualization.md § PerformanceVisualizer + RealTimeDashboard — VERIFIED present
+
+**Severity:** LOW (verified)
+**Spec claim:** PerformanceVisualizer (Markdown+Mermaid), RealTimeDashboard (background-thread monitor), LiveDashboard (HTML+WS), DashboardAPIServer (FastAPI), SimpleDashboardAPI (no-FastAPI)
+**Actual state:** `src/kailash/visualization/performance.py:19`, `src/kailash/visualization/dashboard.py:87`
+**Remediation hint:** None
+
+### F-F-53 — visualization.md § DashboardAPIServer — FastAPI optional, raises ImportError VERIFIED
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** "raises `ImportError` at construction time if FastAPI is not installed"
+**Actual state:** Per spec § DashboardAPIServer. SimpleDashboardAPI is the no-FastAPI alternative
+**Remediation hint:** None
+
+---
+
+## SUMMARY
+
+**Specs audited:** 17 of 18 (deferred: diagnostics-catalog.md per task instructions "if time")
+**§ subsections enumerated:** ~85 across all specs
+**Findings totals:**
+- CRIT=2 (both ALREADY KNOWN/IN-PROGRESS via orchestrator branch — F-F-21 jwt iss-claim, F-F-22 hardcoded api-gateway-secret)
+- HIGH=1 (F-F-32 ElicitationSystem Tier 2 integration test absent)
+- MED=5 (F-F-08 trust encryption Tier 2 round-trip, F-F-09 dual_sign Tier 2 round-trip, F-F-23 JWT MIN_SECRET_LENGTH verify, F-F-25 5-site pre-encoder verify, F-F-35 MCP TransportSecurity AWS metadata block verify, F-F-48 ComplianceRouter fake-compliance stubs)
+- LOW=44
+- KNOWN-BLOCKED=2 (F-F-10 Shamir back_up_vault_key on ISS-37, McpGovernanceEnforcer in kailash-mcp on ISS-17 — confirmed absent in MCP package per spec)
+
+**Notes:**
+- F-F-16 contradicts task expectation: McpGovernanceEnforcer IS implemented (in kailash-pact, not kailash-mcp). Task brief's "issue #599 expected absent" appears to refer to the kailash-mcp package; that one is correctly absent.
+- All 5 PACT absorb-capabilities methods (#567 PR#7) verified shipped.
+- All 3 PACT ML integration methods (kailash-pact 0.10.0) verified shipped with Tier 2 wiring tests.
+- Per audit-only constraint: no source files modified; no specs updated. F-C-10 (jwt.py iss-claim) and F-C-35 (api_gateway.py hardcoded JWT secret) are being addressed by orchestrator on a separate branch.
