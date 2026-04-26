@@ -26,6 +26,7 @@ from __future__ import annotations
 # reserved for symbols whose backend imports are expensive. These four
 # are cheap (no SB3 touch at import time).
 from kailash_ml.rl._lineage import RLLineage
+from kailash_ml.rl._records import EpisodeRecord, EvalRecord
 from kailash_ml.rl._rl_train import rl_train
 from kailash_ml.rl.align_adapter import (
     FeatureNotAvailableError,
@@ -40,6 +41,8 @@ from kailash_ml.rl.trainer import RLTrainer, RLTrainingConfig, RLTrainingResult
 __all__ = [
     "EnvironmentRegistry",
     "EnvironmentSpec",
+    "EpisodeRecord",
+    "EvalRecord",
     "FeatureNotAvailableError",
     "PolicyArtifactRef",
     "PolicyRegistry",

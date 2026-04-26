@@ -26,12 +26,16 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from kailash_ml._device_report import DeviceReport
+from kailash_ml._result import TrainingResult
 from kailash_ml.errors import RLError
 from kailash_ml.rl._lineage import RLLineage
+from kailash_ml.rl._records import EpisodeRecord, EvalRecord
+from kailash_ml.rl.protocols import PolicyArtifactRef
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +93,35 @@ class RLTrainingConfig:
 
 @dataclass
 class RLTrainingResult:
-    """Result of an RL training run.
+    """Result of an RL training run — RL specialisation of :class:`TrainingResult`.
+
+    Per ``specs/ml-rl-core.md`` §3.2 the canonical declaration is
+    ``RLTrainingResult ⊂ TrainingResult`` (subset relationship). This
+    dataclass realises the subset relationship by mirroring the
+    :class:`~kailash_ml._result.TrainingResult` field surface (``model_uri``,
+    ``metrics``, ``device_used``, ``accelerator``, ``precision``,
+    ``elapsed_seconds``, ``tracker_run_id``, ``tenant_id``,
+    ``artifact_uris``, ``lightning_trainer_config``) AND adds the
+    RL-specific spec §3.2 fields:
+
+    * ``algorithm``, ``env_spec``, ``total_timesteps``
+    * ``episode_reward_mean``, ``episode_reward_std``,
+      ``episode_length_mean``
+    * ``policy_entropy``, ``value_loss``, ``kl_divergence``,
+      ``explained_variance`` (None when not applicable to the algorithm)
+    * ``replay_buffer_size`` (off-policy only)
+    * ``total_env_steps``
+    * ``episodes`` (list[EpisodeRecord]) — non-empty at training end
+    * ``eval_history`` (list[EvalRecord]) — non-empty when
+      ``eval_freq <= total_timesteps``
+    * ``policy_artifact`` (PolicyArtifactRef) — path + SHA + algo
+
+    The dataclass is intentionally NOT frozen so the W30 lineage
+    population path (``result.lineage = _build_lineage(...)``) keeps
+    working until those call-sites are migrated to construct the
+    lineage upfront. A future major release MAY tighten to
+    ``frozen=True`` once all construction sites populate every field at
+    the call.
 
     The ``metrics`` dict carries the W29 invariant #4 keys:
     ``reward_mean``, ``reward_std``, ``ep_len_mean``, ``ep_len_std``,
@@ -97,40 +129,291 @@ class RLTrainingResult:
     ``None`` (never hallucinated zero — per zero-tolerance Rule 2).
     """
 
-    policy_name: str
-    algorithm: str
-    total_timesteps: int
-    mean_reward: float
-    std_reward: float
-    training_time_seconds: float
+    # --- Spec §3.2 RL-specific required fields ----------------------------
+    algorithm: str = ""
+    env_spec: str = ""
+    total_timesteps: int = 0
+    episode_reward_mean: float = 0.0
+    episode_reward_std: float = 0.0
+    episode_length_mean: float = 0.0
+    total_env_steps: int = 0
+
+    # --- Spec §3.2 RL-specific optional fields (None when N/A) ------------
+    policy_entropy: float | None = None
+    value_loss: float | None = None
+    kl_divergence: float | None = None
+    explained_variance: float | None = None
+    replay_buffer_size: int | None = None
+
+    # --- TrainingResult-mirrored fields (inherited surface per §3.2) ------
+    # ``metrics`` — required cross-SDK metric dict.
     metrics: dict[str, float | None] = field(default_factory=dict)
-    artifact_path: str | None = None
-    eval_history: list[dict[str, Any]] = field(default_factory=list)
+    # Mirrors of ``TrainingResult`` core fields. Defaults are present so
+    # existing positional callers (kailash-align bridge adapters, tests)
+    # continue to construct without breakage; the W6-015 sweep populates
+    # them at every site.
+    model_uri: str = ""
+    device_used: str = ""
+    accelerator: str = ""
+    precision: str = ""
+    elapsed_seconds: float = 0.0
+    tracker_run_id: str | None = None
+    tenant_id: str | None = None
+    artifact_uris: dict[str, str] = field(default_factory=dict)
+    lightning_trainer_config: dict[str, Any] = field(default_factory=dict)
+
+    # --- RL-specific records + lineage (existing surface) -----------------
+    episodes: list[EpisodeRecord] = field(default_factory=list)
+    eval_history: list[EvalRecord] = field(default_factory=list)
+    policy_artifact: PolicyArtifactRef | None = None
     reward_curve: list[tuple[int, float]] = field(default_factory=list)
-    env_name: str = ""
     # Cross-SDK Protocol fields per ``specs/ml-rl-align-unification.md``
     # §3.2 (result parity) + §5 (lineage). Both default to ``None`` so
-    # existing classical callers continue to work unmodified; the W30
-    # dispatcher populates them for new runs.
+    # existing classical callers continue to work unmodified.
     lineage: RLLineage | None = None
     device: DeviceReport | None = None
 
+    # --- Backwards-compat fields preserved through the W6-015 refactor ----
+    # Pre-1.2.0 callers passed ``policy_name`` / ``mean_reward`` /
+    # ``std_reward`` / ``training_time_seconds`` / ``artifact_path`` /
+    # ``env_name`` positionally or as kwargs. Properties below preserve
+    # the read-side surface; the kwargs are accepted by ``__init__``
+    # via the explicit alias declarations and resolved in __post_init__.
+    policy_name: str = ""
+    artifact_path: str | None = None
+
+    # Aliased kwargs — accepted through ``__init__`` via the explicit
+    # field declarations below and resolved into the canonical
+    # ``episode_reward_mean`` / ``episode_reward_std`` /
+    # ``elapsed_seconds`` / ``env_spec`` fields by ``__post_init__``.
+    # Spec-rename evidence: spec §3.2 mandates
+    # ``episode_reward_mean`` (not ``mean_reward``).
+    mean_reward: float | None = None
+    std_reward: float | None = None
+    training_time_seconds: float | None = None
+    env_name: str | None = None
+
+    def __post_init__(self) -> None:
+        # Backwards-compat: callers that constructed the pre-1.2.0
+        # ``RLTrainingResult(mean_reward=..., std_reward=...,
+        # training_time_seconds=..., env_name=...)`` keep working — the
+        # legacy kwargs win when the canonical kwarg was left at the
+        # zero default.
+        if self.mean_reward is not None and self.episode_reward_mean == 0.0:
+            object.__setattr__(self, "episode_reward_mean", float(self.mean_reward))
+        if self.std_reward is not None and self.episode_reward_std == 0.0:
+            object.__setattr__(self, "episode_reward_std", float(self.std_reward))
+        if self.training_time_seconds is not None and self.elapsed_seconds == 0.0:
+            object.__setattr__(
+                self, "elapsed_seconds", float(self.training_time_seconds)
+            )
+        if self.env_name is not None and not self.env_spec:
+            object.__setattr__(self, "env_spec", str(self.env_name))
+        # Ensure the back-compat read-side properties below see a
+        # non-None value once normalisation completed.
+        if self.mean_reward is None:
+            object.__setattr__(self, "mean_reward", self.episode_reward_mean)
+        if self.std_reward is None:
+            object.__setattr__(self, "std_reward", self.episode_reward_std)
+        if self.training_time_seconds is None:
+            object.__setattr__(self, "training_time_seconds", self.elapsed_seconds)
+        if self.env_name is None:
+            object.__setattr__(self, "env_name", self.env_spec)
+
     def to_dict(self) -> dict[str, Any]:
         return {
-            "policy_name": self.policy_name,
             "algorithm": self.algorithm,
+            "env_spec": self.env_spec,
             "total_timesteps": self.total_timesteps,
-            "mean_reward": self.mean_reward,
-            "std_reward": self.std_reward,
-            "training_time_seconds": self.training_time_seconds,
+            "episode_reward_mean": self.episode_reward_mean,
+            "episode_reward_std": self.episode_reward_std,
+            "episode_length_mean": self.episode_length_mean,
+            "total_env_steps": self.total_env_steps,
+            "policy_entropy": self.policy_entropy,
+            "value_loss": self.value_loss,
+            "kl_divergence": self.kl_divergence,
+            "explained_variance": self.explained_variance,
+            "replay_buffer_size": self.replay_buffer_size,
             "metrics": dict(self.metrics),
-            "artifact_path": self.artifact_path,
-            "eval_history": list(self.eval_history),
+            "model_uri": self.model_uri,
+            "device_used": self.device_used,
+            "accelerator": self.accelerator,
+            "precision": self.precision,
+            "elapsed_seconds": self.elapsed_seconds,
+            "tracker_run_id": self.tracker_run_id,
+            "tenant_id": self.tenant_id,
+            "artifact_uris": dict(self.artifact_uris),
+            "lightning_trainer_config": dict(self.lightning_trainer_config),
+            "episodes": [
+                {
+                    "episode_index": ep.episode_index,
+                    "reward": ep.reward,
+                    "length": ep.length,
+                    "timestamp": ep.timestamp.isoformat(),
+                }
+                for ep in self.episodes
+            ],
+            "eval_history": [
+                {
+                    "eval_step": ev.eval_step,
+                    "mean_reward": ev.mean_reward,
+                    "std_reward": ev.std_reward,
+                    "mean_length": ev.mean_length,
+                    "success_rate": ev.success_rate,
+                    "n_episodes": ev.n_episodes,
+                    "timestamp": ev.timestamp.isoformat(),
+                }
+                for ev in self.eval_history
+            ],
+            "policy_artifact": (
+                {
+                    "path": str(self.policy_artifact.path),
+                    "sha": self.policy_artifact.sha,
+                    "algorithm": self.policy_artifact.algorithm,
+                    "policy_class": self.policy_artifact.policy_class,
+                    "created_at": self.policy_artifact.created_at.isoformat(),
+                    "tenant_id": self.policy_artifact.tenant_id,
+                }
+                if self.policy_artifact is not None
+                else None
+            ),
             "reward_curve": list(self.reward_curve),
-            "env_name": self.env_name,
             "lineage": self.lineage.to_dict() if self.lineage is not None else None,
             "device": self.device.as_log_extra() if self.device is not None else None,
+            # Back-compat read-side keys
+            "policy_name": self.policy_name,
+            "artifact_path": self.artifact_path,
+            "mean_reward": self.episode_reward_mean,
+            "std_reward": self.episode_reward_std,
+            "training_time_seconds": self.elapsed_seconds,
+            "env_name": self.env_spec,
         }
+
+
+# --- Spec §3.2 typed-field extraction helpers -----------------------------
+
+
+def _extract_logger_metric(model: Any, key: str) -> float | None:
+    """Read a finite float from the SB3 backend logger.
+
+    Returns ``None`` when the key is absent / non-finite — mirrors the
+    spec §3.2 invariant 3 ("MAY be ``None`` when not applicable; MUST NOT
+    be hallucinated zero").
+    """
+    import math
+
+    src = getattr(getattr(model, "logger", None), "name_to_value", {}) or {}
+    if key not in src:
+        return None
+    try:
+        val = float(src[key])
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(val):
+        return None
+    return val
+
+
+def _safe_replay_buffer_size(model: Any) -> int | None:
+    """Return ``len(model.replay_buffer)`` for off-policy algos, else None.
+
+    Off-policy SB3 algorithms (DQN/SAC/TD3/DDPG) expose a
+    ``replay_buffer`` attribute with ``size()`` or ``__len__``.
+    On-policy algorithms (PPO/A2C/TRPO) do NOT — return ``None`` per
+    spec §3.2.
+    """
+    rb = getattr(model, "replay_buffer", None)
+    if rb is None:
+        return None
+    if hasattr(rb, "size") and callable(rb.size):
+        try:
+            return int(rb.size())
+        except Exception:  # pragma: no cover - defensive
+            return None
+    try:
+        return int(len(rb))
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _build_episode_records(model: Any) -> list[EpisodeRecord]:
+    """Snapshot the SB3 ``ep_info_buffer`` into typed EpisodeRecord rows.
+
+    Per spec §3.2 invariant 1 — every ``rl_train()`` call that runs at
+    least one complete rollout MUST populate ``episodes`` non-empty. If
+    the SB3 buffer is empty (very short runs), the list is also empty
+    and the caller's evaluation rollout is the only behavioural signal
+    in the result. The caller is responsible for filtering / fail-fast
+    per the same spec invariant.
+    """
+    buf = getattr(model, "ep_info_buffer", None)
+    if buf is None:
+        return []
+    out: list[EpisodeRecord] = []
+    now = datetime.now(timezone.utc)
+    for idx, ep in enumerate(buf):
+        try:
+            reward = float(ep["r"])
+            length = int(ep["l"])
+        except (KeyError, TypeError, ValueError):  # pragma: no cover - defensive
+            continue
+        out.append(
+            EpisodeRecord(
+                episode_index=idx,
+                reward=reward,
+                length=length,
+                timestamp=now,
+            )
+        )
+    return out
+
+
+def _build_policy_artifact_ref(
+    *,
+    algorithm: str,
+    artifact_path: Path | None,
+    tenant_id: str | None,
+    policy: Any,
+) -> PolicyArtifactRef | None:
+    """Construct a :class:`PolicyArtifactRef` for the saved SB3 model.
+
+    Per spec §3.2 — every successful run MUST populate
+    ``policy_artifact`` with path + SHA + algorithm so the registry +
+    lineage layers can fingerprint the artifact without re-reading the
+    .zip from disk. ``None`` only when ``artifact_path`` is missing
+    (e.g. user passed ``save_path=None`` AND model save failed silently).
+    """
+    if artifact_path is None:
+        return None
+    import hashlib
+
+    artifact_dir = Path(artifact_path).parent
+    # SB3's ``model.save("…/model")`` writes ``…/model.zip``. Hash the
+    # zip if it exists; fall back to the path string fingerprint.
+    zip_path = artifact_dir / "model.zip"
+    target = zip_path if zip_path.exists() else Path(str(artifact_path))
+    try:
+        sha = hashlib.sha256(target.read_bytes()).hexdigest()
+    except OSError:  # pragma: no cover - defensive (file removed mid-call)
+        sha = hashlib.sha256(str(target).encode()).hexdigest()
+
+    if isinstance(policy, str):
+        policy_class = f"stable_baselines3.common.policies.{policy}"
+    else:
+        policy_class = (
+            f"{type(policy).__module__}.{type(policy).__name__}"
+            if policy is not None
+            else "unknown"
+        )
+
+    return PolicyArtifactRef(
+        path=Path(str(artifact_path)),
+        sha=sha,
+        algorithm=algorithm,
+        policy_class=policy_class,
+        created_at=datetime.now(timezone.utc),
+        tenant_id=tenant_id,
+    )
 
 
 # --- Metric-capture callback ----------------------------------------------
@@ -363,17 +646,55 @@ class RLTrainer:
         for required in METRIC_KEYS:
             metrics.setdefault(required, None)
 
-        result = RLTrainingResult(
-            policy_name=policy_name,
+        # W6-015: extract typed RL fields from the captured metrics +
+        # SB3 model state per ``specs/ml-rl-core.md`` §3.2 invariants.
+        # ``policy_entropy`` / ``value_loss`` / ``kl_divergence`` /
+        # ``explained_variance`` / ``replay_buffer_size`` MAY be ``None``
+        # when not applicable to the algorithm; they MUST NOT be
+        # hallucinated zero (`rules/zero-tolerance.md` Rule 2).
+        episode_length_mean = metrics.get("ep_len_mean") or 0.0
+        kl_divergence = metrics.get("kl")
+        policy_entropy = _extract_logger_metric(model, "train/entropy_loss")
+        value_loss = _extract_logger_metric(model, "train/value_loss")
+        explained_variance = _extract_logger_metric(model, "train/explained_variance")
+        replay_buffer_size = _safe_replay_buffer_size(model)
+        total_env_steps = int(getattr(model, "num_timesteps", config.total_timesteps))
+
+        # Build typed episode + policy-artifact records per spec §3.2
+        # ("episodes MUST be non-empty at training end").
+        episodes_list = _build_episode_records(model)
+        policy_artifact_ref = _build_policy_artifact_ref(
             algorithm=config.algorithm,
+            artifact_path=artifact_path,
+            tenant_id=self._tenant_id,
+            policy=getattr(adapter, "policy", config.policy_type),
+        )
+
+        result = RLTrainingResult(
+            algorithm=config.algorithm,
+            env_spec=env_name,
             total_timesteps=config.total_timesteps,
-            mean_reward=mean_reward,
-            std_reward=std_reward,
-            training_time_seconds=training_time,
+            episode_reward_mean=float(mean_reward),
+            episode_reward_std=float(std_reward),
+            episode_length_mean=float(episode_length_mean),
+            total_env_steps=total_env_steps,
+            policy_entropy=policy_entropy,
+            value_loss=value_loss,
+            kl_divergence=kl_divergence,
+            explained_variance=explained_variance,
+            replay_buffer_size=replay_buffer_size,
             metrics=metrics,
-            artifact_path=str(artifact_path) if artifact_path else None,
+            elapsed_seconds=float(training_time),
+            tenant_id=self._tenant_id,
+            artifact_uris=(
+                {"sb3": str(artifact_path)} if artifact_path is not None else {}
+            ),
+            episodes=episodes_list,
+            policy_artifact=policy_artifact_ref,
             reward_curve=list(callback.reward_curve),
-            env_name=env_name,
+            # Back-compat kwargs (resolved by __post_init__):
+            policy_name=policy_name,
+            artifact_path=str(artifact_path) if artifact_path else None,
         )
 
         if self._policy_registry is not None:
@@ -530,12 +851,16 @@ class RLTrainer:
             version=next_version,
             algorithm=config.algorithm,
             artifact_path=result.artifact_path or "",
-            mean_reward=result.mean_reward,
-            std_reward=result.std_reward,
+            # W6-015: prefer canonical spec §3.2 names (`episode_reward_mean`
+            # / `episode_reward_std` / `env_spec`) over the back-compat
+            # aliases. PolicyVersion's own field names retain the legacy
+            # `mean_reward` / `std_reward` shape for cross-SDK parity.
+            mean_reward=result.episode_reward_mean,
+            std_reward=result.episode_reward_std,
             total_timesteps=result.total_timesteps,
             metadata={
                 **config.to_dict(),
-                "env_name": result.env_name,
+                "env_spec": result.env_spec,
                 "metrics": dict(result.metrics),
             },
         )

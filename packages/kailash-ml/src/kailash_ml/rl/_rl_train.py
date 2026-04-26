@@ -279,7 +279,10 @@ def rl_train(
             "algorithm": algo,
             "env": env_id,
             "run_id": result.lineage.run_id if result.lineage else None,
-            "mean_reward": result.mean_reward,
+            # W6-015: use canonical spec §3.2 field name; the back-compat
+            # `mean_reward` property still resolves but the structured-log
+            # key MUST track the spec.
+            "episode_reward_mean": result.episode_reward_mean,
             "tenant_id": tenant_id,
             "sdk_source": "kailash-ml",
             "mode": "real",

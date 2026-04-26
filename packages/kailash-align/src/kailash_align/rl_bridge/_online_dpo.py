@@ -234,17 +234,33 @@ class OnlineDPOAdapter(_BridgeAdapterBase):
             created_at=datetime.now(timezone.utc),
         )
 
+        # W6-015: populate spec §3.2 canonical fields. Online DPO is
+        # an RLHF preference-learning algo — no episode rollouts, no
+        # replay buffer, classical metrics stay None.
         result = RLTrainingResult(
-            policy_name=getattr(self._policy, "name_or_path", self.name),
             algorithm=self.name,
+            env_spec="text:preferences",
             total_timesteps=int(total_timesteps),
-            mean_reward=float(metrics.get("reward_mean") or 0.0),
-            std_reward=0.0,
-            training_time_seconds=training_time,
+            episode_reward_mean=float(metrics.get("reward_mean") or 0.0),
+            episode_reward_std=0.0,
+            episode_length_mean=0.0,
+            total_env_steps=int(total_timesteps),
+            policy_entropy=None,
+            value_loss=None,
+            kl_divergence=metrics.get("kl"),
+            explained_variance=None,
+            replay_buffer_size=None,
             metrics=metrics,
-            env_name="text:preferences",
+            elapsed_seconds=float(training_time),
+            tenant_id=self.tenant_id,
+            artifact_uris={},
+            episodes=[],
+            eval_history=[],
+            policy_artifact=None,
             lineage=lineage,
             device=self.device,
+            # Back-compat kwargs (resolved by __post_init__):
+            policy_name=getattr(self._policy, "name_or_path", self.name),
         )
         logger.info(
             "rl_bridge.online_dpo.learn.ok",
