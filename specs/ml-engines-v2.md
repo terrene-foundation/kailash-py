@@ -1958,19 +1958,19 @@ In addition to the engine class, `kailash-ml` ships package-level convenience wr
 
 These wrappers MUST exist in `kailash_ml/__init__.py`:
 
-| Wrapper        | Returns           | Dispatch Target                                                                                                                                           |
-| -------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `km.train`     | `TrainingResult`  | `engine.setup(...)` then `engine.fit(...)` chained on the cached default engine                                                                           |
-| `km.register`  | `RegisterResult`  | `engine.register(...)` on the cached default engine                                                                                                       |
-| `km.serve`     | `ServeHandle`     | `engine.serve(...)` on the cached default engine                                                                                                          |
-| `km.watch`     | `DriftMonitor`    | `engine.monitor(...)` on the cached default engine (see `ml-drift.md` §12)                                                                                |
-| `km.dashboard` | `DashboardHandle` | Non-blocking launcher for `MLDashboard` (see `ml-dashboard.md` §8.6)                                                                                      |
-| `km.diagnose`  | `Diagnostic`      | See `ml-diagnostics.md` §3 (owned there; listed here for discoverability)                                                                                 |
-| `km.track`     | `ExperimentRun`   | See `ml-tracking.md` §2 (owned there; listed here for discoverability)                                                                                    |
-| `km.autolog`   | `AutologHandle`   | See `ml-autolog.md` §2 (owned there; listed here for discoverability)                                                                                     |
-| `km.rl_train`  | `TrainingResult`  | See `ml-rl.md` (owned there; listed here for discoverability)                                                                                             |
-| `km.resume`    | `TrainingResult`  | §12A — reads `last.ckpt` from tracker run's artifact path, dispatches to cached default engine with `resume_from_checkpoint` pinned.                      |
-| `km.lineage`   | `LineageGraph`    | `ml-engines-v2-addendum §E10.2` — tenant-scoped, depth-bounded cross-engine lineage graph (run + dataset + feature_version + model_version + deployment). |
+| Wrapper        | Returns                                                                          | Dispatch Target                                                                                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `km.train`     | `TrainingResult`                                                                 | `engine.setup(...)` then `engine.fit(...)` chained on the cached default engine                                                                                                              |
+| `km.register`  | `RegisterResult`                                                                 | `engine.register(...)` on the cached default engine                                                                                                                                          |
+| `km.serve`     | `ServeHandle`                                                                    | `engine.serve(...)` on the cached default engine                                                                                                                                             |
+| `km.watch`     | `DriftMonitor`                                                                   | `engine.monitor(...)` on the cached default engine (see `ml-drift.md` §12)                                                                                                                   |
+| `km.dashboard` | `DashboardHandle`                                                                | Non-blocking launcher for `MLDashboard` (see `ml-dashboard.md` §8.6)                                                                                                                         |
+| `km.diagnose`  | `Diagnostic`                                                                     | See `ml-diagnostics.md` §3 (owned there; listed here for discoverability)                                                                                                                    |
+| `km.track`     | `ExperimentRun`                                                                  | See `ml-tracking.md` §2 (owned there; listed here for discoverability)                                                                                                                       |
+| `km.autolog`   | `AutologHandle`                                                                  | See `ml-autolog.md` §2 (owned there; listed here for discoverability)                                                                                                                        |
+| `km.rl_train`  | `TrainingResult`                                                                 | See `ml-rl.md` (owned there; listed here for discoverability)                                                                                                                                |
+| `km.resume`    | `TrainingResult`                                                                 | §12A — reads `last.ckpt` from tracker run's artifact path, dispatches to cached default engine with `resume_from_checkpoint` pinned.                                                         |
+| `km.lineage`   | `LineageGraph` (target) — DEFERRED, raises `LineageNotImplementedError` in 1.0.0 | `ml-engines-v2-addendum §E10.2` — tenant-scoped, depth-bounded cross-engine lineage graph. **DEFERRED to Wave 6.5b (W6-014, issue #657)**; see `ml-tracking.md §6.3` for deferral rationale. |
 
 ### 15.2 MUST Rules
 
@@ -2170,7 +2170,7 @@ These wrappers are specified in their owning spec files; listed here for discove
 - `km.autolog` — specified in `ml-autolog.md` §2. Reuses the same contextvar accessor `kailash_ml.tracking.get_current_run()` as every other wrapper — no independent global; conflict with Shard C-A's contextvar accessor (Decision 4 rank-0) is impossible by construction.
 - `km.rl_train` — specified in `ml-rl.md` (wraps `rl.Engine.train()`).
 - `km.resume` — specified in §12A of this file (checkpoint-resume pair to §3.2 MUST 7's `ModelCheckpoint` auto-attach).
-- `km.lineage` — specified in `ml-engines-v2-addendum-draft.md §E10.2`. Signature:
+- `km.lineage` — specified in `ml-engines-v2-addendum.md §E10.2`. **DEFERRED to Wave 6.5b (W6-014, issue terrene-foundation/kailash-py#657)** — see `ml-tracking.md §6.3` for the deferral disposition. In 1.0.0, `km.lineage(...)` raises `LineageNotImplementedError` (a `TrackingError` subclass per `ml-tracking.md §9.1`) rather than returning hollow data. The signature below is the target contract that the deferred implementation MUST satisfy when it lands; the `LineageGraph` return-type module (`kailash_ml.engines.lineage`) does NOT exist in 1.0.0.
 
   ```python
   async def lineage(
@@ -2178,12 +2178,12 @@ These wrappers are specified in their owning spec files; listed here for discove
       *,
       tenant_id: str | None = None,     # resolved via get_current_tenant_id() when None
       max_depth: int = 10,
-  ) -> LineageGraph: ...
+  ) -> LineageGraph: ...   # target — currently raises LineageNotImplementedError
   ```
 
   Per `ml-tracking.md §10.2`, `tenant_id=None` resolves to the ambient `get_current_tenant_id()` value; multi-tenant engines without ambient context raise `TenantRequiredError` per `rules/tenant-isolation.md`. This aligns `km.lineage` with every sibling `km.*` verb (`km.track`, `km.train`, `km.register`, `km.serve`, `km.watch`, `km.resume`, etc.) which all default `tenant_id: str | None = None` — preventing a `TypeError` for day-0 single-tenant users who never pass `tenant_id` explicitly.
 
-  Returns the canonical `LineageGraph` dataclass (declared in `ml-engines-v2-addendum §E10.2`). Tenant-scoped per `rules/tenant-isolation.md` — cross-tenant reads raise `CrossTenantReadError`. Dispatches through the cached default engine per §15.2 MUST 1; `LineageGraph` import is eager per §15.9 MUST rule.
+  When undeferred, returns the canonical `LineageGraph` dataclass (declared in `ml-engines-v2-addendum §E10.2`). Tenant-scoped per `rules/tenant-isolation.md` — cross-tenant reads raise `CrossTenantReadError`. Dispatches through the cached default engine per §15.2 MUST 1.
 
 ### 15.9 `kailash_ml.__all__` Canonical Ordering
 
@@ -2261,7 +2261,10 @@ Per `rules/zero-tolerance.md` Rule 1a (second instance — `py/modification-of-d
 from kailash_ml.tracking import track, autolog, ExperimentTracker, ExperimentRun
 from kailash_ml._wrappers import train, register, serve, watch, dashboard, rl_train
 from kailash_ml.diagnostics import diagnose, DLDiagnostics, RAGDiagnostics, RLDiagnostics
-from kailash_ml.engines.lineage import LineageGraph  # eager import for km.lineage return type (§15.8)
+# NOTE: `from kailash_ml.engines.lineage import LineageGraph` is DEFERRED to Wave 6.5b
+# (W6-014, issue #657 — see ml-tracking.md §6.3). The module does not exist in 1.0.0;
+# `km.lineage(...)` raises `LineageNotImplementedError` (a `TrackingError` subclass).
+from kailash_ml.errors import LineageNotImplementedError  # eager import — `km.lineage` raise site
 from kailash_ml.engines.registry import engine_info, list_engines  # Group 6 Engine Discovery (ml-engines-v2-addendum §E11.2)
 # seed() + reproduce() + resume() + lineage() are DECLARED at module scope in this file
 # (see §11.1, §12, §12A, §15.8):
@@ -2271,7 +2274,9 @@ async def resume(run_id: str, *, tenant_id: str | None = None,
                  tolerance: dict[str, float] | None = None) -> TrainingResult: ...
 async def lineage(run_id_or_model_version_or_dataset_hash: str, *,
                   tenant_id: str | None = None,
-                  max_depth: int = 10) -> LineageGraph: ...
+                  max_depth: int = 10) -> "LineageGraph":
+    """DEFERRED — raises LineageNotImplementedError. See ml-tracking.md §6.3."""
+    raise LineageNotImplementedError(reason=...)
 
 # DO NOT — lazy resolution for __all__ entries
 def __getattr__(name):
@@ -2489,7 +2494,7 @@ This checklist is the structural gate for kailash-ml 1.0.0 release. Every item M
 - [ ] `peft>=0.10.0` is pinned in the `[dl]` extra to support `HuggingFaceTrainable(peft_config=...)` (§3.2 MUST 9)
 - [ ] `km.resume` is listed in `__all__` Group 1 between `"reproduce"` and `"rl_train"` AND eagerly imported at module scope (§15.9)
 - [ ] `kailash_ml.__all__` Group 1 includes `"lineage"` per §15.9
-- [ ] `from kailash_ml.engines.lineage import LineageGraph` is eagerly imported per §15.9 MUST: Eager Imports
+- [ ] DEFERRED to Wave 6.5b (W6-014, issue #657): `from kailash_ml.engines.lineage import LineageGraph` lands when the implementation lands; in 1.0.0, `kailash_ml.errors.LineageNotImplementedError` is eagerly imported instead
 - [ ] `ResumeArtifactNotFoundError` inherits `ModelRegistryError(MLError)` and is re-exported at `kailash_ml.errors.ResumeArtifactNotFoundError`
 - [ ] `ResumeDivergenceError` inherits `MLError` (cross-cutting) and is re-exported at `kailash_ml.errors.ResumeDivergenceError`
 - [ ] `engine_info`, `list_engines` listed in `__all__` Group 6 (§15.9) AND eagerly imported at module scope from `kailash_ml.engines.registry` per `ml-engines-v2-addendum §E11.2`

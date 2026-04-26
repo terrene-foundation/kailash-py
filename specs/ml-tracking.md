@@ -683,6 +683,32 @@ CREATE TABLE _kml_lineage (
 
 **MUST**: Migrations are numbered (`0001_create_kml_experiment.py`, ...) and reversible (`rules/schema-migration.md` §3). Destructive migrations require `force_downgrade=True` per `rules/schema-migration.md` §7. Migration filenames use the bare `kml_experiment` stem (Python identifier rules — leading underscore on a module name is reserved); the physical table name is `_kml_experiment` as declared in §6.3 DDL.
 
+#### Cross-Engine `LineageGraph` — DEFERRED to Wave 6.5b (W6-014, issue #657)
+
+The cross-engine lineage SURFACE (`km.lineage(...)` returning a frozen `LineageGraph` per `ml-engines-v2-addendum §E10.2`, plus the registry-side `ModelRegistry.build_lineage_graph()` walker that traverses the `_kml_lineage` table above) is DEFERRED to Wave 6.5b. The DDL above ships with the 1.0.0 release; the traversal walker + Python-surface frozen dataclass do not.
+
+**Status — 1.0.0:**
+
+- `_kml_lineage` table ships per the DDL above; mutations populate `tracker_run_id`, `parent_version`, `training_data_uri`, `feature_store_version`, `base_model_uri` as designed.
+- `km.lineage(ref, *, tenant_id=None, max_depth=10)` raises `LineageNotImplementedError` (a `TrackingError` subclass — see §9.1).
+- `kailash_ml.LineageGraph` is REMOVED from the public surface (no placeholder type; `rules/zero-tolerance.md` Rule 2 — fake data BLOCKED).
+
+**Disposition rationale per `rules/zero-tolerance.md` Rule 1b (4 conditions met):**
+
+1. Runtime-safety proof — typed `LineageNotImplementedError` raised; no fake graph returned.
+2. Tracking issue — terrene-foundation/kailash-py#657.
+3. Release PR body link — W6-014 PR references #657 in body.
+4. Release-specialist signoff — covered by Wave 6 plan § "Deferral discipline".
+
+**Wave 6.5b implementation contract:**
+
+- Land `kailash_ml/engines/lineage.py` with frozen `LineageGraph` / `LineageNode` / `LineageEdge` dataclasses per `ml-engines-v2-addendum §E10.2`.
+- Implement `ModelRegistry.build_lineage_graph(*, ref, tenant_id, max_depth) -> LineageGraph` traversing `_kml_lineage` via DataFlow primitives (NOT raw SQL — `rules/framework-first.md`).
+- Cross-tenant traversal raises `CrossTenantLineageError` per `rules/tenant-isolation.md`.
+- `km.lineage(...)` switches from raising `LineageNotImplementedError` to returning the real graph; the typed error class is removed from `errors.py` `__all__` in the same PR (`rules/orphan-detection.md` Rule 4 — API removal sweeps tests).
+- Tier 2 wiring test `tests/integration/test_lineage_graph_wiring.py` per `rules/facade-manager-detection.md` MUST Rule 2.
+- End-to-end regression `tests/regression/test_readme_lineage_quickstart.py` per `rules/testing.md` § "End-to-End Pipeline Regression".
+
 ---
 
 ## 7. Tenant-Isolation Keyspace
@@ -880,6 +906,7 @@ class TenantRequiredError(TrackingError): ...
 class ActorRequiredError(TrackingError): ...         # HIGH-4 round-1 finding (§8.1)
 class ModelSignatureRequiredError(TrackingError): ...
 class LineageRequiredError(TrackingError): ...
+class LineageNotImplementedError(TrackingError): ...   # W6-014 deferral — see §6.3 + issue #657
 class ArtifactEncryptionError(TrackingError): ...
 class ArtifactSizeExceededError(TrackingError): ...
 class AliasNotFoundError(TrackingError): ...
@@ -920,6 +947,7 @@ MLError  (kailash_ml.errors)
 │   ├── InvalidTenantIdError
 │   ├── ModelSignatureRequiredError
 │   ├── LineageRequiredError
+│   ├── LineageNotImplementedError              — W6-014 deferral (§6.3 + issue #657)
 │   ├── ArtifactEncryptionError
 │   ├── ArtifactSizeExceededError
 │   ├── AliasNotFoundError
