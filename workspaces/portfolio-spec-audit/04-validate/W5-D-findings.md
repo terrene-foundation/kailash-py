@@ -202,3 +202,17 @@
 **Spec claim:** "`JudgeBudgetExhaustedError` raised AFTER any call that exceeds the cap"
 **Actual state:** `packages/kailash-kaizen/src/kaizen/judges/_judge.py` — `class JudgeBudgetExhaustedError(RuntimeError):` exists. Microdollar accounting routes through `kaizen.cost.tracker.CostTracker`.
 **Remediation hint:** No action; assertion holds at type-existence level.
+
+## F-D-29 — kaizen-evaluation § Public surface — ROUGE/BLEU/BERTScore classes verified
+
+**Severity:** LOW
+**Spec claim:** "ROUGE, BLEU, BERTScore" three metric classes.
+**Actual state:** All three verified at `packages/kailash-kaizen/src/kaizen/evaluation/{rouge,bleu,bertscore}.py`. Zero-LLM-surface invariant verified (only mention of Delegate is in `__init__.py` docstring).
+**Remediation hint:** No action.
+
+## F-D-30 — kaizen-evaluation § Test discipline — Tier 1 unit tests acknowledged missing
+
+**Severity:** MED
+**Spec claim:** "Tier 1 (unit) — `tests/unit/evaluation/test_evaluation_unit.py` (to be added in a follow-up patch...)" — self-acknowledged gap.
+**Actual state:** Confirmed — `tests/unit/evaluation/` directory does not exist. Spec self-deferral is honest but per `rules/zero-tolerance.md` Rule 6 "Implement Fully", and `rules/testing.md` "MUST: Verify NEW modules have NEW tests", new metric modules with zero unit tests is a gap. Spec self-acknowledgment doesn't waive the rule.
+**Remediation hint:** Add `tests/unit/evaluation/test_evaluation_unit.py` with `importorskip` per backend; cover ROUGE/BLEU/BERTScore happy path + edge cases. Update spec when tests land.
