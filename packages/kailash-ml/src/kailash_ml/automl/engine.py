@@ -6,8 +6,10 @@ Responsibilities:
 
 1. Dispatch one of four :class:`SearchStrategy` implementations
    (grid / random / bayesian / halving) over a user-supplied
-   :class:`ParamSpec` list (or an auto-derived one from the
-   :class:`kailash_ml.types.FeatureSchema`).
+   ``space: Sequence[ParamSpec]`` (passed as a keyword-only argument
+   to :meth:`AutoMLEngine.run`). The caller owns the search space;
+   the engine performs no auto-derivation. See
+   ``specs/ml-automl.md`` § 3.1 for the canonical run-surface contract.
 2. Enforce the cost budget — every trial's proposed spend is checked
    against :class:`CostTracker` BEFORE the trial runs; budget overruns
    revert to baseline per ``specs/ml-automl.md`` §8.3 MUST 2b.
@@ -33,7 +35,6 @@ engine through the public facade.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import math
@@ -41,12 +42,11 @@ import re
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Mapping, Optional, Sequence
 
 from kailash_ml.automl.admission import (
-    AdmissionDecision,
     GovernanceEngineLike,
     PromotionRequiresApprovalError,
     check_trial_admission,
