@@ -40,10 +40,19 @@ def _load_vectors() -> List[Dict[str, Any]]:
 
 
 def _build_from_vector(spec: Dict[str, Any]) -> SecurityDefinerBuilder:
-    """Reconstruct a builder from a JSON vector spec."""
+    """Reconstruct a builder from a JSON vector spec.
+
+    #607 Wave 4 hotfix added the mandatory ``function_owner`` field; the
+    fixture's vector schema MUST include it for every vector. Pre-Wave-4
+    fixture versions are no longer valid.
+    """
     b = SecurityDefinerBuilder(spec["function_name"])
     b = b.search_path(spec["search_path"])
     b = b.authenticator_role(spec["authenticator_role"])
+    # function_owner is required (#607 Wave 4 H3); raise loudly if the
+    # fixture is missing it rather than silently falling back to a
+    # default — that would mask cross-SDK contract drift.
+    b = b.function_owner(spec["function_owner"])
     b = b.user_table(spec["user_table"])
     b = b.password_column(spec["password_column"])
     if "tenant_column" in spec:
