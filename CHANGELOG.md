@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2] — 2026-04-26 — JWT security hardening (#635 + #636, Wave 5 audit)
+
+Patch bump — closes two security findings surfaced by Wave 5 portfolio spec audit (workspace `portfolio-spec-audit/04-validate/W5-C-findings.md`).
+
+### Security
+
+- **CRIT (closes #636)** — Remove hardcoded default JWT secret `"api-gateway-secret"` (18 chars) from `src/kailash/middleware/communication/api_gateway.py`. `APIGateway(enable_auth=True)` without an explicit `auth_manager=` now requires `KAILASH_API_GATEWAY_SECRET` environment variable (≥32 bytes per RFC 7518 §3.2). Missing env var raises typed `RuntimeError`; under-length raises typed `ValueError`. Aligns with `rules/env-models.md` (.env source-of-truth) and `rules/security.md` (no hardcoded secrets). Regression tests at `tests/regression/test_issue_636_api_gateway_default_secret.py` cover all paths including a structural invariant that greps the source for the hardcoded literal.
+- **HIGH (closes #635)** — Require `iss` claim presence when issuer is configured at `src/kailash/trust/auth/jwt.py::JWTValidator.verify_token`. PyJWT's `verify_iss` only enforces value equality WHEN the claim is present; tokens forged WITHOUT `iss` were silently accepted. Layered `options={"require": ["iss"]}` (and `aud` when audience is configured) closes the bypass. Cross-SDK companion to #625 (kailash-mcp 0.2.10) and kailash-rs#599 (v3.23.0). Regression tests at `tests/regression/test_issue_635_trust_jwt_iss_required.py` cover missing-iss-rejected, missing-iss-allowed-when-no-issuer, present-iss-validated, present-iss-matched, and missing-aud-rejected paths.
+
+### Cross-SDK alignment
+
+- kailash-rs#599 (v3.23.0) — Rust JWT iss-claim presence enforcement
+- #625 (kailash-mcp 0.2.10) — MCP layer iss-claim fix; this PR completes the same fix at the underlying trust JWT validator the MCP layer delegates to
+
 ## [2.11.1] — 2026-04-26 — Complete alg_id Layer-1 threading (#604 Wave 4)
 
 Patch bump — closes Wave 3 `/redteam` HIGH findings H1 + H2 on the `AlgorithmIdentifier` scaffold. Threads `alg_id` through the four remaining Layer-1 sites that PR #627 (kailash 2.11.0) deferred, and re-exports the canonical scaffold symbols from `kailash.trust` and `kailash.trust.signing`. Wire format remains gated on mint ISS-31 + cross-SDK align with `esperie/kailash-rs#33`; until then, all Layer-1 sites enforce `ed25519+sha256` only and raise `NotImplementedError` on any non-default value.

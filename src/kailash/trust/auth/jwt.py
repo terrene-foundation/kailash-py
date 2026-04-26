@@ -225,12 +225,24 @@ class JWTValidator:
             else:
                 key = self.config.public_key
 
-            # Build verification options
-            options = {
+            # Build verification options.
+            # SECURITY (#635, cross-SDK companion to #625): when an issuer is
+            # configured, the iss claim MUST be present. PyJWT's verify_iss
+            # only enforces value-equality WHEN the claim is present — a token
+            # forged without iss is silently accepted otherwise. Layering
+            # `require: ["iss"]` forces presence and closes the bypass.
+            options: Dict[str, Any] = {
                 "verify_exp": self.config.verify_exp,
                 "verify_iss": self.config.issuer is not None,
                 "verify_aud": self.config.audience is not None,
             }
+            require_claims: List[str] = []
+            if self.config.issuer is not None:
+                require_claims.append("iss")
+            if self.config.audience is not None:
+                require_claims.append("aud")
+            if require_claims:
+                options["require"] = require_claims
 
             # Decode and verify
             payload = jwt.decode(
@@ -240,7 +252,7 @@ class JWTValidator:
                 issuer=self.config.issuer,
                 audience=self.config.audience,
                 leeway=self.config.leeway,
-                options=options,
+                options=options,  # type: ignore[arg-type]  # PyJWT Options TypedDict
             )
 
             # SECURITY: Reject refresh tokens used as access tokens
