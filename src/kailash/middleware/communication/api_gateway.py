@@ -8,6 +8,7 @@ frontend support capabilities.
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -159,12 +160,24 @@ class APIGateway:
         # Initialize auth manager if enabled
         if enable_auth:
             if auth_manager is None:
-                # Create default auth manager if none provided
-                # Import here to avoid circular dependency
+                secret_key = os.environ.get("KAILASH_API_GATEWAY_SECRET")
+                if not secret_key:
+                    raise RuntimeError(
+                        "APIGateway(enable_auth=True) without auth_manager requires "
+                        "KAILASH_API_GATEWAY_SECRET environment variable (>=32 bytes). "
+                        "Either set the env var, pass auth_manager=JWTAuthManager(...), "
+                        "or set enable_auth=False. See issue #636."
+                    )
+                if len(secret_key.encode("utf-8")) < 32:
+                    raise ValueError(
+                        "KAILASH_API_GATEWAY_SECRET must be at least 32 bytes "
+                        f"(got {len(secret_key.encode('utf-8'))}). See RFC 7518 §3.2 "
+                        "and JWTConfig.MIN_SECRET_LENGTH."
+                    )
                 from ..auth import JWTAuthManager
 
                 self.auth_manager = JWTAuthManager(
-                    secret_key="api-gateway-secret",
+                    secret_key=secret_key,
                     algorithm="HS256",
                     issuer="kailash-gateway",
                     audience="kailash-api",
