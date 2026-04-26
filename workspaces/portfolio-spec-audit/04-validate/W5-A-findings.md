@@ -196,3 +196,61 @@ Note: Every spec-claimed runtime class, mixin, exception, and resilience primiti
 Note: All three server classes present with correct inheritance. All four gateway factory functions present. WorkflowGraph deprecation alias present. The single LOW finding is documentation incompleteness on `WorkflowServer.run`.
 
 ---
+
+# Spec 5: `specs/infra-sql.md`
+
+**Subsections audited:** Database Type Enum, Dialect System (Canonical Placeholder, Identifier Safety, JSON Path Validation, QueryDialect ABC, PostgresDialect, MySQLDialect, SQLiteDialect, detect_dialect), Connection Management (ConnectionManager + lifecycle + query + transactions + index creation), URL Resolution (resolve_database_url, resolve_queue_url), Credential Handling (preencode_password_special_chars, decode_userinfo_or_raise), Schema Migration (SCHEMA_VERSION, check/stamp), Database Execution Pipeline (5 stages + ExecutionContext + ExecutionResult + DatabaseExecutionPipeline), Migration Tooling (6 components), Concurrency Invariants, Error Handling.
+**Verification source:** `src/kailash/{db,database,utils/url_credentials,migration}/`.
+
+| Assertion | Method | Expected | Actual | Status |
+|-----------|--------|----------|--------|--------|
+| `class DatabaseType(Enum)` at `kailash.db.dialect` | grep | match | dialect.py:187 | OK |
+| `class QueryDialect(ABC)` | grep | match | dialect.py:198 | OK |
+| `class PostgresDialect(QueryDialect)` | grep | match | dialect.py:378 | OK |
+| `class MySQLDialect(QueryDialect)` | grep | match | dialect.py:455 | OK |
+| `class SQLiteDialect(QueryDialect)` | grep | match | dialect.py:550 | OK |
+| `class IdentifierError(ValueError)` | grep | match | dialect.py:38 | OK |
+| `def detect_dialect(url: str) -> QueryDialect` | grep | match | dialect.py:620 | OK |
+| `def _validate_identifier(name, *, max_length=128)` | grep | match | dialect.py:72 | OK |
+| `def _validate_json_path(path)` | grep | match | dialect.py:168 | OK |
+| `class ConnectionManager` at `kailash.db.connection` | grep | match | connection.py:29 | OK |
+| `def resolve_database_url() -> Optional[str]` at `kailash.db.registry` | grep | match | registry.py:31 | OK |
+| `def resolve_queue_url() -> Optional[str]` | grep | match | registry.py:50 | OK |
+| `def preencode_password_special_chars(connection_string)` at `kailash.utils.url_credentials` | grep | match | url_credentials.py:79 | OK |
+| `def decode_userinfo_or_raise(parsed, *, default_user="root")` | grep | match | url_credentials.py:158 | OK |
+| `SCHEMA_VERSION = 1` at `kailash.db.migration` | grep | int 1 | migration.py:32 | OK |
+| `async def check_schema_version(conn)` (NOTE: spec elides `async`) | grep | exists | migration.py:35 | OK (see F-A-03) |
+| `async def stamp_schema_version(conn, version=SCHEMA_VERSION)` | grep | exists | migration.py:62 | OK (see F-A-03) |
+| `class ExecutionContext` at `kailash.database.execution_pipeline` | grep | match | execution_pipeline.py:21 | OK |
+| `class ExecutionResult` at same module | grep | match | execution_pipeline.py:33 | OK |
+| `class PermissionCheckStage(PipelineStage)` | grep | match | execution_pipeline.py:67 | OK |
+| `class QueryValidationStage(PipelineStage)` | grep | match | execution_pipeline.py:111 | OK |
+| `class QueryExecutionStage(PipelineStage)` | grep | match | execution_pipeline.py:176 | OK |
+| `class DataMaskingStage(PipelineStage)` | grep | match | execution_pipeline.py:243 | OK |
+| `class DatabaseExecutionPipeline` | grep | match | execution_pipeline.py:303 | OK |
+| `class MigrationAssistant` at `kailash.migration` | grep | match | migration_assistant.py:63 | OK |
+| `class CompatibilityChecker` | grep | match | compatibility_checker.py:69 | OK |
+| `class PerformanceComparator` | grep | match | performance_comparator.py:83 | OK |
+| `class ConfigurationValidator` | grep | match | configuration_validator.py:65 | OK |
+| `class MigrationDocGenerator` | grep | match | documentation_generator.py:52 | OK |
+| `class RegressionDetector` | grep | match | regression_detector.py:90 | OK |
+
+## F-A-03 — `infra-sql.md` § Schema Migration — `check_schema_version` / `stamp_schema_version` are async, spec implies sync
+
+**Severity:** LOW
+**Spec claim:** §"Schema Migration" reads `check_schema_version(conn) -> Optional[int]` and `stamp_schema_version(conn, version=SCHEMA_VERSION)` with no `async` qualifier. A reader implementing against spec would expect a sync function returning `Optional[int]` directly.
+**Actual state:** `src/kailash/db/migration.py:35` — `async def check_schema_version(conn: Any) -> Optional[int]`. Line 62 — `async def stamp_schema_version(conn: Any, version: int = SCHEMA_VERSION) -> None`.
+**Remediation hint:** Add `async` to both signatures in spec text, since calling them without `await` returns a coroutine, not a value.
+
+## F-A-04 — `infra-sql.md` § Schema Migration — `SCHEMA_VERSION` constant duplicated outside `db.migration`
+
+**Severity:** LOW
+**Spec claim:** Spec §"Schema Migration" identifies `SCHEMA_VERSION = 1` at `kailash.db.migration` as canonical. Spec implies single ownership.
+**Actual state:** `SCHEMA_VERSION = 1` is also defined at `src/kailash/infrastructure/factory.py:39`, `src/kailash/trust/plane/store/postgres.py:65`, and `src/kailash/trust/plane/store/sqlite.py:53`. Multiple co-existing constants of the same name with the same value risk drift if any one is bumped.
+**Remediation hint:** Decide whether infrastructure/trust modules should re-export from `kailash.db.migration` or maintain independent versioning. If independent, document each in the spec; if shared, refactor to import.
+
+**Spec 5 findings:** 0 CRIT / 0 HIGH / 0 MED / 2 LOW.
+
+Note: All dialect, connection management, credential handling, schema migration, execution pipeline, and migration tooling primitives present at spec-named module paths. Two LOW findings: `async` qualifier missing from spec for `check/stamp_schema_version`, and `SCHEMA_VERSION` constant duplication.
+
+---
