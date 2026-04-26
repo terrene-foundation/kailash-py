@@ -2,7 +2,7 @@
 
 **Specs audited:** 6
 **§ subsections enumerated:** ~62 (across 6 specs)
-**Findings:** CRIT=0 HIGH=4 MED=6 LOW=4
+**Findings:** CRIT=1 HIGH=4 MED=5 LOW=4
 **Audit completed:** 2026-04-26
 
 ---
@@ -282,12 +282,31 @@ Missing files = HIGH (per `rules/facade-manager-detection.md` Rule 2 + `rules/or
 **Actual state:** `src/kailash/middleware/auth/jwt_auth.py:37` defines `JWTAuthManager`.
 **Remediation hint:** None.
 
-## F-C-35 — middleware.md § MiddlewareAuthManager — Default secret-key BLOCKED pattern in APIGateway
+## F-C-35 — middleware.md § APIGateway — CONFIRMED CRIT: Hardcoded JWT default secret allows universal token forgery
 
-**Severity:** HIGH
+**Severity:** CRIT (security control absent / actively forge-able)
 **Spec claim:** §APIGateway: "if True and `auth_manager` is None, constructs a default `JWTAuthManager(secret_key="api-gateway-secret", algorithm="HS256", issuer="kailash-gateway", audience="kailash-api")`."
-**Actual state:** Spec documents that `APIGateway(enable_auth=True, auth_manager=None)` constructs a JWTAuthManager with HARDCODED `secret_key="api-gateway-secret"`. Per `rules/security.md` § "No Hardcoded Secrets", this is a `BLOCKED` pattern. Even as a default, a hardcoded secret allows token forgery against any production deployment that doesn't override `auth_manager`.
-**Remediation hint:** Verify the actual code — if APIGateway truly constructs a hardcoded-secret JWTAuthManager when `auth_manager=None`, this is a CRIT-level security issue that should fail loud at startup OR the constructor must require an explicit secret. Per `rules/zero-tolerance.md` Rule 2, "Fake encryption" / weak default-secret is BLOCKED. The spec should NOT document a hardcoded default; if the code does this, it MUST be patched to (a) generate a random secret per process AND log "ephemeral secret in use", OR (b) raise `ValueError` requiring `auth_manager` or `JWT_SECRET` env-var.
+**Actual state:** **CONFIRMED** at `src/kailash/middleware/communication/api_gateway.py:166-171`:
+```python
+self.auth_manager = JWTAuthManager(
+    secret_key="api-gateway-secret",   # 18-char literal, public knowledge once shipped
+    algorithm="HS256",
+    issuer="kailash-gateway",
+    audience="kailash-api",
+)
+```
+This means any deployment that calls `APIGateway(enable_auth=True)` without supplying `auth_manager=` is using a JWT signing key that is:
+1. **Hardcoded in open-source code** — `"api-gateway-secret"` is publicly visible in the GitHub repo + every PyPI release.
+2. **18 characters / ~144 bits** — below the 32-byte NIST SP 800-117 minimum that `JWTConfig.MIN_SECRET_LENGTH = 32` enforces ELSEWHERE in the codebase (`src/kailash/trust/auth/jwt.py:105`).
+3. **Identical across every kailash deployment that uses the default** — any attacker can forge valid tokens for any deployment using `enable_auth=True` without explicit auth_manager.
+
+This is a textbook `rules/security.md` § "No Hardcoded Secrets" violation AND a `rules/zero-tolerance.md` Rule 2 "Fake encryption" pattern (the auth check exists but its security promise is structurally broken).
+
+**Remediation hint:** MUST fix in next patch release. Three acceptable patterns:
+(a) **Fail loud at construction**: When `enable_auth=True` and `auth_manager is None`, raise `ValueError("APIGateway requires explicit auth_manager OR set JWT_SECRET env-var (≥32 bytes)")`.
+(b) **Read from env**: When `auth_manager is None`, read `os.environ["JWT_SECRET"]` and raise if absent or < 32 bytes.
+(c) **Generate ephemeral random secret per process**: `secret_key = secrets.token_urlsafe(32)` AND log a CRITICAL warning that "ephemeral signing key in use; tokens will not survive process restart".
+Per `rules/zero-tolerance.md` Rule 1a (scanner-surface symmetry), this fix MUST also retire the spec's documentation of the hardcoded value.
 
 ## F-C-36 — middleware.md § Database — All four repositories + session manager + migration runner present
 
@@ -344,7 +363,9 @@ Missing files = HIGH (per `rules/facade-manager-detection.md` Rule 2 + `rules/or
 - Tier 2 wiring tests for ml integration (F-C-30) — file presence not confirmed
 - F-C-29 (NexusContextError, NexusServiceAdapterError) — file presence not confirmed
 - F-C-22 (prometheus startup-warn) — register_metrics_endpoint behavior not deeply traced
-- F-C-35 (APIGateway hardcoded default secret) — spec text says hardcoded; need to verify actual code path (could be CRIT if spec is accurate)
+
+### Verified (re-classified during audit)
+- F-C-35 (APIGateway hardcoded default secret) — VERIFIED CRIT at `src/kailash/middleware/communication/api_gateway.py:166-171`. Hardcoded `secret_key="api-gateway-secret"` enables universal token forgery against any deployment using `APIGateway(enable_auth=True)` without explicit `auth_manager=`.
 
 ### Severity definitions applied
 - **CRIT**: Security control absent or actively forge-able
@@ -352,4 +373,4 @@ Missing files = HIGH (per `rules/facade-manager-detection.md` Rule 2 + `rules/or
 - **MED**: Helper or convenience absent; partial-coverage gap
 - **LOW**: Terminology drift, informational confirmation, minor docs clarity
 
-### No CRIT findings emitted — all "potentially CRIT" items deferred for verification (F-C-35 the most acute candidate).
+### One CRIT finding (F-C-35) emitted with code-line evidence — universal-token-forgery vector via hardcoded JWT secret in APIGateway default constructor.
