@@ -7,7 +7,8 @@ MUST be organised into 6 groups in the exact order documented there.
 Group 1 is ``track, autolog, train, diagnose, register, serve, watch,
 dashboard, seed, reproduce, resume, lineage, rl_train`` (13 entries
 per §15.9) plus ``erase_subject`` per W15 FP-MED-2 → 14. Groups 2-6
-sum to 27 (15 + 5 + 2 + 3 + 2). Total: 41.
+sum to 27 (15 + 5 + 2 + 3 + 2). Total: 41 + 7 Phase-1 Trainable
+adapters + ``CatBoostTrainable`` (W6-013) = 49.
 
 This test locks the ordering so a future refactor that silently
 reorders the list — or drops one of the canonical verbs — fails
@@ -43,6 +44,7 @@ EXPECTED_GROUP_2 = (
     "SklearnTrainable",
     "XGBoostTrainable",
     "LightGBMTrainable",
+    "CatBoostTrainable",
     "TorchTrainable",
     "LightningTrainable",
     "UMAPTrainable",
@@ -83,10 +85,14 @@ EXPECTED_ALL = (
 
 
 def test_all_has_expected_total_symbol_count() -> None:
-    """``__all__`` MUST have exactly 48 symbols (40 §15.9 + erase_subject + 7 Phase-1 adapters)."""
-    assert len(kailash_ml.__all__) == 48, (
-        f"expected 48 symbols (§15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 adapters), "
-        f"got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
+    """``__all__`` MUST have exactly 49 symbols.
+
+    40 §15.9 + W15 ``erase_subject`` + 7 Phase-1 Trainable adapters +
+    ``CatBoostTrainable`` (W6-013 / F-E1-01).
+    """
+    assert len(kailash_ml.__all__) == 49, (
+        f"expected 49 symbols (§15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 adapters "
+        f"+ CatBoostTrainable W6-013), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
 

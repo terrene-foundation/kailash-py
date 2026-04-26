@@ -64,6 +64,7 @@ __all__ = [
     "SklearnTrainable",
     "XGBoostTrainable",
     "LightGBMTrainable",
+    "CatBoostTrainable",
     "TorchTrainable",
     "LightningTrainable",
     "UMAPTrainable",
@@ -1671,6 +1672,290 @@ class LightGBMTrainable:
     def predict(self, X: pl.DataFrame) -> Predictions:
         if not self._is_fitted:
             raise RuntimeError("LightGBMTrainable.predict() called before fit().")
+        frame = (
+            X.select([c for c in self._feature_names if c in X.columns])
+            if self._feature_names
+            else X
+        )
+        preds = self._estimator.predict(frame.to_numpy())
+        return Predictions(preds, column="prediction", device=self._last_device_report)
+
+
+# ---------------------------------------------------------------------------
+# CatBoostTrainable (W6-013 / F-E1-01 — Phase 1 family adapter)
+# ---------------------------------------------------------------------------
+
+
+class CatBoostTrainable:
+    """Wraps catboost's sklearn-style estimator as a Trainable.
+
+    Per ``specs/ml-engines-v2.md §3`` + ``ml-engines-v2-addendum.md``
+    Classical-ML surface, CatBoost is one of the four non-Torch
+    Phase-1 families (sklearn / xgboost / lightgbm / catboost). The
+    ``[catboost]`` extra ships in ``pyproject.toml``; importing this
+    adapter without the extra raises :class:`ImportError` with an
+    actionable message naming the extra (per
+    ``rules/dependencies.md`` § "Optional Extras with Loud Failure").
+
+    Device mapping per ``ml-backends.md`` §5 + CatBoost docs:
+
+    - backend == "cuda" → ``task_type="GPU"`` + ``devices="0"``
+    - backend == "cpu"  → ``task_type="CPU"``
+    - backend in {"mps", "rocm", "xpu", "tpu"} → ``UnsupportedFamily``
+
+    CatBoost's iterative boosting fit runs in
+    ``on_train_start`` of the LightningModule wrapper, mirroring the
+    XGBoost/LightGBM pattern (Lightning Hard Lock-In, Decision 8).
+    """
+
+    family_name = "catboost"
+    _SUPPORTED_BACKENDS = ("cuda", "cpu")
+
+    def __init__(
+        self,
+        estimator: Any = None,
+        *,
+        target: str = "target",
+        task: str = "classification",
+        **kwargs: Any,
+    ) -> None:
+        if estimator is None:
+            try:
+                import catboost as _cb
+            except ImportError as exc:  # pragma: no cover — exercised w/o extra
+                raise ImportError(
+                    "CatBoostTrainable requires the [catboost] extra: "
+                    "pip install kailash-ml[catboost]"
+                ) from exc
+
+            if task == "classification":
+                defaults = {
+                    "iterations": 20,
+                    "depth": 3,
+                    "random_seed": 42,
+                    "verbose": False,
+                }
+                defaults.update(kwargs)
+                estimator = _cb.CatBoostClassifier(**defaults)
+            else:
+                defaults = {
+                    "iterations": 20,
+                    "depth": 3,
+                    "random_seed": 42,
+                    "verbose": False,
+                }
+                defaults.update(kwargs)
+                estimator = _cb.CatBoostRegressor(**defaults)
+        self._estimator = estimator
+        self._target = target
+        self._task = task
+        self._is_fitted = False
+        self._last_module: Any = None
+        self._last_device_report: Optional[DeviceReport] = None
+        self._feature_names: tuple[str, ...] = ()
+
+    @property
+    def model(self) -> Any:
+        """Fitted model handle per W33c / `ml-registry.md` §5.6.1.
+
+        For CatBoost the model IS the sklearn-compatible estimator.
+        """
+        return self._estimator
+
+    def to_lightning_module(self) -> Any:
+        if self._last_module is None:
+            raise RuntimeError(
+                "CatBoostTrainable.to_lightning_module() called before fit(). "
+                "Call fit(data) first."
+            )
+        return self._last_module
+
+    def get_param_distribution(self) -> HyperparameterSpace:
+        return HyperparameterSpace(
+            params=(
+                HyperparameterRange(name="iterations", kind="int", low=10, high=500),
+                HyperparameterRange(name="depth", kind="int", low=2, high=10),
+                HyperparameterRange(
+                    name="learning_rate", kind="log_float", low=1e-3, high=1.0
+                ),
+            )
+        )
+
+    def fit(
+        self,
+        data: pl.DataFrame,
+        *,
+        hyperparameters: Optional[Mapping[str, Any]] = None,
+        context: Optional[TrainingContext] = None,
+    ) -> TrainingResult:
+        import lightning.pytorch as pl_trainer
+
+        ctx = _effective_context(context)
+
+        # Device mapping per ml-backends.md §5 — enforce supported
+        # backend BEFORE any training call. Raises UnsupportedFamily on
+        # MPS / ROCm / XPU / TPU with an actionable message.
+        if ctx.backend not in self._SUPPORTED_BACKENDS:
+            raise UnsupportedFamily(
+                f"catboost cannot run on backend '{ctx.backend}'. "
+                f"catboost supports only {list(self._SUPPORTED_BACKENDS)}. "
+                f"Use accelerator='cpu' or install on a CUDA host; or select "
+                f"a different family (lightgbm supports CUDA+ROCm; torch "
+                f"supports all 6 backends).",
+                family=self.family_name,
+                backend=ctx.backend,
+                supported_backends_for_family=self._SUPPORTED_BACKENDS,
+            )
+
+        if hyperparameters:
+            for k, v in hyperparameters.items():
+                if hasattr(self._estimator, k):
+                    try:
+                        self._estimator.set_params(**{k: v})
+                    except Exception:  # noqa: BLE001 — fall back to attribute set
+                        setattr(self._estimator, k, v)
+
+        # Set CatBoost task_type per §5 (CatBoost idiom). The set_params
+        # call may fail on builds without GPU support — surface as
+        # UnsupportedFamily on the GPU path; tolerate on the CPU path
+        # (the default task_type is already CPU).
+        cb_task_type = "GPU" if ctx.backend == "cuda" else "CPU"
+        if cb_task_type == "GPU":
+            try:
+                self._estimator.set_params(task_type="GPU", devices="0")
+            except Exception as exc:  # noqa: BLE001
+                raise UnsupportedFamily(
+                    f"catboost GPU support not present in the installed build "
+                    f"(requested backend='{ctx.backend}'). "
+                    f"Install a GPU-capable build of catboost, or use "
+                    f"accelerator='cpu'.",
+                    family=self.family_name,
+                    backend=ctx.backend,
+                    supported_backends_for_family=("cpu",),
+                ) from exc
+        else:
+            try:
+                self._estimator.set_params(task_type="CPU")
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "catboost.device.set_failed",
+                    extra={"cb_task_type": "CPU", "family": self.family_name},
+                )
+
+        X, y, feature_names = _split_xy(data, self._target)
+        self._feature_names = feature_names
+        metric_name, metric_fn = _resolve_metric("auto", y, task_hint=self._task)
+        module = _make_single_epoch_module(
+            self._estimator,
+            X,
+            y,
+            metric_name=metric_name,
+            metric_fn=metric_fn,
+            module_name="CatBoostLightningAdapter",
+        )
+
+        trainer_kwargs = _log_backend_selection(ctx, max_epochs=1)
+        trainer = pl_trainer.Trainer(**trainer_kwargs)
+
+        # OOM fallback: GPU OOM on the catboost path MUST degrade to CPU
+        # with a WARN log mirroring xgboost / lightgbm (revised-stack.md
+        # § "No-config contract"). Non-OOM exceptions re-raise unchanged
+        # per zero-tolerance.md Rule 3 (no silent swallow).
+        fallback_reason: Optional[str] = None
+        effective_ctx = ctx
+        effective_trainer_kwargs = trainer_kwargs
+        t0 = time.monotonic()
+        try:
+            trainer.fit(module)
+        except Exception as exc:
+            if ctx.backend == "cpu" or not _is_gpu_oom_error(exc):
+                raise
+            logger.warning(
+                "catboost.gpu.oom_fallback",
+                extra={
+                    "family": self.family_name,
+                    "requested_backend": ctx.backend,
+                    "fallback_backend": "cpu",
+                    "fallback_reason": "oom",
+                    "error_class": type(exc).__name__,
+                },
+            )
+            fallback_reason = "oom"
+            # Re-point catboost at CPU before the retry so the inner fit
+            # inside on_train_start actually runs on CPU.
+            try:
+                self._estimator.set_params(task_type="CPU")
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "catboost.device.set_failed",
+                    extra={
+                        "cb_task_type": "CPU",
+                        "family": self.family_name,
+                    },
+                )
+            cpu_ctx = TrainingContext(
+                accelerator="cpu",
+                precision="32-true",
+                devices=1,
+                device_string="cpu",
+                backend="cpu",
+                tenant_id=ctx.tenant_id,
+                tracker_run_id=ctx.tracker_run_id,
+                trial_number=ctx.trial_number,
+            )
+            cpu_module = _make_single_epoch_module(
+                self._estimator,
+                X,
+                y,
+                metric_name=metric_name,
+                metric_fn=metric_fn,
+                module_name="CatBoostLightningAdapter",
+            )
+            cpu_trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
+            cpu_trainer = pl_trainer.Trainer(**cpu_trainer_kwargs)
+            cpu_trainer.fit(cpu_module)
+            module = cpu_module
+            effective_ctx = cpu_ctx
+            effective_trainer_kwargs = cpu_trainer_kwargs
+        elapsed = time.monotonic() - t0
+
+        self._is_fitted = True
+        self._last_module = module
+
+        artifact_uri = _persist_native_artifact(
+            self._estimator, prefix="catboost", format="pickle"
+        )
+
+        device_report = DeviceReport(
+            family=self.family_name,
+            backend=effective_ctx.backend,
+            device_string=effective_ctx.device_string,
+            precision=effective_ctx.precision,
+            fallback_reason=fallback_reason,
+            array_api=False,
+        )
+        self._last_device_report = device_report
+
+        return TrainingResult(
+            model_uri=f"models://{self.family_name}/{uuid.uuid4().hex[:8]}",
+            metrics={metric_name: module.metric},
+            device_used=effective_ctx.device_string,
+            accelerator=effective_ctx.accelerator,
+            precision=effective_ctx.precision,
+            elapsed_seconds=elapsed,
+            tracker_run_id=effective_ctx.tracker_run_id,
+            tenant_id=effective_ctx.tenant_id,
+            artifact_uris={"native": artifact_uri},
+            lightning_trainer_config=effective_trainer_kwargs,
+            family=self.family_name,
+            hyperparameters=dict(hyperparameters or {}),
+            device=device_report,
+            trainable=self,
+        )
+
+    def predict(self, X: pl.DataFrame) -> Predictions:
+        if not self._is_fitted:
+            raise RuntimeError("CatBoostTrainable.predict() called before fit().")
         frame = (
             X.select([c for c in self._feature_names if c in X.columns])
             if self._feature_names

@@ -302,6 +302,8 @@ _FAMILY_ALIASES = {
     "xgboost": "xgboost",
     "lgbm": "lightgbm",
     "lightgbm": "lightgbm",
+    "catboost": "catboost",
+    "cb": "catboost",
     "torch": "torch",
     "pytorch": "torch",
     "lightning": "lightning",
@@ -333,6 +335,8 @@ def _build_trainable_from_family(family: str, *, target: str) -> Any:
         return _tr.XGBoostTrainable(target=target)
     if canonical == "lightgbm":
         return _tr.LightGBMTrainable(target=target)
+    if canonical == "catboost":
+        return _tr.CatBoostTrainable(target=target)
     if canonical == "torch":
         raise ValueError(
             "family='torch' requires `trainable=TorchTrainable(model=…, "
