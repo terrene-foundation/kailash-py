@@ -263,45 +263,48 @@ class ChurnAnalysisAgent(BaseAgent):
 
 **Why:** "We pin the kailash-ml version" is exactly the failure mode the version-sync invariant exists to prevent. Pinning is a versioning policy that lasts until a security patch forces an upgrade; the moment the upgrade lands, every hardcoded-import agent has a stale tool surface and the LLM calls methods that have been renamed / deprecated / removed. Discovery is the structural defense — it costs one tuple construction per agent startup and eliminates an entire class of drift bugs.
 
-#### 2.4.6 Example Integration — Kaizen Agent Tool-Set From `km.list_engines()`
+#### 2.4.6 Canonical Integration — `kaizen.ml.MLAwareAgent`
+
+The canonical implementation ships at `packages/kailash-kaizen/src/kaizen/ml/ml_aware_agent.py` and is re-exported from `kaizen.ml`:
 
 ```python
-# kaizen.agents.ml_enabled (new module in Kaizen 2.12.0)
 import kailash_ml as km
-from kailash_ml.engines.registry import EngineInfo, MethodSignature
-from kaizen.agents.base import BaseAgent, ToolSpec
+from kaizen.core.config import BaseAgentConfig
+from kaizen.ml import MLAwareAgent
 
-class MLAwareAgent(BaseAgent):
-    """BaseAgent subclass whose tool-set is derived from km.list_engines()."""
-
-    def _build_ml_tools(self) -> list[ToolSpec]:
-        engines: tuple[EngineInfo, ...] = km.list_engines()
-        tools: list[ToolSpec] = []
-        for engine in engines:
-            for sig in engine.signatures:
-                tools.append(self._signature_to_tool_spec(engine, sig))
-        return tools
-
-    @staticmethod
-    def _signature_to_tool_spec(engine: EngineInfo, sig: MethodSignature) -> ToolSpec:
-        return ToolSpec(
-            name=f"{engine.name}.{sig.method_name}",
-            description=f"Version-synchronized with {engine.name} v{engine.version}",
-            parameters={p.name: {"type": p.annotation, "default": p.default} for p in sig.params},
-        )
+# Construction discovers every engine and builds one ToolDefinition per
+# MethodSignature; tools are immutable for the agent's lifetime.
+agent = MLAwareAgent(
+    config=BaseAgentConfig(llm_provider="openai"),
+    tenant_id=None,           # single-tenant mode (every engine visible)
+    clearance_filter=None,    # PACT envelope filter — None = no gating
+)
+print(f"{len(agent.ml_tools)} ML tools registered")
+print(f"{len(agent.ml_engines)} engines discovered")
 ```
 
-Ten lines, version-synchronized, tenant-aware once `_is_clearance_admissible` is layered in (§2.4.3).
+Implementation contract (see `kaizen.ml.ml_aware_agent.MLAwareAgent` for the production source):
+
+1. `__init__` calls `kaizen.ml.discover_ml_tools(tenant_id=..., clearance_filter=...)` — the only sanctioned entry point per §2.4.5 (no hardcoded engine imports).
+2. `build_ml_tools()` walks every `EngineInfo.signatures` and converts each `MethodSignature` to a `kaizen.tools.types.ToolDefinition` named `{engine.name}.{sig.method_name}`.
+3. The `ToolDefinition.description` field embeds `kailash_ml.__version__` so the §2.4.4 version-sync invariant is observable from the LLM-visible tool surface — not just from the `EngineInfo.version` field.
+4. The discovered engines and tools are exposed as immutable tuples (`agent.ml_engines`, `agent.ml_tools`) so the LLM tool-spec list captured at agent start stays consistent across every turn.
+
+Per `rules/agent-reasoning.md` Permitted Deterministic Logic clauses 1+5+6, the conversion path (`MethodSignature → ToolDefinition`) is structural plumbing — no decision logic, no input classification, no routing. The LLM still owns every decision about which tool to invoke.
 
 #### 2.4.7 Tier 2 Wiring Test
 
-Per `rules/facade-manager-detection.md` §2 and `ml-engines-v2-addendum §E11.3 MUST 4`, this integration surface MUST have a Tier 2 wiring test:
+Per `rules/facade-manager-detection.md` §2 and `ml-engines-v2-addendum §E11.3 MUST 4`, this integration surface has the Tier 2 wiring test at:
 
-- File: `tests/integration/test_kaizen_agent_engine_discovery_wiring.py`
-- Construct a real `BaseAgent` (or `MLAwareAgent` per §2.4.6) with tools derived from `km.list_engines()`.
-- Drive one end-to-end agent turn.
-- Assert the LLM-visible tool-spec list contains one entry per `MethodSignature` across all 18 engines listed in `ml-engines-v2-addendum §E1.1`.
-- Assert every tool-spec's `description` field contains a version string that matches `kailash_ml.__version__` — i.e. the version-sync invariant holds on the observable tool surface, not just on the `EngineInfo.version` field.
+- File: `packages/kailash-kaizen/tests/integration/ml/test_kaizen_agent_engine_discovery_wiring.py`
+- Constructs a real `MLAwareAgent` with `BaseAgentConfig(llm_provider="mock")`.
+- Asserts the agent's `ml_tools` contains one entry per `MethodSignature` across every registered engine.
+- Asserts every tool's `description` field embeds `kailash_ml.__version__` — the version-sync invariant on the observable tool surface.
+- Asserts tool naming follows `{engine.name}.{method_name}` per §2.4.6.
+- Asserts `ml_tools` and `ml_engines` are tuples (immutable per §2.4.6).
+- Asserts `tenant_id` flows through to the discovery layer (§2.4.3).
+
+Spec §2.4.5 contract assertion: when `kailash_ml.engine_info` / `list_engines` are not yet shipped in the installed `kailash_ml`, the test asserts `MLRegistryUnavailableError` is raised with an actionable message — no silent skip, no direct-import fallback.
 
 The test is explicitly version-synchronized: any future `kailash_ml.__version__` bump that is NOT reflected in the tool-spec descriptions flips the test red, catching drift at the wiring boundary rather than at the next LLM invocation.
 
