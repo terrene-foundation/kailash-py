@@ -7,12 +7,20 @@
     "Vector schema:",
     "  name: human-readable identifier (used in test IDs)",
     "  builder: { fluent calls, in chain order }",
-    "  expected: array of 4 strings — [create, comment, revoke, grant]",
+    "  expected: array of 5 strings — [create, alter_owner, comment, revoke, grant]",
     "",
     "Drift detection: kailash-py runs",
     "  packages/kailash-dataflow/tests/regression/test_issue_607_cross_sdk_vectors.py",
     "  to load + assert. kailash-rs runs the equivalent in",
     "  crates/kailash-dataflow/tests/security_definer_builder.rs (see kailash-rs#579).",
+    "",
+    "#607 Wave 4 hotfix (dataflow 2.3.1) added the mandatory function_owner",
+    "field + ALTER FUNCTION ... OWNER TO emission. The canonical statement",
+    "order is now: CREATE → ALTER OWNER → COMMENT → REVOKE → GRANT (5",
+    "statements, was 4). Cross-SDK align with kailash-rs awaits a sibling",
+    "release on that side; until then this fixture is the kailash-py side",
+    "of the contract and the regression test gates kailash-rs alignment",
+    "via a clear pytest skip with a tracking-issue reference.",
     "",
     "If either SDK drifts, the affected test fails loudly. Origin: kailash-py#607,",
     "kailash-rs#579, kailash-rs#590."
@@ -29,6 +37,7 @@
         "function_name": "resolve_user_by_email",
         "search_path": "app",
         "authenticator_role": "app_role",
+        "function_owner": "dataflow_app_owner",
         "user_table": "users",
         "password_column": "password_hash",
         "tenant_column": "tenant_id",
@@ -46,6 +55,7 @@
       },
       "expected": [
         "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_email\" text, \"p_tenant_id\" bigint)\nRETURNS TABLE (\"id\" bigint, \"email\" text, \"password_hash\" text, \"is_active\" boolean)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\", \"email\", \"password_hash\", \"is_active\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_email\n    AND \"tenant_id\" = p_tenant_id\n    AND \"is_active\" = true\n  LIMIT 1;\n$$",
+        "ALTER FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) OWNER TO \"dataflow_app_owner\"",
         "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel. Multi-tenant filter inside body prevents T8 cross-tenant reads.'",
         "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) FROM PUBLIC",
         "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text, bigint) TO \"app_role\""
@@ -62,6 +72,7 @@
         "function_name": "resolve_user_by_email",
         "search_path": "app",
         "authenticator_role": "app_role",
+        "function_owner": "dataflow_app_owner",
         "user_table": "users",
         "password_column": "password_hash",
         "params": [
@@ -75,6 +86,7 @@
       },
       "expected": [
         "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_email\" text)\nRETURNS TABLE (\"id\" bigint, \"email\" text, \"password_hash\" text)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\", \"email\", \"password_hash\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_email\n  LIMIT 1;\n$$",
+        "ALTER FUNCTION \"app\".\"resolve_user_by_email\"(text) OWNER TO \"dataflow_app_owner\"",
         "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel.'",
         "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text) FROM PUBLIC",
         "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text) TO \"app_role\""
@@ -91,6 +103,7 @@
         "function_name": "resolve_user_by_email",
         "search_path": "app",
         "authenticator_role": "app_role",
+        "function_owner": "dataflow_app_owner",
         "user_table": "users",
         "password_column": "password_hash",
         "primary_lookup_column": "email",
@@ -103,6 +116,7 @@
       },
       "expected": [
         "CREATE OR REPLACE FUNCTION \"app\".\"resolve_user_by_email\"(\"p_user_email\" text)\nRETURNS TABLE (\"id\" bigint)\nLANGUAGE sql\nSECURITY DEFINER\nSET search_path = app, pg_temp\nSTABLE STRICT\nAS $$\n  SELECT \"id\"\n  FROM \"app\".\"users\"\n  WHERE \"email\" = p_user_email\n  LIMIT 1;\n$$",
+        "ALTER FUNCTION \"app\".\"resolve_user_by_email\"(text) OWNER TO \"dataflow_app_owner\"",
         "COMMENT ON FUNCTION \"app\".\"resolve_user_by_email\"(text) IS 'Pre-auth read helper emitted by SecurityDefinerBuilder. SECURITY DEFINER bypasses RLS on the user table; pinned search_path defeats CVE-2018-1058-class attacks; PUBLIC is revoked and only app_role has EXECUTE. CALLER MUST run a dummy bcrypt compare on 0-row results (column password_hash) to close the T7 email-enumeration timing side-channel.'",
         "REVOKE ALL ON FUNCTION \"app\".\"resolve_user_by_email\"(text) FROM PUBLIC",
         "GRANT EXECUTE ON FUNCTION \"app\".\"resolve_user_by_email\"(text) TO \"app_role\""

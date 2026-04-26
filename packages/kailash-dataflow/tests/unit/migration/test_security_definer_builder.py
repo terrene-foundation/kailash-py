@@ -2,14 +2,18 @@
 
 Covers:
 
-- Four invariants emitted (SECURITY DEFINER, search_path, REVOKE/GRANT,
-  multi-tenant filter inside body)
+- Five invariants emitted (SECURITY DEFINER, search_path, owner pin
+  via ALTER FUNCTION ... OWNER TO, REVOKE/GRANT, multi-tenant filter
+  inside body)
 - Snapshot byte-shape for the canonical multi-tenant recipe (cross-SDK
   parity with the Rust reference impl)
-- Identifier-injection rejection (function name, schema, role, table,
-  primary_lookup_column, active_column)
-- Required-field errors (function_name, search_path, return_column,
-  param)
+- Identifier-injection rejection (function name, schema, role,
+  function_owner, table, primary_lookup_column, active_column)
+- Required-field errors (function_name, search_path,
+  authenticator_role, function_owner, user_table, password_column,
+  return_column, param)
+- COMMENT body printable-ASCII allowlist enforcement
+  (defense-in-depth on top of upstream identifier validation)
 - Multi-tenant filter consistency (tenant_column without p_tenant_id)
 - Extended ALLOWED_PG_TYPES coverage (#583 cross-SDK parity)
 - ``primary_lookup_column`` override + derivation (#585)
@@ -22,6 +26,7 @@ from __future__ import annotations
 import pytest
 
 from dataflow.migration import SecurityDefinerBuilder, SecurityDefinerBuilderError
+from dataflow.migration.security_definer import _safe_comment_literal
 
 
 def _canonical_multi_tenant_builder() -> SecurityDefinerBuilder:
@@ -29,6 +34,7 @@ def _canonical_multi_tenant_builder() -> SecurityDefinerBuilder:
         SecurityDefinerBuilder("resolve_user_by_email")
         .search_path("app")
         .authenticator_role("app_role")
+        .function_owner("dataflow_app_owner")
         .user_table("users")
         .password_column("password_hash")
         .tenant_column("tenant_id")
@@ -47,6 +53,7 @@ def _minimal_builder_with_return_type(ty: str) -> SecurityDefinerBuilder:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .param("p_email", "text")
@@ -59,6 +66,7 @@ def _minimal_builder_with_param_type(ty: str) -> SecurityDefinerBuilder:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .param("p_key", ty)
@@ -67,31 +75,43 @@ def _minimal_builder_with_param_type(ty: str) -> SecurityDefinerBuilder:
 
 
 # ----------------------------------------------------------------------
-# 1. Four invariants emitted.
+# 1. Five invariants emitted (#607 Wave 4 hotfix added owner pinning).
 # ----------------------------------------------------------------------
 
 
-def test_emits_four_invariants() -> None:
+def test_emits_five_invariants() -> None:
     stmts = _canonical_multi_tenant_builder().build()
-    assert len(stmts) == 4, "expected 4 statements: create, comment, revoke, grant"
+    assert (
+        len(stmts) == 5
+    ), "expected 5 statements: create, alter owner, comment, revoke, grant"
 
     create = stmts[0]
+    alter_owner = stmts[1]
+    comment = stmts[2]
+    revoke = stmts[3]
+    grant = stmts[4]
     # Invariant 1: pinned search_path.
     assert "SET search_path = app, pg_temp" in create
-    # Invariant 2: REVOKE + GRANT exist (in stmts 2 and 3).
-    assert "REVOKE ALL" in stmts[2]
-    assert "FROM PUBLIC" in stmts[2]
-    assert "GRANT EXECUTE" in stmts[3]
-    assert '"app_role"' in stmts[3]
+    # Invariant 2: REVOKE + GRANT exist (in stmts 3 and 4).
+    assert "REVOKE ALL" in revoke
+    assert "FROM PUBLIC" in revoke
+    assert "GRANT EXECUTE" in grant
+    assert '"app_role"' in grant
     # Invariant 3: SECURITY DEFINER and timing-note.
     assert "SECURITY DEFINER" in create
     assert "STABLE STRICT" in create
     assert "LANGUAGE sql" in create
     assert (
-        "dummy bcrypt" in stmts[1]
+        "dummy bcrypt" in comment
     ), "comment must remind caller of T7 timing-safe discipline"
     # Invariant 4: multi-tenant filter in body.
     assert '"tenant_id" = p_tenant_id' in create
+    # Invariant 5 (#607 Wave 4): pinned owner via ALTER FUNCTION ...
+    # OWNER TO. Without this the function inherits the migration runner's
+    # role at SECURITY DEFINER execute time (typically superuser-eq).
+    assert "ALTER FUNCTION" in alter_owner
+    assert "OWNER TO" in alter_owner
+    assert '"dataflow_app_owner"' in alter_owner
 
 
 # ----------------------------------------------------------------------
@@ -123,6 +143,7 @@ def test_single_tenant_omits_tenant_clause() -> None:
         SecurityDefinerBuilder("resolve_user_by_email")
         .search_path("app")
         .authenticator_role("app_role")
+        .function_owner("dataflow_app_owner")
         .user_table("users")
         .password_column("password_hash")
         .active_column("is_active")
@@ -151,6 +172,7 @@ def test_rejects_sql_injection_in_function_name() -> None:
             SecurityDefinerBuilder('resolve"; DROP TABLE users; --')
             .search_path("app")
             .authenticator_role("app_role")
+            .function_owner("o")
             .user_table("users")
             .password_column("password_hash")
             .param("p_email", "text")
@@ -165,6 +187,7 @@ def test_rejects_sql_injection_in_schema() -> None:
             SecurityDefinerBuilder("f")
             .search_path('app"; DROP TABLE users')
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .param("p_email", "text")
@@ -179,6 +202,28 @@ def test_rejects_sql_injection_in_role() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("role; GRANT SUPERUSER")
+            .function_owner("o")
+            .user_table("t")
+            .password_column("c")
+            .param("p_email", "text")
+            .return_column("id", "bigint")
+            .build()
+        )
+
+
+def test_rejects_sql_injection_in_function_owner() -> None:
+    """#607 Wave 4: function_owner identifier MUST be validated.
+
+    Without validation, an attacker-controlled owner role would smuggle
+    arbitrary SQL into the emitted ``ALTER FUNCTION ... OWNER TO`` line.
+    Mirrors the authenticator_role defense.
+    """
+    with pytest.raises(SecurityDefinerBuilderError, match="invalid"):
+        (
+            SecurityDefinerBuilder("f")
+            .search_path("app")
+            .authenticator_role("r")
+            .function_owner('owner"; DROP TABLE users; --')
             .user_table("t")
             .password_column("c")
             .param("p_email", "text")
@@ -193,6 +238,7 @@ def test_rejects_sql_injection_in_user_table() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table('users"; DROP TABLE customers; --')
             .password_column("c")
             .param("p_email", "text")
@@ -207,6 +253,7 @@ def test_rejects_digit_leading_identifier() -> None:
             SecurityDefinerBuilder("123abc")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .param("p_email", "text")
@@ -221,6 +268,7 @@ def test_rejects_space_in_identifier() -> None:
             SecurityDefinerBuilder("name WITH DATA")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .param("p_email", "text")
@@ -288,12 +336,36 @@ def test_requires_authenticator_role() -> None:
         )
 
 
+def test_build_raises_when_function_owner_unset() -> None:
+    """#607 Wave 4 H3: function_owner is REQUIRED at build() time.
+
+    SECURITY DEFINER without an explicit owner inherits the migration
+    runner's role at execute time — typically a superuser-equivalent.
+    The check MUST raise ``SecurityDefinerBuilderError`` with the exact
+    "function_owner is required" phrase so the error message is
+    grep-able across log aggregators (per
+    ``rules/observability.md`` § 1).
+    """
+    with pytest.raises(SecurityDefinerBuilderError, match="function_owner is required"):
+        (
+            SecurityDefinerBuilder("f")
+            .search_path("app")
+            .authenticator_role("r")
+            .user_table("t")
+            .password_column("c")
+            .param("p_email", "text")
+            .return_column("id", "bigint")
+            .build()
+        )
+
+
 def test_requires_user_table() -> None:
     with pytest.raises(SecurityDefinerBuilderError, match="user_table"):
         (
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .password_column("c")
             .param("p_email", "text")
             .return_column("id", "bigint")
@@ -307,6 +379,7 @@ def test_requires_password_column() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .param("p_email", "text")
             .return_column("id", "bigint")
@@ -320,6 +393,7 @@ def test_requires_at_least_one_return_column() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .param("p_email", "text")
@@ -333,6 +407,7 @@ def test_requires_at_least_one_param() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .return_column("id", "bigint")
@@ -346,6 +421,7 @@ def test_tenant_column_without_p_tenant_id_rejected() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .tenant_column("tenant_id")
@@ -357,16 +433,110 @@ def test_tenant_column_without_p_tenant_id_rejected() -> None:
 
 def test_comment_mentions_password_column() -> None:
     stmts = _canonical_multi_tenant_builder().build()
-    assert "password_hash" in stmts[1]
+    # Statement order: [create=0, alter_owner=1, comment=2, revoke=3, grant=4].
+    assert "password_hash" in stmts[2]
 
 
 def test_revoke_precedes_grant_and_targets_correct_signature() -> None:
     stmts = _canonical_multi_tenant_builder().build()
-    # REVOKE comes at index 2, GRANT at index 3.
-    assert stmts[2].startswith("REVOKE ALL ON FUNCTION")
-    assert "(text, bigint)" in stmts[2]
-    assert stmts[3].startswith("GRANT EXECUTE ON FUNCTION")
+    # REVOKE at index 3, GRANT at index 4 (post-#607 Wave 4 reordering).
+    assert stmts[3].startswith("REVOKE ALL ON FUNCTION")
     assert "(text, bigint)" in stmts[3]
+    assert stmts[4].startswith("GRANT EXECUTE ON FUNCTION")
+    assert "(text, bigint)" in stmts[4]
+
+
+def test_emitted_ddl_includes_alter_owner_to() -> None:
+    """#607 Wave 4 H3: emitted DDL MUST include ``ALTER FUNCTION ...
+    OWNER TO`` with the configured function_owner.
+
+    Pins:
+    - The ALTER OWNER statement exists in the returned list.
+    - It sits at index 1 (immediately after CREATE) so the function
+      never exists under the migration role for a non-trivial moment.
+    - The owner identifier is double-quoted exactly per
+      ``dataflow-identifier-safety.md`` MUST Rule 1.
+    - The ALTER targets the same fully-qualified function signature as
+      the CREATE / REVOKE / GRANT (no schema or argument-list drift).
+    """
+    stmts = _canonical_multi_tenant_builder().build()
+    alter_owner = stmts[1]
+    assert alter_owner.startswith(
+        'ALTER FUNCTION "app"."resolve_user_by_email"(text, bigint) '
+        'OWNER TO "dataflow_app_owner"'
+    )
+    # ALTER OWNER MUST NOT appear in any other statement (anti-drift).
+    for i, s in enumerate(stmts):
+        if i != 1:
+            assert "ALTER FUNCTION" not in s
+            assert "OWNER TO" not in s
+
+
+def test_function_owner_validates_identifier() -> None:
+    """#607 Wave 4 H3: function_owner routes through the same
+    quote_identifier defense as authenticator_role.
+
+    Mirrors :func:`test_rejects_sql_injection_in_function_owner` but
+    pins the contract under the documented test name (the redteam
+    finding mandated this test name).
+    """
+    with pytest.raises(SecurityDefinerBuilderError, match="invalid"):
+        (
+            SecurityDefinerBuilder("f")
+            .search_path("app")
+            .authenticator_role("r")
+            .function_owner('role"; DROP --')
+            .user_table("t")
+            .password_column("c")
+            .param("p_email", "text")
+            .return_column("id", "bigint")
+            .build()
+        )
+
+
+# ----------------------------------------------------------------------
+# 4b. _safe_comment_literal helper — defense-in-depth on COMMENT body.
+# ----------------------------------------------------------------------
+
+
+def test_safe_comment_literal_passes_printable_ascii() -> None:
+    """Body containing only printable ASCII (no backslash) round-trips
+    through the helper unchanged except for SQL-standard single-quote
+    doubling."""
+    assert _safe_comment_literal("Hello world.") == "Hello world.", "no `'` to double"
+    assert (
+        _safe_comment_literal("It's a comment.") == "It''s a comment."
+    ), "single quote MUST be doubled per SQL spec"
+
+
+def test_safe_comment_literal_rejects_backslash_and_control_chars() -> None:
+    """#607 Wave 4 H4: helper enforces printable-ASCII allowlist.
+
+    Defense-in-depth: a future refactor that allows an interpolant to
+    bypass ``_quote()`` would land bytes in the COMMENT body that the
+    inline ``chr(39).replace`` form silently let through. The helper
+    raises ``SecurityDefinerBuilderError`` instead.
+
+    Coverage:
+    - Backslash (``\\``) — ambiguous under
+      ``standard_conforming_strings = off``.
+    - Control char (``\\n``) — outside ``0x20 <= ord(c) < 0x7F``.
+    - Null byte (``\\x00``) — explicitly outside allowlist.
+    - DEL (``\\x7F``) — boundary case, MUST be rejected.
+    - Unicode smart quote (``\\u2019``) — non-ASCII rejected.
+    """
+    payloads = [
+        "back\\slash inside body",
+        "newline\nhere",
+        "null\x00byte",
+        "del\x7fchar",
+        "smart\u2019quote",
+    ]
+    for body in payloads:
+        with pytest.raises(
+            SecurityDefinerBuilderError, match="printable-ASCII allowlist"
+        ):
+            _safe_comment_literal(body)
 
 
 # ----------------------------------------------------------------------
@@ -418,6 +588,7 @@ def test_primary_lookup_column_overrides_derived_name() -> None:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .primary_lookup_column("email")
@@ -437,6 +608,7 @@ def test_primary_lookup_column_unset_preserves_derivation() -> None:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .param("p_email", "text")
@@ -452,6 +624,7 @@ def test_primary_lookup_column_validates_identifier() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .primary_lookup_column('email"; DROP TABLE users; --')
@@ -471,6 +644,7 @@ def test_omit_active_column_emits_no_activity_guard() -> None:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .param("p_email", "text")
@@ -487,6 +661,7 @@ def test_active_column_emits_column_equals_true() -> None:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .active_column("enabled")
@@ -503,6 +678,7 @@ def test_active_column_validates_identifier() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .active_column('is_active"; DROP TABLE users; --')
@@ -523,6 +699,7 @@ def test_pg_type_normalized_at_insert_strips_whitespace_and_case() -> None:
         SecurityDefinerBuilder("f")
         .search_path("app")
         .authenticator_role("r")
+        .function_owner("o")
         .user_table("t")
         .password_column("c")
         .param("p_email", "  TEXT  ")
@@ -548,8 +725,16 @@ def test_cross_sdk_byte_shape_canonical_multi_tenant() -> None:
     This is the cross-SDK parity test: kailash-rs runs the same fixture
     against its own Rust impl and asserts the same bytes. If either SDK
     drifts, both tests catch it.
+
+    #607 Wave 4: statement count grew from 4 to 5 with the addition of
+    ``ALTER FUNCTION ... OWNER TO`` between CREATE and COMMENT. This
+    test pins kailash-py's local byte-shape; cross-SDK parity with
+    kailash-rs awaits the kailash-rs side of the cross-SDK align (see
+    ``tests/regression/test_issue_607_cross_sdk_vectors.py`` for the
+    fixture-driven contract).
     """
     stmts = _canonical_multi_tenant_builder().build()
+    assert len(stmts) == 5
     expected_create = (
         'CREATE OR REPLACE FUNCTION "app"."resolve_user_by_email"'
         '("p_email" text, "p_tenant_id" bigint)\n'
@@ -569,6 +754,11 @@ def test_cross_sdk_byte_shape_canonical_multi_tenant() -> None:
         "$$"
     )
     assert stmts[0] == expected_create
+    expected_alter_owner = (
+        'ALTER FUNCTION "app"."resolve_user_by_email"'
+        '(text, bigint) OWNER TO "dataflow_app_owner"'
+    )
+    assert stmts[1] == expected_alter_owner
     expected_revoke = (
         'REVOKE ALL ON FUNCTION "app"."resolve_user_by_email"'
         "(text, bigint) FROM PUBLIC"
@@ -577,8 +767,9 @@ def test_cross_sdk_byte_shape_canonical_multi_tenant() -> None:
         'GRANT EXECUTE ON FUNCTION "app"."resolve_user_by_email"'
         '(text, bigint) TO "app_role"'
     )
-    assert stmts[2] == expected_revoke
-    assert stmts[3] == expected_grant
+    # COMMENT at index 2, REVOKE at 3, GRANT at 4 (post-Wave-4 reorder).
+    assert stmts[3] == expected_revoke
+    assert stmts[4] == expected_grant
 
 
 def test_revoke_grant_with_no_params_uses_empty_signature() -> None:
@@ -591,6 +782,7 @@ def test_revoke_grant_with_no_params_uses_empty_signature() -> None:
             SecurityDefinerBuilder("f")
             .search_path("app")
             .authenticator_role("r")
+            .function_owner("o")
             .user_table("t")
             .password_column("c")
             .return_column("id", "bigint")

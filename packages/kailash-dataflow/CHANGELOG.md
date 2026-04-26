@@ -1,5 +1,25 @@
 # DataFlow Changelog
 
+## [2.3.1] — 2026-04-26 — SecurityDefinerBuilder owner-pinning + COMMENT defense-in-depth (#607 follow-up)
+
+### Security
+
+- **HIGH** Add mandatory `function_owner` builder field + emit `ALTER FUNCTION ... OWNER TO` so SECURITY DEFINER helpers run as a low-privilege role (CVE-2018-1058 component B). Without owner pinning every emitted helper inherited the migration-runner's role (typically superuser) — defeating the bypass-protection design intent. The new statement order is `CREATE → ALTER OWNER → COMMENT → REVOKE → GRANT` (5 statements, was 4). `SecurityDefinerBuilder.build()` raises `SecurityDefinerBuilderError("function_owner is required ...")` when the setter is unset; existing call sites MUST add `.function_owner(<low_privilege_role>)` to the fluent chain.
+- **HIGH** Replace fragile `chr(39).replace` COMMENT escape with typed `_safe_comment_literal` helper that validates body against printable-ASCII allowlist (rejects control chars, backslash, non-ASCII) before doubling single-quotes. Defense-in-depth on top of upstream identifier validation; closes the gap a future refactor would open if any interpolant were allowed to skip `dialect.quote_identifier()`.
+
+### Tests
+
+- Updated unit + integration suite to assert ALTER OWNER TO emission, function_owner identifier validation, comment-literal allowlist enforcement. New unit tests: `test_build_raises_when_function_owner_unset`, `test_emitted_ddl_includes_alter_owner_to`, `test_function_owner_validates_identifier`, `test_rejects_sql_injection_in_function_owner`, `test_safe_comment_literal_passes_printable_ascii`, `test_safe_comment_literal_rejects_backslash_and_control_chars`. New Tier 2 test against real PostgreSQL: `test_pg_proc_proowner_matches_function_owner_setter`.
+- Cross-SDK byte vectors regenerated to include the new `ALTER FUNCTION ... OWNER TO` statement; `function_owner` field added to every fixture vector. Cross-SDK align with kailash-rs lands separately on that side.
+
+### Breaking change
+
+- **API**: `SecurityDefinerBuilder.build()` now requires `.function_owner(role)` to be called before `.build()` — previously every existing chain compiled without owner pinning. Callers MUST add the new fluent setter; otherwise `build()` raises `SecurityDefinerBuilderError`. The break is intentional (the unset-default IS the security failure this release fixes); the migration is a one-line addition to every builder chain.
+
+### Origin
+
+- Wave 3 /redteam findings H3 + H4. See `workspaces/issues-604-607/04-validate/02-security-review.md`.
+
 ## [2.3.0] — 2026-04-25 — SecurityDefinerBuilder + RLS posture audit (#607)
 
 Cross-SDK parity with kailash-rs PR #579 + #590. Minor bump — new public surface, no breaking changes.

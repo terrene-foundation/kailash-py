@@ -27,7 +27,20 @@ are easy to get wrong when authored by hand:
    valid session in tenant A who passes ``p_id = <user_id_from_tenant_B>``
    gets tenant B's row back (``SECURITY DEFINER`` bypasses RLS).
 
-This builder emits all four invariants together. Callers pass the
+A FIFTH hardening invariant — function ownership pinning — is now
+enforced (#607 Wave 4 hotfix). ``SECURITY DEFINER`` runs as the
+*function owner*. If ``CREATE FUNCTION`` runs while the connected role
+is the migration runner (typically a superuser-equivalent), every
+emitted helper silently inherits superuser privileges on every
+invocation. The fix is mandatory ``ALTER FUNCTION ... OWNER TO
+<low_privilege_role>`` between ``CREATE`` and ``COMMENT``. The CVE-
+2018-1058 mitigation guidance from upstream PostgreSQL explicitly
+requires both ``SET search_path`` AND owner pinning — the builder now
+emits both. Callers MUST set the owner via
+:meth:`SecurityDefinerBuilder.function_owner` (required at
+:meth:`build` time).
+
+This builder emits all five invariants together. Callers pass the
 resulting ``list[str]`` into a numbered migration's ``upgrade()``
 sequence — the builder only constructs SQL; it does not execute it.
 
@@ -60,6 +73,7 @@ Example
         SecurityDefinerBuilder("resolve_user_by_email")
         .search_path("app")
         .authenticator_role("app_role")
+        .function_owner("dataflow_app_owner")
         .user_table("users")
         .password_column("password_hash")
         .tenant_column("tenant_id")
@@ -72,7 +86,8 @@ Example
         .return_column("is_active", "boolean")
         .build()
     )
-    # stmts is a list of 4 strings: CREATE FUNCTION, COMMENT, REVOKE, GRANT
+    # stmts is a list of 5 strings:
+    #   CREATE FUNCTION, ALTER FUNCTION ... OWNER TO, COMMENT, REVOKE, GRANT
     for stmt in stmts:
         await dataflow.execute_raw(stmt)
 """
@@ -153,6 +168,49 @@ class SecurityDefinerBuilderError(ValueError):
     poisoning and stored XSS via error-message paths
     (``rules/dataflow-identifier-safety.md`` MUST Rule 2).
     """
+
+
+def _safe_comment_literal(body: str) -> str:
+    """Return *body* escaped for safe interpolation inside a quoted COMMENT.
+
+    Defense-in-depth on top of the upstream identifier-validation chain.
+    Every interpolant flowing into a ``COMMENT ON FUNCTION ... IS '...'``
+    body MUST already pass :meth:`PostgreSQLDialect.quote_identifier` (which
+    rejects ``'``, ``"``, control chars, etc.); this helper closes the
+    gap a future refactor opens by allowing one of those interpolants to
+    skip identifier validation.
+
+    Validation contract:
+
+    1. Reject any byte outside printable-ASCII (``0x20 <= ord(c) < 0x7F``).
+       Excludes control chars, NUL, DEL, smart quotes, and any non-ASCII —
+       all of which are either irrelevant to PostgreSQL string literals or
+       interact awkwardly with ``standard_conforming_strings = off``
+       legacy clusters.
+    2. Reject ASCII backslash (``\\``). Under
+       ``standard_conforming_strings = off`` (legacy clusters),
+       ``\\'`` becomes a quote-escape; rejecting backslash entirely
+       removes the ambiguity.
+    3. Apply single-quote doubling (``'`` → ``''``) per the
+       ``standard_conforming_strings = on`` SQL standard.
+
+    The validation is intentionally stricter than the SQL specification
+    needs — printable-ASCII covers every legitimate COMMENT body emitted
+    by this builder (English description + identifier echoes), and
+    rejecting everything else converts a future bug-class into an
+    immediate :class:`SecurityDefinerBuilderError`.
+
+    :raises SecurityDefinerBuilderError: when *body* contains a
+        character outside the printable-ASCII allowlist or contains
+        a backslash.
+    """
+    if not all(0x20 <= ord(c) < 0x7F and c != "\\" for c in body):
+        raise SecurityDefinerBuilderError(
+            "COMMENT body contains characters outside the printable-ASCII "
+            "allowlist (defense-in-depth on top of upstream identifier "
+            "validation; reject control chars, backslash, and non-ASCII)"
+        )
+    return body.replace(chr(39), chr(39) * 2)
 
 
 def _normalize_pg_type(ty: str) -> str:
@@ -248,6 +306,7 @@ class SecurityDefinerBuilder:
     _function_name: Optional[str] = None
     _search_path_schema: Optional[str] = None
     _authenticator_role: Optional[str] = None
+    _function_owner: Optional[str] = None
     _user_table: Optional[str] = None
     _password_column: Optional[str] = None
     _tenant_column: Optional[str] = None
@@ -261,6 +320,7 @@ class SecurityDefinerBuilder:
         self._function_name = function_name
         self._search_path_schema = None
         self._authenticator_role = None
+        self._function_owner = None
         self._user_table = None
         self._password_column = None
         self._tenant_column = None
@@ -284,6 +344,35 @@ class SecurityDefinerBuilder:
         Every other role (including ``PUBLIC``) is revoked.
         """
         self._authenticator_role = role
+        return self
+
+    def function_owner(self, role: str) -> "SecurityDefinerBuilder":
+        """Set the role that will OWN the function (REQUIRED).
+
+        ``SECURITY DEFINER`` functions execute as their *owner*. Without
+        an explicit ``ALTER FUNCTION ... OWNER TO``, the function
+        inherits the role connected at ``CREATE FUNCTION`` time —
+        typically the migration runner, which is often a
+        superuser-equivalent. Every emitted helper would silently gain
+        superuser privileges on every invocation, defeating the bypass-
+        protection design intent.
+
+        The pinned owner MUST be a low-privilege role with only the
+        minimum grants needed to execute the helper body (typically
+        ``SELECT`` on the user table, plus any classification-tagged
+        columns the function returns). It MUST NOT be the migration
+        runner.
+
+        This setter is required: :meth:`build` raises
+        :class:`SecurityDefinerBuilderError` if it is unset.
+
+        :param role: the low-privilege PostgreSQL role to pin as owner.
+            Validated AND quoted via
+            :meth:`PostgreSQLDialect.quote_identifier` at
+            :meth:`build` time, mirroring
+            :meth:`authenticator_role`'s defense.
+        """
+        self._function_owner = role
         return self
 
     def user_table(self, table: str) -> "SecurityDefinerBuilder":
@@ -375,20 +464,25 @@ class SecurityDefinerBuilder:
         The returned list contains, in order:
 
         1. ``CREATE OR REPLACE FUNCTION ... SECURITY DEFINER ...``
-        2. ``COMMENT ON FUNCTION ... IS '...'`` (with timing-note)
-        3. ``REVOKE ALL ON FUNCTION ... FROM PUBLIC``
-        4. ``GRANT EXECUTE ON FUNCTION ... TO <authenticator>``
+        2. ``ALTER FUNCTION ... OWNER TO <function_owner>`` (#607
+           Wave 4 hotfix — required, pins the SECURITY DEFINER runtime
+           identity to a low-privilege role).
+        3. ``COMMENT ON FUNCTION ... IS '...'`` (with timing-note)
+        4. ``REVOKE ALL ON FUNCTION ... FROM PUBLIC``
+        5. ``GRANT EXECUTE ON FUNCTION ... TO <authenticator>``
 
         Callers embed these in a numbered migration's ``upgrade()`` —
         this builder does not execute SQL.
 
         :raises SecurityDefinerBuilderError: if any required field
-            (function name, search path, authenticator role, user
-            table, password column) is unset, OR any identifier fails
-            validation, OR any PG type is not in
+            (function name, search path, authenticator role, function
+            owner, user table, password column) is unset, OR any
+            identifier fails validation, OR any PG type is not in
             :data:`ALLOWED_PG_TYPES`, OR ``tenant_column`` is set
             but ``p_tenant_id`` is not declared as a param, OR
-            ``return_columns`` is empty, OR ``params`` is empty.
+            ``return_columns`` is empty, OR ``params`` is empty, OR the
+            generated COMMENT body fails the printable-ASCII allowlist
+            check in :func:`_safe_comment_literal`.
         """
         if self._function_name is None:
             raise SecurityDefinerBuilderError(
@@ -401,6 +495,14 @@ class SecurityDefinerBuilder:
         if self._authenticator_role is None:
             raise SecurityDefinerBuilderError(
                 "SecurityDefinerBuilder: authenticator_role is required"
+            )
+        if self._function_owner is None:
+            raise SecurityDefinerBuilderError(
+                "SecurityDefinerBuilder: function_owner is required. "
+                "SECURITY DEFINER without an explicit owner runs as the "
+                "migration role (typically superuser); pin a low-privilege "
+                'owner via .function_owner("<role>"). See module docstring '
+                "for the four+1 hardening invariants."
             )
         if self._user_table is None:
             raise SecurityDefinerBuilderError(
@@ -462,6 +564,7 @@ class SecurityDefinerBuilder:
         qfn = _quote(self._function_name)
         qschema_id = _quote(self._search_path_schema)
         qrole = _quote(self._authenticator_role)
+        qowner = _quote(self._function_owner)
         qtable = _quote(self._user_table)
         # password_column / tenant_column / active_column are validated
         # via _quote() defense-in-depth even when only the comment text
@@ -560,9 +663,25 @@ class SecurityDefinerBuilder:
             f"(column {self._password_column}) to close the T7 "
             f"email-enumeration timing side-channel.{tenant_note}"
         )
+        # Defense-in-depth: route the COMMENT body through the typed
+        # helper rather than inlining `.replace(chr(39), chr(39) * 2)`.
+        # _quote() upstream already rejects identifiers containing `'`
+        # / `"` / control chars; the helper closes the gap a future
+        # refactor would open if any interpolant were allowed to skip
+        # identifier validation.
         comment_sql = (
             f"COMMENT ON FUNCTION {qschema_id}.{qfn}({type_list}) IS "
-            f"'{comment_body.replace(chr(39), chr(39) * 2)}'"
+            f"'{_safe_comment_literal(comment_body)}'"
+        )
+
+        # ALTER FUNCTION ... OWNER TO — the fourth+1 hardening invariant
+        # (CVE-2018-1058 component B). MUST sit between CREATE and
+        # COMMENT so the function never exists under the migration role
+        # for a non-trivial moment. PostgreSQL applies the OWNER swap
+        # atomically at the ALTER, so subsequent invocations run as
+        # `qowner`, not as the migration role.
+        alter_owner_sql = (
+            f"ALTER FUNCTION {qschema_id}.{qfn}({type_list}) OWNER TO {qowner}"
         )
 
         revoke_sql = (
@@ -572,4 +691,9 @@ class SecurityDefinerBuilder:
             f"GRANT EXECUTE ON FUNCTION {qschema_id}.{qfn}({type_list}) TO {qrole}"
         )
 
-        return [create_fn, comment_sql, revoke_sql, grant_sql]
+        # Statement order: CREATE → ALTER OWNER → COMMENT → REVOKE → GRANT.
+        # ALTER OWNER MUST follow CREATE immediately so the function
+        # never exists under the migration role for a non-trivial
+        # moment. COMMENT is purely descriptive; REVOKE/GRANT are
+        # access-control and harmless to run after the owner swap.
+        return [create_fn, alter_owner_sql, comment_sql, revoke_sql, grant_sql]

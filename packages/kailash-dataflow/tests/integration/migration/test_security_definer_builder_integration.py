@@ -9,15 +9,18 @@ that:
 3. Is ``STABLE STRICT`` and ``LANGUAGE sql``.
 4. Does NOT grant ``EXECUTE`` to ``PUBLIC``.
 5. DOES grant ``EXECUTE`` to the authenticator role.
-6. Enforces the T8 multi-tenant filter — correct-tenant call returns
+6. Has ``pg_proc.proowner`` matching the configured ``function_owner``
+   (#607 Wave 4 H3: SECURITY DEFINER without owner pinning silently
+   inherits the migration-runner's role at execute time).
+7. Enforces the T8 multi-tenant filter — correct-tenant call returns
    the row; same email + wrong tenant returns 0 rows.
-7. Inactive users are excluded by the ``active_column`` guard.
-8. Identifier-injection payloads are rejected at ``build()`` time
+8. Inactive users are excluded by the ``active_column`` guard.
+9. Identifier-injection payloads are rejected at ``build()`` time
    (defense-in-depth: mirrors the Tier 1 test, repeated here so the
    integration run exercises the contract end-to-end).
-9. Pre-auth carve-out actually bypasses an RLS policy that would
-   otherwise return 0 rows for an unauthenticated session — this is
-   the load-bearing claim the whole feature exists to deliver.
+10. Pre-auth carve-out actually bypasses an RLS policy that would
+    otherwise return 0 rows for an unauthenticated session — this is
+    the load-bearing claim the whole feature exists to deliver.
 
 NO MOCKING POLICY: this file uses real asyncpg against the standard
 DataFlow test Postgres (port 5434, see
@@ -82,15 +85,26 @@ class _Fixture:
     def __init__(self, n: int, pid: int) -> None:
         self.schema = f"sd_test_{pid}_{n}"
         self.role = f"sd_test_auth_{pid}_{n}"
+        # #607 Wave 4 H3: separate low-privilege owner role for the
+        # SECURITY DEFINER function. MUST NOT be the migration runner
+        # nor the authenticator (the auth role is GRANTed EXECUTE; the
+        # owner role is what the function RUNS AS).
+        self.owner_role = f"sd_test_owner_{pid}_{n}"
         self.function_name = "resolve_user_by_email"
 
     async def setup(self, conn: asyncpg.Connection) -> None:
         # Best-effort cleanup from any prior failed run.
         await conn.execute(f"DROP SCHEMA IF EXISTS {self.schema} CASCADE")
         await conn.execute(f"DROP ROLE IF EXISTS {self.role}")
+        await conn.execute(f"DROP ROLE IF EXISTS {self.owner_role}")
 
         await conn.execute(f"CREATE SCHEMA {self.schema}")
         await conn.execute(f"CREATE ROLE {self.role} NOLOGIN")
+        # Owner role needs BYPASSRLS so the SECURITY DEFINER function
+        # can read the user table even when the schema has an RLS
+        # policy. NOLOGIN keeps the role from being a login surface;
+        # it only exists as the function-owner identity.
+        await conn.execute(f"CREATE ROLE {self.owner_role} NOLOGIN BYPASSRLS")
         await conn.execute(
             f"""
             CREATE TABLE {self.schema}.users (
@@ -102,6 +116,10 @@ class _Fixture:
             )
             """
         )
+        # The owner role needs SELECT on the user table so the
+        # function body can read it post-OWNER-swap.
+        await conn.execute(f"GRANT SELECT ON {self.schema}.users TO {self.owner_role}")
+        await conn.execute(f"GRANT USAGE ON SCHEMA {self.schema} TO {self.owner_role}")
         await conn.execute(
             f"""
             INSERT INTO {self.schema}.users
@@ -114,16 +132,20 @@ class _Fixture:
         )
 
     async def teardown(self, conn: asyncpg.Connection) -> None:
-        # CASCADE removes the function too (the role's deps), then
-        # the role drops cleanly.
+        # CASCADE removes the function too (the roles' deps), then
+        # the roles drop cleanly. Drop the owner LAST because the
+        # function may still hold a dependency on it until the
+        # CASCADE drops the schema.
         await conn.execute(f"DROP SCHEMA IF EXISTS {self.schema} CASCADE")
         await conn.execute(f"DROP ROLE IF EXISTS {self.role}")
+        await conn.execute(f"DROP ROLE IF EXISTS {self.owner_role}")
 
     def builder(self) -> SecurityDefinerBuilder:
         return (
             SecurityDefinerBuilder(self.function_name)
             .search_path(self.schema)
             .authenticator_role(self.role)
+            .function_owner(self.owner_role)
             .user_table("users")
             .password_column("password_hash")
             .tenant_column("tenant_id")
@@ -327,10 +349,10 @@ async def test_security_definer_bypasses_rls_for_unauthenticated_session(
     # Direct SELECT would return 0 rows because the policy denies all.
     # But the SECURITY DEFINER function bypasses this — alice's row
     # comes back even though the calling session has no auth context.
-    # NOTE: the function's owner (the postgres superuser running this
-    # test) implicitly bypasses RLS, which is exactly the production
-    # configuration — the function owner is a role with BYPASSRLS or
-    # it owns the table.
+    # The function's owner (the dedicated low-privilege owner role with
+    # BYPASSRLS, set via .function_owner() — see #607 Wave 4 H3) is the
+    # role the function runs as, and it has BYPASSRLS so the policy
+    # cannot block it. This is the production configuration.
     rows = await conn.fetch(call_sql, "alice@example.com", 1)
     assert len(rows) == 1, (
         "SECURITY DEFINER MUST bypass RLS — this is the whole point of "
@@ -351,6 +373,7 @@ async def test_defense_in_depth_rejects_identifier_injection() -> None:
             SecurityDefinerBuilder('resolve"; DROP TABLE users; --')
             .search_path("app")
             .authenticator_role("app_role")
+            .function_owner("dataflow_app_owner")
             .user_table("users")
             .password_column("password_hash")
             .param("p_email", "text")
@@ -389,3 +412,49 @@ async def test_comment_persisted_on_function(
     assert (
         "T8 cross-tenant" in body
     ), "COMMENT must mention T8 mitigation when tenant_column is set"
+
+
+# ----------------------------------------------------------------------
+# 8. #607 Wave 4 H3 — pg_proc.proowner matches configured owner.
+#
+# The structural defense for SECURITY DEFINER privilege escalation. If
+# this assertion fails, every emitted helper inherits the migration
+# runner's role at execute time (typically a superuser-equivalent),
+# defeating the bypass-protection design intent.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_pg_proc_proowner_matches_function_owner_setter(
+    fixture: Tuple[asyncpg.Connection, _Fixture],
+) -> None:
+    """The function's pg_proc.proowner MUST equal the role passed to
+    .function_owner(...) — not the migration-runner's role.
+
+    This is the wired test that Tier 1 cannot give us: we apply the
+    emitted DDL to a real PostgreSQL instance and inspect the
+    catalog. If a future refactor drops the ALTER OWNER statement or
+    sends it to the wrong role, this test fails loudly.
+    """
+    conn, fx = fixture
+    await _apply_builder(conn, fx.builder().build())
+
+    row = await conn.fetchrow(
+        """
+        SELECT r.rolname AS owner_rolname
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        JOIN pg_roles r     ON p.proowner     = r.oid
+        WHERE p.proname = $1 AND n.nspname = $2
+        """,
+        fx.function_name,
+        fx.schema,
+    )
+    assert row is not None, "function should exist exactly once"
+    assert row["owner_rolname"] == fx.owner_role, (
+        f"pg_proc.proowner MUST equal the role passed to .function_owner() "
+        f"(expected {fx.owner_role!r}, got {row['owner_rolname']!r}). "
+        f"Without this, SECURITY DEFINER inherits the migration runner's "
+        f"role at execute time — typically a superuser-equivalent — which "
+        f"defeats the bypass-protection design intent."
+    )
