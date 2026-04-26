@@ -9,6 +9,8 @@ Status: DRAFT at `workspaces/kailash-ml-audit/specs-draft/ml-engines-v2-addendum
 
 Origin: `workspaces/kailash-ml-audit/04-validate/round-1-SYNTHESIS.md` themes T2 (0/18 engines auto-wire tracker) + T3 (tenant isolation absent from 13/13 engines) + T5 (two model registries) + T7 (industry parity sub-MLflow-1.0); `round-1-mlops-production.md` 13×Tracker + 13×Tenant matrices; `round-1-industry-competitive.md` §C scorecard. Split per `rules/specs-authority.md §8` (base file already >300 LOC — an addendum keeps each shard ≤500 LOC rather than ballooning the parent).
 
+> **Wave 6.5 deferral note (2026-04-26):** This addendum cites `engine.fit_auto(...)` as a five-line Quick Start surface (§ E2.1, line 109). Per the Wave 6.5 spec realignment, `MLEngine.fit_auto()` is **not implemented** in kailash-ml 1.1.1 — see `ml-automl.md` § "Deferred to M2 milestone" entry D-fitauto. Callers today use `MLEngine.compare()` for family ranking and instantiate `kailash_ml.automl.AutoMLEngine` directly for HPO. The fit_auto facade lands in M2.
+
 ---
 
 ## Enrichment 1 — The 18-Engine × Tracker × Tenant × Actor Matrix
