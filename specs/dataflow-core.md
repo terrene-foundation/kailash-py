@@ -1,6 +1,6 @@
 # Kailash DataFlow — Core (DataFlow Class, Engine, Exceptions, Trust, Fabric)
 
-Version: 2.0.7
+Version: 2.3.1
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: DataFlow class + constructor + connection URL + lazy/runtime detection, DataFlowEngine builder, exceptions, write events, Data Fabric Engine, derived models, retention engine, trust plane integration, versioning

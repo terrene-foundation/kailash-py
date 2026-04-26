@@ -1,6 +1,6 @@
 # Kailash Kaizen -- Domain Specification — Core
 
-Version: 2.7.3
+Version: 2.13.1
 Package: `kailash-kaizen`
 License: Apache-2.0
 Owner: Terrene Foundation (Singapore CLG)

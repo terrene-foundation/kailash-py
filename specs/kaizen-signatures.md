@@ -1,6 +1,6 @@
 # Kailash Kaizen -- Domain Specification — Signatures & Structured Output
 
-Version: 2.7.3
+Version: 2.13.1
 Package: `kailash-kaizen`
 
 Parent domain: Kailash Kaizen AI agent framework. This file covers the signature system (InputField, OutputField, Signature, SignatureMeta, parser/compiler/validator, templates, enterprise extensions, multi-modal, execution patterns) and structured output (JSON schema generation). See also `kaizen-core.md`, `kaizen-providers.md`, and `kaizen-advanced.md`.

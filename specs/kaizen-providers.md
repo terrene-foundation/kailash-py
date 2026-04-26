@@ -1,6 +1,6 @@
 # Kailash Kaizen -- Domain Specification — Providers, Strategies, Tools & Memory
 
-Version: 2.7.3
+Version: 2.13.1
 Package: `kailash-kaizen`
 
 Parent domain: Kailash Kaizen AI agent framework. This file covers the provider system, execution strategies, tool integration (MCP), memory system, error handling, and streaming support. See also `kaizen-core.md`, `kaizen-signatures.md`, and `kaizen-advanced.md`.

@@ -1,6 +1,6 @@
 # Kailash Kaizen -- Domain Specification — Advanced Features
 
-Version: 2.7.3
+Version: 2.13.1
 Package: `kailash-kaizen`
 
 Parent domain: Kailash Kaizen AI agent framework. This file covers cost tracking, composition system, optimization system, audio support, configuration system, agent type presets, Google A2A protocol, permission system, hook system, and trust/posture. See also `kaizen-core.md`, `kaizen-signatures.md`, and `kaizen-providers.md`.

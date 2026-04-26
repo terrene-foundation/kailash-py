@@ -1,6 +1,6 @@
 # Kailash DataFlow — Cache, Dialect, Record ID Coercion, Transactions, Pooling
 
-Version: 2.0.12
+Version: 2.3.1
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: Cache layer (backend selection, key format, TTL, invalidation, stats), dialect system (identifier quoting, placeholders, type mapping, feature matrix, upsert SQL, parameter conversion), record ID coercion, transaction manager, connection pooling
