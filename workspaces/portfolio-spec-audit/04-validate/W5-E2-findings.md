@@ -400,3 +400,31 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** `packages/kailash-align/src/kailash_align/models.py` exists; spec says "JSON columns use TEXT storage (same pattern as kailash-ml's MLModelVersion.metrics_json)". Need verification of field definitions matching spec exactly.
 **Remediation hint:** Verify field list parity between spec § 1.6 and `models.py` constants.
 
+
+---
+
+## Spec 8 — `alignment-diagnostics.md` (170 lines)
+
+§ subsections enumerated: ~9 (purpose, surface (construction, protocol, evaluate_pair, kl_divergence, win_rate, track_training, detect_reward_hacking, report, df accessors, plots), invariants, security threats, test discipline, observability, cross-SDK parity, attribution, origin)
+
+### F-E2-50 — `alignment-diagnostics.md` (full spec) — Implementation matches spec point-for-point (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Surface enumerates: `AlignmentDiagnostics(label, window=10000, run_id=None)`; conforms to `Diagnostic` Protocol (`isinstance(diag, Diagnostic)` True); methods `evaluate_pair`, `kl_divergence`, `win_rate`, `track_training`, `detect_reward_hacking`, `report`, `pair_df`, `training_df`, `findings_df`, `plot_training_curves`, `plot_alignment_dashboard`. Bounded memory: `deque(maxlen=window)`. Facade-import contract: `from kailash_align.diagnostics import AlignmentDiagnostics`.
+**Actual state:** `packages/kailash-align/src/kailash_align/diagnostics/alignment.py:182` `class AlignmentDiagnostics`, `:243` `deque(maxlen=window)` confirmed bounded memory, `:271,354,369,381,438,844` all spec-named methods present. Facade `__init__.py` re-exports `AlignmentDiagnostics`. No medical-metaphor terminology in source (per spec invariant 6).
+**Remediation hint:** None — confirms compliance. This is the cleanest spec-to-implementation match in the audit set.
+
+### F-E2-51 — `alignment-diagnostics.md` § Cross-SDK parity — Diagnostic Protocol pin to byte-vector test absent
+
+**Severity:** MED
+**Spec claim:** § Cross-SDK parity references `schemas/trace-event.v1.json` + `src/kailash/diagnostics/protocols.py::Diagnostic`. A future kailash-rs adapter (BP-053) "implements the same Protocol with matching `report()` key shapes."
+**Actual state:** Per `rules/cross-sdk-inspection.md` MUST Rule 4 (Cross-SDK Hash / Fingerprint Helpers MUST Pin Byte Vectors From Sibling SDK), the spec mandates byte-vector pinning for cross-SDK fingerprints. AlignmentDiagnostics does NOT compute cross-SDK fingerprints (it computes KL/reward stats). Cross-SDK parity claim here is structural Protocol conformance (`report()` key shape), not byte-shape parity. No fingerprint helper to byte-pin. The MED severity is because spec § references a future kailash-rs adapter that does not yet exist; current ENforcement is N/A for this PR.
+**Remediation hint:** When kailash-rs PR#3-equivalent ships, add a Tier-2 cross-SDK regression that pins `report()` output keys + types byte-for-byte across SDK pairs.
+
+### F-E2-52 — `alignment-diagnostics.md` § Test discipline — Tier 1 + Tier 2 wiring tests required
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § Test discipline mandates `test_alignment_diagnostics_unit.py` (Tier 1) + `test_alignment_diagnostics_wiring.py` (Tier 2). Tier 2 MUST use facade-import (`from kailash_align.diagnostics import AlignmentDiagnostics`).
+**Actual state:** Test file paths not directly verified in audit; per `rules/facade-manager-detection.md` and orphan-detection convention, the wiring test name `test_alignment_diagnostics_wiring.py` would be expected.
+**Remediation hint:** Verify via `ls packages/kailash-align/tests/integration/test_alignment_diagnostics_wiring.py`.
+
