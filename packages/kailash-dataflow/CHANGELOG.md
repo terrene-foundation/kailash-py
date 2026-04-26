@@ -1,6 +1,10 @@
 # DataFlow Changelog
 
-## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006)
+## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
+
+### Tests
+
+- **Pinned `dataflow.hash()` byte-vector tests against kailash-rs reference (closes F-B-31, W6-017).** Added `packages/kailash-dataflow/tests/regression/test_hash_byte_vectors.py` with 5 pinned reference vectors covering sentinel cases (empty frame, single-row, all-zero, two-column, mixed types) per `rules/cross-sdk-inspection.md` MUST 4. Each vector is a `(polars.DataFrame, expected sha256:<64hex>)` tuple derived empirically from kailash-py at polars 1.40.0 — these ARE the canonical reference set the kailash-rs `dataflow::hash()` implementation MUST match byte-for-byte once it lands. Also pins format invariant (`^sha256:[a-f0-9]{64}$`) and signature invariant (positional `df`, keyword-only `algorithm='sha256'` and `stable=True`) per `cross-sdk-inspection.md` § 3a structural API-divergence disposition. The cross-SDK byte-for-byte parity assertion is deferred via `pytest.skip` because kailash-rs has not yet implemented the Rust-side helper (no `crates/kailash-dataflow/src/hash.rs` or `ml/` module exists at the time of writing); per `rules/zero-tolerance.md` Rule 2, no fabricated reference vectors. When the Rust implementation lands, the skip flips on and the byte-for-byte check executes against these pinned vectors.
 
 ### Changed
 
