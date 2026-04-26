@@ -1,9 +1,25 @@
 # W5-D Findings — kaizen
 
-**Specs audited:** 13
-**§ subsections enumerated:** TBD
-**Findings:** CRIT=0 HIGH=0 MED=0 LOW=0
+**Specs audited:** 13 (kaizen-core, kaizen-signatures, kaizen-providers, kaizen-advanced, kaizen-llm-deployments, kaizen-interpretability, kaizen-judges, kaizen-evaluation, kaizen-observability, kaizen-agents-core, kaizen-agents-patterns, kaizen-agents-governance, kaizen-ml-integration)
+**§ subsections enumerated:** ~120 across all specs
+**Findings:** CRIT=0 HIGH=4 MED=8 LOW=45
 **Audit completed:** 2026-04-26
+
+## HIGH Findings Summary
+- **F-D-02** kaizen-core § 6.1 — CoreAgent default config hardcodes `"gpt-3.5-turbo"` (env-models.md violation)
+- **F-D-25** kaizen-judges § Test discipline — 24 Tier-1 unit tests claimed but `tests/unit/judges/` doesn't exist
+- **F-D-50** kaizen-agents-governance § 9.2 — GovernedSupervisor default model hardcoded `"claude-sonnet-4-6"` (env-models.md violation)
+- **F-D-55** kaizen-ml-integration § 2.4 — `km.engine_info` discovery + `MLAwareAgent` class mandated by spec but ZERO production wiring (orphan-detection.md §1 violation)
+
+## MED Findings Summary
+- F-D-03 (posture wiring cross-spec correlation), F-D-04 (checkpoint_manager undocumented), F-D-06 (MultiModalSignature defined twice), F-D-17 (A2A types module path drift), F-D-20 (security tests in different dirs than spec), F-D-22 (InterpretabilityDiagnostics no production consumer), F-D-30 (kaizen-evaluation Tier-1 unit tests acknowledged missing), F-D-53 (SQLiteSink at wrong module path), F-D-56 (4 of 5 Tier-2 wiring tests missing)
+
+## Audit Methodology
+- Read each spec in full
+- Grep/AST verified every named class, function, and contract assertion
+- Cross-correlated rules: `agent-reasoning.md`, `env-models.md`, `orphan-detection.md`, `facade-manager-detection.md`
+- Verified BaseAgent hot-path wiring for diagnostic adapters (TraceExporter wiring confirmed; InterpretabilityDiagnostics standalone-by-design; LLMDiagnostics + AgentDiagnostics wired via tracker= kwarg)
+- Did NOT modify any spec or source code
 
 ---
 
@@ -350,9 +366,58 @@
 **Actual state:** Need to verify in `record_tool_use` impl. Spec assertion at signature level only — deeper audit deferred.
 **Remediation hint:** Tier 2 wiring tests should assert `arguments` values are NOT persisted (only keys). Add explicit test if missing.
 
-## F-D-50 — kaizen-agents-governance § 9.2 — Default model is hardcoded "claude-sonnet-4-6" per spec
+## F-D-50 — kaizen-agents-governance § 9.2 — Default model is hardcoded "claude-sonnet-4-6" per spec AND code
 
 **Severity:** HIGH
 **Spec claim:** "`model` ... Default `\"claude-sonnet-4-6\"`"
-**Actual state:** Spec mandates a default; per `rules/env-models.md` "NEVER Hardcode Model Names" — `claude-sonnet-4-6` MUST come from env (e.g., `os.environ["ANTHROPIC_MODEL"]`). Need to verify the actual constructor pulls from env or hardcodes.
-**Remediation hint:** If GovernedSupervisor constructor hardcodes "claude-sonnet-4-6" as default, change to `os.environ.get("DEFAULT_LLM_MODEL")` or raise. Spec MUST be updated to reflect env-resolved default.
+**Actual state:** `packages/kaizen-agents/src/kaizen_agents/supervisor.py:221` — `model: str = "claude-sonnet-4-6"`. Confirmed hardcoded. Per `rules/env-models.md` "NEVER Hardcode Model Names: BLOCKED: model='claude-3-opus'" — this violates the rule. Spec accurately documents the violation.
+**Remediation hint:** Change default to `model: Optional[str] = None`; resolve at runtime via `os.environ.get("ANTHROPIC_MODEL", os.environ.get("DEFAULT_LLM_MODEL"))`; raise if unset. Update spec accordingly.
+
+## F-D-51 — kaizen-ml-integration § Status — Spec is DRAFT targeting 2.12.0; current package version 2.13.1
+
+**Severity:** LOW
+**Spec claim:** "Target release: kailash-kaizen 2.12.0 ... Status: DRAFT at workspaces/kailash-ml-audit/supporting-specs-draft/"
+**Actual state:** Current `kailash-kaizen` version is 2.13.1 — past the 2.12.0 target. Spec says "Promotes to specs/kaizen-ml-integration.md after round-3 convergence" but file already exists at `specs/kaizen-ml-integration.md`. Promotion happened.
+**Remediation hint:** Update spec status from DRAFT to LIVE and bump version target to 2.13.x; document what landed.
+
+## F-D-52 — kaizen-ml-integration § 2 — `tracker=` kwarg integrated into AgentDiagnostics + InterpretabilityDiagnostics
+
+**Severity:** LOW
+**Spec claim:** Three adapters gain `tracker: Optional[ExperimentRun]` kwarg.
+**Actual state:** Verified at `packages/kailash-kaizen/src/kaizen/observability/agent_diagnostics.py:195` and `kaizen/interpretability/core.py:330`. `LLMDiagnostics` exists at `kaizen/judges/llm_diagnostics.py` (NOT at spec's claimed `kaizen/observability/llm_diagnostics.py`).
+**Remediation hint:** Update spec § 2.3 to note actual module path (`kaizen.judges.llm_diagnostics`).
+
+## F-D-53 — kaizen-ml-integration § 5.1 — `SQLiteSink` lives in `kaizen/ml/_sqlite_sink.py` not `kaizen/observability/trace_exporter.py`
+
+**Severity:** MED
+**Spec claim:** "`# kaizen.observability.trace_exporter` ... `class SQLiteSink:`"
+**Actual state:** SQLiteSink class lives at `packages/kailash-kaizen/src/kaizen/ml/_sqlite_sink.py` (NOT in observability module per spec). This is module-path drift; consumers importing per spec get ImportError.
+**Remediation hint:** Either move SQLiteSink to `kaizen.observability.trace_exporter` OR re-export from there. Update spec to canonical import path. Per `rules/orphan-detection.md` §6, eager-imported public symbols must live where the spec promises.
+
+## F-D-54 — kaizen-ml-integration § 4.2 — CostDelta microdollar wire format verified
+
+**Severity:** LOW
+**Spec claim:** "Kaizen 2.12.0 MUST migrate `kaizen.cost.tracker.CostTracker` to microdollars wire format"
+**Actual state:** `packages/kailash-kaizen/src/kaizen/cost/tracker.py` — verified microdollar accumulation, `_MICRODOLLARS_PER_USD = 1_000_000`. CostDelta migration appears complete.
+**Remediation hint:** No action.
+
+## F-D-55 — kaizen-ml-integration § 2.4 — `km.engine_info` / `km.list_engines` agent tool discovery — production wiring NOT verified
+
+**Severity:** HIGH
+**Spec claim:** "Kaizen agents (BaseAgent, DelegateEngine, SupervisorAgent, and every descendant) MUST obtain ML-method signatures AT runtime via `km.engine_info(engine_name)` / `km.list_engines()`."
+**Actual state:** Greps for `km.engine_info`, `km.list_engines`, or `MLAwareAgent` returned ZERO matches in `packages/kailash-kaizen/src/kaizen/agents/`, `kaizen/core/`, or `kaizen-agents/src/kaizen_agents/agents/`. The spec mandates a `MLAwareAgent` class at `kaizen.agents.ml_enabled` (line 269) — does not exist. Tier-2 wiring test at `tests/integration/test_kaizen_agent_engine_discovery_wiring.py` (spec § 2.4.7) — does not exist. This is a critical orphan: spec mandates discovery-driven tool construction but NO production code consumes `km.list_engines()`.
+**Remediation hint:** Either ship `MLAwareAgent` + Tier-2 wiring test per spec, OR update spec to mark this surface as DEFERRED/Awaiting-implementation. Per `rules/orphan-detection.md` §1, MUST land production call site within 5 commits of facade landing.
+
+## F-D-56 — kaizen-ml-integration § 7.2 — Several Tier-2 wiring tests exist; some missing
+
+**Severity:** MED
+**Spec claim:** 5 Tier-2 wiring tests at specific paths.
+**Actual state:** `tests/integration/ml/test_sqlite_sink_fingerprint_wiring.py` exists. Did not find: `test_agent_diagnostics_tracker_wiring.py`, `test_llm_diagnostics_tracker_wiring.py`, `test_interpretability_diagnostics_tracker_wiring.py`, `test_cost_tracker_cross_sdk_parity_wiring.py`. Missing 4 of 5 wiring tests.
+**Remediation hint:** Create the 4 missing Tier-2 wiring tests per spec § 7.2 paths.
+
+## F-D-57 — kaizen-ml-integration § 5.2 — Schema table prefix `_kml_agent_*` undocumented in production code paths
+
+**Severity:** LOW
+**Spec claim:** Two tables `_kml_agent_traces` + `_kml_agent_trace_events` with full DDL.
+**Actual state:** SQLiteSink class exists at `kaizen/ml/_sqlite_sink.py`; deeper schema verification deferred. Spec asserts `_kml_` prefix per ML's canonical internal-system-table convention.
+**Remediation hint:** Verify SQLiteSink CREATE TABLE statements match spec DDL exactly; update spec if drift.
