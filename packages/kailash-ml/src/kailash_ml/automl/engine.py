@@ -290,62 +290,193 @@ class AutoMLResult:
 # ---------------------------------------------------------------------------
 
 
+# Canonical names — single source of truth shared with the numbered
+# migration. See ``kailash.tracking.migrations.0003_automl_trials_schema_alignment``
+# for the DDL (rules/schema-migration.md MUST Rule 1).
 _AUTOML_TRIALS_TABLE = "_kml_automl_trials"
+# Sentinel column whose presence proves migration 0003 has aligned the
+# schema to the engine's runtime form. Absent on 0002's placeholder
+# shape, present on the canonical 19-column form.
+_CANONICAL_SENTINEL_COLUMN = "trial_number"
 
 
-async def _ensure_trials_table(conn: Any) -> bool:
-    """Create the audit table on first use; idempotent via IF NOT EXISTS.
+async def _probe_trials_table(conn: Any) -> tuple[bool, bool]:
+    """Probe the audit table state without emitting DDL.
 
-    Returns True if the table is known to exist after this call, False
-    if creation failed (emits a WARN). AutoMLEngine uses this to decide
-    whether to attempt INSERTs or fall back to in-memory audit.
+    Returns ``(table_present, schema_canonical)``:
+
+    - ``table_present`` — True iff ``_kml_automl_trials`` exists.
+    - ``schema_canonical`` — True iff the canonical sentinel column
+      ``trial_number`` is present (which is the unambiguous signal that
+      migration 0003 has been applied; the column is absent on the
+      pre-W6-020 placeholder form from migration 0002).
+
+    Per ``rules/schema-migration.md`` MUST Rule 1, this engine MUST NOT
+    emit ``CREATE TABLE`` DDL inline; the migration framework owns
+    schema lifecycle. When ``schema_canonical`` is False the caller
+    raises :class:`kailash_ml.errors.MigrationRequiredError`.
+    """
+    # Resolve dialect via the connection's introspection surface.
+    try:
+        from kailash.db.dialect import (
+            DatabaseType,
+            MySQLDialect,
+            PostgresDialect,
+            SQLiteDialect,
+        )
+    except ImportError:  # pragma: no cover - kailash-core missing
+        # No dialect helper available — best-effort probe via SQL only.
+        return await _probe_via_sql_only(conn)
+
+    dialect = getattr(conn, "dialect", None)
+    if dialect is None:
+        db_type = getattr(conn, "database_type", None)
+        if db_type is None:
+            return await _probe_via_sql_only(conn)
+        if isinstance(db_type, DatabaseType):
+            dialect = {
+                DatabaseType.POSTGRESQL: PostgresDialect,
+                DatabaseType.SQLITE: SQLiteDialect,
+                DatabaseType.MYSQL: MySQLDialect,
+            }[db_type]()
+        elif isinstance(db_type, str):
+            for member in DatabaseType:
+                if member.value == db_type.lower():
+                    dialect = {
+                        DatabaseType.POSTGRESQL: PostgresDialect,
+                        DatabaseType.SQLITE: SQLiteDialect,
+                        DatabaseType.MYSQL: MySQLDialect,
+                    }[member]()
+                    break
+
+    if dialect is None:
+        return await _probe_via_sql_only(conn)
+
+    # Probe table existence + canonical-column presence.
+    table_present = await _probe_table_exists(dialect, conn, _AUTOML_TRIALS_TABLE)
+    if not table_present:
+        return (False, False)
+    schema_canonical = await _probe_column_exists(
+        dialect, conn, _AUTOML_TRIALS_TABLE, _CANONICAL_SENTINEL_COLUMN
+    )
+    return (True, schema_canonical)
+
+
+async def _probe_via_sql_only(conn: Any) -> tuple[bool, bool]:
+    """Fallback probe — issues a no-op SELECT against the canonical
+    sentinel column. Returns ``(False, False)`` on any error so the
+    caller raises :class:`MigrationRequiredError`.
     """
     try:
         await conn.execute(
-            f"CREATE TABLE IF NOT EXISTS {_AUTOML_TRIALS_TABLE} ("
-            "  trial_id TEXT PRIMARY KEY,"
-            "  run_id TEXT NOT NULL,"
-            "  tenant_id TEXT NOT NULL,"
-            "  actor_id TEXT NOT NULL,"
-            "  trial_number INTEGER NOT NULL,"
-            "  strategy TEXT NOT NULL,"
-            "  params_json TEXT NOT NULL,"
-            "  metric_name TEXT NOT NULL,"
-            "  metric_value REAL,"
-            "  cost_microdollars INTEGER NOT NULL DEFAULT 0,"
-            "  started_at TEXT NOT NULL,"
-            "  finished_at TEXT,"
-            "  status TEXT NOT NULL,"
-            "  admission_decision_id TEXT,"
-            "  admission_decision TEXT,"
-            "  error TEXT,"
-            "  source TEXT NOT NULL DEFAULT 'baseline',"
-            "  fidelity REAL NOT NULL DEFAULT 1.0,"
-            "  rung INTEGER NOT NULL DEFAULT 0"
-            ")"
+            f"SELECT {_CANONICAL_SENTINEL_COLUMN} FROM {_AUTOML_TRIALS_TABLE} "
+            f"WHERE 1=0"
         )
-        await conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_automl_trials_tenant_run "
-            f"ON {_AUTOML_TRIALS_TABLE}(tenant_id, run_id, trial_number)"
+        return (True, True)
+    except Exception:
+        return (False, False)
+
+
+async def _probe_table_exists(dialect: Any, conn: Any, name: str) -> bool:
+    """Dialect-portable table-existence probe.
+
+    Mirrors the helper in
+    ``kailash.tracking.migrations.0003_automl_trials_schema_alignment``
+    so engine + migration agree byte-for-byte on what "table present"
+    means.
+    """
+    from kailash.db.dialect import DatabaseType
+
+    if dialect.database_type == DatabaseType.SQLITE:
+        result = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+            (name,),
         )
-        return True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "automl.audit.table_create_failed",
-            extra={
-                "table": _AUTOML_TRIALS_TABLE,
-                "error_class": type(exc).__name__,
-                "error_message": str(exc),
-                "note": (
-                    "CREATE TABLE IF NOT EXISTS failed for the audit table."
-                    " AutoMLEngine will keep running but audit rows will be"
-                    " held in-memory. An orchestrator-owned numbered"
-                    " migration per rules/schema-migration.md MUST Rule 1"
-                    " is required."
-                ),
-            },
+        if hasattr(result, "__await__"):
+            result = await result
+        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
+        if fetchone is None:
+            return False
+        row = fetchone()
+        if hasattr(row, "__await__"):
+            row = await row
+        return row is not None
+    if dialect.database_type == DatabaseType.POSTGRESQL:
+        result = conn.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = ?",
+            (name,),
         )
+        if hasattr(result, "__await__"):
+            result = await result
+        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
+        if fetchone is None:
+            return False
+        row = fetchone()
+        if hasattr(row, "__await__"):
+            row = await row
+        return row is not None
+    if dialect.database_type == DatabaseType.MYSQL:
+        result = conn.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = DATABASE() AND table_name = ?",
+            (name,),
+        )
+        if hasattr(result, "__await__"):
+            result = await result
+        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
+        if fetchone is None:
+            return False
+        row = fetchone()
+        if hasattr(row, "__await__"):
+            row = await row
+        return row is not None
+    return False
+
+
+async def _probe_column_exists(
+    dialect: Any, conn: Any, table: str, column: str
+) -> bool:
+    """Dialect-portable column-existence probe."""
+    from kailash.db.dialect import DatabaseType
+
+    if dialect.database_type == DatabaseType.SQLITE:
+        quoted = dialect.quote_identifier(table)
+        result = conn.execute(f"PRAGMA table_info({quoted})")
+        if hasattr(result, "__await__"):
+            result = await result
+        fetchall = getattr(result, "fetchall", None) or getattr(conn, "fetchall", None)
+        if fetchall is None:
+            return False
+        rows = fetchall()
+        if hasattr(rows, "__await__"):
+            rows = await rows
+        for row in rows or []:
+            name = row[1] if not isinstance(row, dict) else row.get("name")
+            if name == column:
+                return True
         return False
+    if dialect.database_type in (DatabaseType.POSTGRESQL, DatabaseType.MYSQL):
+        sql = (
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = ? AND column_name = ?"
+        )
+        if dialect.database_type == DatabaseType.MYSQL:
+            sql = (
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = DATABASE() AND table_name = ? "
+                "AND column_name = ?"
+            )
+        result = conn.execute(sql, (table, column))
+        if hasattr(result, "__await__"):
+            result = await result
+        fetchone = getattr(result, "fetchone", None) or getattr(conn, "fetchone", None)
+        if fetchone is None:
+            return False
+        row = fetchone()
+        if hasattr(row, "__await__"):
+            row = await row
+        return row is not None
+    return False
 
 
 async def _insert_trial_row(conn: Any, record: TrialRecord) -> None:
@@ -474,6 +605,20 @@ class AutoMLEngine:
         return list(self._trials)
 
     async def _ensure_audit_ready(self) -> bool:
+        """Probe the persistent audit-table state at first use.
+
+        Returns ``True`` once the canonical 19-column ``_kml_automl_trials``
+        schema is confirmed present (migration 0003 applied). Returns
+        ``False`` when no ``ConnectionManager`` was injected — in-memory
+        audit only.
+
+        Raises :class:`kailash_ml.errors.MigrationRequiredError` when a
+        connection is wired but the table is missing OR the schema is
+        the pre-W6-020 placeholder shape (per
+        ``rules/schema-migration.md`` MUST Rule 1, the engine MUST NOT
+        emit ``CREATE TABLE`` DDL inline; failing loud is the correct
+        disposition so the operator runs migration 0003).
+        """
         if self._audit_table_ready is not None:
             return self._audit_table_ready
         if self._connection is None:
@@ -485,15 +630,44 @@ class AutoMLEngine:
                         "AutoMLEngine instantiated without a ConnectionManager;"
                         " trial audit rows will be held in-memory only. Passing"
                         " connection=... at construction enables the persistent"
-                        " _kml_automl_trials audit trail."
+                        " _kml_automl_trials audit trail (requires migration"
+                        " 0003 — see rules/schema-migration.md MUST Rule 1)."
                     ),
                 },
             )
             self._audit_table_ready = False
             return False
-        ok = await _ensure_trials_table(self._connection)
-        self._audit_table_ready = ok
-        return ok
+
+        table_present, schema_canonical = await _probe_trials_table(self._connection)
+        if not schema_canonical:
+            # Defer the import — kailash_ml.errors re-exports the canonical
+            # MigrationRequiredError from kailash.ml.errors.
+            from kailash_ml.errors import MigrationRequiredError
+
+            self._audit_table_ready = False
+            raise MigrationRequiredError(
+                reason=(
+                    f"_kml_automl_trials audit schema not aligned to the "
+                    f"engine runtime form; "
+                    f"table_present={table_present}, schema_canonical=False. "
+                    f"Apply migration "
+                    f"kailash.tracking.migrations."
+                    f"0003_automl_trials_schema_alignment via "
+                    f"MigrationRegistry.apply_pending(conn) before "
+                    f"running AutoMLEngine.run(). See "
+                    f"rules/schema-migration.md MUST Rule 1 + "
+                    f"specs/ml-automl.md §8A.2."
+                ),
+                tenant_id=self._tenant_id,
+                actor_id=self._actor_id,
+                resource_id=_AUTOML_TRIALS_TABLE,
+                table_present=table_present,
+                migration_module=(
+                    "kailash.tracking.migrations." "0003_automl_trials_schema_alignment"
+                ),
+            )
+        self._audit_table_ready = True
+        return True
 
     async def _record_trial(self, record: TrialRecord) -> None:
         self._trials.append(record)
