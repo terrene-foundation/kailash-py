@@ -18,11 +18,23 @@ Origin: `ml-feature-store-draft.md` §2 mandates "DataFlow lineage integration" 
 
 ### 1.1 In Scope
 
-Three capabilities DataFlow 2.1.0 ships for kailash-ml 1.0.0:
+Four capabilities DataFlow 2.1.0 ships for kailash-ml 1.0.0:
 
 1. **`dataflow.ml_feature_source(feature_group)` polars binding** — materialize a `FeatureStore` feature group as a DataFlow read source that downstream Express / workflow operations can consume.
 2. **`@feature` pipeline consumption of `dataflow.transform`** — feature-store decorators call into a new `dataflow.transform(expr, source)` helper for feature-computation pipelines that reuse DataFlow's parameterized-query guarantees.
 3. **DataFlow × ML lineage** — `dataflow.hash(df)` returns a stable SHA-256 fingerprint consumed by `ModelRegistry.register_version(lineage_dataset_hash=...)` as the mandatory lineage field.
+4. **ML training-lifecycle event surface** — `dataflow.ml` ships a fixed pair of `DomainEvent` types (`ML_TRAIN_START_EVENT` / `ML_TRAIN_END_EVENT`), emit-helpers (`emit_train_start` / `emit_train_end`) for kailash-ml training engines, and subscribe-helpers (`on_train_start` / `on_train_end`) for downstream consumers (MLflow bridge, dashboard, audit trail). The events ride DataFlow's existing `event_bus` so every DataFlow consumer inherits the surface without a second event bus. See § 4A for the full contract. Module: `dataflow.ml._events` (re-exported through `dataflow.ml`).
+
+Public symbols (re-exported through `dataflow.ml.__all__`):
+
+- `ml_feature_source`, `transform`, `hash` — primary surface (§§ 2, 3, 4).
+- `TrainingContext` — frozen dataclass `(run_id, tenant_id, dataset_hash, actor_id)` carried in every event payload.
+- `ML_TRAIN_START_EVENT`, `ML_TRAIN_END_EVENT` — string constants for the two `event_type` values (§ 4A.1).
+- `emit_train_start`, `emit_train_end` — emit-helpers used by kailash-ml training engines (§ 4A.2).
+- `on_train_start`, `on_train_end` — subscribe-helpers for downstream consumers (§ 4A.3).
+- `build_cache_key` — exposed for tenant-scoped invalidation callers (§ 2.3).
+- `DataFlowMLIntegrationError`, `FeatureSourceError`, `DataFlowTransformError`, `LineageHashError`, `TenantRequiredError` — error taxonomy (§ 5).
+- `MLTenantRequiredError` — deprecated alias resolved via module-level `__getattr__`; intentionally absent from `__all__` (§ 5).
 
 ### 1.2 Out of Scope (Owned By Sibling Specs)
 
@@ -206,6 +218,151 @@ class ModelRegistry:
 ```
 
 Per `rules/zero-tolerance.md` Rule 2, this is NOT a stub — it is an explicitly-declared future surface with a typed error indicating the correct alternative. The method body does not pretend to succeed.
+
+---
+
+## 4A. Event Subscription Contract — `dataflow.ml._events`
+
+The ML training-lifecycle event surface lives in `dataflow.ml._events` and is re-exported through `dataflow.ml`. kailash-ml does NOT ship a second event bus — every consumer subscribes through the DataFlow facade's existing `event_bus` (Core SDK `EventBus`).
+
+### 4A.1 Event-Type Constants
+
+```python
+# packages/kailash-dataflow/src/dataflow/ml/_events.py
+ML_TRAIN_START_EVENT = "kailash_ml.train.start"
+ML_TRAIN_END_EVENT   = "kailash_ml.train.end"
+```
+
+These are the literal `event_type` strings carried on every `DomainEvent` published by the helpers in §§ 4A.2 and surfaced to subscribers in § 4A.3. Cross-SDK parity (per `rules/cross-sdk-inspection.md` § 3): kailash-rs MUST use byte-identical event-type strings if it ships an equivalent surface.
+
+### 4A.2 Emit Helpers (kailash-ml producer side)
+
+```python
+def emit_train_start(
+    db: Any,
+    context: TrainingContext,
+    *,
+    model_name: Optional[str] = None,
+    engine: Optional[str] = None,
+) -> None:
+    """Publish a ``kailash_ml.train.start`` event on ``db.event_bus``.
+
+    Args:
+        db: DataFlow instance (must expose ``event_bus``).
+        context: Immutable provenance envelope (run_id / tenant_id /
+            dataset_hash / actor_id).
+        model_name: Optional name of the model being trained.
+        engine: Optional training engine identifier
+            (``"sklearn"``, ``"lightgbm"``, ``"pytorch-lightning"``, …).
+    """
+
+def emit_train_end(
+    db: Any,
+    context: TrainingContext,
+    *,
+    status: str,
+    duration_seconds: Optional[float] = None,
+    error: Optional[str] = None,
+) -> None:
+    """Publish a ``kailash_ml.train.end`` event on ``db.event_bus``.
+
+    Args:
+        db: DataFlow instance.
+        context: Immutable training context (same as emit_train_start).
+        status: ``"success"`` / ``"failure"`` / ``"cancelled"``.
+        duration_seconds: Wall-clock duration of the run.
+        error: Error message when status="failure". Caller is responsible
+            for sanitizing — error strings MUST NOT carry classified field
+            values per ``rules/security.md`` § "Multi-Site Kwarg Plumbing".
+    """
+```
+
+**Required `event_bus` attribute.** Both emit helpers raise `RuntimeError("DataFlow instance has no event_bus — call db.initialize() …")` when `getattr(db, "event_bus", None)` is `None`. The error message names the corrective action so callers do not have to grep the source.
+
+**Fire-and-forget semantics.** Bus publish failures MUST NOT propagate up into the training run. Both helpers wrap `bus.publish(...)` in `try/except Exception` and emit `WARN` (not ERROR) so operators see the failure without aborting an in-progress training run. Per `rules/observability.md` Rule 7, the WARN line includes `run_id` for correlation.
+
+**Logging.** Every emit call also writes a structured INFO/WARN log line BEFORE publishing (`dataflow.ml.train.start` / `dataflow.ml.train.end`) so the run is auditable even if the bus is unreachable. Log fields: `run_id`, `tenant_id`, `model_name`, `engine`, `dataset_hash` (already a `sha256:` fingerprint), `status`, `duration_seconds`. Per `rules/observability.md` Rule 8, no schema-revealing field names are included.
+
+### 4A.3 Subscribe Helpers (consumer side)
+
+```python
+def on_train_start(db: Any, handler: Callable[[Any], None]) -> List[str]:
+    """Subscribe ``handler`` to ``kailash_ml.train.start`` events.
+
+    Args:
+        db: DataFlow instance (must expose ``event_bus``).
+        handler: Callable invoked with a single ``DomainEvent`` argument.
+
+    Returns:
+        ``[subscription_id]`` — single-element list matching the shape of
+        :meth:`DataFlow.on_model_change` so callers can batch
+        subscribe/unsubscribe uniformly.
+    """
+
+def on_train_end(db: Any, handler: Callable[[Any], None]) -> List[str]:
+    """Subscribe ``handler`` to ``kailash_ml.train.end`` events.
+
+    See :func:`on_train_start` for the return shape.
+    """
+```
+
+**Single-element list return.** The return shape matches `DataFlow.on_model_change(...)` so a consumer can collect subscription IDs from heterogeneous event sources into one flat list and unsubscribe all on shutdown without special-casing.
+
+**Handler contract.** The `handler` callable receives a `kailash.middleware.communication.domain_event.DomainEvent` instance. Subscribers iterate `event.event_type` and `event.payload`; the payload shape is defined in § 4A.4.
+
+### 4A.4 Event Payload Shape
+
+Every train-event payload is a flat dict with the shape:
+
+```python
+{
+    "event":         <ML_TRAIN_START_EVENT | ML_TRAIN_END_EVENT>,
+    "run_id":        <context.run_id>,        # opaque identifier
+    "tenant_id":     <context.tenant_id>,     # operational metadata
+    "dataset_hash":  <context.dataset_hash>,  # already "sha256:<64hex>"
+    "actor_id":      <context.actor_id>,      # opaque identifier
+    "record_id":     <fingerprint>,           # see classification path below
+    # emit_train_start adds (when supplied):
+    "model_name":    <str>,
+    "engine":        <str>,
+    # emit_train_end adds:
+    "status":            <"success" | "failure" | "cancelled">,
+    "duration_seconds":  <float>,                # when supplied
+    "error":             <str>,                  # when status="failure"
+}
+```
+
+**Classification path (mandatory).** Both emit helpers route `record_id` through `dataflow.classification.event_payload.format_record_id_for_event(...)` per `rules/event-payload-classification.md` § 1 — single filter point at the emitter, not at every caller. The `record_id` source is `context.dataset_hash` (already a 64-hex SHA-256 fingerprint, NOT a classified PK), but the routing-through-filter discipline is preserved so the classification policy attached to the DataFlow instance (`db._classification_policy`) is honored uniformly with DataFlow's write-event path.
+
+**Why `TrainingContext` fields are safe to emit raw.** Per `dataflow/ml/_events.py` module docstring:
+
+- `run_id` and `actor_id` are opaque caller-chosen identifiers (UUIDs / agent handles). Not classified data on their own.
+- `tenant_id` is operational metadata — `rules/tenant-isolation.md` § 4 explicitly permits it as a metric label / event-payload dimension (bounded cardinality).
+- `dataset_hash` is already a `sha256:<64hex>` fingerprint produced by `dataflow.hash(...)` (§ 4) — not a raw value.
+
+No subscriber path ever echoes a classified PK back to the bus.
+
+### 4A.5 `TrainingContext` Field Reference
+
+```python
+@dataclass(frozen=True)
+class TrainingContext:
+    run_id:       str   # opaque caller-chosen run identifier
+    tenant_id:    str   # tenant scope (bounded cardinality per tenant-isolation §4)
+    dataset_hash: str   # "sha256:<64hex>" from dataflow.hash(...)
+    actor_id:     str   # opaque actor identifier (agent handle, user id)
+```
+
+Frozen so emit helpers cannot mutate the caller's provenance envelope mid-publish.
+
+### 4A.6 Subscriber Test Contract
+
+Per `rules/event-payload-classification.md` § 4 and `rules/orphan-detection.md` § 1, every emit/subscribe pair MUST have an end-to-end Tier 2 test:
+
+- `tests/integration/test_train_event_emit_subscribe_wiring.py` — real DataFlow + real `event_bus` + `on_train_start(db, handler)` → `emit_train_start(db, context, …)` → assert `handler` was invoked with a `DomainEvent` whose `event_type == ML_TRAIN_START_EVENT` AND payload contains `run_id`, `tenant_id`, `dataset_hash`, `actor_id`, and a `record_id` matching the classification-path output.
+- Companion test for `emit_train_end` / `on_train_end` covering all three `status` values (`"success"` / `"failure"` / `"cancelled"`).
+
+Tier 1 helper-only unit tests are insufficient — they prove the helper hashes the record_id but NOT that the framework's hot path actually calls the helper (see `rules/orphan-detection.md` § 2a "crypto-pair round-trip through facade" — same pattern applies to event helpers).
 
 ---
 
