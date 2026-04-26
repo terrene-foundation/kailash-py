@@ -97,3 +97,31 @@
 **Spec claim:** `"azure": "_unified_azure",  # Lazy-loaded` — table entries.
 **Actual state:** `packages/kailash-kaizen/src/kaizen/providers/registry.py:54-69` — verified PROVIDERS dict matches spec exactly (14 entries including aliases). Lazy `"_unified_azure"` string is a sentinel resolved by `get_provider`. Spec accurately describes; no defect.
 **Remediation hint:** No action; assertion holds.
+
+## F-D-14 — kaizen-advanced § 12.1 — Cost tracker microdollar precision verified
+
+**Severity:** LOW
+**Spec claim:** "Costs stored internally as integer microdollars (1 USD = 1,000,000) ... Cross-SDK alignment with kailash-rs#38."
+**Actual state:** `packages/kailash-kaizen/src/kaizen/cost/tracker.py:21` — `_MICRODOLLARS_PER_USD = 1_000_000`. Verified contract.
+**Remediation hint:** No action.
+
+## F-D-15 — kaizen-advanced § 13 — Composition functions exist (validate_dag, check_schema_compatibility, estimate_cost)
+
+**Severity:** LOW
+**Spec claim:** Three composition functions exposed via `kaizen.composition`.
+**Actual state:** All three verified at `packages/kailash-kaizen/src/kaizen/composition/{dag_validator,schema_compat,cost_estimator}.py`. Spec assertion holds.
+**Remediation hint:** No action.
+
+## F-D-16 — kaizen-advanced § 16.3 — `ProviderConfig.api_key` redaction in `__repr__` verified
+
+**Severity:** LOW
+**Spec claim:** "`api_key` is redacted in `__repr__` to prevent leakage in logs/tracebacks."
+**Actual state:** `packages/kailash-kaizen/src/kaizen/config/providers.py:54-59` — verified `__repr__` returns `'***'` placeholder when api_key set. Contract holds.
+**Remediation hint:** No action.
+
+## F-D-17 — kaizen-advanced § 19 — A2A capability cards exposed; Card factory functions undocumented at module level
+
+**Severity:** MED
+**Spec claim:** Lists 13+ A2A types (A2AAgentCard, Capability, CollaborationStyle, A2ATask, TaskState, etc.) and 6 factory functions.
+**Actual state:** Many A2A types live in `packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py` (deeply nested). Spec implies they are at top-level `kaizen.a2a` module but actual location is `nodes/ai/`. Module path drift.
+**Remediation hint:** Either re-export A2A types at `kaizen.a2a.*` or update spec to canonical import paths (`from kaizen.nodes.ai.a2a import A2AAgentCard`).
