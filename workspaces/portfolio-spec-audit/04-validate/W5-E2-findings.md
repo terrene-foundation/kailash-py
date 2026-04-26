@@ -1,9 +1,34 @@
 # W5-E2 Findings — ml extras + align + integrations + diagnostics catalog
 
-**Specs audited:** 11
-**§ subsections enumerated:** TBD
-**Findings:** CRIT=0 HIGH=0 MED=0 LOW=0
-**Audit completed:** 2026-04-26 (in progress)
+**Specs audited:** 11 (ml-automl, ml-drift, ml-feature-store, ml-dashboard, ml-integration, alignment-training, alignment-serving, alignment-diagnostics, align-ml-integration, kailash-core-ml-integration, diagnostics-catalog)
+**§ subsections enumerated:** ~140 across 11 specs
+**Findings:** CRIT=0 HIGH=18 MED=16 LOW=35 (70 total, F-E2-01..F-E2-70)
+**Audit completed:** 2026-04-26
+
+## Findings tally per spec
+
+| Spec | Findings (CRIT/HIGH/MED/LOW) | Range |
+| ---- | ---------------------------- | ----- |
+| ml-automl.md | 0/8/1/0 | F-E2-01..10 |
+| ml-drift.md | 0/2/5/0 | F-E2-11..17 |
+| ml-feature-store.md | 0/5/0/2 | F-E2-18..24 |
+| ml-dashboard.md | 0/2/3/1 | F-E2-25..30 |
+| ml-integration.md (DEPRECATED) | 0/0/0/4 | F-E2-31..34 |
+| alignment-training.md | 0/1/1/5 | F-E2-35..41 |
+| alignment-serving.md | 0/0/1/7 | F-E2-42..49 |
+| alignment-diagnostics.md | 0/0/1/2 | F-E2-50..52 |
+| align-ml-integration.md | 0/0/2/5 | F-E2-53..59 |
+| kailash-core-ml-integration.md | 0/0/2/4 | F-E2-60..65 |
+| diagnostics-catalog.md | 0/0/0/5 | F-E2-66..70 |
+
+## Top-level themes
+
+1. **AutoML 1.0 spec is overstated vs implementation** (F-E2-01..10): two divergent `AutoMLEngine` classes, only 4/7 search strategies, no Ray/Dask executor, no Ensemble facade, missing typed exceptions, post-hoc LLM cost cap (not token-level pre-cap per spec § 8.3 MUST 2). Spec needs alignment with current implementation OR M2 deferral markers.
+2. **DriftMonitor "drift_type" semantic drift** (F-E2-11): spec covariate/concept/prior/label vs implementation severity none/moderate/severe — different concept entirely.
+3. **FeatureStore is DataFlow-bridge, not URL-based** (F-E2-18..22): spec § 2.1 declares `store=`/`online=` URLs, implementation takes a `DataFlow` instance. No online store, no `@feature` decorator, no `FeatureGroup` class, no materialization API.
+4. **Alignment is the most spec-compliant package**: alignment-training, alignment-serving, alignment-diagnostics all match spec point-for-point with only minor gaps. Demonstrates that spec-driven development with stable scope works.
+5. **Cross-SDK Diagnostic Protocol byte-vector pinning deferred**: F-E2-51, F-E2-62 — both flag deferred kailash-rs counterparts. Per `rules/cross-sdk-inspection.md` MUST Rule 4, byte-vector pinning is required when sibling SDK ships; tracked-deferred OK for now.
+6. **Diagnostics catalog is fully populated and audited** (F-E2-66..70): all 6 cataloged adapters exist, all 7 wiring tests exist, medical-metaphor scrub clean. Minor catalog-path drift only (F-E2-70).
 
 ---
 
