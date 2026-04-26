@@ -174,24 +174,44 @@ class NexusDashboardAuth(DashboardAuth):
 
 ### 4.2 Nexus public-key registry
 
-Nexus 2.2.0 MUST expose `JWTValidator.from_nexus_config()` class-method:
+Nexus 2.2.0 ships the dashboard auth adapter at `nexus.ml.MLDashboard` (`packages/kailash-nexus/src/nexus/ml/__init__.py`). The adapter exposes `MLDashboard.from_nexus(nexus)` — a classmethod that walks the live Nexus instance's ASGI middleware stack, locates the registered `JWTMiddleware`, extracts its `JWTConfig` (issuer / audience / jwks_url / public_key / secret / algorithm), and constructs the dashboard auth adapter from those fields:
 
 ```python
-# kailash_nexus.auth.jwt.JWTValidator
-@classmethod
-def from_nexus_config(cls, nexus_config: NexusConfig) -> "JWTValidator":
-    """Construct a validator reusing the Nexus instance's issuer, audience,
-    JWKS URL, and public-key registry. Dashboard uses this to avoid
-    duplicating key material."""
-    return cls(JWTConfig(
-        issuer=nexus_config.jwt_issuer,
-        audience=nexus_config.jwt_audience,
-        jwks_url=nexus_config.jwks_url,
-        public_key=nexus_config.jwt_public_key,
-    ))
+# packages/kailash-nexus/src/nexus/ml/__init__.py
+class MLDashboard:
+    @classmethod
+    def from_nexus(cls, nexus: Any) -> "MLDashboard":
+        """Construct an MLDashboard auth adapter from a live Nexus instance.
+
+        Reuses the Nexus instance's JWT config (issuer / audience / JWKS URL /
+        public key) so the dashboard does NOT store key material independently.
+        Raises RuntimeError when the Nexus instance has no fastapi_app or no
+        JWTMiddleware is registered.
+        """
+        cfg = cls._extract_jwt_config(nexus)
+        return cls(**cfg)
 ```
 
-**Invariant:** `MLDashboard(auth="nexus", nexus=<Nexus instance>)` picks up issuer/audience/JWKS via `JWTValidator.from_nexus_config(nexus.config)`. The dashboard does NOT store key material independently.
+**Invariant:** `MLDashboard(auth="nexus")` resolves to `MLDashboard.from_nexus(nexus)` on the ml side; the dashboard does NOT store key material independently — it always reads the live JWTMiddleware config off the Nexus instance.
+
+**Canonical JWTValidator construction:** `JWTValidator` is constructed directly from a `JWTConfig` populated via environment variables per `rules/env-models.md` (`os.environ["NEXUS_JWT_SECRET"]`, etc.) — there is NO `JWTValidator.from_nexus_config()` classmethod. The Nexus-side reuse path runs through `MLDashboard.from_nexus(nexus)` which walks the middleware stack to extract the already-configured JWTConfig:
+
+```python
+# Direct construction (canonical):
+import os
+from kailash.trust.auth.jwt import JWTValidator, JWTConfig
+
+validator = JWTValidator(JWTConfig(
+    issuer=os.environ["NEXUS_JWT_ISSUER"],
+    audience=os.environ["NEXUS_JWT_AUDIENCE"],
+    jwks_url=os.environ.get("NEXUS_JWKS_URL"),
+    secret=os.environ.get("NEXUS_JWT_SECRET"),
+))
+
+# Nexus-reuse path (canonical for dashboard):
+from nexus.ml import MLDashboard
+dash_auth = MLDashboard.from_nexus(nexus)  # reads JWTMiddleware config off live instance
+```
 
 ### 4.3 Dashboard principal dataclass
 
@@ -328,7 +348,8 @@ Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side Nexus ML inf
 2.1.x users get the contextvar surface as ADDITIONS. No existing middleware signature changes:
 
 - `JWTMiddleware.__init__` — unchanged.
-- `JWTValidator` — gains `from_nexus_config()` classmethod (purely additive).
+- `JWTValidator` — unchanged; constructed directly via `JWTValidator(JWTConfig(...))`. Dashboard reuse runs through `nexus.ml.MLDashboard.from_nexus(nexus)` which extracts the already-configured JWTConfig from the live JWTMiddleware on the Nexus instance.
+- `nexus.ml` — new module: `MLDashboard` auth adapter + `mount_ml_endpoints` helper.
 - `Nexus` — gains `register_service()` overload that accepts a `NexusServiceAdapter` (backward-compatible).
 
 Users relying on `specs/nexus-auth.md` §9.1 behavior are unaffected. Optional migration: switch from manual `request.state.user.tenant_id` extraction to `get_current_tenant_id()` (simpler, same value, but NOT required).
