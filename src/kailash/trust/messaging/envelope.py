@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from kailash.trust.signing.algorithm_id import ALGORITHM_DEFAULT
+
 
 @dataclass
 class MessageMetadata:
@@ -181,6 +183,12 @@ class SecureMessageEnvelope:
     nonce: str = field(default_factory=lambda: secrets.token_hex(32))
     signature: str = ""
     signature_algorithm: str = "Ed25519"
+    # Issue #604 scaffold: signing-algorithm version-tag (distinct from the
+    # legacy `signature_algorithm` field which names the crypto primitive).
+    # Recorded out-of-band from get_signing_payload() so legacy envelopes
+    # (no algorithm) verify under the empty-branch warning path. Default
+    # value matches the only spec-supported value until mint ISS-31.
+    algorithm: str = ALGORITHM_DEFAULT
     metadata: Optional[MessageMetadata] = None
 
     def get_signing_payload(self) -> bytes:
@@ -249,6 +257,7 @@ class SecureMessageEnvelope:
             "signature": self.signature,
             "signature_algorithm": self.signature_algorithm,
             "trust_chain_hash": self.trust_chain_hash,
+            "algorithm": self.algorithm,
             "metadata": self.metadata.to_dict() if self.metadata else None,
         }
 
@@ -271,6 +280,17 @@ class SecureMessageEnvelope:
         if data.get("metadata"):
             metadata = MessageMetadata.from_dict(data["metadata"])
 
+        # Issue #604: missing/empty `algorithm` (legacy / pre-#604) defaults
+        # to ALGORITHM_DEFAULT. Verify-path warning fires in
+        # MessageVerifier._verify_signature, not here, so persistence-layer
+        # round-trips do not flood logs with the legacy warning.
+        algorithm = data.get("algorithm") or ALGORITHM_DEFAULT
+        if not isinstance(algorithm, str):
+            raise TypeError(
+                f"SecureMessageEnvelope.algorithm must be str, got "
+                f"{type(algorithm).__name__}"
+            )
+
         return cls(
             message_id=data["message_id"],
             sender_agent_id=data["sender_agent_id"],
@@ -281,6 +301,7 @@ class SecureMessageEnvelope:
             signature=data.get("signature", ""),
             signature_algorithm=data.get("signature_algorithm", "Ed25519"),
             trust_chain_hash=data["trust_chain_hash"],
+            algorithm=algorithm,
             metadata=metadata,
         )
 
