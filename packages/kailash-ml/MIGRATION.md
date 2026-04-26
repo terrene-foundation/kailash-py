@@ -238,8 +238,12 @@ The 0.x pattern of "import the class I need" is replaced by registry-based
 discovery. This makes engine availability observable and testable.
 
 ```python
-# 0.x -- import directly
-from kailash_ml.engines.automl_engine import AutoMLEngine
+# 0.x -- import directly from legacy scaffold path
+# from kailash_ml.engines.automl_engine import AutoMLEngine   # removed in W6-018
+# 1.0.0 canonical surface
+from kailash_ml.automl import AutoMLEngine
+# Equivalent top-level alias:
+from kailash_ml import AutoMLEngine
 
 # 1.0.0 -- discover what is available
 for name in km.list_engines():

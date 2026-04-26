@@ -211,10 +211,11 @@ Key operations: `search()`.
 #### AutoMLEngine
 
 ```python
-from kailash_ml.engines.automl_engine import AutoMLEngine, AutoMLConfig
+from kailash_ml.automl import AutoMLEngine, AutoMLConfig
+# Equivalent: from kailash_ml import AutoMLEngine
 ```
 
-Orchestrates HyperparameterSearch across multiple model families, ranks results, and optionally augments decisions with Kaizen agents. Requires double opt-in for agent augmentation: set `agent=True` in `AutoMLConfig` AND have `kailash-ml[agents]` installed. Cost budgets cap LLM spending via `max_llm_cost_usd`.
+Orchestrates search-strategy sweeps over a user-supplied `ParamSpec` list, enforces a microdollar cost budget via `CostTracker`, consults PACT admission, and persists a tenant-scoped audit row per trial. Requires double opt-in for agent augmentation: set `agent=True` in `AutoMLConfig` AND have `kailash-ml[agents]` installed. Cost budgets cap LLM spending via `max_llm_cost_usd`.
 
 Key operations: `run()`.
 
@@ -472,7 +473,7 @@ Every agent-augmented operation enforces:
 ### Example: Agent-Augmented AutoML
 
 ```python
-from kailash_ml.engines.automl_engine import AutoMLEngine, AutoMLConfig
+from kailash_ml.automl import AutoMLEngine, AutoMLConfig
 
 config = AutoMLConfig(
     task_type="classification",
@@ -481,15 +482,20 @@ config = AutoMLConfig(
     max_llm_cost_usd=5.0,   # Cost budget cap
 )
 engine = AutoMLEngine(
-    feature_store=feature_store,
-    model_registry=registry,
     config=config,
+    tenant_id="acme",
+    actor_id="alice@acme",
+    connection=conn_mgr,           # ConnectionManager for `_kml_automl_trials` audit
 )
-result = await engine.run(schema=schema, data=df)
+result = await engine.run(
+    space=param_specs,
+    trial_fn=user_trial_fn,
+    source_tag="agent",
+)
 
-# result includes both agent recommendations and algorithmic baseline
-print(result.best_model)
-print(result.agent_recommendations)
+# result.best_trial is the TrialRecord with the highest metric_value
+print(result.best_trial)
+print(result.cumulative_cost_microdollars)
 ```
 
 ### Agent Tools

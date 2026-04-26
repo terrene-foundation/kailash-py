@@ -32,17 +32,22 @@ print(f"Confidence: {result['confidence']}")
 Automated model selection and hyperparameter tuning:
 
 ```python
-from kailash_ml.engines.automl_engine import AutoMLEngine
+from kailash_ml.automl import AutoMLConfig, AutoMLEngine
+# Equivalent: from kailash_ml import AutoMLEngine
 
-automl = AutoMLEngine()
-result = await automl.run(
-    data=df,
-    target_column="target",
-    task="classification",
+config = AutoMLConfig(
+    task_type="classification",
     time_budget_seconds=300,
 )
-print(f"Best model: {result.best_model_name}")
-print(f"Best score: {result.best_score:.4f}")
+automl = AutoMLEngine(
+    config=config,
+    tenant_id="acme",
+    actor_id="alice@acme",
+    connection=conn_mgr,
+)
+result = await automl.run(space=param_specs, trial_fn=user_trial_fn)
+print(f"Best trial: {result.best_trial}")
+print(f"Cumulative cost (microdollars): {result.cumulative_cost_microdollars}")
 ```
 
 ## Five Guardrails

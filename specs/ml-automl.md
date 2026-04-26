@@ -34,20 +34,25 @@ This spec is authoritative for the AutoML primitives that ship in `kailash_ml.au
 - **AutoML UI / leaderboard rendering** — covered by `MLDashboard`; this spec owns the data model.
 - **`MLEngine.fit_auto()`** — the v1 spec mandated this entry point; the canonical implementation does not provide it. See § "Deferred to M2 milestone" entry D-fitauto.
 
-### 1.3 Two Coexisting Surfaces (v1.0.0 → v1.1.1 Migration)
+### 1.3 Single Canonical Surface (v1.1.1+, W6-018)
 
-Two `AutoMLEngine` classes ship in 1.1.1 and the user may encounter either:
+Exactly one `AutoMLEngine` class ships:
 
-| Path                                                                 | Status     | Constructor signature                                                                                                                                               |
-| -------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kailash_ml.automl.engine.AutoMLEngine` (canonical M1 surface)       | preferred  | `AutoMLEngine(*, config, tenant_id, actor_id, connection=None, cost_tracker=None, governance_engine=None)`                                                          |
-| `kailash_ml.engines.automl_engine.AutoMLEngine` (legacy M0 scaffold) | deprecated | `AutoMLEngine(pipeline, search, *, registry=None)` — ALSO reachable as `kailash_ml.AutoMLEngine` via the module-level `__getattr__` in `kailash_ml/__init__.py:593` |
+| Path                                                          | Status    | Constructor signature                                                                                      |
+| ------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| `kailash_ml.automl.engine.AutoMLEngine` (canonical, the only) | preferred | `AutoMLEngine(*, config, tenant_id, actor_id, connection=None, cost_tracker=None, governance_engine=None)` |
 
-Verified by direct read: top-level `kailash_ml.AutoMLEngine` resolves through `kailash_ml/__init__.py` `__getattr__` (lines 580-622) into `kailash_ml.engines.automl_engine` — i.e. the LEGACY scaffold. To use the canonical M1 surface, callers MUST `from kailash_ml.automl import AutoMLEngine`.
+Top-level `kailash_ml.AutoMLEngine` is an alias of the canonical class — both reachable forms resolve to the same class object:
 
-This is a known transitional state. The legacy scaffold is retained for backwards compatibility until the W32 sweep removes it; the canonical surface is the spec authority for every contract below.
+```python
+from kailash_ml import AutoMLEngine as via_lazy
+from kailash_ml.automl import AutoMLEngine as via_direct
+assert via_lazy is via_direct  # W6-018 identity invariant
+```
 
-**Wave 6 follow-up:** flip the `kailash_ml/__init__.py` `__getattr__` map entry (line 593) from `kailash_ml.engines.automl_engine` (legacy) to `kailash_ml.automl.engine` (canonical) so that `kailash_ml.AutoMLEngine` and `from kailash_ml.automl import AutoMLEngine` resolve to the same class. Until that lands, downstream code that follows the v1 spec's `from kailash_ml import AutoMLEngine` form receives the LEGACY scaffold; this is a user-hostile divergence that this spec documents but does not perpetuate.
+The lazy alias is registered in `kailash_ml/__init__.py` `__getattr__` (`_LAZY_MAP["AutoMLEngine"] = "kailash_ml.automl.engine"`) so `import kailash_ml` does not pay the import cost of `polars` / strategy modules until `km.AutoMLEngine` is actually accessed. The Tier-1 identity test at `packages/kailash-ml/tests/unit/test_kailash_ml_lazy_map.py::test_kailash_ml_AutoMLEngine_resolves_to_canonical` pins this invariant.
+
+**History:** v1.0.0 → v1.1.1 shipped with TWO `AutoMLEngine` classes — the canonical M1 surface here AND a legacy M0 scaffold at `kailash_ml.engines.automl_engine` (constructor `AutoMLEngine(pipeline, search, *, registry=None)`) reachable as `kailash_ml.AutoMLEngine`. W6-018 (workspace `portfolio-spec-audit`, todo `W6-018-flip-getattr-canonical-automl`) deleted the legacy scaffold per `rules/orphan-detection.md` § 3 (Removed = Deleted) and flipped the lazy map to the canonical module. The deletion swept legacy-API-only tests (`tests/unit/test_automl_engine.py`, `tests/examples/test_pycaret_comparison.py`, `TestAutoMLEngineAutoLogging` class in `test_auto_logging.py`) per `rules/orphan-detection.md` § 4 (API Removal Sweeps Tests).
 
 ---
 
@@ -408,7 +413,7 @@ See § "Deferred to M2 milestone" entries D-ensembleleaderboard and D-ensemblere
 
 ### 8.1 Caller-Driven Wiring Only
 
-In v1.1.1 the engine itself does NOT manage an LLM. The `config.agent` flag is persisted on `AutoMLConfig` but is read only by callers who wire LLM suggestions into their own `trial_fn`. The legacy scaffold at `engines/automl_engine.py:201-230` (`LLMCostTracker`) implements POST-HOC cost summation (raises `LLMBudgetExceededError` AFTER the call when `_spent > _max_budget`); this is NOT wired into the canonical engine's `run()` loop.
+In v1.1.1 the engine itself does NOT manage an LLM. The `config.agent` flag is persisted on `AutoMLConfig` but is read only by callers who wire LLM suggestions into their own `trial_fn`. (Historical note: a legacy scaffold under `kailash_ml.engines.automl_engine` shipped a `LLMCostTracker` with POST-HOC cost summation; that scaffold was deleted in W6-018 — see § 1.3 history.)
 
 ### 8.2 Prompt-Injection Scan At Run-Loop Level
 
@@ -569,29 +574,31 @@ See § "Deferred to M2 milestone" entry D-typederrors.
 
 Test files verified by `find packages/kailash-ml/tests -name 'test_automl*'`:
 
-| File                                             | Tier   | Purpose                                                                                    |
-| ------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| `tests/unit/test_automl_engine.py`               | Tier 1 | Engine behaviour with stubbed connection + stubbed governance                              |
-| `tests/unit/test_automl_engine_unit.py`          | Tier 1 | Engine helper internals (`_record_trial`, time-budget logic, `_select_best`)               |
-| `tests/unit/test_automl_admission.py`            | Tier 1 | PACT admission decision matrix (skipped / unimplemented / approval_required / fail-closed) |
-| `tests/unit/test_automl_cost_budget.py`          | Tier 1 | `CostTracker.record` atomicity, negative-compensation, `check_would_exceed` lock-free      |
-| `tests/unit/test_automl_strategies.py`           | Tier 1 | `ParamSpec` validation, strategy protocol conformance, `resolve_strategy` factory          |
-| `tests/integration/test_automl_engine_wiring.py` | Tier 2 | Real Postgres / SQLite, end-to-end run with audit row persistence — see § 11.3             |
+| File                                             | Tier   | Purpose                                                                                     |
+| ------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------- |
+| `tests/unit/test_automl_engine_unit.py`          | Tier 1 | Engine helper internals (`_record_trial`, time-budget logic, `_select_best`)                |
+| `tests/unit/test_automl_admission.py`            | Tier 1 | PACT admission decision matrix (skipped / unimplemented / approval_required / fail-closed)  |
+| `tests/unit/test_automl_cost_budget.py`          | Tier 1 | `CostTracker.record` atomicity, negative-compensation, `check_would_exceed` lock-free       |
+| `tests/unit/test_automl_strategies.py`           | Tier 1 | `ParamSpec` validation, strategy protocol conformance, `resolve_strategy` factory           |
+| `tests/unit/test_kailash_ml_lazy_map.py`         | Tier 1 | `kailash_ml.AutoMLEngine` `is` `kailash_ml.automl.AutoMLEngine` identity invariant (W6-018) |
+| `tests/integration/test_automl_engine_wiring.py` | Tier 2 | Real Postgres / SQLite, end-to-end run with audit row persistence — see § 11.3              |
 
 The exact assertions per file are owned by the test code, not this spec. To enumerate the cases run:
 
 ```bash
-pytest --collect-only -q packages/kailash-ml/tests/unit/test_automl_engine.py \
-                        packages/kailash-ml/tests/unit/test_automl_engine_unit.py \
+pytest --collect-only -q packages/kailash-ml/tests/unit/test_automl_engine_unit.py \
                         packages/kailash-ml/tests/unit/test_automl_admission.py \
                         packages/kailash-ml/tests/unit/test_automl_cost_budget.py \
                         packages/kailash-ml/tests/unit/test_automl_strategies.py \
+                        packages/kailash-ml/tests/unit/test_kailash_ml_lazy_map.py \
                         packages/kailash-ml/tests/integration/test_automl_engine_wiring.py
 ```
 
+(W6-018 deleted `tests/unit/test_automl_engine.py` along with the legacy `engines/automl_engine.py` it covered, per `rules/orphan-detection.md` § 4.)
+
 ### 11.2 Tier 3 (E2E)
 
-No Tier 3 e2e file exists for the canonical `kailash_ml.automl.engine.AutoMLEngine` surface as of v1.1.1. The legacy scaffold has e2e coverage under `kailash-ml`'s broader test pyramid; the canonical surface relies on the Tier 2 wiring test (§ 11.3) for end-to-end coverage with real infrastructure. Wave 6 follow-up: add `test_automl_engine_e2e_with_real_trainer.py` exercising the canonical surface against a real model family.
+No Tier 3 e2e file exists for the canonical `kailash_ml.automl.engine.AutoMLEngine` surface as of v1.1.1. The canonical surface relies on the Tier 2 wiring test (§ 11.3) for end-to-end coverage with real infrastructure. Follow-up: add `test_automl_engine_e2e_with_real_trainer.py` exercising the canonical surface against a real model family.
 
 ### 11.3 Wiring Test Per `rules/facade-manager-detection.md`
 
@@ -786,14 +793,14 @@ The v1 spec promises 12 capabilities the v1.1.1 implementation does not provide.
 ### D-tokenbackpressure. Token-Level LLM Backpressure
 
 - **v1 spec citation:** § 8.3 MUST 2 — `max_llm_cost_usd` enforced via TOKEN-LEVEL backpressure (compute `max_tokens_this_call` BEFORE the call to prevent overrun); § 8.3 MUST 2a mandates `max_prompt_tokens` / `max_completion_tokens` agent-config kwargs; `min_confidence` from `AgentGuardrailMixin`.
-- **Current behaviour:** `AutoMLConfig` has `min_confidence` but NOT `max_prompt_tokens` / `max_completion_tokens`. The legacy `LLMCostTracker.record(...)` (`engines/automl_engine.py:215-230`) performs POST-HOC summation: it records cost AFTER the call and raises `LLMBudgetExceededError` only when `_spent > _max_budget`. The exact "$4.99 → $7.50 in one call" failure mode the v1 spec forbids is the implementation's actual behaviour.
+- **Current behaviour:** `AutoMLConfig` has `min_confidence` but NOT `max_prompt_tokens` / `max_completion_tokens`. The canonical `CostTracker.record(...)` performs atomic accounting (raises `BudgetExceeded` BEFORE the call when `check_would_exceed` would push past the ceiling), but TOKEN-LEVEL backpressure (`max_tokens_this_call` computed from remaining budget BEFORE the LLM call) is not implemented; the engine itself does not call an LLM in v1.1.1, so the failure mode lives in caller-supplied `trial_fn`. (W6-018 deleted the legacy `LLMCostTracker` POST-HOC summation that previously embodied this anti-pattern.)
 - **Deferral rationale:** Token-level backpressure requires per-model pricing tables AND per-call computation of max_tokens — significant complexity that depends on D-baselineparallel before it has a meaningful enforcement seat.
 - **Sketch:** Add `max_prompt_tokens` and `max_completion_tokens` to a new `AgentConfig` dataclass under `kailash_ml/automl/agent.py`. Compute `max_tokens_this_call = remaining_budget / (model_cost_per_token * safety_margin=1.2)`. Wire into the agent-side `trial_fn` factory (the engine itself stays neutral about LLM; the agent factory enforces). Also re-route `LLMCostTracker` to call the canonical `CostTracker` so cost tracking is unified.
 
 ### D-baselineparallel. Baseline-Parallel-With-Agent Stream
 
 - **v1 spec citation:** § 8.3 MUST 1 — when `agent=True`, a baseline pure-algorithmic search runs in PARALLEL with the agent's suggestions; final report tags each trial `source="agent" | "baseline"`.
-- **Current behaviour:** The canonical engine runs ONE stream per `run()` invocation. The orchestrator chooses `source_tag="baseline"` or `source_tag="agent"`. The legacy scaffold's `engines/automl_engine.py:529` says "Agent augmentation (not implemented in v1 -- requires kaizen agents)" and proceeds without parallelism.
+- **Current behaviour:** The canonical engine runs ONE stream per `run()` invocation. The orchestrator chooses `source_tag="baseline"` or `source_tag="agent"`. Parallel-stream orchestration is deferred to `MLEngine.fit_auto()` (D-fitauto). (The legacy scaffold's stub `# Agent augmentation (not implemented in v1 -- requires kaizen agents)` was removed by W6-018.)
 - **Deferral rationale:** Depends on D-executor (parallel infrastructure) AND D-fitauto (the high-level surface that would orchestrate the two streams).
 - **Sketch:** Inside `MLEngine.fit_auto(agent=True)`, dispatch two `AutoMLEngine.run(...)` invocations (one with `source_tag="baseline"`, one with `source_tag="agent"`) to the configured executor and merge results into one `LeaderboardReport`. Trials in both streams write to the same `_kml_automl_trials` table — `source` column is the partitioning key.
 
