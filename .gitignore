@@ -28,6 +28,10 @@ packages/kailash-dataflow/src/dataflow/migrations/performance_data/
 .spec-coverage.md
 .spec-coverage-*.md
 .test-results
+
+# Spec drift gate symbol-index cache (regenerated on every run; see SDG-501).
+# The baseline file `.spec-drift-baseline.jsonl` IS committed — do not ignore it.
+.spec-drift-gate-cache.json
 .test-results.md
 
 # Editable install symlinks (pip install -e creates these)
