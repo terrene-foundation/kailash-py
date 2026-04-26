@@ -1,5 +1,15 @@
 # DataFlow Changelog
 
+## [Unreleased] — DataFlow × ML error-name spec compliance (W6-003 / F-B-23)
+
+### Changed
+
+- **`dataflow.ml.MLTenantRequiredError` → `dataflow.ml.TenantRequiredError`** — renamed the ML-bridge tenant-required error to match `specs/dataflow-ml-integration.md` § 5 canonical name; spec-following users hit `ImportError` against the old name. Closes finding F-B-23.
+
+### Deprecated
+
+- **`MLTenantRequiredError`** — deprecated alias resolves to `TenantRequiredError` via module-level `__getattr__` on both `dataflow.ml` and `dataflow.ml._errors`; access emits a `DeprecationWarning`. The alias is intentionally absent from `__all__` so star-imports pick up only the canonical name. Slated for removal in **kailash-dataflow v3.0** — callers MUST migrate within the v2.x window. Per user `feedback_no_shims`, this is a 1-release back-compat bridge with an explicit removal milestone, NOT a permanent shim.
+
 ## [2.3.1] — 2026-04-26 — SecurityDefinerBuilder owner-pinning + COMMENT defense-in-depth (#607 follow-up)
 
 ### Security
