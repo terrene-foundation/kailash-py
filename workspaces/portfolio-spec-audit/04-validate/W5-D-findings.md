@@ -174,3 +174,31 @@
 **Spec claim:** "API-only model prefixes (`gpt-*`, `o1-*`, `o3-*`, `o4-*`, `claude-*`, `gemini-*`, `deepseek-*`) are refused"
 **Actual state:** Per `rules/agent-reasoning.md` § "Permitted Deterministic Logic" item 4 (safety guards on configuration string), this is permitted. However, the prefix list duplicates the model-prefix dispatch from `kaizen-providers.md` § 8.3 model→provider table. Single-source-of-truth violation — API-only list lives in two specs.
 **Remediation hint:** Move API-only prefix list to a single canonical location (e.g., `kaizen.providers.registry._API_ONLY_PREFIXES`); both specs reference it.
+
+## F-D-25 — kaizen-judges § Test discipline — Tier 1 unit tests claimed but not present at expected path
+
+**Severity:** HIGH
+**Spec claim:** "Tier 1 (unit) — `packages/kailash-kaizen/tests/unit/judges/test_judges_unit.py` (24 tests)"
+**Actual state:** Directory `packages/kailash-kaizen/tests/unit/judges/` does NOT exist. Only `tests/integration/judges/test_judges_wiring.py` present. Per `rules/testing.md` Audit Mode: zero unit tests for new module = HIGH finding. Spec asserts 24 unit tests; mechanical grep confirms zero.
+**Remediation hint:** Create `tests/unit/judges/test_judges_unit.py` with the 24 unit tests spec describes (Protocol conformance, pointwise/pairwise scoring, position-swap aggregation, budget-exhaust, input validation, helper math). OR update spec to reflect actual test inventory if tests live elsewhere.
+
+## F-D-26 — kaizen-judges § Public surface — All 8 facade exports verified
+
+**Severity:** LOW
+**Spec claim:** Facade exports `LLMJudge, LLMDiagnostics, FaithfulnessJudge, SelfConsistencyJudge, SelfConsistencyReport, RefusalCalibrator, JudgeBudgetExhaustedError, resolve_judge_model`.
+**Actual state:** All 8 verified across `kaizen/judges/_judge.py` + `_wrappers.py` + `llm_diagnostics.py`. Need to confirm `__init__.py` re-exports per facade contract.
+**Remediation hint:** Verify `kaizen/judges/__init__.py` exposes all 8 in `__all__`.
+
+## F-D-27 — kaizen-judges § Position-swap bias mitigation verified
+
+**Severity:** LOW
+**Spec claim:** "`_resolve_winner(pref_a, pref_a_swap)` ... Both orderings prefer the same candidate → return that winner. Orderings disagree → return `'tie'` ..."
+**Actual state:** `packages/kailash-kaizen/src/kaizen/judges/_judge.py:786` — `def _resolve_winner(...)`. Pairwise scoring at line 531+ implements position-swap. Spec assertion holds at signature level.
+**Remediation hint:** No action; deeper logic verification deferred to Tier-2 wiring tests.
+
+## F-D-28 — kaizen-judges § Microdollar budget enforcement verified
+
+**Severity:** LOW
+**Spec claim:** "`JudgeBudgetExhaustedError` raised AFTER any call that exceeds the cap"
+**Actual state:** `packages/kailash-kaizen/src/kaizen/judges/_judge.py` — `class JudgeBudgetExhaustedError(RuntimeError):` exists. Microdollar accounting routes through `kaizen.cost.tracker.CostTracker`.
+**Remediation hint:** No action; assertion holds at type-existence level.
