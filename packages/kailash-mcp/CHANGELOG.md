@@ -5,6 +5,31 @@ All notable changes to the Kailash MCP package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.10] — 2026-04-26 — JWT iss-claim required when expected_issuer configured (#625)
+
+Patch bump — closes Wave 4 cross-SDK security finding #625 (kailash-rs#599 sibling). Per upstream PyJWT semantics, calling `decode(token, ..., issuer=allowlist)` enforces equality only when the `iss` claim is **present**. A forged token that omits `iss` entirely passes issuer validation regardless of the allowlist. Layering `options={"require": ["exp", "iss"]}` forces presence and closes the bypass.
+
+### Security
+
+- **HIGH (closes #625)** — `BearerTokenAuth.__init__` accepts new optional `expected_issuer` kwarg; `_validate_jwt_token` layers `options={"require": ["exp", "iss"]}` and `issuer=` when set. PyJWT exception handlers cover `MissingRequiredClaimError` + `InvalidIssuerError`.
+- **HIGH (closes #625)** — `JWTAuth.__init__` passes its `issuer` arg through to `BearerTokenAuth` as `expected_issuer`, so callers using `JWTAuth` automatically inherit the iss requirement.
+- **HIGH (closes #625)** — `JWTManager.verify_access_token` / `verify_refresh_token` layer the require-claims when `self.issuer is not None`.
+
+### Tests
+
+- 9/9 regression tests at `packages/kailash-mcp/tests/regression/test_issue_625_jwt_iss_required.py` (acceptance B + C + extra coverage + cross-SDK semantic-parity tests).
+- Registered `regression` pytest marker in `pyproject.toml`.
+
+### Cross-SDK
+
+- Originating issue: `esperie/kailash-rs#599`
+- Rust merging PR: `kailash-rs#602` (v3.23.0)
+- Python merging PR: kailash-py #632 (this release)
+
+### Origin
+
+- Initial fix shipped via PR #632 but was missed in the kailash-mcp version bump. This patch corrects the version to 0.2.10 so consumers can `pip install kailash-mcp==0.2.10` and receive the security fix. Per `rules/build-repo-release-discipline.md` § 1 (every src change triggers a release-cycle).
+
 ## [0.2.9] — 2026-04-24 — Security patch (issue #613)
 
 ### Changed
