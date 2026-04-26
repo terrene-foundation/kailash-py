@@ -28,6 +28,7 @@ from __future__ import annotations
 from kailash_ml.rl._lineage import RLLineage
 from kailash_ml.rl._records import EpisodeRecord, EvalRecord
 from kailash_ml.rl._rl_train import rl_train
+from kailash_ml.rl._trajectory import TrajectorySchema
 from kailash_ml.rl.align_adapter import (
     FeatureNotAvailableError,
     register_bridge_adapter,
@@ -53,6 +54,7 @@ __all__ = [
     "RLTrainer",
     "RLTrainingConfig",
     "RLTrainingResult",
+    "TrajectorySchema",
     "register_bridge_adapter",
     "resolve_bridge_adapter",
     "rl_train",
