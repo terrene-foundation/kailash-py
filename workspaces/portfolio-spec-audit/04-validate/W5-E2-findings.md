@@ -83,3 +83,59 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Spec claim:** § 8.3 MUST 1 mandates baseline pure-algorithmic search runs in PARALLEL with the agent's suggestions; final report tags each trial `source="agent" | "baseline"`.
 **Actual state:** Canonical `AutoMLEngine.run()` accepts `source_tag` parameter (string), but the implementation runs ONE trial stream per invocation (the orchestrator decides if it's "agent" or "baseline"; not parallel). No internal parallel-baseline logic. `TrialRecord` carries `source_tag` field but the agent path is sequential ("v1 -- requires kaizen agents") — agent augmentation is `not implemented in v1` per `engines/automl_engine.py:529`.
 **Remediation hint:** Implement parallel baseline+agent stream OR mark `(Awaiting agent integration)` and remove MUST 1 from § 8.3.
+
+---
+
+## Spec 2 — `ml-drift.md` (887 lines)
+
+§ subsections enumerated: 14 (1.1-1.6, 2.1-2.3, 3.1-3.6, 4.x, 5.x, 6.x, 7.x, 8.x, 9, 10, 11.x, 12, 13)
+
+### F-E2-11 — `ml-drift.md` § 1.1 / § 6.x — Drift type taxonomy diverges from spec (covariate/concept/prior/label vs none/moderate/severe)
+
+**Severity:** HIGH
+**Spec claim:** § 1.1 mandates `drift_type: Literal["covariate", "concept", "prior", "label", "unknown"]` on every `DriftFeatureResult`; users route alerts/recommendations differently per type.
+**Actual state:** `engines/drift_monitor.py:1240` sets `drift_type = "severe" if psi > 0.25 else "moderate" if psi > 0.1 else "none"` — a SEVERITY enum, not a TYPE enum. `_types.py:42` declares `drift_type: str  # "none", "moderate", "severe"`. The spec's covariate/concept/prior/label distinction (which determines whether to recalibrate vs full-retrain) is NOT modeled.
+**Remediation hint:** Add `drift_axis: Literal["covariate", "concept", "prior", "label"]` field separate from severity. Or rename current `drift_type` → `severity` and add `axis` field with the spec values.
+
+### F-E2-12 — `ml-drift.md` § 2.1 — `DriftMonitorConfig` dataclass surface absent
+
+**Severity:** MED
+**Spec claim:** § 2.1 declares `@dataclass(frozen=True, slots=True) class DriftMonitorConfig(tenant_id, model_uri, axes, store, alerts, label_lag_seconds, min_samples, reference_max_rows)`; constructor `DriftMonitor(config: DriftMonitorConfig, *, registry, tracker, artifact_store)`.
+**Actual state:** `DriftMonitorConfig` dataclass does not exist; constructor signature is direct kwargs (`conn`, `tenant_id`, `psi_threshold`, `ks_threshold`, `performance_threshold`, `thresholds`, `tracker`, `alerts`). `model_uri`, `axes`, `min_samples`, `reference_max_rows`, `label_lag_seconds`, `artifact_store` not exposed at construction. Spec § 2.1 itself acknowledges this divergence: "the current Python implementation accepts direct kwargs rather than the DriftMonitorConfig wrapping ... is a forward-looking ergonomic surface."
+**Remediation hint:** Spec already self-flags this; add explicit `(Awaiting full DriftMonitorConfig facade)` marker OR ship the dataclass.
+
+### F-E2-13 — `ml-drift.md` § 2.2 — `MLEngine.monitor()` facade absent
+
+**Severity:** HIGH
+**Spec claim:** § 2.2 mandates `engine.monitor(model="fraud", alias="@production", axes={...}, alerts=...)` as canonical construction path that resolves registry/tracker/store.
+**Actual state:** `MLEngine` class needs verification but `monitor()` async method that returns `DriftMonitor` with model lookup is not visible in the canonical engine surface. Direct `DriftMonitor(conn, tenant_id=...)` is the only path. Spec § 2.3 Reference From Registry Lineage (registry-driven default reference resolution) requires `MLEngine.monitor()` facade to wire `registry`.
+**Remediation hint:** Add `MLEngine.monitor(...)` facade method.
+
+### F-E2-14 — `ml-drift.md` § 3.5 — Composite `drift_score ∈ [0, 1]` not surfaced
+
+**Severity:** MED
+**Spec claim:** § 3.5 mandates per-column `drift_score ∈ [0, 1]` combining triggered statistics; model-level score is max-across-columns (default) OR weighted-mean.
+**Actual state:** `_types.py:FeatureDriftResult` (lines 28-83) needs check for `drift_score` field; current implementation surfaces individual statistics (PSI, KS, JSD) but no composite normalized score. No `drift_score` aggregator visible in `DriftReport`.
+**Remediation hint:** Add normalized `drift_score: float` to `FeatureDriftResult`; add model-level aggregation API (max OR weighted).
+
+### F-E2-15 — `ml-drift.md` § 1.4 — Performance drift / label-lag wiring incomplete
+
+**Severity:** MED
+**Spec claim:** § 1.4 + § 2.1 require `label_lag_seconds: int = 86_400` config; performance axis "Requires labels to arrive after predictions"; § 1.5 label drift with chi² on incoming labels.
+**Actual state:** `PerformanceDegradationReport` class exists at `engines/drift_monitor.py:89`, `performance_threshold` kwarg accepted, BUT `label_lag_seconds` config not visible; label-arrival reconciliation (label-lag window) implementation needs deeper check. Reference frames: ground-truth labels-vs-predictions reconciliation implementation may be partial.
+**Remediation hint:** Verify `label_lag_seconds` is honored in performance-drift check path; add Tier-2 test for label-lag windowed reconciliation.
+
+### F-E2-16 — `ml-drift.md` § 5.x — Persistent restart-surviving scheduler partially implemented
+
+**Severity:** MED
+**Spec claim:** Round-1 HIGH addressed: "no scheduler persistence — `schedule_monitoring` is in-process `asyncio.create_task` that dies on restart". § 5 mandates persistent schedule storage; restart picks up schedules.
+**Actual state:** `schedule_monitoring`, `register_data_source`, `start_scheduler`, `stop_scheduler` exist (`engines/drift_monitor.py:1464-1976`). However spec acknowledges "Python callables are not persistable, so after process restart the caller MUST re-register via `register_data_source` before `start_scheduler` dispatches the schedule." This pushes restart-survival to caller.
+**Remediation hint:** Document the limitation explicitly in spec OR implement function-reference registry in DDL.
+
+### F-E2-17 — `ml-drift.md` § 6.x — Shadow-prediction divergence wiring not surfaced
+
+**Severity:** MED
+**Spec claim:** Round-1 HIGH "shadow-prediction divergence is not wired into drift alerting". § 1.3 prediction drift, § 6.x downstream wiring.
+**Actual state:** `ml-serving-draft.md §6.5 shadow divergence feed` referenced as sibling; canonical wiring from shadow predictions → DriftMonitor not visible in `engines/drift_monitor.py` (no `record_shadow_divergence(...)` or similar API). `check_drift` accepts current_data but no streaming shadow-prediction integration point.
+**Remediation hint:** Add explicit integration helper `monitor.ingest_shadow(...)` OR document via consumer pattern.
+
