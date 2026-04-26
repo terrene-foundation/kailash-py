@@ -41,6 +41,8 @@ def test_kaizen_ml_public_surface_matches_spec() -> None:
         "MLEngineDescriptor",
         "MLRegistryUnavailableError",
         "MLToolDiscoveryError",
+        # ML-aware agent — §2.4.6 production call site
+        "MLAwareAgent",
     }
     actual = set(km_bridge.__all__)
     missing = expected - actual

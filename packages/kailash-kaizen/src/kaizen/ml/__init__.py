@@ -25,6 +25,8 @@ Public surface per ``specs/kaizen-ml-integration.md`` §1.1:
         MLEngineDescriptor,
         MLRegistryUnavailableError,
         MLToolDiscoveryError,
+        # ML-aware agent — production call site for the discovery surface
+        MLAwareAgent,
     )
 
 This module is the single facade for every Kaizen↔kailash-ml
@@ -60,6 +62,7 @@ from kaizen.ml._tracker_bridge import (
     is_emit_rank_0,
     resolve_active_tracker,
 )
+from kaizen.ml.ml_aware_agent import MLAwareAgent
 
 __all__ = [
     # Shared wire format
@@ -82,4 +85,6 @@ __all__ = [
     "MLEngineDescriptor",
     "MLRegistryUnavailableError",
     "MLToolDiscoveryError",
+    # ML-aware agent — production call site for §2.4 discovery surface
+    "MLAwareAgent",
 ]
