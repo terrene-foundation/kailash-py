@@ -237,3 +237,45 @@
 **Spec claim:** "Tier 1 unit (`tests/unit/observability/test_trace_exporter_fingerprint.py`): 15 tests"; "Tier 2 integration (`tests/integration/observability/test_agent_diagnostics_wiring.py`): 4 tests"
 **Actual state:** Both files exist; broader observability test suite includes 19 tests across unit/integration/e2e/cross_sdk_parity. Spec's specific files verified.
 **Remediation hint:** No action.
+
+## F-D-34 — kaizen-agents-core § header — Spec version stale (0.9.2 vs actual 0.9.4)
+
+**Severity:** LOW
+**Spec claim:** "Version: 0.9.2"
+**Actual state:** `packages/kaizen-agents/pyproject.toml:version = "0.9.4"` — spec is two patch versions behind.
+**Remediation hint:** Bump spec version header.
+
+## F-D-35 — kaizen-agents-core § 2.4 — ConstructorIOError + Delegate verified
+
+**Severity:** LOW
+**Spec claim:** "The constructor MUST be synchronous and free of any network, filesystem, or subprocess calls. ... raises `ConstructorIOError`."
+**Actual state:** `packages/kaizen-agents/src/kaizen_agents/delegate/delegate.py:78,270` — both classes exist and exported via `__all__ = ["Delegate", "ConstructorIOError", "ToolRegistryCollisionError"]`.
+**Remediation hint:** No action.
+
+## F-D-36 — kaizen-agents-core § 4.3 — All 4 streaming adapters verified
+
+**Severity:** LOW
+**Spec claim:** OpenAI/Anthropic/Google/Ollama adapter modules exist.
+**Actual state:** `packages/kaizen-agents/src/kaizen_agents/delegate/adapters/{openai,anthropic,google,ollama}_adapter.py` all present + `registry.py::get_adapter_for_model()`.
+**Remediation hint:** No action.
+
+## F-D-37 — kaizen-agents-core § 5 — Wrapper stack classes verified
+
+**Severity:** LOW
+**Spec claim:** "BaseAgent -> L3GovernedAgent -> MonitoredAgent -> StreamingAgent" wrapper stack.
+**Actual state:** `wrapper_base.py` (WrapperBase), `governed_agent.py` (L3GovernedAgent), `monitored_agent.py` (MonitoredAgent), `streaming_agent.py` (StreamingAgent). All four classes verified.
+**Remediation hint:** No action.
+
+## F-D-38 — kaizen-agents-core § 1.2 — Public API surface — `Pipeline` re-export documented but module path drift
+
+**Severity:** LOW
+**Spec claim:** `from kaizen_agents import Pipeline`
+**Actual state:** `Pipeline` lives at `packages/kaizen-agents/src/kaizen_agents/patterns/pipeline.py`. Need to verify it's re-exported in `kaizen_agents/__init__.py`.
+**Remediation hint:** Verify `__init__.py` re-exports `Pipeline`. Add to `__all__` if missing per `rules/orphan-detection.md` §6.
+
+## F-D-39 — kaizen-agents-core § 27 — Error taxonomy 9 errors all present
+
+**Severity:** LOW
+**Spec claim:** ConstructorIOError, ToolRegistryCollisionError, GovernanceRejectedError, BudgetExhaustedError, DuplicateWrapperError, WrapperOrderError, DelegationCapExceeded, StreamTimeoutError, GovernanceHeldError.
+**Actual state:** All 9 verified via grep across kaizen_agents source tree at expected file locations.
+**Remediation hint:** No action.
