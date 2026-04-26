@@ -161,3 +161,75 @@
   - `test_pact_engine_method_clearance_wiring.py` (named slightly differently from spec — minor naming nit)
   - `test_cross_tenant_op_wiring.py`
 **Remediation hint:** Optional: rename to exact-spec form (`test_check_engine_method_clearance_wiring.py`, `test_check_cross_tenant_op_wiring.py`) per facade-manager-detection rule §2 grep-discoverability
+
+---
+
+## SECURITY DOMAIN (3 specs)
+
+### F-F-21 — security-auth.md § 2.1.1 JWT iss-claim enforcement — CRIT (orchestrator branch fixing)
+
+**Severity:** CRIT — but ALREADY KNOWN/IN-PROGRESS (F-C-10 from prior shard)
+**Spec claim:** "Algorithm confusion prevention" + iss claim verification (per recent PR #625 mcp-auth.md fix pattern)
+**Actual state:** `src/kailash/trust/auth/jwt.py:231` `"verify_iss": self.config.issuer is not None` — conditionally enables iss verification only when issuer configured (BYPASS if no issuer set). PR #625 mandated unconditional `verify_iss=True`
+**Remediation hint:** Per task brief, orchestrator is fixing this on a separate branch. DO NOT modify here. Fix should match: `"verify_iss": True` unconditionally to mirror PR #625 in kailash-mcp 0.2.10
+
+### F-F-22 — security-auth.md § 2.1.2 Middleware JWT — CRIT hardcoded JWT secret (orchestrator branch fixing)
+
+**Severity:** CRIT — but ALREADY KNOWN/IN-PROGRESS (F-C-35 from prior shard)
+**Spec claim:** "Minimum 32-character secret enforced at config time"
+**Actual state:** `src/kailash/middleware/communication/api_gateway.py:167` `secret_key="api-gateway-secret"` — 18-char hardcoded secret violates rules/security.md "No Hardcoded Secrets" + the documented 32-char min in spec § 2.1.1
+**Remediation hint:** Per task brief, orchestrator is fixing this on a separate branch. DO NOT modify here. Fix should be `secret_key=os.environ["KAILASH_GATEWAY_SECRET"]` with fail-fast on missing env
+
+### F-F-23 — security-auth.md § 2.1.1 JWT MIN_SECRET_LENGTH — VERIFY enforcement
+
+**Severity:** MED (cross-checks F-F-22)
+**Spec claim:** `MIN_SECRET_LENGTH = 32`, "Minimum secret length of 32 characters for HS\* algorithms" enforced in `__post_init__`
+**Actual state:** Need verification: `JWTConfig.__post_init__` raises on `secret < 32 chars`?
+**Remediation hint:** grep `MIN_SECRET_LENGTH\|len(self.secret) <` in `src/kailash/trust/auth/jwt.py`. If enforced, the api_gateway.py "api-gateway-secret" (18 chars) would have failed at construction — meaning it uses Middleware JWTAuthManager not Trust-Plane JWTValidator (DIFFERENT subsystems per spec)
+
+### F-F-24 — security-data.md § 6 Credential Decode Helpers — VERIFIED
+
+**Severity:** LOW (verified)
+**Spec claim:** `decode_userinfo_or_raise` + `preencode_password_special_chars` in `kailash.utils.url_credentials`
+**Actual state:** `src/kailash/utils/url_credentials.py` exists with both helpers
+**Remediation hint:** None
+
+### F-F-25 — security-data.md § 6.1.2 Pre-encoder callers — VERIFY 5 sites all use shared helper
+
+**Severity:** MED (per security.md "Multi-Site Kwarg Plumbing")
+**Spec claim:** 5 required callers MUST route through helper:
+  1. `src/kailash/db/connection.py`
+  2. `src/kailash/trust/esa/database.py`
+  3. `src/kailash/nodes/data/async_sql.py`
+  4. `packages/kailash-dataflow/src/dataflow/core/pool_utils.py`
+  5. `packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py`
+**Actual state:** Need verification per site
+**Remediation hint:** `grep -rln "decode_userinfo_or_raise\|preencode_password_special_chars" src/ packages/` — count MUST be ≥5
+
+### F-F-26 — security-data.md § 7.1 TrustPlane AES-256-GCM — VERIFIED
+
+**Severity:** LOW (verified — from F-F-08 trust scan)
+**Spec claim:** `nonce(12) || ciphertext (includes 16-byte tag)` AES-256-GCM via `kailash.trust.plane.encryption.crypto_utils`
+**Actual state:** Tests exist in `tests/trust/plane/unit/test_encryption.py`
+**Remediation hint:** See F-F-08 — Tier 2 round-trip recommended
+
+### F-F-27 — security-data.md § 11.6 SecurityDefinerBuilder — VERIFIED present
+
+**Severity:** LOW (verified)
+**Spec claim:** `SecurityDefinerBuilder` in `packages/kailash-dataflow/src/dataflow/migration/security_definer.py` with cross-SDK byte-shape parity vectors at `packages/kailash-dataflow/tests/fixtures/security_definer_vectors.json`
+**Actual state:** Both files present
+**Remediation hint:** None
+
+### F-F-28 — security-threats.md § 14 Threat model — comprehensive coverage VERIFIED
+
+**Severity:** LOW (verified)
+**Spec claim:** Auth/Authorization/Data/DoS threat tables with mitigations
+**Actual state:** Spec is comprehensive, mitigations referenced in code via prior findings
+**Remediation hint:** None
+
+### F-F-29 — security-threats.md § 15.2 Default JWT algorithm HS256 — VERIFIED
+
+**Severity:** LOW (informational)
+**Spec claim:** "JWT algorithm | HS256 | Simplest secure option"
+**Actual state:** Per code review, HS256 is symmetric default — combined with F-F-22 hardcoded "api-gateway-secret" (18 chars), creates documented attack surface. Spec contract requires 32+ char secrets per F-F-23
+**Remediation hint:** Once F-F-22 + F-F-23 fixed, this becomes purely informational
