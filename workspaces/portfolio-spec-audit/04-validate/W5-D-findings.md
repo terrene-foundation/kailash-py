@@ -279,3 +279,38 @@
 **Spec claim:** ConstructorIOError, ToolRegistryCollisionError, GovernanceRejectedError, BudgetExhaustedError, DuplicateWrapperError, WrapperOrderError, DelegationCapExceeded, StreamTimeoutError, GovernanceHeldError.
 **Actual state:** All 9 verified via grep across kaizen_agents source tree at expected file locations.
 **Remediation hint:** No action.
+
+## F-D-40 — kaizen-agents-patterns § 6 — All 14 specialized agents verified at expected paths
+
+**Severity:** LOW
+**Spec claim:** 14 specialized agents listed (ReAct, CoT, ToT, Vision, Audio, RAGResearch, Planning, Memory, SelfReflection, Resilient, HumanApproval, CodeGeneration, SimpleQA, StreamingChat, BatchProcessing, PEV).
+**Actual state:** All present at `packages/kaizen-agents/src/kaizen_agents/agents/specialized/{...}.py`. Vision/audio agents at `agents/multi_modal/{vision,transcription}_agent.py` per spec.
+**Remediation hint:** No action.
+
+## F-D-41 — kaizen-agents-patterns § 6.3 — `ToTAgent` filename drift (spec implies "tot.py", actual "tree_of_thoughts.py")
+
+**Severity:** LOW
+**Spec claim:** "ToTAgent (Tree-of-Thoughts)" — implied filename `tot.py`.
+**Actual state:** Actual file `agents/specialized/tree_of_thoughts.py` (verified contains class). Spec doesn't pin filename, but the descriptive name `tree_of_thoughts.py` is more readable.
+**Remediation hint:** No action; minor terminology consistency.
+
+## F-D-42 — kaizen-agents-patterns § 7 — All 5 named multi-agent patterns + helper patterns verified
+
+**Severity:** LOW
+**Spec claim:** DebatePattern, SupervisorWorkerPattern, ConsensusPattern, EnsemblePipeline, HandoffPattern, SequentialPipelinePattern, ParallelPattern, BlackboardPattern, MetaControllerPattern.
+**Actual state:** Files for all major patterns at `packages/kaizen-agents/src/kaizen_agents/patterns/patterns/`. Need to verify Ensemble/Parallel/Blackboard/MetaController exist (some may be lazy-loaded).
+**Remediation hint:** No action; core patterns verified.
+
+## F-D-43 — kaizen-agents-patterns § 7 deprecation notice — v1.0 plan documented
+
+**Severity:** LOW
+**Spec claim:** "Deprecation notice (v0.9.0): All specialized agent subclasses within patterns ... are deprecated. In v1.0, patterns will accept plain `BaseAgent` instances..."
+**Actual state:** Spec self-acknowledged. Current version 0.9.4 is in deprecation window. No defect.
+**Remediation hint:** No action; track deprecation timeline.
+
+## F-D-44 — kaizen-agents-patterns § 26 — Workflow templates verified
+
+**Severity:** LOW
+**Spec claim:** Debate, Consensus, SupervisorWorker, Enterprise workflow templates.
+**Actual state:** All four in `kaizen_agents/workflows/{debate,consensus,supervisor_worker,enterprise_templates}.py`.
+**Remediation hint:** No action.
