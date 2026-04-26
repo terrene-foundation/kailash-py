@@ -809,6 +809,10 @@ class SymbolIndex:
     decorator_counts: dict[str, int] = field(default_factory=dict)
     # Union of every ``__all__`` entry declared at module scope (FR-6).
     all_exports: set[str] = field(default_factory=set)
+    # SDG-203: package-qualified-name → {symbol: target_module} extracted
+    # from the package's ``__init__.py::__getattr__`` lazy-import map. The
+    # B1 sweep consults this to flag spec / source resolution divergence.
+    getattr_resolution: dict[str, dict[str, str]] = field(default_factory=dict)
     _entries: list[CacheEntry] = field(default_factory=list)
 
     def _absorb(self, entry: CacheEntry) -> None:
@@ -838,6 +842,15 @@ class SymbolIndex:
         for root in source_roots:
             if not root.exists():
                 continue
+            # SDG-203: per-root ``__getattr__`` resolution map. ``root``
+            # like ``packages/kailash-ml/src/kailash_ml`` resolves to
+            # package qualname ``kailash_ml`` (the directory name).
+            pkg_qualname = root.name
+            init_py = root / "__init__.py"
+            if init_py.exists():
+                map_entries = _parse_getattr_map(init_py)
+                if map_entries:
+                    idx.getattr_resolution[pkg_qualname] = map_entries
             for py_file in sorted(root.rglob("*.py")):
                 resolved = str(py_file.resolve())
                 if resolved in seen_paths:
@@ -998,6 +1011,148 @@ def _strings_in_literal(node: ast.expr) -> set[str]:
     return set()
 
 
+def _parse_getattr_map(init_py: Path) -> dict[str, str]:
+    """Extract a ``{symbol: target_module}`` map from a package's
+    ``__init__.py::__getattr__`` body (SDG-203).
+
+    Recognised shapes:
+
+    1. Inline dict literal assigned to a local name (the ``kailash_ml``
+       form: ``_engine_map = {"AutoMLEngine": "kailash_ml.engines.automl_engine", ...}``)
+       followed by ``importlib.import_module(_engine_map[name])``.
+    2. Module-scope ``_LAZY_IMPORT_MAP = {...}`` or ``_LAZY = {...}``
+       constant referenced from inside ``__getattr__``.
+    3. Inline ``if name == "X": ... importlib.import_module("pkg.subpkg")``
+       chains — each branch contributes one ``X → pkg.subpkg`` entry.
+
+    Returns ``{}`` when no ``__getattr__`` exists or the body shape is
+    unrecognised — full traversal is M2 per spec § 11.1; v1.0 ships shallow
+    detection that catches the W6.5 motivating pattern (the kailash_ml
+    legacy-vs-canonical AutoMLEngine map).
+    """
+
+    try:
+        source = init_py.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    try:
+        tree = ast.parse(source, filename=str(init_py))
+    except SyntaxError:
+        return {}
+
+    # Pre-scan module-scope dict assignments so __getattr__ can reference
+    # them by name (pattern #2).
+    module_dicts: dict[str, dict[str, str]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                d = _string_dict_literal(node.value)
+                if d:
+                    module_dicts[target.id] = d
+
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.FunctionDef) and node.name == "__getattr__"):
+            continue
+        # Pattern #1: inline dict literal assigned within the function.
+        local_dicts: dict[str, dict[str, str]] = {}
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assign) and len(sub.targets) == 1:
+                target = sub.targets[0]
+                if isinstance(target, ast.Name):
+                    d = _string_dict_literal(sub.value)
+                    if d:
+                        local_dicts[target.id] = d
+        for d in local_dicts.values():
+            out.update(d)
+        # Pattern #2: __getattr__ references a module-scope dict.
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Subscript) and isinstance(sub.value, ast.Name):
+                d = module_dicts.get(sub.value.id)
+                if d:
+                    out.update(d)
+            if isinstance(sub, ast.Compare) and isinstance(sub.left, ast.Name):
+                # ``if name in _LAZY_IMPORT_MAP``
+                for op, comparator in zip(sub.ops, sub.comparators):
+                    if isinstance(op, ast.In) and isinstance(comparator, ast.Name):
+                        d = module_dicts.get(comparator.id)
+                        if d:
+                            out.update(d)
+        # Pattern #3: inline ``if name == "X": ... importlib.import_module("pkg")``
+        out.update(_walk_inline_if_chain(node))
+
+    return out
+
+
+def _string_dict_literal(node: ast.expr) -> dict[str, str]:
+    if not isinstance(node, ast.Dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in zip(node.keys, node.values):
+        if (
+            isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+        ):
+            out[key.value] = value.value
+    return out
+
+
+def _walk_inline_if_chain(node: ast.FunctionDef) -> dict[str, str]:
+    """Pattern #3: walk ``if name == "X": ... importlib.import_module("Y")``.
+
+    Captures the (X, Y) pair. Multi-line branches and nested ifs are
+    supported shallowly — full traversal is M2.
+    """
+
+    out: dict[str, str] = {}
+
+    def _visit(stmts: list[ast.stmt]) -> None:
+        for stmt in stmts:
+            if isinstance(stmt, ast.If):
+                symbol = _name_eq_string_test(stmt.test)
+                target_module = _find_import_module_call(stmt.body)
+                if symbol is not None and target_module is not None:
+                    out[symbol] = target_module
+                _visit(stmt.body)
+                _visit(stmt.orelse)
+
+    _visit(list(node.body))
+    return out
+
+
+def _name_eq_string_test(test: ast.expr) -> str | None:
+    if (
+        isinstance(test, ast.Compare)
+        and isinstance(test.left, ast.Name)
+        and test.left.id == "name"
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], ast.Eq)
+        and len(test.comparators) == 1
+        and isinstance(test.comparators[0], ast.Constant)
+        and isinstance(test.comparators[0].value, str)
+    ):
+        return test.comparators[0].value
+    return None
+
+
+def _find_import_module_call(stmts: list[ast.stmt]) -> str | None:
+    for stmt in stmts:
+        for sub in ast.walk(stmt):
+            if (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr == "import_module"
+                and len(sub.args) == 1
+                and isinstance(sub.args[0], ast.Constant)
+                and isinstance(sub.args[0].value, str)
+            ):
+                return sub.args[0].value
+    return None
+
+
 def _load_cache(cache_path: Path) -> dict[str, CacheEntry]:
     if not cache_path.exists():
         return {}
@@ -1041,6 +1196,11 @@ class Finding:
     symbol: str
     kind: str
     message: str
+    # SDG-203: B1 / `__getattr__` resolution mismatches ship as
+    # ``level="WARN"`` in v1.0 — they highlight a known divergence but do
+    # NOT cause exit-code failure. Hard-fail integration is v1.1 per Q9.3
+    # disposition (journal 0005).
+    level: Literal["FAIL", "WARN"] = "FAIL"
 
     def sort_key(self) -> tuple[str, int, str, str]:
         return (self.spec_path, self.line, self.fr_code, self.symbol)
@@ -1100,6 +1260,15 @@ EXPORT_PHRASE_RE = re.compile(r"in\s+`__all__`")
 # section (``## Cross-References`` etc., handled by EXCLUSION_PATTERNS).
 WORKSPACE_LEAK_RE = re.compile(r"\bW\d+\s+\d+[a-z]?\b")
 WORKSPACE_PATH_RE = re.compile(r"workspaces/[\w./-]+")
+# SDG-203 fully-qualified-class form: ``pkg.subpkg.module.Symbol``. The
+# trailing ``Symbol`` MUST be capitalized (single class), the prefix MUST
+# be a chain of lowercase/underscore module segments. ``kailash_ml.AutoMLEngine``
+# (2-segment form) is captured too so packages that expose a symbol
+# directly at the top level are checked.
+FQ_CLASS_RE = re.compile(
+    r"^([a-z_][a-zA-Z0-9_]*)((?:\.[a-z_][a-zA-Z0-9_]*)*)\.([A-Z][a-zA-Z0-9_]*)$"
+)
+
 LEGITIMATE_CITATION_PREFIXES: tuple[str, ...] = (
     "Origin:",
     "Citation:",
@@ -1315,6 +1484,15 @@ def run_sweeps(
         spec_path=spec_path,
         spec_text=spec_text,
         sections=sections,
+        findings=findings,
+    )
+
+    # SDG-203: B1 ``__getattr__``-resolution sweep. WARN-only in v1.0.
+    _sweep_b1_getattr_resolution(
+        spec_path=spec_path,
+        spec_text=spec_text,
+        sections=sections,
+        cache=cache,
         findings=findings,
     )
 
@@ -1743,6 +1921,113 @@ def _suppressed(
 
 
 # ---------------------------------------------------------------------------
+# SDG-203: B1 ``__getattr__`` resolution sweep.
+#
+# Day-1 CRIT mitigation per redteam REQ-HIGH-1 + journal 0005 disposition.
+# When a spec asserts a fully-qualified path like ``kailash_ml.automl.engine.AutoMLEngine``
+# AND the symbol resolves through a different module via the package's
+# ``__getattr__`` lazy-import map (e.g. legacy ``kailash_ml.engines.automl_engine``),
+# emit a B1-class WARN. WARN-only in v1.0 — exit code stays 0 unless other
+# FAIL findings exist. Dual-emit coherence with FR-6 per redteam HIGH-2:
+# when the symbol is also in ``__all__``, the WARN message cross-references
+# that signal so operators see both attached to one symbol.
+# ---------------------------------------------------------------------------
+
+
+def _sweep_b1_getattr_resolution(
+    *,
+    spec_path: Path,
+    spec_text: str,
+    sections: list[Section],
+    cache: SymbolIndex,
+    findings: list[Finding],
+) -> None:
+    if not cache.getattr_resolution:
+        return
+
+    excluded_ranges: list[tuple[int, int]] = []
+    for section in sections:
+        if _is_excluded(section.heading):
+            excluded_ranges.append((section.heading_line, section.body_end))
+
+    def _is_excluded_line(line_no: int) -> bool:
+        return any(start <= line_no < end for start, end in excluded_ranges)
+
+    def _section_for_line(line_no: int) -> Section | None:
+        for section in sections:
+            if section.heading_line <= line_no < section.body_end:
+                return section
+        return None
+
+    lines = spec_text.splitlines()
+    in_fence = False
+    # Dedupe per (pkg, symbol). Earliest cite wins so the WARN points at
+    # the first place the spec author asserted the canonical FQ path.
+    seen: set[tuple[str, str]] = set()
+
+    for line_no, line in enumerate(lines, start=1):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if _is_excluded_line(line_no):
+            continue
+        section = _section_for_line(line_no)
+        if section is not None and _is_in_negated_subsection(section, line_no):
+            continue
+        if _line_is_negated(lines, line_no):
+            continue
+
+        for token in BACKTICK_TOKEN_RE.findall(line):
+            token = token.strip()
+            if not token:
+                continue
+            m = FQ_CLASS_RE.match(token)
+            if m is None:
+                continue
+            pkg_root, middle, symbol = m.group(1), m.group(2), m.group(3)
+
+            getattr_map = cache.getattr_resolution.get(pkg_root)
+            if getattr_map is None:
+                continue
+            actual = getattr_map.get(symbol)
+            if actual is None:
+                continue
+
+            # Build the spec's expected module: ``pkg_root`` plus the
+            # middle dotted path (which carries a leading dot if non-empty).
+            expected = f"{pkg_root}{middle}" if middle else pkg_root
+            if expected == actual:
+                continue
+            if (pkg_root, symbol) in seen:
+                continue
+            seen.add((pkg_root, symbol))
+
+            # FR-6 dual-emit coherence per redteam HIGH-2.
+            in_all = symbol in cache.all_exports
+            fr6_note = f" (FR-6 PASS — {symbol} is in __all__)" if in_all else ""
+            findings.append(
+                Finding(
+                    spec_path=str(spec_path),
+                    line=line_no,
+                    fr_code="B1",
+                    symbol=f"{pkg_root}.{symbol}",
+                    kind="getattr_resolution",
+                    level="WARN",
+                    message=(
+                        f"B1: {pkg_root}.{symbol} resolves via "
+                        f"{pkg_root}.__getattr__ to '{actual}' but the spec "
+                        f"asserts '{expected}'{fr6_note} — flip the "
+                        f"__getattr__ map entry to '{expected}' or update "
+                        f"the spec to match the actual resolution"
+                    ),
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
 # Output formatting (S1: human format only).
 # ---------------------------------------------------------------------------
 
@@ -1769,25 +2054,30 @@ def _emit_human(
         sec_list = sections_by_spec.get(sp, [])
         scanned = [s.heading for s in sec_list if s.matched_frs]
         spec_findings = by_spec.get(sp, [])
+        fail_findings = [f for f in spec_findings if f.level == "FAIL"]
         if spec_findings:
             for f in spec_findings:
+                prefix = f.level
                 print(
-                    f"FAIL {f.spec_path}:{f.line} {f.fr_code}: "
+                    f"{prefix} {f.spec_path}:{f.line} {f.fr_code}: "
                     f"{f.symbol} ({f.kind}) — {f.message}"
                 )
-                print(FIX_HINT_TEMPLATE.format(symbol=f.symbol))
+                if f.level == "FAIL":
+                    print(FIX_HINT_TEMPLATE.format(symbol=f.symbol))
         else:
             print(f"PASS {sp} (0 findings across {len(scanned)} scanned sections)")
         if scanned:
             print(f"INFO sections scanned: {scanned}")
-        else:
+        elif not fail_findings:
             print(
                 f"WARN {sp}: zero allowlisted sections found. "
                 f"Expected one of: ## Surface, ## Construction, ## Public API, "
                 f"## Errors, ## Test Contract"
             )
 
-    return 1 if findings else 0
+    # Exit 1 only when at least one FAIL-level finding is present. WARN-only
+    # output (e.g., B1 ``__getattr__`` divergences) returns 0 per Q9.3.
+    return 1 if any(f.level == "FAIL" for f in findings) else 0
 
 
 # ---------------------------------------------------------------------------
@@ -1868,15 +2158,16 @@ def main(argv: list[str] | None = None) -> int:
         # Minimal JSON output for S1; full schema in S3.
         out = [f.__dict__ for f in all_findings]
         print(json.dumps(out, indent=2, sort_keys=True))
-        return 1 if all_findings else 0
+        return 1 if any(f.level == "FAIL" for f in all_findings) else 0
     if args.format == "github":
         # Minimal GitHub Actions annotation for S1; full schema in S3.
         for f in all_findings:
+            severity = "error" if f.level == "FAIL" else "warning"
             print(
-                f"::error file={f.spec_path},line={f.line}::"
+                f"::{severity} file={f.spec_path},line={f.line}::"
                 f"{f.fr_code}: {f.message}"
             )
-        return 1 if all_findings else 0
+        return 1 if any(f.level == "FAIL" for f in all_findings) else 0
 
     return 0
 
