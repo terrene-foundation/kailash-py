@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] — 2026-04-26 — Complete alg_id Layer-1 threading (#604 Wave 4)
+
+Patch bump — closes Wave 3 `/redteam` HIGH findings H1 + H2 on the `AlgorithmIdentifier` scaffold. Threads `alg_id` through the four remaining Layer-1 sites that PR #627 (kailash 2.11.0) deferred, and re-exports the canonical scaffold symbols from `kailash.trust` and `kailash.trust.signing`. Wire format remains gated on mint ISS-31 + cross-SDK align with `esperie/kailash-rs#33`; until then, all Layer-1 sites enforce `ed25519+sha256` only and raise `NotImplementedError` on any non-default value.
+
+### Security
+
+- **HIGH (closes Wave 3 redteam H1)** — Thread `AlgorithmIdentifier` through the four remaining Layer-1 signed-record dataclasses + producers + verifiers per inventory at `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`. Closes the multi-site kwarg plumbing gap from PR #627.
+  - **`src/kailash/trust/envelope.py`** — `sign_envelope` / `verify_envelope` accept `alg_id` keyword (asymmetric kwarg-only pair; HMAC `ConstraintEnvelope` payload signing forbids embedded `algorithm` field — would break wire compat).
+  - **`src/kailash/trust/signing/timestamping.py`** — `TimestampToken` + `TimestampResponse` storage gain `algorithm` field with `to_dict`/`from_dict` round-trip; `LocalTimestampAuthority.get_timestamp` (and abstract / RFC3161 variants) accept `alg_id`; `TimestampAnchorManager.verify_anchor` runs the canonical three-branch guard (empty → DeprecationWarning, default → proceed, non-default → `NotImplementedError`).
+  - **`src/kailash/trust/signing/crl.py`** — `CRLMetadata.algorithm` storage field; `CertificateRevocationList.sign` accepts `alg_id`; `verify_signature` runs the three-branch guard.
+  - **`src/kailash/trust/messaging/{envelope,signer,verifier}.py`** — `SecureMessageEnvelope.algorithm` field added alongside legacy `signature_algorithm` (distinct semantics: legacy field names the crypto primitive, new field is the agility-scaffold version-tag); `MessageSigner.sign_message` accepts `alg_id`; `MessageVerifier._verify_signature` runs the three-branch guard.
+- **HIGH (closes Wave 3 redteam H2)** — Re-export scaffold symbols (`AlgorithmIdentifier`, `ALGORITHM_DEFAULT`, `coerce_algorithm_id`) from canonical namespaces:
+  - `kailash.trust.signing` (the home namespace per `specs/trust-crypto.md` § 21.1)
+  - `kailash.trust` (top-level convenience)
+  - Existing `kailash.trust.pact.envelopes` re-export retained for backward compatibility.
+
+### Cross-SDK
+
+- Wire format remains gated on mint ISS-31 + cross-SDK align with `esperie/kailash-rs#33`. All Layer-1 sites enforce `"ed25519+sha256"` only.
+
+### Origin
+
+- Wave 3 `/redteam` findings H1 + H2: `workspaces/issues-604-607/04-validate/02-security-review.md`.
+- Inventory: `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md` § "Threading scope for this PR".
+
 ## [2.11.0] — 2026-04-25 — Algorithm-agility scaffold (#604) + SLIP-0039 Shamir wrapper (#606)
 
 Minor bump — two new public modules in `kailash.trust`. Ships alongside `kailash-dataflow 2.3.0` (#607 SecurityDefinerBuilder) and `kailash-pact 0.11.0` (#605 PACT N4/N5 conformance runner). All three are additive; lockstep dep pins updated to `kailash>=2.11.0` across every framework package.
