@@ -42,3 +42,30 @@
 **Actual state:** `packages/kailash-kaizen/src/kaizen/core/base_agent.py:127-134` — verified, suppresses with logger.debug. Behavior matches spec; no defect.
 **Remediation hint:** No action; assertion holds. Listed for completeness.
 
+## F-D-06 — kaizen-signatures § 2.8 — `MultiModalSignature` defined in two locations
+
+**Severity:** MED
+**Spec claim:** "`MultiModalSignature`: Support for image + audio + text inputs." (single class)
+**Actual state:** `packages/kailash-kaizen/src/kaizen/signatures/enterprise.py:277` AND `packages/kailash-kaizen/src/kaizen/signatures/multi_modal.py:602` — TWO classes both named `MultiModalSignature`. Whichever is exported via `signatures/__init__.py` wins; consumers depending on the other shape see silent divergence.
+**Remediation hint:** Consolidate to one definition; if both have unique APIs, rename one (e.g., `EnterpriseMultiModalSignature`). Cross-reference with `kaizen-providers.md` § multi-modal exports.
+
+## F-D-07 — kaizen-signatures § 2.x — Undocumented `SignatureOptimizer` class present
+
+**Severity:** LOW
+**Spec claim:** Spec § 2.4-2.7 enumerate Parser, Compiler, Validator, Template — no `SignatureOptimizer`.
+**Actual state:** `packages/kailash-kaizen/src/kaizen/signatures/core.py:1824` — `class SignatureOptimizer:` exists but absent from spec.
+**Remediation hint:** Document `SignatureOptimizer` in spec or mark as private (`_SignatureOptimizer`). If experimental, add `(Awaiting ISS-NN)` marker.
+
+## F-D-08 — kaizen-signatures § 2.3 — Spec lists `signature_type` enum values but doesn't pin "enterprise" semantics
+
+**Severity:** LOW
+**Spec claim:** "`signature_type: str = "basic"` — basic, multi_io, complex, enterprise, multi_modal"
+**Actual state:** Verified `Signature.__init__` accepts `signature_type`. Enum values not validated at constructor — any string accepted. Spec describes 5 valid values; code does not enforce.
+**Remediation hint:** Add typed validation in `__post_init__` (raise on invalid) OR convert to Literal type hint. Update spec to clarify enforcement.
+
+## F-D-09 — kaizen-signatures § 18.1 — `create_structured_output_config` exists but signature deviation
+
+**Severity:** LOW
+**Spec claim:** "`create_structured_output_config(signature=my_signature, strict=True)` → returns dict suitable for `response_format`."
+**Actual state:** `packages/kailash-kaizen/src/kaizen/core/structured_output.py:292` — verified function exists. Spec assertion holds at signature level. No defect; listed for completeness.
+**Remediation hint:** No action.
