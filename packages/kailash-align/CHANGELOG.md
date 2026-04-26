@@ -1,5 +1,61 @@
 # kailash-align Changelog
 
+## [0.7.0] - 2026-04-27 — W6-016: shared trajectory schema bridge (F-E1-50)
+
+Cross-SDK companion of `kailash-ml 1.3.0`. Closes W5-E1 finding F-E1-50
+(HIGH) on the kailash-align side: the trajectory-schema bridge between
+`kailash-ml.rl` (producer) and `kailash-align` (consumer) is now wired
+through both halves with a Tier-2 round-trip regression test.
+
+### Added
+
+- **`AlignmentPipeline.consume_trajectories(trajectories)`** — align-side
+  consumer entry of the cross-SDK bridge. Accepts a single
+  `kailash_ml.rl.TrajectorySchema` OR an iterable of them, accumulating
+  on repeated calls so multi-stage pipelines (e.g. SFT → DPO each
+  consuming distinct upstream trajectories) build provenance over
+  multiple steps. Lazy-imports `TrajectorySchema` from `kailash_ml.rl`
+  so `import kailash_align` stays cheap when the bridge is unused.
+  Non-`TrajectorySchema` items raise `TrainingError`. Per spec
+  `ml-rl-align-unification.md` §3.2 + §4.
+- **`AlignmentPipeline.consumed_trajectories` property** — read-only
+  tuple of every trajectory previously consumed; alignment runs use it
+  to record upstream provenance into their own audit trail.
+- **`kailash_align.ml.TrajectorySchema` re-export** — single-source-in-ml
+  mandate per spec §7: kailash-align re-exports the canonical
+  `kailash_ml.rl.TrajectorySchema` and does NOT define a parallel.
+  Eager re-export per `rules/orphan-detection.md` §6 (every `__all__`
+  entry resolves at module-scope import). Added to `kailash_align.ml.__all__`.
+
+### Tests
+
+- **`tests/integration/ml/test_trajectory_round_trip.py`** — Tier-2
+  round-trip regression (11 tests, all green): canonical-type identity
+  (`align.ml.TrajectorySchema is kailash_ml.rl.TrajectorySchema`),
+  producer-side `RLTrainer.collect_trajectories` correctness, lineage
+  required guard, byte-stable dict + JSON round-trip, schema-
+  discriminator + version rejection, consumer-side
+  `AlignmentPipeline.consume_trajectories` for single + iterable
+  payloads, type-rejection, and the full bridge (RL → JSON → Align)
+  end-to-end.
+
+### Spec references
+
+- `specs/ml-rl-align-unification.md` v1.0.0 §3.2 (result-type parity),
+  §4 (Tier-2 conformance test), §7 (dependency topology — single source
+  in ml; align imports, never redefines).
+- `workspaces/portfolio-spec-audit/04-validate/W5-E1-findings.md`
+  F-E1-50 (HIGH closure).
+
+### Notes
+
+- `kailash-align 0.7.0` requires `kailash-ml>=1.3` at runtime for the
+  `TrajectorySchema` re-export and lazy import in
+  `AlignmentPipeline.consume_trajectories`. Orchestrators releasing
+  this version MUST release `kailash-ml 1.3.0+` first per
+  `rules/deployment.md` § "Optional Dependencies Pin to PyPI-Resolvable
+  Versions".
+
 ## [0.6.0] - 2026-04-23
 
 ### Added

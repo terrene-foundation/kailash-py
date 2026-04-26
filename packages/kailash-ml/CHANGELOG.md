@@ -1,5 +1,58 @@
 # kailash-ml Changelog
 
+## [1.3.0] — 2026-04-27 — W6-016: shared trajectory schema (F-E1-50)
+
+Closes W5-E1 finding F-E1-50 (HIGH): the spec-mandated shared trajectory
+schema between `kailash-ml.rl` and `kailash-align` was named in
+`specs/ml-rl-align-unification.md` §3.2 + §4 but had no concrete
+dataclass exposing the bridge contract. Builds on W6-015's
+`EpisodeRecord` / `EvalRecord` records and the W30 `RLLineage`
+provenance type.
+
+### Added
+
+- **`kailash_ml.rl.TrajectorySchema`** — frozen dataclass bundling a
+  completed RL or RLHF training run for cross-SDK handoff. Fields:
+  `episodes: tuple[EpisodeRecord, ...]`, `lineage: RLLineage`,
+  `eval_history: tuple[EvalRecord, ...]`, `metadata: Mapping[str, Any]`
+  (read-only `MappingProxyType`). Single-source-in-ml per spec §7 — the
+  type lives here; kailash-align re-exports it from
+  `kailash_align.ml.TrajectorySchema` and never defines a parallel.
+- **`TrajectorySchema.to_dict()` / `from_dict()`** — byte-stable
+  round-trip serialisation. Carries a schema discriminator
+  (`"kailash_ml.rl.TrajectorySchema"`) and `schema_version=1`; foreign
+  payloads or unsupported versions raise `ValueError`. Datetime fields
+  serialise via `isoformat()`. Round-trip JSON is byte-identical under
+  `json.dumps(sort_keys=True)` so cross-process / cross-machine
+  handoff is sound without bespoke serialisers.
+- **`RLTrainer.collect_trajectories(result, *, metadata=None)`** —
+  canonical RL-side bridge entry: bundles a completed
+  `RLTrainingResult` into a `TrajectorySchema`. Auto-populates schema
+  metadata from the result (algorithm, env_spec, total_timesteps,
+  total_env_steps, elapsed_seconds, device_used, tenant_id) and merges
+  caller-supplied metadata on top. Raises typed `RLError(reason=
+"missing_lineage")` when `result.lineage is None` — no silent
+  fabrication of provenance per `rules/zero-tolerance.md` Rule 2.
+
+### Spec references
+
+- `specs/ml-rl-align-unification.md` v1.0.0 §3.2 (result-type parity),
+  §4 (Tier-2 conformance test), §5 (lineage immutability promise
+  extended to trajectory state), §7 (single-source-in-ml mandate).
+- `workspaces/portfolio-spec-audit/04-validate/W5-E1-findings.md`
+  F-E1-50 (HIGH closure).
+
+### Notes
+
+- `TrajectorySchema` is intentionally NOT a parallel `RLLineage`. It is
+  a bundle that _contains_ an `RLLineage` plus the actual episode +
+  eval data. The W30 0.6.0 changelog note ("no parallel Trajectory
+  class would violate spec §7 single-source mandate") still holds:
+  `TrajectorySchema` lives in kailash-ml only; kailash-align re-exports.
+- The bundle is frozen by construction. `metadata` is normalised to a
+  `MappingProxyType` at `__post_init__`; mutating the caller's original
+  dict after construction MUST NOT mutate the trajectory's view.
+
 ## [1.2.0] — 2026-04-27 — W5 wave: schema parity + scope cleanup
 
 W6-015 is the version owner for the W5 wave. This release batches three
