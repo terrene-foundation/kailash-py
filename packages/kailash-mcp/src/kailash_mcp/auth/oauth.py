@@ -123,6 +123,7 @@ def _require_oauth_extras() -> None:
             f"(missing: {', '.join(missing)})"
         )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -534,7 +535,12 @@ class JWTManager:
             private_key: Private key for signing (PEM format)
             public_key: Public key for verification (PEM format)
             algorithm: JWT algorithm
-            issuer: Token issuer
+            issuer: Token issuer. When set, ``verify_access_token`` and
+                ``verify_refresh_token`` REQUIRE the ``iss`` claim AND
+                check it equals this value (cross-SDK port of
+                esperie/kailash-rs#599 / PR #602). When ``None``,
+                absent-iss tokens still verify so callers that opt out of
+                issuer enforcement see no behaviour change.
         """
         _require_oauth_extras()
         self.algorithm = algorithm
@@ -642,14 +648,32 @@ class JWTManager:
     def verify_access_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify JWT access token.
 
+        When ``self.issuer`` is configured, this layers PyJWT's
+        ``options={"require": ["exp", "iss"]}`` on top of the ``issuer=``
+        equality check.
+
+        Cross-SDK port of esperie/kailash-rs#599 (PR #602): PyJWT's
+        ``issuer=`` parameter only enforces equality when the ``iss``
+        claim is present in the token payload. A forged token that OMITS
+        ``iss`` entirely passes the allowlist check unless ``iss`` is
+        also added to the required-claims set. The require list closes
+        that bypass.
+
         Args:
             token: JWT token to verify
 
         Returns:
             Token payload or None if invalid
         """
+        decode_kwargs: Dict[str, Any] = {
+            "algorithms": [self.algorithm],
+        }
+        if self.issuer is not None:
+            decode_kwargs["issuer"] = self.issuer
+            decode_kwargs["options"] = {"require": ["exp", "iss"]}
+
         try:
-            payload = jwt.decode(token, self.public_key, algorithms=[self.algorithm])  # type: ignore[arg-type]
+            payload = jwt.decode(token, self.public_key, **decode_kwargs)  # type: ignore[arg-type]
 
             # Verify token type
             if payload.get("token_type") != "access_token":
@@ -658,6 +682,9 @@ class JWTManager:
             return payload
 
         except jwt.InvalidTokenError as e:
+            # MissingRequiredClaimError + InvalidIssuerError both subclass
+            # InvalidTokenError so this single handler covers absent-iss
+            # and wrong-iss alike.
             raise AuthenticationError(f"Invalid token: {e}")
 
     def create_refresh_token(
@@ -699,25 +726,44 @@ class JWTManager:
     def verify_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify JWT refresh token.
 
+        See ``verify_access_token`` for the iss-required rationale (cross-SDK
+        port of esperie/kailash-rs#599 / PR #602). When ``self.issuer`` is
+        configured, the ``iss`` claim is REQUIRED and equality-checked at
+        decode time. The post-decode manual issuer check below is now
+        redundant in the issuer-set case but kept for the ``self.issuer is
+        None`` path so behaviour is unchanged.
+
         Args:
             token: JWT token to verify
 
         Returns:
             Token payload if valid, None otherwise
         """
+        decode_kwargs: Dict[str, Any] = {
+            "algorithms": [self.algorithm],
+            "options": {"verify_aud": False},
+        }
+        if self.issuer is not None:
+            decode_kwargs["issuer"] = self.issuer
+            # Layer iss-required on top of options
+            decode_kwargs["options"] = {
+                "verify_aud": False,
+                "require": ["exp", "iss"],
+            }
+
         try:
             payload = jwt.decode(  # type: ignore[arg-type]
                 token,
                 self.public_key,  # type: ignore[reportArgumentType]
-                algorithms=[self.algorithm],
-                options={"verify_aud": False},
+                **decode_kwargs,
             )
 
             # Check token type
             if payload.get("token_type") != "refresh_token":
                 raise AuthenticationError("Invalid token type")
 
-            # Check issuer
+            # Belt-and-suspenders check (redundant when self.issuer is set
+            # because PyJWT already raised; preserved for clarity).
             if self.issuer and payload.get("iss") != self.issuer:
                 raise AuthenticationError("Invalid issuer")
 
