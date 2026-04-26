@@ -84,6 +84,7 @@ Hierarchy (authoritative — matches ``ml-tracking.md §9.1.1`` tree)::
     ├── UnsupportedTrainerError           (Decision 8 — cross-cutting)
     ├── MultiTenantOpError                (Decision 12 — cross-cutting)
     ├── MigrationFailedError              (Tracking migration — see §7)
+    ├── MigrationRequiredError            (Tracking migration — see §7)
     ├── WorkflowNodeMLContextError        (workflow nodes — see §7)
     └── EnvVarDeprecatedError             (2.0 env-var sunset contract)
 
@@ -134,6 +135,7 @@ __all__ = [
     "UnsupportedTrainerError",
     "MultiTenantOpError",
     "MigrationFailedError",
+    "MigrationRequiredError",
     "WorkflowNodeMLContextError",
     "EnvVarDeprecatedError",
     # --- TrackingError subclasses ---
@@ -349,6 +351,29 @@ class MigrationFailedError(MLError):
     """Raised by ``kailash.tracking.migrations`` when a migration's
     ``apply()`` raises or ``verify()`` returns ``False``. See
     ``kailash-core-ml-integration.md §7``."""
+
+
+class MigrationRequiredError(MLError):
+    """Raised when an engine detects that a required schema object
+    (table / column / index) is absent at first use, indicating the
+    operator has not run the corresponding numbered migration.
+
+    Distinct from :class:`MigrationFailedError` (which fires on a
+    migration's own ``apply()`` failure) and from
+    :class:`MigrationImportError` (which fires when a migration module
+    cannot be loaded). This error fires from inside the engine's hot
+    path when persistence is degraded because the schema is missing —
+    the typed signal lets operators differentiate "schema missing,
+    please run migrations" from "migration ran but crashed" from
+    "migration module failed to import" without log triage.
+
+    Per ``rules/schema-migration.md`` MUST Rule 1, application code
+    MUST NOT emit ``CREATE TABLE`` DDL inline; raising this error is
+    the correct fail-loud disposition when an engine encounters a
+    missing schema. See ``specs/ml-automl.md §8A.2`` and
+    ``specs/kailash-core-ml-integration.md §4`` for the migration
+    framework contract.
+    """
 
 
 class WorkflowNodeMLContextError(MLError):
