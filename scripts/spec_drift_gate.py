@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Literal
 
-VERSION = "1.0.0-s2"
+VERSION = "1.0.0-s3"
 
 DEFAULT_MANIFEST_PATH = Path(".spec-drift-gate.toml")
 
@@ -69,6 +69,10 @@ class ManifestNotFoundError(SpecDriftGateError):
 
 class ManifestSchemaError(SpecDriftGateError):
     """Manifest fails schema validation. The message names the bad field."""
+
+
+class BaselineParseError(SpecDriftGateError):
+    """``.spec-drift-baseline.jsonl`` is malformed JSON or missing required fields."""
 
 
 # ---------------------------------------------------------------------------
@@ -1184,6 +1188,377 @@ def _save_cache(cache_path: Path, entries: Iterable[CacheEntry]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Baseline (SDG-301). Spec § 5.1 entry schema; § 5.2 lifecycle states.
+#
+# JSONL-on-disk, one entry per line, sorted by ``(spec, line, finding,
+# symbol)`` so PR diffs are minimal. Identity for diff classification is
+# ``(spec, finding, symbol, kind)`` — line is informational only and may
+# shift across spec edits without invalidating the entry.
+#
+# ``origin`` field is REQUIRED to refuse untracked drift (§ 5.4 D4
+# mitigation). ``ageout`` defaults to ``added + DEFAULT_AGEOUT_DAYS``.
+# ---------------------------------------------------------------------------
+
+from datetime import date, datetime, timedelta
+
+DEFAULT_AGEOUT_DAYS = 90
+DEFAULT_BASELINE_PATH = Path(".spec-drift-baseline.jsonl")
+DEFAULT_RESOLVED_PATH = Path(".spec-drift-resolved.jsonl")
+ORIGIN_TOKEN_RE = re.compile(r"^(F-E\d+-\d+|#\d+(?:-[\w-]+)?|gh-\d+|PR-\d+)$")
+
+
+@dataclass(frozen=True)
+class BaselineEntry:
+    spec: str
+    line: int
+    finding: str
+    symbol: str
+    kind: str
+    origin: str
+    added: date
+    ageout: date
+
+    def identity(self) -> tuple[str, str, str, str]:
+        """Stable identity for diff classification (line is excluded)."""
+        return (self.spec, self.finding, self.symbol, self.kind)
+
+    def sort_key(self) -> tuple[str, int, str, str]:
+        return (self.spec, self.line, self.finding, self.symbol)
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "spec": self.spec,
+                "line": self.line,
+                "finding": self.finding,
+                "symbol": self.symbol,
+                "kind": self.kind,
+                "origin": self.origin,
+                "added": self.added.isoformat(),
+                "ageout": self.ageout.isoformat(),
+            },
+            sort_keys=True,
+        )
+
+    @classmethod
+    def from_finding(
+        cls,
+        finding: Finding,
+        *,
+        origin: str,
+        added: date | None = None,
+        ageout_days: int = DEFAULT_AGEOUT_DAYS,
+    ) -> BaselineEntry:
+        d_added = added or date.today()
+        d_ageout = d_added + timedelta(days=ageout_days)
+        return cls(
+            spec=finding.spec_path,
+            line=finding.line,
+            finding=finding.fr_code,
+            symbol=finding.symbol,
+            kind=finding.kind,
+            origin=origin,
+            added=d_added,
+            ageout=d_ageout,
+        )
+
+
+REQUIRED_BASELINE_FIELDS: tuple[str, ...] = (
+    "spec",
+    "line",
+    "finding",
+    "symbol",
+    "kind",
+    "origin",
+    "added",
+    "ageout",
+)
+
+
+def _parse_iso_date(value: str, field: str, lineno: int) -> date:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise BaselineParseError(
+            f"line {lineno}: field {field!r} not ISO YYYY-MM-DD: {value!r}"
+        ) from exc
+
+
+def _validate_origin(value: str, lineno: int) -> str:
+    """Origin MUST be a recognised citation token (§ 5.1 + § 5.4 D4).
+
+    Free-form text is BLOCKED so the baseline cannot accumulate untracked
+    entries. Recognised forms: ``F-E2-NN`` (audit finding ID), ``#NNN`` /
+    ``#NNN-discovery`` (PR or issue with optional discovery suffix),
+    ``gh-NNN`` (GitHub issue), ``PR-NNN`` (cross-repo PR).
+    """
+    if not isinstance(value, str) or not ORIGIN_TOKEN_RE.match(value):
+        raise BaselineParseError(
+            f"line {lineno}: origin must match /F-E\\d+-\\d+|#\\d+(?:-...)?|gh-\\d+|"
+            f"PR-\\d+/, got {value!r}"
+        )
+    return value
+
+
+def read_baseline(path: Path) -> list[BaselineEntry]:
+    """Parse ``.spec-drift-baseline.jsonl`` into a sorted list of entries.
+
+    Raises BaselineParseError on malformed JSON or missing required fields
+    (spec § 6.1). Empty file ⇒ empty list. Missing file ⇒ empty list (caller
+    decides whether to treat absence as error).
+    """
+    if not path.exists():
+        return []
+    entries: list[BaselineEntry] = []
+    text = path.read_text(encoding="utf-8")
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise BaselineParseError(f"line {lineno}: invalid JSON: {exc.msg}") from exc
+        if not isinstance(obj, dict):
+            raise BaselineParseError(
+                f"line {lineno}: expected object, got {type(obj).__name__}"
+            )
+        missing = [f for f in REQUIRED_BASELINE_FIELDS if f not in obj]
+        if missing:
+            raise BaselineParseError(
+                f"line {lineno}: missing required fields {missing}"
+            )
+        try:
+            line_no = int(obj["line"])
+        except (TypeError, ValueError) as exc:
+            raise BaselineParseError(
+                f"line {lineno}: field 'line' not int: {obj['line']!r}"
+            ) from exc
+        entries.append(
+            BaselineEntry(
+                spec=str(obj["spec"]),
+                line=line_no,
+                finding=str(obj["finding"]),
+                symbol=str(obj["symbol"]),
+                kind=str(obj["kind"]),
+                origin=_validate_origin(obj["origin"], lineno),
+                added=_parse_iso_date(obj["added"], "added", lineno),
+                ageout=_parse_iso_date(obj["ageout"], "ageout", lineno),
+            )
+        )
+    entries.sort(key=BaselineEntry.sort_key)
+    return entries
+
+
+def write_baseline(entries: Iterable[BaselineEntry], path: Path) -> None:
+    """Write entries to JSONL, sorted, trailing newline.
+
+    Sort is deterministic across runs so PR diffs are minimal — the
+    invariant the spec § 5.1 calls out.
+    """
+    rows = sorted(entries, key=BaselineEntry.sort_key)
+    body = "\n".join(e.to_json() for e in rows)
+    path.write_text(body + "\n" if rows else "", encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class DiffResult:
+    """Total classification of today's findings + baseline entries.
+
+    Every today-finding lands in exactly one of ``new`` / ``pre_existing``;
+    every baseline entry lands in exactly one of ``pre_existing`` / ``resolved``
+    / ``expired`` / ``expired_2x`` (the WARN/FAIL ageout buckets).
+
+    Note: ``pre_existing`` is reported on BOTH sides — the today-finding (so
+    it can be silenced) AND the baseline entry (so the entry's age can be
+    inspected).
+    """
+
+    new: list[Finding]
+    pre_existing: list[Finding]
+    resolved: list[BaselineEntry]
+    expired: list[BaselineEntry]
+    expired_2x: list[BaselineEntry]
+
+
+def diff_findings(
+    today: Iterable[Finding],
+    baseline: Iterable[BaselineEntry],
+    *,
+    today_date: date | None = None,
+    ageout_days: int = DEFAULT_AGEOUT_DAYS,
+) -> DiffResult:
+    """Classify today's findings vs baseline entries (spec § 5.2).
+
+    Identity match is ``(spec, finding, symbol, kind)`` — line excluded so
+    spec-edit line shifts don't invalidate baseline entries.
+    """
+    today_list = list(today)
+    baseline_list = list(baseline)
+    base_index: dict[tuple[str, str, str, str], BaselineEntry] = {
+        b.identity(): b for b in baseline_list
+    }
+    today_keys = {(f.spec_path, f.fr_code, f.symbol, f.kind) for f in today_list}
+
+    new_findings: list[Finding] = []
+    pre_existing: list[Finding] = []
+    for f in today_list:
+        key = (f.spec_path, f.fr_code, f.symbol, f.kind)
+        if key in base_index:
+            pre_existing.append(f)
+        else:
+            new_findings.append(f)
+
+    today_iso = today_date or date.today()
+    resolved: list[BaselineEntry] = []
+    expired: list[BaselineEntry] = []
+    expired_2x: list[BaselineEntry] = []
+    for b in baseline_list:
+        if b.identity() not in today_keys:
+            resolved.append(b)
+            continue
+        age_days = (today_iso - b.added).days
+        if age_days >= 2 * ageout_days:
+            expired_2x.append(b)
+        elif age_days >= ageout_days:
+            expired.append(b)
+
+    return DiffResult(
+        new=sorted(new_findings, key=Finding.sort_key),
+        pre_existing=sorted(pre_existing, key=Finding.sort_key),
+        resolved=sorted(resolved, key=BaselineEntry.sort_key),
+        expired=sorted(expired, key=BaselineEntry.sort_key),
+        expired_2x=sorted(expired_2x, key=BaselineEntry.sort_key),
+    )
+
+
+def ageout_state(
+    entry: BaselineEntry,
+    *,
+    today: date | None = None,
+    ageout_days: int = DEFAULT_AGEOUT_DAYS,
+) -> Literal["fresh", "expired", "expired_2x"]:
+    """Classify a baseline entry by age (spec § 5.4)."""
+    today_iso = today or date.today()
+    age = (today_iso - entry.added).days
+    if age >= 2 * ageout_days:
+        return "expired_2x"
+    if age >= ageout_days:
+        return "expired"
+    return "fresh"
+
+
+def parse_filter(filter_expr: str | None) -> dict[str, str]:
+    """Parse ``--filter origin:F-E2-NN`` / ``spec:foo`` / ``finding:FR-4`` ...
+
+    Returns a dict of allowed predicates. Empty filter ⇒ empty dict
+    (matches everything). Multiple predicates can be ``,``-separated.
+    """
+    if not filter_expr:
+        return {}
+    out: dict[str, str] = {}
+    for part in filter_expr.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise SpecDriftGateError(
+                f"--filter: malformed predicate {part!r}; "
+                f"expected key:value (e.g., origin:F-E2-12)"
+            )
+        key, _, value = part.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if key not in {"origin", "spec", "finding", "symbol"}:
+            raise SpecDriftGateError(
+                f"--filter: unknown key {key!r}; "
+                f"allowed: origin / spec / finding / symbol"
+            )
+        out[key] = value
+    return out
+
+
+def apply_filter(
+    entries: Iterable[BaselineEntry], predicates: dict[str, str]
+) -> list[BaselineEntry]:
+    if not predicates:
+        return list(entries)
+    matched: list[BaselineEntry] = []
+    for b in entries:
+        if predicates.get("origin") and b.origin != predicates["origin"]:
+            continue
+        if predicates.get("spec") and b.spec != predicates["spec"]:
+            continue
+        if predicates.get("finding") and b.finding != predicates["finding"]:
+            continue
+        if predicates.get("symbol") and b.symbol != predicates["symbol"]:
+            continue
+        matched.append(b)
+    return matched
+
+
+def archive_resolved(
+    entries: Iterable[BaselineEntry],
+    archive_path: Path,
+    *,
+    resolved_sha: str,
+    resolved_at: date | None = None,
+) -> int:
+    """Append resolved baseline entries to the audit-trail JSONL.
+
+    Each archive line carries the original baseline-entry fields PLUS
+    ``resolved_sha`` + ``resolved_at`` (spec § 5.3 invariant 3 — every
+    archived entry cites the resolving commit). Append-only — entries
+    already in the archive are kept; resolved-side entries are appended.
+    """
+    resolved_iso = (resolved_at or date.today()).isoformat()
+    rows = list(entries)
+    if not rows:
+        return 0
+    with archive_path.open("a", encoding="utf-8") as fh:
+        for b in sorted(rows, key=BaselineEntry.sort_key):
+            payload = {
+                "spec": b.spec,
+                "line": b.line,
+                "finding": b.finding,
+                "symbol": b.symbol,
+                "kind": b.kind,
+                "origin": b.origin,
+                "added": b.added.isoformat(),
+                "ageout": b.ageout.isoformat(),
+                "resolved_sha": resolved_sha,
+                "resolved_at": resolved_iso,
+            }
+            fh.write(json.dumps(payload, sort_keys=True) + "\n")
+    return len(rows)
+
+
+def _git_head_sha() -> str:
+    """Read the current commit SHA via ``git rev-parse HEAD``.
+
+    Used when ``--refresh-baseline`` is invoked without an explicit
+    ``--resolved-by-sha``. Returns ``"unknown"`` if git is unavailable
+    or the working tree is not a git repo — the caller's error path
+    surfaces a clear message before that fallback ships into the
+    archive.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return "unknown"
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip() or "unknown"
+
+
+# ---------------------------------------------------------------------------
 # Findings.
 # ---------------------------------------------------------------------------
 
@@ -2028,15 +2403,78 @@ def _sweep_b1_getattr_resolution(
 
 
 # ---------------------------------------------------------------------------
-# Output formatting (S1: human format only).
+# Output formatting (SDG-302). ADR-6 fix-hint format: every FAIL finding
+# carries a one-line ``→ fix: (a) ..., OR (b) ..., OR (c) ...`` triad
+# (parallel structure, no truncation — invariant 1). The per-FR catalog
+# below is the single source of fix-hint text; emitters dispatch through
+# ``fix_hint_for(finding)`` so JSON / GitHub / human variants stay aligned.
 # ---------------------------------------------------------------------------
 
 
-FIX_HINT_TEMPLATE = (
-    "  → fix: (a) define {symbol} in source, "
-    "OR (b) delete the assertion, "
+FIX_HINT_CATALOG: dict[str, str] = {
+    "FR-1": (
+        "→ fix: (a) define {symbol} class in the source tree, "
+        "OR (b) correct the cite, "
+        "OR (c) move under `## Deferred to M2` per `rules/specs-authority.md` § 6"
+    ),
+    "FR-2": (
+        "→ fix: (a) implement {symbol} method, "
+        "OR (b) correct the cite, "
+        "OR (c) move under `## Deferred to M2`"
+    ),
+    "FR-3": (
+        "→ fix: (a) apply @{symbol} to the asserted call sites, "
+        "OR (b) correct the count phrase, "
+        "OR (c) move under `## Deferred to M2`"
+    ),
+    "FR-4": (
+        "→ fix: (a) define {symbol} class in the errors module + add eager "
+        "re-export per `rules/orphan-detection.md` MUST 6, "
+        "OR (b) delete the assertion, "
+        "OR (c) move under `## Deferred to M2`"
+    ),
+    "FR-5": (
+        "→ fix: (a) declare {symbol} as an AnnAssign field on the dataclass, "
+        "OR (b) correct the cite, "
+        "OR (c) move under `## Deferred to M2`"
+    ),
+    "FR-6": (
+        '→ fix: (a) add `"{symbol}"` to the package\'s `__all__`, '
+        "OR (b) drop the `in __all__` claim, "
+        "OR (c) move under `## Deferred to M2`"
+    ),
+    "FR-7": (
+        "→ fix: (a) create file at {symbol} per `rules/facade-manager-detection.md` "
+        "MUST 1, "
+        "OR (b) correct the path, "
+        "OR (c) mark as Wave 6 follow-up under `## Deferred to M2`"
+    ),
+    "FR-8": (
+        "→ fix: (a) drop the `{symbol}` workspace reference (specs are "
+        "pristine), "
+        "OR (b) prefix with a legitimate citation marker (`Origin:` / `See` / "
+        "`Per`), "
+        "OR (c) move under `## Cross-References`"
+    ),
+    "B1": (
+        "→ fix: (a) align the spec assertion with the actual `__getattr__` "
+        "resolution for {symbol}, "
+        "OR (b) flip the source-side `__getattr__` map, "
+        "OR (c) update the spec to the canonical module path"
+    ),
+}
+
+FIX_HINT_FALLBACK = (
+    "→ fix: (a) implement {symbol} in source, "
+    "OR (b) correct the cite, "
     "OR (c) move under `## Deferred to M2`"
 )
+
+
+def fix_hint_for(finding: Finding) -> str:
+    """Return the ADR-6 fix-hint string for a finding (no leading indent)."""
+    template = FIX_HINT_CATALOG.get(finding.fr_code, FIX_HINT_FALLBACK)
+    return template.format(symbol=finding.symbol)
 
 
 def _emit_human(
@@ -2044,6 +2482,8 @@ def _emit_human(
     *,
     spec_paths: list[Path],
     sections_by_spec: dict[str, list[Section]],
+    suppressed_count: int = 0,
+    expired_warns: list[BaselineEntry] | None = None,
 ) -> int:
     by_spec: dict[str, list[Finding]] = {}
     for f in findings:
@@ -2063,7 +2503,7 @@ def _emit_human(
                     f"{f.symbol} ({f.kind}) — {f.message}"
                 )
                 if f.level == "FAIL":
-                    print(FIX_HINT_TEMPLATE.format(symbol=f.symbol))
+                    print(f"  {fix_hint_for(f)}")
         else:
             print(f"PASS {sp} (0 findings across {len(scanned)} scanned sections)")
         if scanned:
@@ -2075,8 +2515,103 @@ def _emit_human(
                 f"## Errors, ## Test Contract"
             )
 
+    if suppressed_count:
+        print(
+            f"INFO baseline grace: {suppressed_count} pre-existing finding(s) "
+            f"silenced (run with --no-baseline to surface)"
+        )
+    if expired_warns:
+        for b in expired_warns:
+            print(
+                f"WARN baseline expired: {b.spec}:{b.line} {b.finding} "
+                f"{b.symbol} ({b.kind}) past ageout {b.ageout.isoformat()} "
+                f"(origin {b.origin}); resolve or extend justification"
+            )
+
     # Exit 1 only when at least one FAIL-level finding is present. WARN-only
-    # output (e.g., B1 ``__getattr__`` divergences) returns 0 per Q9.3.
+    # output (e.g., B1 ``__getattr__`` divergences, baseline ageout WARNs)
+    # returns 0 per Q9.3.
+    return 1 if any(f.level == "FAIL" for f in findings) else 0
+
+
+def _emit_json(
+    findings: list[Finding],
+    *,
+    suppressed_count: int = 0,
+    expired_warns: list[BaselineEntry] | None = None,
+) -> int:
+    """ADR-6 JSON emitter: array of finding objects + meta block.
+
+    Each finding object carries ``{spec, line, finding, symbol, kind,
+    severity, message, fix_hint}``. ``severity`` mirrors ``level`` (FAIL /
+    WARN). The top-level shape is ``{"meta": {...}, "findings": [...]}``
+    so JSON consumers can read both at once.
+    """
+    findings_out: list[dict] = []
+    for f in findings:
+        findings_out.append(
+            {
+                "spec": f.spec_path,
+                "line": f.line,
+                "finding": f.fr_code,
+                "symbol": f.symbol,
+                "kind": f.kind,
+                "severity": f.level,
+                "message": f.message,
+                "fix_hint": fix_hint_for(f) if f.level == "FAIL" else None,
+            }
+        )
+    expired_out = []
+    for b in expired_warns or []:
+        expired_out.append(
+            {
+                "spec": b.spec,
+                "line": b.line,
+                "finding": b.finding,
+                "symbol": b.symbol,
+                "kind": b.kind,
+                "origin": b.origin,
+                "added": b.added.isoformat(),
+                "ageout": b.ageout.isoformat(),
+            }
+        )
+    payload = {
+        "meta": {
+            "version": VERSION,
+            "suppressed_baseline_count": suppressed_count,
+            "expired_baseline_count": len(expired_out),
+        },
+        "findings": findings_out,
+        "expired_baseline": expired_out,
+    }
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 1 if any(f.level == "FAIL" for f in findings) else 0
+
+
+def _emit_github(
+    findings: list[Finding],
+    *,
+    expired_warns: list[BaselineEntry] | None = None,
+) -> int:
+    """GitHub Actions annotation format (``::error`` / ``::warning``)."""
+    for f in findings:
+        severity = "error" if f.level == "FAIL" else "warning"
+        # GitHub annotations cannot contain newlines; the fix-hint is appended
+        # to the message via " — " so it stays on one line.
+        msg = f"{f.fr_code}: {f.symbol} ({f.kind}) — {f.message}"
+        if f.level == "FAIL":
+            msg = f"{msg} | {fix_hint_for(f)}"
+        # GitHub annotation strings escape commas / newlines — replace ``\n``
+        # with ``%0A`` so multi-line messages still render.
+        msg = msg.replace("\n", "%0A").replace(",", "%2C")
+        print(f"::{severity} file={f.spec_path},line={f.line}::{msg}")
+    for b in expired_warns or []:
+        msg = (
+            f"baseline-expired: {b.finding} {b.symbol} ({b.kind}) past "
+            f"ageout {b.ageout.isoformat()} (origin {b.origin})"
+        )
+        msg = msg.replace("\n", "%0A").replace(",", "%2C")
+        print(f"::warning file={b.spec},line={b.line}::{msg}")
     return 1 if any(f.level == "FAIL" for f in findings) else 0
 
 
@@ -2092,11 +2627,39 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["human", "json", "github"],
         default="human",
     )
+    parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE_PATH)
     parser.add_argument(
-        "--baseline", type=Path, default=Path(".spec-drift-baseline.jsonl")
+        "--resolved-archive",
+        type=Path,
+        default=DEFAULT_RESOLVED_PATH,
+        help="Append-only audit trail of resolved baseline entries.",
     )
-    parser.add_argument("--refresh-baseline", action="store_true")
-    parser.add_argument("--filter", default=None)
+    parser.add_argument(
+        "--refresh-baseline",
+        action="store_true",
+        help=(
+            "Diff today's findings vs baseline, archive resolved entries to "
+            "--resolved-archive, rewrite the baseline without them. Does NOT "
+            "auto-add new findings."
+        ),
+    )
+    parser.add_argument(
+        "--resolved-by-sha",
+        default=None,
+        help=(
+            "Commit SHA citing the resolution; defaults to `git rev-parse "
+            "HEAD`. Used as `resolved_sha` in --resolved-archive entries."
+        ),
+    )
+    parser.add_argument(
+        "--filter",
+        default=None,
+        help=(
+            "Scope baseline operations to entries matching origin / spec / "
+            "finding (e.g., `--filter origin:F-E2-12`, `--filter spec:specs/"
+            "ml-automl.md`, `--filter finding:FR-4`)."
+        ),
+    )
     parser.add_argument("--no-baseline", action="store_true")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("spec_paths", nargs="*")
@@ -2148,26 +2711,118 @@ def main(argv: list[str] | None = None) -> int:
 
     all_findings.sort(key=Finding.sort_key)
 
+    # Filter predicates affect both --refresh-baseline scoping AND the
+    # in-progress baseline diff. Parse early so a malformed --filter aborts
+    # before any I/O.
+    try:
+        filter_predicates = parse_filter(args.filter)
+    except SpecDriftGateError as exc:
+        print(f"spec_drift_gate: {exc}", file=sys.stderr)
+        return 2
+
+    # --refresh-baseline (SDG-303). Run sweeps with grace bypassed, diff
+    # against baseline, archive resolved entries to --resolved-archive,
+    # rewrite baseline without them. NEW findings are NOT auto-added —
+    # operator runs sweep without --refresh-baseline + git-add to bless.
+    if args.refresh_baseline:
+        try:
+            baseline = read_baseline(args.baseline)
+        except BaselineParseError as exc:
+            print(f"spec_drift_gate: baseline: {exc}", file=sys.stderr)
+            return 2
+        if filter_predicates:
+            scoped_baseline = apply_filter(baseline, filter_predicates)
+            scoped_keys = {b.identity() for b in scoped_baseline}
+            untouched = [b for b in baseline if b.identity() not in scoped_keys]
+        else:
+            scoped_baseline = baseline
+            untouched = []
+        fail_findings = [f for f in all_findings if f.level == "FAIL"]
+        diff = diff_findings(fail_findings, scoped_baseline)
+        resolved_sha = args.resolved_by_sha or _git_head_sha()
+        archived = archive_resolved(
+            diff.resolved,
+            args.resolved_archive,
+            resolved_sha=resolved_sha,
+        )
+        # Keep the entries that are still present today, plus any untouched
+        # entries (when --filter narrows scope).
+        kept = [
+            b
+            for b in scoped_baseline
+            if b.identity() not in {r.identity() for r in diff.resolved}
+        ]
+        write_baseline(kept + untouched, args.baseline)
+        print(
+            f"refresh-baseline: archived {archived} resolved entries to "
+            f"{args.resolved_archive} (resolved_sha={resolved_sha}); baseline "
+            f"now has {len(kept) + len(untouched)} entries."
+        )
+        if diff.new:
+            print(
+                f"refresh-baseline: {len(diff.new)} NEW finding(s) NOT "
+                f"auto-added — review with `python scripts/spec_drift_gate.py "
+                f"--no-baseline` and `git add {args.baseline}` to bless."
+            )
+        return 0
+
+    # Baseline grace (FR-11). Pre-existing FAIL findings registered in the
+    # baseline are silenced; only NEW findings reach the emitters as FAIL.
+    # ``--no-baseline`` bypasses the diff entirely. WARN-level findings are
+    # never silenced (they are advisory, never gate exit code).
+    suppressed_count = 0
+    expired_warns: list[BaselineEntry] = []
+    if not args.no_baseline:
+        try:
+            baseline = read_baseline(args.baseline)
+        except BaselineParseError as exc:
+            print(f"spec_drift_gate: baseline: {exc}", file=sys.stderr)
+            return 2
+        if baseline:
+            fail_findings = [f for f in all_findings if f.level == "FAIL"]
+            other_findings = [f for f in all_findings if f.level != "FAIL"]
+            diff = diff_findings(fail_findings, baseline)
+            suppressed_count = len(diff.pre_existing)
+            expired_warns = list(diff.expired)
+            # 2× ageout entries are surfaced as fresh FAIL findings (force
+            # resolution per spec § 5.2). Reuse the baseline entry's metadata.
+            forced_fails: list[Finding] = []
+            for b in diff.expired_2x:
+                forced_fails.append(
+                    Finding(
+                        spec_path=b.spec,
+                        line=b.line,
+                        fr_code=b.finding,
+                        symbol=b.symbol,
+                        kind=b.kind,
+                        message=(
+                            f"baseline entry past 2× ageout "
+                            f"({b.ageout.isoformat()}) — force resolution"
+                        ),
+                        level="FAIL",
+                    )
+                )
+            all_findings = sorted(
+                diff.new + forced_fails + other_findings,
+                key=Finding.sort_key,
+            )
+
     if args.format == "human":
         return _emit_human(
             all_findings,
             spec_paths=spec_paths,
             sections_by_spec=sections_by_spec,
+            suppressed_count=suppressed_count,
+            expired_warns=expired_warns,
         )
     if args.format == "json":
-        # Minimal JSON output for S1; full schema in S3.
-        out = [f.__dict__ for f in all_findings]
-        print(json.dumps(out, indent=2, sort_keys=True))
-        return 1 if any(f.level == "FAIL" for f in all_findings) else 0
+        return _emit_json(
+            all_findings,
+            suppressed_count=suppressed_count,
+            expired_warns=expired_warns,
+        )
     if args.format == "github":
-        # Minimal GitHub Actions annotation for S1; full schema in S3.
-        for f in all_findings:
-            severity = "error" if f.level == "FAIL" else "warning"
-            print(
-                f"::{severity} file={f.spec_path},line={f.line}::"
-                f"{f.fr_code}: {f.message}"
-            )
-        return 1 if any(f.level == "FAIL" for f in all_findings) else 0
+        return _emit_github(all_findings, expired_warns=expired_warns)
 
     return 0
 
