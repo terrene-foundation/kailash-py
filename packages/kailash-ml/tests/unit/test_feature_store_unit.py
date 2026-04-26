@@ -17,7 +17,6 @@ from types import SimpleNamespace
 
 import polars as pl
 import pytest
-
 from kailash_ml.errors import TenantRequiredError
 from kailash_ml.features import FeatureField, FeatureSchema, FeatureStore
 from kailash_ml.features import store as _store_mod
@@ -134,8 +133,10 @@ async def test_get_features_requires_tenant_id() -> None:
 async def test_get_features_raises_import_error_when_binding_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When dataflow.ml_feature_source is not landed (W31 31b blocker),
-    the store MUST fail loudly with an actionable ImportError."""
+    """When ``ml_feature_source`` is not resolvable, the store MUST
+    fail loudly with an actionable ImportError citing the canonical
+    sibling spec ``specs/dataflow-ml-integration.md §1.1``.
+    """
     monkeypatch.setattr(
         _store_mod,
         "_import_ml_feature_source",
@@ -144,17 +145,20 @@ async def test_get_features_raises_import_error_when_binding_missing(
     fs = FeatureStore(SimpleNamespace(), default_tenant_id="acme")  # type: ignore[arg-type]
     with pytest.raises(ImportError) as ei:
         await fs.get_features(_mk_schema())
-    # Message MUST name the blocker so operators can trace the ticket.
+    # Message MUST name the binding AND cite the sibling spec so
+    # operators have a durable cross-reference (no workspace-history
+    # references per `rules/specs-authority.md` § 1).
     msg = str(ei.value)
     assert "ml_feature_source" in msg
-    assert "W31 31b" in msg
+    assert "dataflow-ml-integration.md" in msg
 
 
 def _raise_missing_binding():
     raise ImportError(
-        "dataflow.ml_feature_source is not available. kailash-ml 1.0.0 "
-        "FeatureStore.get_features requires DataFlow 2.1.0's polars binding "
-        "(tracked as W31 31b in specs/dataflow-ml-integration.md §1.1)."
+        "ml_feature_source is not available. kailash-ml 1.0+ "
+        "FeatureStore.get_features requires DataFlow 2.1.0's polars "
+        "binding — see specs/dataflow-ml-integration.md §1.1 for the "
+        "canonical contract."
     )
 
 

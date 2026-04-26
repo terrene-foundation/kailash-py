@@ -4,9 +4,9 @@
 
 Single source of truth for feature retrieval at training + serving time.
 Reads route through ``dataflow.ml_feature_source(feature_group)`` (specced
-in ``specs/dataflow-ml-integration.md §1.1``, delivered by W31 31b). This
-module BLOCKS silent fallback: when the DataFlow binding is absent, a
-descriptive :class:`ImportError` names W31 31b as the blocker per
+in ``specs/dataflow-ml-integration.md §1.1``). This module BLOCKS silent
+fallback: when the DataFlow binding is absent, a descriptive
+:class:`ImportError` cites the canonical sibling spec per
 ``rules/dependencies.md`` § "Exception: Optional Extras with Loud Failure".
 
 Per ``rules/facade-manager-detection.md``:
@@ -45,11 +45,10 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-
 from kailash_ml.errors import FeatureStoreError, TenantRequiredError
 from kailash_ml.features.cache_keys import (
     make_feature_cache_key,
@@ -156,8 +155,9 @@ class FeatureStore:
         :class:`~kailash_ml.errors.TenantRequiredError` per
         ``rules/tenant-isolation.md`` Rule 2.
 
-        Absent ``dataflow.ml_feature_source`` (W31 31b not landed) raises
-        :class:`ImportError` with an actionable message per
+        Absent ``dataflow.ml_feature_source`` raises :class:`ImportError`
+        with an actionable message that cites
+        ``specs/dataflow-ml-integration.md §1.1`` per
         ``rules/dependencies.md`` § "Exception: Optional Extras with Loud
         Failure".
         """
@@ -322,40 +322,63 @@ class FeatureStore:
 
 
 # ---------------------------------------------------------------------------
-# Deferred DataFlow binding — loud failure when W31 31b is not landed.
+# Deferred DataFlow binding — loud failure when ml_feature_source is not landed.
 # ---------------------------------------------------------------------------
 
 
 def _import_ml_feature_source() -> Any:
-    """Resolve ``dataflow.ml_feature_source`` at call time.
+    """Resolve ``ml_feature_source`` at call time.
 
     Per ``rules/dependencies.md`` § "Exception: Optional Extras with Loud
     Failure", a missing dependency MUST NOT silently degrade to ``None``.
-    The loud ImportError tells operators exactly which workstream is
-    blocking them so the ticket trail is discoverable.
+    The loud ImportError tells operators exactly which sibling spec
+    owns the binding so the cross-spec trail is discoverable.
 
-    Deferred import also means test code that mocks the binding at its
-    original module (``dataflow.ml_integration.ml_feature_source``) can
-    monkey-patch without the store having to be re-imported.
+    Three resolution paths, in priority order:
+
+    1. ``dataflow.ml_feature_source`` — top-level re-export, future
+       canonical home (kept for forward compatibility).
+    2. ``dataflow.ml.ml_feature_source`` — current canonical location
+       per ``specs/dataflow-ml-integration.md §1.1``; kailash-dataflow
+       2.1+ exports the helper from the ``dataflow.ml`` sub-package.
+    3. ``dataflow.ml_integration.ml_feature_source`` — legacy probe
+       kept for back-compat with downstream forks that placed the
+       binding at the older location.
+
+    Deferred import also means test code that monkey-patches the
+    binding at its original module can do so without the store having
+    to be re-imported.
     """
     try:
-        # Primary location per specs/dataflow-ml-integration.md §1.1
+        # Path 1: top-level re-export (forward-compatible canonical).
         from dataflow import ml_feature_source  # type: ignore[attr-defined]
 
         return ml_feature_source
     except (ImportError, AttributeError):
         pass
     try:
-        from dataflow.ml_integration import ml_feature_source  # type: ignore[import-not-found]
+        # Path 2: current canonical location (DataFlow 2.1+).
+        from dataflow.ml import ml_feature_source  # type: ignore[attr-defined]
+
+        return ml_feature_source
+    except (ImportError, AttributeError):
+        pass
+    try:
+        # Path 3: legacy back-compat probe.
+        from dataflow.ml_integration import (
+            ml_feature_source,  # type: ignore[import-not-found]
+        )
 
         return ml_feature_source
     except (ImportError, AttributeError) as exc:
-        # Loud actionable failure — name the blocking workstream.
+        # Loud actionable failure — cite the sibling spec, not workspace
+        # history. Per `rules/specs-authority.md` § 1 user-facing strings
+        # cite specs (durable cross-references), not ad-hoc workspace IDs.
         raise ImportError(
-            "dataflow.ml_feature_source is not available. kailash-ml 1.0.0 "
+            "ml_feature_source is not available. kailash-ml 1.0+ "
             "FeatureStore.get_features requires DataFlow 2.1.0's polars "
-            "binding (tracked as W31 31b in specs/dataflow-ml-integration.md "
-            "§1.1). Blocker: that shard has not landed yet. Upgrade "
-            "kailash-dataflow to a version that exports ml_feature_source, "
-            "or wire the binding into dataflow/ml_integration.py."
+            "binding — see specs/dataflow-ml-integration.md §1.1 for the "
+            "canonical contract. Upgrade kailash-dataflow to a version "
+            "that exports ml_feature_source from `dataflow.ml`, or wire "
+            "the binding into dataflow/ml_integration.py."
         ) from exc

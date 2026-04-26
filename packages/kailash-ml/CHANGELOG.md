@@ -1,5 +1,53 @@
 # kailash-ml Changelog
 
+## [1.4.1] — 2026-04-27 — W8 wave: FeatureStore wiring test + spec hygiene
+
+Bundles two Wave 6 follow-ups (W6-022 + W6-023) into one W8-wave
+patch release. Test-only addition + minor source/comment cleanups —
+no breaking changes, no public-API surface drift.
+
+### Added
+
+- **W6-022 Tier-2 wiring test** at
+  `packages/kailash-ml/tests/integration/test_feature_store_wiring.py`
+  — closes the `rules/facade-manager-detection.md` MUST 1 + MUST 2 gap
+  for the canonical 1.0+ `kailash_ml.features.FeatureStore`. Fifteen
+  test cases, one per § 10 conformance assertion in
+  `specs/ml-feature-store.md`, exercised against a real `DataFlow(...)`
+  instance backed by file-based SQLite (Tier 2 per `rules/testing.md`
+  — NO mocks). Imports through the `kailash_ml.features` facade per
+  Rule 1.
+
+### Changed
+
+- **W6-023** — stripped the `W31 31b` workspace-artifact reference
+  from `kailash_ml/features/store.py` (module docstring + class
+  docstring + comment) AND from the runtime `ImportError` message
+  raised by `_import_ml_feature_source` when the DataFlow polars
+  binding is absent. The new error message cites the canonical
+  sibling spec `specs/dataflow-ml-integration.md §1.1` per
+  `rules/specs-authority.md` § 1 (specs are durable cross-references;
+  workspace identifiers are not). Unit test
+  `tests/unit/test_feature_store_unit.py::test_get_features_raises_import_error_when_binding_missing`
+  updated to match the new assertion shape.
+- **`_import_ml_feature_source` resolution** — extended the deferred
+  binding resolver to also probe `dataflow.ml.ml_feature_source`
+  (the current canonical export location in DataFlow ≥ 2.1) in
+  addition to the legacy `dataflow.ml_integration.ml_feature_source`
+  fallback. The top-level `from dataflow import ml_feature_source`
+  remains the first-priority probe for forward compatibility. This
+  closes a wiring drift between the canonical FeatureStore surface
+  and the actual `dataflow.ml` binding location — `get_features` now
+  reaches the real polars binding under DataFlow 2.1+ instead of
+  raising the loud `ImportError` that masked downstream wiring.
+
+### Notes
+
+- **W6-021 (Tier-3 e2e for AutoML + FeatureStore)** is unblocked by
+  this release and queued as the next-session work — it
+  `depends_on: [W6-018, W6-022]` and could not land in parallel with
+  W6-022 (which it depends on).
+
 ## [1.4.0] — 2026-04-27 — W7 wave: AutoML migration discipline + canonical surface
 
 Bundles three Wave 6 follow-ups (W6-018 + W6-019 + W6-020) into one
