@@ -38,9 +38,9 @@ def test_trust_disabled_by_default():
 
     Covers the trust_executor half of the dormancy contract; the audit_store
     sibling has its own test in ``test_audit_store_wiring.py``.
-    ``_tenant_trust_manager`` is NOT an attribute on DataFlow (removed
-    2026-04-18 per rules/orphan-detection.md MUST 3) — see
-    ``test_trust_manager_wiring.py``.
+    ``_tenant_trust_manager`` is NOT an attribute on DataFlow (facade
+    removed 2026-04-18; class deleted 2026-04-27 per W6-006/F-B-05 per
+    rules/orphan-detection.md MUST 3) — see ``test_trust_manager_wiring.py``.
     """
     db = DataFlow("sqlite:///:memory:")
     try:

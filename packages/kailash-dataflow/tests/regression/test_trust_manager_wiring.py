@@ -1,25 +1,31 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Regression tests — ``TenantTrustManager`` facade wiring.
+"""Regression tests — ``TenantTrustManager`` orphan deletion.
 
-Per rules/facade-manager-detection.md MUST Rule 2, every manager-shape
-class exposed as a property on the framework's top-level class MUST have
-a Tier 2 test file named ``test_<lowercase_manager>_wiring.py``. This
-file covers ``TenantTrustManager`` (formerly ``db._tenant_trust_manager``).
-Split from the former monolithic ``test_phase_5_11_trust_wiring.py``
-(issue #499 Finding 8).
+Per ``rules/orphan-detection.md`` § 3 ("Removed = Deleted, Not Deprecated"),
+``TenantTrustManager`` and ``CrossTenantDelegation`` were removed entirely
+on 2026-04-27 (W6-006, finding F-B-05). The first stage of the deletion
+(2026-04-18) removed the ``db._tenant_trust_manager`` facade but left the
+class importable; the second stage (this PR) removes the class itself
+because no production call site ever materialised.
 
-Current contract (2026-04-18): ``_tenant_trust_manager`` was REMOVED from
-the DataFlow facade because no framework hot path invoked its methods
-(Phase 5.11-shaped orphan, per rules/orphan-detection.md MUST 3). The
-class remains importable at ``dataflow.trust.multi_tenant.TenantTrustManager``
-for standalone consumers, but is NOT a ``db.*`` facade.
+The tests below assert BOTH:
 
-When a production call site is wired in the future, the facade MUST be
-re-added IN THE SAME PR as the call site, and this file's assertions
-inverted (assert ``hasattr(db, "trust_manager")`` and exercise the wiring).
+1. The DataFlow facade does not expose ``_tenant_trust_manager``.
+2. The class is no longer importable from ``dataflow.trust`` or
+   ``dataflow.trust.multi_tenant``.
 
-Origin: Phase 5.11 orphan fix (2026-04-18) + issue #499 Finding 8.
+If a future PR resurrects either symbol without a production call site,
+both assertions fire loudly. If a production cross-tenant delegation
+requirement lands, design the new surface against the framework's hot
+path (express, query engine) in the SAME PR — do NOT restore the orphan
+from git history.
+
+See:
+    - rules/orphan-detection.md MUST 1, 3
+    - specs/dataflow-core.md § 21.2
+    - workspaces/issues-492-497/journal/0003-RISK-tenant-trust-manager-orphan.md
+    - workspaces/portfolio-spec-audit/04-validate/W5-B-findings.md (F-B-05)
 """
 
 import pytest
@@ -29,16 +35,10 @@ from dataflow import DataFlow
 pytestmark = pytest.mark.regression
 
 
-def test_tenant_trust_manager_not_attached_as_facade():
+def test_tenant_trust_manager_facade_absent():
     """Regression: ``_tenant_trust_manager`` was removed from the DataFlow
-    facade on 2026-04-18 because no framework hot path invoked its
-    methods (Phase 5.11-shaped orphan). When a production call site is
-    wired, the facade MUST be re-added in the SAME PR. Until then, this
-    test asserts the facade is absent so reintroducing it without a
-    call site fails loudly.
-
-    See rules/orphan-detection.md MUST 1+3, specs/dataflow-core.md § 21.2,
-    workspaces/issues-492-497/journal/0003-RISK-tenant-trust-manager-orphan.md.
+    facade on 2026-04-18 (Phase 5.11-shaped orphan). Re-adding it without
+    a production call site recreates the orphan.
     """
     db = DataFlow(
         "sqlite:///:memory:",
@@ -47,13 +47,37 @@ def test_tenant_trust_manager_not_attached_as_facade():
     )
     try:
         assert not hasattr(db, "_tenant_trust_manager"), (
-            "Re-adding _tenant_trust_manager without a production call site "
-            "recreates the Phase 5.11 orphan. Wire into features/express.py "
-            "in the SAME PR."
+            "Re-adding _tenant_trust_manager without a production call "
+            "site recreates the Phase 5.11 orphan. Wire into "
+            "features/express.py in the SAME PR."
         )
-        # The class itself remains importable for standalone consumer use.
-        from dataflow.trust.multi_tenant import TenantTrustManager
-
-        assert TenantTrustManager is not None
     finally:
         db.close()
+
+
+def test_tenant_trust_manager_class_deleted():
+    """Regression: the ``TenantTrustManager`` and ``CrossTenantDelegation``
+    classes were deleted entirely on 2026-04-27 (W6-006). Restoring them
+    without a production call site is BLOCKED per orphan-detection § 3.
+    """
+    # The submodule itself MUST be gone (deleted on 2026-04-27).
+    with pytest.raises(ImportError):
+        import dataflow.trust.multi_tenant  # noqa: F401
+
+    # The re-exports from dataflow.trust MUST be gone.
+    import dataflow.trust as trust_pkg
+
+    assert not hasattr(trust_pkg, "TenantTrustManager"), (
+        "TenantTrustManager was deleted on 2026-04-27 (W6-006). "
+        "Restoring it without a production call site recreates the orphan. "
+        "If you need cross-tenant delegation, design the surface against "
+        "features/express.py or the query engine in the SAME PR."
+    )
+    assert not hasattr(trust_pkg, "CrossTenantDelegation"), (
+        "CrossTenantDelegation was deleted on 2026-04-27 (W6-006). See "
+        "TenantTrustManager assertion above."
+    )
+
+    # Verify __all__ no longer advertises them.
+    assert "TenantTrustManager" not in trust_pkg.__all__
+    assert "CrossTenantDelegation" not in trust_pkg.__all__
