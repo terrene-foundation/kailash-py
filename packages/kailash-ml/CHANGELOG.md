@@ -1,5 +1,105 @@
 # kailash-ml Changelog
 
+## [1.4.0] — 2026-04-27 — W7 wave: AutoML migration discipline + canonical surface
+
+Bundles three Wave 6 follow-ups (W6-018 + W6-019 + W6-020) into one
+W7-wave release. The dominant change is the W6-020 schema-migration
+discipline for the AutoML audit table — the engine no longer emits
+`CREATE TABLE IF NOT EXISTS` inline at first use; operators MUST run a
+numbered migration ahead of every sweep.
+
+### Added
+
+- **Migration `0003_automl_trials_schema_alignment`** at
+  `kailash.tracking.migrations.0003_automl_trials_schema_alignment` —
+  brings persisted `_kml_automl_trials` schema up to the engine's
+  19-column runtime form. Idempotent + reversible (`force_downgrade=True`
+  required for rollback per `rules/schema-migration.md` Rule 7);
+  detects the 0002 placeholder shape via the `hyperparams` sentinel
+  column; refuses to drop a populated placeholder via
+  `PlaceholderTablePopulatedError`. Append-only — does NOT edit 0002
+  per Rule 4.
+- **`kailash.ml.errors.MigrationRequiredError`** — typed error raised by
+  engines that detect a required schema object is absent at first use.
+  Sibling of `MigrationFailedError` (which fires on a migration's own
+  apply failure) and `MigrationImportError` (which fires when a
+  migration module cannot be loaded). Re-exported through
+  `kailash_ml.errors` and `kailash_ml.MigrationRequiredError` per the
+  W33 6-group canonical **all** structure.
+- **W6-020 Tier-2 regression test** at
+  `packages/kailash-ml/tests/integration/test_kml_automl_trials_migration.py`
+  — covers fresh-DB → typed error path, post-migration write-then-read
+  path, idempotent re-apply, populated-placeholder rejection, and
+  `force_downgrade=True` rollback discipline. Real SQLite via
+  `kailash.db.connection.ConnectionManager` per `rules/testing.md` §
+  Tier 2.
+
+### Changed
+
+- **`AutoMLEngine._ensure_audit_ready`** now probes the audit table
+  via `_probe_trials_table` and raises typed `MigrationRequiredError`
+  when the canonical schema is absent, instead of emitting
+  `CREATE TABLE IF NOT EXISTS` inline. The probe is dialect-portable
+  (PostgreSQL / SQLite / MySQL) using `information_schema` or
+  `sqlite_master`, with a SELECT-against-sentinel fallback when the
+  dialect helper isn't reachable. The sentinel column `trial_number`
+  unambiguously distinguishes the canonical 19-column form from
+  migration 0002's seven-column placeholder.
+- **`kailash_ml.AutoMLEngine`** now resolves to the canonical surface
+  at `kailash_ml.automl.engine.AutoMLEngine` (W6-018). The legacy
+  `engines/automl_engine.py` import path is removed; downstream
+  callers using `from kailash_ml.engines.automl_engine import ...`
+  MUST migrate to `from kailash_ml.automl import AutoMLEngine`. The
+  Tier-1 identity test at
+  `packages/kailash-ml/tests/unit/test_automl_engine_canonical.py`
+  pins this contract going forward.
+- **`kailash_ml.automl.engine.AutoMLEngine` docstring** stripped the
+  stale `FeatureSchema` auto-derivation claim (W6-019) — the engine
+  has never auto-derived a `ParamSpec` list from a `FeatureSchema`;
+  callers always supply `space=` explicitly.
+
+### Removed
+
+- `_ensure_trials_table` helper from `automl/engine.py` — the inline
+  `CREATE TABLE IF NOT EXISTS` path is fully retired. Callers MUST
+  apply migration 0003 ahead of every sweep
+  (`rules/schema-migration.md` MUST Rule 1).
+- Legacy `kailash_ml/engines/automl_engine.py` module (W6-018).
+
+### Migration
+
+When upgrading from kailash-ml 1.3.x:
+
+1. Apply migration 0003 against your tracking DB:
+   ```python
+   from kailash.tracking.migrations._registry import get_registry
+   await get_registry().apply_pending(_MigrationConnAdapter(conn))
+   ```
+   `ExperimentTracker.create()` does this automatically on first open.
+2. Update any imports of `kailash_ml.engines.automl_engine.AutoMLEngine`
+   to `kailash_ml.automl.AutoMLEngine`.
+
+### Spec references
+
+- `specs/ml-automl.md` §8A.2 — first-use DDL discipline + Wave 6
+  numbered-migration mandate.
+- `specs/kailash-core-ml-integration.md` §4 — migration framework
+  contract.
+- `workspaces/portfolio-spec-audit/todos/active/W6-020-numbered-migration-kml-automl-trials.md`
+- `workspaces/portfolio-spec-audit/todos/active/W6-018-flip-getattr-canonical-automl.md`
+- `workspaces/portfolio-spec-audit/todos/active/W6-019-strip-stale-feature-schema-docstring.md`
+
+### Rules cited
+
+- `rules/schema-migration.md` MUST Rule 1 (numbered migrations only),
+  Rule 3 (reversible), Rule 4 (append-only — 0002 untouched), Rule 5
+  (real PG + SQLite test), Rule 7 (force_downgrade=True for
+  destructive rollback).
+- `rules/dataflow-identifier-safety.md` MUST Rule 1 (every dynamic
+  DDL identifier through `quote_identifier`).
+- `rules/zero-tolerance.md` Rule 2 (no stubs / fake DDL).
+- `rules/testing.md` § Tier 2 (real DB, no mocks for migration tests).
+
 ## [1.3.0] — 2026-04-27 — W6-016: shared trajectory schema (F-E1-50)
 
 Closes W5-E1 finding F-E1-50 (HIGH): the spec-mandated shared trajectory
