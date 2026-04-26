@@ -237,6 +237,10 @@ class TenantRequiredError(DataFlowMLIntegrationError):
     tenant_id. Per rules/tenant-isolation.md §2."""
 ```
 
+**Canonical name:** `TenantRequiredError` (since kailash-dataflow 2.3.2 — closes F-B-23). The class lives at `dataflow.ml._errors.TenantRequiredError` and is re-exported from `dataflow.ml` namespace; it is **distinct** from the sibling-but-unrelated `dataflow.core.multi_tenancy.TenantRequiredError` (Express-path tenant guard).
+
+**Deprecated alias:** `MLTenantRequiredError` resolves to `TenantRequiredError` via a module-level `__getattr__` on both `dataflow.ml._errors` and `dataflow.ml`; the alias emits a `DeprecationWarning` per access. Slated for removal in **kailash-dataflow v3.0**. Callers SHOULD migrate to the canonical name within the v2.x → v3.0 window. The alias is intentionally absent from `__all__` so star-imports pick up only the canonical name.
+
 The errors are DataFlow-side — the ML-side sees them wrapped via `FeatureStoreError(MLError)` when thrown through the `FeatureStore` API (per `kailash-core-ml-integration-draft.md` §3 hierarchy).
 
 ---

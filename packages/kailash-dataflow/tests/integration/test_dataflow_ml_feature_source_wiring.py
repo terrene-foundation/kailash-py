@@ -10,7 +10,7 @@ DataFlow instance and asserts the externally-observable contract:
 * ``materialize`` on a FeatureGroup implementation returns a
   ``polars.LazyFrame``.
 * Multi-tenant groups without ``tenant_id`` raise
-  ``MLTenantRequiredError`` with the exact message shape the
+  ``TenantRequiredError`` with the exact message shape the
   ``rules/tenant-isolation.md`` § 2 contract mandates.
 * Write-then-read persistence is verified end-to-end: rows written to
   the DataFlow table through ``db.express`` are retrievable through a
@@ -33,7 +33,7 @@ import pytest
 
 from dataflow import DataFlow
 from dataflow.ml import (
-    MLTenantRequiredError,
+    TenantRequiredError,
     ml_feature_source,
     transform,
 )
@@ -141,7 +141,7 @@ def single_tenant_db(tmp_path: Path):
 
 @pytest.fixture
 def multi_tenant_db(tmp_path: Path):
-    """Build a multi-tenant DataFlow for MLTenantRequiredError coverage."""
+    """Build a multi-tenant DataFlow for TenantRequiredError coverage."""
     db_path = tmp_path / "ml_mt_source.sqlite"
     df = DataFlow(f"sqlite:///{db_path}", auto_migrate=True, multi_tenant=True)
     df._ensure_connected()
@@ -224,7 +224,7 @@ def test_ml_feature_source_multi_tenant_without_tenant_id_raises(
 
     group = DataFlowTableFeatureGroup(db=db, model_name="SomeModel", multi_tenant=True)
 
-    with pytest.raises(MLTenantRequiredError, match="tenant_id is required"):
+    with pytest.raises(TenantRequiredError, match="tenant_id is required"):
         ml_feature_source(group)  # no tenant_id
 
 

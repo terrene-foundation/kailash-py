@@ -38,7 +38,7 @@ class TrainingContext:
         tenant_id: Tenant that owns the training data. ``None`` is
             permitted ONLY for single-tenant ``DataFlow`` instances;
             multi-tenant feature groups raise
-            :class:`MLTenantRequiredError` upstream before a
+            :class:`TenantRequiredError` upstream before a
             ``TrainingContext`` can be constructed with ``None``.
         dataset_hash: The ``dataflow.ml.hash()`` output for the training
             set. MUST start with ``"sha256:"`` and be 64 hex chars.

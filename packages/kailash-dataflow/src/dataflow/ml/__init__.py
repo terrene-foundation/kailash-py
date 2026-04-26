@@ -31,6 +31,8 @@ same canonicalized polars Arrow IPC stream across languages.
 
 from __future__ import annotations
 
+import warnings
+
 from dataflow.ml._classify import _kml_classify_actions
 from dataflow.ml._context import TrainingContext
 from dataflow.ml._errors import (
@@ -38,7 +40,7 @@ from dataflow.ml._errors import (
     DataFlowTransformError,
     FeatureSourceError,
     LineageHashError,
-    MLTenantRequiredError,
+    TenantRequiredError,
 )
 from dataflow.ml._events import (
     ML_TRAIN_END_EVENT,
@@ -74,5 +76,30 @@ __all__ = [
     "FeatureSourceError",
     "DataFlowTransformError",
     "LineageHashError",
-    "MLTenantRequiredError",
+    "TenantRequiredError",
+    # NOTE: ``MLTenantRequiredError`` is an intentional deprecated alias
+    # resolved through ``__getattr__`` below; it is intentionally absent
+    # from ``__all__`` so star-imports pick up only the canonical name,
+    # while ``from dataflow.ml import MLTenantRequiredError`` still works
+    # (with a DeprecationWarning) for the v2.x → v3.0 migration window.
 ]
+
+
+def __getattr__(name: str):
+    """Module-level ``__getattr__`` for deprecated aliases.
+
+    ``MLTenantRequiredError`` was renamed to :class:`TenantRequiredError`
+    in kailash-dataflow 2.3.2 (closes F-B-23) to match
+    ``specs/dataflow-ml-integration.md`` § 5. The old name resolves to
+    the new class with a one-shot ``DeprecationWarning`` per access. The
+    alias is slated for removal in kailash-dataflow v3.0.
+    """
+    if name == "MLTenantRequiredError":
+        warnings.warn(
+            "MLTenantRequiredError is deprecated; use TenantRequiredError. "
+            "Alias will be removed in kailash-dataflow v3.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return TenantRequiredError
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

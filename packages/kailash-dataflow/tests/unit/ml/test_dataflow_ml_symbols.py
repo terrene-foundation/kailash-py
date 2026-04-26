@@ -48,7 +48,7 @@ def test_public_api_symbols_present():
         "FeatureSourceError",
         "DataFlowTransformError",
         "LineageHashError",
-        "MLTenantRequiredError",
+        "TenantRequiredError",
     }
     missing = required - set(ml.__all__)
     assert not missing, f"dataflow.ml.__all__ missing symbols: {sorted(missing)}"
@@ -383,7 +383,7 @@ def test_error_hierarchy_all_inherit_dataflow_error():
         DataFlowTransformError,
         FeatureSourceError,
         LineageHashError,
-        MLTenantRequiredError,
+        TenantRequiredError,
     )
 
     for cls in (
@@ -391,7 +391,7 @@ def test_error_hierarchy_all_inherit_dataflow_error():
         FeatureSourceError,
         DataFlowTransformError,
         LineageHashError,
-        MLTenantRequiredError,
+        TenantRequiredError,
     ):
         assert issubclass(cls, DataFlowError), (
             f"{cls.__name__} must inherit from DataFlowError "
