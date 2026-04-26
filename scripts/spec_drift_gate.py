@@ -25,33 +25,21 @@ import hashlib
 import json
 import re
 import sys
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Literal
 
-VERSION = "1.0.0-s1"
+VERSION = "1.0.0-s2"
+
+DEFAULT_MANIFEST_PATH = Path(".spec-drift-gate.toml")
 
 # ---------------------------------------------------------------------------
-# Default source-root and errors-module configuration.
-# S2 (SDG-201) replaces these constants with manifest-driven values
-# (``.spec-drift-gate.toml`` per spec § 2.4).
+# Source-root and errors-module configuration is manifest-driven from
+# ``.spec-drift-gate.toml`` (per spec § 2.4). The S1 in-line defaults were
+# replaced by ``Manifest.load()`` in S2; missing manifest raises
+# ``ManifestNotFoundError`` rather than falling back implicitly.
 # ---------------------------------------------------------------------------
-
-DEFAULT_SOURCE_ROOTS: list[Path] = [
-    Path("src/kailash"),
-    Path("packages/kailash-ml/src/kailash_ml"),
-    Path("packages/kailash-dataflow/src/dataflow"),
-    Path("packages/kailash-nexus/src/nexus"),
-    Path("packages/kailash-kaizen/src/kaizen"),
-    Path("packages/kailash-pact/src/pact"),
-    Path("packages/kailash-mcp/src/mcp"),
-    Path("packages/kailash-align/src/kailash_align"),
-]
-
-DEFAULT_ERRORS_MODULES: list[Path] = [
-    Path("src/kailash/ml/errors.py"),
-    Path("src/kailash/errors.py"),
-]
 
 CACHE_PATH = Path(".spec-drift-gate-cache.json")
 CACHE_FORMAT_VERSION = "1"
@@ -73,6 +61,157 @@ class MarkerSyntaxError(SpecDriftGateError):
 
 class SweepRuntimeError(SpecDriftGateError):
     """An AST parse failure on a ``.py`` file in a source root."""
+
+
+class ManifestNotFoundError(SpecDriftGateError):
+    """``.spec-drift-gate.toml`` not present at the expected path."""
+
+
+class ManifestSchemaError(SpecDriftGateError):
+    """Manifest fails schema validation. The message names the bad field."""
+
+
+# ---------------------------------------------------------------------------
+# Manifest (SDG-201). Spec § 2.4 is canonical (supersedes the divergent ADR-5
+# example in ``02-requirements-and-adrs.md`` per redteam REQ-HIGH-2). The
+# parser refuses to run without the file (no implicit defaults) and validates
+# every path at parse time so typos surface before any sweep fires.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SourceRoot:
+    package: str
+    path: Path
+
+
+@dataclass(frozen=True)
+class ErrorsOverride:
+    package: str
+    path: Path
+
+
+@dataclass(frozen=True)
+class Exclusions:
+    test_specs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """Typed view of ``.spec-drift-gate.toml`` per spec § 2.4."""
+
+    version: str
+    spec_glob: str
+    source_roots: tuple[SourceRoot, ...]
+    errors_default: Path
+    errors_overrides: tuple[ErrorsOverride, ...]
+    exclusions: Exclusions
+
+    @classmethod
+    def load(cls, path: Path = DEFAULT_MANIFEST_PATH) -> "Manifest":
+        if not path.exists():
+            raise ManifestNotFoundError(
+                f"manifest not found at {path}; create one per "
+                f"specs/spec-drift-gate.md § 2.4"
+            )
+        try:
+            with path.open("rb") as fh:
+                raw = tomllib.load(fh)
+        except tomllib.TOMLDecodeError as exc:
+            raise ManifestSchemaError(f"{path}: malformed TOML: {exc}") from exc
+        return cls._from_raw(raw, path)
+
+    @classmethod
+    def _from_raw(cls, raw: dict[str, object], manifest_path: Path) -> "Manifest":
+        gate = raw.get("gate")
+        if not isinstance(gate, dict):
+            raise ManifestSchemaError(f"{manifest_path}: missing required [gate] table")
+        for required in ("version", "spec_glob"):
+            if required not in gate:
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [gate].{required} is required"
+                )
+
+        sr_raw = raw.get("source_roots")
+        if not isinstance(sr_raw, list) or not sr_raw:
+            raise ManifestSchemaError(
+                f"{manifest_path}: [[source_roots]] required (at least one entry)"
+            )
+        source_roots: list[SourceRoot] = []
+        for i, item in enumerate(sr_raw):
+            if not isinstance(item, dict):
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [[source_roots]][{i}] not a table"
+                )
+            if "package" not in item:
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [[source_roots]][{i}] missing 'package'"
+                )
+            if "path" not in item:
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [[source_roots]][{i}] missing 'path'"
+                )
+            p = Path(str(item["path"]))
+            if not p.exists():
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [[source_roots]][{i}] path does not "
+                    f"exist on disk: {p}"
+                )
+            source_roots.append(SourceRoot(package=str(item["package"]), path=p))
+
+        em_raw = raw.get("errors_modules")
+        if not isinstance(em_raw, dict) or "default" not in em_raw:
+            raise ManifestSchemaError(
+                f"{manifest_path}: [errors_modules].default is required"
+            )
+        errors_default = Path(str(em_raw["default"]))
+        if not errors_default.exists():
+            raise ManifestSchemaError(
+                f"{manifest_path}: [errors_modules].default path does not "
+                f"exist on disk: {errors_default}"
+            )
+        overrides_raw = em_raw.get("overrides") or []
+        if not isinstance(overrides_raw, list):
+            raise ManifestSchemaError(
+                f"{manifest_path}: [errors_modules].overrides must be an array"
+            )
+        overrides: list[ErrorsOverride] = []
+        for i, item in enumerate(overrides_raw):
+            if not isinstance(item, dict):
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [errors_modules].overrides[{i}] " f"not a table"
+                )
+            if "package" not in item:
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [errors_modules].overrides[{i}] "
+                    f"missing 'package'"
+                )
+            if "path" not in item:
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [errors_modules].overrides[{i}] "
+                    f"missing 'path'"
+                )
+            p = Path(str(item["path"]))
+            if not p.exists():
+                raise ManifestSchemaError(
+                    f"{manifest_path}: [errors_modules].overrides[{i}] path "
+                    f"does not exist on disk: {p}"
+                )
+            overrides.append(ErrorsOverride(package=str(item["package"]), path=p))
+
+        exclusions_raw = raw.get("exclusions") or {}
+        if not isinstance(exclusions_raw, dict):
+            raise ManifestSchemaError(f"{manifest_path}: [exclusions] must be a table")
+        test_specs = tuple(str(x) for x in (exclusions_raw.get("test_specs") or []))
+
+        return cls(
+            version=str(gate["version"]),
+            spec_glob=str(gate["spec_glob"]),
+            source_roots=tuple(source_roots),
+            errors_default=errors_default,
+            errors_overrides=tuple(overrides),
+            exclusions=Exclusions(test_specs=test_specs),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1179,23 +1318,28 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.version:
-        manifest_path = (
-            args.baseline.parent / ".spec-drift-gate.toml"
-            if args.baseline
-            else Path(".spec-drift-gate.toml")
-        )
-        print(f"spec_drift_gate v{VERSION} (manifest: {manifest_path})")
+        print(f"spec_drift_gate v{VERSION} (manifest: {DEFAULT_MANIFEST_PATH})")
         return 0
 
-    # Resolve target specs.
+    # Manifest is the single source of source-root + errors-module config
+    # (spec § 2.4). Missing or malformed manifest is a typed setup error —
+    # propagated to the caller as exit 2 (distinct from exit 1 = findings).
+    try:
+        manifest = Manifest.load()
+    except (ManifestNotFoundError, ManifestSchemaError) as exc:
+        print(f"spec_drift_gate: {exc}", file=sys.stderr)
+        return 2
+
+    # Resolve target specs from manifest.spec_glob unless overridden by CLI.
     if args.spec_paths:
         spec_paths = [Path(p) for p in args.spec_paths]
     else:
-        spec_paths = sorted(Path("specs").glob("**/*.md"))
+        spec_paths = sorted(Path().glob(manifest.spec_glob))
 
     cache = SymbolIndex.build(
-        DEFAULT_SOURCE_ROOTS,
-        errors_modules=[ErrorsModule(p) for p in DEFAULT_ERRORS_MODULES],
+        [sr.path for sr in manifest.source_roots],
+        errors_modules=[ErrorsModule(manifest.errors_default)]
+        + [ErrorsModule(o.path) for o in manifest.errors_overrides],
     )
 
     all_findings: list[Finding] = []

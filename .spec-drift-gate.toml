@@ -1,0 +1,51 @@
+# Spec Drift Gate manifest — canonical schema per specs/spec-drift-gate.md § 2.4.
+#
+# The gate refuses to run without this file (no implicit defaults). All paths
+# below are validated to exist on disk at parse time so typos surface
+# immediately, not at sweep time.
+
+[gate]
+version = "1.0"
+spec_glob = "specs/**/*.md"
+
+[[source_roots]]
+package = "kailash-core"
+path = "src/kailash"
+
+[[source_roots]]
+package = "kailash-ml"
+path = "packages/kailash-ml/src/kailash_ml"
+
+[[source_roots]]
+package = "kailash-dataflow"
+path = "packages/kailash-dataflow/src/dataflow"
+
+[[source_roots]]
+package = "kailash-nexus"
+path = "packages/kailash-nexus/src/nexus"
+
+[[source_roots]]
+package = "kailash-kaizen"
+path = "packages/kailash-kaizen/src/kaizen"
+
+[[source_roots]]
+package = "kailash-pact"
+path = "packages/kailash-pact/src/pact"
+
+[[source_roots]]
+package = "kailash-mcp"
+path = "packages/kailash-mcp/src/kailash_mcp"
+
+[[source_roots]]
+package = "kailash-align"
+path = "packages/kailash-align/src/kailash_align"
+
+[errors_modules]
+default = "src/kailash/ml/errors.py"
+overrides = [
+  { package = "kailash-mcp", path = "packages/kailash-mcp/src/kailash_mcp/errors.py" },
+  { package = "kailash-nexus", path = "packages/kailash-nexus/src/nexus/errors.py" },
+]
+
+[exclusions]
+test_specs = ["tests/fixtures/spec_drift_gate/*.md"]
