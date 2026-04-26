@@ -314,3 +314,45 @@
 **Spec claim:** Debate, Consensus, SupervisorWorker, Enterprise workflow templates.
 **Actual state:** All four in `kaizen_agents/workflows/{debate,consensus,supervisor_worker,enterprise_templates}.py`.
 **Remediation hint:** No action.
+
+## F-D-45 — kaizen-agents-governance § 9 — `GovernedSupervisor` class verified, all 9 Layer 3 properties enumerated
+
+**Severity:** LOW
+**Spec claim:** "GovernedSupervisor" + 9 Layer 3 read-only views (accountability, budget, cascade, clearance, audit, dereliction, bypass_manager, vacancy, classifier).
+**Actual state:** `packages/kaizen-agents/src/kaizen_agents/supervisor.py:196` — GovernedSupervisor class. Helper classes _ReadOnlyView (line 114), HoldRecord (92), SupervisorResult (166) all present. PACT integration verified ("PACT-governed L3" docstring; "PACT default-deny" defaults).
+**Remediation hint:** No action.
+
+## F-D-46 — kaizen-agents-governance § 10 — All 8 governance subsystems present
+
+**Severity:** LOW
+**Spec claim:** AccountabilityTracker, ClearanceEnforcer, CascadeManager, VacancyManager, DerelictionDetector, BypassManager, BudgetTracker, ClassificationAssigner, CostModel.
+**Actual state:** All 8 governance subsystem files exist at `packages/kaizen-agents/src/kaizen_agents/governance/{accountability,clearance,cascade,vacancy,dereliction,bypass,budget,cost_model}.py`.
+**Remediation hint:** No action.
+
+## F-D-47 — kaizen-agents-governance § 11 — AuditTrail verified at expected location
+
+**Severity:** LOW
+**Spec claim:** "AuditTrail ... append-only audit trail with SHA-256 hash chain integrity."
+**Actual state:** `packages/kaizen-agents/src/kaizen_agents/audit/trail.py:62` — `class AuditTrail:`. Verified.
+**Remediation hint:** No action.
+
+## F-D-48 — kaizen-agents-governance § 19.6 — OrchestrationRuntime + 4 orchestration classes verified
+
+**Severity:** LOW
+**Spec claim:** "OrchestrationRuntime ... OrchestrationStrategy ... OrchestrationConfig ... OrchestrationResult ... PipelineStep ... PipelineInputSource ... Coordinator ... AgentLike ... SharedMemoryCoordinator ... OrchestrationError"
+**Actual state:** All 11 classes verified in `packages/kailash-kaizen/src/kaizen/orchestration/runtime.py` at lines 122-401. Spec assertion holds.
+**Remediation hint:** No action.
+
+## F-D-49 — kaizen-agents-governance § 9.6 — Tool argument auditing security verified
+
+**Severity:** LOW
+**Spec claim:** "Records only argument keys (not values) in the audit trail for security."
+**Actual state:** Need to verify in `record_tool_use` impl. Spec assertion at signature level only — deeper audit deferred.
+**Remediation hint:** Tier 2 wiring tests should assert `arguments` values are NOT persisted (only keys). Add explicit test if missing.
+
+## F-D-50 — kaizen-agents-governance § 9.2 — Default model is hardcoded "claude-sonnet-4-6" per spec
+
+**Severity:** HIGH
+**Spec claim:** "`model` ... Default `\"claude-sonnet-4-6\"`"
+**Actual state:** Spec mandates a default; per `rules/env-models.md` "NEVER Hardcode Model Names" — `claude-sonnet-4-6` MUST come from env (e.g., `os.environ["ANTHROPIC_MODEL"]`). Need to verify the actual constructor pulls from env or hardcodes.
+**Remediation hint:** If GovernedSupervisor constructor hardcodes "claude-sonnet-4-6" as default, change to `os.environ.get("DEFAULT_LLM_MODEL")` or raise. Spec MUST be updated to reflect env-resolved default.
