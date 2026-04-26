@@ -2,7 +2,7 @@
 
 **Specs audited:** 11
 **§ subsections enumerated:** see per-spec sections below
-**Findings:** CRIT=0 HIGH=5 MED=18 LOW=29 (TOTAL=52)
+**Findings:** CRIT=0 HIGH=5 MED=15 LOW=32 (TOTAL=52)
 **Audit completed:** 2026-04-26
 
 Worktree: `/Users/esperie/repos/loom/kailash-py/.claude/worktrees/w5-e1-ml-core`
@@ -156,12 +156,12 @@ Branch: `audit/w5-e1-ml-core-spec-audit`
 
 ## ml-tracking.md — ExperimentTracker (MLflow-replacement), async-context, GDPR erase_subject
 
-### F-E1-19 — ml-tracking § 2.1 / § 2.5 — `ExperimentTracker` async-context contract present, `create()` factory missing
+### F-E1-19 — ml-tracking § 2.5 — `ExperimentTracker.create()` async factory present (POST-AUDIT VERIFIED)
 
-**Severity:** MED
-**Spec claim:** § 2.5 — canonical factory `await ExperimentTracker.create(store_url=...)` per ml-engines-v2 line 167 example. Multiple references to `ExperimentTracker.create` in spec.
-**Actual state:** `tracking/tracker.py:61` `class ExperimentTracker`. The ml-specialist context confirms `await ExperimentTracker.create("sqlite:///ml.db")` is the prescribed factory but no `@classmethod async def create` is visible from grep. Need direct line check.
-**Remediation hint:** Verify `tracker.py` exposes `@classmethod async def create(cls, store_url) -> ExperimentTracker`; if absent, add per § 2.5.
+**Severity:** LOW (pass — verified post initial commit)
+**Spec claim:** § 2.5 — canonical factory `await ExperimentTracker.create(store_url=...)` per ml-engines-v2 line 167 example.
+**Actual state:** `tracking/tracker.py:90-91` declares `@classmethod async def create(...)` matching spec.
+**Remediation hint:** None — compliant.
 
 ### F-E1-20 — ml-tracking § 4 — `parent_run_id` nested-runs supported
 
@@ -216,12 +216,12 @@ Branch: `audit/w5-e1-ml-core-spec-audit`
 **Actual state:** `model_registry.py` declares `alias` parameter handling but full alias resolution including the `@champion` syntax + `AliasNotFoundError` / `AliasOccupiedError` typed errors visible at `errors.py` (imported in `__init__.py:55-127`). End-to-end wiring of alias-on-register + resolve-on-read needs verification.
 **Remediation hint:** Add Tier-2 wiring test `test_model_registry_alias_round_trip`: register with `alias="champion"`, then `get_model_by_alias("name@champion")` returns the same artifact.
 
-### F-E1-27 — ml-registry § 6 — `LocalFileArtifactStore` default; pluggable `ArtifactStore` Protocol
+### F-E1-27 — ml-registry § 6 — `LocalFileArtifactStore` + `ArtifactStore` Protocol present (POST-AUDIT VERIFIED)
 
-**Severity:** MED
-**Spec claim:** § 6 — `ArtifactStore` Protocol with `upload`, `download`, `delete`, `exists` methods; default `LocalFileArtifactStore("./artifacts")` per the ml-specialist quickstart.
-**Actual state:** ml-specialist context references `LocalFileArtifactStore` but no grep target verifies the implementation file. `ModelRegistry.__init__` reportedly takes `artifact_store: ArtifactStore` but the storage backend abstraction layer location is implicit.
-**Remediation hint:** Verify `LocalFileArtifactStore` exists; expose `ArtifactStore` Protocol in `kailash_ml.types` for pluggable backends (S3, GCS).
+**Severity:** LOW (pass — verified post initial commit)
+**Spec claim:** § 6 — `ArtifactStore` Protocol; default `LocalFileArtifactStore`.
+**Actual state:** `engines/model_registry.py:66` `class ArtifactStore(Protocol)`; line 90 `class LocalFileArtifactStore`.
+**Remediation hint:** None — compliant. Optional follow-up: re-export `ArtifactStore` Protocol from `kailash_ml.types` so users can implement S3/GCS backends without importing from `engines/`.
 
 ---
 
@@ -336,12 +336,12 @@ This is a bifurcation. Tests can hit either; `__init__.py:592` lazy-loads `Infer
 **Actual state:** `errors.py` declares `FeatureNotYetSupportedError`, `RLEnvIncompatibleError` (imports `__init__.py:81-82`). Per spec § 1.2, these guard the deferred surfaces.
 **Remediation hint:** Verify `MaskablePPOAdapter` raises FNYS until SB3-contrib is pinned per § RA-02; verify `DecisionTransformerAdapter` raises FNYS per § RA-03.
 
-### F-E1-42 — ml-rl-core § 18 — Anti-regression test battery
+### F-E1-42 — ml-rl-core § 18 — `test_rl_orphan_guard.py` STILL PRESENT after WIRE decision (POST-AUDIT VERIFIED)
 
 **Severity:** MED
-**Spec claim:** § 18 — replace `tests/regression/test_rl_orphan_guard.py` with anti-regression tests proving the WIRE decision didn't reorphan.
-**Actual state:** Need verification — `ls packages/kailash-ml/tests/regression/ | grep -i rl` to confirm. From context, RL orphan guard reportedly persists.
-**Remediation hint:** Confirm orphan-guard removal and add Tier-2 wiring tests per `orphan-detection.md` Rule 2 (every wired manager has a Tier-2 integration test).
+**Spec claim:** § 2.3 + § 18: WIRE selected; existing `tests/regression/test_rl_orphan_guard.py` MUST be removed and replaced with anti-regression battery.
+**Actual state:** `ls packages/kailash-ml/tests/regression/test_rl_orphan_guard.py` exists. The test file content does not contain a `rl_orphan` token (`grep -c rl_orphan` returns 0), suggesting it may already have been re-purposed but the FILE NAME still tracks the orphan-era. Per spec § 2.3 the WIRE decision was selected and the orphan-guard MUST be replaced — the file should be renamed (e.g. `test_rl_wired_invariants.py`) per `orphan-detection.md` Rule 4 (API removal sweeps tests in same PR).
+**Remediation hint:** Rename `test_rl_orphan_guard.py` → `test_rl_wired_invariants.py` (or similar) and verify content matches the post-WIRE battery in spec § 18.
 
 ---
 
@@ -354,12 +354,12 @@ This is a bifurcation. Tests can hit either; `__init__.py:592` lazy-loads `Infer
 **Actual state:** `rl/policies.py:47-56` lists all 8 algorithm-name → adapter-class mappings: `ppo`, `sac`, `dqn`, `a2c`, `td3`, `ddpg`, `maskable-ppo`, `decision-transformer`. Case-insensitive aliases lines 61-68 add `PPO`, `SAC`, etc.
 **Remediation hint:** None — compliant.
 
-### F-E1-44 — ml-rl-algorithms § 3 — Adapter classes referenced but `algorithms.py` content not verified
+### F-E1-44 — ml-rl-algorithms § 3 — All 8 adapter classes present in `rl/algorithms/__init__.py` (POST-AUDIT VERIFIED)
 
-**Severity:** MED
-**Spec claim:** § 3 — adapter classes implement the per-algorithm `AlgorithmAdapter` Protocol satisfying `RLLifecycleProtocol`.
-**Actual state:** `rl/policies.py` references `kailash_ml.rl.algorithms:PPOAdapter` etc. — module-spec format. Verify `kailash_ml/rl/algorithms.py` (or sub-package) actually exists with all 8 adapter classes.
-**Remediation hint:** Run `grep -nE "class (PPO|SAC|DQN|A2C|TD3|DDPG|MaskablePPO|DecisionTransformer)Adapter" packages/kailash-ml/src/kailash_ml/rl/algorithms.py` to confirm.
+**Severity:** LOW (pass — verified post initial commit)
+**Spec claim:** § 3 — adapter classes implement `AlgorithmAdapter` satisfying `RLLifecycleProtocol`.
+**Actual state:** `rl/algorithms/` is a sub-package (not a single file). `__init__.py:210, 230, 249, 269, 288, 307, 323, 356` declare `PPOAdapter`, `A2CAdapter`, `DQNAdapter`, `SACAdapter`, `TD3Adapter`, `DDPGAdapter`, `MaskablePPOAdapter`, `DecisionTransformerAdapter`. Lookup table at line 411.
+**Remediation hint:** None — compliant.
 
 ### F-E1-45 — ml-rl-algorithms § 4 — `RLLifecycleProtocol` runtime-checkable
 
@@ -445,7 +445,7 @@ This is a bifurcation. Tests can hit either; `__init__.py:592` lazy-loads `Infer
 | F-E1-16 | ml-diagnostics | LOW | [dl] extra gating correct |
 | F-E1-17 | ml-diagnostics | LOW | diagnose_classifier/regressor present |
 | F-E1-18 | ml-diagnostics | MED | Auto-append callback per-family de-dup unverified |
-| F-E1-19 | ml-tracking | MED | ExperimentTracker.create() factory verification needed |
+| F-E1-19 | ml-tracking | LOW | ExperimentTracker.create() factory present (verified) |
 | F-E1-20 | ml-tracking | LOW | parent_run_id nested runs supported |
 | F-E1-21 | ml-tracking | LOW | erase_subject GDPR present |
 | F-E1-22 | ml-tracking | LOW | All 7 auto-log adapters present |
@@ -453,7 +453,7 @@ This is a bifurcation. Tests can hit either; `__init__.py:592` lazy-loads `Infer
 | F-E1-24 | ml-registry | LOW | Production demote-on-promote |
 | F-E1-25 | ml-registry | LOW | km.register async wrapper |
 | F-E1-26 | ml-registry | MED | Alias resolution end-to-end wiring needs Tier-2 test |
-| F-E1-27 | ml-registry | MED | LocalFileArtifactStore + ArtifactStore Protocol verification |
+| F-E1-27 | ml-registry | LOW | LocalFileArtifactStore + ArtifactStore Protocol present (verified) |
 | F-E1-28 | ml-serving | HIGH | Dual InferenceServer (engines/ + serving/) |
 | F-E1-29 | ml-serving | LOW | Model-signature validation present |
 | F-E1-30 | ml-serving | LOW | Nexus integration via NexusHandler |
@@ -470,7 +470,7 @@ This is a bifurcation. Tests can hit either; `__init__.py:592` lazy-loads `Infer
 | F-E1-41 | ml-rl-core | LOW | FeatureNotYetSupportedError typed errors |
 | F-E1-42 | ml-rl-core | MED | Anti-regression test battery verification |
 | F-E1-43 | ml-rl-algorithms | LOW | All 8 algorithms in PolicyRegistry |
-| F-E1-44 | ml-rl-algorithms | MED | algorithms.py adapter classes verification |
+| F-E1-44 | ml-rl-algorithms | LOW | All 8 adapter classes present in rl/algorithms/ (verified) |
 | F-E1-45 | ml-rl-algorithms | LOW | RLLifecycleProtocol runtime-checkable |
 | F-E1-46 | ml-rl-algorithms | MED | Per-algorithm metrics flat dict not typed |
 | F-E1-47 | ml-rl-align-unification | LOW | Shared RLLifecycleProtocol present |
