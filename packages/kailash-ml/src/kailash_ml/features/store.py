@@ -4,10 +4,10 @@
 
 Single source of truth for feature retrieval at training + serving time.
 Reads route through ``dataflow.ml_feature_source(feature_group)`` (specced
-in ``specs/dataflow-ml-integration.md §1.1``, delivered by W31 31b). This
-module BLOCKS silent fallback: when the DataFlow binding is absent, a
-descriptive :class:`ImportError` names W31 31b as the blocker per
-``rules/dependencies.md`` § "Exception: Optional Extras with Loud Failure".
+in ``specs/dataflow-ml-integration.md §1.1``). This module BLOCKS silent
+fallback: when the DataFlow binding is absent, a descriptive
+:class:`ImportError` cites the spec section per ``rules/dependencies.md``
+§ "Exception: Optional Extras with Loud Failure".
 
 Per ``rules/facade-manager-detection.md``:
 
@@ -156,7 +156,7 @@ class FeatureStore:
         :class:`~kailash_ml.errors.TenantRequiredError` per
         ``rules/tenant-isolation.md`` Rule 2.
 
-        Absent ``dataflow.ml_feature_source`` (W31 31b not landed) raises
+        Absent ``dataflow.ml_feature_source`` raises
         :class:`ImportError` with an actionable message per
         ``rules/dependencies.md`` § "Exception: Optional Extras with Loud
         Failure".
@@ -322,7 +322,7 @@ class FeatureStore:
 
 
 # ---------------------------------------------------------------------------
-# Deferred DataFlow binding — loud failure when W31 31b is not landed.
+# Deferred DataFlow binding — loud failure when ml_feature_source is absent.
 # ---------------------------------------------------------------------------
 
 
@@ -350,12 +350,11 @@ def _import_ml_feature_source() -> Any:
 
         return ml_feature_source
     except (ImportError, AttributeError) as exc:
-        # Loud actionable failure — name the blocking workstream.
+        # Loud actionable failure — cite spec, not workspace history.
         raise ImportError(
             "dataflow.ml_feature_source is not available. kailash-ml 1.0.0 "
             "FeatureStore.get_features requires DataFlow 2.1.0's polars "
-            "binding (tracked as W31 31b in specs/dataflow-ml-integration.md "
-            "§1.1). Blocker: that shard has not landed yet. Upgrade "
+            "binding (see specs/dataflow-ml-integration.md §1.1). Upgrade "
             "kailash-dataflow to a version that exports ml_feature_source, "
             "or wire the binding into dataflow/ml_integration.py."
         ) from exc
