@@ -140,6 +140,7 @@ from kailash_ml.estimators import (
     unregister_estimator,
 )
 from kailash_ml.trainable import (
+    CatBoostTrainable,
     HDBSCANTrainable,
     LightGBMTrainable,
     LightningTrainable,
@@ -658,6 +659,7 @@ __all__ = [
     "SklearnTrainable",
     "XGBoostTrainable",
     "LightGBMTrainable",
+    "CatBoostTrainable",
     "TorchTrainable",
     "LightningTrainable",
     "UMAPTrainable",
@@ -717,6 +719,7 @@ _ = (
     register_estimator,
     registered_estimators,
     unregister_estimator,
+    CatBoostTrainable,
     HDBSCANTrainable,
     LightGBMTrainable,
     LightningTrainable,
