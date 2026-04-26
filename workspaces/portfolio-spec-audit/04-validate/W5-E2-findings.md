@@ -484,3 +484,57 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** `packages/kailash-align/src/kailash_align/exceptions.py` needs verification for these classes. Spec error taxonomy must match implementation.
 **Remediation hint:** Grep `exceptions.py` for `RLBridge*Error` definitions; add any missing typed errors.
 
+
+---
+
+## Spec 10 — `kailash-core-ml-integration.md` (594 lines)
+
+§ subsections enumerated: ~16 (1.x scope, 2.x protocols expansion, 3.x MLError hierarchy, 4.x tracking migrations, 5.x workflow nodes, 6.x observability, 7-11 cross-refs)
+
+### F-E2-60 — `kailash-core-ml-integration.md` § 1.1 — All 5 net-new core surfaces shipped (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.1 enumerates 5 deliverables: (1) `src/kailash/diagnostics/protocols.py` expansion (+ RLDiagnostic + DiagnosticReport), (2) `src/kailash/ml/errors.py` (NEW), (3) `src/kailash/tracking/migrations/` (NEW), (4) `kailash.workflow.nodes.ml` (MLTrainingNode, MLInferenceNode, MLRegistryPromoteNode), (5) `kailash.observability.ml` (OTel/Prometheus hooks).
+**Actual state:**
+- (1) `src/kailash/diagnostics/protocols.py:419` `class Diagnostic(Protocol)`, `:451` `class RLDiagnostic(Protocol)`, `:521` `class DiagnosticReport`. Confirmed.
+- (2) `src/kailash/ml/errors.py:230` `class MLError(Exception)` + 11+ family classes (TrackingError, AutologError, RLError, BackendError, DriftMonitorError, InferenceServerError, ModelRegistryError, FeatureStoreError, AutoMLError, DiagnosticsError, DashboardError) — ALL 11 spec'd families present plus MultiTenantOpError, UnsupportedTrainerError, MigrationFailedError, WorkflowNodeMLContextError, EnvVarDeprecatedError. Confirmed.
+- (3) `src/kailash/tracking/migrations/` exists with `0001_status_vocabulary_finished.py`, `0002_kml_prefix_tenant_audit.py`, `_base.py`, `_registry.py`. Confirmed.
+- (4) `src/kailash/workflow/nodes/ml/` exists with `MLTrainingNode` (line 133), `MLInferenceNode` (line 298), `MLRegistryPromoteNode` (line 406). All 3 spec'd nodes present.
+- (5) `src/kailash/observability/ml/` exists with Prometheus counters `kailash_ml_train_duration_seconds`, `kailash_ml_inference_latency_ms`, `kailash_ml_drift_alerts_total` (lines 199, 205, 211). Loud WARN on missing `prometheus_client` per spec § 6.x.
+**Remediation hint:** None — confirms compliance. This is the most thoroughly-implemented integration spec in the audit set.
+
+### F-E2-61 — `kailash-core-ml-integration.md` § 1.1 — Extras alias `kailash[ml]` declared (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Per task brief: "extras alias (`pip install kailash[ml]`), workflow-node adapters, `kailash.ml` namespace re-export".
+**Actual state:** Root `pyproject.toml:95` `ml = ["kailash-ml>=1.1.0"]` — alias confirmed; `pip install kailash[ml]` pulls kailash-ml.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-62 — `kailash-core-ml-integration.md` § 2.4 — Cross-SDK parity Diagnostic Protocol byte-vector pinning absent
+
+**Severity:** MED
+**Spec claim:** § 2.4 mandates kailash-rs side `crates/kailash/src/diagnostics/protocols.rs` parity: "Same fingerprint format (`sha256:<8hex>`)". Per `rules/cross-sdk-inspection.md` MUST Rule 4, cross-SDK fingerprint helpers MUST pin BYTE VECTORS (≥3 vectors + sentinel cases) from sibling SDK output.
+**Actual state:** `src/kailash/diagnostics/protocols.py:262` `compute_trace_event_fingerprint(event) -> str` returns `sha256:<8hex>`. Spec acknowledges "Cross-SDK follow-up is deferred until kailash-rs scopes" and "No tracking issue required until Rust-side scoping begins". The deferred-fingerprint contract is documented as pending.
+**Remediation hint:** When Rust-side scoping begins, add Tier-2 cross-SDK regression with ≥3 byte-pinned event vectors + empty/sentinel cases per `rules/cross-sdk-inspection.md` Rule 4.
+
+### F-E2-63 — `kailash-core-ml-integration.md` § 3.1 — Module location at `kailash.ml.errors` enables cross-package error catching (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 3.1 — placing error hierarchy at `kailash.ml.errors` (inside core) means every wave package (kailash-nexus, kailash-kaizen, kailash-align, kailash-dataflow, kailash-pact) can catch `MLError` without depending on kailash-ml.
+**Actual state:** `src/kailash/ml/errors.py` exists at the spec'd location; `kailash_ml.errors` re-exports MUST be verified.
+**Remediation hint:** Verify `from kailash_ml.errors import MLError` works via re-export from `kailash.ml.errors`.
+
+### F-E2-64 — `kailash-core-ml-integration.md` § 4.x — Tracking migrations registry has only 2 numbered migrations
+
+**Severity:** MED
+**Spec claim:** § 4.x mandates 0.17.0 → 1.0.0 migrations: status vocabulary, table consolidation, keyspace reshape (3 distinct migration concerns).
+**Actual state:** `src/kailash/tracking/migrations/` has `0001_status_vocabulary_finished.py` and `0002_kml_prefix_tenant_audit.py` — only 2 numbered migrations. The spec § 4 lists at minimum 3 concerns; if "table consolidation" and "keyspace reshape" are bundled into 0002, that's potentially OK; but verification needed.
+**Remediation hint:** Verify all 0.17.0 → 1.0.0 migration concerns are covered by the 2 existing migration files.
+
+### F-E2-65 — `kailash-core-ml-integration.md` § 5.x — Workflow nodes `MLTrainingNode`/`MLInferenceNode`/`MLRegistryPromoteNode` consume MLError hierarchy
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 5.x — workflow nodes consume new tracker AND MLError hierarchy.
+**Actual state:** All 3 nodes exist at `src/kailash/workflow/nodes/ml/__init__.py`. Per spec § 1.1 + spec § 3 they should `raise MLError`-family exceptions on failure paths. Implementation needs verification of error-class usage.
+**Remediation hint:** Grep node bodies for `MLError`-subclass `raise` statements.
+
