@@ -153,3 +153,24 @@
 **Spec claim:** "LlmClientError ... LlmError ... AuthError ... EndpointError ... ModelGrammarError ... ConfigError" hierarchy.
 **Actual state:** `packages/kailash-kaizen/src/kaizen/llm/errors.py:104,113,179,226,286,326` — all 6 root error classes exist. Sub-types (Timeout, RateLimited, ProviderError, InvalidResponse, etc.) need closer inspection but root hierarchy verified.
 **Remediation hint:** No action; assertion holds at hierarchy level.
+
+## F-D-22 — kaizen-interpretability § 1 — `InterpretabilityDiagnostics` exists at expected path, but no production call site
+
+**Severity:** MED
+**Spec claim:** "context-manager session that operates on a local open-weight `transformers.PreTrainedModel`" — adapter is operator-invoked.
+**Actual state:** `packages/kailash-kaizen/src/kaizen/interpretability/core.py:266` exists. However, the only import of `InterpretabilityDiagnostics` outside the module is in `kaizen/interpretability/__init__.py`. NO production code in `kaizen/core/`, `kaizen/agents/`, or `kaizen_agents/` consumes this adapter. Per `rules/orphan-detection.md` §1, while diagnostic adapters are intentionally standalone (operators invoke), the spec's intent — "downstream consumers use `isinstance(obj, Diagnostic)`" — implies a sink/aggregator that has no production realization yet. Tier 2 wiring tests exist (`test_interpretability_wiring.py`) but only at adapter-construction level, not via a framework-pulled-from-`db`-or-`agent`-style hot path.
+**Remediation hint:** Document in spec that `InterpretabilityDiagnostics` is operator-invoked (no auto-wiring); OR add a sink (e.g., `agent.attach_diagnostic(diag)`) that consumes via the Diagnostic Protocol in production hot path. If standalone-by-design, add explicit § "Wiring is the operator's responsibility" note.
+
+## F-D-23 — kaizen-interpretability § 8.1 — Tests exist at expected paths
+
+**Severity:** LOW
+**Spec claim:** Unit tests at `tests/unit/interpretability/test_interpretability_diagnostics_unit.py`; integration at `tests/integration/interpretability/test_interpretability_wiring.py`.
+**Actual state:** Both files verified at the expected paths. Test inventory matches spec.
+**Remediation hint:** No action.
+
+## F-D-24 — kaizen-interpretability § 3.5 — API-only refusal is permitted deterministic logic, but spec lists prefixes that overlap with kaizen-llm-deployments § Tier 2
+
+**Severity:** LOW
+**Spec claim:** "API-only model prefixes (`gpt-*`, `o1-*`, `o3-*`, `o4-*`, `claude-*`, `gemini-*`, `deepseek-*`) are refused"
+**Actual state:** Per `rules/agent-reasoning.md` § "Permitted Deterministic Logic" item 4 (safety guards on configuration string), this is permitted. However, the prefix list duplicates the model-prefix dispatch from `kaizen-providers.md` § 8.3 model→provider table. Single-source-of-truth violation — API-only list lives in two specs.
+**Remediation hint:** Move API-only prefix list to a single canonical location (e.g., `kaizen.providers.registry._API_ONLY_PREFIXES`); both specs reference it.
