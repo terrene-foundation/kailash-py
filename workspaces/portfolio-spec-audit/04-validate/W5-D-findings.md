@@ -125,3 +125,31 @@
 **Spec claim:** Lists 13+ A2A types (A2AAgentCard, Capability, CollaborationStyle, A2ATask, TaskState, etc.) and 6 factory functions.
 **Actual state:** Many A2A types live in `packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py` (deeply nested). Spec implies they are at top-level `kaizen.a2a` module but actual location is `nodes/ai/`. Module path drift.
 **Remediation hint:** Either re-export A2A types at `kaizen.a2a.*` or update spec to canonical import paths (`from kaizen.nodes.ai.a2a import A2AAgentCard`).
+
+## F-D-18 — kaizen-llm-deployments § Preset Catalog — All 24 presets verified (16 direct + 5 Bedrock + 2 Vertex + 1 Azure)
+
+**Severity:** LOW
+**Spec claim:** 24 presets across direct providers, Bedrock, Vertex, Azure.
+**Actual state:** `packages/kailash-kaizen/src/kaizen/llm/presets.py` — 54 register/registration calls; `register_preset` enumerated for all 24 named presets (openai, anthropic, google, cohere, mistral, perplexity, huggingface, ollama, docker_model_runner, groq, together, fireworks, openrouter, deepseek, lm_studio, llama_cpp, bedrock_claude, bedrock_llama, bedrock_titan, bedrock_mistral, bedrock_cohere, vertex_claude, vertex_gemini, azure_openai). All 24 verified.
+**Remediation hint:** No action; assertion holds.
+
+## F-D-19 — kaizen-llm-deployments § Four Axes — LlmDeployment + LlmClient classes verified
+
+**Severity:** LOW
+**Spec claim:** "`LlmDeployment` primitive composes these four axes ... `LlmClient.from_deployment(d)` wraps it."
+**Actual state:** `packages/kailash-kaizen/src/kaizen/llm/deployment.py:287` — `LlmDeployment(BaseModel)` ; `packages/kailash-kaizen/src/kaizen/llm/client.py:79` — `LlmClient`. Auth strategies (ApiKeyBearer, StaticNone, AwsBearerToken, AwsSigV4, GcpOauth, AzureEntra) all present in `kaizen/llm/auth/`. WireProtocol enum at `deployment.py:53`. Endpoint at `deployment.py:82`. Verified.
+**Remediation hint:** No action.
+
+## F-D-20 — kaizen-llm-deployments § 6 Security — Test paths drift from spec table
+
+**Severity:** MED
+**Spec claim:** Security tests live in `packages/kailash-kaizen/tests/unit/llm/security/` (table lists 8 tests with that path).
+**Actual state:** Only 5 tests in `tests/unit/llm/security/`. The other 3 live in different directories: `test_aws_credentials_zeroize_on_rotate.py` is at `tests/unit/llm/auth/`; `test_apikey.py` is at `tests/unit/llm/`; `test_errors.py` (referenced in spec) actually named `test_errors_no_credential_leak.py` at `tests/unit/llm/`. Spec table inaccurately implies all 8 in same dir.
+**Remediation hint:** Update spec table with actual test paths OR consolidate tests into `tests/unit/llm/security/` directory.
+
+## F-D-21 — kaizen-llm-deployments § Error Taxonomy — All error classes verified
+
+**Severity:** LOW
+**Spec claim:** "LlmClientError ... LlmError ... AuthError ... EndpointError ... ModelGrammarError ... ConfigError" hierarchy.
+**Actual state:** `packages/kailash-kaizen/src/kaizen/llm/errors.py:104,113,179,226,286,326` — all 6 root error classes exist. Sub-types (Timeout, RateLimited, ProviderError, InvalidResponse, etc.) need closer inspection but root hierarchy verified.
+**Remediation hint:** No action; assertion holds at hierarchy level.
