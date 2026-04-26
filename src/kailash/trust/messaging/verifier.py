@@ -17,11 +17,13 @@ Key Features:
 
 import hmac
 import logging
+import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from kailash.trust.chain import VerificationLevel
+from kailash.trust.signing.algorithm_id import ALGORITHM_DEFAULT
 from kailash.trust.signing.crypto import verify_signature
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.messaging.envelope import SecureMessageEnvelope
@@ -31,6 +33,12 @@ from kailash.trust.operations import TrustOperations
 from kailash.trust.registry.agent_registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
+
+# Module-level guard for once-per-process DeprecationWarning emission when a
+# legacy SecureMessageEnvelope (no/empty algorithm — pre-#604 record) is
+# verified. Warning text MUST contain literal "scaffold for #604; wire
+# format pending mint ISS-31" substring so future agents can grep-find it.
+_LEGACY_MESSAGE_WARNED: bool = False
 
 
 # Clock skew tolerance (60 seconds)
@@ -333,7 +341,44 @@ class MessageVerifier:
         errors: List[str],
         warnings: List[str],
     ) -> bool:
-        """Verify the envelope's Ed25519 signature."""
+        """Verify the envelope's Ed25519 signature.
+
+        Algorithm-agility (issue #604 scaffold):
+
+        - Examines ``envelope.algorithm``.
+        - Empty / missing → emits a one-time ``DeprecationWarning`` per
+          process whose message contains the literal substring
+          ``"scaffold for #604; wire format pending mint ISS-31"`` and
+          proceeds with verification (legacy / pre-#604 record path).
+        - Equal to :data:`ALGORITHM_DEFAULT` → verifies normally.
+        - Any other non-default value → raises ``NotImplementedError``
+          BEFORE any crypto work.
+
+        Raises:
+            NotImplementedError: If ``envelope.algorithm`` is non-default
+                non-empty (pending mint ISS-31).
+        """
+        # Algorithm-agility guard — runs BEFORE any verification work.
+        global _LEGACY_MESSAGE_WARNED
+        algo = envelope.algorithm or ""
+        if algo == "":
+            if not _LEGACY_MESSAGE_WARNED:
+                _LEGACY_MESSAGE_WARNED = True
+                _warnings.warn(
+                    "SecureMessageEnvelope verified with empty algorithm "
+                    "(legacy record); defaulting to "
+                    f"{ALGORITHM_DEFAULT!r} — scaffold for #604; wire "
+                    "format pending mint ISS-31.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        elif algo != ALGORITHM_DEFAULT:
+            raise NotImplementedError(
+                f"SecureMessageEnvelope.algorithm={algo!r} awaits mint "
+                f"ISS-31 spec. Only {ALGORITHM_DEFAULT!r} is supported "
+                f"in this scaffold (issue #604, cross-SDK kailash-rs#33)."
+            )
+
         try:
             # Get sender's public key
             public_key = await self._get_sender_public_key(envelope.sender_agent_id)

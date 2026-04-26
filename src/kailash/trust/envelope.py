@@ -32,12 +32,29 @@ import hmac as hmac_mod
 import json
 import logging
 import math
+import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
+
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
 
 logger = logging.getLogger(__name__)
+
+# Module-level guard for once-per-process DeprecationWarning emission when an
+# HMAC envelope is verified without a recorded algorithm. The warning text MUST
+# contain the literal "scaffold for #604; wire format pending mint ISS-31"
+# substring per issue-#604 directive (zero-tolerance.md Rule 1 + grep-ability
+# requirement). The HMAC ConstraintEnvelope is asymmetric — see § 21.4 of
+# specs/trust-crypto.md for the rationale: adding `algorithm` to the dataclass
+# would alter the canonical-JSON payload bytes that the HMAC signs, breaking
+# every existing HMAC-signed envelope on disk.
+_LEGACY_HMAC_ENVELOPE_WARNED: bool = False
 
 __all__ = [
     # Error classes
@@ -1378,19 +1395,47 @@ def _intersect_posture_ceiling(
 def sign_envelope(
     envelope: ConstraintEnvelope,
     secret_ref: SecretRef,
+    *,
+    alg_id: Optional[AlgorithmIdentifier] = None,
 ) -> str:
     """Compute HMAC-SHA256 signature of the envelope's canonical JSON.
 
     Returns a hex-encoded HMAC digest. The kid (key ID) from the SecretRef
     can be transmitted alongside the signature for key rotation support.
 
+    Algorithm-agility (issue #604, asymmetric pair):
+
+    - Accepts an optional ``alg_id`` keyword. ``None`` defaults via
+      :func:`coerce_algorithm_id` to :data:`ALGORITHM_DEFAULT`
+      (``"ed25519+sha256"``). Non-default values raise
+      ``NotImplementedError`` (the single permitted scaffold-era stub).
+    - The canonical ``algorithm`` value is recorded ALONGSIDE the
+      signature in the caller's metadata dict — NOT inside the signed
+      payload bytes. Adding ``algorithm`` to the canonical-JSON shape
+      would invalidate every existing HMAC-signed envelope on disk
+      (the payload-bytes change → the HMAC changes). The asymmetry is
+      documented in spec § 21.4 + the module guard
+      ``_LEGACY_HMAC_ENVELOPE_WARNED``.
+
+    The HMAC primitive (`hmac.compare_digest`) is unchanged; threading
+    ``alg_id`` adds metadata to the surrounding shape, NOT the
+    verification primitive (per `rules/eatp.md` § Cryptography).
+
     Args:
         envelope: The ConstraintEnvelope to sign.
         secret_ref: Reference to the signing secret.
+        alg_id: Optional algorithm identifier. ``None`` → default
+            (``"ed25519+sha256"``). Mint ISS-31 will lift the
+            single-value restriction; threading is in place today so
+            no producer/verifier will need re-touching when it does.
 
     Returns:
         Hex-encoded HMAC-SHA256 digest string.
     """
+    # Coerce alg_id; non-default raises NotImplementedError before any
+    # crypto work — the verifier MUST not give the appearance of approval
+    # for an unsupported algorithm even by accident.
+    coerce_algorithm_id(alg_id)
     key_bytes = _resolve_secret(secret_ref)
     payload = envelope.to_canonical_json().encode("utf-8")
     return hmac_mod.new(key_bytes, payload, hashlib.sha256).hexdigest()
@@ -1400,26 +1445,72 @@ def verify_envelope(
     envelope: ConstraintEnvelope,
     signature: str,
     secret_ref: SecretRef,
+    *,
+    alg_id: Optional[AlgorithmIdentifier] = None,
 ) -> bool:
     """Verify HMAC-SHA256 signature of the envelope's canonical JSON.
 
     Uses constant-time comparison (hmac.compare_digest) per trust-plane
     security rule -- NEVER use equality operators for HMAC comparison.
 
+    Algorithm-agility (issue #604, asymmetric pair):
+
+    - When ``alg_id`` is provided, it is validated via
+      :func:`coerce_algorithm_id`. Non-default values raise
+      ``NotImplementedError`` BEFORE any HMAC work — fail-closed to
+      avoid the appearance of approval for an unsupported algorithm.
+    - When ``alg_id`` is ``None`` (legacy / pre-#604 caller), the
+      verifier emits a one-time ``DeprecationWarning`` per process whose
+      message contains the literal substring
+      ``"scaffold for #604; wire format pending mint ISS-31"`` and then
+      proceeds with the HMAC verification using the default algorithm.
+      The warning is grep-able across log archives so operators can
+      correlate stale call sites.
+
+    The HMAC ConstraintEnvelope is the asymmetric pair: ``algorithm`` is
+    recorded in the caller's metadata dict, NOT inside the
+    canonical-JSON payload bytes (see spec § 21.4 for rationale).
+
     Args:
         envelope: The ConstraintEnvelope to verify.
         signature: Hex-encoded HMAC-SHA256 digest to verify against.
         secret_ref: Reference to the verification secret.
+        alg_id: Optional algorithm identifier. ``None`` falls through to
+            the legacy-warning branch.
 
     Returns:
         True if the signature matches, False otherwise. Fail-closed on
         any error.
+
+    Raises:
+        NotImplementedError: If ``alg_id`` is non-default (pending mint
+            ISS-31). Raised BEFORE any HMAC work.
     """
+    global _LEGACY_HMAC_ENVELOPE_WARNED
+    if alg_id is None:
+        # Legacy / pre-#604 caller. Accept AND warn once per process.
+        if not _LEGACY_HMAC_ENVELOPE_WARNED:
+            _LEGACY_HMAC_ENVELOPE_WARNED = True
+            _warnings.warn(
+                "verify_envelope called without alg_id (legacy / pre-#604 "
+                f"caller); defaulting to {ALGORITHM_DEFAULT!r} — scaffold "
+                "for #604; wire format pending mint ISS-31.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+    else:
+        # Validate (coerce raises NotImplementedError on non-default).
+        coerce_algorithm_id(alg_id)
+
     try:
         key_bytes = _resolve_secret(secret_ref)
         payload = envelope.to_canonical_json().encode("utf-8")
         expected = hmac_mod.new(key_bytes, payload, hashlib.sha256).hexdigest()
         return hmac_mod.compare_digest(expected, signature)
+    except NotImplementedError:
+        # Surface the spec-gate error to the caller; do NOT mask as
+        # fail-closed-False — the caller MUST see the gate.
+        raise
     except Exception:
         logger.exception(
             "HMAC verification failed for envelope -- fail-closed to False"

@@ -17,6 +17,10 @@ import base64
 import logging
 from typing import Any, Dict, Optional, Union
 
+from kailash.trust.signing.algorithm_id import (
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
 from kailash.trust.signing.crypto import sign
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
@@ -91,6 +95,8 @@ class MessageSigner:
         recipient_agent_id: str,
         payload: Dict[str, Any],
         metadata: Optional[MessageMetadata] = None,
+        *,
+        alg_id: Optional[AlgorithmIdentifier] = None,
     ) -> SecureMessageEnvelope:
         """
         Create and sign a message to another agent.
@@ -123,6 +129,10 @@ class MessageSigner:
             ...     metadata=MessageMetadata(priority="high", ttl_seconds=60)
             ... )
         """
+        # Issue #604 scaffold: coerce + validate alg_id BEFORE any I/O.
+        # Non-default values raise NotImplementedError immediately.
+        canonical = coerce_algorithm_id(alg_id)
+
         try:
             # Get current trust chain hash
             trust_chain_hash = await self._get_current_trust_chain_hash()
@@ -133,6 +143,7 @@ class MessageSigner:
                 recipient_agent_id=recipient_agent_id,
                 payload=payload,
                 trust_chain_hash=trust_chain_hash,
+                algorithm=canonical.algorithm,
                 metadata=metadata,
             )
 
