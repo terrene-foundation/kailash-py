@@ -69,3 +69,31 @@
 **Spec claim:** "`create_structured_output_config(signature=my_signature, strict=True)` → returns dict suitable for `response_format`."
 **Actual state:** `packages/kailash-kaizen/src/kaizen/core/structured_output.py:292` — verified function exists. Spec assertion holds at signature level. No defect; listed for completeness.
 **Remediation hint:** No action.
+
+## F-D-10 — kaizen-providers § 11.5 — `PersistenceBackend` is `Protocol` not `ABC` as spec implies
+
+**Severity:** LOW
+**Spec claim:** "`class PersistenceBackend(ABC):` ... `@abstractmethod` ... `async def save(self, session_id: str, data: Any) -> None`"
+**Actual state:** `packages/kailash-kaizen/src/kaizen/memory/persistence_backend.py:11` — `class PersistenceBackend(Protocol):` (NOT ABC). Methods are `save_turn(self, session_id, turn)` and signatures differ from spec (sync, not async; method named differently).
+**Remediation hint:** Update spec to reflect Protocol-based structural typing AND actual method names (`save_turn`, `load_session`, etc.). Verify all consumers expect the Protocol shape.
+
+## F-D-11 — kaizen-providers § 8.5 — `StreamEvent` dataclass body undocumented
+
+**Severity:** LOW
+**Spec claim:** "`@dataclass class StreamEvent:` # Token-by-token streaming event from LLM provider" — empty body in spec.
+**Actual state:** Class exists in `packages/kailash-kaizen/src/kaizen/providers/types.py`. Spec leaves contract undefined; consumers cannot infer field names without reading source.
+**Remediation hint:** Document `StreamEvent` fields in spec (token delta, metadata, completion status, etc.).
+
+## F-D-12 — kaizen-providers § 10 — Tool registry removal verified; spec note correct
+
+**Severity:** LOW
+**Spec claim:** "Kaizen uses MCP (Model Context Protocol) as the sole tool integration mechanism. `ToolRegistry` and `ToolExecutor` are removed."
+**Actual state:** Verified — `packages/kailash-kaizen/src/kaizen/tools/__init__.py` does not export ToolRegistry/ToolExecutor. Spec assertion holds.
+**Remediation hint:** No action.
+
+## F-D-13 — kaizen-providers § 8.3 — Provider registry uses lazy "_unified_azure" string sentinel; spec note unclear
+
+**Severity:** LOW
+**Spec claim:** `"azure": "_unified_azure",  # Lazy-loaded` — table entries.
+**Actual state:** `packages/kailash-kaizen/src/kaizen/providers/registry.py:54-69` — verified PROVIDERS dict matches spec exactly (14 entries including aliases). Lazy `"_unified_azure"` string is a sentinel resolved by `get_provider`. Spec accurately describes; no defect.
+**Remediation hint:** No action; assertion holds.
