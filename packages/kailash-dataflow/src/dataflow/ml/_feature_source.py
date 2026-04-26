@@ -13,7 +13,7 @@ Failure").
 Tenant isolation:
 
 * ``multi_tenant=True`` feature groups MUST receive a non-``None``
-  ``tenant_id``; omission raises :class:`MLTenantRequiredError`
+  ``tenant_id``; omission raises :class:`TenantRequiredError`
   (per ``rules/tenant-isolation.md`` § 2).
 * ``tenant_id`` is preserved on every cache key the helper constructs
   (see ``_cache_key`` below) so a tenant-scoped invalidation only
@@ -33,7 +33,7 @@ from typing import Any, List, Optional
 
 from dataflow.ml._errors import (
     FeatureSourceError,
-    MLTenantRequiredError,
+    TenantRequiredError,
 )
 
 logger = logging.getLogger(__name__)
@@ -184,7 +184,7 @@ def ml_feature_source(
         FeatureSourceError: kailash-ml is absent, the feature group's
             shape is invalid, or the underlying store refused to
             serve.
-        MLTenantRequiredError: ``multi_tenant=True`` without a
+        TenantRequiredError: ``multi_tenant=True`` without a
             ``tenant_id``.
         ValueError: Conflicting window arguments.
     """
@@ -214,7 +214,7 @@ def ml_feature_source(
     # Tenant strict mode — missing tenant on a multi-tenant group is a
     # typed error (`rules/tenant-isolation.md` § 2).
     if _is_multi_tenant_group(feature_group) and tenant_id is None:
-        raise MLTenantRequiredError(
+        raise TenantRequiredError(
             f"FeatureGroup {group_name!r} is multi_tenant=True; tenant_id is required"
         )
 
@@ -260,7 +260,7 @@ def ml_feature_source(
             until=until,
             limit=limit,
         )
-    except (FeatureSourceError, MLTenantRequiredError):
+    except (FeatureSourceError, TenantRequiredError):
         raise
     except TypeError as exc:
         # Older FeatureGroup implementations may not accept every kwarg;
