@@ -359,6 +359,8 @@ Every drift report MUST carry the `registered.model_uri` being monitored, plus t
 
 ### E10.2 Formal Dataclasses — `LineageGraph` / `LineageNode` / `LineageEdge`
 
+> **DEFERRED to Wave 6.5b (W6-014, issue #657).** The Python surface declared below — `kailash_ml.engines.lineage` module + frozen `LineageGraph` / `LineageNode` / `LineageEdge` dataclasses + the registry-side `build_lineage_graph()` walker — does NOT ship in 1.0.0. Per `rules/zero-tolerance.md` Rule 1b, `km.lineage(...)` raises `LineageNotImplementedError` (a `TrackingError` subclass per `ml-tracking.md §9.1`). The `_kml_lineage` table DDL (`ml-tracking.md §6.3`) DOES ship in 1.0.0 — only the traversal-walker + Python dataclass surface is deferred. This section remains the canonical contract that the deferred implementation MUST satisfy when it lands.
+
 The cross-engine lineage surface is three frozen dataclasses. `LineageNode` is one vertex (run / dataset / feature_version / model_version / deployment), `LineageEdge` is one directed edge with a typed `relation`, and `LineageGraph` is the rooted, tenant-scoped, depth-bounded result of `km.lineage(...)`. This is the canonical shape — every other spec that serializes lineage (`ml-dashboard-draft.md §4.1`, `ml-registry-draft.md`, any future REST / SSE / CLI surface) MUST import this shape, not redefine it.
 
 ```python

@@ -87,6 +87,7 @@ from kailash_ml.errors import (
     InsufficientTrialsError,
     InvalidInputSchemaError,
     InvalidTenantIdError,
+    LineageNotImplementedError,
     LineageRequiredError,
     LiveStreamError,
     MetricValueError,
@@ -215,33 +216,19 @@ from kailash_ml.engines.registry import (
     list_engines,
 )
 
-# Lineage return type — eagerly imported so km.lineage(...) has a
-# canonical return annotation per §15.8.
-# ``LineageGraph`` is declared in ml-engines-v2-addendum §E10.2.
-try:
-    from kailash_ml.engines.lineage import LineageGraph  # type: ignore[import]
-except ImportError:
-    # Forward-compatible: the engines/lineage.py module lands in a
-    # later M11 shard. Until then, expose a minimal stub so tests that
-    # round-trip ``km.lineage(...)`` through the type can still import
-    # the name. The real engine replaces this stub when it lands.
-    from dataclasses import dataclass as _dc
-    from dataclasses import field as _field
-
-    @_dc(frozen=True)
-    class LineageGraph:  # type: ignore[no-redef]
-        """Placeholder until engines/lineage.py lands per §E10.2.
-
-        The real dataclass exposes the full ``nodes`` / ``edges`` /
-        ``root`` / ``depth`` contract; this placeholder keeps the
-        eager-import contract intact so ``km.lineage(...)`` has a
-        return type to cite.
-        """
-
-        root: str
-        nodes: tuple = _field(default_factory=tuple)
-        edges: tuple = _field(default_factory=tuple)
-        depth: int = 0
+# Lineage return type — DEFERRED to Wave 6.5b per W6-014.
+#
+# The canonical ``LineageGraph`` declared in ``ml-engines-v2-addendum
+# §E10.2`` requires the registry-side ``build_lineage_graph`` primitive,
+# the ``_kml_lineage`` DDL (``ml-tracking.md §6.3``), and the lineage
+# walker — all larger than one shard's load-bearing-logic budget.
+# Tracking issue: terrene-foundation/kailash-py#657.
+#
+# Per ``rules/zero-tolerance.md`` Rule 2 (no fake data), the package
+# MUST NOT ship a placeholder ``LineageGraph`` that round-trips through
+# ``km.lineage(...)`` with hollow ``nodes=(ref,), edges=()`` content;
+# the typed deferral below (``km.lineage`` → ``LineageNotImplementedError``)
+# is the legitimate Rule 1b deferral path.
 
 
 # W33c: km.register top-level wrapper per specs/ml-engines-v2.md §15.4 +
@@ -536,36 +523,45 @@ async def lineage(
     *,
     tenant_id: Optional[str] = None,
     max_depth: int = 10,
-) -> "LineageGraph":
+) -> Any:
     """Return the cross-engine lineage graph rooted at ``ref``.
 
-    Per ``specs/ml-engines-v2-addendum §E10.2`` and §15.8. ``ref``
-    may be a run_id, model_version string, or dataset_hash. The
-    graph is tenant-scoped — cross-tenant reads raise
-    :class:`CrossTenantLineageError` per
+    .. warning::
+
+       **Deferred to Wave 6.5b** — see issue
+       `terrene-foundation/kailash-py#657
+       <https://github.com/terrene-foundation/kailash-py/issues/657>`_
+       for the design sketch (frozen ``LineageGraph`` / ``LineageNode`` /
+       ``LineageEdge`` per ``ml-engines-v2-addendum §E10.2`` + the
+       ``_kml_lineage`` DDL + traversal walker per ``ml-tracking.md
+       §6.3 / §7.1``).
+
+       The deferral disposition follows ``rules/zero-tolerance.md``
+       Rule 1b — calling ``km.lineage(...)`` raises a typed
+       :class:`~kailash_ml.errors.LineageNotImplementedError` (a
+       :class:`~kailash_ml.errors.TrackingError` subclass) rather than
+       returning a hollow placeholder graph (Rule 2 — fake data is
+       BLOCKED).
+
+    Per ``specs/ml-engines-v2-addendum §E10.2`` and §15.8 (target
+    contract). ``ref`` may be a run_id, model_version string, or
+    dataset_hash. The graph is tenant-scoped — cross-tenant reads raise
+    :class:`~kailash_ml.errors.CrossTenantLineageError` per
     ``rules/tenant-isolation.md``.
     """
-    from kailash_ml._wrappers import _get_default_engine
-
-    engine = _get_default_engine(tenant_id)
-    # The canonical lineage surface lives on the ModelRegistry engine
-    # (§E10.2 — run_id + dataset_hash + feature_version + model_version
-    # + deployment are all tracked on the registry's lineage table).
-    registry = getattr(engine, "_model_registry", None) or getattr(
-        engine, "model_registry", None
+    raise LineageNotImplementedError(
+        reason=(
+            "km.lineage() implementation deferred to Wave 6.5b — "
+            "see terrene-foundation/kailash-py#657 for the design "
+            "sketch (LineageGraph dataclass + _kml_lineage DDL + "
+            "registry traversal walker). The canonical contract is "
+            "specified in specs/ml-engines-v2-addendum.md §E10 and "
+            "specs/ml-tracking.md §6.3 / §7.1."
+        ),
+        tenant_id=tenant_id,
+        resource_id=ref,
+        max_depth=max_depth,
     )
-    if registry is not None and hasattr(registry, "build_lineage_graph"):
-        graph = await registry.build_lineage_graph(
-            ref=ref,
-            tenant_id=tenant_id,
-            max_depth=max_depth,
-        )
-        return graph
-    # Fallback: return a minimal LineageGraph with only the root
-    # populated when the registry has not yet implemented the
-    # build_lineage_graph primitive (shard-landing order). This keeps
-    # ``km.lineage`` callable end-to-end while the engine fills in.
-    return LineageGraph(root=ref, nodes=(ref,), edges=(), depth=0)
 
 
 # ---------------------------------------------------------------------------
@@ -748,7 +744,10 @@ _ = (
     EngineNotFoundError,
     MethodSignature,
     ParamSpec,
-    LineageGraph,
+    # NOTE: ``LineageGraph`` removed at W6-014 — the type is deferred to
+    # Wave 6.5b along with the registry-side ``build_lineage_graph``
+    # primitive (issue #657). ``km.lineage(...)`` raises
+    # ``LineageNotImplementedError`` per ``rules/zero-tolerance.md`` Rule 1b.
     # Error classes kept reachable for callers who want the finer taxonomy
     ActorRequiredError,
     AliasNotFoundError,
@@ -776,6 +775,7 @@ _ = (
     InsufficientTrialsError,
     InvalidInputSchemaError,
     InvalidTenantIdError,
+    LineageNotImplementedError,
     LineageRequiredError,
     LiveStreamError,
     MetricValueError,

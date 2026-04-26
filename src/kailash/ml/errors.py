@@ -147,6 +147,7 @@ __all__ = [
     "InvalidTenantIdError",
     "ModelSignatureRequiredError",
     "LineageRequiredError",
+    "LineageNotImplementedError",
     "ArtifactEncryptionError",
     "ArtifactSizeExceededError",
     "AliasNotFoundError",
@@ -419,6 +420,27 @@ class ModelSignatureRequiredError(TrackingError):
 class LineageRequiredError(TrackingError):
     """Raised when a mutation requires ``dataset_hash`` and none is
     available."""
+
+
+class LineageNotImplementedError(TrackingError):
+    """Raised by ``km.lineage(...)`` while the cross-engine LineageGraph
+    surface is deferred.
+
+    Per ``rules/zero-tolerance.md`` Rule 1b, the canonical lineage
+    primitive (``ModelRegistry.build_lineage_graph`` + the lineage DDL
+    + traversal walker described in ``ml-tracking.md §6.3 / §7.1``) is
+    declared deferred to a later wave. ``km.lineage()`` MUST raise this
+    typed error rather than return a hollow placeholder graph (Rule 2 —
+    fake data is BLOCKED). The deferral disposition is tracked in the
+    associated GitHub issue; the message field carries the issue link
+    so callers can find the design sketch.
+
+    The exception is a strict :class:`TrackingError` per the canonical
+    hierarchy in ``ml-tracking.md §9.1``; callers catching
+    :class:`TrackingError` (or :class:`MLError`) continue to handle the
+    not-implemented surface uniformly with the rest of the lineage
+    error family (:class:`LineageRequiredError`, :class:`CrossTenantLineageError`).
+    """
 
 
 class ArtifactEncryptionError(TrackingError):
