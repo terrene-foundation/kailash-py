@@ -165,3 +165,34 @@ Note: All workflow construction classes, connection types, contract types, and v
 Note: Every spec-claimed runtime class, mixin, exception, and resilience primitive is present at the named module path. `get_runtime` factory present. Cycle and convergence primitives all present. The single LOW finding is documentation drift on `ContentAwareExecutionError`'s parent class.
 
 ---
+
+# Spec 4: `specs/core-servers.md`
+
+**Subsections audited:** §9.1 (WorkflowServer), §9.2 (DurableWorkflowServer), §9.3 (EnterpriseWorkflowServer), §9.4 (Server Hierarchy), §10.1 (create_gateway), §10.2 (Convenience Aliases), §11 (Deprecated and Removed APIs).
+**Verification source:** `src/kailash/servers/{workflow_server,durable_workflow_server,enterprise_workflow_server,gateway,__init__}.py`.
+
+| Assertion | Method | Expected | Actual | Status |
+|-----------|--------|----------|--------|--------|
+| `class WorkflowServer` at `kailash.servers.workflow_server` | grep | match | workflow_server.py:84 | OK |
+| `class DurableWorkflowServer(WorkflowServer)` at `kailash.servers.durable_workflow_server` | grep | match | durable_workflow_server.py:37 | OK |
+| `class EnterpriseWorkflowServer(DurableWorkflowServer)` | grep | match | enterprise_workflow_server.py:86 | OK |
+| `def create_gateway(...)` factory | grep | match | gateway.py:19 | OK |
+| `def create_enterprise_gateway(**kwargs)` | grep | match | gateway.py:150 | OK |
+| `def create_durable_gateway(**kwargs)` | grep | match | gateway.py:161 | OK |
+| `def create_basic_gateway(**kwargs)` | grep | match | gateway.py:172 | OK |
+| `WorkflowServer.register_workflow(name, workflow)` | grep | match | workflow_server.py:580 | OK |
+| `WorkflowServer.run(port=8000)` | grep | exists | workflow_server.py:752 — actual signature `run(host="127.0.0.1", port=8000, **kwargs)` | OK (see F-A-02) |
+| `WorkflowGraph` deprecation alias | grep | DeprecationWarning | `kailash/__init__.py:30` raises DeprecationWarning naming v3.0.0 | OK |
+
+## F-A-02 — `core-servers.md` § 9.1 — `WorkflowServer.run` missing `host` parameter in spec
+
+**Severity:** LOW
+**Spec claim:** §9.1 lists key method `run(port=8000)`.
+**Actual state:** `src/kailash/servers/workflow_server.py:752` signature is `def run(self, host: str = "127.0.0.1", port: int = 8000, **kwargs)`. The `host` parameter is part of the public API but not documented.
+**Remediation hint:** Update spec §9.1 to document `run(host="127.0.0.1", port=8000, **kwargs)` so users know how to override the bind host (production deployments typically bind to `0.0.0.0`).
+
+**Spec 4 findings:** 0 CRIT / 0 HIGH / 0 MED / 1 LOW.
+
+Note: All three server classes present with correct inheritance. All four gateway factory functions present. WorkflowGraph deprecation alias present. The single LOW finding is documentation incompleteness on `WorkflowServer.run`.
+
+---
