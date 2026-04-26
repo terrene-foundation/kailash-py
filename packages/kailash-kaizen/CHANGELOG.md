@@ -5,6 +5,17 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Removed hardcoded model strings from `CoreAgent` + `GovernedSupervisor`; both now read from `KAIZEN_DEFAULT_MODEL` env var (closes F-D-02 + F-D-50).** `CoreAgent` (`kaizen.core.agents.Agent`) and `GovernedSupervisor` (`kaizen_agents.supervisor.GovernedSupervisor`) previously defaulted to `"gpt-3.5-turbo"` and `"claude-sonnet-4-6"` respectively when the caller omitted `model=`. This violated `rules/env-models.md` (model identifiers MUST come from `.env`) and locked every default-API deployment to a single provider. Both constructors now resolve the default from `KAIZEN_DEFAULT_MODEL` and raise `kaizen.errors.EnvModelMissing` (new typed error) with an actionable message when the env var is unset. Existing callers passing explicit `model=<literal>` are unaffected. Tier-1 unit tests in `tests/unit/test_kaizen_default_model_env.py` cover env-set, caller-override, env-unset, and empty-string env paths for both constructors.
+
+### Added
+
+- **`kaizen.errors.EnvModelMissing`**: typed `RuntimeError` subclass for "model identifier required but `.env` did not provide it" failures. Carries `env_var` and `component` attributes so multi-call-site triage can disambiguate which entry point raised. Surfaces as a top-level export from `kaizen.errors`.
+- **`.env.example` at repo root**: documents `KAIZEN_DEFAULT_MODEL` plus the matching provider API-key entries per `rules/env-models.md` Model-Key Pairings table.
+
 ## [2.13.1] — 2026-04-25 — Fix clean-venv ImportError (post-2.13.0 hotfix)
 
 Patch — guards a pre-existing unconditional `import kaizen_agents.patterns.patterns` in `kaizen/orchestration/__init__.py` behind a `try/except ImportError`. The `kaizen-agents` package is NOT a declared dependency of `kailash-kaizen`; the proxies that consumed it were defensive `mock.patch` aliases for legacy test code. Without the guard, `from kaizen.orchestration import OrchestrationRuntime` (the new #602 surface in 2.13.0) raised `ModuleNotFoundError` for any clean-venv install of `kailash-kaizen` without `kaizen-agents` present. The proxy aliases are now installed only when `kaizen-agents` is co-installed.

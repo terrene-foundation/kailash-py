@@ -5,12 +5,13 @@
 Hides the 20-concept L3 surface area behind three layers:
 
 Layer 1 (simple):
-    supervisor = GovernedSupervisor(model="claude-sonnet-4-6", budget_usd=10.0)
+    # KAIZEN_DEFAULT_MODEL=<your-chosen-model> in .env supplies the default.
+    supervisor = GovernedSupervisor(budget_usd=10.0)
     result = await supervisor.run("Analyze this codebase")
 
 Layer 2 (configured):
     supervisor = GovernedSupervisor(
-        model="claude-sonnet-4-6",
+        model=os.environ["KAIZEN_DEFAULT_MODEL"],  # explicit env override
         budget_usd=10.0,
         tools=["read_file", "grep", "write_report"],
         data_clearance="restricted",
@@ -32,10 +33,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 import threading
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Awaitable, Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from kaizen.errors import EnvModelMissing
 
 try:
     from kailash.trust.pact.agent import GovernanceHeldError
@@ -48,27 +53,22 @@ except ImportError:
             super().__init__(*args)
 
 
-from kaizen_agents.audit.trail import AuditTrail
-from kaizen_agents.governance.accountability import AccountabilityTracker
-from kaizen_agents.governance.budget import BudgetTracker
-from kaizen_agents.governance.bypass import BypassManager
-from kaizen_agents.governance.cascade import CascadeManager
-from kaizen_agents.governance.cost_model import CostModel
 from kailash.trust import ConfidentialityLevel
-
-from kaizen_agents.governance.clearance import (
-    ClassificationAssigner,
-    ClearanceEnforcer,
-)
-from kaizen_agents.governance.dereliction import DerelictionDetector
-from kaizen_agents.governance.vacancy import VacancyManager
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
-
+from kaizen_agents.audit.trail import AuditTrail
+from kaizen_agents.governance.accountability import AccountabilityTracker
+from kaizen_agents.governance.budget import BudgetTracker
+from kaizen_agents.governance.bypass import BypassManager
+from kaizen_agents.governance.cascade import CascadeManager
+from kaizen_agents.governance.clearance import ClassificationAssigner, ClearanceEnforcer
+from kaizen_agents.governance.cost_model import CostModel
+from kaizen_agents.governance.dereliction import DerelictionDetector
+from kaizen_agents.governance.vacancy import VacancyManager
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
@@ -85,7 +85,12 @@ from kaizen_agents.types import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["GovernanceHeldError", "GovernedSupervisor", "HoldRecord", "SupervisorResult"]
+__all__ = [
+    "GovernanceHeldError",
+    "GovernedSupervisor",
+    "HoldRecord",
+    "SupervisorResult",
+]
 
 
 @dataclass
@@ -119,7 +124,9 @@ class _ReadOnlyView:
         object.__setattr__(self, "_allowed", allowed_methods)
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("_") or name not in object.__getattribute__(self, "_allowed"):
+        if name.startswith("_") or name not in object.__getattribute__(
+            self, "_allowed"
+        ):
             target = object.__getattribute__(self, "_target")
             raise AttributeError(
                 f"'{type(target).__name__}' read-only view has no attribute '{name}'"
@@ -203,6 +210,9 @@ class GovernedSupervisor:
 
     Args:
         model: Model identifier string (informational, passed to AgentSpecs).
+            When ``None`` (default), resolves from the ``KAIZEN_DEFAULT_MODEL``
+            environment variable; if that is also unset, raises
+            :class:`kaizen.errors.EnvModelMissing` per ``rules/env-models.md``.
         budget_usd: Maximum budget in USD. Default $1.00.
         tools: Allowed tool names. Default empty (default-deny per PACT Rule 5).
         data_clearance: Clearance level string. Default "public".
@@ -218,7 +228,7 @@ class GovernedSupervisor:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str | None = None,
         budget_usd: float = 1.0,
         tools: list[str] | None = None,
         data_clearance: str = "public",
@@ -229,13 +239,34 @@ class GovernedSupervisor:
         policy_source: str = "",
         cost_model: CostModel | None = None,
     ) -> None:
+        # Resolve model identifier. Per rules/env-models.md, model strings MUST
+        # come from .env (KAIZEN_DEFAULT_MODEL); a hardcoded literal default
+        # like "claude-sonnet-4-6" is BLOCKED because it locks every supervisor
+        # deployment to one provider/version. If the caller passed model=None,
+        # fall back to the env var; if that is unset too, raise the typed
+        # EnvModelMissing error so the failure surfaces with an actionable
+        # instruction instead of silently sending a stale model on the wire.
+        if model is None:
+            env_model = os.environ.get("KAIZEN_DEFAULT_MODEL")
+            if not env_model:
+                raise EnvModelMissing(
+                    env_var="KAIZEN_DEFAULT_MODEL", component="GovernedSupervisor"
+                )
+            model = env_model
+
         # Validate inputs
         if not math.isfinite(budget_usd) or budget_usd < 0:
-            raise ValueError(f"budget_usd must be finite and non-negative, got {budget_usd}")
+            raise ValueError(
+                f"budget_usd must be finite and non-negative, got {budget_usd}"
+            )
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-            raise ValueError(f"timeout_seconds must be finite and positive, got {timeout_seconds}")
+            raise ValueError(
+                f"timeout_seconds must be finite and positive, got {timeout_seconds}"
+            )
         if not math.isfinite(warning_threshold):
-            raise ValueError(f"warning_threshold must be finite, got {warning_threshold}")
+            raise ValueError(
+                f"warning_threshold must be finite, got {warning_threshold}"
+            )
         if data_clearance not in _CLEARANCE_MAP:
             raise ValueError(
                 f"data_clearance must be one of {sorted(_CLEARANCE_MAP.keys())}, "
@@ -440,13 +471,21 @@ class GovernedSupervisor:
                     hold_record = HoldRecord(
                         node_id=node_id,
                         reason=hold_reason,
-                        details=getattr(held, "details", {}) if hasattr(held, "details") else {},
-                        held_at=datetime.now(timezone.utc),
+                        details=(
+                            getattr(held, "details", {})
+                            if hasattr(held, "details")
+                            else {}
+                        ),
+                        held_at=datetime.now(UTC),
                     )
                     with self._held_lock:
                         # Evict resolved holds if at capacity
                         if len(self._held_nodes) >= self._max_held_nodes:
-                            resolved = [k for k, v in self._held_nodes.items() if v.event.is_set()]
+                            resolved = [
+                                k
+                                for k, v in self._held_nodes.items()
+                                if v.event.is_set()
+                            ]
                             for k in resolved:
                                 del self._held_nodes[k]
                         self._held_nodes[node_id] = hold_record
@@ -457,7 +496,9 @@ class GovernedSupervisor:
                             reason=f"governance: {hold_reason}",
                         )
                     )
-                    self._audit.record_held("root", node_id, f"governance: {hold_reason}")
+                    self._audit.record_held(
+                        "root", node_id, f"governance: {hold_reason}"
+                    )
                     continue
 
                 except (KeyboardInterrupt, SystemExit):
@@ -496,7 +537,9 @@ class GovernedSupervisor:
         events.append(
             PlanEvent(
                 event_type=(
-                    PlanEventType.PLAN_COMPLETED if all_completed else PlanEventType.PLAN_FAILED
+                    PlanEventType.PLAN_COMPLETED
+                    if all_completed
+                    else PlanEventType.PLAN_FAILED
                 ),
                 results=node_results if all_completed else None,
             )
@@ -600,13 +643,21 @@ class GovernedSupervisor:
                     hold_record = HoldRecord(
                         node_id=node_id,
                         reason=hold_reason,
-                        details=getattr(held, "details", {}) if hasattr(held, "details") else {},
-                        held_at=datetime.now(timezone.utc),
+                        details=(
+                            getattr(held, "details", {})
+                            if hasattr(held, "details")
+                            else {}
+                        ),
+                        held_at=datetime.now(UTC),
                     )
                     with self._held_lock:
                         # Evict resolved holds if at capacity
                         if len(self._held_nodes) >= self._max_held_nodes:
-                            resolved = [k for k, v in self._held_nodes.items() if v.event.is_set()]
+                            resolved = [
+                                k
+                                for k, v in self._held_nodes.items()
+                                if v.event.is_set()
+                            ]
                             for k in resolved:
                                 del self._held_nodes[k]
                         self._held_nodes[node_id] = hold_record
@@ -617,7 +668,9 @@ class GovernedSupervisor:
                             reason=f"governance: {hold_reason}",
                         )
                     )
-                    self._audit.record_held("root", node_id, f"governance: {hold_reason}")
+                    self._audit.record_held(
+                        "root", node_id, f"governance: {hold_reason}"
+                    )
                     continue
 
                 except (KeyboardInterrupt, SystemExit):
@@ -867,7 +920,9 @@ class GovernedSupervisor:
                 and completion_tokens >= 0
             ):
                 model_name = output.get("model", self._model)
-                computed = self._cost_model.compute(model_name, prompt_tokens, completion_tokens)
+                computed = self._cost_model.compute(
+                    model_name, prompt_tokens, completion_tokens
+                )
                 if math.isfinite(computed) and computed >= 0:
                     return computed
 
