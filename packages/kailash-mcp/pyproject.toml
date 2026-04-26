@@ -83,6 +83,7 @@ markers = [
     "unit: Unit tests (fast, isolated)",
     "integration: Integration tests (real services)",
     "e2e: End-to-end tests (complete flows)",
+    "regression: Regression tests for specific issues (NEVER deleted)",
 ]
 asyncio_mode = "auto"
 

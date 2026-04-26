@@ -228,6 +228,9 @@ class BearerTokenAuth(AuthProvider):
         validate_jwt: Whether to validate JWT tokens
         jwt_secret: Secret for JWT validation
         jwt_algorithm: Algorithm for JWT validation
+        expected_issuer: When set, JWT validation requires the ``iss`` claim
+            to be present AND equal to this value. When ``None`` (default),
+            absent-iss tokens are accepted (existing behaviour preserved).
 
     Examples:
         Simple bearer token:
@@ -249,11 +252,13 @@ class BearerTokenAuth(AuthProvider):
         validate_jwt: bool = False,
         jwt_secret: Optional[str] = None,
         jwt_algorithm: str = "HS256",
+        expected_issuer: Optional[str] = None,
     ):
         """Initialize bearer token authentication."""
         self.validate_jwt = validate_jwt
         self.jwt_secret = jwt_secret
         self.jwt_algorithm = jwt_algorithm
+        self.expected_issuer = expected_issuer
 
         # Normalize tokens
         if tokens is None:
@@ -297,13 +302,33 @@ class BearerTokenAuth(AuthProvider):
             return self._validate_opaque_token(token)
 
     def _validate_jwt_token(self, token: str) -> Dict[str, Any]:
-        """Validate JWT token."""
+        """Validate JWT token.
+
+        When ``expected_issuer`` is configured, this layers PyJWT's
+        ``options={"require": ["exp", "iss"]}`` on top of the ``issuer=``
+        equality check.
+
+        Cross-SDK port of esperie/kailash-rs#599 (PR #602): jsonwebtoken's
+        ``set_issuer`` (Rust) and PyJWT's ``issuer=`` (Python) only enforce
+        equality when the ``iss`` claim is present in the token payload. A
+        forged token that OMITS ``iss`` entirely passes the allowlist check
+        unless ``iss`` is also added to the required-claims set. The require
+        list closes that bypass.
+        """
         if jwt is None:
             raise AuthenticationError("JWT validation not available")
 
+        decode_kwargs: Dict[str, Any] = {
+            "algorithms": [self.jwt_algorithm],
+        }
+        if self.expected_issuer is not None:
+            # Layer iss-required + issuer-allowlist when caller opted in.
+            decode_kwargs["issuer"] = self.expected_issuer
+            decode_kwargs["options"] = {"require": ["exp", "iss"]}
+
         try:
             payload = jwt.decode(  # type: ignore[union-attr]
-                token, self.jwt_secret, algorithms=[self.jwt_algorithm]  # type: ignore[arg-type]
+                token, self.jwt_secret, **decode_kwargs  # type: ignore[arg-type]
             )
 
             return {
@@ -315,6 +340,13 @@ class BearerTokenAuth(AuthProvider):
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationError("Token expired")
+        except jwt.MissingRequiredClaimError as e:
+            # PyJWT raises this for absent `iss` when require=["exp", "iss"]
+            # is set. Surface as the same typed AuthenticationError so callers
+            # do not have to distinguish between "no iss" and "wrong iss".
+            raise AuthenticationError(f"Invalid token: {e}")
+        except jwt.InvalidIssuerError as e:
+            raise AuthenticationError(f"Invalid token: {e}")
         except jwt.InvalidTokenError as e:
             raise AuthenticationError(f"Invalid token: {e}")
 
@@ -370,7 +402,10 @@ class JWTAuth(BearerTokenAuth):
         secret: JWT signing secret
         algorithm: JWT algorithm
         expiration: Token expiration time in seconds
-        issuer: Token issuer
+        issuer: Token issuer. Used both as the ``iss`` claim on tokens
+            issued by :py:meth:`create_token` AND as the ``expected_issuer``
+            allowlist on validation. When set, validation REQUIRES ``iss``
+            to be present (cross-SDK port of esperie/kailash-rs#599).
 
     Examples:
         Create JWT auth provider:
@@ -387,7 +422,12 @@ class JWTAuth(BearerTokenAuth):
         issuer: str = "mcp-server",
     ):
         """Initialize JWT authentication."""
-        super().__init__(validate_jwt=True, jwt_secret=secret, jwt_algorithm=algorithm)
+        super().__init__(
+            validate_jwt=True,
+            jwt_secret=secret,
+            jwt_algorithm=algorithm,
+            expected_issuer=issuer,
+        )
         self.expiration = expiration
         self.issuer = issuer
 
