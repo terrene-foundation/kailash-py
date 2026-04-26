@@ -244,3 +244,40 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** `MLDashboard.__init__` default `db_url="sqlite:///kailash-ml.db"` — a relative path, NOT `~/.kailash_ml/ml.db`. No call to `resolve_store_url()` visible at construction. The `KAILASH_ML_STORE_URL` env-var precedence chain not exercised at default.
 **Remediation hint:** Replace literal default with `resolve_store_url(explicit=db_url)` call.
 
+
+---
+
+## Spec 5 — `ml-integration.md` (478 lines)
+
+**Spec status:** Per task brief: "DEPRECATED legacy ml-integration namespace (retained until 3.0 cut)". However spec file itself does NOT carry a `Status: DEPRECATED` header at top — only references "kailash-ml v0.9.0" in package version line.
+
+§ subsections enumerated: ~12 — architecture overview, module layout, lazy loading, dependency model, type protocols, ONNX bridge, MLflow compat, agent infusion, interop, metrics, dashboard, RL, GPU setup CLI, security.
+
+### F-E2-31 — `ml-integration.md` (header) — DEPRECATED status not declared in spec
+
+**Severity:** LOW
+**Spec claim:** Per task brief this is the "legacy ml-integration namespace (retained until 3.0 cut)".
+**Actual state:** Spec header declares "Package: kailash-ml v0.9.0" and treats this as live integration spec. No `Status: DEPRECATED` / `Status: SUPERSEDED BY ml-engines-v2.md` marker. Per `rules/orphan-detection.md` Rule 3 ("Removed = Deleted, Not Deprecated") the document remaining alongside non-deprecated 1.0 specs (ml-engines-v2.md, ml-feature-store.md) creates ambiguity for which spec is canonical for shared symbols (FeatureStore, ModelRegistry).
+**Remediation hint:** Add `Status: DEPRECATED — superseded by [ml-engines-v2.md, ml-feature-store.md, ml-tracking.md, etc.]; retained until 3.0 cut` header at top of file.
+
+### F-E2-32 — `ml-integration.md` § 1.1 — ALLOWED_MODEL_PREFIXES enforcement implemented (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.1 "Security allowlist": Model class instantiation gated by `ALLOWED_MODEL_PREFIXES` in `engines/_shared.py`. Allowed: `sklearn.`, `lightgbm.`, `xgboost.`, `catboost.`, `kailash_ml.`, `torch.`, `lightning.`. Other prefixes raise `ValueError`.
+**Actual state:** `engines/_shared.py:48-78` — `ALLOWED_MODEL_PREFIXES = frozenset(...)`; `validate_model_class()` raises `ValueError` if class string does not start with any allowed prefix. Confirmed.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-33 — `ml-integration.md` § 1.1 — Lazy loading via `__getattr__` implemented (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.1 + § 1.3 — top-level `kailash_ml` module uses `__getattr__` to defer engine imports until first access.
+**Actual state:** `kailash_ml/__init__.py:577` — `def __getattr__(name)` confirmed; eager-imports for groups (1, 2, 6) coexist with lazy-load fallback for engines + ExperimentalWarning. ExperimentalWarning class exists in `_decorators.py:13`; `@experimental` decorator emits on first instantiation.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-34 — `ml-integration.md` § 1.2 — Module layout matches spec (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.2 declares directories: `engines/`, `bridge/`, `compat/`, `agents/`, `dashboard/`, `metrics/`, `rl/` plus key files.
+**Actual state:** All directories confirmed present in `packages/kailash-ml/src/kailash_ml/`. Additional 1.0 directories (`automl/`, `drift/`, `features/`, `tracking/`, `serving/`, `interop.py`, `data/`, `engine.py`, `engines/`) coexist — confirming the spec describes the legacy 0.9 layout.
+**Remediation hint:** None — confirms compliance with legacy layout (further reinforces F-E2-31 deprecation-marker need).
+
