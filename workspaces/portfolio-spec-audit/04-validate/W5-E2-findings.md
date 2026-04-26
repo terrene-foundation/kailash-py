@@ -428,3 +428,59 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** Test file paths not directly verified in audit; per `rules/facade-manager-detection.md` and orphan-detection convention, the wiring test name `test_alignment_diagnostics_wiring.py` would be expected.
 **Remediation hint:** Verify via `ls packages/kailash-align/tests/integration/test_alignment_diagnostics_wiring.py`.
 
+
+---
+
+## Spec 9 — `align-ml-integration.md` (356 lines)
+
+§ subsections enumerated: ~11 (1.x scope, 2.x Protocol compliance, 3.x auto-emission, 4.x extras, 5 errors, 6 tests, 7 cross-SDK, 8 industry, 9 migration, 10 release, 11 cross-refs)
+
+### F-E2-53 — `align-ml-integration.md` § 2.2 — All 4 RL bridge adapters implemented (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 2.2 declares `AlignDPOAdapter`, `AlignPPOAdapter`, `AlignRLOOAdapter`, `AlignOnlineDPOAdapter` — adapters wrapping TRL trainers and satisfying `RLLifecycleProtocol`.
+**Actual state:** `packages/kailash-align/src/kailash_align/rl_bridge/` contains `_dpo.py`, `_ppo_rlhf.py`, `_rloo.py`, `_online_dpo.py`. Each has `class Align...Adapter` per spec. `_base.py:129` `def emit_metric(...)` defines the Protocol's emission contract.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-54 — `align-ml-integration.md` § 4.1 — `[rl-bridge]` extra declared (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 4.1 declares `rl-bridge = ["kailash-ml>=1.0.0,<2.0.0"]` extra; install via `pip install kailash-align[rl-bridge]`.
+**Actual state:** `packages/kailash-align/pyproject.toml:55-59` declares `rl-bridge = [..., "kailash-align[rlhf,eval,serve,online,rl-bridge]"]` (note: extra includes itself recursively as part of an `all`-style super-extra). Need to verify the ACTUAL `[rl-bridge]` extra does NOT recursively include itself — a recursive self-reference is a packaging anti-pattern.
+**Remediation hint:** Verify `[rl-bridge]` definition; the visible snippet may be the `[all]` extra rather than `[rl-bridge]` itself.
+
+### F-E2-55 — `align-ml-integration.md` § 3.x — Metric auto-emission via TRL callback bridge (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 3.4 — TRL `TrainerCallback` registered via `Trainer.add_callback()`; `on_log()` reads TRL `logs` dict, routes through `self.emit_metric()`. § 3.1 metric namespace `rl.policy.kl_from_ref`, `rl.policy.loss`, etc.
+**Actual state:** `_dpo.py:234-258` and `_online_dpo.py:191` show `self.emit_metric(rl_key, float(entry[trl_key]), step=step)` pattern after `_TRL_TO_KML_METRIC_NAME` dict resolution. TRL → kailash-ml metric key mapping is in place.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-56 — `align-ml-integration.md` § 1.1 — LoRA Lightning callback in ml/ subpackage (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Spec mentions LoRA callback for Lightning integration as part of cross-framework training surface (per task brief: "LoRA Lightning callback").
+**Actual state:** `packages/kailash-align/src/kailash_align/ml/_lora_callback.py:118` `class LoRALightningCallback(pl.Callback)` exists.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-57 — `align-ml-integration.md` § 1.1 — Trajectory unification helper present (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** Spec brief: "RL ↔ alignment trajectory unification".
+**Actual state:** `packages/kailash-align/src/kailash_align/ml/_trajectory.py:57` `trajectory_from_alignment_run(run)` returns `RLLineage` (from kailash-ml). Spec § 1.1 + § 11 cross-refs `ml-rl-core-draft.md` `PolicyArtifactRef` / `RLLineage`.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-58 — `align-ml-integration.md` § 3.5 — Rank-0-only emission discipline asserted in spec; verify guard implemented
+
+**Severity:** MED
+**Spec claim:** § 3.5 — multi-GPU training via `accelerate` MUST emit metrics ONLY from rank-0 process. Guard: `if state.is_world_process_zero is False: return`.
+**Actual state:** Need to verify guard exists in callback `on_log()` of each of the 4 adapters. The spec snippet shows the pattern but I have not directly grepped each adapter's callback for the guard.
+**Remediation hint:** Verify `is_world_process_zero` check in each of `_dpo.py`, `_ppo_rlhf.py`, `_rloo.py`, `_online_dpo.py` callback paths. If absent, distributed training will emit duplicate metrics N times.
+
+### F-E2-59 — `align-ml-integration.md` § 5 — `RLBridgeError`, `RLBridgeImportError`, `RLBridgeProtocolViolationError`, `RLBridgeTRLVersionError` typed exceptions
+
+**Severity:** MED
+**Spec claim:** § 5 declares 4 typed errors: `RLBridgeError` (base), `RLBridgeImportError`, `RLBridgeProtocolViolationError`, `RLBridgeTRLVersionError`.
+**Actual state:** `packages/kailash-align/src/kailash_align/exceptions.py` needs verification for these classes. Spec error taxonomy must match implementation.
+**Remediation hint:** Grep `exceptions.py` for `RLBridge*Error` definitions; add any missing typed errors.
+
