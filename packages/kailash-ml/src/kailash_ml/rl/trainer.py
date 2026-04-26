@@ -35,6 +35,7 @@ from kailash_ml._result import TrainingResult
 from kailash_ml.errors import RLError
 from kailash_ml.rl._lineage import RLLineage
 from kailash_ml.rl._records import EpisodeRecord, EvalRecord
+from kailash_ml.rl._trajectory import TrajectorySchema
 from kailash_ml.rl.protocols import PolicyArtifactRef
 
 logger = logging.getLogger(__name__)
@@ -750,6 +751,94 @@ class RLTrainer:
             raise RLError(reason="policy_registry_required", op="load_and_evaluate")
         model = self._policy_registry.load_model(policy_name, version)
         return self.evaluate(model, env_name, n_episodes)
+
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def collect_trajectories(
+        result: RLTrainingResult,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> TrajectorySchema:
+        """Bundle a completed RL training run into a :class:`TrajectorySchema`.
+
+        Per ``specs/ml-rl-align-unification.md`` §3.2 + §4 the producer
+        side of the bridge ships its result as a single round-trippable
+        carrier. This is the canonical RL-side entry point.
+
+        The result MUST carry an :class:`RLLineage` (per spec §5 every
+        run that may cross the bridge populates lineage at construction
+        time). When ``result.lineage`` is ``None`` the method raises a
+        typed :class:`RLError` rather than silently fabricating one — a
+        downstream RLHF consumer needs the producer's lineage to chain
+        runs.
+
+        Parameters
+        ----------
+        result:
+            :class:`RLTrainingResult` returned by :meth:`train` or by
+            :func:`kailash_ml.rl.rl_train`.
+        metadata:
+            Optional producer-supplied extension fields. Stored on the
+            schema as a read-only mapping (callers cannot mutate
+            post-handoff). Common entries: env_spec, reward-model ref
+            hashes, dataset row counts.
+
+        Returns
+        -------
+        TrajectorySchema
+            Frozen bundle of episodes + evals + lineage + metadata.
+
+        Raises
+        ------
+        RLError
+            When ``result.lineage`` is ``None`` (cross-bridge runs
+            require lineage, ``rules/zero-tolerance.md`` Rule 2 — no
+            silent fabrication of provenance).
+        """
+        lineage = result.lineage
+        if lineage is None:
+            raise RLError(
+                reason="missing_lineage",
+                op="collect_trajectories",
+                detail=(
+                    "RLTrainingResult.lineage is None; collect_trajectories "
+                    "requires a populated RLLineage. Construct the result "
+                    "with a lineage at the train() call site (spec §5)."
+                ),
+            )
+
+        merged_metadata: dict[str, Any] = {
+            "algorithm": result.algorithm,
+            "env_spec": result.env_spec,
+            "total_timesteps": result.total_timesteps,
+            "total_env_steps": result.total_env_steps,
+            "elapsed_seconds": result.elapsed_seconds,
+            "device_used": result.device_used,
+            "tenant_id": result.tenant_id,
+        }
+        if metadata:
+            for key, value in metadata.items():
+                merged_metadata[str(key)] = value
+
+        trajectory = TrajectorySchema(
+            episodes=tuple(result.episodes),
+            lineage=lineage,
+            eval_history=tuple(result.eval_history),
+            metadata=merged_metadata,
+        )
+        logger.info(
+            "rl_trainer.collect_trajectories",
+            extra={
+                "run_id": lineage.run_id,
+                "algorithm": result.algorithm,
+                "n_episodes": trajectory.n_episodes,
+                "n_evals": trajectory.n_evals,
+                "tenant_id": result.tenant_id,
+                "mode": "real",
+            },
+        )
+        return trajectory
 
     # ------------------------------------------------------------------
 

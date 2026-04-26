@@ -75,6 +75,14 @@ from kailash_align.ml._lora_callback import (
 )
 from kailash_align.ml._trajectory import trajectory_from_alignment_run
 
+# W6-016 — single-source-in-ml mandate (spec §7): TrajectorySchema is
+# the canonical bundle defined in kailash_ml.rl and re-exported here so
+# call sites can `from kailash_align.ml import TrajectorySchema` without
+# kailash-align ever defining a parallel type. Eager re-export per
+# rules/orphan-detection.md §6 (every __all__ entry resolves at
+# module-scope import).
+from kailash_ml.rl import TrajectorySchema
+
 if TYPE_CHECKING:  # pragma: no cover — typing-only imports
     from kailash_ml.rl import RLLineage  # re-exported via trajectory_from_alignment_run
 
@@ -94,4 +102,6 @@ __all__ = [
     "lora_callback_for",
     # Trajectory unification (returns kailash_ml.rl.RLLineage)
     "trajectory_from_alignment_run",
+    # W6-016 — shared trajectory schema (re-export of kailash_ml.rl.TrajectorySchema)
+    "TrajectorySchema",
 ]

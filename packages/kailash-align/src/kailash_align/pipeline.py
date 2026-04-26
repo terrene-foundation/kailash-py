@@ -62,6 +62,91 @@ class AlignmentPipeline:
     ) -> None:
         self._config = config
         self._registry = adapter_registry
+        # Trajectories handed off from a producer (e.g. an RL pretraining
+        # run) before this pipeline runs. Consumed by ``_run_training`` as
+        # additional metadata; populated via :meth:`consume_trajectories`.
+        # Stored as a tuple so the pipeline never accidentally mutates a
+        # caller-owned list.
+        self._consumed_trajectories: tuple[Any, ...] = ()
+
+    def consume_trajectories(self, trajectories: Any) -> None:
+        """Accept one or more :class:`TrajectorySchema` from a producer.
+
+        Per ``specs/ml-rl-align-unification.md`` §3.2 + §4 this is the
+        align-side consumer entry of the cross-SDK bridge. Called BEFORE
+        :meth:`train` so the alignment run records the upstream
+        provenance (parent_run_id, base_model_ref) into its own audit
+        trail.
+
+        Accepts a single :class:`TrajectorySchema` OR an iterable of
+        them. Late-imports the type from ``kailash_ml.rl`` so the
+        pipeline does not pay the kailash-ml import cost on a kailash-
+        align build that never uses the bridge.
+
+        Parameters
+        ----------
+        trajectories:
+            Either a single :class:`~kailash_ml.rl.TrajectorySchema` or
+            a sequence of them. Empty sequences are accepted (no-op).
+
+        Raises
+        ------
+        TrainingError
+            If any item in ``trajectories`` is not a
+            :class:`TrajectorySchema` instance.
+        """
+        # Lazy import — keep ``import kailash_align`` cheap when the
+        # bridge is not in use. The dependency direction (align -> ml)
+        # is spec §7-sanctioned but the import cost MUST stay opt-in.
+        try:
+            from kailash_ml.rl import TrajectorySchema
+        except ImportError as exc:
+            raise TrainingError(
+                "AlignmentPipeline.consume_trajectories requires kailash-ml "
+                "to be installed. kailash-align declares kailash-ml>=0.11 as "
+                "a runtime dep; reinstall kailash-align to pull it in."
+            ) from exc
+
+        # Normalise to a tuple. Single-instance callers pass the
+        # trajectory directly; iterable callers pass a list/tuple.
+        if isinstance(trajectories, TrajectorySchema):
+            items: tuple[Any, ...] = (trajectories,)
+        else:
+            try:
+                items = tuple(trajectories)
+            except TypeError as exc:
+                raise TrainingError(
+                    "AlignmentPipeline.consume_trajectories: trajectories "
+                    "must be a TrajectorySchema or an iterable of "
+                    f"TrajectorySchema, got {type(trajectories).__name__!r}"
+                ) from exc
+
+        for idx, item in enumerate(items):
+            if not isinstance(item, TrajectorySchema):
+                raise TrainingError(
+                    "AlignmentPipeline.consume_trajectories: item "
+                    f"{idx} is not a TrajectorySchema "
+                    f"(got {type(item).__name__!r})"
+                )
+
+        # Append to existing — repeated calls accumulate so multi-stage
+        # pipelines (e.g. SFT → DPO each consuming distinct upstream
+        # trajectories) can build provenance over multiple steps.
+        self._consumed_trajectories = self._consumed_trajectories + items
+        logger.info(
+            "alignment_pipeline.consume_trajectories",
+            extra={
+                "n_consumed": len(items),
+                "n_total": len(self._consumed_trajectories),
+                "lineage_run_ids": [t.lineage.run_id for t in items],
+                "mode": "real",
+            },
+        )
+
+    @property
+    def consumed_trajectories(self) -> tuple[Any, ...]:
+        """Return all trajectories consumed via :meth:`consume_trajectories`."""
+        return self._consumed_trajectories
 
     async def train(
         self,
