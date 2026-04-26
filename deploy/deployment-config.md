@@ -17,17 +17,17 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.11.0          |
-| kailash-dataflow | `dataflow-v*`      | 2.3.0           |
+| kailash (core)   | `v*`               | 2.11.2          |
+| kailash-dataflow | `dataflow-v*`      | 2.3.1           |
 | kailash-kaizen   | `kaizen-v*`        | 2.13.1          |
 | kailash-nexus    | `nexus-v*`         | 2.3.0           |
 | kailash-pact     | `pact-v*`          | 0.11.0          |
 | kailash-ml       | `ml-v*`            | 1.1.1           |
 | kailash-align    | `align-v*`         | 0.6.0           |
-| kailash-mcp      | `mcp-v*`           | 0.2.9           |
+| kailash-mcp      | `mcp-v*`           | 0.2.10          |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-25 (1.3.0 wave — 6-issue parallel resolution wave). 3 packages released: kailash 2.11.0 (#604 algorithm-agility scaffold via `kailash.trust.signing.algorithm_id` + #606 SLIP-0039 Shamir wrapper via `kailash.trust.vault` + new `[shamir]` optional extra), kailash-dataflow 2.3.0 (#607 SecurityDefinerBuilder for pre-auth RLS carveouts + RLS posture audit + carveout pattern docs), kailash-pact 0.11.0 (#605 PACT N4/N5 conformance runner — A+B vector schema + runner with cross-SDK byte-equality, C+D CLI `pact-conformance-runner` + Tier 2 vendored vector suite; closes Envoy Phase 02 BET-6 cross-SDK contract parity gate). Lockstep dep pins on all 7 framework packages bumped to `kailash>=2.11.0`. PRs #622, #623, #624, #627, #628 admin-merged in this session.
+Last updated: 2026-04-26 (kailash 2.11.2 hotfix — JWT security hardening). Closes #635 (trust JWT iss-claim presence enforcement, cross-SDK companion to #625) + #636 (CRIT — `APIGateway` hardcoded JWT default secret removed, now requires `KAILASH_API_GATEWAY_SECRET` env var ≥32 bytes). Both surfaced by Wave 5 portfolio spec audit (`workspaces/portfolio-spec-audit/04-validate/00-portfolio-summary.md`). 11/11 regression tests at `tests/regression/test_issue_63{5,6}*.py`. PR #637 admin-merged this session. No sibling drift — every other BUILD-repo package main matches PyPI exactly.
 
 ## Release Runbook
 
