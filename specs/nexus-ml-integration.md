@@ -231,33 +231,54 @@ Frozen (per PACT MUST Rule 1 discipline) + the scopes tuple is immutable.
 
 ### 5.1 Contract
 
-When `InferenceServer` (kailash-ml) is registered as a Nexus service:
+When a kailash-ml `ServeHandle` (returned by `km.serve(...)` or constructed directly from an `InferenceServer`) is mounted behind Nexus:
 
 ```python
-from kailash_nexus import Nexus
-from kailash_ml import InferenceServer
+from nexus import Nexus
+from nexus.ml import mount_ml_endpoints
+import kailash_ml as km
 
 nexus = Nexus(...)
-server = InferenceServer(model_name="churn_v3")
-nexus.register_service("inference", server.as_nexus_service())
+serve_handle = await km.serve(model_name="churn_v3")
+mount_ml_endpoints(nexus, serve_handle, prefix="/ml")
 ```
 
-Every request hitting `POST /services/inference/predict` MUST:
+Every request hitting `POST /ml/predict` (or the optional MCP / WebSocket variants — see §5.2) MUST:
 
 1. Pass through `JWTMiddleware` (sets `_current_tenant_id`, `_current_actor_id`).
-2. `InferenceServer.as_nexus_service()` wraps its `predict()` handler such that it reads `get_current_tenant_id()` / `get_current_actor_id()` and forwards them into the `predict(request, *, tenant_id=..., actor_id=...)` call.
+2. `mount_ml_endpoints` wraps the registered `ServeHandle.predict` so the handler reads `get_current_tenant_id()` / `get_current_actor_id()` at the request boundary and forwards them as keyword arguments into `predict(inputs, *, tenant_id=..., actor_id=...)` when the predictor's signature accepts them. Predictors that do NOT accept the kwargs still see the propagated tenant via `get_current_tenant_id()` directly through the kailash-ml compat layer (`§2.3`).
 3. The predictor appends the tenant/actor to the inference audit row.
 
-### 5.2 `InferenceServer.as_nexus_service()` API
+### 5.2 `mount_ml_endpoints` API (canonical)
 
 ```python
-# packages/kailash-ml/src/kailash_ml/serving/server.py
-def as_nexus_service(self) -> "NexusServiceAdapter":
-    """Adapter that exposes this InferenceServer as a Nexus service.
-    Propagates ambient tenant_id + actor_id into every predict() call."""
+# packages/kailash-nexus/src/nexus/ml/__init__.py
+def mount_ml_endpoints(
+    nexus: Any,
+    serve_handle: Any,
+    *,
+    prefix: str = "/ml",
+) -> None:
+    """Mount REST + MCP + WebSocket routes for a kailash-ml ``ServeHandle``.
+
+    Routes registered (relative to ``prefix``, default ``/ml``):
+        - ``POST {prefix}/predict``       — REST prediction endpoint
+        - ``GET  {prefix}/describe``      — model metadata (signature, version)
+        - ``GET  {prefix}/healthz``       — liveness probe (no auth)
+        - ``POST {prefix}/mcp/predict``   — MCP-compatible prediction endpoint
+        - WebSocket ``{prefix}/ws``       — streaming predictions (when the
+          underlying Nexus exposes ``register_websocket``)
+    """
 ```
 
-The adapter is a thin wrapper — kailash-ml does NOT take a hard dependency on Nexus. The adapter is only instantiated when `as_nexus_service()` is called, and that method imports Nexus lazily (import-time deferral per `rules/dependencies.md` discipline).
+**Canonical contract** (verified at `packages/kailash-nexus/src/nexus/ml/__init__.py:222`):
+
+- `serve_handle` MUST expose a `predict(inputs, *, tenant_id=None, actor_id=None) -> dict` callable. Predictors whose signatures lack the kwargs are still supported — `mount_ml_endpoints` introspects `inspect.signature(predict)` and only forwards kwargs the callable accepts.
+- `serve_handle` MAY expose `describe() -> dict` for model metadata; absent, `GET {prefix}/describe` returns `{"prefix": prefix}`.
+- The `[ml]` extra is required (`pip install kailash-nexus[ml]`); `mount_ml_endpoints` raises `ImportError` at call time when `kailash_ml` is not installed.
+- WebSocket registration is best-effort: when the Nexus instance exposes `register_websocket`, a class-based `MessageHandler` is registered at `{prefix}/ws` per `skills/03-nexus/nexus-multi-channel.md`. Errors during streaming send a generic `{"error": "prediction failed"}` body without leaking exception details (per `rules/security.md` § Output Encoding).
+
+The mount function is a thin wrapper — kailash-ml does NOT take a hard dependency on Nexus. The Nexus-side import of `kailash_ml` is deferred to call time inside `_require_ml_extra(...)` per `rules/dependencies.md` § "Exception: Optional Extras with Loud Failure".
 
 ### 5.3 Auto-audit
 
@@ -283,9 +304,10 @@ class NexusContextError(NexusError):
     """New. Raised when a caller tries to reset a contextvar with a token
     that doesn't belong to them, or when contextvar state is corrupt."""
 
-class NexusServiceAdapterError(NexusError):
-    """New. Raised when InferenceServer.as_nexus_service() fails to
-    construct (missing optional extra, misconfigured nexus instance)."""
+class NexusMLMountError(NexusError):
+    """New. Raised when ``nexus.ml.mount_ml_endpoints`` cannot register
+    routes (missing ``[ml]`` extra, ``serve_handle`` lacks ``predict``,
+    or the underlying Nexus HTTP transport is uninitialised)."""
 ```
 
 Missing `sub` claim → 401 `invalid_token` (existing behavior in `specs/nexus-auth.md` §9.1).
@@ -307,7 +329,8 @@ File naming:
 
 - `tests/integration/test_jwt_middleware_tenant_propagation_wiring.py` — real FastAPI app + real JWTMiddleware + ML engine reads `get_current_tenant_id()` → matches JWT `tenant_id` claim.
 - `tests/integration/test_dashboard_nexus_auth_wiring.py` — real Nexus instance issues JWT → `MLDashboard(auth="nexus")` validates it → principal carries `actor_id` + `tenant_id`.
-- `tests/integration/test_inference_server_as_nexus_service_wiring.py` — Nexus-served `InferenceServer` → JWT-authenticated request → audit row in the inference audit table carries the JWT's `sub` + `tenant_id`.
+- `tests/integration/test_nexus_ml_endpoints_wiring.py` — Nexus instance + `mount_ml_endpoints` + Protocol-satisfying `ServeHandle` (per `rules/testing.md` § Tier 2 "Protocol-Satisfying Deterministic Adapters") + JWT-authenticated request → assertions: (a) `POST {prefix}/predict` returns 200; (b) the predictor saw the propagated `tenant_id` + `actor_id`; (c) `GET {prefix}/healthz` is reachable without auth; (d) `POST {prefix}/mcp/predict` unwraps the MCP tool envelope; (e) two sequential requests with different JWTs do NOT bleed tenant context.
+- `tests/integration/test_mount_ml_endpoints.py` — Canonical-entry regression locking the shipped public-API shape: (1) `mount_ml_endpoints` signature is exactly `(nexus, serve_handle, *, prefix="/ml") -> None` (structural invariant test per `rules/cross-sdk-inspection.md` §3a); (2) the absent legacy names `Nexus.register_service` and `InferenceServer.as_nexus_service` are NOT present on the Nexus or kailash-ml public surfaces — if a future refactor reintroduces them, the test fails loudly and forces re-audit per `rules/orphan-detection.md` §3.
 
 Each test asserts state persistence per `rules/testing.md` § "State Persistence Verification" — every write is read back.
 
@@ -350,7 +373,7 @@ Cross-SDK follow-up is deferred until kailash-rs scopes a Rust-side Nexus ML inf
 - `JWTMiddleware.__init__` — unchanged.
 - `JWTValidator` — unchanged; constructed directly via `JWTValidator(JWTConfig(...))`. Dashboard reuse runs through `nexus.ml.MLDashboard.from_nexus(nexus)` which extracts the already-configured JWTConfig from the live JWTMiddleware on the Nexus instance.
 - `nexus.ml` — new module: `MLDashboard` auth adapter + `mount_ml_endpoints` helper.
-- `Nexus` — gains `register_service()` overload that accepts a `NexusServiceAdapter` (backward-compatible).
+- `Nexus` — UNCHANGED. The ML serving surface mounts via the standalone helper `nexus.ml.mount_ml_endpoints(nexus, serve_handle)` rather than a method on the `Nexus` class itself. No `register_service()` overload and no `NexusServiceAdapter` class are introduced; the prior draft's mention of those names is RETRACTED in favor of the canonical `mount_ml_endpoints` entry per §5.2.
 
 Users relying on `specs/nexus-auth.md` §9.1 behavior are unaffected. Optional migration: switch from manual `request.state.user.tenant_id` extraction to `get_current_tenant_id()` (simpler, same value, but NOT required).
 
@@ -373,7 +396,7 @@ Part of the kailash-ml 1.0.0 wave release (see `pact-ml-integration-draft.md` §
 - kailash-ml specs consuming this surface:
   - `ml-tracking-draft.md` §10 — `get_current_run()` contextvar (ml-side mirror).
   - `ml-dashboard-draft.md` §5 — `MLDashboard(auth="nexus")`.
-  - `ml-serving-draft.md` — `InferenceServer.as_nexus_service()`.
+  - `ml-serving.md` — `InferenceServer` runtime that produces the `ServeHandle` instance fed to `mount_ml_endpoints` (the bridge module is owned by `nexus-ml-integration.md` §5; ml-serving owns only the runtime).
   - `ml-engines-v2-draft.md` §3 — every engine reads `get_current_tenant_id()` via the compat layer.
 - Nexus companion specs:
   - `specs/nexus-auth.md` §9.1 — JWTMiddleware (unchanged).

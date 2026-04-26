@@ -1,5 +1,19 @@
 # Nexus Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- **W6-009 — Canonicalized ML mount path on `mount_ml_endpoints()` (closes F-C-26)**: `specs/nexus-ml-integration.md` previously cited `nexus.register_service("inference", server.as_nexus_service())` and an `InferenceServer.as_nexus_service()` API that were never shipped. The canonical entry — verified at `packages/kailash-nexus/src/nexus/ml/__init__.py:222` — is `nexus.ml.mount_ml_endpoints(nexus, serve_handle, *, prefix="/ml")`. Spec sections §5.1, §5.2, §6 (error class), §7.2 (Tier-2 test name), §10 (Migration Path), and §12 (Cross-References) updated to reference the shipped surface; absent legacy names retracted per `rules/orphan-detection.md` §3 (Removed = Deleted, Not Deprecated).
+
+### Tests
+
+- **`tests/integration/test_mount_ml_endpoints.py` (new)**: structural-invariant Tier-2 regression test pinning `mount_ml_endpoints(nexus, serve_handle, *, prefix="/ml")` as the canonical entry. Asserts (a) signature shape; (b) absence of `Nexus.register_service` and `InferenceServer.as_nexus_service`; (c) end-to-end JWT-claim propagation into the predictor against a real Nexus + Protocol-satisfying ServeHandle (per `rules/testing.md` § Tier 2 "Protocol-Satisfying Deterministic Adapters" — no mocks). 7/7 passing locally.
+
+### Internal
+
+- `packages/kailash-nexus/pytest.ini` — register the `regression` marker (already in use by `tests/regression/test_issue_211.py`) to clear pre-existing `PytestUnknownMarkWarning` per `rules/zero-tolerance.md` Rule 1.
+
 ## [2.3.0] - 2026-04-25 — WebSocket per-connection unicast + on_message reply delivery (#618)
 
 ### Added
