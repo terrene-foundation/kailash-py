@@ -1,9 +1,8 @@
-"""DataFlow Trust Module (CARE-019, CARE-020, CARE-021).
+"""DataFlow Trust Module (CARE-019, CARE-020).
 
 Provides trust-aware query execution for DataFlow, integrating with the
-Enterprise Agent Trust Protocol (EATP) for fine-grained access control,
-cryptographically signed audit records for tamper evidence, and
-cross-tenant data access with explicit delegation chains.
+Enterprise Agent Trust Protocol (EATP) for fine-grained access control
+and cryptographically signed audit records for tamper evidence.
 
 Key Components:
     CARE-019 (Query Wrapper):
@@ -16,9 +15,14 @@ Key Components:
     - SignedAuditRecord: Cryptographically signed audit record
     - DataFlowAuditStore: Storage and verification for audit records
 
-    CARE-021 (Multi-Tenancy):
-    - CrossTenantDelegation: Represents a delegation record between tenants
-    - TenantTrustManager: Manages cross-tenant delegations and verification
+    CARE-021 (Multi-Tenancy): REMOVED on 2026-04-27 (W6-006, finding F-B-05).
+    `TenantTrustManager` and `CrossTenantDelegation` were exposed publicly
+    but no framework hot path invoked them — orphan-detection MUST 1+3.
+    Per `rules/orphan-detection.md` § 3 ("Removed = Deleted, Not Deprecated"),
+    the classes have been deleted entirely. When a production cross-tenant
+    delegation requirement lands, design the new surface against the
+    framework's hot path (express, query engine) in the SAME PR — do not
+    resurrect the orphan from git history without a real call site.
 
 Usage:
     from dataflow.trust import (
@@ -30,9 +34,6 @@ Usage:
         # CARE-020: Signed audit
         SignedAuditRecord,
         DataFlowAuditStore,
-        # CARE-021: Multi-tenancy
-        CrossTenantDelegation,
-        TenantTrustManager,
     )
 
     # Create executor (optional Kaizen/Core SDK dependencies)
@@ -63,16 +64,6 @@ Usage:
     )
     is_valid = store.verify_record(record)
 
-    # Create cross-tenant delegation (CARE-021)
-    manager = TenantTrustManager(strict_mode=True)
-    delegation = await manager.create_cross_tenant_delegation(
-        source_tenant_id="tenant-a",
-        target_tenant_id="tenant-b",
-        delegating_agent_id="agent-a",
-        receiving_agent_id="agent-b",
-        allowed_models=["User"],
-    )
-
 Features:
     - Standalone operation (no hard Kaizen dependency)
     - Graceful degradation when trust modules not available
@@ -84,17 +75,14 @@ Features:
     - Audit trail integration
     - Ed25519 cryptographic signatures (CARE-020)
     - SHA-256 hash chain for tamper detection (CARE-020)
-    - Cross-tenant delegation management (CARE-021)
-    - Trust-aware multi-tenancy with explicit EATP delegation chains (CARE-021)
 
 Version:
     CARE-019: Added in v0.11.0
     CARE-020: Added in v0.11.0
-    CARE-021: Added in v0.11.0
+    CARE-021: Removed in v2.0.13 (orphan-detection §3 sweep, W6-006).
 """
 
 from dataflow.trust.audit import DataFlowAuditStore, SignedAuditRecord
-from dataflow.trust.multi_tenant import CrossTenantDelegation, TenantTrustManager
 from dataflow.trust.query_wrapper import (
     ConstraintEnvelopeWrapper,
     QueryAccessResult,
@@ -111,7 +99,4 @@ __all__ = [
     # CARE-020: Signed audit
     "DataFlowAuditStore",
     "SignedAuditRecord",
-    # CARE-021: Multi-tenancy
-    "CrossTenantDelegation",
-    "TenantTrustManager",
 ]

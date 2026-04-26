@@ -657,13 +657,16 @@ class DataFlow(DataFlowEventMixin):
                 extra={"signed": trust_audit_signing_key is not None},
             )
 
-        # NOTE: `TenantTrustManager` is available as a standalone class at
-        # `dataflow.trust.multi_tenant.TenantTrustManager` for consumers that
-        # need cross-tenant delegation verification. It is NOT attached as a
-        # `db.*` facade here because no framework hot-path (express read/list,
-        # trust executor) invokes its methods — attaching it would be a
-        # Phase-5.11-shaped orphan (rules/orphan-detection.md MUST 3). When a
-        # production call site lands, wire it at that same PR.
+        # NOTE: `TenantTrustManager` and `CrossTenantDelegation` were
+        # removed entirely on 2026-04-27 (W6-006, finding F-B-05). The
+        # classes had been preserved as a standalone import after the
+        # facade was withdrawn on 2026-04-18, but no production call site
+        # ever materialised. Per `rules/orphan-detection.md` § 3
+        # ("Removed = Deleted, Not Deprecated"), the source + tests were
+        # deleted. When a production cross-tenant delegation requirement
+        # lands, design the new surface against the framework's hot path
+        # (express, query engine) in the SAME PR — do NOT resurrect the
+        # orphan from git history without a real call site.
 
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
