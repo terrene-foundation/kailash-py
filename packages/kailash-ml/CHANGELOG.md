@@ -1,5 +1,109 @@
 # kailash-ml Changelog
 
+## [1.2.0] — 2026-04-27 — W5 wave: schema parity + scope cleanup
+
+W6-015 is the version owner for the W5 wave. This release batches three
+ml todos:
+
+- **W6-015 — `RLTrainingResult` schema parity (F-E1-38).** Realises the
+  `specs/ml-rl-core.md` §3.2 subset relationship `RLTrainingResult ⊂
+TrainingResult` by mirroring every `TrainingResult` field on the
+  RL envelope AND adding the 8 spec-required RL-specific fields:
+  `episodes` (list[`EpisodeRecord`]), `policy_entropy`, `value_loss`,
+  `kl_divergence`, `explained_variance`, `replay_buffer_size`,
+  `total_env_steps`, `policy_artifact` (`PolicyArtifactRef`).
+- **W6-013 — `CatBoostTrainable` adapter (F-E1-01).** W5-wave batch
+  coordination — the adapter ships in this release-wave window;
+  parallel todos populate the trainable layer separately while W6-015
+  owns the version + CHANGELOG.
+- **W6-014 — `LineageGraph` deferral (F-E1-09).** Tracked through the
+  Wave 6.5b roadmap per `rules/zero-tolerance.md` Rule 1b. Marker entry
+  for the W5-wave batch coordination — `km.lineage()` raises typed
+  `LineageNotImplementedError` rather than returning fake data, and the
+  full graph DDL + traversal lands in a follow-up release.
+
+### Added
+
+- **`kailash_ml.rl.EpisodeRecord` + `kailash_ml.rl.EvalRecord`** — typed
+  per-episode + per-eval records per `specs/ml-rl-core.md` §3.2 +
+  §10.2. Both are frozen dataclasses with no SB3 / Gymnasium imports
+  so the `[rl]` extra remains optional.
+- **`RLTrainingResult` 8 spec-required fields** per spec §3.2:
+  - `algorithm: str`, `env_spec: str`, `total_timesteps: int`
+    (replacing the legacy positional-only attributes)
+  - `episode_reward_mean: float`, `episode_reward_std: float`,
+    `episode_length_mean: float`
+  - `policy_entropy: float | None`, `value_loss: float | None`,
+    `kl_divergence: float | None`, `explained_variance: float | None`
+    (all `None` when not applicable to the algorithm — never
+    hallucinated zero per `rules/zero-tolerance.md` Rule 2)
+  - `replay_buffer_size: int | None` (`None` for on-policy algos)
+  - `total_env_steps: int`
+  - `episodes: list[EpisodeRecord]` (non-empty when ≥1 rollout completed)
+  - `eval_history: list[EvalRecord]`
+  - `policy_artifact: PolicyArtifactRef | None` (path + sha256 + algo)
+- **`RLTrainingResult` mirrors of `TrainingResult` fields** for spec §3.2
+  subset relationship: `model_uri`, `device_used`, `accelerator`,
+  `precision`, `elapsed_seconds`, `tracker_run_id`, `tenant_id`,
+  `artifact_uris`, `lightning_trainer_config`. Defaults preserve
+  back-compat for callers that only set the legacy positional fields.
+- **Tier-2 e2e regression** at
+  `tests/regression/test_rl_train_register_e2e.py` exercises the
+  canonical `km.rl_train(env="CartPole-v1", algo="ppo", ...)` pipeline
+  end-to-end against real SB3 + Gymnasium and asserts every spec §3.2
+  field is populated correctly. Per `rules/testing.md` § "End-to-End
+  Pipeline Regression".
+
+### Changed
+
+- **`RLTrainingResult` field-level rename** with back-compat aliases:
+  - `mean_reward` → `episode_reward_mean` (legacy kwarg accepted; alias
+    property reads the canonical field)
+  - `std_reward` → `episode_reward_std` (legacy kwarg accepted; alias
+    property reads the canonical field)
+  - `training_time_seconds` → `elapsed_seconds` (legacy kwarg accepted;
+    alias property reads the canonical field)
+  - `env_name` → `env_spec` (legacy kwarg accepted; alias property
+    reads the canonical field)
+
+  Pre-1.2.0 callers that read the legacy attributes continue to work via
+  back-compat properties on the dataclass; new callers MUST use the
+  canonical spec §3.2 field names. The wire-format `to_dict()` payload
+  emits BOTH canonical and legacy keys during the deprecation window.
+
+- **5 `RLTrainingResult(...)` construction sites swept** to populate the
+  new schema:
+  - `packages/kailash-ml/src/kailash_ml/rl/trainer.py::RLTrainer.train`
+  - `packages/kailash-align/src/kailash_align/rl_bridge/_dpo.py`
+  - `packages/kailash-align/src/kailash_align/rl_bridge/_online_dpo.py`
+  - `packages/kailash-align/src/kailash_align/rl_bridge/_rloo.py`
+  - `packages/kailash-align/src/kailash_align/rl_bridge/_ppo_rlhf.py`
+
+  Per `rules/security.md` § "Multi-Site Kwarg Plumbing" — every
+  construction site updates in the same release wave.
+
+- **`RLTrainer._register_trained` reads canonical field names**
+  (`result.episode_reward_mean` / `result.episode_reward_std` /
+  `result.env_spec`) instead of the legacy aliases. The
+  `PolicyVersion` storage shape itself is unchanged for cross-SDK
+  parity.
+- **`km.rl_train` structured-log key** for the success line uses
+  `episode_reward_mean` (canonical) instead of `mean_reward` (legacy).
+
+### Compatibility
+
+The legacy positional / kwarg interface continues to work for all
+existing callers — the dataclass accepts both the canonical spec §3.2
+field names AND the legacy aliases. The `to_dict()` payload carries
+both during the deprecation window so cross-SDK consumers (kailash-rs
+registry readers) see both surfaces.
+
+A future major release MAY remove the legacy aliases once the cross-SDK
+ecosystem has fully migrated; the deprecation timeline lives in the
+W6.5b lineage roadmap.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
 ## [1.1.2] — 2026-04-27 — W6-004: legacy InferenceServer deletion (F-E1-28)
 
 ### Removed
