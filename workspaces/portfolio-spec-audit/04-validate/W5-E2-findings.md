@@ -195,3 +195,52 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** `cache_keys.py:67-126` — `validate_tenant_id()` raises `TenantRequiredError` on None/empty/forbidden sentinels; `make_feature_cache_key` shape is `kailash_ml:{FEATURE_KEY_VERSION}:{tenant_id}:feature:{schema_name}:{version}:{row_key}` per spec § 9.1. `FORBIDDEN_TENANT_SENTINELS` blocks `"default"`, `"global"`, `""`. `_resolve_tenant` is called on every method.
 **Remediation hint:** None — confirms compliance.
 
+
+---
+
+## Spec 4 — `ml-dashboard.md` (810 lines)
+
+§ subsections enumerated: 18 (1.x, 2.x, 3.x, 4.x, 5.x, 6.x, 7.x, 8.x, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
+
+### F-E2-25 — `ml-dashboard.md` § 3.1 — `MLDashboard` constructor signature diverges from spec
+
+**Severity:** MED
+**Spec claim:** § 3.1 declares `MLDashboard(db_url, *, tenant_id, title, bind, port, enable_control, auth, log_level, cors_origins)`.
+**Actual state:** `packages/kailash-ml/src/kailash_ml/dashboard/__init__.py:58` — actual signature is `MLDashboard(db_url="sqlite:///kailash-ml.db", artifact_root="./mlartifacts", host="127.0.0.1", port=5000, tenant_id, title, enable_control, auth, cors_origins)`. Uses `host=` instead of spec's `bind=`. Default `db_url` is `sqlite:///kailash-ml.db` not the spec's `~/.kailash_ml/ml.db`. No `log_level` kwarg. `artifact_root` is non-spec. Construction-time validation `auth=None + non-loopback bind` not enforced (spec § 8.2). The constructor stores `auth` / `enable_control` / `cors_origins` but the docstring acknowledges they are CLI-only ("plumbing them through the dashboard middleware layer is tracked as a P1 follow-up").
+**Remediation hint:** Rename `host=`→`bind=`, add `log_level=`, default `db_url` to `~/.kailash_ml/ml.db` resolution chain, propagate auth/cors to middleware.
+
+### F-E2-26 — `ml-dashboard.md` § 4.x — REST endpoints subset (not all 14 routes verified)
+
+**Severity:** MED
+**Spec claim:** § 4.1 enumerates ~14 GET routes under `/api/v1/`: `/runs`, `/runs/{id}`, `/runs/{id}/metrics`, `/runs/{id}/params`, `/runs/{id}/artifacts`, `/runs/{id}/artifacts/{name}`, `/runs/{id}/figures`, `/runs/{id}/figures/{name}`, `/runs/{id}/system_metrics`, `/runs/compare`, `/experiments`, `/experiments/{id}/runs`, `/models`.
+**Actual state:** `dashboard/app.py` builds plotly view routes via `build_plotly_view_routes`; views named `runs`, `metrics`, `params`, `artifacts` confirmed. Need verification of `figures/{name}`, `system_metrics`, `compare`, `experiments`, `models` routes. The `app.py` route enumeration may not cover all 14 spec'd endpoints.
+**Remediation hint:** Audit endpoint coverage; document missing endpoints.
+
+### F-E2-27 — `ml-dashboard.md` § 4.x — SSE endpoint absent
+
+**Severity:** HIGH
+**Spec claim:** § 1.1 + § 4.x require SSE endpoint for live-metric streaming for in-progress run.
+**Actual state:** No `EventSource` / SSE route handler visible in `dashboard/app.py`. Production dashboard ships as static plotly views; live-update streaming surface absent.
+**Remediation hint:** Either implement SSE endpoint OR mark `(Awaiting M2)` — also reflects in spec §4.x SSE entry.
+
+### F-E2-28 — `ml-dashboard.md` § 4.x — WebSocket control endpoint absent
+
+**Severity:** MED
+**Spec claim:** § 1.1 + § 4.x require WebSocket bidirectional run control (kill, tag, promote); enabled via `enable_control=True`.
+**Actual state:** `enable_control` kwarg accepted at constructor but documented as "CLI-surface configuration consumed by the cli.py wrapper" (lines 103-108). No WS route handler visible. The kwarg has no functional consumer in the dashboard middleware.
+**Remediation hint:** Implement WS route mounting OR mark `enable_control` as `(Awaiting M2)`.
+
+### F-E2-29 — `ml-dashboard.md` § 8.6 — `km.dashboard()` background-thread launcher implemented (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 8.6 mandates `km.dashboard(...)` non-blocking launcher returning `DashboardHandle` with background-thread serve loop; notebook-friendly.
+**Actual state:** `_wrappers.py:394-443` `dashboard()` function spawns `threading.Thread(target=_run, daemon=True)` and returns `DashboardHandle(url, thread, server)`. Notebook-friendly background-thread launch confirmed.
+**Remediation hint:** None — confirms compliance (note: `auth` / `tenant_id` / `title` are reserved-but-unused kwargs).
+
+### F-E2-30 — `ml-dashboard.md` § 3.2 — Default `db_url` divergence from canonical store path
+
+**Severity:** HIGH
+**Spec claim:** § 3.2 mandates dashboard's default store path MUST equal tracker's default path (`~/.kailash_ml/ml.db`); MUST route through `kailash_ml._env.resolve_store_url()`. Divergence is "Round-1 CRITICAL regression".
+**Actual state:** `MLDashboard.__init__` default `db_url="sqlite:///kailash-ml.db"` — a relative path, NOT `~/.kailash_ml/ml.db`. No call to `resolve_store_url()` visible at construction. The `KAILASH_ML_STORE_URL` env-var precedence chain not exercised at default.
+**Remediation hint:** Replace literal default with `resolve_store_url(explicit=db_url)` call.
+
