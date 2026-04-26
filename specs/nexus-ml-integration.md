@@ -231,7 +231,7 @@ Every request hitting `POST /services/inference/predict` MUST:
 ### 5.2 `InferenceServer.as_nexus_service()` API
 
 ```python
-# packages/kailash-ml/src/kailash_ml/engines/inference_server.py
+# packages/kailash-ml/src/kailash_ml/serving/server.py
 def as_nexus_service(self) -> "NexusServiceAdapter":
     """Adapter that exposes this InferenceServer as a Nexus service.
     Propagates ambient tenant_id + actor_id into every predict() call."""

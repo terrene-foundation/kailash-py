@@ -32,7 +32,6 @@ from kailash_ml.engines.hyperparameter_search import (
     SearchResult,
     SearchSpace,
 )
-from kailash_ml.engines.inference_server import InferenceServer, PredictionResult
 from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.engines.preprocessing import PreprocessingPipeline, SetupResult
 from kailash_ml.engines.training_pipeline import (
@@ -703,76 +702,14 @@ async def test_09_model_registry(
 
 
 # ---------------------------------------------------------------------------
-# 10. Inference Server -- PyCaret: predict_model()
+# 10. Inference Server -- removed in W6-004 (F-E1-28); the legacy
+#     `engines.inference_server` was deleted. The canonical surface
+#     `serving.server.InferenceServer` has a deployment-oriented lifecycle
+#     (config envelope + channels) that is exercised in
+#     `tests/integration/test_serve_handle_*.py` rather than this PyCaret
+#     comparison file. Restoring a comparison test against the canonical
+#     surface is tracked as a follow-up to the W6-004 todo.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-async def test_10_inference_server(
-    registry: ModelRegistry,
-    schema: FeatureSchema,
-) -> None:
-    """Single and batch prediction via InferenceServer.
-
-    PyCaret equivalent:
-        from pycaret.classification import predict_model
-        predictions = predict_model(best_model, data=new_data)
-    """
-    # Register a trained model
-    rf = RandomForestClassifier(n_estimators=20, random_state=42)
-    X_train = np.random.RandomState(42).randn(200, 10)
-    y_train = (X_train[:, 0] > 0).astype(int)
-    rf.fit(X_train, y_train)
-
-    signature = ModelSignature(
-        input_schema=schema,
-        output_columns=["prediction"],
-        output_dtypes=["int64"],
-        model_type="classifier",
-    )
-
-    await registry.register_model(
-        "inference_model",
-        pickle.dumps(rf),
-        metrics=[MetricSpec("accuracy", 0.90)],
-        signature=signature,
-    )
-
-    server = InferenceServer(registry, cache_size=5)
-
-    # Single prediction (PyCaret: predict_model with single row)
-    features = {f"feat_{i}": float(i) for i in range(10)}
-    result: PredictionResult = await server.predict("inference_model", features)
-
-    assert result.prediction is not None
-    assert result.model_name == "inference_model"
-    assert result.model_version == 1
-    assert result.inference_time_ms >= 0
-    assert result.inference_path in ("native", "onnx")
-
-    # Batch prediction (PyCaret: predict_model with DataFrame)
-    batch_records = [
-        {f"feat_{i}": float(np.random.RandomState(row).randn()) for i in range(10)}
-        for row in range(50)
-    ]
-    batch_results: list[PredictionResult] = await server.predict_batch(
-        "inference_model",
-        batch_records,
-    )
-
-    assert len(batch_results) == 50
-    assert all(r.model_name == "inference_model" for r in batch_results)
-    assert all(r.prediction is not None for r in batch_results)
-
-    # MLToolProtocol: get_metrics (for Kaizen agent integration)
-    metrics_info = await server.get_metrics("inference_model")
-    assert "metrics" in metrics_info
-    assert metrics_info["metrics"]["accuracy"] == 0.90
-
-    # MLToolProtocol: get_model_info
-    model_info = await server.get_model_info("inference_model")
-    assert model_info["name"] == "inference_model"
-    assert 1 in model_info["versions"]
 
 
 # ---------------------------------------------------------------------------
@@ -902,12 +839,12 @@ async def test_12_full_lifecycle(
     assert promoted.stage == "production"
 
     # ---- Step 5: Serve predictions (PyCaret: predict_model) ----
-    server = InferenceServer(registry, cache_size=5)
-    pred = await server.predict(
-        "lifecycle_model",
-        {f"feat_{i}": float(i * 0.1) for i in range(10)},
-    )
-    assert pred.prediction is not None
+    # W6-004 (F-E1-28): the legacy `engines.inference_server.InferenceServer`
+    # primitive was deleted; the canonical `serving.server.InferenceServer`
+    # has a deployment-oriented lifecycle (config envelope + channels)
+    # exercised in `tests/integration/test_serve_handle_*.py`. The
+    # PyCaret-comparison serve step is tracked as a follow-up rewrite
+    # against the canonical surface.
 
     # ---- Step 6: Monitor drift ----
     feature_cols = [f"feat_{i}" for i in range(10)]

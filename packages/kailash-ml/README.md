@@ -169,12 +169,12 @@ Key operations: `train()`, `calibrate()`, `retrain()`.
 #### InferenceServer
 
 ```python
-from kailash_ml.engines.inference_server import InferenceServer
+from kailash_ml.serving.server import InferenceServer, InferenceServerConfig
 ```
 
-Loads models from ModelRegistry, caches them in an LRU memory cache, and serves predictions. Supports single-record and batch prediction with model signature validation -- missing or mistyped features raise errors instead of silently defaulting. Nexus integration is lazy-loaded -- if kailash-nexus is installed, predictions can be auto-exposed as REST endpoints.
+Loads a registered model and serves predictions over the requested channels (REST, MCP, gRPC). Construction takes an `InferenceServerConfig` envelope (tenant_id, model_name, model_version, channels, runtime, batch_size); `from_registry()` is the convenience classmethod that resolves a `models://name@alias` URI through the registry's alias layer. Single-record and batch prediction flow through `predict(features, *, tenant_id=None)`; the model signature gates input shape (W25 invariant 1).
 
-Key operations: `predict()`, `predict_batch()`, `load_model()`, `evict()`.
+Key operations: `from_registry()`, `start()`, `predict()`, `stop()`, `health()`.
 
 #### DriftMonitor
 

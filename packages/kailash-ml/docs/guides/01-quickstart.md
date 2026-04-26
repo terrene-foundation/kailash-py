@@ -62,16 +62,22 @@ html = await explorer.to_html(df, title="Iris Dataset")
 ## Serve Predictions
 
 ```python
-from kailash_ml.engines.inference_server import InferenceServer
+from kailash_ml.serving.server import InferenceServer
 
-server = InferenceServer(registry)
-result = await server.predict("iris-classifier", {
+server = await InferenceServer.from_registry(
+    "models://iris-classifier@production",
+    registry=registry,
+    channels=("rest",),
+)
+await server.start()
+result = await server.predict({
     "sepal length (cm)": 5.1,
     "sepal width (cm)": 3.5,
     "petal length (cm)": 1.4,
     "petal width (cm)": 0.2,
 })
-print(f"Prediction: {result.prediction}")
+print(f"Prediction: {result['prediction']}")
+await server.stop()
 ```
 
 ## Common Errors
