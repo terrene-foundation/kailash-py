@@ -340,7 +340,7 @@ Per `rules/tenant-isolation.md` MUST 4, the `tenant_id` label on every family MU
 Every latency histogram MUST declare explicit bucket boundaries. Prometheus defaults `(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)` saturate at 10s and silently bucket every LLM first-token latency (routinely 30-300s on 1M-context prefill) into the `+Inf` bucket — destroying p99 computation.
 
 ```python
-# kailash_ml/engines/inference_server.py
+# kailash_ml/serving/server.py
 LATENCY_BUCKETS_MS: tuple[float, ...] = (
     1, 5, 10, 25, 50, 100, 250, 500,         # online inference (1ms-500ms)
     1_000, 2_500, 5_000, 10_000,             # near-online / batch rows (1s-10s)

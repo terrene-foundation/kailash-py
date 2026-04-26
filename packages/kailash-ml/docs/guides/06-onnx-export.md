@@ -13,14 +13,22 @@ Export trained models to ONNX for cross-platform inference.
 
 ## Automatic Export
 
-InferenceServer attempts ONNX export automatically when a model is loaded:
+InferenceServer prefers ONNX when an `.onnx` artifact is registered alongside the model. Set `runtime="onnx"` on `InferenceServerConfig` (the default) to require ONNX; pass `runtime="pickle"` to opt into native deserialization.
 
 ```python
-from kailash_ml.engines.inference_server import InferenceServer
+from kailash_ml.serving.server import InferenceServer, InferenceServerConfig
 
-server = InferenceServer(registry)
-result = await server.predict("my-model", features)
-print(result.inference_path)  # "onnx" if export succeeded
+config = InferenceServerConfig(
+    tenant_id="acme",
+    model_name="my-model",
+    model_version=3,
+    channels=("rest",),
+    runtime="onnx",
+)
+server = InferenceServer(config, registry=registry)
+await server.start()
+result = await server.predict(features)
+await server.stop()
 ```
 
 ## Manual Export

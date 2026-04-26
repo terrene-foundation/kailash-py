@@ -1,5 +1,19 @@
 # kailash-ml Changelog
 
+## [1.1.2] — 2026-04-27 — W6-004: legacy InferenceServer deletion (F-E1-28)
+
+### Removed
+
+- **`kailash_ml.engines.inference_server`** module deleted per `rules/orphan-detection.md` Rule 3 ("removed = deleted, not deprecated"). The legacy class duplicated the canonical 1.0+ surface at `kailash_ml.serving.server::InferenceServer`. Closes finding F-E1-28 of the W5-E1 portfolio audit.
+
+### Changed
+
+- **`kailash_ml.engines.registry`** — `InferenceServer` `EngineInfo` entry now points at `kailash_ml.serving.server` with W25 lifecycle method signatures (`from_registry`, `start`, `predict`, `stop`).
+- **`kailash_ml.__init__`** — lazy-load map for `InferenceServer` redirected to the canonical surface.
+- **`kailash_ml.engine.MLEngine.evaluate`** — replaced its dependency on the deleted legacy class with an inlined in-process scoring helper (`_score_records_for_evaluate`). The canonical `serving.server.InferenceServer` has a deployment-oriented lifecycle (config envelope, channels) that does not match `evaluate()`'s per-row scoring need; the helper performs the minimal load-artifact + predict path.
+- **Documentation** — README, quickstart guide, ONNX export guide, and the inference-server guide now reference the canonical `serving.server` surface. `specs/ml-serving.md`, `specs/ml-engines-v2-addendum.md`, and `specs/nexus-ml-integration.md` updated to canonical paths.
+- **Tests** — `tests/unit/test_inference_server.py` and `tests/integration/test_inference_server.py` deleted (per `rules/orphan-detection.md` Rule 4 — API removal sweeps tests in same PR). The legacy `test_10_inference_server` and the corresponding "Step 5" of the lifecycle test in `tests/examples/test_pycaret_comparison.py` were removed; restoration against the canonical surface is tracked as a follow-up.
+
 ## [1.1.1] — 2026-04-24 — Cyclic-import refactor (issue #612)
 
 ### Changed

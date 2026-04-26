@@ -1,74 +1,85 @@
 # Inference Server
 
-Serve predictions via HTTP (Nexus) and MCP with automatic ONNX optimization.
+Serve predictions over REST, MCP, and gRPC channels with model-signature
+validation, ONNX-default runtime, and tenant-scoped lifecycle.
+
+The legacy `kailash_ml.engines.inference_server.InferenceServer` was deleted
+in W6-004 (F-E1-28); the canonical surface lives at
+`kailash_ml.serving.server.InferenceServer` and follows the W25 lifecycle
+contract documented in `specs/ml-serving.md`.
 
 ## Basic Setup
 
+`InferenceServer.from_registry()` resolves a `models://name@alias` URI
+through the registry's alias layer and returns a ready-to-start server.
+
 ```python
-from kailash_ml.engines.inference_server import InferenceServer
-from kailash_ml.engines.model_registry import ModelRegistry
+from kailash_ml.serving.server import InferenceServer
 
-registry = ModelRegistry()
-server = InferenceServer(registry)
+server = await InferenceServer.from_registry(
+    "models://churn-predictor@production",
+    registry=registry,
+    tenant_id="acme",
+    channels=("rest", "mcp"),
+)
+await server.start()
 
-# Single prediction
-result = await server.predict("churn-predictor", {
+result = await server.predict({
     "tenure_months": 24,
     "monthly_charges": 79.99,
     "total_charges": 1919.76,
 })
-print(f"Prediction: {result.prediction}, Time: {result.inference_time_ms}ms")
+print(result["prediction"], result["latency_ms"])
+
+await server.stop()
+```
+
+## Construction Envelope
+
+When you need explicit control of `model_version`, `runtime`, or
+`batch_size`, construct the `InferenceServerConfig` envelope directly:
+
+```python
+from kailash_ml.serving.server import InferenceServer, InferenceServerConfig
+
+config = InferenceServerConfig(
+    tenant_id="acme",
+    model_name="churn-predictor",
+    model_version=7,
+    channels=("rest",),
+    runtime="onnx",       # "onnx" (default) or "pickle" (explicit opt-in)
+    batch_size=128,       # None = no batch mode
+)
+server = InferenceServer(config, registry=registry)
+await server.start()
 ```
 
 ## Batch Predictions
 
-```python
-records = [
-    {"tenure_months": 24, "monthly_charges": 79.99},
-    {"tenure_months": 6, "monthly_charges": 29.99},
-    {"tenure_months": 48, "monthly_charges": 99.99},
-]
-results = await server.predict_batch("churn-predictor", records)
-for r in results:
-    print(f"  {r.prediction} (confidence: {r.confidence})")
-```
-
-## Nexus HTTP Endpoints
+Pass a `records` payload to score multiple rows in one call:
 
 ```python
-from kailash_nexus import Nexus
-
-nexus = Nexus(api_port=8000)
-server.register_endpoints(nexus)
-nexus.start()
-# POST http://localhost:8000/api/predict/churn-predictor
-# POST http://localhost:8000/api/predict_batch/churn-predictor
-# GET  http://localhost:8000/api/ml/health
-```
-
-## MCP Tools
-
-```python
-from mcp import FastMCP
-
-mcp_server = FastMCP("ml-service")
-server.register_mcp_tools(mcp_server, namespace="ml")
-# Tools: ml.predict, ml.predict_batch, ml.model_info
-```
-
-## ONNX Optimization
-
-InferenceServer automatically attempts ONNX export for sklearn and LightGBM models. When successful, predictions use the ONNX runtime for faster inference.
-
-```python
-result = await server.predict("iris-classifier", features)
-print(f"Inference path: {result.inference_path}")  # "onnx" or "native"
+result = await server.predict({
+    "records": [
+        {"tenure_months": 24, "monthly_charges": 79.99},
+        {"tenure_months": 6, "monthly_charges": 29.99},
+        {"tenure_months": 48, "monthly_charges": 99.99},
+    ]
+})
+for row in result["predictions"]:
+    print(row)
 ```
 
 ## Common Errors
 
-**`ModelNotFoundError`** -- The model name must match a registered model in the registry.
+**`InvalidInputSchemaError`** — the features payload does not match the
+model's `ModelSignature` (W25 invariant 1). Compare the request keys
+against `server.model_signature.input_schema.features`.
 
-**`PredictionError: feature mismatch`** -- Ensure feature names match exactly what the model was trained on. Check `registry.load(name).feature_names`.
+**`InferenceServerError`** — the server is not in the `ready` state, or a
+cross-tenant request was attempted. `start()` MUST be awaited before
+`predict()`; cross-tenant calls are rejected by design.
 
-**`ONNXExportError`** -- ONNX export failed (unsupported model type). Predictions fall back to native inference automatically.
+**`ModelNotFoundError`** — the URI does not resolve to a registered model.
+Confirm the alias exists via `registry.list_aliases(name)` before
+calling `from_registry()`.
