@@ -1,0 +1,77 @@
+# Spec Drift Gate — fires on every PR that touches specs/**.md and runs
+# scripts/spec_drift_gate.py against the full corpus. Findings render as
+# GitHub PR annotations via `--format github`. The gate exits non-zero on
+# NEW drift (anything not present in the committed .spec-drift-baseline.jsonl)
+# and exits zero when only baseline-graced findings remain.
+#
+# Cost projection (per workspaces/spec-drift-gate/01-analysis/02-requirements-and-adrs.md
+# § 3.4 ADR-4 + § 4.2):
+#   ~3 min/run cold cache, ~30s warm cache (path-filter ensures most PRs
+#   skip entirely). At typical load (5-10 spec-touching PRs/month) the
+#   workflow consumes ~20-40 min/month of GitHub-billable runner time.
+#   `concurrency: cancel-in-progress: true` prevents fix-up pushes from
+#   billing duplicate full runs (per rules/git.md § Pre-FIRST-Push CI
+#   Parity).
+#
+# Author proposal: SDG-601 (separate PR per feedback_no_auto_cicd.md;
+# user reviews cost before merging).
+
+name: Spec Drift Gate
+
+on:
+  pull_request:
+    paths:
+      - "specs/**.md"
+      - "scripts/spec_drift_gate.py"
+      - ".spec-drift-baseline.jsonl"
+      - ".spec-drift-gate.toml"
+      - ".github/workflows/spec-drift-gate.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: spec-drift-gate-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # required for `--format github` annotations
+
+jobs:
+  drift-check:
+    name: Spec drift sweep
+    runs-on: ubuntu-latest
+    # Release-prep PRs (release/v*) are metadata-only — version anchors
+    # + CHANGELOG. They should never touch specs/, but defense-in-depth
+    # per ci-runners.md MUST Rule 8: every PR-gate job in every workflow
+    # excludes release/* head refs.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # The gate is stdlib-only (per workspaces/spec-drift-gate/01-analysis
+      # § NFR-2). No pip install / uv sync — saves the cold-cache install
+      # step entirely.
+      - name: Run spec drift gate
+        run: |
+          # Enumerate every spec file. The gate's positional spec_paths
+          # accept a directory only via the manifest fallback; we pass
+          # the explicit list so behaviour matches the pre-commit hook
+          # (entry: scripts/spec_drift_gate.py against staged paths).
+          mapfile -t spec_files < <(find specs -name '*.md' -type f | sort)
+          if [ ${#spec_files[@]} -eq 0 ]; then
+            echo "No spec files under specs/ — nothing to sweep."
+            exit 0
+          fi
+          python scripts/spec_drift_gate.py \
+            --format github \
+            --resolved-by-sha "${GITHUB_SHA}" \
+            "${spec_files[@]}"
