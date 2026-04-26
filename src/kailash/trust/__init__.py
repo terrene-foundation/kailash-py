@@ -247,6 +247,19 @@ if TYPE_CHECKING:
     )
     from kailash.trust.signing.crypto import verify_signature as verify_signature
 
+# ---------------------------------------------------------------------------
+# Issue #604 algorithm-agility scaffold (canonical re-export)
+# ---------------------------------------------------------------------------
+# `kailash.trust.signing.algorithm_id` is the canonical home; re-exporting at
+# `kailash.trust` lets `from kailash.trust import AlgorithmIdentifier` work.
+# These have no heavy deps (pure-Python dataclass + helper) so the import is
+# eager rather than lazy via __getattr__.
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
+
 _CRYPTO_NAMES = frozenset(
     {
         "generate_keypair",
@@ -442,4 +455,8 @@ __all__ = [
     "derive_key_with_salt",
     "NACL_AVAILABLE",
     "SALT_LENGTH",
+    # --- Issue #604 algorithm-agility scaffold ---
+    "ALGORITHM_DEFAULT",
+    "AlgorithmIdentifier",
+    "coerce_algorithm_id",
 ]

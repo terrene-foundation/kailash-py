@@ -20,6 +20,15 @@ Functions:
 
 from __future__ import annotations
 
+# Issue #604 algorithm-agility scaffold — canonical namespace.
+# `kailash.trust.signing.algorithm_id` is the module-level home; this
+# re-export establishes `kailash.trust.signing` as the canonical import
+# path per specs/trust-crypto.md § 21.1.
+from kailash.trust.signing.algorithm_id import (
+    ALGORITHM_DEFAULT,
+    AlgorithmIdentifier,
+    coerce_algorithm_id,
+)
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     SALT_LENGTH,
@@ -68,4 +77,8 @@ __all__ = [
     "hmac_verify",
     "dual_sign",
     "dual_verify",
+    # Issue #604 algorithm-agility scaffold (canonical namespace)
+    "ALGORITHM_DEFAULT",
+    "AlgorithmIdentifier",
+    "coerce_algorithm_id",
 ]
