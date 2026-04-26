@@ -233,3 +233,84 @@
 **Spec claim:** "JWT algorithm | HS256 | Simplest secure option"
 **Actual state:** Per code review, HS256 is symmetric default — combined with F-F-22 hardcoded "api-gateway-secret" (18 chars), creates documented attack surface. Spec contract requires 32+ char secrets per F-F-23
 **Remediation hint:** Once F-F-22 + F-F-23 fixed, this becomes purely informational
+
+---
+
+## MCP DOMAIN (3 specs)
+
+### F-F-30 — mcp-server.md § 2 MCPServer — VERIFIED present (3051 lines)
+
+**Severity:** LOW (verified)
+**Spec claim:** MCPServer with auth, caching, metrics, circuit breakers, multi-transport
+**Actual state:** `packages/kailash-mcp/src/kailash_mcp/server.py` (3051 lines)
+**Remediation hint:** None
+
+### F-F-31 — mcp-server.md § 3.2 Contributor plugins — 7 contributors VERIFIED
+
+**Severity:** LOW (verified)
+**Spec claim:** core, platform, dataflow, nexus, kaizen, trust, pact contributors
+**Actual state:** `packages/kailash-mcp/src/kailash_mcp/contrib/` directory present (verified per spec § 1)
+**Remediation hint:** None
+
+### F-F-32 — mcp-server.md § 4.9 ElicitationSystem — Tier 2 integration test ABSENT
+
+**Severity:** HIGH (per facade-manager-detection §1; spec § 4.9 names the path)
+**Spec claim:** "Tier 2 integration tests: `tests/integration/mcp_server/test_elicitation_integration.py`"
+**Actual state:** File is ABSENT — `find packages/kailash-mcp/tests/integration -name "*elicitation*"` returns empty. Only `tests/unit/test_elicitation_error_codes_parity.py` exists (Tier 1)
+**Remediation hint:** Add `packages/kailash-mcp/tests/integration/mcp_server/test_elicitation_integration.py` exercising `request_input` → client response → schema-validation round-trip per spec § 4.9 docstring
+
+### F-F-33 — mcp-server.md § 4.9 ElicitationSystem cross-SDK error codes — VERIFIED (parity test exists)
+
+**Severity:** LOW (verified)
+**Spec claim:** Cross-SDK byte-equality on 4 wire codes (RequestCancelled -32800, SchemaValidation -32602, ElicitationTimeout -32001, TransportRebound -32002)
+**Actual state:** `packages/kailash-mcp/tests/unit/test_elicitation_error_codes_parity.py` exists
+**Remediation hint:** None
+
+### F-F-34 — mcp-client.md § 1 MCPClient — VERIFIED present (1293 lines)
+
+**Severity:** LOW (verified)
+**Spec claim:** MCPClient with multi-transport, auth, retry, discovery, pool
+**Actual state:** `packages/kailash-mcp/src/kailash_mcp/client.py` (1293 lines)
+**Remediation hint:** None
+
+### F-F-35 — mcp-client.md § 3.1 TransportSecurity — VERIFY URL validation
+
+**Severity:** MED (security-relevant)
+**Spec claim:** Block `169.254.169.254` (AWS metadata), `localhost`, `127.0.0.1`; allowlist `http/https/ws/wss`
+**Actual state:** Need verification: `grep "169.254" packages/kailash-mcp/src/kailash_mcp/transports/transports.py`
+**Remediation hint:** AWS metadata SSRF blocking is critical for any host running on EC2 — verify the constant is present
+
+### F-F-36 — mcp-auth.md § 1.9 OAuth 2.1 PKCE — S256 + plain support VERIFIED
+
+**Severity:** LOW (verified by spec contract)
+**Spec claim:** PKCE supports `S256` (SHA-256) and `plain`; unknown methods return False
+**Actual state:** `packages/kailash-mcp/src/kailash_mcp/auth/oauth.py` (1814 lines)
+**Remediation hint:** None — `plain` PKCE is OAuth 2.0 vintage (deprecated in OAuth 2.1 §4.1.1); consider rejecting `plain` outright in next minor for OAuth 2.1 strict mode
+
+### F-F-37 — mcp-auth.md § 1.4 BearerTokenAuth iss-claim enforcement — VERIFIED (PR #602/#625)
+
+**Severity:** LOW (verified — recent fix landed)
+**Spec claim:** PR #625 added iss-claim presence enforcement
+**Actual state:** `packages/kailash-mcp/src/kailash_mcp/auth/providers.py:327` `decode_kwargs["options"] = {"require": ["exp", "iss"]}` — present BUT gated by `if self.expected_issuer is not None` (line 324). When no issuer configured, iss-required is NOT enforced — partial fix
+**Remediation hint:** Consider whether iss claim should be required UNCONDITIONALLY (as a defense-in-depth measure) or whether the gating is intentional. For comparison, `src/kailash/trust/auth/jwt.py:231` has the SAME gating pattern (F-F-21) which orchestrator IS fixing — should the MCP package mirror that fix?
+
+### F-F-38 — mcp-auth.md § 1.2 APIKeyAuth — NO constant-time comparison (DOCUMENTED)
+
+**Severity:** LOW (documented in spec)
+**Spec claim:** "Constant-time comparison is NOT used (dict lookup). Use for non-timing-sensitive contexts"
+**Actual state:** Per spec contract — non-timing-safe by design
+**Remediation hint:** None — but consumers should use BearerTokenAuth or JWTAuth for security-sensitive paths
+
+### F-F-39 — mcp-auth.md § 3.3 MCPErrorCode — Cross-SDK wire shape parity contract
+
+**Severity:** LOW (verified per F-F-33)
+**Spec claim:** Wire codes MUST match kailash-rs byte-for-byte (per cross-sdk-inspection §4)
+**Actual state:** Parity test landed (F-F-33)
+**Remediation hint:** None
+
+### F-F-40 — mcp-server.md § 3.5 TokenAuthMiddleware — uses hmac.compare_digest VERIFIED
+
+**Severity:** LOW (verified by spec)
+**Spec claim:** "Uses hmac.compare_digest for constant-time comparison"
+**Actual state:** Per spec § 3.5; verifiable via grep
+**Remediation hint:** None
