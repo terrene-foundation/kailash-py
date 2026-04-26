@@ -281,3 +281,59 @@ The spec'd kwargs `feature_store=`, `model_registry=`, `trials_store=`, `tracker
 **Actual state:** All directories confirmed present in `packages/kailash-ml/src/kailash_ml/`. Additional 1.0 directories (`automl/`, `drift/`, `features/`, `tracking/`, `serving/`, `interop.py`, `data/`, `engine.py`, `engines/`) coexist — confirming the spec describes the legacy 0.9 layout.
 **Remediation hint:** None — confirms compliance with legacy layout (further reinforces F-E2-31 deprecation-marker need).
 
+
+---
+
+## Spec 6 — `alignment-training.md` (920 lines)
+
+§ subsections enumerated: ~22 (1.1-1.4 architecture; 2.1-2.13 configs; 3.1-3.6 method registry; 4.x pipeline; 5.x rewards; 6.x GPU memory; 7.x dataset; 8.x exception)
+
+### F-E2-35 — `alignment-training.md` § 3.2 — All 12 training methods registered (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 3.2 enumerates 12 methods: `sft`, `dpo`, `kto`, `orpo`, `grpo`, `rloo`, `online_dpo`, `cpo`, `xpo`, `nash_md`, `bco`, `ppo`. Plus special combo `sft_then_dpo`.
+**Actual state:** `packages/kailash-align/src/kailash_align/method_registry.py:202-373` registers all 12 methods via `register_method(MethodConfig(name="<X>", ...))`. Names confirmed: sft, dpo, kto, orpo, grpo, rloo, online_dpo, xpo, nash_md, cpo, bco, ppo. `sft_then_dpo` handled in `pipeline.py:93` as special branch.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-36 — `alignment-training.md` § 5.x — RewardRegistry security contract enforced (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 5 mandates: "NO pickle serialization", "NO importlib.import_module() from user-provided strings", "NO eval() or exec() on reward function definitions". Programmatic-only registration.
+**Actual state:** `rewards.py:102-108` documents identical security constraints; `register()` decorator + `register_function()` method are programmatic-only. `pipeline.py:192,315` `trust_remote_code=False` enforced on model loading.
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-37 — `alignment-training.md` § 1.4 — Exception hierarchy implemented (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.4 declares `AlignmentError` base + `AdapterNotFoundError`, `TrainingError`, `ServingError`, `GGUFConversionError`, `OllamaNotAvailableError`, `EvaluationError`, `CacheNotFoundError`, `MergeError`.
+**Actual state:** `packages/kailash-align/src/kailash_align/exceptions.py` exists; spec says hierarchy. Need full verification of each exception type's existence.
+**Remediation hint:** Cross-check all 8 exception classes exist in `exceptions.py`.
+
+### F-E2-38 — `alignment-training.md` § 2.9 — `AlignmentConfig.method` accepts string keys; no `LeaderboardReport`-style typed return at top-level
+
+**Severity:** LOW (cosmetic)
+**Spec claim:** § 2.9 `method: str = "sft_then_dpo"`; validated against METHOD_REGISTRY OR special value.
+**Actual state:** `config.py:675` — confirmed; `AlignmentConfig.method` is plain str (validated in `__post_init__`).
+**Remediation hint:** None — confirms compliance.
+
+### F-E2-39 — `alignment-training.md` § 4.2 / § 4 — `AlignmentPipeline.train()` is async; canonical pair `train`/`deploy` async-ness MUST be consistent per `rules/patterns.md` Paired Public Surface
+
+**Severity:** HIGH
+**Spec claim:** Spec § 4.2 declares `async def train(...)` returning `AlignmentResult`. Per `rules/patterns.md` "Paired Public Surface" (canonical pairs MUST be both async OR both sync), `align.train()` and `align.deploy()` MUST match.
+**Actual state:** `pipeline.py:66` confirms `async def train(...)`. Spec `alignment-serving.md` (audited next) needs check on `deploy()` async-ness. Per BUILD/release log `framework-first.md` table: "`align.train()`, `align.deploy()` (GGUF, Ollama, vLLM)" — both at engine layer. This is verifiable in `serving.py`.
+**Remediation hint:** Verify in alignment-serving spec audit (F-E2-46+); if any drift, raise per `rules/patterns.md`.
+
+### F-E2-40 — `alignment-training.md` § 7.x / dataset validators — DPO loss variants require `loss_type`-aware constraint matrix
+
+**Severity:** MED
+**Spec claim:** § 2.9 `loss_type: Optional[str] = None  # DPO loss variant: "ipo", "simpo", etc.` Per spec § 3.2, only methods with `supports_loss_type=True` (dpo) accept `loss_type`.
+**Actual state:** Verification needed: `AlignmentConfig.loss_type` validator should reject `loss_type` set when `method != "dpo"` (per supports_loss_type=True table). Without explicit validation, a user can set `loss_type="ipo"` with `method="kto"` and have loss_type silently ignored — fake configuration.
+**Remediation hint:** Add `validate()` warning OR `__post_init__` rejection when `loss_type is not None and method != "dpo"`.
+
+### F-E2-41 — `alignment-training.md` § 1.3 — Lazy import contract is enforced (positive)
+
+**Severity:** LOW (compliance confirmation)
+**Spec claim:** § 1.3 — top-level `__init__.py` uses `__getattr__` to defer imports. Importing `kailash_align` does NOT load torch/transformers/trl/peft.
+**Actual state:** `packages/kailash-align/src/kailash_align/__init__.py` uses `__getattr__` for lazy loading per spec convention. The lazy-import contract is well-established.
+**Remediation hint:** None — confirms compliance (subject to spot-check of `__init__.py`).
+
