@@ -18,8 +18,8 @@ Origin: round-1 theme T3 (tenant isolation absent from 13/13 ML engines). Every 
 
 Four capabilities Nexus 2.2.0 ships to support kailash-ml 1.0.0:
 
-1. **Tenant-id contextvar** — `kailash_nexus.context._current_tenant_id: ContextVar[Optional[str]]` set by the JWT middleware from a documented JWT claim; read by kailash-ml engines via `kailash_nexus.context.get_current_tenant_id() -> Optional[str]`.
-2. **Actor-id contextvar** — `kailash_nexus.context._current_actor_id: ContextVar[Optional[str]]` set from the JWT `sub` claim; read via `kailash_nexus.context.get_current_actor_id() -> Optional[str]`.
+1. **Tenant-id contextvar** — `nexus.context._current_tenant_id: ContextVar[Optional[str]]` set by the JWT middleware from a documented JWT claim; read by kailash-ml engines via `nexus.context.get_current_tenant_id() -> Optional[str]`.
+2. **Actor-id contextvar** — `nexus.context._current_actor_id: ContextVar[Optional[str]]` set from the JWT `sub` claim; read via `nexus.context.get_current_actor_id() -> Optional[str]`.
 3. **Dashboard auth adapter** — `MLDashboard(auth="nexus")` accepts a Nexus-issued JWT and validates it via Nexus's public-key registry; the dashboard HTTP/SSE/WebSocket surface reuses Nexus auth without importing Nexus modules into kailash-ml's core.
 4. **Inference-endpoint tenant propagation** — when kailash-ml's `InferenceServer` runs behind Nexus, Nexus forwards ambient tenant+actor context into the predictor's request-scoped execution.
 
@@ -36,7 +36,7 @@ Four capabilities Nexus 2.2.0 ships to support kailash-ml 1.0.0:
 
 - **No breaking changes** to `nexus-auth.md` §9.1 JWT middleware signature.
 - **No new JWT claim requirements** — `tenant_id` claim support is OPTIONAL at the JWT level; if the claim is absent the contextvar is set to `None` and kailash-ml engines handle the multi-tenant-strict-mode error per `rules/tenant-isolation.md` §2.
-- **No Nexus dependency inside kailash-ml's core** — kailash-ml reads contextvars by name from `kailash_nexus.context` WHEN Nexus is installed, else falls back to its own `kailash_ml.tracking.context` contextvars (same names, same types). This preserves kailash-ml as a standalone package.
+- **No Nexus dependency inside kailash-ml's core** — kailash-ml reads contextvars by name from `nexus.context` WHEN Nexus is installed, else falls back to its own `kailash_ml.tracking.context` contextvars (same names, same types). This preserves kailash-ml as a standalone package.
 
 ---
 
@@ -45,7 +45,7 @@ Four capabilities Nexus 2.2.0 ships to support kailash-ml 1.0.0:
 ### 2.1 Definition
 
 ```python
-# packages/kailash-nexus/src/kailash_nexus/context.py
+# packages/kailash-nexus/src/nexus/context.py
 from contextvars import ContextVar
 from typing import Optional
 
@@ -109,7 +109,7 @@ The `kailash_ml._compat.nexus_context` module:
 ```python
 # packages/kailash-ml/src/kailash_ml/_compat/nexus_context.py
 try:
-    from kailash_nexus.context import get_current_tenant_id, get_current_actor_id
+    from nexus.context import get_current_tenant_id, get_current_actor_id
 except ImportError:
     # Nexus not installed; fall back to ml-local contextvars (same names)
     from kailash_ml.tracking.context import (
@@ -127,7 +127,7 @@ except ImportError:
 Symmetric to §2, keyed on JWT `sub` claim. Same extraction, same reset-in-`finally`, same read helper.
 
 ```python
-# packages/kailash-nexus/src/kailash_nexus/context.py
+# packages/kailash-nexus/src/nexus/context.py
 _current_actor_id: ContextVar[Optional[str]] = ContextVar(
     "kailash_nexus.current_actor_id",
     default=None,
@@ -156,7 +156,7 @@ from kailash_ml.dashboard.auth_base import DashboardAuth
 
 class NexusDashboardAuth(DashboardAuth):
     def __init__(self, *, issuer: str, audience: str, jwks_url: Optional[str] = None):
-        from kailash_nexus.auth.jwt import JWTValidator, JWTConfig
+        from nexus.auth.jwt import JWTValidator, JWTConfig
         self._validator = JWTValidator(JWTConfig(
             issuer=issuer,
             audience=audience,
@@ -234,7 +234,7 @@ Frozen (per PACT MUST Rule 1 discipline) + the scopes tuple is immutable.
 When `InferenceServer` (kailash-ml) is registered as a Nexus service:
 
 ```python
-from kailash_nexus import Nexus
+from nexus import Nexus
 from kailash_ml import InferenceServer
 
 nexus = Nexus(...)
@@ -270,7 +270,7 @@ Every forwarded call MUST:
 
 ## 6. Error Taxonomy
 
-All errors inherit from `kailash_nexus.exceptions.NexusError`:
+All errors inherit from `nexus.errors.NexusError`:
 
 ```python
 class NexusError(Exception):
@@ -364,7 +364,7 @@ Part of the kailash-ml 1.0.0 wave release (see `pact-ml-integration-draft.md` §
 
 **Release order position:** after kailash 2.9.0 (which ships the expanded `src/kailash/diagnostics/protocols.py` that the Dashboard auth adapter depends on for `DashboardAuth` Protocol — see `kailash-core-ml-integration-draft.md` §2). Parallel with kailash-pact 0.10.0, kailash-kaizen 2.12.0, kailash-dataflow 2.1.0.
 
-**Parallel-worktree ownership** (`rules/agents.md`): nexus-specialist agent owns `packages/kailash-nexus/pyproject.toml`, `packages/kailash-nexus/src/kailash_nexus/__init__.py::__version__`, and `packages/kailash-nexus/CHANGELOG.md`. Every other agent's prompt MUST exclude these files.
+**Parallel-worktree ownership** (`rules/agents.md`): nexus-specialist agent owns `packages/kailash-nexus/pyproject.toml`, `packages/kailash-nexus/src/nexus/__init__.py::__version__`, and `packages/kailash-nexus/CHANGELOG.md`. Every other agent's prompt MUST exclude these files.
 
 ---
 
