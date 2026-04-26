@@ -1,9 +1,29 @@
 # W5-B Findings — dataflow
 
-**Specs audited:** 5
-**§ subsections enumerated:** TBD
-**Findings:** TBD
-**Audit completed:** 2026-04-26 (in progress)
+**Specs audited:** 5 (dataflow-core, dataflow-express, dataflow-models, dataflow-cache, dataflow-ml-integration)
+**§ subsections enumerated:** ~46 (core: 8, express: 12, models: 8, cache: 9, ml: 9)
+**Findings:** CRIT=0 HIGH=3 MED=9 LOW=20 (12 are positive verifications)
+**Audit completed:** 2026-04-26
+
+## Severity Summary
+
+| Severity | Count | Examples |
+| -------- | ----- | -------- |
+| CRIT     | 0     | (no security/governance contracts claimed-but-absent) |
+| HIGH     | 3     | F-B-05 TenantTrustManager orphan; F-B-23 MLTenantRequiredError naming drift; F-B-25 ML event surface missing from spec § 1.1; F-B-31 cross-SDK byte-vector pinning absent |
+| MED      | 9     | F-B-02/03 missing methods; F-B-06 trust private attrs vs spec; F-B-10/22/24/26-30 |
+| LOW      | 20    | Version mismatches × 5 + 12 positive findings + 3 minor signature issues |
+
+## Key Pattern Observations
+
+1. **Version drift across all 5 specs** — every spec header claims 2.0.7 / 2.0.12 while pyproject is 2.3.1. Per `specs-authority.md` § 5, every spec needs version-header re-sync.
+2. **ML integration spec is least-aligned** — § 5 error class name (`TenantRequiredError` vs `MLTenantRequiredError`), § 1.1 missing event surface, § 6 test file naming all diverge from shipped code. Promotion from draft was incomplete.
+3. **Trust plane orphan acknowledged in spec but not deleted** — § 21.2 of dataflow-core self-documents the orphan; per `orphan-detection.md` MUST 3, this is the exact failure mode the rule blocks.
+4. **Public API positives** — Express 14 methods + 11 generated nodes + classification enums + tenant regex all match spec exactly.
+
+## Findings Notation
+
+Each finding includes severity, exact spec quote/paraphrase, grep-verified actual state with file:line, and remediation hint with rule citations.
 
 ---
 
