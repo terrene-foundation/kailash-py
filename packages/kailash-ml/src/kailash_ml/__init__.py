@@ -44,8 +44,56 @@ from kailash_ml._results import (
 )
 from kailash_ml._seed import SeedReport, seed
 from kailash_ml._version import __version__
+
+# Group 1 verbs live in :mod:`kailash_ml._wrappers`. Eager-import so
+# every ``__all__`` entry is a module-scope symbol per
+# ``rules/zero-tolerance.md §1a`` second-instance example.
+from kailash_ml._wrappers import (
+    DashboardHandle,
+    autolog,
+    autolog_fn,
+    dashboard,
+    diagnose,
+    rl_train,
+    serve,
+    track,
+    train,
+    watch,
+)
+
+# Diagnostic adapters (Group 3).
+from kailash_ml.diagnostics import (
+    DLDiagnostics,
+    RAGDiagnostics,
+    RLDiagnostics,
+    diagnose_classifier,
+    diagnose_regressor,
+)
+
+# km.doctor() diagnostic per specs/ml-backends.md §7 — stays eager so
+# the symbol remains reachable at module scope even though it is NOT
+# in the canonical __all__ (doctor is a separate surface from
+# km.diagnose per Round-8 clarification).
+from kailash_ml.doctor import doctor
 from kailash_ml.engine import MLEngine
 from kailash_ml.engines.data_explorer import AlertConfig
+
+# Tracker primitives (Group 5) — eager-import so ``from kailash_ml
+# import ExperimentTracker, ExperimentRun, ModelRegistry`` resolves
+# without a lazy-__getattr__ hop (CodeQL
+# py/modification-of-default-value gate).
+from kailash_ml.engines.model_registry import ModelRegistry
+
+# Group 6 — Engine Discovery.
+from kailash_ml.engines.registry import (
+    ClearanceRequirement,
+    EngineInfo,
+    EngineNotFoundError,
+    MethodSignature,
+    ParamSpec,
+    engine_info,
+    list_engines,
+)
 
 # Every error subclass is eagerly imported so ``kailash_ml.MLError`` and
 # the full hierarchy stay reachable by attribute lookup for legacy
@@ -141,6 +189,14 @@ from kailash_ml.estimators import (
     registered_estimators,
     unregister_estimator,
 )
+
+# W30 cross-SDK RL bridge surface.
+from kailash_ml.rl._lineage import RLLineage
+from kailash_ml.rl.align_adapter import FeatureNotAvailableError
+from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
+from kailash_ml.tracking import erase_subject  # W15 GDPR surface (Group 1)
+from kailash_ml.tracking.runner import ExperimentRun
+from kailash_ml.tracking.tracker import ExperimentTracker
 from kailash_ml.trainable import (
     CatBoostTrainable,
     HDBSCANTrainable,
@@ -152,11 +208,6 @@ from kailash_ml.trainable import (
     UMAPTrainable,
     XGBoostTrainable,
 )
-
-# W30 cross-SDK RL bridge surface.
-from kailash_ml.rl._lineage import RLLineage
-from kailash_ml.rl.align_adapter import FeatureNotAvailableError
-from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -164,58 +215,6 @@ from kailash_ml.types import (
     MetricSpec,
     MLToolProtocol,
     ModelSignature,
-)
-
-# Diagnostic adapters (Group 3).
-from kailash_ml.diagnostics import (
-    DLDiagnostics,
-    RAGDiagnostics,
-    RLDiagnostics,
-    diagnose_classifier,
-    diagnose_regressor,
-)
-
-# Tracker primitives (Group 5) — eager-import so ``from kailash_ml
-# import ExperimentTracker, ExperimentRun, ModelRegistry`` resolves
-# without a lazy-__getattr__ hop (CodeQL
-# py/modification-of-default-value gate).
-from kailash_ml.engines.model_registry import ModelRegistry
-from kailash_ml.tracking import erase_subject  # W15 GDPR surface (Group 1)
-from kailash_ml.tracking.runner import ExperimentRun
-from kailash_ml.tracking.tracker import ExperimentTracker
-
-# km.doctor() diagnostic per specs/ml-backends.md §7 — stays eager so
-# the symbol remains reachable at module scope even though it is NOT
-# in the canonical __all__ (doctor is a separate surface from
-# km.diagnose per Round-8 clarification).
-from kailash_ml.doctor import doctor
-
-# Group 1 verbs live in :mod:`kailash_ml._wrappers`. Eager-import so
-# every ``__all__`` entry is a module-scope symbol per
-# ``rules/zero-tolerance.md §1a`` second-instance example.
-from kailash_ml._wrappers import (
-    DashboardHandle,
-    autolog,
-    autolog_fn,
-    dashboard,
-    diagnose,
-    register,
-    rl_train,
-    serve,
-    track,
-    train,
-    watch,
-)
-
-# Group 6 — Engine Discovery.
-from kailash_ml.engines.registry import (
-    ClearanceRequirement,
-    EngineInfo,
-    EngineNotFoundError,
-    MethodSignature,
-    ParamSpec,
-    engine_info,
-    list_engines,
 )
 
 # Lineage return type — DEFERRED to Wave 6.5b per W6-014.
@@ -239,10 +238,12 @@ from kailash_ml.engines.registry import (
 #     result = km.train(df, target="y")
 #     registered = km.register(result, name="demo")
 #
-# Sync wrapper around MLEngine.register() matching `km.train`'s pattern
-# for notebook / three-line-hello-world ergonomics. Advanced callers
-# needing async composition (inside an existing event loop) MUST use
-# `MLEngine().register(...)` directly.
+# Async wrapper around MLEngine.register() matching `km.train`'s pattern
+# (both async per `rules/patterns.md` § "Paired Public Surface — Consistent
+# Async-ness"). Originally landed sync at W33c; converted to async at
+# commit fdd3040e to close the canonical Quick Start chain
+# `await km.train(...) -> await km.register(...)` under any event-loop
+# context (pytest-asyncio, Nexus handler, Jupyter kernel).
 async def register(
     training_result: TrainingResult,
     *,
@@ -626,14 +627,23 @@ def __getattr__(name: str):  # noqa: N807
 # ---------------------------------------------------------------------------
 # Canonical __all__ — exact 6-group ordering per specs/ml-engines-v2.md §15.9
 #
-# Symbol count: 41 (spec §15.9 enumerates 40 groups + W15 FP-MED-2
-# clarification adds ``erase_subject`` to Group 1). The ordering is
-# load-bearing: ``from kailash_ml import *`` users observe verbs first,
+# Symbol count: 50 (spec §15.9 base 40 groups + W15 FP-MED-2 adds
+# ``erase_subject`` to Group 1 + W6 wave additions: ``rl_train`` (Group 1,
+# W6-015 RL primary verb), 7 Phase-1 Trainable adapters in Group 2
+# enumeration including ``CatBoostTrainable`` (W6-013), Group 6 discovery
+# primitives ``engine_info`` / ``list_engines`` (W6-012), + Group 0 metadata
+# (``__version__``, W6 round-3 MED-1 — eagerly imported at module scope per
+# ``rules/orphan-detection.md`` §6). The ordering is load-bearing:
+# ``from kailash_ml import *`` users observe metadata first, then verbs,
 # then primitives, then diagnostics, then backend, then tracker, then
-# discovery. Reordering requires a spec amendment (§15.9 MUST).
+# discovery. Reordering requires a spec amendment (§15.9 MUST). Count is
+# verifier-derived (``ast.parse(...).find('__all__')``) per
+# ``rules/testing.md`` § "Verified Numerical Claims".
 # ---------------------------------------------------------------------------
 
 __all__ = [
+    # Group 0 — Package metadata
+    "__version__",
     # Group 1 — Lifecycle verbs (action-first for discoverability)
     "track",
     "autolog",

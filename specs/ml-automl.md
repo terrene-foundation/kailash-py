@@ -594,7 +594,7 @@ pytest --collect-only -q packages/kailash-ml/tests/unit/test_automl_engine_unit.
                         packages/kailash-ml/tests/integration/test_automl_engine_wiring.py
 ```
 
-(W6-018 deleted `tests/unit/test_automl_engine.py` along with the legacy `engines/automl_engine.py` it covered, per `rules/orphan-detection.md` § 4.)
+(Per W6-018 disposition — the legacy unit test file was deleted alongside the legacy `engines/automl_engine.py` module it covered — see `rules/orphan-detection.md` § 4.)
 
 ### 11.2 Tier 3 (E2E)
 
