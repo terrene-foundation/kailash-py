@@ -1,0 +1,128 @@
+source_repo: kailash-py
+codify_date: "2026-04-25"
+codify_session: |
+  Session 2026-04-25 — 11-issue resolution wave (PR #619 bundled — 5 issues
+  implemented + closed: #598 plan-suspension, #600 mcp-transports, #602
+  orchestration-runtime, #603 budget-callback, #618 nexus-ws-unicast; 6
+  dispositioned: #596/#599 spec-gated on mint, #604/#606 cross-SDK gated,
+  #605/#607 multi-shard with scoping briefs). Hotfix kaizen 2.13.0→2.13.1
+  via PR #620 caught by post-release clean-venv check. PyPI live: kailash
+  2.10.0, kailash-nexus 2.3.0, kailash-kaizen 2.13.1.
+
+  Two institutional lessons emerged from the kaizen 2.13.0→2.13.1 hotfix
+  cycle, both codified locally and proposed upstream this cycle:
+
+  (1) `__init__.py` module-scope imports of co-installed-but-NOT-declared
+  sibling packages MUST be wrapped in `try/except ImportError` with side-
+  effects in the `else` branch. Editable installs in dev environments hide
+  the failure mode (every dev has the sibling installed); a clean PyPI
+  install raises `ModuleNotFoundError` at the FIRST `import <package>`,
+  blocking every downstream consumer. Codified as a new MUST sub-rule in
+  `dependencies.md` § "Declared = Imported".
+
+  (2) When the post-release clean-venv check fails, the broken pattern is
+  the scope of the hotfix — NOT just the most-recent PR's diff. The same
+  failure may have been latent in main for many sessions, hidden behind
+  editable installs. Codified as an extension to `build-repo-release-
+  discipline.md` Rule 2 ("Latent failures count").
+
+  Both lessons reinforce existing rules — the first prevents the failure
+  class structurally, the second tightens the diagnostic discipline when
+  the structural defense was missing. Together they close the loop the
+  kaizen 2.13.1 hotfix exposed.
+
+status: distributed
+submitted_date: "2026-04-25T18:30:00+08:00"
+reviewed_date: "2026-04-25T19:50:00+08:00"
+distributed_date: "2026-04-25T19:50:00+08:00"
+sdk_version: "2.10.0"
+loom_version: "2.8.30"
+classification:
+  init-py-module-scope-imports-honor-manifest: global
+  clean-venv-check-surfaces-latent-failures-not-just-pr-diff: global
+
+changes:
+  - id: init-py-module-scope-imports-honor-manifest
+    type: rule
+    severity: HIGH
+    target: rules/dependencies.md
+    section: "new MUST sub-rule § '`__init__.py` Module-Scope Imports Honor The Manifest' inside § 'Declared = Imported — No Silent Missing Dependencies'"
+    summary: |
+      Every unconditional `import X` / `from X import Y` at module scope
+      in any package's `__init__.py` MUST resolve to a package declared
+      in that package's own `pyproject.toml::dependencies`. Imports of
+      co-installed but optional sibling packages (defensive proxy
+      aliases, legacy mock.patch shims, integration surfaces that
+      activate only when the sibling is present) MUST be wrapped in
+      `try/except ImportError` AND any alias side-effects (sys.modules.
+      setdefault, re-exports, attribute assignments) MUST live in the
+      `else` branch.
+
+      Distinct from the existing "BLOCKED: silent fallback to None"
+      anti-pattern — that pattern degrades production paths silently
+      because later use sites hit `None.method()`. The optional-proxy
+      pattern has NO later use site that could break: the alias either
+      installs (sibling present) or the package imports normally
+      without the alias (sibling absent).
+
+      BLOCKED rationalizations: "Everyone in dev has the sibling
+      editable-installed" / "The proxy is defensive; a clean install
+      will never hit it" / "We declared kaizen-agents as an extra,
+      that's enough" / "The next CI run will catch it" / "It's been in
+      main for months without breaking".
+
+      Evidence: kailash-kaizen 2.13.1 hotfix (commit 9002c002,
+      2026-04-25). Four unconditional `kaizen_agents.patterns.*`
+      imports in `kaizen/orchestration/__init__.py` (predating
+      structural-split refactor #75) raised ModuleNotFoundError on
+      every clean `pip install kailash-kaizen` because kaizen-agents
+      is not a declared dep. Caught by post-2.13.0 clean-venv check;
+      fixed via try/except ImportError + else-branch alias
+      installation.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. Same pattern in Rust (`use other_crate::*`
+      at module scope without a Cargo.toml dep, only resolved through
+      a workspace-mate's compilation), Ruby (`require 'other_gem'` in
+      a gem's lib/ without gemspec dep), Node.js (`require('sibling')`
+      in a package's index.js without package.json dep). The
+      try/except-equivalent guard is language-specific syntax but the
+      structural rule is identical. Variant overlay possible for the
+      examples slot; neutral body is language-agnostic.
+
+  - id: clean-venv-check-surfaces-latent-failures-not-just-pr-diff
+    type: rule
+    severity: MEDIUM
+    target: rules/build-repo-release-discipline.md
+    section: "extend Rule 2 (PyPI Installability Is The Done Gate) with 'Latent failures count' clause"
+    summary: |
+      When the post-release clean-venv check fails, the broken pattern
+      is the scope of the hotfix — NOT just the most-recent PR's diff.
+      The same failure may have been latent in main for many sessions,
+      hidden behind editable installs in every dev environment. Fix
+      the entire broken pattern in the hotfix; file a follow-up issue
+      ONLY if the fix exceeds one shard (per autonomous-execution.md
+      Rule 1).
+
+      BLOCKED rationalizations: "It's been working" / "this PR didn't
+      introduce it" / "main was green" / "the most recent PR is the
+      only suspect" / "we'll cover the rest in a separate hotfix".
+
+      Cross-references the new dependencies.md MUST sub-rule as the
+      structural defense: Rule 2 catches the failure; the dependencies.
+      md sub-rule prevents it.
+
+      Evidence: kailash-kaizen 2.13.1 hotfix scope was the FOUR
+      kaizen_agents.* unconditional imports — only ONE was new in
+      2.13.0 (PR #602's OrchestrationRuntime extension); the other
+      THREE had been in main since refactor #75 and would have failed
+      every clean install since then. Limiting the hotfix to "what
+      #602 added" would have left the latent class intact.
+    classification_suggestion: global
+    rationale: |
+      Cross-SDK applicable. The "editable install hides failure;
+      clean install surfaces failure" pattern is language-neutral.
+      Rust workspaces + cargo's path deps exhibit the same masking
+      effect; published-crate verification surfaces the latent class.
+      No variant overlay needed; the rule body is language-agnostic
+      and the example anchor is the kailash-kaizen Python case.
