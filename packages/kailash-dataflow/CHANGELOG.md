@@ -1,5 +1,31 @@
 # DataFlow Changelog
 
+## [2.3.2] — 2026-04-27 — emit_train_end structural error redaction (W7-002, Round-3 LOW-2 carry-forward)
+
+### Security
+
+- **HIGH** Wire `dataflow.classification.event_payload.format_error_for_event` (new helper) into `dataflow.ml._events.emit_train_end` so the emitter — not the caller — structurally redacts classified field VALUES and classified field NAMES from the `error: Optional[str]` argument before publishing the `kailash_ml.train.end` `DomainEvent`. Per `rules/event-payload-classification.md` § 1, caller-side sanitisation documented in the previous spec was not a structural defence — every call site that forgot the rule shipped raw `str(exc)` strings to subscribers, tracing spans, and observability vendors. The fix is single-filter-point at the emitter: callers MAY pass `str(exc)` directly, including DB-engine error strings that interpolate row data (`DETAIL: Failing row contains (alice@tenant.example, hunter2)`) — the helper substitutes any classified value with `"[REDACTED]"` and scrubs classified field names that appear verbatim. Closes the W6 audit's Round-3 LOW-2 finding (carry-forward W7-002).
+
+### Added
+
+- **`dataflow.classification.event_payload.format_error_for_event(policy, error_str, *, model_name=None, known_field_values=None)`** — public helper for emitter-side error redaction. Re-exported through `dataflow.classification.__all__` per `rules/orphan-detection.md` § 6. The helper:
+  - returns `None` for `None` and the input unchanged when policy is `None` or the input is empty/whitespace,
+  - scrubs known classified VALUES (when caller supplies the row dict via `known_field_values=`) using the `[REDACTED]` sentinel,
+  - scrubs classified field NAMES that appear verbatim in the error string (DB engine errors leak column names; `rules/observability.md` Rule 8 classifies field names as schema-revealing),
+  - enforces a 3-character minimum scrub length to avoid shredding error strings on common substrings,
+  - supports `model_name=None` mode for ML training paths where the active model name is not bound at emit time (scans every classified field across every registered model in the policy).
+
+  Cross-SDK: helper-name, sentinel, and minimum-scrub-length are intentionally aligned with the equivalent kailash-rs surface so the same input produces byte-identical scrubbed payloads in both SDKs.
+
+### Tests
+
+- **Tier 2 regression — `tests/integration/test_emit_train_end_redaction.py`** — 4 regression tests subscribe a real handler to the DataFlow event bus, trigger `emit_train_end` with classified content in the error string, and assert the published payload has the classified content scrubbed. Per `rules/event-payload-classification.md` § 4: helper-level unit tests are necessary but insufficient; only an end-to-end exercise against the real bus proves the emitter invokes the helper. Marked `@pytest.mark.regression` + `@pytest.mark.integration` per `rules/testing.md`.
+
+### Documentation
+
+- Updated `specs/dataflow-ml-integration.md` § 4A.2 — replaced the "Caller is responsible for sanitizing" docstring contract with the emitter-redacted contract, referencing `format_error_for_event` and `rules/event-payload-classification.md` § 1.
+- Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-* and dataflow-ml-* specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
+
 ## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
 
 ### Tests
