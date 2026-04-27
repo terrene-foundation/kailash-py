@@ -437,8 +437,14 @@ async def resume(
                 f"{type(tolerance).__name__}"
             )
         for metric_name, metric_tol in tolerance.items():
-            if not isinstance(metric_name, str):
-                raise TypeError(
+            # Defensive runtime check — pyright narrows tolerance.items() to
+            # (str, Any) pairs from the Mapping[str, Any] hint above; the
+            # isinstance keeps runtime safety for callers who pass a dict
+            # with non-string keys despite the type hint.
+            if not isinstance(
+                metric_name, str
+            ):  # pyright: ignore[reportUnnecessaryIsInstance]
+                raise TypeError(  # pyright: ignore[reportUnreachable]
                     f"resume(tolerance=...) — metric names must be strings, "
                     f"got {type(metric_name).__name__}"
                 )

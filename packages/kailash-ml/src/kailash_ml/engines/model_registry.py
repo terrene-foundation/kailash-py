@@ -306,7 +306,10 @@ def _attempt_onnx_export(
 
         n_features = len(signature.input_schema.features)
         initial_type = [("input", FloatTensorType([None, n_features]))]
-        onnx_model = skl2onnx.convert_sklearn(model, initial_types=initial_type)
+        # convert_sklearn returns ModelProto with default intermediate=False.
+        # The skl2onnx type stub declares a Union including the
+        # (ModelProto, Topology) tuple shape (intermediate=True path).
+        onnx_model: Any = skl2onnx.convert_sklearn(model, initial_types=initial_type)
         return ("success", None, onnx_model.SerializeToString())
     except ImportError:
         return ("not_applicable", "skl2onnx not installed", None)
