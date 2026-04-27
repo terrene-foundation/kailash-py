@@ -271,9 +271,18 @@ def emit_train_end(
         context: Immutable training context (same as emit_train_start).
         status: ``"success"`` / ``"failure"`` / ``"cancelled"``.
         duration_seconds: Wall-clock duration of the run.
-        error: Error message when status="failure". Caller is responsible
-            for sanitizing — error strings MUST NOT carry classified field
-            values per ``rules/security.md`` § "Multi-Site Kwarg Plumbing".
+        error: Raw error message when ``status="failure"``. The emitter
+            structurally redacts classified field values and classified
+            field names via
+            :func:`dataflow.classification.event_payload.format_error_for_event`
+            BEFORE the event is published. Callers MAY pass ``str(exc)``
+            directly — including exception strings that interpolate row
+            data (``DETAIL: Failing row contains
+            (alice@tenant.example, hunter2)``). Documentation-only
+            caller-sanitization is BLOCKED per
+            ``rules/event-payload-classification.md`` § 1; the
+            single-filter-point at the emitter IS the structural
+            defense.
     """
 ```
 

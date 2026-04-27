@@ -258,7 +258,7 @@ Every MLError subclass MUST:
 
 - Carry a human-readable `reason` string.
 - Carry structured context: `tenant_id`, `actor_id`, `resource_id` (when relevant) as attributes.
-- NEVER echo classified payload fields verbatim (per `rules/event-payload-classification.md` §2). Use `sha256:<8hex>` fingerprint in error messages that reference classified content.
+- NEVER echo classified payload fields verbatim (per `rules/event-payload-classification.md` §2). Use `sha256:<8hex>` fingerprint in error messages that reference classified content. (When the error string is forwarded to the DataFlow event bus via `dataflow.ml.emit_train_end(error=str(exc))`, the emitter additionally routes the string through `format_error_for_event` for defense-in-depth structural redaction — but the caller-construction discipline is the primary gate; the emitter helper is NOT a license to construct leaky errors.)
 
 ```python
 # DO — structured + fingerprinted
