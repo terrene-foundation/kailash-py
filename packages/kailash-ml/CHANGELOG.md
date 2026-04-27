@@ -1,5 +1,20 @@
 # kailash-ml Changelog
 
+## [1.4.2] — 2026-04-27 — W6 round-3 MED-1 catch-up: `__version__` in canonical `__all__`
+
+Atomic version bump to pair with the public-API addition landed in PR #674
+(commit `6e106d13`). Per `rules/zero-tolerance.md` Rule 5, version must be
+bumped atomically with the public-API surface change — that bump was missed
+at merge time and is caught up here.
+
+### Added
+
+- **`__version__` in canonical `__all__`** (Group 0 — Package metadata) —
+  `from kailash_ml import *` now exports the package version string per
+  `rules/orphan-detection.md` §6 (every eagerly-imported module-scope symbol
+  MUST appear in `__all__`). Closes W6 round-3 finding MED-1. Landed in PR #674
+  (commit `6e106d13`); version bump caught up in this release.
+
 ## [1.4.1] — 2026-04-27 — W8 wave: FeatureStore wiring test + spec hygiene
 
 Bundles two Wave 6 follow-ups (W6-022 + W6-023) into one W8-wave
