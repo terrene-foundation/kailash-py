@@ -162,10 +162,13 @@ Sibling specs referencing `n_envs`: `ml-rl-algorithms-draft.md` § per-algo adap
 
 ### 3.2 Return type — `RLTrainingResult ⊂ TrainingResult`
 
+`RLTrainingResult` realizes the structural subset relationship to `TrainingResult` via **field-mirroring**, NOT Python `class RLTrainingResult(TrainingResult):` inheritance. Rationale per `rules/specs-authority.md` § 6 (deviation acknowledgement): `TrainingResult` is `@dataclass(frozen=True)` and the W30 lineage code path mutates `result.lineage = ...` post-construction; switching to frozen inheritance would have required either a deeper refactor of the lineage construction (out of W6-015 shard budget) or breaking every existing caller. The structural subset is preserved (every `TrainingResult` field is present on `RLTrainingResult` with matching types), and `to_dict()` emits the parent-equivalent keys for cross-SDK consumers. A future major release MAY tighten to true frozen inheritance once the lineage construction is migrated upfront.
+
 ```python
 @dataclass
-class RLTrainingResult(TrainingResult):
-    # Inherited from TrainingResult (specs/ml-engines.md § TrainingResult):
+class RLTrainingResult:
+    # Mirrored from TrainingResult (specs/ml-engines.md § TrainingResult) —
+    # subset relationship realized structurally, not via inheritance:
     #   model, metrics, device: DeviceReport, backend_info, run_id, experiment_name
     algorithm: str                         # "ppo", "sac", "dpo", ...
     env_spec: str                          # "CartPole-v1" or "dataset:/path/to/d4rl.parquet"
