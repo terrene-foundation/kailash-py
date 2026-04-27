@@ -31,7 +31,10 @@ Usage::
     assert fc.classification == DataClassification.PII
 """
 
-from dataflow.classification.event_payload import format_record_id_for_event
+from dataflow.classification.event_payload import (
+    format_error_for_event,
+    format_record_id_for_event,
+)
 from dataflow.classification.policy import (
     ClassificationPolicy,
     FieldClassification,
@@ -58,6 +61,7 @@ __all__ = [
     # Read-time helpers (public API — cross-SDK parity with kailash-rs#514)
     "apply_read_classification",
     "format_record_id_for_event",
+    "format_error_for_event",
 ]
 
 __version__ = "0.2.0"
