@@ -39,7 +39,6 @@ Invariant tests
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from kailash.db.dialect import (
@@ -172,6 +171,8 @@ async def _column_exists(
         # interpolation per ``rules/dataflow-identifier-safety.md`` Rule 1.
         quoted = dialect.quote_identifier(table)
         executor = getattr(conn, "execute", None)
+        if executor is None:
+            raise TypeError("conn has no .execute method")
         result = executor(f"PRAGMA table_info({quoted})")
         if hasattr(result, "__await__"):
             result = await result
