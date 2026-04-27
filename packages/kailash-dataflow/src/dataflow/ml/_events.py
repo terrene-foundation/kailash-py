@@ -220,7 +220,7 @@ def emit_train_end(
             "ensure kailash>=2.8.9 is installed."
         ) from exc
 
-    extra = {"status": status}
+    extra: dict[str, Any] = {"status": status}
     if duration_seconds is not None:
         extra["duration_seconds"] = duration_seconds
     if error is not None:

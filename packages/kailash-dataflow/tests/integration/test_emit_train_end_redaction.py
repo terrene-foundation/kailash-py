@@ -250,8 +250,12 @@ def test_emit_train_end_no_policy_passes_error_through_unchanged(
     emitter MUST NOT alter the error string — there is no policy to
     define what 'classified' means.
     """
-    # Ensure no policy is set on the db.
-    db._classification_policy = None
+    # Ensure no policy is set on the db. The runtime accepts None
+    # (format_error_for_event early-returns when policy is None per
+    # rules/event-payload-classification.md § 1) but pyright narrows
+    # the class attribute to non-Optional; setattr bypasses the
+    # static type without changing runtime behavior.
+    setattr(db, "_classification_policy", None)
 
     received: List[Any] = []
     on_train_end(db, received.append)
