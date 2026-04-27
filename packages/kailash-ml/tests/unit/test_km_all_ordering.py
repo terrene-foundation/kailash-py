@@ -1,14 +1,16 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""W33 Tier-1 — ``kailash_ml.__all__`` membership + 6-group ordering.
+"""W33 Tier-1 — ``kailash_ml.__all__`` membership + 7-group ordering.
 
 Per ``specs/ml-engines-v2.md §15.9``, the package-level ``__all__``
-MUST be organised into 6 groups in the exact order documented there.
-Group 1 is ``track, autolog, train, diagnose, register, serve, watch,
-dashboard, seed, reproduce, resume, lineage, rl_train`` (13 entries
-per §15.9) plus ``erase_subject`` per W15 FP-MED-2 → 14. Groups 2-6
-sum to 27 (15 + 5 + 2 + 3 + 2). Total: 41 + 7 Phase-1 Trainable
-adapters + ``CatBoostTrainable`` (W6-013) = 49.
+MUST be organised into 7 groups in the exact order documented there.
+Group 0 (W6 round-3 MED-1 addition, 2026-04-27) is package metadata
+(``__version__``). Group 1 is ``track, autolog, train, diagnose,
+register, serve, watch, dashboard, seed, reproduce, resume, lineage,
+rl_train`` (13 entries per §15.9) plus ``erase_subject`` per W15
+FP-MED-2 → 14. Groups 2-6 sum to 27 (15 + 5 + 2 + 3 + 2). Total:
+1 (Group 0) + 41 + 7 Phase-1 Trainable adapters + ``CatBoostTrainable``
+(W6-013) = 50.
 
 This test locks the ordering so a future refactor that silently
 reorders the list — or drops one of the canonical verbs — fails
@@ -20,7 +22,8 @@ from __future__ import annotations
 import kailash_ml
 
 
-# Canonical ordering per spec §15.9 plus W15 clarification.
+# Canonical ordering per spec §15.9 plus W15 clarification + Group 0 metadata.
+EXPECTED_GROUP_0 = ("__version__",)
 EXPECTED_GROUP_1 = (
     "track",
     "autolog",
@@ -75,7 +78,8 @@ EXPECTED_GROUP_5 = ("ExperimentTracker", "ExperimentRun", "ModelRegistry")
 EXPECTED_GROUP_6 = ("engine_info", "list_engines")
 
 EXPECTED_ALL = (
-    EXPECTED_GROUP_1
+    EXPECTED_GROUP_0
+    + EXPECTED_GROUP_1
     + EXPECTED_GROUP_2
     + EXPECTED_GROUP_3
     + EXPECTED_GROUP_4
@@ -85,14 +89,14 @@ EXPECTED_ALL = (
 
 
 def test_all_has_expected_total_symbol_count() -> None:
-    """``__all__`` MUST have exactly 49 symbols.
+    """``__all__`` MUST have exactly 50 symbols.
 
-    40 §15.9 + W15 ``erase_subject`` + 7 Phase-1 Trainable adapters +
-    ``CatBoostTrainable`` (W6-013 / F-E1-01).
+    1 (Group 0 metadata) + 40 §15.9 + W15 ``erase_subject`` + 7 Phase-1
+    Trainable adapters + ``CatBoostTrainable`` (W6-013 / F-E1-01).
     """
-    assert len(kailash_ml.__all__) == 49, (
-        f"expected 49 symbols (§15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 adapters "
-        f"+ CatBoostTrainable W6-013), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
+    assert len(kailash_ml.__all__) == 50, (
+        f"expected 50 symbols (1 Group 0 + §15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 "
+        f"adapters + CatBoostTrainable W6-013), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
 
@@ -106,9 +110,20 @@ def test_all_is_exactly_expected_ordering() -> None:
     )
 
 
-def test_group_1_lifecycle_verbs_come_first() -> None:
-    """Verbs Group 1 MUST occupy positions 0..13 (verbs first per §15.9)."""
-    for idx, name in enumerate(EXPECTED_GROUP_1):
+def test_group_0_metadata_comes_first() -> None:
+    """Group 0 (``__version__``) MUST occupy position 0 per §15.9 W6 round-3 deviation."""
+    for idx, name in enumerate(EXPECTED_GROUP_0):
+        assert kailash_ml.__all__[idx] == name, (
+            f"Group 0 metadata at position {idx} expected {name!r}, "
+            f"got {kailash_ml.__all__[idx]!r}"
+        )
+
+
+def test_group_1_lifecycle_verbs_follow_metadata() -> None:
+    """Verbs Group 1 MUST occupy positions 1..14 (after Group 0 metadata per §15.9)."""
+    start = len(EXPECTED_GROUP_0)
+    for offset, name in enumerate(EXPECTED_GROUP_1):
+        idx = start + offset
         assert kailash_ml.__all__[idx] == name, (
             f"Group 1 verb at position {idx} expected {name!r}, "
             f"got {kailash_ml.__all__[idx]!r}"
@@ -135,22 +150,27 @@ def test_all_has_no_duplicates() -> None:
 
 def test_group_2_primitives_and_errors() -> None:
     """Group 2 is primitives + the 12-class MLError hierarchy per §15.9."""
-    # Start index = len(Group 1).
-    start = len(EXPECTED_GROUP_1)
+    # Start index = len(Group 0) + len(Group 1).
+    start = len(EXPECTED_GROUP_0) + len(EXPECTED_GROUP_1)
     end = start + len(EXPECTED_GROUP_2)
     assert tuple(kailash_ml.__all__[start:end]) == EXPECTED_GROUP_2
 
 
 def test_group_3_diagnostics() -> None:
     """Group 3 is the 5 diagnostic adapters/helpers."""
-    start = len(EXPECTED_GROUP_1) + len(EXPECTED_GROUP_2)
+    start = len(EXPECTED_GROUP_0) + len(EXPECTED_GROUP_1) + len(EXPECTED_GROUP_2)
     end = start + len(EXPECTED_GROUP_3)
     assert tuple(kailash_ml.__all__[start:end]) == EXPECTED_GROUP_3
 
 
 def test_group_4_backend_pair() -> None:
     """Group 4 is the (detect_backend, DeviceReport) pair."""
-    start = len(EXPECTED_GROUP_1) + len(EXPECTED_GROUP_2) + len(EXPECTED_GROUP_3)
+    start = (
+        len(EXPECTED_GROUP_0)
+        + len(EXPECTED_GROUP_1)
+        + len(EXPECTED_GROUP_2)
+        + len(EXPECTED_GROUP_3)
+    )
     end = start + len(EXPECTED_GROUP_4)
     assert tuple(kailash_ml.__all__[start:end]) == EXPECTED_GROUP_4
 
@@ -158,7 +178,8 @@ def test_group_4_backend_pair() -> None:
 def test_group_5_tracker_primitives() -> None:
     """Group 5 is the tracker primitives trio."""
     start = (
-        len(EXPECTED_GROUP_1)
+        len(EXPECTED_GROUP_0)
+        + len(EXPECTED_GROUP_1)
         + len(EXPECTED_GROUP_2)
         + len(EXPECTED_GROUP_3)
         + len(EXPECTED_GROUP_4)

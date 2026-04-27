@@ -2293,7 +2293,7 @@ def __getattr__(name):
 
 #### Deviation note — Group 0 `__version__` addition (W6 round-3 MED-1, 2026-04-27)
 
-Round-3 redteam audit (`workspaces/portfolio-spec-audit/04-validate/W6-redteam-round3-verification.md` §4 MED-1) surfaced that `__version__` was eagerly imported at `kailash_ml/__init__.py:46` (`from kailash_ml._version import __version__`) but absent from canonical `__all__` — a `rules/orphan-detection.md` §6 violation. Added to the canonical surface as Group 0 (Package metadata) ahead of Group 1 verbs. Downstream consumers using `from kailash_ml import *` now receive the version string. AST-derived count moves from 49 → 50 entries. Per `rules/specs-authority.md` §6, the deviation is acknowledged here in spec text rather than only in code.
+Round-3 redteam audit (Origin: `workspaces/portfolio-spec-audit/04-validate/W6-redteam-round3-verification.md` §4 MED-1) surfaced that `__version__` was eagerly imported at `kailash_ml/__init__.py:46` (`from kailash_ml._version import __version__`) but absent from canonical `__all__` — a `rules/orphan-detection.md` §6 violation. Added to the canonical surface as Group 0 (Package metadata) ahead of Group 1 verbs. Downstream consumers using `from kailash_ml import *` now receive the version string. AST-derived count moves from 49 → 50 entries. Per `rules/specs-authority.md` §6, the deviation is acknowledged here in spec text rather than only in code.
 
 ### 15.10 MLEngine Method-Set Preservation (Explicit Restatement)
 
