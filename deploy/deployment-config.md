@@ -17,17 +17,17 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.11.2          |
-| kailash-dataflow | `dataflow-v*`      | 2.3.1           |
+| kailash (core)   | `v*`               | 2.11.3          |
+| kailash-dataflow | `dataflow-v*`      | 2.3.2           |
 | kailash-kaizen   | `kaizen-v*`        | 2.13.1          |
 | kailash-nexus    | `nexus-v*`         | 2.3.0           |
 | kailash-pact     | `pact-v*`          | 0.11.0          |
-| kailash-ml       | `ml-v*`            | 1.1.1           |
-| kailash-align    | `align-v*`         | 0.6.0           |
+| kailash-ml       | `ml-v*`            | 1.5.0           |
+| kailash-align    | `align-v*`         | 0.7.0           |
 | kailash-mcp      | `mcp-v*`           | 0.2.10          |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-26 (kailash 2.11.2 hotfix — JWT security hardening). Closes #635 (trust JWT iss-claim presence enforcement, cross-SDK companion to #625) + #636 (CRIT — `APIGateway` hardcoded JWT default secret removed, now requires `KAILASH_API_GATEWAY_SECRET` env var ≥32 bytes). Both surfaced by Wave 5 portfolio spec audit (`workspaces/portfolio-spec-audit/04-validate/00-portfolio-summary.md`). 11/11 regression tests at `tests/regression/test_issue_63{5,6}*.py`. PR #637 admin-merged this session. No sibling drift — every other BUILD-repo package main matches PyPI exactly.
+Last updated: 2026-04-27 (W7 portfolio remediation cycle — kailash-ml 1.5.0 + kailash-dataflow 2.3.2). kailash-ml 1.5.0 (PR #677, closes #657) ships the cross-engine `LineageGraph` engine module — frozen `LineageGraph`/`LineageNode`/`LineageEdge` dataclasses, BFS walker via DataFlow `ConnectionManager`, numbered migration `0004_kml_lineage_table.py`, `LineageNotImplementedError` deletion per orphan-detection §3, and 13 tests (Tier 2 wiring + Tier 3 README quickstart regression). kailash-dataflow 2.3.2 (PR #678) wires `format_error_for_event` through `emit_train_end` at the emitter (single filter point per `event-payload-classification.md` §1) — caller-sanitization documentation replaced with structural-redaction contract, 4 Tier 2 regression tests. Both clean-venv installability checks passed. No sibling drift — kailash 2.11.3 / kailash-kaizen 2.13.1 / kailash-nexus 2.3.0 / kailash-pact 0.11.0 / kailash-mcp 0.2.10 / kailash-align 0.7.0 / kaizen-agents 0.9.4 all match PyPI.
 
 ## Release Runbook
 
