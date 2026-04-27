@@ -1,5 +1,83 @@
 # kailash-ml Changelog
 
+## [1.5.0] — 2026-04-27 — W7-001: cross-engine LineageGraph (closes #657)
+
+Implements the cross-engine lineage surface deferred at 1.0.0. Closes
+GitHub issue [#657](https://github.com/terrene-foundation/kailash-py/issues/657)
+and the deferral disposition declared at `specs/ml-tracking.md §6.3`.
+
+### Added
+
+- **`kailash_ml.engines.lineage` module** — frozen `LineageGraph` /
+  `LineageNode` / `LineageEdge` dataclasses per
+  `specs/ml-engines-v2-addendum.md §E10.2`. Reachable through the
+  top-level namespace as `kailash_ml.LineageGraph` (eager import; not
+  in canonical `__all__` per the same convention as `DeviceReport` /
+  `ServeResult` / `MetricSpec`).
+- **`build_lineage_graph(conn, *, name, version, tenant_id, max_depth)`
+  walker** — BFS traversal of `_kml_lineage` via
+  `ConnectionManager.fetch`. Materialises `model_version`, `run`,
+  `dataset`, `feature_version`, and `model_version` (parent) nodes
+  with the canonical `produced_by` / `consumed` / `used_features` /
+  `derived_from` edges. Bounded by `max_depth`.
+- **`ModelRegistry.build_lineage_graph(*, ref, tenant_id, max_depth)`
+  facade** — accepts both bare model names (latest version resolves
+  via `_kml_models.latest_version`) and the canonical `model@vN`
+  form. Raises `ModelNotFoundError` for unknown refs.
+- **`ModelRegistry.record_lineage(*, name, version, tenant_id,
+  tracker_run_id, ...)`** — canonical write path for `_kml_lineage`
+  rows. Idempotent on PK `(tenant_id, model_name, version)` via
+  `DELETE` + `INSERT` in one transaction (dialect-portable; avoids
+  `ON CONFLICT` divergence).
+- **Numbered migration `0004_kml_lineage_table`** at
+  `src/kailash/tracking/migrations/`. 8-column DDL per
+  `specs/ml-tracking.md §6.3` + audit-correlation index
+  `idx_kml_lineage_tracker_run_id`. Reversible upgrade/downgrade with
+  `force_downgrade=True` gate per `rules/schema-migration.md` Rule 7.
+- **Tier 2 wiring test** at
+  `packages/kailash-ml/tests/integration/test_lineage_graph_wiring.py`
+  per `rules/facade-manager-detection.md` MUST Rule 2. 10 cases
+  covering migration probe, materialised graph shape, cross-tenant
+  defense (WHERE filter + monkeypatched fetcher), cache key shape,
+  unknown-model error, bare-name resolution, and frozen-dataclass
+  identity.
+- **Tier 3 regression** at
+  `packages/kailash-ml/tests/regression/test_readme_lineage_quickstart.py`
+  per `rules/testing.md` § "End-to-End Pipeline Regression". 3 cases
+  covering the canonical Quick Start, top-level dataclass exposure,
+  async-surface consistency, and the `LineageNotImplementedError`
+  removal sweep.
+
+### Changed
+
+- **`km.lineage(ref, *, tenant_id=None, max_depth=10)`** now returns
+  a real `LineageGraph` via the registry walker instead of raising
+  `LineageNotImplementedError`. Fall-through tenant resolution per
+  `specs/ml-tracking.md §7.2` — explicit `tenant_id` arg, then
+  `get_current_tenant_id()`, then the canonical `"_single"`
+  sentinel.
+- **`specs/ml-tracking.md §6.3`** — deferral block replaced with the
+  W7-001 implementation contract.
+- **`specs/ml-engines-v2-addendum.md §E10.2`** — header flipped from
+  DEFERRED to IMPLEMENTED.
+- **`specs/ml-engines-v2.md §15` + §15.8** — wrapper table row and
+  signature block updated to reflect the shipped surface.
+
+### Removed (BREAKING for callers catching the deferral error)
+
+- **`kailash_ml.errors.LineageNotImplementedError`** class deleted
+  per `rules/orphan-detection.md` Rule 3 (Removed = Deleted, Not
+  Deprecated). Class no longer reachable through `kailash.ml.errors`
+  or `kailash_ml.errors` in any form.
+
+  **Migration**: callers handling the deferral path with
+  `except LineageNotImplementedError` MUST switch to handling a real
+  `LineageGraph` return value. The Quick Start `await km.lineage(...)`
+  no longer raises this error class. If your code was a deferred
+  pass-through that re-raised the error, delete the `try/except`
+  block — `km.lineage` succeeds against any DB whose migration is
+  applied.
+
 ## [1.4.2] — 2026-04-27 — W6 round-3 MED-1 catch-up: `__version__` in canonical `__all__`
 
 Atomic version bump to pair with the public-API addition landed in PR #674
