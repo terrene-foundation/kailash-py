@@ -82,6 +82,7 @@ from kailash_ml.engines.data_explorer import AlertConfig
 # import ExperimentTracker, ExperimentRun, ModelRegistry`` resolves
 # without a lazy-__getattr__ hop (CodeQL
 # py/modification-of-default-value gate).
+from kailash_ml.engines.lineage import LineageEdge, LineageGraph, LineageNode
 from kailash_ml.engines.model_registry import ModelRegistry
 
 # Group 6 — Engine Discovery.
@@ -135,7 +136,6 @@ from kailash_ml.errors import (
     InsufficientTrialsError,
     InvalidInputSchemaError,
     InvalidTenantIdError,
-    LineageNotImplementedError,
     LineageRequiredError,
     LiveStreamError,
     MetricValueError,
@@ -217,19 +217,16 @@ from kailash_ml.types import (
     ModelSignature,
 )
 
-# Lineage return type — DEFERRED to Wave 6.5b per W6-014.
+# Lineage return type — W7-001 implementation (closes issue #657).
 #
-# The canonical ``LineageGraph`` declared in ``ml-engines-v2-addendum
-# §E10.2`` requires the registry-side ``build_lineage_graph`` primitive,
-# the ``_kml_lineage`` DDL (``ml-tracking.md §6.3``), and the lineage
-# walker — all larger than one shard's load-bearing-logic budget.
-# Tracking issue: terrene-foundation/kailash-py#657.
-#
-# Per ``rules/zero-tolerance.md`` Rule 2 (no fake data), the package
-# MUST NOT ship a placeholder ``LineageGraph`` that round-trips through
-# ``km.lineage(...)`` with hollow ``nodes=(ref,), edges=()`` content;
-# the typed deferral below (``km.lineage`` → ``LineageNotImplementedError``)
-# is the legitimate Rule 1b deferral path.
+# The canonical ``LineageGraph`` / ``LineageNode`` / ``LineageEdge``
+# declared in ``ml-engines-v2-addendum §E10.2`` ships from
+# ``kailash_ml.engines.lineage`` and is eagerly imported above. The
+# registry-side ``build_lineage_graph`` walker, the ``_kml_lineage``
+# DDL (``ml-tracking.md §6.3``), and migration 0004 land in the same
+# PR per ``rules/orphan-detection.md`` Rule 1 (every facade has a
+# production call site in the same PR). ``km.lineage(...)`` below
+# returns the real graph via the registry walker.
 
 
 # W33c: km.register top-level wrapper per specs/ml-engines-v2.md §15.4 +
@@ -529,42 +526,63 @@ async def lineage(
 ) -> Any:
     """Return the cross-engine lineage graph rooted at ``ref``.
 
-    .. warning::
+    Implements the contract declared in
+    ``specs/ml-engines-v2-addendum §E10`` and persisted via the
+    ``_kml_lineage`` table from ``specs/ml-tracking.md §6.3``. Closes
+    issue #657 (W7-001).
 
-       **Deferred to Wave 6.5b** — see issue
-       `terrene-foundation/kailash-py#657
-       <https://github.com/terrene-foundation/kailash-py/issues/657>`_
-       for the design sketch (frozen ``LineageGraph`` / ``LineageNode`` /
-       ``LineageEdge`` per ``ml-engines-v2-addendum §E10.2`` + the
-       ``_kml_lineage`` DDL + traversal walker per ``ml-tracking.md
-       §6.3 / §7.1``).
+    Args:
+        ref: Either a bare model name (``"churn"``) — latest version
+            resolves automatically — or the canonical ``model@vN`` form
+            (``"churn@v3"``). Future revisions may also accept a
+            ``run_id`` or ``dataset_hash`` per §E10.2; the current
+            implementation is rooted at the model_version surface.
+        tenant_id: Tenant scope. When ``None``, resolves via
+            :func:`kailash_ml.tracking.get_current_tenant_id`; when no
+            ambient run is active, falls through to the canonical
+            single-tenant sentinel ``"_single"`` per
+            ``ml-tracking.md §7.2``.
+        max_depth: Maximum number of parent-version hops the walker
+            traverses. Defaults to 10 per §E10.3.
 
-       The deferral disposition follows ``rules/zero-tolerance.md``
-       Rule 1b — calling ``km.lineage(...)`` raises a typed
-       :class:`~kailash_ml.errors.LineageNotImplementedError` (a
-       :class:`~kailash_ml.errors.TrackingError` subclass) rather than
-       returning a hollow placeholder graph (Rule 2 — fake data is
-       BLOCKED).
+    Returns:
+        :class:`~kailash_ml.engines.lineage.LineageGraph` — a frozen
+        dataclass containing the rooted, tenant-scoped, depth-bounded
+        lineage tree. Cross-tenant traversal raises
+        :class:`~kailash_ml.errors.CrossTenantLineageError`.
 
-    Per ``specs/ml-engines-v2-addendum §E10.2`` and §15.8 (target
-    contract). ``ref`` may be a run_id, model_version string, or
-    dataset_hash. The graph is tenant-scoped — cross-tenant reads raise
-    :class:`~kailash_ml.errors.CrossTenantLineageError` per
-    ``rules/tenant-isolation.md``.
+    Raises:
+        kailash_ml.errors.MigrationRequiredError: ``_kml_lineage`` not
+            present (run ``MigrationRegistry.apply_pending(conn)``).
+        kailash_ml.errors.ModelNotFoundError: ``ref`` does not resolve
+            to a registered model_version.
+        kailash_ml.errors.CrossTenantLineageError: a traversed row's
+            ``tenant_id`` does not match the caller's argument.
     """
-    raise LineageNotImplementedError(
-        reason=(
-            "km.lineage() implementation deferred to Wave 6.5b — "
-            "see terrene-foundation/kailash-py#657 for the design "
-            "sketch (LineageGraph dataclass + _kml_lineage DDL + "
-            "registry traversal walker). The canonical contract is "
-            "specified in specs/ml-engines-v2-addendum.md §E10 and "
-            "specs/ml-tracking.md §6.3 / §7.1."
-        ),
-        tenant_id=tenant_id,
-        resource_id=ref,
-        max_depth=max_depth,
-    )
+    # Resolve the canonical store URL and open a registry against it.
+    # Mirrors the ExperimentTracker.create() factory pattern but does
+    # not need the tracker's full machinery — we only need the
+    # ConnectionManager-backed registry surface.
+    from kailash_ml._env import resolve_store_url
+    from kailash_ml.engines.model_registry import ModelRegistry
+    from kailash_ml.tracking import get_current_tenant_id
+
+    from kailash.db.connection import ConnectionManager
+
+    resolved_tenant = tenant_id or get_current_tenant_id() or "_single"
+    store_url = resolve_store_url()
+
+    conn = ConnectionManager(store_url)
+    await conn.initialize()
+    try:
+        registry = ModelRegistry(conn)
+        return await registry.build_lineage_graph(
+            ref=ref,
+            tenant_id=resolved_tenant,
+            max_depth=max_depth,
+        )
+    finally:
+        await conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -758,10 +776,13 @@ _ = (
     EngineNotFoundError,
     MethodSignature,
     ParamSpec,
-    # NOTE: ``LineageGraph`` removed at W6-014 — the type is deferred to
-    # Wave 6.5b along with the registry-side ``build_lineage_graph``
-    # primitive (issue #657). ``km.lineage(...)`` raises
-    # ``LineageNotImplementedError`` per ``rules/zero-tolerance.md`` Rule 1b.
+    # W7-001 (closes issue #657) — ``LineageGraph`` ships from
+    # ``kailash_ml.engines.lineage`` and ``km.lineage(...)`` returns
+    # the real graph via the registry walker. The deferral disposition
+    # at 1.0.0 (the typed ``LineageNotImplementedError``) is removed.
+    LineageGraph,
+    LineageNode,
+    LineageEdge,
     # Error classes kept reachable for callers who want the finer taxonomy
     ActorRequiredError,
     AliasNotFoundError,
@@ -789,7 +810,6 @@ _ = (
     InsufficientTrialsError,
     InvalidInputSchemaError,
     InvalidTenantIdError,
-    LineageNotImplementedError,
     LineageRequiredError,
     LiveStreamError,
     MetricValueError,
