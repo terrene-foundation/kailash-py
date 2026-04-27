@@ -389,8 +389,12 @@ async def build_lineage_graph(
     root_model_row = await _fetch_model_version_row(conn, name=name, version=version)
     if root_model_row is None:
         raise ModelNotFoundError(
-            f"Model {name!r} version {version} not found in _kml_model_versions; "
-            f"cannot build lineage graph."
+            reason=(
+                f"Model {name!r} version {version} not found in "
+                f"_kml_model_versions; cannot build lineage graph."
+            ),
+            resource_id=f"{name}@v{version}",
+            tenant_id=tenant_id,
         )
 
     # Structured emission per ``rules/observability.md`` Rule 1 (every
