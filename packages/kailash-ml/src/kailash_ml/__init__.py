@@ -54,7 +54,6 @@ from kailash_ml._wrappers import (
     autolog_fn,
     dashboard,
     diagnose,
-    register,
     rl_train,
     serve,
     track,
@@ -239,10 +238,12 @@ from kailash_ml.types import (
 #     result = km.train(df, target="y")
 #     registered = km.register(result, name="demo")
 #
-# Sync wrapper around MLEngine.register() matching `km.train`'s pattern
-# for notebook / three-line-hello-world ergonomics. Advanced callers
-# needing async composition (inside an existing event loop) MUST use
-# `MLEngine().register(...)` directly.
+# Async wrapper around MLEngine.register() matching `km.train`'s pattern
+# (both async per `rules/patterns.md` § "Paired Public Surface — Consistent
+# Async-ness"). Originally landed sync at W33c; converted to async at
+# commit fdd3040e to close the canonical Quick Start chain
+# `await km.train(...) -> await km.register(...)` under any event-loop
+# context (pytest-asyncio, Nexus handler, Jupyter kernel).
 async def register(
     training_result: TrainingResult,
     *,
@@ -626,19 +627,23 @@ def __getattr__(name: str):  # noqa: N807
 # ---------------------------------------------------------------------------
 # Canonical __all__ — exact 6-group ordering per specs/ml-engines-v2.md §15.9
 #
-# Symbol count: 49 (spec §15.9 base 40 groups + W15 FP-MED-2 adds
+# Symbol count: 50 (spec §15.9 base 40 groups + W15 FP-MED-2 adds
 # ``erase_subject`` to Group 1 + W6 wave additions: ``rl_train`` (Group 1,
 # W6-015 RL primary verb), 7 Phase-1 Trainable adapters in Group 2
-# enumeration including ``CatBoostTrainable`` (W6-013), and Group 6
-# discovery primitives ``engine_info`` / ``list_engines`` (W6-012). The
-# ordering is load-bearing: ``from kailash_ml import *`` users observe
-# verbs first, then primitives, then diagnostics, then backend, then
-# tracker, then discovery. Reordering requires a spec amendment (§15.9
-# MUST). Count is verifier-derived (``ast.parse(...).find('__all__')``)
-# per ``rules/testing.md`` § "Verified Numerical Claims".
+# enumeration including ``CatBoostTrainable`` (W6-013), Group 6 discovery
+# primitives ``engine_info`` / ``list_engines`` (W6-012), + Group 0 metadata
+# (``__version__``, W6 round-3 MED-1 — eagerly imported at module scope per
+# ``rules/orphan-detection.md`` §6). The ordering is load-bearing:
+# ``from kailash_ml import *`` users observe metadata first, then verbs,
+# then primitives, then diagnostics, then backend, then tracker, then
+# discovery. Reordering requires a spec amendment (§15.9 MUST). Count is
+# verifier-derived (``ast.parse(...).find('__all__')``) per
+# ``rules/testing.md`` § "Verified Numerical Claims".
 # ---------------------------------------------------------------------------
 
 __all__ = [
+    # Group 0 — Package metadata
+    "__version__",
     # Group 1 — Lifecycle verbs (action-first for discoverability)
     "track",
     "autolog",

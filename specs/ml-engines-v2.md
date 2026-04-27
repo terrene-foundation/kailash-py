@@ -2187,10 +2187,13 @@ These wrappers are specified in their owning spec files; listed here for discove
 
 ### 15.9 `kailash_ml.__all__` Canonical Ordering
 
-The `kailash_ml/__init__.py::__all__` list MUST be ordered as follows — six named groups in this exact sequence (Group 6 added by Phase-F F5 per `ml-engines-v2-addendum §E11.2`):
+The `kailash_ml/__init__.py::__all__` list MUST be ordered as follows — seven named groups in this exact sequence (Group 0 added by W6 round-3 MED-1 per `rules/orphan-detection.md` §6 — eagerly-imported public symbol MUST appear in `__all__`; Group 6 added by Phase-F F5 per `ml-engines-v2-addendum §E11.2`):
 
 ```python
 __all__ = [
+    # Group 0 — Package metadata
+    "__version__",
+
     # Group 1 — Lifecycle verbs (action-first for discoverability)
     "track",
     "autolog",
@@ -2287,6 +2290,10 @@ def __getattr__(name):
 ```
 
 **Why:** Eager imports close the `__all__`-drift failure mode permanently and ship a single canonical export set that every static-analysis tool reads consistently. The one-time import cost is paid once per process.
+
+#### Deviation note — Group 0 `__version__` addition (W6 round-3 MED-1, 2026-04-27)
+
+Round-3 redteam audit (`workspaces/portfolio-spec-audit/04-validate/W6-redteam-round3-verification.md` §4 MED-1) surfaced that `__version__` was eagerly imported at `kailash_ml/__init__.py:46` (`from kailash_ml._version import __version__`) but absent from canonical `__all__` — a `rules/orphan-detection.md` §6 violation. Added to the canonical surface as Group 0 (Package metadata) ahead of Group 1 verbs. Downstream consumers using `from kailash_ml import *` now receive the version string. AST-derived count moves from 49 → 50 entries. Per `rules/specs-authority.md` §6, the deviation is acknowledged here in spec text rather than only in code.
 
 ### 15.10 MLEngine Method-Set Preservation (Explicit Restatement)
 
@@ -2479,7 +2486,8 @@ This checklist is the structural gate for kailash-ml 1.0.0 release. Every item M
 - [ ] `cudnn.benchmark=True` combined with fixed seed emits a loud WARN
 - [ ] `BackendCapability` enum extended to include `fp8_e4m3`, `fp8_e5m2` per §14
 - [ ] Top-level `km.*` wrappers (`train`, `register`, `serve`, `watch`, `dashboard`, `diagnose`, `track`, `autolog`, `seed`, `reproduce`, `resume`, `rl_train`) are declared in `kailash_ml/__init__.py::__all__` AND eagerly imported. `seed`, `reproduce`, and `resume` are module-level functions (§11.1, §12, §12A) — not methods on any class.
-- [ ] `kailash_ml/__init__.py::__all__` ordering matches §15.9 (verbs first, primitives + MLError hierarchy second, diagnostic adapters third, backends fourth, tracker primitives fifth)
+- [ ] `kailash_ml/__init__.py::__all__` ordering matches §15.9 (Group 0 metadata `__version__` first, then verbs, then primitives + MLError hierarchy, then diagnostic adapters, then backends, then tracker primitives, then engine discovery)
+- [ ] `__version__` is eagerly imported AND listed in `__all__` Group 0 (W6 round-3 MED-1; `rules/orphan-detection.md` §6)
 - [ ] `MLEngine` method count is exactly eight (§2.1 MUST 5) — NO `km.*` wrapper is added as a ninth engine method
 - [ ] `km.*` wrappers route through a `_default_engines: dict[str | None, Engine]` cache keyed by `tenant_id` — one cached instance per tenant per process
 - [ ] `tests/integration/test_readme_quickstart_executes.py` parses and executes the literal `## Quick Start` block from `packages/kailash-ml/README.md` on every CI matrix job
