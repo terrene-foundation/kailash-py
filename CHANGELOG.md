@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.3] — 2026-04-27 — Patch: ML error classes missed in v2.11.2 wheel (W6-014, W6-020)
+
+Patch bump — ships two `kailash.ml.errors` additions that were committed to main after
+the `v2.11.2` tag and therefore absent from the published wheel. Required by `kailash-ml
+1.4.2` at import time.
+
+### Added
+
+- **`LineageNotImplementedError(TrackingError)`** — raised by `km.lineage(...)` while the
+  cross-engine LineageGraph surface is deferred to Wave 6.5b. Typed error allows callers
+  to distinguish "not yet implemented" from generic failure. Added in commit `56fe3f7a`
+  (W6-014).
+- **`MigrationRequiredError(MLError)`** — raised by an engine's hot path when a required
+  schema object (table/column/index) is absent, indicating the operator has not run the
+  corresponding numbered migration. Distinct from `MigrationFailedError` and
+  `MigrationImportError`. Added in commit `f5127b15` (W6-020).
+
 ## [2.11.2] — 2026-04-26 — JWT security hardening (#635 + #636, Wave 5 audit)
 
 Patch bump — closes two security findings surfaced by Wave 5 portfolio spec audit (workspace `portfolio-spec-audit/04-validate/W5-C-findings.md`).
