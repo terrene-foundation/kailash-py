@@ -197,10 +197,18 @@ def emit_train_end(
         context: Immutable training context.
         status: ``"success"`` / ``"failure"`` / ``"cancelled"``.
         duration_seconds: Wall-clock duration of the run.
-        error: Error message if ``status="failure"``. Caller is
-            responsible for ensuring error messages contain no
-            classified values (per ``rules/security.md`` §
-            "Multi-Site Kwarg Plumbing" — sanitize before emitting).
+        error: Raw error message when ``status="failure"``. The
+            emitter structurally redacts classified field values and
+            classified field names via
+            :func:`dataflow.classification.event_payload.format_error_for_event`
+            before publishing — callers MAY pass ``str(exc)`` directly,
+            including raw exception strings that interpolate row data
+            (``DETAIL: Failing row contains (alice@tenant.example,
+            hunter2)``). Per
+            ``rules/event-payload-classification.md`` § 1, the
+            single-filter-point at the emitter is the structural
+            defense; documentation-only caller-sanitization is
+            BLOCKED.
     """
     bus = _require_event_bus(db)
 
@@ -216,7 +224,22 @@ def emit_train_end(
     if duration_seconds is not None:
         extra["duration_seconds"] = duration_seconds
     if error is not None:
-        extra["error"] = error
+        # Structural redaction at the emitter (single filter point) —
+        # per ``rules/event-payload-classification.md`` § 1. The
+        # ``model_name=None`` mode is used because the training event
+        # is not bound to a single registered DataFlow model — the
+        # caller may be training across feature columns sourced from
+        # any number of registered models.
+        from dataflow.classification.event_payload import format_error_for_event
+
+        policy = getattr(db, "_classification_policy", None)
+        safe_error = format_error_for_event(
+            policy=policy,
+            error_str=error,
+            model_name=None,
+            known_field_values=None,
+        )
+        extra["error"] = safe_error
 
     payload = _build_train_payload(
         db=db, event_type=ML_TRAIN_END_EVENT, context=context, extra=extra
