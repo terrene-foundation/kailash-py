@@ -1970,7 +1970,7 @@ These wrappers MUST exist in `kailash_ml/__init__.py`:
 | `km.autolog`   | `AutologHandle`                                                                  | See `ml-autolog.md` §2 (owned there; listed here for discoverability)                                                                                                                        |
 | `km.rl_train`  | `TrainingResult`                                                                 | See `ml-rl.md` (owned there; listed here for discoverability)                                                                                                                                |
 | `km.resume`    | `TrainingResult`                                                                 | §12A — reads `last.ckpt` from tracker run's artifact path, dispatches to cached default engine with `resume_from_checkpoint` pinned.                                                         |
-| `km.lineage`   | `LineageGraph` (target) — DEFERRED, raises `LineageNotImplementedError` in 1.0.0 | `ml-engines-v2-addendum §E10.2` — tenant-scoped, depth-bounded cross-engine lineage graph. **DEFERRED to Wave 6.5b (W6-014, issue #657)**; see `ml-tracking.md §6.3` for deferral rationale. |
+| `km.lineage`   | `LineageGraph` (kailash-ml 1.5.0+)                                               | `ml-engines-v2-addendum §E10.2` — tenant-scoped, depth-bounded cross-engine lineage graph. Implemented at W7-001 (issue #657). Walker traverses `_kml_lineage` via `ConnectionManager.fetch`; cross-tenant rows raise `CrossTenantLineageError`. |
 
 ### 15.2 MUST Rules
 
@@ -2170,7 +2170,7 @@ These wrappers are specified in their owning spec files; listed here for discove
 - `km.autolog` — specified in `ml-autolog.md` §2. Reuses the same contextvar accessor `kailash_ml.tracking.get_current_run()` as every other wrapper — no independent global; conflict with Shard C-A's contextvar accessor (Decision 4 rank-0) is impossible by construction.
 - `km.rl_train` — specified in `ml-rl.md` (wraps `rl.Engine.train()`).
 - `km.resume` — specified in §12A of this file (checkpoint-resume pair to §3.2 MUST 7's `ModelCheckpoint` auto-attach).
-- `km.lineage` — specified in `ml-engines-v2-addendum.md §E10.2`. **DEFERRED to Wave 6.5b (W6-014, issue terrene-foundation/kailash-py#657)** — see `ml-tracking.md §6.3` for the deferral disposition. In 1.0.0, `km.lineage(...)` raises `LineageNotImplementedError` (a `TrackingError` subclass per `ml-tracking.md §9.1`) rather than returning hollow data. The signature below is the target contract that the deferred implementation MUST satisfy when it lands; the `LineageGraph` return-type module (`kailash_ml.engines.lineage`) does NOT exist in 1.0.0.
+- `km.lineage` — specified in `ml-engines-v2-addendum.md §E10.2`. **Implemented at W7-001 (issue terrene-foundation/kailash-py#657, kailash-ml 1.5.0)** — see `ml-tracking.md §6.3` for the implementation contract. The `LineageGraph` return-type module (`kailash_ml.engines.lineage`) ships with the canonical frozen dataclasses; `km.lineage(...)` opens a tenant-scoped `ConnectionManager` against `resolve_store_url()` and dispatches into `ModelRegistry.build_lineage_graph(...)`.
 
   ```python
   async def lineage(
@@ -2178,12 +2178,12 @@ These wrappers are specified in their owning spec files; listed here for discove
       *,
       tenant_id: str | None = None,     # resolved via get_current_tenant_id() when None
       max_depth: int = 10,
-  ) -> LineageGraph: ...   # target — currently raises LineageNotImplementedError
+  ) -> LineageGraph: ...   # ships from kailash_ml.engines.lineage at 1.5.0
   ```
 
-  Per `ml-tracking.md §10.2`, `tenant_id=None` resolves to the ambient `get_current_tenant_id()` value; multi-tenant engines without ambient context raise `TenantRequiredError` per `rules/tenant-isolation.md`. This aligns `km.lineage` with every sibling `km.*` verb (`km.track`, `km.train`, `km.register`, `km.serve`, `km.watch`, `km.resume`, etc.) which all default `tenant_id: str | None = None` — preventing a `TypeError` for day-0 single-tenant users who never pass `tenant_id` explicitly.
+  Per `ml-tracking.md §10.2`, `tenant_id=None` resolves to the ambient `get_current_tenant_id()` value with fall-through to the canonical `"_single"` sentinel for single-tenant deployments. This aligns `km.lineage` with every sibling `km.*` verb (`km.track`, `km.train`, `km.register`, `km.serve`, `km.watch`, `km.resume`, etc.) which all default `tenant_id: str | None = None` — preventing a `TypeError` for day-0 single-tenant users who never pass `tenant_id` explicitly.
 
-  When undeferred, returns the canonical `LineageGraph` dataclass (declared in `ml-engines-v2-addendum §E10.2`). Tenant-scoped per `rules/tenant-isolation.md` — cross-tenant reads raise `CrossTenantReadError`. Dispatches through the cached default engine per §15.2 MUST 1.
+  Returns the canonical `LineageGraph` dataclass (declared in `ml-engines-v2-addendum §E10.2`). Tenant-scoped per `rules/tenant-isolation.md` — cross-tenant rows raise `CrossTenantLineageError`. Walker traverses `_kml_lineage` via `ConnectionManager.fetch` (no raw DDL outside numbered migration `0004_kml_lineage_table`).
 
 ### 15.9 `kailash_ml.__all__` Canonical Ordering
 
@@ -2264,10 +2264,10 @@ Per `rules/zero-tolerance.md` Rule 1a (second instance — `py/modification-of-d
 from kailash_ml.tracking import track, autolog, ExperimentTracker, ExperimentRun
 from kailash_ml._wrappers import train, register, serve, watch, dashboard, rl_train
 from kailash_ml.diagnostics import diagnose, DLDiagnostics, RAGDiagnostics, RLDiagnostics
-# NOTE: `from kailash_ml.engines.lineage import LineageGraph` is DEFERRED to Wave 6.5b
-# (W6-014, issue #657 — see ml-tracking.md §6.3). The module does not exist in 1.0.0;
-# `km.lineage(...)` raises `LineageNotImplementedError` (a `TrackingError` subclass).
-from kailash_ml.errors import LineageNotImplementedError  # eager import — `km.lineage` raise site
+# W7-001 (issue #657, kailash-ml 1.5.0) — LineageGraph + the registry walker
+# both ship at module-scope. `km.lineage(...)` returns a real graph via the
+# walker (no deferral typed-error remains).
+from kailash_ml.engines.lineage import LineageGraph, LineageNode, LineageEdge
 from kailash_ml.engines.registry import engine_info, list_engines  # Group 6 Engine Discovery (ml-engines-v2-addendum §E11.2)
 # seed() + reproduce() + resume() + lineage() are DECLARED at module scope in this file
 # (see §11.1, §12, §12A, §15.8):
@@ -2275,11 +2275,11 @@ def seed(seed: int, *, torch: bool = True, ...) -> SeedReport: ...
 async def reproduce(run_id: str, *, verify: bool = True, ...) -> TrainingResult: ...
 async def resume(run_id: str, *, tenant_id: str | None = None,
                  tolerance: dict[str, float] | None = None) -> TrainingResult: ...
-async def lineage(run_id_or_model_version_or_dataset_hash: str, *,
+async def lineage(ref: str, *,
                   tenant_id: str | None = None,
                   max_depth: int = 10) -> "LineageGraph":
-    """DEFERRED — raises LineageNotImplementedError. See ml-tracking.md §6.3."""
-    raise LineageNotImplementedError(reason=...)
+    """Open ConnectionManager + dispatch into ModelRegistry.build_lineage_graph."""
+    ...  # see kailash_ml/__init__.py for the production implementation
 
 # DO NOT — lazy resolution for __all__ entries
 def __getattr__(name):
@@ -2502,7 +2502,7 @@ This checklist is the structural gate for kailash-ml 1.0.0 release. Every item M
 - [ ] `peft>=0.10.0` is pinned in the `[dl]` extra to support `HuggingFaceTrainable(peft_config=...)` (§3.2 MUST 9)
 - [ ] `km.resume` is listed in `__all__` Group 1 between `"reproduce"` and `"rl_train"` AND eagerly imported at module scope (§15.9)
 - [ ] `kailash_ml.__all__` Group 1 includes `"lineage"` per §15.9
-- [ ] DEFERRED to Wave 6.5b (W6-014, issue #657): `from kailash_ml.engines.lineage import LineageGraph` lands when the implementation lands; in 1.0.0, `kailash_ml.errors.LineageNotImplementedError` is eagerly imported instead
+- [x] **W7-001** (issue #657, kailash-ml 1.5.0): `from kailash_ml.engines.lineage import LineageGraph, LineageNode, LineageEdge` ships; `kailash_ml.errors.LineageNotImplementedError` deleted per `rules/orphan-detection.md` Rule 3.
 - [ ] `ResumeArtifactNotFoundError` inherits `ModelRegistryError(MLError)` and is re-exported at `kailash_ml.errors.ResumeArtifactNotFoundError`
 - [ ] `ResumeDivergenceError` inherits `MLError` (cross-cutting) and is re-exported at `kailash_ml.errors.ResumeDivergenceError`
 - [ ] `engine_info`, `list_engines` listed in `__all__` Group 6 (§15.9) AND eagerly imported at module scope from `kailash_ml.engines.registry` per `ml-engines-v2-addendum §E11.2`
