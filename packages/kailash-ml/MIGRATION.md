@@ -227,10 +227,19 @@ continued = await km.resume("run-abc123", tolerance=1e-3, verify=True)
 ```
 
 ```python
-# 1.0.0 -- lineage queries (no 0.x equivalent)
-graph = await km.lineage(run_id="run-abc123")
-# graph.parents, graph.children, graph.edges
+# 1.5.0 -- cross-engine lineage queries (W7-001, no 0.x equivalent)
+graph = await km.lineage("churn@v3")           # canonical "model@vN" form
+graph = await km.lineage("churn", tenant_id="acme")  # bare name -> latest version
+# graph.root_id, graph.nodes (tuple), graph.edges (tuple), graph.computed_at
 ```
+
+> **Note (1.4.x → 1.5.0):** `km.lineage(...)` raised
+> `LineageNotImplementedError` in 1.0.0--1.4.x while the cross-engine
+> walker was deferred (issue #657). At 1.5.0 the walker ships and the
+> typed deferral error is deleted from `kailash.ml.errors`. Callers
+> handling the deferral path with `except LineageNotImplementedError`
+> MUST switch to handling a real `LineageGraph` return value -- the
+> error class is no longer reachable.
 
 ## Breaking change 7 -- `km.engine_info` / `km.list_engines` replace ad-hoc discovery
 

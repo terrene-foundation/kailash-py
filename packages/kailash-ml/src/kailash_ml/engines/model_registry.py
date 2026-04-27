@@ -14,16 +14,15 @@ from __future__ import annotations
 import json
 import logging
 import pickle
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from kailash.db.connection import ConnectionManager
-from kailash.db.dialect import _validate_identifier
 from kailash_ml.types import MetricSpec, ModelSignature
+
+from kailash.db.connection import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +306,10 @@ def _attempt_onnx_export(
 
         n_features = len(signature.input_schema.features)
         initial_type = [("input", FloatTensorType([None, n_features]))]
-        onnx_model = skl2onnx.convert_sklearn(model, initial_types=initial_type)
+        # convert_sklearn returns ModelProto with default intermediate=False.
+        # The skl2onnx type stub declares a Union including the
+        # (ModelProto, Topology) tuple shape (intermediate=True path).
+        onnx_model: Any = skl2onnx.convert_sklearn(model, initial_types=initial_type)
         return ("success", None, onnx_model.SerializeToString())
     except ImportError:
         return ("not_applicable", "skl2onnx not installed", None)
@@ -918,3 +920,147 @@ class ModelRegistry:
             reason,
             now_iso,
         )
+
+    # ------------------------------------------------------------------
+    # Lineage (W7-001 — closes issue #657)
+    # ------------------------------------------------------------------
+
+    async def record_lineage(
+        self,
+        *,
+        name: str,
+        version: int,
+        tenant_id: str,
+        tracker_run_id: str,
+        parent_version: int | None = None,
+        training_data_uri: str | None = None,
+        feature_store_version: str | None = None,
+        base_model_uri: str | None = None,
+    ) -> None:
+        """Persist one ``_kml_lineage`` row for a registered model version.
+
+        Idempotent on the PK ``(tenant_id, name, version)`` — repeated
+        calls for the same triple replace the prior row's mutable
+        fields (``parent_version`` / ``training_data_uri`` /
+        ``feature_store_version`` / ``base_model_uri``) so a re-run of
+        ``km.train`` followed by ``km.register`` updates the existing
+        lineage row rather than failing on a UNIQUE-constraint
+        violation. The ``tracker_run_id`` is the audit-trail correlation
+        key per ``ml-tracking.md §6.3``.
+
+        Args:
+            name: Model name (matches ``_kml_model_versions.name``).
+            version: Model version (matches ``_kml_model_versions.version``).
+            tenant_id: Tenant scope. Required — the lineage table has
+                no single-tenant fast path; callers MUST resolve via
+                :func:`kailash_ml.tracking.get_current_tenant_id` and
+                fall through the canonical sentinel ``"_single"`` per
+                ``ml-tracking.md §7.2``.
+            tracker_run_id: ID of the producing
+                :class:`~kailash_ml.tracking.runner.ExperimentRun`.
+            parent_version: When this model derives from another version
+                of the same model (transfer learning, fine-tuning), the
+                parent's version integer.
+            training_data_uri: SHA-prefixed dataset hash or storage URI.
+            feature_store_version: ``group@version`` of the feature
+                store snapshot consumed.
+            base_model_uri: Pretrained base-model URI when applicable
+                (LoRA / fine-tuning / continued-training).
+        """
+        from kailash_ml.engines.lineage import (  # local-import to keep startup graph clean
+            LINEAGE_TABLE,
+        )
+
+        # Idempotent UPSERT — DELETE + INSERT round-trip avoids dialect
+        # divergence between Postgres ``ON CONFLICT`` and SQLite
+        # ``ON CONFLICT``. The framework's ConnectionManager handles
+        # the parameter binding for the VALUES — only the table name is
+        # interpolated, and it's a Python-literal constant from the
+        # canonical ``LINEAGE_TABLE``.
+        async with self._conn.transaction() as tx:
+            await tx.execute(
+                f"DELETE FROM {LINEAGE_TABLE} WHERE tenant_id = ? "
+                f"AND model_name = ? AND version = ?",
+                tenant_id,
+                name,
+                version,
+            )
+            await tx.execute(
+                f"INSERT INTO {LINEAGE_TABLE} ("
+                f"tenant_id, model_name, version, tracker_run_id, "
+                f"parent_version, training_data_uri, "
+                f"feature_store_version, base_model_uri"
+                f") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                tenant_id,
+                name,
+                version,
+                tracker_run_id,
+                parent_version,
+                training_data_uri,
+                feature_store_version,
+                base_model_uri,
+            )
+
+    async def build_lineage_graph(
+        self,
+        *,
+        ref: str,
+        tenant_id: str,
+        max_depth: int = 10,
+    ):
+        """Construct the cross-engine lineage graph rooted at ``ref``.
+
+        ``ref`` is the canonical ``model@vN`` form (e.g. ``"churn@v3"``)
+        OR a bare model name (the latest version is resolved). Per
+        ``ml-engines-v2-addendum §E10.3``, cross-tenant traversal raises
+        :class:`~kailash_ml.errors.CrossTenantLineageError`.
+
+        See :func:`kailash_ml.engines.lineage.build_lineage_graph` for
+        the walker contract.
+        """
+        from kailash_ml.engines.lineage import LineageGraph, build_lineage_graph
+
+        name, version = _parse_model_ref(ref)
+        if version is None:
+            await self._ensure_tables()
+            model_row = await _get_model_row(self._conn, name)
+            if model_row is None:
+                raise ModelNotFoundError(
+                    f"Model {name!r} not found; cannot build lineage graph."
+                )
+            version = int(model_row["latest_version"])
+
+        graph: LineageGraph = await build_lineage_graph(
+            self._conn,
+            name=name,
+            version=version,
+            tenant_id=tenant_id,
+            max_depth=max_depth,
+        )
+        return graph
+
+
+def _parse_model_ref(ref: str) -> tuple[str, int | None]:
+    """Split ``ref`` into ``(name, version|None)``.
+
+    Accepts ``"name"`` and ``"name@vN"``. Anything else raises
+    :class:`ValueError` so the caller can surface the malformed ref to
+    the user before the walker fires.
+    """
+    if not isinstance(ref, str) or not ref:
+        raise ValueError(f"lineage ref must be a non-empty string; got {ref!r}")
+    if "@" not in ref:
+        return (ref, None)
+    name, _, vpart = ref.rpartition("@")
+    if not vpart.startswith("v"):
+        raise ValueError(
+            f"lineage ref version segment MUST start with 'v' (e.g. 'name@v3'); "
+            f"got {ref!r}"
+        )
+    try:
+        version = int(vpart[1:])
+    except ValueError as exc:
+        raise ValueError(
+            f"lineage ref version segment MUST be an integer; got {ref!r}"
+        ) from exc
+    return (name, version)
