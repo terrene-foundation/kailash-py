@@ -1,27 +1,93 @@
-# Session Notes — 2026-04-26
+# Session Notes — 2026-04-27 (Wave 6 substantially converged)
 
 ## Where we are
 
-Wave 5 portfolio spec audit complete (71 of 72 specs across 7 shards). kailash 2.11.2 hotfix shipped to PyPI closing 2 security findings (CRIT #636 + HIGH #635). Next move: Wave 6 remediation of remaining 36 HIGHs from the audit, OR launch into a different workstream.
+**Wave 6 complete: 21 of 23 todos merged + 2 closed as superseded by sibling PRs.** Security /redteam pass returned PASS WITH AMENDMENTS (0 CRIT, 0 HIGH, 1 MED, 3 LOW). MED-1 fixed in this commit. Reviewer + analyst /redteam agents rate-limited mid-audit; defer to next session.
 
 ## Read first
 
-1. `workspaces/portfolio-spec-audit/04-validate/00-portfolio-summary.md` — full Wave 5 verdict + Wave 6 remediation plan ranked by blast radius. Single most useful entry point.
-2. `workspaces/portfolio-spec-audit/04-validate/W5-{A,B,C,D,E1,E2,F}-findings.md` — per-shard detail; read only the shard whose finding you're acting on.
-3. `deploy/deployment-config.md` — sibling-package PyPI versions table (synced this session) + tag conventions.
-4. `.claude/rules/build-repo-release-discipline.md` — "done means released, not merged"; PyPI installability is the done gate.
+1. `04-validate/W6-redteam-closeout.md` — convergence summary + remaining work
+2. `04-validate/W6-redteam-security-findings.md` — full security review (PASS WITH AMENDMENTS)
+3. `02-plans/01-wave6-implementation-plan.md` § Acceptance — checklist closeout
+4. `04-validate/W6.5-v2-draft-review.md` — W6.5 v2 spec review (drove `f21e9844`)
+
+## Wave 6 merged PRs
+
+| PR | Title | Merge SHA |
+| --- | --- | --- |
+| #644 | W6.5 v2 audit evidence | `00b8e840` |
+| #645 | Wave 6 plan + 23 todos + tracker | `14138b95` |
+| #646 | W6-001 strip hardcoded models in kaizen | `b2e0c920` |
+| #647 | W6-002 MCP ElicitationSystem Tier-2 test | `75c9b65a` |
+| #648 | W6-003 rename MLTenantRequiredError + alias | `8c896c00` |
+| #649 | W6-004 delete legacy InferenceServer | `2afbad96` |
+| #650 | W6-005 bulk spec version-header cleanup | `7a725049` |
+| #651 | W6-006 delete unused TenantTrustManager | `152a183c` |
+| #652 | W6-007 enumerate ML event surface | `f6777452` |
+| #653 | W6-008 strip JWTValidator.from_nexus_config | `6b126d57` |
+| #654 | W6-009 canonicalize nexus mount on mount_ml_endpoints | merged |
+| #655 | W6-010 — CLOSED as superseded by #654 | n/a |
+| #656 | W6-011 28 Tier-1 tests for kaizen.judges | merged |
+| #658 | W6-012 wire MLAwareAgent to km.list_engines | merged |
+| #659 | W6-013 CatBoostTrainable adapter | merged |
+| #660 | W6-014 defer LineageGraph (issue #657) | merged |
+| #661 | W6-015 RLTrainingResult schema + W5 wave version 1.2.0 | merged |
+| #662 | W6-017 dataflow.hash byte-vector tests | merged |
+| #663 | W6-016 shared TrajectorySchema (ml 1.3.0 + align 0.7.0) | merged |
+| #664 | W6-019 strip stale FeatureSchema docstring | merged |
+| #665 | W6-018 flip kailash_ml.AutoMLEngine to canonical | merged |
+| #666 | W6-020 numbered migration + W7 wave version 1.4.0 | merged |
+| #667 | W6-022 FeatureStore wiring test + W8 wave version 1.4.1 (folded W6-023 fix) | `970b4a35` |
+| #668 | W6-023 — CLOSED as superseded by #667 | n/a |
+| #669 | W6-021 Tier-3 e2e tests | `5deaec7d` |
+| #657 | issue: W6-014 LineageGraph deferral tracking | open |
+| #599 | CLOSED — McpGovernanceEnforcer confirmed shipped | closed |
+
+**Final main HEAD:** `5deaec7d`
+
+## Versions bumped
+
+- kailash-ml: 1.1.1 → 1.4.1 (W6-004, W6-013/14/15, W6-016, W6-018/19/20, W6-022)
+- kailash-align: 0.6.0 → 0.7.0 (W6-016)
 
 ## In-flight state
 
-- 7 audit branches `audit/w5-{a,b,c,d,e1,e2,f}-*-spec-audit` still on origin — content is bundled in main via PR #638; safe to delete.
-- Pre-existing uncommitted changes in main checkout: `.claude/.proposals/latest.yaml`, `.claude/rules/agents.md`, `.claude/rules/build-repo-release-discipline.md`, untracked `.claude/.proposals/archive/2026-04-25-kailash-py.yaml`. From the prior `/codify` cycle awaiting loom/ Gate 1 — not this session's scope.
-- Issue #599 disposition stale: `McpGovernanceEnforcer` IS shipped in kailash-pact (W5-F finding F-F-16) — issue body still says "blocked on mint ISS-17". Re-triage candidate.
-- Wave 6.5 candidate: AutoML 1.0 + FeatureStore specs are overstated vs implementation (13 of 36 HIGHs combined). Recommend `analyst`-led re-spec rather than implementing-to-stale-spec.
+- **Reviewer + analyst /redteam agents rate-limited at start** ("You've hit your limit · resets 7am Asia/Singapore"); transcripts at `/private/tmp/claude-501/-Users-esperie-repos-loom-kailash-py/16e94b2d-7c95-4048-8849-504ea09fca89/tasks/{a87539defc4936ffa,ab51ab3ac58d4304a}.output`. Re-run next session.
+- **Worktrees still harness-locked**: 14+ `agent-*` worktrees in `.claude/worktrees/`. Clean with `git worktree remove --force --force <path>` next session.
+- **Recovery branch artifact**: `recovery/w6-022-restore-feature-store-wiring-test` exists locally — false-alarm investigation; file was actually present in origin/main. Delete with `git branch -D recovery/w6-022-restore-feature-store-wiring-test` (worktree-locked currently).
+- **Loom v2.9.1 sync content** still untouched in working tree (43 dirty paths from session start). Loom owns via `/sync` Gate 1 protocol per `rules/artifact-flow.md`.
+
+## Remaining work
+
+### Next session (Wave 6 closeout)
+
+1. Re-launch reviewer + analyst /redteam agents (account quota resets ~7am Asia/Singapore 2026-04-27/28)
+2. Address LOW-2 (W6-007 emit-helper sanitization structural fix) — file as W6-followup or M2 todo
+3. Apply LOW-3 (scanner attestation in PR bodies) discipline going forward
+4. Worktree cleanup: `find .claude/worktrees -name 'agent-*' -maxdepth 1 -type d -exec git worktree remove --force --force {} +`
+5. Branch cleanup: delete merged feat/w6-* + recovery/w6-022-* branches
+
+### Wave 6.5b (deferred)
+
+- LineageGraph implementation (issue #657, deferred per zero-tolerance Rule 1b)
+
+### Out of scope (separate workstream)
+
+- kailash-rs cross-SDK parity audit — defer to next `/sync` cycle. Includes:
+  - W6-017 byte-vector reference for Rust `dataflow::hash()` (currently scaffolded with `pytest.skip` until Rust impl lands)
+  - Cross-SDK alignment audit per `rules/cross-sdk-inspection.md` § 1
+- Pre-existing kaizen `kaizen.manifest` orphan test files (2 files, predate Wave 6) — file as kaizen-cleanup todo
 
 ## Traps
 
-- `git`, `gh`, `rm`, `uv` are NOT in default PATH for Bash sessions. Use absolute paths: `/usr/bin/git`, `/opt/homebrew/bin/gh`, `/bin/rm`, `/Users/esperie/.local/bin/uv`.
-- Pre-commit hook auto-stash conflicts with end-of-file-fixer modifications — re-`git add` after the hook fixes a file, then re-commit (per `rules/git.md` § Pre-Commit Hook Workarounds).
-- Branch protection on main rejects direct push for everyone EXCEPT the owner (admin bypass). The "Changes must be made through a pull request" remote message can appear even when push succeeded — check the actual `To .../kailash-py.git` confirmation line.
-- PyPI cache lag is real (~60s after workflow success). Use until-loop polling on `pypi.org/pypi/<pkg>/<version>/json`, not chained `sleep` (Bash blocks chained sleeps; use Monitor or `run_in_background: true`).
-- 5 of the 38 HIGHs are kaizen `tests/unit/judges/` test directory absence (F-D-25) and AutoML token-level backpressure (F-E2-09) — both look like quick wins but bear hidden surface area. Read the finding body first.
+- **Stale local main ref**: After admin-merging via `gh`, run `git fetch origin && git checkout main && git reset --hard origin/main` to sync. The `git pull --ff-only` shorthand can fail under worktree conditions and leave local `main` stale, causing false-positive "file missing" investigations.
+- **Stale-base merge**: W6-021 was based at `0e485e69` (before W6-022 merged at `970b4a35`). The 3-way admin-merge correctly preserved W6-022's file but local main ref drift caused 30 minutes of wasted investigation.
+- **Account-level rate limits**: Per-account daily quotas reset on Asia/Singapore time; account-swap (`csq swap N`) clears per-account but server-side throttle (`API Error: Server is temporarily limiting requests`) is independent. Re-launch via `Agent` for fresh agentId; SendMessage continues a rate-limited agent's transcript without burning a fresh launch.
+- **Worktree-relative venv**: pre-commit hooks resolve `.venv/bin/python` against worktree cwd which has no venv. Use `git -c core.hooksPath=/dev/null commit ...` per `rules/git.md` § Pre-Commit Hook Workarounds; document the bypass.
+- **Read-only specialists** (`security-reviewer`, `analyst`, `reviewer`): Bash + Grep tools NOT available. For mechanical filesystem sweeps, route to `testing-specialist` or `pact-specialist` (both have Bash). Pure-judgment review is fine for read-only.
+- **`git`, `gh`, `rm`, `uv` are NOT in default PATH for Bash sessions**. Use absolute paths.
+
+## Open questions for the human
+
+- Whether to file a separate W6-followup issue for LOW-2 (emit-helper structural sanitization) or fold into W7 wave plan.
+- Whether to apply LOW-3 scanner-attestation discipline retroactively to W6 PR bodies (not recommended — would amend merged PR descriptions).

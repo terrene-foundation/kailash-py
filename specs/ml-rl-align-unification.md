@@ -243,7 +243,7 @@ async def test_km_rl_train_dispatches_to_align_dpo(tmp_path):
         result = km.rl_train(
             env="text:preferences",
             algo="dpo",
-            policy="sshleifer/tiny-gpt2",      # tiny model for CI
+            policy="sshleifer/tiny-gpt2",      # CI-only HF fixture; production uses .env per `rules/env-models.md` (HF model IDs ≠ LLM API model presets — see scope clause)
             reference_model="sshleifer/tiny-gpt2",
             preference_dataset=prefs,
             total_timesteps=2,                  # a few steps only
