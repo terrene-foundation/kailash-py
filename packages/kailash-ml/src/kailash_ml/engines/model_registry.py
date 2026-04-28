@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from kailash_ml.errors import ModelNotFoundError
 from kailash_ml.types import MetricSpec, ModelSignature
 
 from kailash.db.connection import ConnectionManager
@@ -51,10 +52,14 @@ ALL_STAGES = {"staging", "shadow", "production", "archived"}
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
-
-
-class ModelNotFoundError(Exception):
-    """Raised when a model or version is not found."""
+#
+# ``ModelNotFoundError`` is re-exported from ``kailash_ml.errors`` (canonical
+# location at ``kailash.ml.errors.ModelNotFoundError``, subclass of
+# ``ModelRegistryError`` → ``MLError``). Prior to W7 follow-up there was a
+# distinct local ``class ModelNotFoundError(Exception)`` here; the divergence
+# meant `except ModelNotFoundError:` in user code caught one OR the other
+# depending on import path, never both. Routing all paths to canonical closes
+# the bug class. See ``rules/orphan-detection.md`` § 1.
 
 
 # ---------------------------------------------------------------------------
@@ -590,23 +595,32 @@ class ModelRegistry:
             row = await _get_version_by_stage(self._conn, name, stage)
             if row is None:
                 raise ModelNotFoundError(
-                    f"No version of model '{name}' at stage '{stage}'."
+                    reason=f"No version of model '{name}' at stage '{stage}'.",
+                    resource_id=name,
                 )
             return _row_to_model_version(row)
 
         if version is not None:
             row = await _get_version_row(self._conn, name, version)
             if row is None:
-                raise ModelNotFoundError(f"Model '{name}' version {version} not found.")
+                raise ModelNotFoundError(
+                    reason=f"Model '{name}' version {version} not found.",
+                    resource_id=name,
+                    version=version,
+                )
             return _row_to_model_version(row)
 
         # Latest version
         model_row = await _get_model_row(self._conn, name)
         if model_row is None:
-            raise ModelNotFoundError(f"Model '{name}' not found.")
+            raise ModelNotFoundError(
+                reason=f"Model '{name}' not found.", resource_id=name
+            )
         row = await _get_version_row(self._conn, name, model_row["latest_version"])
         if row is None:
-            raise ModelNotFoundError(f"Model '{name}' has no versions.")
+            raise ModelNotFoundError(
+                reason=f"Model '{name}' has no versions.", resource_id=name
+            )
         return _row_to_model_version(row)
 
     # ------------------------------------------------------------------
@@ -1026,7 +1040,8 @@ class ModelRegistry:
             model_row = await _get_model_row(self._conn, name)
             if model_row is None:
                 raise ModelNotFoundError(
-                    f"Model {name!r} not found; cannot build lineage graph."
+                    reason=f"Model {name!r} not found; cannot build lineage graph.",
+                    resource_id=name,
                 )
             version = int(model_row["latest_version"])
 

@@ -1,5 +1,31 @@
 # kailash-ml Changelog
 
+## [1.5.1] — 2026-04-28 — W7 follow-up: ModelNotFoundError canonical identity
+
+### Fixed
+
+- **Duplicate `ModelNotFoundError` class** at
+  `kailash_ml/engines/model_registry.py:56` removed. The local
+  `class ModelNotFoundError(Exception)` was distinct from the canonical
+  `kailash.ml.errors.ModelNotFoundError` (subclass of
+  `ModelRegistryError → MLError`). User code catching `ModelNotFoundError`
+  via either import path silently caught one OR the other — never both.
+  All raise sites now route through the canonical class via
+  `from kailash_ml.errors import ModelNotFoundError`. Surfaced by W7-001
+  agent (lineage walker raised canonical; `get_model` raised local).
+- **Regression tests** at
+  `tests/regression/test_model_not_found_error_canonical_identity.py`:
+  pin class identity, MLError subclass invariant, AST-level invariant
+  blocking re-introduction of a local class.
+
+### Closed (no code change in this release)
+
+- Issue [#672](https://github.com/terrene-foundation/kailash-py/issues/672)
+  (`format_record_id_for_event` parity with kailash-rs BP-048) closed
+  with delivered-code references — helper already shipped at
+  `dataflow.classification.event_payload.format_record_id_for_event`
+  via `kailash-dataflow>=2.3.2`.
+
 ## [1.5.0] — 2026-04-27 — W7-001: cross-engine LineageGraph (closes #657)
 
 Implements the cross-engine lineage surface deferred at 1.0.0. Closes
@@ -25,7 +51,7 @@ and the deferral disposition declared at `specs/ml-tracking.md §6.3`.
   via `_kml_models.latest_version`) and the canonical `model@vN`
   form. Raises `ModelNotFoundError` for unknown refs.
 - **`ModelRegistry.record_lineage(*, name, version, tenant_id,
-  tracker_run_id, ...)`** — canonical write path for `_kml_lineage`
+tracker_run_id, ...)`** — canonical write path for `_kml_lineage`
   rows. Idempotent on PK `(tenant_id, model_name, version)` via
   `DELETE` + `INSERT` in one transaction (dialect-portable; avoids
   `ON CONFLICT` divergence).

@@ -24,30 +24,22 @@ Invariants covered:
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import pickle
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
+from kailash_ml.engines.model_registry import ModelVersion
 from kailash_ml.errors import (
     InferenceServerError,
     InvalidInputSchemaError,
     ModelLoadError,
     ModelNotFoundError,
 )
-from kailash_ml.serving import (
-    InferenceServer,
-    InferenceServerConfig,
-    ServeHandle,
-)
-from kailash_ml.engines.model_registry import ModelVersion
+from kailash_ml.serving import InferenceServer, InferenceServerConfig, ServeHandle
 from kailash_ml.types import FeatureField, FeatureSchema, ModelSignature
-
+from sklearn.ensemble import RandomForestClassifier
 
 # ---------------------------------------------------------------------------
 # Fixtures / fakes
@@ -118,19 +110,28 @@ class FakeRegistry:
                 ModelNotFoundError as _RegistryNotFound,
             )
 
-            raise _RegistryNotFound(f"Model {name!r} not found.")
+            raise _RegistryNotFound(
+                reason=f"Model {name!r} not found.", resource_id=name
+            )
         if stage is not None and stage != self.stage:
             from kailash_ml.engines.model_registry import (
                 ModelNotFoundError as _RegistryNotFound,
             )
 
-            raise _RegistryNotFound(f"No version of model {name!r} at stage {stage!r}.")
+            raise _RegistryNotFound(
+                reason=f"No version of model {name!r} at stage {stage!r}.",
+                resource_id=name,
+            )
         if version is not None and version != self.model_version:
             from kailash_ml.engines.model_registry import (
                 ModelNotFoundError as _RegistryNotFound,
             )
 
-            raise _RegistryNotFound(f"Model {name!r} version {version} not found.")
+            raise _RegistryNotFound(
+                reason=f"Model {name!r} version {version} not found.",
+                resource_id=name,
+                version=version,
+            )
         return ModelVersion(
             name=self.model_name,
             version=self.model_version,
