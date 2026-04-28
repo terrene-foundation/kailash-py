@@ -1,6 +1,6 @@
 # Kailash DataFlow — Core (DataFlow Class, Engine, Exceptions, Trust, Fabric)
 
-Version: 2.3.1
+Version: 2.4.0
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: DataFlow class + constructor + connection URL + lazy/runtime detection, DataFlowEngine builder, exceptions, write events, Data Fabric Engine, derived models, retention engine, trust plane integration, versioning
@@ -38,7 +38,7 @@ DataFlow(
     slow_query_threshold: float = 1.0,
     debug: bool = False,
     migration_enabled: bool = True,
-    auto_migrate: bool = True,
+    auto_migrate: Union[bool, str] = True,  # True | False | "warn"
     existing_schema_mode: bool = False,
     enable_model_persistence: bool = True,
     tdd_mode: bool = False,
@@ -83,7 +83,7 @@ DataFlow(
 | `slow_query_threshold`         | `float`                    | `1.0`   | Seconds above which a query is logged as slow.                                                                                |
 | `debug`                        | `bool`                     | `False` | Enable debug logging.                                                                                                         |
 | `migration_enabled`            | `bool`                     | `True`  | Enable automatic database migrations.                                                                                         |
-| `auto_migrate`                 | `bool`                     | `True`  | Automatically run migrations on model registration.                                                                           |
+| `auto_migrate`                 | `Union[bool, str]`         | `True`  | Auto-migration mode. `True` (fail-fast on DDL failure, default since v2.4.0), `False` (no DDL execution), or `"warn"` (legacy log-and-continue escape hatch). See § 1.6 Auto-Migrate Semantics. Typo strings (`"WARN"`, `"warning"`, etc.) raise `DataFlowConfigurationError` at `__init__`. |
 | `existing_schema_mode`         | `bool`                     | `False` | Safe mode for existing databases -- validates compatibility without modifying schema.                                         |
 | `enable_model_persistence`     | `bool`                     | `True`  | Enable persistent model registry for multi-application support.                                                               |
 | `tdd_mode`                     | `bool`                     | `False` | Enable TDD mode for testing. Also settable via `DATAFLOW_TDD_MODE` env var.                                                   |
@@ -171,6 +171,54 @@ DataFlow detects whether it is running in an async or sync context at constructi
 - **Sync context** (no running event loop): uses `LocalRuntime`
 
 All subsystems share a single runtime via `acquire()`/`release()` ref-counting to prevent orphan runtimes and pool exhaustion.
+
+### 1.6 Auto-Migrate Semantics
+
+Origin: GitHub issue #696 (per `workspaces/dataflow-prod-incident`, 2026-04-28). The JourneyMate (Azure FastAPI + DataFlow) production incident logged `Failed to execute DDL: CREATE TABLE IF NOT EXISTS "evaluation_dimensions" ...` every 30 seconds for the lifetime of the deployment. Root cause: under `auto_migrate=True`, the original DDL-failure path emitted an ERROR log and `continued`. The schema cache was never marked as ensured, so every subsequent model access re-entered `ensure_table_exists()` and re-fired the failing CREATE TABLE — saturating Azure PostgreSQL `max_connections` within minutes.
+
+The `auto_migrate` parameter accepts three values, each with a distinct behavioural contract. Strings other than `"warn"` (case-sensitive) are rejected at `__init__` with `DataFlowConfigurationError` so a typo (`"WARN"`, `"warning"`, `"true"`) cannot silently degrade behavior at deploy time.
+
+| Value     | DDL execution        | On DDL failure (e.g. invalid type, FK ordering, role permission)                                                                                                                                                                                                                       | Subsequent access to failed model                                                                                                                                              |
+| --------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `True`    | Yes (default)        | Records the failure on `_failed_table_creations[model_name] = FailedDDLRecord(timestamp, error_message, statement_preview)`. Emits exactly ONE `engine.ddl_failed_recorded` ERROR log per `(model, DataFlow instance)` pair. Raises `DDLFailedError` to the caller of the first access. | Fail-fast: raises `DDLFailedError` from the head of `ensure_table_exists()` BEFORE re-entering the DDL path. NO connection acquired, NO DDL fired, NO additional log emitted. |
+| `False`   | No (skip mode)       | N/A — DDL never runs. Schema is assumed managed externally (Alembic, Liquibase, dba-issued DDL).                                                                                                                                                                                       | Standard SQL-layer access. SELECT/INSERT errors surface from the database normally; no circuit-breaker engagement.                                                             |
+| `"warn"`  | Yes (legacy)         | Records the failure on `_failed_table_creations` AND emits the `engine.ddl_failed_recorded` ERROR log (same as fail-fast). Returns `False` from `ensure_table_exists()`. **Does NOT raise.**                                                                                            | Legacy retry-on-access: `_check_failed_ddl()` is a no-op, the DDL path resumes pre-#696 semantics. Operators who explicitly opt in accept the pool-leak risk this entails.    |
+
+#### 1.6.1 The `DDLFailedError` Typed Surface
+
+`DDLFailedError` (`dataflow.core.exceptions.DDLFailedError`, also exported at `dataflow.DDLFailedError`) is the structured exception raised by the fail-fast circuit breaker. It subclasses `DataFlowError` so callers using `except DataFlowError` continue to catch the new type without explicit import.
+
+| Attribute            | Type             | Description                                                                                                                                                              |
+| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model_name`         | `str`            | The model whose `CREATE TABLE` / `ALTER TABLE` failed.                                                                                                                   |
+| `original_error`     | `BaseException`  | The underlying exception from the DDL execution (PostgreSQL `UndefinedObject`, MySQL `OperationalError`, etc.). Operators do not need to chain `__cause__` to diagnose. |
+| `statement_preview`  | `str` (≤200 ch)  | First 200 characters of the failed DDL statement. Bounded to avoid leaking large schema bodies through error chains shipped to log aggregators.                          |
+
+The `str(DDLFailedError)` rendering includes `model_name`, `original_error` type+message, optionally `statement_preview` (when non-empty), and inline operator guidance: "Subsequent access to this model will fail-fast without re-firing the DDL. Diagnose the root cause, then restart the application to retry. Use `auto_migrate='warn'` (legacy) to opt into log-and-continue behavior instead of fail-fast."
+
+#### 1.6.2 Diagnostic Surface — `_failed_table_creations`
+
+`DataFlow._failed_table_creations: Dict[str, FailedDDLRecord]` is a public-but-frozen diagnostic surface readable by support scripts. The leading underscore signals "internal state — do not mutate" while keeping the surface observable for incident response. The dictionary maps model names to `FailedDDLRecord` (a `collections.namedtuple` with fields `timestamp`, `error_message`, `statement_preview`). An empty dict means no DDL failures have been recorded; missing-key lookups return `None`.
+
+```python
+# Operator script: enumerate failed migrations on a running instance
+for model_name, record in db._failed_table_creations.items():
+    print(f"{model_name}: {record.error_message[:80]} (at {record.timestamp})")
+```
+
+State is per-`DataFlow` instance — one tenant's failed DDL cannot poison another tenant's framework. The dictionary is cleared on application restart (the canonical recovery path documented on `DDLFailedError`); operators who fix the root cause without restarting can clear individual entries via `_clear_failed_ddl(model_name)` for advanced workflows.
+
+#### 1.6.3 Idempotency Invariant — One ERROR Log Per (Model, Process) Pair
+
+A failed `CREATE TABLE` / `ALTER TABLE` under `auto_migrate=True` produces exactly ONE `engine.ddl_failed_recorded` ERROR log + ONE metric increment per `(model, DataFlow instance)` pair, NOT N per request. The `_record_failed_ddl()` helper checks `_failed_table_creations` membership before logging — every subsequent failure for the same model returns the existing record without re-emitting the log line. This is the structural defense against the JourneyMate retry storm manifesting as log spam (200,000 ERROR lines / hour) even when the DDL retry itself were somehow re-fired.
+
+The log line is structured (per `rules/observability.md` Rule 1) and carries `model_name`, `error_type`, `error_message` (truncated to 500 chars), `statement_preview`, and `auto_migrate_mode` (`"warn"` or `"fail-fast"`) so operators see at a glance whether this run is the new fail-fast surface or the legacy log-and-continue escape hatch.
+
+#### 1.6.4 Cross-Reference
+
+- `rules/zero-tolerance.md` Rule 3 — silent fallbacks BLOCKED. The pre-#696 `except Exception: continue` pattern in `ensure_table_exists()` was the canonical instance of this anti-pattern; `DDLFailedError` is the typed surface that converts it into a loud, fail-fast error.
+- `rules/observability.md` Rule 7 — bulk operations MUST log partial failures at WARN. Issue #696 surfaced the analogous gap for DDL operations: a per-model failure that re-fires every 30 seconds with no aggregation-pipeline visibility. The idempotent-once ERROR log + the `auto_migrate_mode` field together close that gap for the DDL surface.
+- `rules/dataflow-pool.md` Rule 2 — fail-fast at startup. The DDL fail-fast circuit breaker is the model-access-time analogue of the pool-config validator: convert a silent degradation into a deployment-time failure that surfaces before users observe broken endpoints.
 
 ---
 
