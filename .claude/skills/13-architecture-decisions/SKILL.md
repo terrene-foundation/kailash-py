@@ -12,31 +12,25 @@ Decision guides for selecting the right frameworks, runtimes, databases, nodes, 
 | Decision  | File                                                                      | Quick Answer                                                                |
 | --------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Framework | [decide-framework](decide-framework.md)                                   | Core SDK (custom), DataFlow (DB), Nexus (multi-channel), Kaizen (AI agents) |
-| Runtime   | [decide-runtime](decide-runtime.md)                                       | Docker/FastAPI -> AsyncLocalRuntime; CLI/Scripts -> LocalRuntime            |
+| Runtime   | [decide-runtime](decide-runtime.md)                                       | Docker/async -> AsyncLocalRuntime; CLI/Scripts -> LocalRuntime            |
 | Database  | [decide-database-postgresql-sqlite](decide-database-postgresql-sqlite.md) | Production -> PostgreSQL; Dev/Test -> SQLite                                |
 | Node      | [decide-node-for-task](decide-node-for-task.md)                           | See node selection flow below                                               |
 | Test Tier | [decide-test-tier](decide-test-tier.md)                                   | Unit (fast), Integration (real infra), E2E (full system)                    |
 
 ## Framework Selection Matrix
 
-| Need                  | Framework     | Why                                                                   |
-| --------------------- | ------------- | --------------------------------------------------------------------- |
-| **Custom workflows**  | Core SDK      | Full control, 140+ nodes                                              |
-| **Database CRUD**     | DataFlow      | Auto-generated nodes                                                  |
-| **Multi-channel API** | Nexus         | API + CLI + MCP instantly                                             |
-| **AI agents**         | Kaizen        | Signature-based agents                                                |
-| **ML lifecycle**      | kailash-ml    | Engine-first `km.*` surface, 18 engines (see skill **34-kailash-ml**) |
-| **LLM fine-tuning**   | kailash-align | LoRA/SFT/DPO, serving pipeline                                        |
-| **All of above**      | Combine them  | They work together                                                    |
-
-## Async/Sync Public-Surface Consistency (M1)
-
-New async-authoritative entry points MUST be async all the way down. `km.train` and `km.register` are both `async def` — use `await` directly; do not add sync wrappers that mix event-loop-hosting with driver execution. Sync call-sites wrap via `asyncio.run(...)` at the edge only.
+| Need                  | Framework    | Why                       |
+| --------------------- | ------------ | ------------------------- |
+| **Custom workflows**  | Core SDK     | Full control, 140+ nodes  |
+| **Database CRUD**     | DataFlow     | Auto-generated nodes      |
+| **Multi-channel API** | Nexus        | API + CLI + MCP instantly |
+| **AI agents**         | Kaizen       | Signature-based agents    |
+| **All of above**      | Combine them | They work together        |
 
 ## Runtime Selection Flow
 
 ```
-Deploying to Docker/FastAPI/Kubernetes?
+Deploying to Docker/async/Kubernetes?
   YES -> AsyncLocalRuntime (async-first, no threads)
   NO  -> CLI/script?
     YES -> LocalRuntime (sync execution)
@@ -80,7 +74,7 @@ Complete user flow         -> Tier 3 (E2E)
 
 ### Runtime
 
-- Docker/FastAPI -> AsyncLocalRuntime (mandatory)
+- Docker/async -> AsyncLocalRuntime (mandatory)
 - NEVER use LocalRuntime in Docker (causes hangs)
 - NEVER mix runtimes in same application
 

@@ -12,7 +12,7 @@ Transport abstraction layer that maps registered handlers to protocol-specific d
 | Component         | Purpose                                                |
 | ----------------- | ------------------------------------------------------ |
 | `Transport` ABC   | Base class for all transports                          |
-| `HTTPTransport`   | Maps handlers to FastAPI routes                        |
+| `HTTPTransport`   | Maps handlers to Nexus HTTP routes                     |
 | `MCPTransport`    | Maps handlers to FastMCP tools                         |
 | `HandlerRegistry` | Central registry for all handler definitions           |
 | `HandlerDef`      | Handler metadata (name, function, params, description) |
@@ -60,7 +60,7 @@ class Transport(ABC):
 
 ### HTTPTransport
 
-Creates FastAPI routes from registered handlers:
+Creates Nexus HTTP routes from registered handlers:
 
 ```python
 from nexus.transports.http import HTTPTransport

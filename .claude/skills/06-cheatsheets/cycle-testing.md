@@ -276,7 +276,6 @@ cycle.connect("python_node", "python_node",
 Use specialized subagents when:
 - **testing-specialist**: Comprehensive test strategies, tier-3 tests
 - **pattern-expert**: Complex multi-node cycle tests
-- **sdk-navigator**: Test failures, unclear errors
 
 ## Documentation References
 

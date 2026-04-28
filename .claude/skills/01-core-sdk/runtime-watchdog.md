@@ -62,6 +62,6 @@ watchdog thread receives a best-effort stop signal.
 
 ## When to Use
 
-- **Production monitoring**: Detect blocked event loops in Docker/FastAPI deployments
+- **Production monitoring**: Detect blocked event loops in Docker/Nexus deployments
 - **CI diagnostics**: Add to integration tests that occasionally hang to capture what's blocking
 - **Development**: Wrap long-running workflow executions to catch accidental sync calls in async nodes

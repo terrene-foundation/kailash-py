@@ -7,6 +7,8 @@ The only deliverable is a `.session-notes` file that lets a fresh session start 
 
 **Before running:** if significant decisions, discoveries, or risks from this session are not yet in `journal/`, run `/journal new DECISION|DISCOVERY|RISK <topic>` first. `.session-notes` is not a decision log.
 
+**Release drift check (MUST — BUILD repos only):** Before writing `.session-notes`, run `node .claude/hooks/lib/release-drift.js` via a quick inline check (or inspect the `[RELEASE-DRIFT]` lines from session-start). If any packages have commits since their last tag, surface this to the user with a recommendation to run `/release` before ending the session. Record the unreleased package list in `.session-notes` under an "Unreleased packages" section so the next session sees the backlog. Silent on downstream repos / non-package repos.
+
 ## What the next session already has for free
 
 Do NOT duplicate these — the next session reads them directly:

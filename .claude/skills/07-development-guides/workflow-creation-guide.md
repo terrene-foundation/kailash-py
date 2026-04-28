@@ -36,7 +36,7 @@ results, run_id = runtime.execute(workflow.build(), parameters={
     "processor": {"input_data": {"value": 100}}
 })
 
-# For Docker/FastAPI (async)
+# For Docker/async production
 # from kailash.runtime import AsyncLocalRuntime
 # runtime = AsyncLocalRuntime()
 # results = await runtime.execute_workflow_async(workflow.build(), inputs={...})

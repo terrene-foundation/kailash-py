@@ -1,6 +1,6 @@
 # SDK Release Runbook
 
-Detailed version coordination and step-by-step release procedures for the Kailash Python SDK monorepo. Referenced by `/release` command and `deployment-specialist` agent.
+Detailed version coordination and step-by-step release procedures for the Kailash Python SDK monorepo. Referenced by `/release` command and `release-specialist` agent.
 
 ## Version Locations (All Packages)
 

@@ -82,7 +82,7 @@ jwt_config = JWTConfig(
 
 ```python
 from nexus.auth.dependencies import RequireRole, RequirePermission, get_current_user
-from fastapi import Depends
+from nexus.http import Depends
 
 # Define roles in plugin
 auth = NexusAuthPlugin(
@@ -191,19 +191,19 @@ NexusAuthPlugin handles this automatically. Do NOT add middleware manually.
 | `TypeError: 'secret_key' unexpected`    | Wrong param name                     | Use `secret`, not `secret_key`        |
 | `TypeError: 'exclude_paths' unexpected` | JWTConfig uses different name        | Use `exempt_paths`                    |
 | `TypeError: 'admin_roles' unexpected`   | TenantConfig uses singular           | Use `admin_role` (string)             |
-| FastAPI dependency injection fails      | `from __future__ import annotations` | Remove PEP 563 import                 |
+| Nexus dependency injection fails      | `from __future__ import annotations` | Remove PEP 563 import                 |
 | Permission check fails                  | Only checking JWT direct             | Use `RequirePermission` (checks both) |
 | RBAC without JWT                        | RBAC requires JWT                    | Add `jwt=JWTConfig(...)`              |
 
-### FastAPI Dependency Injection Warning
+### Nexus Dependency Injection Warning
 
-**NEVER use `from __future__ import annotations` in files with FastAPI dependencies.**
+**NEVER use `from __future__ import annotations` in files with Nexus dependencies.**
 
 ```python
 # auth_routes.py
 # DO NOT add: from __future__ import annotations  # BREAKS INJECTION
 
-from fastapi import Depends, Request
+from nexus.http import Depends, Request
 from nexus.auth.dependencies import RequireRole
 
 @app.get("/admin")
@@ -211,7 +211,7 @@ async def admin(user=Depends(RequireRole("admin"))):  # Works
     return user
 ```
 
-PEP 563 turns type annotations into strings, preventing FastAPI from recognizing `Request` and other special types.
+PEP 563 turns type annotations into strings, preventing Nexus from recognizing `Request` and other special types.
 
 ## MCP Transport
 

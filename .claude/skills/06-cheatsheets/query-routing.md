@@ -67,7 +67,6 @@ router = QueryRouterNode(
 
 Use specialized subagents when:
 - **pattern-expert**: Complex patterns, multi-node workflows
-- **sdk-navigator**: Error resolution, parameter issues
 - **testing-specialist**: Comprehensive testing strategies
 
 ## Documentation References

@@ -1,4 +1,12 @@
+---
+priority: 0
+scope: baseline
+---
+
 # Autonomous Execution Model
+
+
+<!-- slot:neutral-body -->
 
 COC executes through **autonomous AI agent systems**, not human teams. All deliberation, analysis, recommendations, and effort estimates MUST assume autonomous execution unless the user explicitly states otherwise.
 
@@ -99,6 +107,46 @@ Shards with an executable feedback loop (unit tests, `cargo check`, type checker
 
 **Why:** Feedback loops convert "write 2000 LOC then discover it's wrong" into "write 200 LOC, test, continue." The multiplier is real but requires the loop to actually fire during the session — "redteam will catch it later" is not a feedback loop.
 
+### 4. Fix-Immediately When Review Surfaces A Same-Class Gap Within Shard Budget (MUST)
+
+When a code review or self-verification surfaces a latent gap in the SAME BUG CLASS as the in-flight PR AND the gap fits within one remaining shard budget (≤500 LOC load-bearing logic / ≤5–10 invariants / ≤3–4 call-graph hops), the session MUST spawn the fix immediately rather than filing a follow-up issue. Filing the follow-up issue instead of fixing is BLOCKED.
+
+```markdown
+# DO — review surfaces 40+ sibling sites with the same bug, remaining
+
+# capacity covers one shard, fix immediately
+
+- PR A fixes null-bind on one code path (say, the SQL-cast parser)
+- Reviewer flags 40+ sibling sites on a complementary path with the
+  SAME hardcoded pattern (~300 LOC, identical bug class)
+- Shard 2 (same session): apply the typed helper to the sibling path →
+  ship as PR B before session end
+
+# DO NOT — file a follow-up issue when the gap is same-bug-class and
+
+# fits the shard budget
+
+- PR A fixes one path
+- "Filing issue #NNN for the 40+ sibling sites — that's the next
+  session's work"
+  → user pushback: "why aren't you resolving it?"
+```
+
+**BLOCKED rationalizations:**
+
+- "That's the next session's work"
+- "A separate PR is cleaner for review"
+- "The follow-up issue captures it, we won't forget"
+- "The in-flight PR is already reviewed, adding more risks reopening it"
+- "Budget allows it but the blast radius is higher if something breaks"
+- "Splitting into two PRs is the conservative approach"
+
+**Why:** Same-bug-class gaps surfaced during review cost the least to fix while the context is loaded — the invariants, call graph, and domain model are all warm in attention. Filing a follow-up issue requires the next session to reload the entire context from scratch, typically 2–5× the marginal cost of continuing. Evidence: kailash-rs 2026-04-20 — PR #435 reviewer flagged 40+ model-aware `bind_value` sites with the same `None::<String>` hardcode. The agent filed #436 instead of fixing; the user pushed back ("why aren't you resolving it"); the fix shipped as #437 in the same session. Filing #436 wasted one user-turn of friction and one session-handoff context-reload that was unnecessary.
+
+**Bounded by the shard budget.** This rule does NOT override MUST Rule 1 (shard threshold). If the surfaced gap exceeds ≤500 LOC load-bearing / ≤5–10 invariants / ≤3–4 call-graph hops, filing the follow-up issue IS the correct disposition — the gap is a new shard, not a continuation of the current one.
+
+Origin: kailash-rs 2026-04-20 — #424 null-bind fix shipped as PR #435 (SQL-cast path); review surfaced the FieldType path gap (same bug class, ~300 LOC, one shard); initial disposition was "file #436"; user corrected; fix shipped as #437 same session.
+
 ## MUST NOT (Sharding)
 
 - Size shards by LOC alone, ignoring invariant count and call-graph depth
@@ -121,3 +169,5 @@ Shards with an executable feedback loop (unit tests, `cargo check`, type checker
 **Why:** Context window is not attention. Model capability claims are not evidence for a specific task. "One conceptual change" is exactly how Phase 5.11 shipped 2,407 LOC of orphaned code.
 
 Origin: Session 2026-04-13 — capacity bands discussion (~500 LOC load-bearing, ~5–10 invariants, ~3–4 call-graph hops, "describe in 3 sentences" heuristic), grounded in the Phase 5.11 orphan failure mode documented in `rules/orphan-detection.md`.
+
+<!-- /slot:neutral-body -->

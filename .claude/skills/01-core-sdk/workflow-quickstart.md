@@ -12,7 +12,6 @@ Create basic Kailash workflows using WorkflowBuilder pattern with string-based n
 > Priority: `CRITICAL`
 > SDK Version: `0.9.25+`
 > Related Skills: [`connection-patterns`](../connection-patterns.md), [`node-patterns-common`](../node-patterns-common.md), [`runtime-execution`](../runtime-execution.md), [`param-passing-quick`](../param-passing-quick.md)
-> Related Subagents: `pattern-expert` (complex workflows), `sdk-navigator` (finding nodes)
 
 ## Quick Reference
 
@@ -191,7 +190,6 @@ Use `pattern-expert` subagent when:
 - Creating custom nodes from scratch
 - Optimizing workflow performance
 
-Use `sdk-navigator` subagent when:
 
 - Need to find specific nodes for your use case
 - Looking for workflow examples in specific domains (finance, healthcare, etc.)
@@ -336,7 +334,7 @@ results, run_id = runtime.execute(workflow.build())
 
 ## Version Notes
 
-- **v0.9.25+**: AsyncLocalRuntime now default for Docker/FastAPI (no changes to this pattern)
+- **v0.9.25+**: AsyncLocalRuntime now default for Docker/async contexts (no changes to this pattern)
 - **v0.9.20+**: String-based nodes became the recommended production pattern
 - **v0.6.6+**: Auto ID generation and flexible API patterns added
 

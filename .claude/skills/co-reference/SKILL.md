@@ -39,7 +39,7 @@ CARE (Philosophy: What is the human for?)
 | Trust Plane        | Genesis + Delegation Records             | Layer 2 (Context) + Layer 3 (Guardrails) | Rules + CLAUDE.md                |
 | Execution Plane    | Constraint Envelopes                     | Layer 1 (Intent agents)                  | Agents + Skills                  |
 | Human-on-the-Loop  | Trust Postures + Verification Gradient   | Layer 4 (Instructions)                   | 7-phase workflow + quality gates |
-| Evolutionary Trust | Audit Anchors                            | Layer 5 (Learning)                       | Observe-capture-evolve pipeline  |
+| Evolutionary Trust | Audit Anchors                            | Layer 5 (Learning)                       | Observe-digest-codify pipeline   |
 | Accountability     | Traceability (necessary, not sufficient) | Human approval gates                     | Evidence-based completion        |
 
 ## Spec Reference (load on demand)

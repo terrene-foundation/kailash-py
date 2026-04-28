@@ -1,6 +1,6 @@
 ---
 name: dataflow-deployment
-description: "DataFlow production deployment patterns. Use when asking 'deploy dataflow', 'dataflow production', 'dataflow docker', or 'dataflow fastapi'."
+description: "DataFlow production deployment patterns. Use when asking 'deploy dataflow', 'dataflow production', 'dataflow docker', or 'dataflow deployment'."
 ---
 
 # DataFlow Production Deployment
@@ -10,9 +10,9 @@ description: "DataFlow production deployment patterns. Use when asking 'deploy d
 > Priority: `HIGH`
 > SDK Version: `0.10.15+`
 
-## Docker/FastAPI Deployment (current version FIX)
+## Docker/async Deployment (current version FIX)
 
-✅ **`auto_migrate=True` NOW WORKS in Docker/FastAPI!**
+✅ **`auto_migrate=True` NOW WORKS in Docker/async!**
 
 DataFlow uses synchronous database drivers (psycopg2, sqlite3) for table creation, avoiding event loop boundary issues.
 
@@ -20,7 +20,7 @@ DataFlow uses synchronous database drivers (psycopg2, sqlite3) for table creatio
 
 ```python
 from dataflow import DataFlow
-from fastapi import FastAPI
+from nexus import Nexus
 
 # Zero-config: auto_migrate=True (default) now works!
 db = DataFlow("postgresql://user:pass@localhost:5432/mydb")
@@ -31,7 +31,7 @@ class User:
     name: str
     email: str
 
-app = FastAPI()
+app = Nexus()
 
 @app.post("/users")
 async def create_user(data: dict):
@@ -104,7 +104,7 @@ For explicit control over table creation timing:
 ```python
 from dataflow import DataFlow
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from nexus import Nexus
 
 # Use auto_migrate=False for manual control
 db = DataFlow("postgresql://...", auto_migrate=False)
@@ -115,7 +115,7 @@ class User:
     name: str
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     # Option 1: Sync table creation
     db.create_tables_sync()
 
@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
     yield
     await db.close_async()
 
-app = FastAPI(lifespan=lifespan)
+app = Nexus(lifespan=lifespan)
 ```
 
 ## ⚠️ In-Memory SQLite Limitation
@@ -161,4 +161,4 @@ db = DataFlow(
 ## Documentation
 
 
-<!-- Trigger Keywords: deploy dataflow, dataflow production, dataflow docker, dataflow kubernetes, dataflow fastapi -->
+<!-- Trigger Keywords: deploy dataflow, dataflow production, dataflow docker, dataflow kubernetes, dataflow deployment -->

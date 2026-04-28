@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "README.md"
   - "docs/**"
@@ -6,6 +8,9 @@ paths:
 ---
 
 # Documentation Rules
+
+
+<!-- slot:neutral-body -->
 
 ## Version Numbers Must Match pyproject.toml
 
@@ -45,3 +50,5 @@ Review docs when: version bumped, repo restructured, package added/removed, URLs
 `cd docs && python build_docs.py` must build without warnings on release.
 
 **Why:** Sphinx warnings indicate broken cross-references, missing modules, or formatting errors that render as garbled output on the published docs site.
+
+<!-- /slot:neutral-body -->

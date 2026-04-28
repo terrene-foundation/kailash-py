@@ -1,3 +1,7 @@
+---
+agent_class_is_kaizen_sdk: true
+---
+
 # Kaizen Checkpoint & Resume System
 
 **Available in**: Autonomous agents
@@ -51,6 +55,7 @@ result = await agent._autonomous_loop("Perform a complex task")
 ### Automatic Checkpointing
 
 **Save state every N steps**:
+
 ```python
 config = AutonomousConfig(
     checkpoint_frequency=5,  # Save every 5 steps
@@ -58,6 +63,7 @@ config = AutonomousConfig(
 ```
 
 **Save state every M seconds**:
+
 ```python
 state_manager = StateManager(
     storage=storage,
@@ -66,6 +72,7 @@ state_manager = StateManager(
 ```
 
 **Hybrid (OR logic)**:
+
 ```python
 # Checkpoint every 5 steps OR every 30 seconds (whichever comes first)
 config = AutonomousConfig(checkpoint_frequency=5)
@@ -75,6 +82,7 @@ state_manager = StateManager(checkpoint_interval=30.0)
 ### Resume from Checkpoint
 
 **Enable resume**:
+
 ```python
 config = AutonomousConfig(
     resume_from_checkpoint=True,  # Load latest checkpoint on start
@@ -86,6 +94,7 @@ result = await agent._autonomous_loop("Continue task")
 ```
 
 **How it works**:
+
 1. Agent checks for latest checkpoint matching agent_id
 2. If found, restores complete state (step, memory, plan, budget)
 3. Continues execution from interruption point
@@ -94,6 +103,7 @@ result = await agent._autonomous_loop("Continue task")
 ### Compression
 
 **Enable compression** to reduce storage by >50%:
+
 ```python
 storage = FilesystemStorage(
     base_dir=".kaizen/checkpoints",
@@ -102,6 +112,7 @@ storage = FilesystemStorage(
 ```
 
 **Performance**:
+
 - Compression ratio: >50% size reduction
 - Overhead: <10ms per checkpoint
 - Auto-decompression: Transparent on load
@@ -110,6 +121,7 @@ storage = FilesystemStorage(
 ### Retention Policy
 
 **Keep only latest N checkpoints**:
+
 ```python
 state_manager = StateManager(
     storage=storage,
@@ -118,6 +130,7 @@ state_manager = StateManager(
 ```
 
 **Behavior**:
+
 - Oldest checkpoints deleted automatically after each save
 - Deletion is non-blocking (errors logged but don't fail saves)
 - Per-agent enforcement (each agent_id has own retention)
@@ -129,6 +142,7 @@ state_manager = StateManager(
 ### PRE_CHECKPOINT_SAVE Hook
 
 **Triggered before checkpoint save**:
+
 ```python
 from kaizen.core.autonomy.hooks import HookManager, HookEvent, HookResult
 
@@ -149,6 +163,7 @@ state_manager = StateManager(storage=storage, hook_manager=hook_manager)
 ### POST_CHECKPOINT_SAVE Hook
 
 **Triggered after checkpoint save**:
+
 ```python
 async def post_checkpoint_hook(context):
     """Log or notify after checkpoint save"""
@@ -161,6 +176,7 @@ hook_manager.register(HookEvent.POST_CHECKPOINT_SAVE, post_checkpoint_hook)
 ```
 
 **Available in context.data**:
+
 - `agent_id`: Agent identifier
 - `step_number`: Current step
 - `status`: Agent status ("running", "completed", "failed")
@@ -276,21 +292,25 @@ state_manager = StateManager(
 ## Use Cases
 
 ### Long-Running Agents (30+ hour sessions)
+
 - Checkpoint every 10 minutes
 - Resume automatically on restart
 - Prevent data loss from system failures
 
 ### Development Testing
+
 - Checkpoint every step
 - Quick iteration cycles
 - Debug from specific states
 
 ### Production Autonomous Agents
+
 - Balance checkpointing frequency with performance
 - Enable compression for storage efficiency
 - Retention policy to prevent storage bloat
 
 ### Cost Optimization
+
 - Avoid repeating expensive operations
 - Resume from checkpoint instead of restarting
 - Save checkpoint before high-cost operations
@@ -300,11 +320,13 @@ state_manager = StateManager(
 ## Performance
 
 ### Checkpoint Performance
+
 - **Save**: 5-10ms (uncompressed), 8-15ms (compressed)
 - **Load**: 2-5ms (uncompressed), 3-7ms (compressed)
 - **Compression overhead**: <5ms (acceptable for >50% size reduction)
 
 ### Storage Efficiency
+
 - **Typical checkpoint**: 500-2000 bytes uncompressed
 - **After compression**: 200-800 bytes (>50% reduction)
 - **100 checkpoints**: ~100KB uncompressed, ~40KB compressed
@@ -318,6 +340,7 @@ state_manager = StateManager(
 **Problem**: Agent runs but no checkpoints created
 
 **Solutions**:
+
 1. Check state_manager is provided: `agent = BaseAutonomousAgent(..., state_manager=state_manager)`
 2. Verify checkpoint_frequency is set: `config = AutonomousConfig(checkpoint_frequency=5)`
 3. Check storage directory exists and is writable
@@ -327,6 +350,7 @@ state_manager = StateManager(
 **Problem**: Agent starts fresh instead of resuming
 
 **Solutions**:
+
 1. Enable resume: `config = AutonomousConfig(resume_from_checkpoint=True)`
 2. Verify checkpoint files exist in storage directory
 3. Check agent_id matches (default is "autonomous_agent")
@@ -337,6 +361,7 @@ state_manager = StateManager(
 **Problem**: Checkpoint directory size increasing
 
 **Solutions**:
+
 1. Enable compression: `storage = FilesystemStorage(compress=True)`
 2. Set retention policy: `state_manager = StateManager(retention_count=10)`
 3. Reduce checkpoint frequency: `config = AutonomousConfig(checkpoint_frequency=10)`

@@ -29,7 +29,7 @@ runtime.execute(workflow.build(), parameters={"node": {"param": "value"}})
 
 ### Wrong Runtime Selection
 ```python
-# ❌ Error: Using sync runtime in async context (FastAPI)
+# ❌ Error: Using sync runtime in async context (Nexus/Docker)
 from kailash.runtime import LocalRuntime
 
 @app.post("/execute")
@@ -60,7 +60,7 @@ results, run_id = runtime.execute(workflow.build())
 | Context | Runtime | Method |
 |---------|---------|--------|
 | **CLI/Scripts** | `LocalRuntime()` | `execute(workflow.build())` |
-| **FastAPI/Docker** | `AsyncLocalRuntime()` | `await execute_workflow_async(workflow.build(), inputs={})` |
+| **Nexus/Docker** | `AsyncLocalRuntime()` | `await execute_workflow_async(workflow.build(), inputs={})` |
 | **Parallel** | `ParallelRuntime(max_workers=4)` | `execute(workflow.build())` |
 | **Auto-detect** | `get_runtime()` | Context-aware |
 
@@ -81,13 +81,13 @@ results, run_id = runtime.execute(workflow.build())
 print(f"Completed: {run_id}")
 ```
 
-### FastAPI/Async Pattern
+### Nexus/Async Pattern
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import AsyncLocalRuntime
-from fastapi import FastAPI
+from nexus import Nexus
 
-app = FastAPI()
+app = Nexus()
 
 @app.post("/execute")
 async def execute():
@@ -122,7 +122,7 @@ Use `pattern-expert` subagent when:
 ## Quick Tips
 
 - 💡 **Right parameter name**: Always use `parameters={}` not `inputs` or `config`
-- 💡 **Async contexts**: Use AsyncLocalRuntime for FastAPI/Docker
+- 💡 **Async contexts**: Use AsyncLocalRuntime for Nexus/Docker
 - 💡 **Capture both**: Always get `results, run_id = runtime.execute(...)`
 
 <!-- Trigger Keywords: execute() failed, runtime error, workflow execution error, LocalRuntime error, execution failed, runtime.execute error, execution failure, runtime issue -->

@@ -303,7 +303,7 @@ User: "Run rm -rf /"
 | Have Claude implement something complex | Just ask - Claude will delegate to appropriate agents |
 | Enforce a new rule                      | Add to `.claude/rules/`                               |
 | Add new knowledge                       | Add to `.claude/skills/`                              |
-| Automate quality checks                 | Add to `scripts/hooks/`                               |
+| Automate quality checks                 | Add to `.claude/hooks/`                               |
 
 ### Agent Selection Guide
 

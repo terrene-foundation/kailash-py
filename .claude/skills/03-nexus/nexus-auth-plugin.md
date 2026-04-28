@@ -205,10 +205,10 @@ audit = AuditConfig(
 )
 ```
 
-## FastAPI Dependencies
+## Nexus Dependencies
 
 ```python
-from fastapi import Depends
+from nexus.http import Depends
 from nexus.auth.dependencies import (
     get_current_user,
     get_optional_user,
@@ -262,13 +262,13 @@ Response <- Audit <- RateLimit <- JWT <- Tenant <- RBAC <- Handler
 | `exclude_paths` | `exempt_paths` | JWTConfig    |
 | `admin_roles`   | `admin_role`   | TenantConfig |
 
-### PEP 563 Breaks FastAPI Injection
+### PEP 563 Breaks Nexus Injection
 
 ```python
-# NEVER do this in files with FastAPI dependencies:
+# NEVER do this in files with Nexus dependencies:
 from __future__ import annotations  # BREAKS INJECTION
 
-# FastAPI cannot inject Request when annotations are strings
+# Nexus cannot inject Request when annotations are strings
 ```
 
 ### RBAC Requires JWT

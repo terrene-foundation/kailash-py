@@ -93,7 +93,7 @@ impl DataFlowBuilder {
 }
 ```
 
-**Scope**: `DataFlowEngine::builder()`, `NexusEngine::builder()`, trust envelope construction. ~4 builders.
+**Scope**: `DataFlowEngine::builder()`, `NexusApp::builder()`, trust envelope construction. ~4 builders.
 
 **Effort**: 1-2 sessions. Requires new generic type parameters but no algorithm changes.
 
@@ -132,7 +132,7 @@ impl TenantIdPy {
 }
 ```
 
-**Scope**: `TenantId` (exists in `crates/kailash-auth/src/tenant.rs`) + other identity/correlation newtypes to be introduced (user id, correlation id, request id) across PyO3, napi-rs, Magnus bindings.
+**Scope**: TenantId, UserId, CorrelationId, RequestId across PyO3, napi-rs, Magnus bindings.
 
 **Effort**: 2-3 sessions. Requires FFI specialist.
 
@@ -150,9 +150,8 @@ pub trait AuditEvent: private::Sealed { ... }
 
 mod private {
     pub trait Sealed {}
-    // Illustrative only — real audit-event type names TBD by the governance layer:
-    impl Sealed for super::AuditEventA {}
-    impl Sealed for super::AuditEventB {}
+    impl Sealed for super::QueryAudit {}
+    impl Sealed for super::MutationAudit {}
     // External types CANNOT implement Sealed
 }
 
@@ -161,7 +160,7 @@ pub trait AuditEvent { ... }
 // struct FakeAudit; impl AuditEvent for FakeAudit { ... }  ← undetectable
 ```
 
-**Scope**: `AuditEntry` (verified in kailash-rs audit layer) + related audit-event types, governance envelope types (not yet introduced).
+**Scope**: AuditEntry, PolicyEnvelope, TrustToken, GovernanceDecision.
 
 ## Python Patterns
 

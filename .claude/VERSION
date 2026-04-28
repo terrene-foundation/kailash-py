@@ -1,14 +1,14 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-04-12",
+  "updated": "2026-04-28",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.8.7",
-    "build_version": "2.8.7",
-    "synced_at": "2026-04-15T04:00:00Z",
+    "version": "2.9.5",
+    "build_version": "2.9.5",
+    "synced_at": "2026-04-28T00:00:00Z",
     "sdk_packages": {
       "kailash": "2.8.6",
       "kailash-dataflow": "2.0.8",
@@ -23,6 +23,27 @@
     }
   },
   "changelog": [
+    {
+      "version": "1.0.5",
+      "date": "2026-04-28",
+      "summary": "Sync loom 2.9.5 \u2014 multi-CLI architect wave (cli-orchestrator + codex-architect + gemini-architect), hooks consolidation under .claude/hooks/, autonomize command, multi-CLI parity rule, Nexus HTTP-status + webhook-HMAC + UI-backend-defense rules, kailash-ml skill suite, MCP platform skills.",
+      "changes": [
+        "NEW AGENTS: cc-architect, cli-orchestrator, codex-architect, gemini-architect \u2014 multi-CLI architect wave (CC + Codex + Gemini emission targets).",
+        "NEW COMMAND: commands/autonomize.md \u2014 autonomous execution under user permission envelope.",
+        "NEW RULES: rules/cross-cli-parity.md, rules/nexus-http-status-convention.md, rules/nexus-webhook-hmac.md, rules/ui-backend-defense.md, rules/variant-authoring.md.",
+        "NEW GUIDE: guides/deterministic-quality/09-parallel-agent-bundles.md.",
+        "NEW SKILLS (Nexus): handler-status-codes, nexus-extractors, nexus-http-status-convention.",
+        "NEW SKILLS (MCP platform): mcp-claude-code-config, mcp-contributor-pattern, mcp-migration-guide, mcp-platform-map, mcp-platform-overview, mcp-security-tiers, mcp-tool-catalog.",
+        "NEW SKILLS (DataFlow): migration-scaffold, dataflow-rls-posture, rls-security-definer-preauth-carveout.",
+        "NEW SKILLS (kailash-ml): ml-agent-guardrails, ml-drift-monitoring, ml-feature-pipelines, ml-inference-server, ml-model-registry, ml-onnx-export, ml-training-pipeline.",
+        "NEW SKILLS (architecture): allowlist-extension-pattern, multi-axis-decomposition, ci-runner-troubleshooting, sdk-upstream-donation.",
+        "NEW SKILLS: kailash-align suite (35-kailash-align/), test-skip-discipline, project skills.",
+        "REORG: hooks consolidated under .claude/hooks/ (was scripts/hooks/ + .claude/scripts/hooks/) \u2014 Anthropic-documented canonical location, eliminates dual source-of-truth per cross-repo.md Rule 3.",
+        "REORG: scripts/resolve-template.js \u2192 .claude/bin/resolve-template.js.",
+        "OBSOLETED: scripts/hooks/, .claude/scripts/, scripts/resolve-template.js \u2014 declared in .claude/.coc-obsoleted; deleted on this sync per cross-repo.md Rule 4 obsoletion exemption.",
+        "UPDATE: 196 artifacts modified across agents/commands/rules/skills/guides \u2014 Cycle 8/9 institutional knowledge accumulated since loom 2.8.7."
+      ]
+    },
     {
       "version": "1.0.4",
       "date": "2026-04-12",

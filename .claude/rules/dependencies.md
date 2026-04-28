@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "pyproject.toml"
   - "Cargo.toml"

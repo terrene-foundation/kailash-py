@@ -1,10 +1,15 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/db/**"
   - "**/infrastructure/**"
 ---
 
 # Infrastructure SQL Rules
+
+
+<!-- slot:neutral-body -->
 
 > **Scope**: Application code MUST go through DataFlow (`@db.model`, `db.express`) — see `framework-first.md` § Work-Domain Binding. The patterns here are for the SDK source tree and dialect helper layer where DataFlow itself generates SQL underneath. Application code never writes these patterns directly.
 
@@ -160,3 +165,5 @@ Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-11) — `packa
   **Why:** Each ConnectionManager creates its own pool, so N stores means N pools competing for the same `max_connections` limit — pool math breaks silently.
 - **No `FOR UPDATE SKIP LOCKED` without transaction** — lock releases on auto-commit, causing race conditions
   **Why:** Without a transaction, the row lock acquired by `FOR UPDATE` releases immediately on auto-commit, and another worker grabs the same row.
+
+<!-- /slot:neutral-body -->

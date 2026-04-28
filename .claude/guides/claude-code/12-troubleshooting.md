@@ -71,7 +71,7 @@ claude
 
 ```bash
 # Make hook scripts executable
-chmod +x scripts/hooks/*.js
+chmod +x .claude/hooks/*.js
 ```
 
 ---
@@ -100,7 +100,7 @@ chmod +x scripts/hooks/*.js
         "matcher": "Edit|Write",
         "hooks": [
           {
-            "command": "scripts/hooks/slow-hook.js",
+            "command": ".claude/hooks/slow-hook.js",
             "timeout": 60 // Increase from default
           }
         ]
@@ -160,7 +160,7 @@ python -m json.tool .claude/settings.json
 3. **Verify hook path**:
 
 ```bash
-ls -la scripts/hooks/your-hook.js
+ls -la .claude/hooks/your-hook.js
 ```
 
 ---

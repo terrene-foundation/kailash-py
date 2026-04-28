@@ -34,7 +34,7 @@ Every CO setup consists of five component types. Each maps to a specific CO laye
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  HOOKS (scripts/hooks/ + .claude/settings.json)  [CO L3]     │
+│  HOOKS (.claude/hooks/ + .claude/settings.json)  [CO L3]     │
 │  Deterministic enforcement outside the AI's context         │
 │  Anti-amnesia, validation, session lifecycle                │
 └─────────────────────────────────────────────────────────────┘

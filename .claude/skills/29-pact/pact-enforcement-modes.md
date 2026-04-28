@@ -1,6 +1,5 @@
 ---
 description: PACT enforcement modes (ENFORCE/SHADOW/DISABLED) and envelope-to-execution adapter
-paths: ["packages/kailash-pact/**"]
 ---
 
 # PACT Enforcement Modes

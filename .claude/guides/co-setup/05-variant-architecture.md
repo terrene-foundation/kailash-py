@@ -163,7 +163,7 @@ The manifest declares every artifact's tier and variant status:
 tiers:
   cc:
     - guides/claude-code/**
-    - agents/claude-code-architect.md
+    - agents/cc-architect.md
     - skills/30-claude-code-patterns/**
     - rules/cc-artifacts.md
     - commands/cc-audit.md
@@ -266,8 +266,8 @@ variants:
 variant_only:
   py:
     - variants/py/agents/frameworks/infrastructure-specialist.md
-    - variants/py/scripts/hooks/detect-package-manager.js
-    - variants/py/scripts/hooks/validate-prod-deploy.js
+    - variants/py/.claude/hooks/detect-package-manager.js
+    - variants/py/.claude/hooks/validate-prod-deploy.js
     - variants/py/scripts/deployment/**
     - variants/py/scripts/development/**
     - variants/py/scripts/maintenance/**

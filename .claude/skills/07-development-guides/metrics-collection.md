@@ -66,18 +66,19 @@ finally:
 
 ### 3. Metrics Endpoint
 ```python
-from fastapi import FastAPI
+from nexus import Nexus
 from prometheus_client import make_asgi_app
 
-app = FastAPI()
+app = Nexus(auto_discovery=False)
 
-# Mount Prometheus metrics endpoint
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
-
-@app.get("/health")
-def health():
+# Expose Prometheus metrics via a handler
+@app.handler("health", description="Health check")
+async def health() -> dict:
     return {"status": "healthy"}
+
+# For Prometheus scraping, mount the ASGI app on the underlying server:
+# metrics_app = make_asgi_app()
+# app.include_router or middleware integration for /metrics
 ```
 
 ## When to Engage

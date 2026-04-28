@@ -25,7 +25,7 @@ workflow.add_connection("source", "output", "processor", "input_data")
 runtime = LocalRuntime()  # For CLI/scripts
 results, run_id = runtime.execute(workflow.build())
 
-# For Docker/FastAPI (async)
+# For Docker/async (async)
 # from kailash.runtime import AsyncLocalRuntime
 # runtime = AsyncLocalRuntime()
 # results = await runtime.execute_workflow_async(workflow.build(), inputs={})
@@ -103,7 +103,7 @@ from kailash.runtime import LocalRuntime
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
-# For Docker/FastAPI (async)
+# For Docker/async (async)
 from kailash.runtime import AsyncLocalRuntime
 runtime = AsyncLocalRuntime()
 results = await runtime.execute_workflow_async(workflow.build(), inputs={})

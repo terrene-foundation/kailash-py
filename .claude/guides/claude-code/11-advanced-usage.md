@@ -176,7 +176,7 @@ For simple tasks, avoid loading heavy context:
 Create a new hook script:
 
 ```javascript
-// scripts/hooks/my-custom-hook.js
+// .claude/hooks/my-custom-hook.js
 #!/usr/bin/env node
 
 const fs = require('fs');
@@ -213,7 +213,7 @@ Register in `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/hooks/my-custom-hook.js",
+            "command": ".claude/hooks/my-custom-hook.js",
             "timeout": 5
           }
         ]
@@ -511,7 +511,7 @@ ln -s ~/shared-claude-setup/.claude/skills .claude/skills
 The session-start hook detects frameworks:
 
 ```javascript
-// scripts/hooks/session-start.js
+// .claude/hooks/session-start.js
 const hasDataFlow = fs.existsSync("dataflow.py") || hasImport("dataflow");
 const hasNexus = fs.existsSync("nexus.py") || hasImport("nexus");
 ```

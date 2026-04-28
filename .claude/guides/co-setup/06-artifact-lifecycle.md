@@ -215,7 +215,7 @@ The `/sync` command at loom/ is the only authorized outbound path. The BUILD rep
 
 ### What about the COC templates for other LLMs?
 
-The same architecture applies. kailash-coc-gemini-py is another template that receives from loom/ via /sync. Gemini-specific artifacts go in `variants/gemini-py/` (if any exist — most likely the templates are identical except for model references in hooks).
+The multi-CLI USE templates (`kailash-coc-py`, `kailash-coc-rs`) emit `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex), and `GEMINI.md` (Gemini CLI) from a single shared `.claude/` source — Gemini support is built-in, not a separate template. The earlier dedicated `kailash-coc-gemini-py` repo was removed (2026-04-27) once the multi-CLI architecture rendered it redundant.
 
 ## What Changes in Existing Commands
 
@@ -232,8 +232,8 @@ The same architecture applies. kailash-coc-gemini-py is another template that re
 | ------------------------ | -------------------------------------------------------------------- |
 | `coc-sync`               | Rewritten: reads sync-manifest.yaml, applies overlays, variant-aware |
 | **NEW**: `sync-reviewer` | Scans BUILD repos, presents diffs, classifies changes                |
-| `code-inspector`         | Absorbed from ~/repos into loom/agents/management/                   |
-| `repo-admin`             | Absorbed from ~/repos into loom/agents/management/                   |
+| `repo-ops`               | Absorbed from ~/repos into loom/agents/management/                   |
+| `repo-ops`               | Absorbed from ~/repos into loom/agents/management/                   |
 | `settings-manager`       | Absorbed from ~/repos into loom/agents/management/                   |
 
 ## What Changes in Existing Rules

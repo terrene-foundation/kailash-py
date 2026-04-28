@@ -9,7 +9,7 @@ description: "DataFlow installation and setup guide. Use when asking 'install da
 > Category: `dataflow`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`dataflow-specialist`](dataflow-specialist.md), [`dataflow-quickstart`](dataflow-quickstart.md)
+> Related Skills: `dataflow-specialist`, [`dataflow-quickstart`](dataflow-quickstart.md)
 
 ## Installation
 
@@ -66,6 +66,5 @@ print(db.list_models())
 ```
 
 ## Documentation
-
 
 <!-- Trigger Keywords: install dataflow, dataflow setup, dataflow requirements, dataflow installation -->

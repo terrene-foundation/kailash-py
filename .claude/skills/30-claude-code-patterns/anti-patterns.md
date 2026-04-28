@@ -66,7 +66,7 @@ Common mistakes when creating or modifying Claude Code artifacts, organized by a
 
 **Symptom**: "MUST validate IDs with validate_id()" but no rationale.
 **Why it's wrong**: Without understanding why, Claude applies the rule mechanically and misses edge cases where the spirit matters more than the letter.
-**Fix**: Add "**Why**: [one-line rationale]" after each MUST.
+**Fix**: Add "**Why:** [one-line rationale]" after each MUST.
 
 ## Command Anti-Patterns
 

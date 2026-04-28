@@ -59,7 +59,7 @@ workflow.add_node("AsyncSQLDatabaseNode", "query", {
 import asyncpg
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-# For multi-worker deployments (Gunicorn + FastAPI)
+# For multi-worker deployments (Gunicorn + Nexus)
 # Create ONE pool, share across all AsyncSQLDatabaseNode instances
 pool = await asyncpg.create_pool(dsn, min_size=5, max_size=20)
 

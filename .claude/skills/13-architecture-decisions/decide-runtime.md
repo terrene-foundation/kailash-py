@@ -39,7 +39,7 @@ results, run_id = runtime.execute(workflow.build())
 ### Use AsyncLocalRuntime When:
 
 - Docker deployments
-- FastAPI applications
+- Nexus applications (API + CLI + MCP)
 - High-concurrency scenarios
 - Async execution contexts
 - Production APIs (10-100x faster)
@@ -68,7 +68,7 @@ runtime = get_runtime("async")  # Force asynchronous
 | Feature | LocalRuntime | AsyncLocalRuntime |
 |---------|--------------|-------------------|
 | **Execution Model** | Synchronous | Asynchronous |
-| **Best For** | CLI, Scripts, Tests | Docker, FastAPI, APIs |
+| **Best For** | CLI, Scripts, Tests | Docker, Nexus, APIs |
 | **Performance** | Standard | 10-100x faster |
 | **Threading** | ThreadPoolExecutor | No threads (async/await) |
 | **Return Value** | `(results, run_id)` | `results` |
@@ -185,20 +185,22 @@ results, run_id = runtime.execute(workflow.build())
 print(f"Workflow {run_id} completed: {results}")
 ```
 
-### Pattern 2: FastAPI Deployment
+### Pattern 2: Nexus Deployment
 
 ```python
-# FastAPI app - use AsyncLocalRuntime
-from fastapi import FastAPI
+# Nexus app - use AsyncLocalRuntime (Nexus handles this internally)
+from nexus import Nexus
 from kailash.runtime import AsyncLocalRuntime
 
-app = FastAPI()
+app = Nexus(auto_discovery=False)
 runtime = AsyncLocalRuntime()
 
-@app.post("/execute")
-async def execute_workflow():
+@app.handler("execute", description="Execute workflow")
+async def execute_workflow() -> dict:
     results = await runtime.execute_workflow_async(workflow.build(), inputs={})
     return results
+
+app.start()
 ```
 
 ### Pattern 3: Testing

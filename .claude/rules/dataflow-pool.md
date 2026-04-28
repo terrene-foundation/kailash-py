@@ -1,9 +1,14 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/dataflow/**"
 ---
 
 # DataFlow Pool Configuration Rules
+
+
+<!-- slot:neutral-body -->
 
 > **Scope**: Application code MUST go through DataFlow's high-level API (`@db.model`, `db.express`) — see `framework-first.md` § Work-Domain Binding. The patterns here are for tuning the DataFlow connection pool itself, not for bypassing it.
 
@@ -65,7 +70,7 @@ class PipelineExecutor:
 
 **Why:** The orphan-attribute pattern is the exact bug Phase 5.2 fixed in `PipelineExecutor` — `redis_url` was stored and logged at init but the executor used an in-memory dict internally. Operators believed the cache was Redis-backed for weeks. The fix requires every `_url` / `_backend` / `_client` to have a grep-able consumer.
 
-**Audit protocol:** run `rg 'self\._(url|backend|client|executor|store|policy)\w*\s*=' src/` and for each match, verify there's at least one `self._<attr>.` read in the same class OR a downstream passthrough to another class that consumes it.
+**Audit protocol:** run `rg 'self\._(url|backend|client|executor|store|policy)\w*\s*=' .` and for each match, verify there's at least one `self._<attr>.` read in the same class OR a downstream passthrough to another class that consumes it.
 
 ### 4. Bounded max_overflow
 
@@ -111,3 +116,5 @@ class SubsystemClass:
 - No new pool size defaults — consolidate with existing parameters before adding
 
 **Why:** Every additional default becomes another competing source of truth, recreating the exact pool exhaustion crisis these rules prevent.
+
+<!-- /slot:neutral-body -->

@@ -8,11 +8,11 @@ operations. Nodes emit updates via `report_progress()`, and registered callbacks
 
 ```
 Node.run()                     ProgressRegistry              Callbacks
-    │                               │                           │
-    ├─ report_progress(1, 100) ──►  emit(ProgressUpdate) ──►  on_progress(update)
-    ├─ report_progress(2, 100) ──►  emit(ProgressUpdate) ──►  on_progress(update)
-    │                               │                           │
-    └─ (node completes)             └─ (bounded deque)          └─ (UI/log/metric)
+    |                               |                           |
+    +- report_progress(1, 100) -->  emit(ProgressUpdate) -->  on_progress(update)
+    +- report_progress(2, 100) -->  emit(ProgressUpdate) -->  on_progress(update)
+    |                               |                           |
+    +- (node completes)             +- (bounded deque)          +- (UI/log/metric)
 ```
 
 - **Context variables** (`contextvars`) propagate the registry and current node ID

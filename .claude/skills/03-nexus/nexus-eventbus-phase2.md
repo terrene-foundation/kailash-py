@@ -20,10 +20,10 @@ Event-driven architecture with janus.Queue bridging sync/async boundaries, plus 
 
 ## EventBus Architecture
 
-The EventBus uses `janus.Queue` (bounded 256) to bridge sync publishers (MCP thread) and async subscribers (FastAPI event loop):
+The EventBus uses `janus.Queue` (bounded 256) to bridge sync publishers (MCP thread) and async subscribers (Nexus HTTP transport event loop):
 
 ```
-Sync Thread (MCP)     janus.Queue      Async Loop (FastAPI)
+Sync Thread (MCP)     janus.Queue      Async Loop (Nexus HTTP)
    publish() -------> [bounded 256] ----> dispatch_loop()
                                              |
                                       fan-out to subscribers

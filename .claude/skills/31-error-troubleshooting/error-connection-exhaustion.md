@@ -24,7 +24,7 @@ Database connection pool exhaustion in multi-worker deployments.
 - Database process OOM
 - Intermittent connection failures under load
 
-**Common in**: Gunicorn + FastAPI multi-worker deployments.
+**Common in**: Gunicorn + Nexus multi-worker deployments.
 
 ## Root Cause
 
@@ -67,10 +67,10 @@ Instead of letting each node create its own pool, create ONE pool at app startup
 ```python
 import asyncpg
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from nexus import Nexus
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: Nexus):
     # ONE pool for the entire worker
     app.state.pool = await asyncpg.create_pool(
         os.environ["DATABASE_URL"],
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.pool.close()
 
-app = FastAPI(lifespan=lifespan)
+app = Nexus(lifespan=lifespan)
 
 @app.get("/users")
 async def get_users():

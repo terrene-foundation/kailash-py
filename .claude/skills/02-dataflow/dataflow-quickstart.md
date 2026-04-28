@@ -272,7 +272,7 @@ workflow.add_node("OrderCreateNode", "create", {
 })
 ```
 
-## Async Usage (FastAPI, Async Workflows)
+## Async Usage (Nexus, Async Workflows)
 
 ### Basic Pattern
 
@@ -305,19 +305,19 @@ async def create_user():
     return results["create"]["id"]
 ```
 
-### FastAPI Integration
+### Nexus Integration
 
-**DataFlow**: `auto_migrate=True` (default) works correctly in Docker/FastAPI environments. No special workarounds needed.
+**DataFlow**: `auto_migrate=True` (default) works correctly in Docker/async environments. No special workarounds needed.
 
 ```python
-from fastapi import FastAPI
+from nexus import Nexus
 from contextlib import asynccontextmanager
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 import uuid
 
-# auto_migrate=True (default) works in Docker/FastAPI
+# auto_migrate=True (default) works in Docker/async
 db = DataFlow("postgresql://localhost:5432/mydb")
 
 @db.model
@@ -327,11 +327,11 @@ class User:
     email: str
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     yield
     await db.close_async()
 
-app = FastAPI(lifespan=lifespan)
+app = Nexus(lifespan=lifespan)
 
 @app.post("/users")
 async def create_user(name: str, email: str):
@@ -361,10 +361,10 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus FIRST with auto_discovery=False
 app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 
-# Step 2: Create DataFlow (auto_migrate=True works in Docker/FastAPI as of the current version)
+# Step 2: Create DataFlow (auto_migrate=True works in Docker/async as of the current version)
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI
+    auto_migrate=True,  # DEFAULT - works in Docker/async
 )
 
 # Step 3: Define models

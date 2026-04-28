@@ -107,7 +107,7 @@ Skills provide **organized, accessible domain expertise**:
 | `24-value-audit`             | Value Audit   | Enterprise demo QA        |
 | `25-ai-interaction-patterns` | AI Patterns   | AI UX (Shape of AI)       |
 | `26-eatp-reference`          | EATP          | Trust protocol reference  |
-| `27-care-reference`          | CARE          | Governance framework ref  |
+| `co-reference`          | CARE          | Governance framework ref  |
 | `28-coc-reference`           | COC           | Five-layer architecture   |
 
 ---
@@ -559,7 +559,6 @@ Every skill knows which agents to invoke:
 For complex workflows or debugging, invoke:
 
 - `pattern-expert` - Workflow patterns
-- `sdk-navigator` - Find specific patterns
 - `testing-specialist` - Test implementations
 ```
 

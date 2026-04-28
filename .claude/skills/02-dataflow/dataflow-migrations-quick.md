@@ -13,12 +13,12 @@ Automatic schema migrations with safety controls for development and production.
 > Related Skills: [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist` (complex migrations, production safety)
 
-> **DataFlow v0.11.0 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL). The previous workaround of using `auto_migrate=False` + `create_tables_async()` is **OBSOLETE**.
+> **DataFlow v0.11.0 Update**: `auto_migrate=True` now works correctly in Docker/async environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL). The previous workaround of using `auto_migrate=False` + `create_tables_async()` is **OBSOLETE**.
 
 ## Quick Reference
 
 - **Development**: `auto_migrate=True` (default) - safe, preserves data
-- **Docker/FastAPI**: `auto_migrate=True` - works correctly as of v0.10.15+
+- **Docker/async**: `auto_migrate=True` - works correctly as of v0.10.15+
 - **Production**: `auto_migrate=True` - same pattern for all environments
 - **Enterprise**: Full migration system with risk assessment for complex operations
 - **Safety**: auto_migrate ALWAYS preserves existing data, adds new columns safely
@@ -49,7 +49,7 @@ class User:
 ## Quick Tips
 
 - `auto_migrate=True` is safe for ALL environments (v0.10.15+)
-- Works correctly in Docker/FastAPI via `SyncDDLExecutor`
+- Works correctly in Docker/async via `SyncDDLExecutor`
 - Always provide defaults for NOT NULL columns
 - Enterprise migration system for complex operations (type changes, renames)
 - Test migrations on staging before production

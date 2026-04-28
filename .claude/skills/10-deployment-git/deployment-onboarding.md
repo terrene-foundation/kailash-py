@@ -1,6 +1,6 @@
 # SDK Release Onboarding Process
 
-Interactive process for creating a project's `deploy/deployment-config.md`. The deployment-specialist agent drives this process with the human architect. Focused on SDK release infrastructure (PyPI publishing, CI, docs), not cloud deployment.
+Interactive process for creating a project's `deploy/deployment-config.md`. The release-specialist agent drives this process with the human architect. Focused on SDK release infrastructure (PyPI publishing, CI, docs), not cloud deployment.
 
 ## When to Run
 

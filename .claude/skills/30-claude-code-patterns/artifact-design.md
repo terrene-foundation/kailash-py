@@ -120,7 +120,7 @@ allowed-tools:
 ```
 ````
 
-**Why**: [one-line rationale]
+**Why:** [one-line rationale]
 
 ## MUST NOT Rules
 

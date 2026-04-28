@@ -820,8 +820,13 @@ function checkStubsAndSimulations(content, filePath, messages) {
  * Runs after validation; overhead is <5ms (fs.appendFileSync of JSONL lines).
  */
 function logFileObservations(content, filePath, cwd, messages) {
-  // Skip hook/script files — observing our own infrastructure is noise
+  // Skip hook/script files — observing our own infrastructure is noise.
+  // Note: /scripts/hooks/ was deprecated in v2.9.1 (consolidated under .claude/hooks/).
+  // The matcher is retained only to skip orphan files in legacy USE templates that
+  // haven't yet run the v2.9.1 sync (purged per .coc-obsoleted). Safe to remove
+  // entirely once every downstream consumer has run /sync past v2.9.1.
   if (
+    filePath.includes("/.claude/hooks/") ||
     filePath.includes("/scripts/hooks/") ||
     filePath.includes("/scripts/learning/")
   )

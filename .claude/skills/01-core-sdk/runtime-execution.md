@@ -35,7 +35,7 @@ with LocalRuntime() as runtime:
     results, run_id = runtime.execute(workflow.build())
 ```
 
-### Asynchronous Execution (Docker/FastAPI)
+### Asynchronous Execution (Docker/async)
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -193,7 +193,7 @@ metrics = runtime.get_validation_metrics()  # LocalRuntime
 Use AsyncLocalRuntime when:
 
 - Deploying to Docker/Kubernetes
-- Building FastAPI applications
+- Building Nexus applications
 - Requiring high concurrency
 - Using async nodes (AsyncPythonCodeNode, etc.)
 - Production API deployments (10-100x faster than LocalRuntime)
@@ -300,7 +300,7 @@ See `docs/guides/00-performance-optimizations.md` for full details.
 ## Quick Tips
 
 - Always use `runtime.execute(workflow.build())` - never `workflow.execute()`
-- Choose LocalRuntime for CLI/scripts, AsyncLocalRuntime for Docker/FastAPI
+- Choose LocalRuntime for CLI/scripts, AsyncLocalRuntime for Docker/async
 - Both runtimes share the same configuration parameters and validation logic
 - Parameter resolution supports ${param} templates with type preservation
 - Use context manager (`with LocalRuntime() as runtime:`) for proper resource cleanup

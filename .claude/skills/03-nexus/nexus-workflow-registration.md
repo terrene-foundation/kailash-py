@@ -1,254 +1,138 @@
----
-skill: nexus-workflow-registration
-description: Master workflow registration patterns including manual registration, auto-discovery, versioning, and lifecycle management
-priority: HIGH
-tags: [nexus, workflow, registration, auto-discovery, versioning]
----
-
 # Nexus Workflow Registration
 
-Master workflow registration patterns from basic to advanced.
+Register workflows for multi-channel deployment (API + CLI + MCP) via a single call.
 
 ## Registration Methods
 
-Nexus provides two registration approaches:
+| Method           | Use Case                  | Example                                  |
+| ---------------- | ------------------------- | ---------------------------------------- |
+| `@app.handler()` | Python functions (prefer) | `@app.handler("name")`                   |
+| `app.register()` | WorkflowBuilder workflows | `app.register("name", workflow.build())` |
 
-| Method           | Use Case                       | Example                                  |
-| ---------------- | ------------------------------ | ---------------------------------------- |
-| `app.register()` | WorkflowBuilder workflows      | `app.register("name", workflow.build())` |
-| `@app.handler()` | Python functions (recommended) | `@app.handler("name")`                   |
-
-**Recommendation**: Use `@app.handler()` for most cases. It bypasses PythonCodeNode sandbox restrictions and provides better IDE support.
-
-## Handler Registration (Recommended)
-
-Register Python functions directly as multi-channel workflows:
+## Handler Registration (Preferred)
 
 ```python
 from nexus import Nexus
-
 app = Nexus()
 
 @app.handler("greet", description="Greet a user")
 async def greet(name: str, greeting: str = "Hello") -> dict:
     return {"message": f"{greeting}, {name}!"}
 
-# Full Python access - no sandbox restrictions
 @app.handler("search_users")
 async def search_users(query: str, limit: int = 10) -> dict:
     from my_app.services import UserService
-    service = UserService()
-    users = await service.search(query, limit)
-    return {"users": users}
+    return {"users": await UserService().search(query, limit)}
 
 app.start()
 ```
 
-### Non-Decorator Handler Registration
+Benefits: full Python access (no sandbox), auto parameter derivation from signature, async/sync, IDE support, docstrings as descriptions.
+
+Non-decorator form:
 
 ```python
-from my_app.handlers import process_order
-
-app = Nexus()
 app.register_handler("process_order", process_order, description="Process an order")
-app.start()
 ```
-
-### Handler Benefits
-
-- Full Python access (no sandbox restrictions)
-- Automatic parameter derivation from function signature
-- Works with async and sync functions
-- IDE support (type hints, autocomplete)
-- Docstrings used as descriptions
 
 See [nexus-handler-support](#) for complete handler documentation.
 
-## Workflow Registration (v1.1.0)
+## WorkflowBuilder Registration (v1.1.0)
 
 ```python
 from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 app = Nexus()
-
-# Create workflow
 workflow = WorkflowBuilder()
 workflow.add_node("HTTPRequestNode", "fetch", {
-    "url": "https://api.example.com/data",
-    "method": "GET"
+    "url": "https://api.example.com/data", "method": "GET"
 })
 
-# Register with name - single call exposes on ALL channels
 app.register("data-fetcher", workflow.build())
-
-# What happens internally (v1.1.0):
-# 1. Nexus stores workflow: self._workflows[name] = workflow
-# 2. Gateway registration: self._gateway.register_workflow(name, workflow)
-#    → API endpoint: POST /workflows/data-fetcher/execute
-#    → CLI command: nexus execute data-fetcher
-# 3. MCP registration: self._mcp_channel.register_workflow(name, workflow)
-#    → MCP tool: workflow_data-fetcher
-
-# No ChannelManager - Nexus handles everything directly
+# Internally:
+#   API  -> POST /workflows/data-fetcher/execute
+#   CLI  -> nexus execute data-fetcher
+#   MCP  -> tool workflow_data-fetcher
 ```
 
 ## Critical Rules
 
-### Always Call .build()
-
 ```python
-# CORRECT
-app.register("workflow-name", workflow.build())
+# MUST call .build()
+app.register("name", workflow.build())   # correct
+app.register("name", workflow)           # WRONG - fails
 
-# WRONG - Will fail
-app.register("workflow-name", workflow)
+# MUST use name-first parameter order
+app.register(name, workflow.build())     # correct
+app.register(workflow.build(), name)     # WRONG - reversed
 ```
 
-### Correct Parameter Order
-
-```python
-# CORRECT - name first, workflow second
-app.register(name, workflow.build())
-
-# WRONG - reversed parameters
-app.register(workflow.build(), name)
-```
-
-## Enhanced Registration with Metadata (v1.1.0)
-
-**NOTE**: Metadata is currently NOT supported in v1.1.0's `register()` method signature.
-The method only accepts `(name, workflow)` - no metadata parameter.
-
-```python
-# v1.1.0 Reality: No metadata parameter
-app.register("data-fetcher", workflow.build())
-
-# Planned for future version:
-# app.register("data-fetcher", workflow.build(), metadata={
-#     "version": "1.0.0",
-#     "description": "Fetches data from external API",
-#     "tags": ["data", "api"]
-# })
-
-# Current workaround: Store metadata separately
-app._workflow_metadata = getattr(app, '_workflow_metadata', {})
-app._workflow_metadata["data-fetcher"] = {
-    "version": "1.0.0",
-    "description": "Fetches data from external API",
-    "author": "Development Team",
-    "tags": ["data", "api", "production"]
-}
-```
-
-**What Changed:**
-
-- ❌ `register(name, workflow, metadata)` not supported in v1.1.0
-- ✅ Only `register(name, workflow)` signature available
-- 🔜 Metadata support planned for future version
+**Metadata**: Not supported in v1.1.0. `register()` accepts only `(name, workflow)`.
 
 ## Auto-Discovery
 
-Nexus automatically discovers workflows in these patterns:
+File patterns discovered automatically:
 
-### File Patterns
-
-- `workflows/*.py`
-- `*.workflow.py`
-- `workflow_*.py`
-- `*_workflow.py`
-
-### Example Workflow File
+- `workflows/*.py`, `*.workflow.py`, `workflow_*.py`, `*_workflow.py`
 
 ```python
-# my_workflow.py
+# my_workflow.py -- export a `workflow` variable
 from kailash.workflow.builder import WorkflowBuilder
-
 workflow = WorkflowBuilder()
 workflow.add_node("HTTPRequestNode", "fetch", {
-    "url": "https://httpbin.org/json",
-    "method": "GET"
+    "url": "https://httpbin.org/json", "method": "GET"
 })
 ```
 
-### Enable/Disable Auto-Discovery
-
 ```python
-# Enable (default)
-app = Nexus(auto_discovery=True)
-
-# Disable (recommended with DataFlow)
-app = Nexus(auto_discovery=False)
+app = Nexus(auto_discovery=True)   # default
+app = Nexus(auto_discovery=False)  # recommended with DataFlow
 ```
 
 ## Dynamic Registration
 
-### Runtime Workflow Discovery
+### Runtime Discovery
 
 ```python
+import os, importlib.util
 from nexus import Nexus
-import os
-import importlib.util
 
 app = Nexus()
 
 def discover_and_register(directory="./workflows"):
     for filename in os.listdir(directory):
         if filename.endswith("_workflow.py"):
-            name = filename[:-12]  # Remove '_workflow.py'
-
-            # Load module
+            name = filename[:-12]
             spec = importlib.util.spec_from_file_location(
-                name,
-                os.path.join(directory, filename)
-            )
+                name, os.path.join(directory, filename))
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-
-            # Register workflow
             if hasattr(module, 'workflow'):
                 app.register(name, module.workflow.build())
-                print(f"Registered: {name}")
 
 discover_and_register()
 ```
 
-### Configuration-Driven Registration
+### Configuration-Driven
 
 ```python
 import yaml
 
 def register_from_config(app, config_file="workflows.yaml"):
-    with open(config_file, 'r') as f:
+    with open(config_file) as f:
         config = yaml.safe_load(f)
-
-    for wf_config in config['workflows']:
+    for wf in config['workflows']:
         workflow = WorkflowBuilder()
-
-        # Build from config
-        for node in wf_config['nodes']:
-            workflow.add_node(
-                node['type'],
-                node['id'],
-                node['parameters']
-            )
-
-        # Add connections
-        for conn in wf_config.get('connections', []):
-            workflow.add_connection(
-                conn['from_node'], "result",
-                conn['to_node'], "input"
-            )
-
-        app.register(
-            wf_config['name'],
-            workflow.build(),
-        )
+        for node in wf['nodes']:
+            workflow.add_node(node['type'], node['id'], node['parameters'])
+        for conn in wf.get('connections', []):
+            workflow.add_connection(conn['from_node'], "result",
+                                   conn['to_node'], "input")
+        app.register(wf['name'], workflow.build())
 ```
 
-## Workflow Versioning
-
-### Version Management
+## Versioning
 
 ```python
 class WorkflowVersionManager:
@@ -258,274 +142,46 @@ class WorkflowVersionManager:
 
     def register_version(self, name, workflow, version):
         versioned_name = f"{name}:v{version}"
-
         self.app.register(versioned_name, workflow.build())
-
-        # Track versions
-        if name not in self.versions:
-            self.versions[name] = []
-        self.versions[name].append(version)
-
-        # Register as latest
-        latest = max(self.versions[name])
-        if version == latest:
+        self.versions.setdefault(name, []).append(version)
+        if version == max(self.versions[name]):
             self.app.register(f"{name}:latest", workflow.build())
             self.app.register(name, workflow.build())
 
     def rollback(self, name, target_version):
-        versioned_workflow = self.app.workflows.get(f"{name}:v{target_version}")
-        if versioned_workflow:
-            self.app.register(name, versioned_workflow.workflow)
+        wf = self.app.workflows.get(f"{name}:v{target_version}")
+        if wf:
+            self.app.register(name, wf.workflow)
             return True
         return False
 
 # Usage
-version_mgr = WorkflowVersionManager(app)
-version_mgr.register_version("data-api", workflow, "1.0.0")
-version_mgr.register_version("data-api", workflow_v2, "2.0.0")
-version_mgr.rollback("data-api", "1.0.0")
+mgr = WorkflowVersionManager(app)
+mgr.register_version("data-api", workflow_v1, "1.0.0")
+mgr.register_version("data-api", workflow_v2, "2.0.0")
+mgr.rollback("data-api", "1.0.0")
 ```
 
-### Blue-Green Deployment
+## Quick Reference
 
-```python
-class BlueGreenDeployment:
-    def __init__(self, nexus_app):
-        self.app = nexus_app
-        self.deployments = {}
+**Registration flow**: single `app.register()` or `@app.handler()` call exposes on all channels automatically. No ChannelManager needed.
 
-    def deploy_blue(self, name, workflow):
-        blue_name = f"{name}-blue"
-        self.app.register(blue_name, workflow.build())
-        print(f"Blue deployed: {blue_name}")
-        return blue_name
+**Common fixes**:
 
-    def deploy_green(self, name, workflow):
-        green_name = f"{name}-green"
-        self.app.register(green_name, workflow.build())
-        print(f"Green deployed: {green_name}")
-        return green_name
+- Workflow not found -> ensure `.build()` is called
+- Auto-discovery blocks with DataFlow -> use `auto_discovery=False`
+- Parameters reversed -> name first, workflow second
 
-    def switch_traffic(self, name, target_environment):
-        """Switch traffic to blue or green"""
-        target_name = f"{name}-{target_environment}"
+**Best practices**:
 
-        if target_name in self.app.workflows:
-            target_workflow = self.app.workflows[target_name]
-            self.app.register(name, target_workflow.workflow)
-            print(f"Traffic switched to {target_environment}")
-            return True
-        return False
-
-# Usage
-bg = BlueGreenDeployment(app)
-
-# Deploy production to blue
-bg.deploy_blue("data-service", prod_workflow)
-bg.switch_traffic("data-service", "blue")
-
-# Deploy new version to green
-bg.deploy_green("data-service", new_workflow)
-
-# Test green, then switch
-bg.switch_traffic("data-service", "green")
-```
-
-## Lifecycle Management
-
-### Lifecycle Hooks
-
-```python
-class WorkflowLifecycleManager:
-    def __init__(self, nexus_app):
-        self.app = nexus_app
-        self.hooks = {
-            "pre_register": [],
-            "post_register": [],
-            "pre_execute": [],
-            "post_execute": []
-        }
-
-    def add_hook(self, event, hook_function):
-        self.hooks[event].append(hook_function)
-
-    def trigger_hooks(self, event, context):
-        for hook in self.hooks.get(event, []):
-            try:
-                hook(context)
-            except Exception as e:
-                print(f"Hook error: {e}")
-
-    def register_with_lifecycle(self, name, workflow):
-        context = {
-            "name": name,
-            "workflow": workflow,
-            "timestamp": time.time()
-        }
-
-        # Pre-registration hooks
-        self.trigger_hooks("pre_register", context)
-
-        # Register
-        self.app.register(name, workflow.build())
-
-        # Post-registration hooks
-        context["registered"] = True
-        self.trigger_hooks("post_register", context)
-
-# Define hooks
-def validate_workflow(context):
-    if not context['workflow'].nodes:
-        raise ValueError("Workflow has no nodes")
-    print(f"Validated: {context['name']}")
-
-def log_registration(context):
-    print(f"Logged: {context['name']} at {context['timestamp']}")
-
-# Use lifecycle management
-lifecycle = WorkflowLifecycleManager(app)
-lifecycle.add_hook("pre_register", validate_workflow)
-lifecycle.add_hook("pre_register", log_registration)
-lifecycle.register_with_lifecycle("my-workflow", workflow)
-```
-
-## Conditional Registration
-
-```python
-def conditional_register(app, name, workflow_factory, condition_func):
-    """Register only if condition is met"""
-    if condition_func():
-        workflow = workflow_factory()
-        app.register(name, workflow.build())
-        print(f"Registered: {name}")
-        return True
-    else:
-        print(f"Skipped: {name}")
-        return False
-
-# Condition functions
-def is_production():
-    return os.getenv("ENVIRONMENT") == "production"
-
-def has_database_access():
-    return check_database_connection()
-
-# Conditional registration
-conditional_register(
-    app,
-    "production-api",
-    create_production_workflow,
-    is_production,
-)
-```
-
-## Workflow Validation
-
-```python
-class WorkflowValidator:
-    @staticmethod
-    def validate_workflow(workflow, name):
-        errors = []
-        warnings = []
-
-        # Check structure
-        if not workflow.nodes:
-            errors.append("No nodes")
-
-        if len(workflow.nodes) == 1:
-            warnings.append("Only one node")
-
-        # Check connections
-        if len(workflow.nodes) > 1 and not workflow.connections:
-            warnings.append("No connections")
-
-        return {"errors": errors, "warnings": warnings}
-
-    @staticmethod
-    def safe_register(app, name, workflow, strict=False):
-        """Register with validation"""
-        result = WorkflowValidator.validate_workflow(workflow, name)
-
-        # Print warnings
-        for warning in result["warnings"]:
-            print(f"Warning: {warning}")
-
-        # Check errors
-        if result["errors"]:
-            for error in result["errors"]:
-                print(f"Error: {error}")
-
-            if strict:
-                raise ValueError(f"Validation failed: {name}")
-            return False
-
-        # Register if valid
-        app.register(name, workflow.build())
-        print(f"Validated and registered: {name}")
-        return True
-
-# Usage
-validator = WorkflowValidator()
-validator.safe_register(app, "my-workflow", workflow)
-```
-
-## Best Practices
-
-1. **Always call .build()** before registration
-2. **Use descriptive names** for workflows
-3. **Validate workflows** before registration
-4. **Use versioning** for production deployments
-5. **Implement lifecycle hooks** for monitoring
-6. **Test registration** in development environment
-
-## Common Issues
-
-### Workflow Not Found
-
-```python
-# Ensure .build() is called
-app.register("workflow", workflow.build())  # Correct
-```
-
-### Auto-Discovery Blocking
-
-```python
-# Disable when using DataFlow
-app = Nexus(auto_discovery=False)
-```
-
-### Registration Order
-
-```python
-# Name first, workflow second
-app.register(name, workflow.build())  # Correct
-```
-
-## Key Takeaways (v1.1.0)
-
-**Registration Flow:**
-
-- ✅ Single `app.register(name, workflow.build())` call
-- ✅ Automatically exposes on API, CLI, and MCP channels
-- ✅ No ChannelManager - Nexus handles everything directly
-- ✅ Enterprise gateway provides multi-channel support
-
-**Current Limitations:**
-
-- ❌ Auto-discovery can block with DataFlow (use `auto_discovery=False`)
-- ✅ Versioning and lifecycle management require custom implementation
-
-**Always Remember:**
-
-1. Call `.build()` before registration
-2. Use `auto_discovery=False` when integrating with DataFlow
-3. Single registration → multi-channel exposure
-4. No need to manage channels manually
+1. Prefer `@app.handler()` over WorkflowBuilder for most cases
+2. Always call `.build()` before registration
+3. Use `auto_discovery=False` when integrating with DataFlow
+4. Use versioned names (`name:v1.0.0`) for production deployments
 
 ## Related Skills
 
-- [nexus-quickstart](#) - Basic registration
-- [nexus-handler-support](#) - Handler registration (recommended)
+- [nexus-handler-support](#) - Complete handler documentation
 - [nexus-dataflow-integration](#) - DataFlow workflow registration
-- [nexus-production-deployment](#) - Production patterns
+- [nexus-production-deployment](#) - Production deployment patterns
 - [nexus-troubleshooting](#) - Fix registration issues

@@ -81,7 +81,6 @@ result = manager.execute(operation="execute_transaction")
 
 Use specialized subagents when:
 - **pattern-expert**: Complex patterns, multi-node workflows
-- **sdk-navigator**: Error resolution, parameter issues
 - **testing-specialist**: Comprehensive testing strategies
 
 ## Documentation References

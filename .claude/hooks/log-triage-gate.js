@@ -85,7 +85,7 @@ const EXCLUDED_DIRS = [
   ".coverage",
   ".git",
   ".claude", // hook logs, learning observations
-  "benchmarks", // perf measurement output
+  "benchmarks", // perf measurement output (FAIL means "missed perf target", not session-actionable)
 ];
 
 function triageLogs(cwd) {

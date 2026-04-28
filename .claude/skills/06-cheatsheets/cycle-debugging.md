@@ -302,7 +302,6 @@ converge_when("count >= 5")  # Numeric comparison
 
 Use specialized subagents when:
 - **pattern-expert**: Complex cycle patterns, multi-node debugging
-- **sdk-navigator**: Persistent errors, unclear error messages
 - **testing-specialist**: Comprehensive test strategies
 
 ## Documentation References

@@ -53,7 +53,7 @@ Understanding how Nexus works internally.
 
 **Components**:
 
-- **API Channel**: FastAPI-based REST server (via enterprise gateway)
+- **API Channel**: Async REST server (via enterprise gateway)
 - **CLI Channel**: Command-line interface (via enterprise gateway)
 - **MCP Channel**: Model Context Protocol server (separate initialization)
 
@@ -222,14 +222,13 @@ app.start()
 
 **Goal**: Start simple, add features as needed
 
-```python
+```
 # Start simple
 app = Nexus()
 
-# Add features progressively
-app.enable_auth = True
-app.enable_monitoring = True
-app.rate_limit = 1000
+# Add features progressively via configuration
+# Auth, monitoring, and rate limiting are configured per-language
+# See language-specific variant for configuration patterns
 ```
 
 **Implementation**:
@@ -278,7 +277,7 @@ app.register("test", workflow.build())
 ```
 1. Client sends HTTP POST to /workflows/name/execute
    ↓
-2. Enterprise Gateway receives request (FastAPI)
+2. Enterprise Gateway receives request (Nexus HTTP)
    ↓
 3. Gateway processes (built-in):
    - Authentication (if enabled)
@@ -438,7 +437,7 @@ cache.set(
 ### 3. Async Execution
 
 ```python
-# Use async runtime for Docker/FastAPI
+# Use async runtime for Docker/Nexus
 from kailash.runtime import AsyncLocalRuntime
 
 runtime = AsyncLocalRuntime()
@@ -451,7 +450,7 @@ result = await runtime.execute_workflow_async(workflow, inputs)
 - **Zero-configuration**: `Nexus()` with smart defaults
 - **Built on Kailash SDK**: Leverages proven workflow execution
 - **Single registration path**: `Nexus.register()` handles all channels
-- **Enterprise gateway integration**: FastAPI-based with multi-channel support
+- **Enterprise gateway integration**: Async HTTP with multi-channel support
 - **Parameter broadcasting**: Inputs broadcast to all nodes via runtime
 - **v1.0 vs v1.1 features**: Event logging (v1.0) vs real-time broadcasting (v1.1)
 

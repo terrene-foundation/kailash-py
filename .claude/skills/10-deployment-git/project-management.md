@@ -134,7 +134,7 @@ When GitHub and local todos diverge:
 
 ```bash
 # Step 1: Requirements analyst creates user stories
-> Use the requirements-analyst subagent to break down [feature] into user stories
+> Use the analyst subagent to break down [feature] into user stories
 
 # Step 2: Create GitHub issues
 > Use the gh-manager subagent to create GitHub issues from user stories and add to project
@@ -188,7 +188,7 @@ pytest tests/  # Ensure all tests pass
 > Use the todo-manager subagent to mark TODO-101 as completed
 
 # Step 4: Create PR
-> Use the git-release-specialist subagent to create PR for feature
+> Use the release-specialist subagent to create PR for feature
 
 # Step 5: Close GitHub issue
 > Use the gh-manager subagent to close #101 with PR reference
@@ -211,7 +211,7 @@ pytest tests/  # Ensure all tests pass
 # Output: Local todos created for all sprint issues
 
 # Step 3: Review task breakdown
-> Use the intermediate-reviewer subagent to validate todo completeness
+> Use the reviewer subagent to validate todo completeness
 
 # Step 4: Begin implementation
 # Developers work through todos with automatic sync to GitHub
@@ -386,13 +386,13 @@ pytest tests/  # Ensure all tests pass
 # Typical workflow coordination:
 
 # 1. Create project structure
-requirements-analyst → gh-manager → todo-manager
+analyst → gh-manager → todo-manager
 
 # 2. During implementation
-tdd-implementer → pattern-expert → todo-manager (sync) → intermediate-reviewer
+tdd-implementer → pattern-expert → todo-manager (sync) → reviewer
 
 # 3. On completion
-git-release-specialist → gh-manager (close issues) → todo-manager (archive)
+release-specialist → gh-manager (close issues) → todo-manager (archive)
 ```
 
 ## Verification Checklist

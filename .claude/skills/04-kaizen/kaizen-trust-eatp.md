@@ -458,7 +458,7 @@ service = A2AService(
 card_generator = AgentCardGenerator(trust_operations=trust_ops)
 card = await card_generator.generate("agent-001")
 
-# Create FastAPI app
+# Create app
 app = create_a2a_app(service)
 
 # Run server

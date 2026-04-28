@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "tests/**"
   - "**/*test*"
@@ -13,6 +15,8 @@ paths:
 # Testing Rules
 
 See `.claude/guides/rule-extracts/testing.md` for full evidence, the kailash-ml W33b post-mortem, the test-skip triage decision tree, the test-resource-cleanup post-mortems (PR #466 63-warning sweep, 11,917-test block, env-var race), and protocol blocks.
+
+<!-- slot:neutral-body -->
 
 ## Test-Once Protocol (Implementation Mode)
 
@@ -60,18 +64,18 @@ Numerical claims (test counts, file counts, coverage) in session notes MUST be p
 
 **Why:** "Claim a number, never verify" produces multi-test discrepancies; 2-second command converts memory bug into script.
 
-### MUST: `__all__` Symbol Counts Use AST Enumeration, Not Grep
+### MUST: `__all__` / Re-export Symbol Counts Use Structural Enumeration, Not Grep
 
-Counts of `__all__` entries (spec authority, docstrings, audit findings) MUST be produced by `ast.parse()` enumeration of the `ast.Assign` node — NOT `grep -c '"' __init__.py` or `wc -l`. See guide for the canonical AST snippet.
+Counts of `__all__` entries (Python) or re-exports (Rust `pub use ...`) used in spec authority, docstrings, audit findings, or CHANGELOG claims MUST be produced by structural enumeration of the language's parser AST — NOT `grep -c` / `wc -l`. See guide for canonical Python (`ast.parse()`) and Rust (`syn::parse_file` / `cargo doc --document-private-items`) snippets.
 
 ```python
-# DO — AST-derived count: walk ast.Assign for __all__, len(value.elts)
+# DO — Python: walk ast.Assign for __all__, len(value.elts)
 # DO NOT — grep '^\s*"' (counts comments + blank lines + line continuations as entries)
 ```
 
 **BLOCKED rationalizations:** "Grep is faster" / "I'll subtract the comment lines manually" / "The count is approximate anyway" / "AST is overkill for a docstring number".
 
-**Why:** Grep cannot distinguish `# Group N — comment` from `"Group_N",` when both contain quotes; it cannot follow line continuations. AST is canonical because it parses Python, not text. See guide for Wave 6 evidence (three incompatible counts: docstring 41, grep 48, AST 49).
+**Why:** Grep cannot distinguish `# Group N — comment` from `"Group_N",` when both contain quotes; it cannot follow line continuations across an `__all__ = [...]` block. Structural parsing is canonical because it parses the language, not text. See guide for Wave 6 evidence (three incompatible counts: docstring 41, grep 48, AST 49).
 
 ## Test Resource Cleanup
 
@@ -132,9 +136,7 @@ Any two tests mutating SAME env var MUST serialize through a module-scope `threa
 - **Tier 2 (Integration)**: Real infrastructure. NO mocking (`@patch`, `MagicMock`, `unittest.mock` — BLOCKED)
 - **Tier 3 (E2E)**: Real everything; every write verified with read-back
 
-**Why:** Mocks in Tier 2/3 hide real failures (connection handling, schema mismatches, transactions) that only surface against real infra.
-
-**Exception — Protocol-Satisfying Deterministic Adapters:** A class satisfying a `typing.Protocol` at runtime with deterministic output is NOT a mock. See guide § "Protocol Adapters" for full example.
+**Why:** Mocks in Tier 2/3 hide real failures (connection handling, schema mismatches, transactions) that only surface against real infra. Exception — Protocol-Satisfying Deterministic Adapters: a class satisfying a `typing.Protocol` at runtime with deterministic output is NOT a mock. See guide § "Protocol Adapters" for full example.
 
 ## Coverage Requirements
 
@@ -148,12 +150,10 @@ Any two tests mutating SAME env var MUST serialize through a module-scope `threa
 Every canonical pipeline the docs teach (README Quick Start, tutorial, 3-line example) MUST have a Tier-2+ regression test executing DOCS-EXACT code against real infra, asserting the final user-visible outcome. Lives in `tests/regression/` with `@pytest.mark.regression`; name includes "quickstart"/"readme"/tutorial-name (grep-able). See guide for full example.
 
 ```python
-# DO — DOCS-EXACT chain, asserts handoff field survives
 @pytest.mark.regression
 async def test_readme_quickstart_executes_end_to_end():
     result = await km.train(df, target="churned")
     assert result.trainable is not None  # handoff field MUST survive
-# DO NOT — only test primitives in isolation; the A→B handoff is invisible to unit tests
 ```
 
 **BLOCKED rationalizations:** "primitives have unit+integration, pipeline is composition" / "README is illustrative" / "Tier 2 per primitive proves interfaces" / "user will file issue" / "E2E is slow and flaky" / "pipeline is demo's concern, not SDK".
@@ -184,7 +184,7 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 
 **BLOCKED rationalizations:** "typed calls raw internally, one test covers both" / "shared core" / "integration catches this" / "raw is just less-useful typed".
 
-**Why:** Convergent delegation paths look like one path until they diverge under refactor pressure — the divergent moment is when the test you didn't write would have failed. `/redteam` MUST mechanically grep each variant pair; any pair with zero direct call site is a finding.
+**Why:** Convergent delegation paths look like one path until they diverge under refactor pressure. `/redteam` MUST mechanically grep each variant pair; any pair with zero direct call site is a finding.
 
 ## Rules
 
@@ -193,7 +193,8 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 - Isolated: clean setup/teardown, isolated DBs, tests MUST NOT affect each other
 - Naming: `test_[feature]_[scenario]_[expected_result].py`
 
-**Why (deterministic):** Intermittent failures erode trust; developers start ignoring real failures.
-**Why (isolated):** Shared state → order-dependent results; passes individually, fails in CI where order differs.
+**Why:** Intermittent failures erode trust; shared state → order-dependent results that pass individually but fail in CI where order differs.
 
-Origin: PR #466 (warnings sweep), #518 (test-skip triage), BP-046 (paired-variant coverage), kailash-rs #435 (env-var race), kailash-ml W33b (E2E regression). See guide for full session evidence.
+Origin: PR #466 (warnings sweep), #518 (test-skip triage), BP-046 (paired-variant coverage), kailash-rs #435 (env-var race), kailash-ml W33b (E2E regression), 2026-04-27 W6 (AST counts). See guide for full session evidence.
+
+<!-- /slot:neutral-body -->

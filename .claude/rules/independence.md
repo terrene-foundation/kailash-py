@@ -1,4 +1,12 @@
+---
+priority: 0
+scope: baseline
+---
+
 # Foundation Independence Rules
+
+
+<!-- slot:neutral-body -->
 
 Kailash Python SDK is owned by the Terrene Foundation (Singapore CLG). It is an independent open-source product with NO structural relationship to any commercial entity.
 
@@ -42,3 +50,5 @@ All decisions driven by: what SDK users need, what Python developers expect, wha
 **Why:** Designing for a specific commercial consumer rather than SDK users at large biases the API surface, making it awkward for the broader community while optimizing for one party.
 
 Third parties may build commercial products on Kailash. The SDK has zero knowledge of, zero dependency on, and zero design consideration for any such product.
+
+<!-- /slot:neutral-body -->
