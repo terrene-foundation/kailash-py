@@ -15,7 +15,10 @@ class ResponseFormatter:
 
     def format(self, data: Any, **kwargs) -> str:
         """Format data into string representation."""
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"{type(self).__name__} must override format() — "
+            f"ResponseFormatter is an abstract base"
+        )
 
 
 class JSONFormatter(ResponseFormatter):
