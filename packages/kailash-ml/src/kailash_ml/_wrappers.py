@@ -466,6 +466,22 @@ def diagnose(
     The default tracker is resolved from the ambient ``km.track()`` run
     via :func:`kailash_ml.tracking.get_current_run` (§3.3 step 4) when
     ``tracker is None``.
+
+    Per-``kind`` ``data`` semantics:
+
+      * ``kind="dl"`` — ``data`` MAY be a ``torch.utils.data.DataLoader``;
+        forwarded to :class:`DLDiagnostics` and consumed inside
+        ``report()`` when invoked. Closes GH issue #701 (silent drop).
+      * ``kind="classical_classifier"`` / ``kind="classical_regressor"``
+        — ``data`` MUST be a ``(X, y)`` tuple.
+      * Other kinds — ``data`` is currently inert per spec §3.2.
+
+    The signature is fixed-arity (no ``**kwargs``); unsupported kwargs
+    raise ``TypeError`` directly from Python's binding mechanism. The
+    1.1.x kwargs (``title``, ``n_batches``, ``train_losses``,
+    ``val_losses``, ``forward_returns_tuple``) were removed in 1.5.0
+    and now surface as a Python-level ``TypeError`` naming the unknown
+    keyword — see CHANGELOG migration section.
     """
     # Resolve ambient tracker only when the caller did not supply one.
     if tracker is None:
@@ -491,7 +507,11 @@ def diagnose(
 
     # Explicit-kind dispatch first — the §3.2 table.
     if kind == "dl":
-        return DLDiagnostics(subject, tracker=tracker)
+        # Per GH issue #701: data= MUST be forwarded into DLDiagnostics
+        # so report() can iterate the loader. Pre-fix, data was silently
+        # dropped at this dispatch site (zero-tolerance.md Rule 3 — fake
+        # integration via missing handoff field).
+        return DLDiagnostics(subject, tracker=tracker, data=data)
     if kind == "rl":
         return RLDiagnostics(
             algo=subject if isinstance(subject, str) else "ppo", tracker=tracker
@@ -562,8 +582,9 @@ def diagnose(
         X, y = data
         return diagnose_regressor(subject, X, y, tracker=tracker)
 
-    # Fallback — treat as a DL / Lightning module.
-    return DLDiagnostics(subject, tracker=tracker)
+    # Fallback — treat as a DL / Lightning module. Forward data= so the
+    # auto-dispatched DL path honours #701 the same as kind="dl".
+    return DLDiagnostics(subject, tracker=tracker, data=data)
 
 
 # ---------------------------------------------------------------------------
