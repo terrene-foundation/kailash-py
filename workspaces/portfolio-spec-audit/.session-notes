@@ -1,30 +1,66 @@
-# Session Notes — 2026-04-27
+# Session Notes — 2026-04-28 (W6+W7 follow-up complete)
 
 ## Where we are
 
-W6 + W7 portfolio remediation **converged and shipped**. Both W7 PRs admin-merged, both packages published to PyPI and clean-venv-verified. Milestone tracker flipped to `w6_w7_converged_shipped`. Active todos directory holds only `W6-000-milestone-tracker.md`. The portfolio-spec-audit workspace has no further open W-series work.
+W6 + W7 portfolio remediation **fully closed**. Two follow-up bugs from the prior session's `.session-notes` "in-flight state" resolved + released as kailash-ml 1.5.1 via PR #679. The portfolio-spec-audit workspace has no further open work.
+
+**Releases shipped this session:**
+- kailash-ml 1.5.1 (PR #679, tag `ml-v1.5.1`, commit `9edc2432`) — canonical `ModelNotFoundError` class identity + worktree-safe pre-commit wrapper
+- Clean-venv install verified live: `kailash-ml==1.5.1` imports, `ModelNotFoundError canonical identity: OK`, `__all__ count: 50 (AST-derived)`
+- `deploy/deployment-config.md` refreshed (commit `2825a335`)
+
+**Codify outputs (PR #679):**
+- `rules/agents.md` — new MUST sub-clause "Audit/Closure-Parity Verification Specialist Has Bash + Read"
+- `rules/testing.md` — new MUST sub-clause "`__all__` Symbol Counts Use AST Enumeration, Not Grep"
+- 5 journal entries (3 promoted from `.pending` + 2 new)
+- Fresh proposal at `.claude/.proposals/latest.yaml` with 2 entries (status=`pending_review`)
 
 ## Read first
 
-1. `workspaces/portfolio-spec-audit/todos/active/W6-000-milestone-tracker.md` — Wave 7 acceptance section is fully checked; status field is the canonical state-of-portfolio
-2. `deploy/deployment-config.md` — current-versions table just refreshed (commit `82a49305`); use this to enumerate release scope at next session start
-3. `.claude/rules/build-repo-release-discipline.md` — Rules 1-4 on session-level release-scope enumeration + clean-venv install verification (informed this session's release loop)
-4. `CLAUDE.md` — entry point if next session is a fresh topic, not a portfolio-spec-audit continuation
+1. `workspaces/portfolio-spec-audit/todos/active/W6-000-milestone-tracker.md` — status field is `w6_w7_converged_shipped`
+2. `deploy/deployment-config.md` — current-versions reflects ALL packages at PyPI parity (kailash-ml at 1.5.1)
+3. `workspaces/portfolio-spec-audit/journal/0001-RISK..0005-DISCOVERY.md` — full institutional knowledge captured
+4. `.claude/.proposals/latest.yaml` — 2 GLOBAL rule additions awaiting loom Gate 1 classification
+5. `CLAUDE.md` — entry point if next session is a fresh topic
 
 ## In-flight state
 
-- Pre-commit hook can't resolve `.venv/bin/python` from inside `.claude/worktrees/<X>/` — both W7 worktrees committed via `git -c core.hooksPath=/dev/null` with the bypass documented in commit bodies. Follow-up todo (pre-commit upward-`.venv`-resolution OR conditional skip when not at project root) was mentioned inline in those bodies but not filed as a workspace todo.
-- `packages/kailash-ml/src/kailash_ml/engines/model_registry.py` declares its own local `class ModelNotFoundError(Exception)` at line ~56 distinct from the canonical `kailash.ml.errors.ModelNotFoundError`. New `build_lineage_graph` walker raises canonical; existing `get_model` paths still raise local. Both reachable depending on import path. Surfaced by W7-001 agent — not addressed.
+**None for kailash-py source code.** All deferred items from prior `.session-notes` resolved:
+- ✅ Pre-commit `.venv` worktree resolution → fixed via `scripts/development/find-venv-python.sh` (PR #679)
+- ✅ Duplicate `ModelNotFoundError` class → routed through canonical `kailash.ml.errors.ModelNotFoundError` (PR #679)
+- ✅ HIGH-1 register shadowing + MED-1 `__version__` not in `__all__` → both already fixed via earlier PR #674
 
-## Traps
+**Cross-repo lifecycle (not actionable here):**
+- The 2 new MUST sub-clauses sit at `.claude/.proposals/latest.yaml` status=`pending_review`. Loom-side `/sync` Gate 1 (classify) → Gate 2 (distribute) still needed to push them to USE templates and back into kailash-py + kailash-rs locals.
+- kailash-py local `.claude/rules/agents.md` is at 232 lines; loom version is 273 lines. The parent rule "Verify Specialist Tool Inventory Before Implementation Delegation" exists at loom but hasn't been distributed to kailash-py yet. Resolves on next loom→kailash-py /sync.
 
-- **Pyright IDE diagnostics will re-fire on session start** — `kailash_ml.engines.lineage` import "unresolved" + `ModelRegistry.build_lineage_graph` "unknown attribute" warnings against stale cache. Both resolve once IDE pyright server reloads main (now at `82a49305`). Not real.
-- **Defensive `isinstance(metric_name, str)` at `kailash_ml/__init__.py` ~line 440** is pinned with `pyright: ignore[reportUnnecessaryIsInstance]`; pyright still flags inner block as unreachable due to flow narrowing. False positive — runtime guard is correct and intentional.
-- **Pytest fixture parameters** (`policy_with_classified_field` at `test_emit_train_end_redaction.py` lines 112/174/221) flagged as "not accessed" — pyright doesn't model pytest auto-injection.
-- **Multi-tag release rule**: tags MUST be pushed individually with `sleep ≥1s` between pushes — batch pushes of 3+ tags silently skip workflow triggers per `rules/git.md` § Release-Prep PRs / `rules/deployment.md`. Tag conventions: `ml-v*` (NOT `kailash-ml-v*`), `dataflow-v*` (NOT `kailash-dataflow-v*`).
-- **PyPI cache lag** on fresh release — 30-90s for `info.version` JSON, longer for simple-index `pip install`. Retry up to 3× with 60s pause; the harness blocks `sleep 60` followed by other commands so use `until <check>; do sleep 10; done` patterns.
-- **Worktrees auto-clean if branch has zero commits** — both W7 worktrees were removed via `git worktree remove --force` after merge; recovery protocol per `rules/agents.md` § "Recover Orphan Writes" is no longer applicable to this session.
+## Cross-SDK inspection (kailash-rs)
+
+Per `rules/cross-sdk-inspection.md` MUST Rule 1, both fixes inspected at kailash-rs:
+
+- **ModelNotFoundError canonical identity**: NOT APPLICABLE. kailash-rs uses single `MlError` enum at `crates/kailash-ml-core/src/error.rs` (variant-based), not class hierarchy — divergent-class pattern cannot manifest by design.
+- **Pre-commit worktree wrapper**: NOT APPLICABLE. kailash-rs has no `.pre-commit-config.yaml`; the `.venv` resolution issue is Python-specific.
+
+No kailash-rs issues filed.
+
+## Traps (next session inheritance)
+
+- **Pyright IDE diagnostics will re-fire on session start** — `kailash_ml.engines.lineage` "unresolved" warnings against stale cache. Resolve once IDE pyright server reloads main (now at `2825a335`). Not real.
+- **Defensive `isinstance(metric_name, str)` at `kailash_ml/__init__.py` ~line 440** is pinned with `pyright: ignore[reportUnnecessaryIsInstance]`; pyright still flags inner block unreachable. False positive.
+- **`AA` conflict marker on stash pop after committing** — when stash holds files that were also committed to the parent branch, `git stash pop` flags `both-added`. Resolve via `git checkout HEAD -- <path>` then `git stash drop`.
+- **Multi-tag release rule still applies** — `ml-v*` (NOT `kailash-ml-v*`); push individually with sleep ≥1s.
+- **PyPI cache lag** persists — 30-90s for `info.version` JSON, longer for simple-index. Use `until` poll loops, not chained `sleep` commands (harness blocks).
+- **uv install cache** can mask new releases briefly — `uv pip install --refresh` or `uv cache clean <pkg>` forces re-resolution.
+
+## Deferred to next codify cycle (per `learning-codified.json`)
+
+- **Pattern 3 from journal/0005**: "sub-wave bundling vs new-wave-milestone heuristic" — needs 2nd occurrence to codify.
+- **Rule file size hygiene** — `rules/agents.md` 232 lines, `rules/testing.md` 284 lines, both exceed 200-line guidance. Future cycle MUST extract older reference material to guides per `rules/rule-authoring.md` MUST NOT.
+- **Cross-SDK port to kailash-rs** — both new rule additions (Bash-equipped audit specialist + AST `__all__` count) classified GLOBAL; awaiting loom Gate 1 classification + sync to kailash-rs.
 
 ## Open questions for the human
 
-- Next workspace topic? Portfolio-spec-audit has no further W-series work. Candidates: re-derivation of `/sync` to push any new rule learnings to coc-claude-py template, or open a fresh workspace.
+- Next workspace topic? Portfolio-spec-audit fully closed. Candidates:
+  - Switch to loom/ to run `/sync` and process the 2 GLOBAL rule additions (Gate 1 classify → Gate 2 distribute to coc-py + coc-rs templates)
+  - Open a fresh workspace for a new initiative
+  - Kailash-rs cross-SDK work (separate session at `~/repos/loom/kailash-rs`)
