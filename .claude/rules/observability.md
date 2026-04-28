@@ -10,7 +10,7 @@ paths:
 
 # Observability Rules
 
-See `.claude/guides/rule-extracts/observability.md` for extended examples, post-mortems, and full triage protocol blocks.
+See `.claude/guides/rule-extracts/observability.md` for extended examples, post-mortems, the full endpoint-log fleshed-out version, and the Rule 5/7/8 origin evidence.
 
 If a code path is not logged, it does not exist. Post-deployment integration failures are almost always failures to observe what was already broken in dev. Logs are the contract that lets the next session know what happened.
 
@@ -20,7 +20,7 @@ Every code change MUST emit a structured log line at each juncture. No exception
 
 ### 1. Endpoints (HTTP, RPC, MCP, CLI)
 
-Entry, exit, and error each log. Entry captures intent; exit captures outcome + latency; error captures stack + trace ID.
+Entry, exit, and error each log. Entry captures intent; exit captures outcome + latency; error captures stack + trace ID. See guide for the full fleshed-out version.
 
 ```python
 # DO
@@ -29,12 +29,11 @@ try:
     user = await db.express.create("User", req.fields())
     logger.info("create_user.ok", user_id=user["id"], latency_ms=...)
 except Exception as e:
-    logger.exception("create_user.error", error=str(e))
-    raise
+    logger.exception("create_user.error", error=str(e)); raise
 # DO NOT — bare handler with zero observability
 ```
 
-**Why:** Without entry+exit+error, every production failure becomes a guess about which step failed. First 30 minutes of any incident spent recreating what logs should have captured.
+**Why:** Without entry+exit+error, every production failure becomes a guess. First 30 minutes of any incident spent recreating what logs should have captured.
 
 ### 2. Integration Points (outbound HTTP, DB, queue, file IO, third-party SDK)
 
@@ -106,58 +105,26 @@ See `rules/security.md` § "No secrets in logs". Same rule applies to structured
 
 ### 5. Log Triage Gate — Read Before Reporting Done
 
-Before any of `/implement`, `/redteam`, `/deploy`, `/wrapup` reports complete, MUST scan for WARN+ entries and acknowledge each.
+Before any of `/implement`, `/redteam`, `/deploy`, `/wrapup` reports complete, MUST scan recent test/build output (`pytest`, `npm`, `cargo`, `pip check`, recent `*.log`) for WARN+ entries and acknowledge each. See guide for full scan command set.
 
-Scan commands (run all that apply):
+Disposition per unique entry (group identical WARN+ as one): **Fixed** (+ commit SHA) / **Deferred** (+ reason + todo + human ack) / **Upstream** (+ issue link or pin reason) / **False positive** (+ explanation). Unacknowledged WARN+ BLOCK the gate. Exception: hooks/cleanup where failure is expected — pre-acknowledge via comment marker.
 
-```bash
-pytest --tb=short 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
-find . -name "*.log" -mmin -120 -exec grep -HnE 'WARN|ERROR|FAIL' {} +
-npm run build 2>&1 | grep -iE 'warn|error' | sort -u
-cargo build 2>&1 | grep -iE 'warning|error'
-pip check 2>&1
-```
-
-Disposition per unique entry (not per occurrence):
-
-1. Group identical WARN+ (same file + same pattern = one entry); state disposition once.
-2. For each: **Fixed** (+ commit SHA) / **Deferred** (+ reason + todo + human ack) / **Upstream** (+ issue link or pin reason) / **False positive** (+ explanation).
-3. Unacknowledged WARN+ BLOCK the gate.
-
-**Exception:** Hooks/cleanup where failure is expected — pre-acknowledge via comment marker (same as `zero-tolerance.md` Rule 3).
-
-**Why:** Logs nobody reads are worse than no logs — illusion of observability while the underlying problem festers. Dedup turns 200-warning run from 200 lines into 5-10 tractable entries.
+**Why:** Logs nobody reads are worse than no logs — illusion of observability while the underlying problem festers. Dedup turns 200-warning run from 200 lines into 5-10 tractable entries. See guide for full origin.
 
 ### 6. Mask Helper Output Forms
 
-#### 6.1 Mask Failure Sentinels Distinct From Masked Output
-
-Masking helpers MUST return a sentinel distinguishable from successful-mask output on parse failure. Returning the masked-success template on failure is BLOCKED.
+**6.1 Failure sentinels:** Masking helpers MUST return a sentinel distinguishable from successful-mask output on parse failure (e.g. `"<unparseable redis url>"`). Returning the masked-success template on failure is BLOCKED. **6.2 Uniform mask form:** All URL-masking helpers MUST emit canonical `scheme://***@host[:port]/path` — stripping userinfo or partial-masking is BLOCKED.
 
 ```python
-# DO
-def mask_url(url: str) -> str:
-    try: parsed = urlparse(url)
-    except Exception: return "<unparseable redis url>"  # grep-able
-    if not parsed.scheme or not parsed.hostname: return "<unparseable redis url>"
-    return f"{parsed.scheme}://***@{parsed.hostname}:{parsed.port or ''}{parsed.path}"
+# DO — distinct sentinel + canonical form (grep-able via `***@`)
+return "<unparseable redis url>"  if parse fails
+return f"{scheme}://***@{host}:{port}{path}"  if parse succeeds
 
-# DO NOT — "redis://***" looks masked; actually "helper bailed"
+# DO NOT — return "redis://***" on parse failure (looks masked, actually bailed)
+# DO NOT — strip userinfo (audit grep `***@` misses it) / partial mask (leaks username)
 ```
 
-**Why:** Success-shape on failure makes triage believe the credential was masked when the helper bailed and the credential may have been written to a sibling log line.
-
-#### 6.2 Mask Form Uniform Across Helpers
-
-All URL-masking helpers MUST emit canonical `scheme://***@host[:port]/path`. Stripping userinfo or partial-masking is BLOCKED.
-
-```python
-# DO — grep-able via `***@`
-return f"redis://***@cache:6379/0"
-# DO NOT — strip userinfo (audit cannot find it) / partial mask (leaks username)
-```
-
-**Why:** Grep audit for credential leakage searches `***@`. Helpers that strip userinfo silently bypass that audit.
+**Why:** Success-shape on failure makes triage believe the credential was masked when the helper bailed and the credential may have been written to a sibling log line. Grep audit for credential leakage searches `***@`; helpers that strip userinfo silently bypass that audit.
 
 ### 7. Bulk Operations MUST Log Partial Failures At WARN
 
@@ -169,13 +136,12 @@ if failed_count > 0:
     logger.warning("bulk_create.partial_failure",
         attempted=total, failed=failed_count,
         first_error=str(errors[0]) if errors else "unknown")
-# DO NOT — silent swallow
-except Exception: continue
+# DO NOT — silent swallow: except Exception: continue
 ```
 
 **BLOCKED responses:** "caller sees the return value" / "we return a failure list" / "we log at DEBUG".
 
-**Why:** A bulk op returning `failed: 10663` with no WARN line is invisible to alerting pipelines.
+**Why:** A bulk op returning `failed: 10663` with no WARN line is invisible to alerting pipelines. See guide for kailash-py BulkCreate evidence.
 
 ### 8. Schema-Revealing Field Names MUST Be DEBUG Or Hashed
 
@@ -196,26 +162,26 @@ logger.warning("classification.default_applied", extra={"model": "users", "field
 
 **BLOCKED responses:** "field name isn't the value, just schema" / "operators need to see unclassified fields" / "log aggregator access = database access" / "DEBUG is off in prod, nobody sees it".
 
-**Why:** Log aggregators (Datadog, Splunk, CloudWatch) typically have broader access than the production database — SREs, support, third-party vendors. WARN `field=ssn` reveals `users.ssn` schema to everyone with log read, even if VALUES never leak. Classification metadata is schema-level PII-adjacency.
+**Why:** Log aggregators (Datadog, Splunk, CloudWatch) typically have broader access than the production database. WARN `field=ssn` reveals `users.ssn` schema to everyone with log read, even if VALUES never leak. See guide for PR #430 evidence.
 
 ## MUST NOT
 
-- **Log-and-continue without action.** Catch → log → retry/fallback/re-raise. `logger.error(...); pass` is BLOCKED (same class as `except: pass` in `zero-tolerance.md` Rule 3). Exception: hooks/cleanup.
+- **Log-and-continue without action.** Catch → log → retry/fallback/re-raise. `logger.error(...); pass` is BLOCKED. Exception: hooks/cleanup.
 
-**Why:** Paper trail of failures that nothing acts on — worst of both worlds, noisy logs + broken behavior.
+**Why:** Paper trail of failures that nothing acts on — worst of both worlds.
 
 - **Log-spam in hot loops.** Per-iteration INFO floods aggregators. Use sample-rate or aggregate to one summary line per N items.
 
 **Why:** 1M-row loop × 1 INFO/row = 1M log lines/run — costs money AND crowds out real signal.
 
-- **Unstructured `f"..."` messages.** Pass fields as kwargs to the structured logger, never f-string-interpolate.
+- **Unstructured `f"..."` messages.** Pass fields as kwargs to the structured logger.
 
 ```python
-# DO   logger.info("user.created", user_id=uid, plan=plan)
+# DO    logger.info("user.created", user_id=uid, plan=plan)
 # DO NOT logger.info(f"User created: {uid} on {plan}")
 ```
 
-**Why:** F-string-interpolated messages cannot be queried by field — defeats structured logging; operators must regex-match strings instead of filtering on `user_id`.
+**Why:** F-string-interpolated messages cannot be queried by field — defeats structured logging.
 
 - **Silent log-level downgrades.** MUST NOT change WARN/ERROR to INFO to "clean up" CI output. Fix root cause or document suppression in the rule itself.
 
