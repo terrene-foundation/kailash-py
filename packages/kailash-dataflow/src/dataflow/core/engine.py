@@ -29,6 +29,21 @@ from typing import (
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
 
+# NamedTuple for failed-DDL state (issue #696). Module-level so it is
+# importable for tests / introspection without going through DataFlow.
+from collections import namedtuple as _namedtuple
+
+FailedDDLRecord = _namedtuple(
+    "FailedDDLRecord",
+    ["timestamp", "error_message", "statement_preview"],
+)
+
+# Sentinel module-name for the auto_migrate "warn" mode. Spelled
+# explicitly so a typo at the call site (`auto_migrate="WARN"`,
+# `auto_migrate="warning"`) raises DataFlowConfigurationError at
+# __init__ rather than silently degrading to fail-fast.
+_AUTO_MIGRATE_WARN = "warn"
+
 from kailash.db.dialect import _validate_identifier
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
@@ -127,7 +142,12 @@ class DataFlow(DataFlowEventMixin):
         slow_query_threshold: float = 1.0,
         debug: bool = False,
         migration_enabled: bool = True,
-        auto_migrate: bool = True,  # NEW: Control auto-migration behavior
+        # auto_migrate accepts True (fail-fast on DDL failure, default since
+        # issue #696), False (no auto-migration; manual migrations only), or
+        # the literal string "warn" (legacy log-and-continue behavior — opt-in
+        # only, preserves the pre-#696 retry-on-access semantics for callers
+        # that explicitly relied on it).
+        auto_migrate: Union[bool, str] = True,
         existing_schema_mode: bool = False,  # NEW: Safe mode for existing DBs
         enable_model_persistence: bool = True,  # NEW: Enable persistent model registry
         tdd_mode: bool = False,  # NEW: Enable TDD mode for testing
@@ -177,7 +197,23 @@ class DataFlow(DataFlowEventMixin):
             cache_ttl: Cache time-to-live
             monitoring: Enable performance monitoring
             migration_enabled: Enable automatic database migrations (default True)
-            auto_migrate: Automatically run migrations on model registration (default True)
+            auto_migrate: Auto-migration mode (default ``True``). Accepts:
+
+                * ``True``  — fail-fast on DDL failure (issue #696). On the
+                  first failed CREATE TABLE / ALTER TABLE, the failure is
+                  recorded on ``_failed_table_creations`` and a single
+                  ERROR log + metric is emitted. Every subsequent access
+                  to that model raises :class:`DDLFailedError` WITHOUT
+                  re-firing the DDL. This is the canonical default per
+                  the issue #696 production-incident response.
+                * ``"warn"``— legacy log-and-continue mode. Preserves the
+                  pre-#696 retry-on-access semantics: failed DDL emits an
+                  ERROR log and the caller's operation proceeds (which
+                  typically re-fires the DDL on the next access). Provided
+                  as an opt-in escape hatch for callers that depended on
+                  the prior behavior.
+                * ``False`` — auto-migration disabled; the application
+                  manages schema via explicit migrations.
             existing_schema_mode: Safe mode for existing databases - validates compatibility (default False)
             tdd_mode: Enable TDD mode for testing (default False)
             test_context: TDD test context (default None)
@@ -425,7 +461,29 @@ class DataFlow(DataFlowEventMixin):
         self._async_sql_node_cache = {}  # Keyed by database_type
 
         # Store migration control parameters
-        self._auto_migrate = auto_migrate
+        # auto_migrate enum (issue #696):
+        #   True  → fail-fast on DDL failure (record + raise DDLFailedError on next access)
+        #   "warn"→ legacy log-and-continue (pre-#696 behavior; opt-in escape hatch)
+        #   False → no auto-migration; caller manages schema explicitly
+        if isinstance(auto_migrate, str):
+            if auto_migrate != _AUTO_MIGRATE_WARN:
+                from dataflow.exceptions import DataFlowConfigurationError
+
+                raise DataFlowConfigurationError(
+                    f"auto_migrate string value must be {_AUTO_MIGRATE_WARN!r} "
+                    f"(legacy log-and-continue mode); got {auto_migrate!r}. "
+                    f"Use True (fail-fast, default) or False (manual migrations) "
+                    f"for boolean modes."
+                )
+            # "warn" mode: behaves as auto_migrate=True for migration triggering
+            # but disables fail-fast on DDL failure. We keep the boolean semantics
+            # for every existing call site (they only care about truthiness) and
+            # carry the warn-mode flag separately.
+            self._auto_migrate: bool = True
+            self._auto_migrate_warn: bool = True
+        else:
+            self._auto_migrate = bool(auto_migrate)
+            self._auto_migrate_warn = False
         self._migration_enabled = migration_enabled
         self._existing_schema_mode = existing_schema_mode
         self._migration_lock_timeout = max(
@@ -704,6 +762,19 @@ class DataFlow(DataFlowEventMixin):
 
         # Track models that need table creation (deferred until _ensure_connected)
         self._pending_table_creations: list = []
+
+        # Issue #696: failed-DDL circuit breaker state. Maps model_name →
+        # FailedDDLRecord. Once a model's CREATE TABLE / ALTER TABLE fails
+        # under auto_migrate=True (fail-fast mode), the failure is recorded
+        # here and every subsequent access to that model raises
+        # DDLFailedError without re-firing the DDL. Cleared on successful
+        # DDL retry — allowing operators who fix the root cause to retry
+        # without restarting the application (though restart is the
+        # canonical recovery path documented on DDLFailedError).
+        from .exceptions import DDLFailedError as _DDLFailedError
+
+        self._DDLFailedError = _DDLFailedError  # cached symbol for hot path
+        self._failed_table_creations: Dict[str, FailedDDLRecord] = {}
 
     # ------------------------------------------------------------------
     # TSG-105: Read-replica connection routing
@@ -7507,6 +7578,94 @@ class DataFlow(DataFlowEventMixin):
                     )
                     # Continue with other statements even if one fails
                     continue
+
+    # ------------------------------------------------------------------
+    # Issue #696 — auto_migrate fail-fast circuit breaker
+    # ------------------------------------------------------------------
+    def _record_failed_ddl(
+        self,
+        model_name: str,
+        error: BaseException,
+        statement: str = "",
+    ) -> FailedDDLRecord:
+        """Record a failed DDL execution for *model_name*.
+
+        Single-point recording for both sync (`_create_table_sync`,
+        `_create_tables_batch`) and async (`_execute_ddl`, `_execute_ddl_async`)
+        DDL paths. Idempotent on the model_name key — only the FIRST failure
+        per model emits the ERROR log + metric so the retry storm cannot
+        manifest as log spam either.
+
+        Returns the recorded :class:`FailedDDLRecord` (new or existing).
+
+        See Also:
+            ``rules/observability.md`` Rule 1 (structured state-transition
+            logging), ``rules/zero-tolerance.md`` Rule 3 (no silent fallbacks).
+        """
+        existing = self._failed_table_creations.get(model_name)
+        if existing is not None:
+            # Already recorded — every subsequent failure is the retry-storm
+            # we are preventing. Caller WILL be raised at the next access via
+            # _check_failed_ddl. Do not re-log; the storm itself would flood
+            # aggregators.
+            return existing
+
+        record = FailedDDLRecord(
+            timestamp=time.time(),
+            error_message=f"{type(error).__name__}: {error}",
+            statement_preview=(statement or "")[:200],
+        )
+        self._failed_table_creations[model_name] = record
+
+        # ERROR-level structured log (rules/observability.md Rule 1).
+        # Does NOT include credentials (statement is DDL only; no values).
+        # Includes the auto_migrate mode so operators can see at a glance
+        # whether this run is fail-fast or warn-legacy.
+        logger.error(
+            "engine.ddl_failed_recorded",
+            extra={
+                "model_name": model_name,
+                "error_type": type(error).__name__,
+                "error_message": str(error)[:500],
+                "statement_preview": record.statement_preview,
+                "auto_migrate_mode": (
+                    "warn" if self._auto_migrate_warn else "fail-fast"
+                ),
+                "fail_fast": not self._auto_migrate_warn,
+            },
+        )
+        return record
+
+    def _check_failed_ddl(self, model_name: str) -> None:
+        """Raise :class:`DDLFailedError` if *model_name* has a recorded
+        DDL failure AND fail-fast mode is active.
+
+        Called at the head of every model-access hot path (`ensure_table_exists`)
+        BEFORE the cache check. This is the circuit breaker: a failed model
+        never re-enters the DDL path; it short-circuits to a typed error.
+
+        In ``auto_migrate="warn"`` mode the recorded failure is preserved
+        (so operators can introspect `_failed_table_creations`) but no
+        exception is raised — the legacy log-and-continue path resumes.
+        """
+        if self._auto_migrate_warn:
+            return  # legacy escape hatch: log-and-continue
+        record = self._failed_table_creations.get(model_name)
+        if record is None:
+            return
+        raise self._DDLFailedError(
+            model_name=model_name,
+            original_error=RuntimeError(record.error_message),
+            statement_preview=record.statement_preview,
+        )
+
+    def _clear_failed_ddl(self, model_name: str) -> None:
+        """Clear a recorded DDL failure for *model_name*.
+
+        Called after a successful DDL retry (operator fixed the root cause
+        without restarting). The next access proceeds normally. Idempotent.
+        """
+        self._failed_table_creations.pop(model_name, None)
 
     def _create_table_sync(self, model_name: str) -> bool:
         """Create a table for a single model using synchronous DDL execution.
