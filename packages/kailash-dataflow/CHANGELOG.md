@@ -1,5 +1,24 @@
 # DataFlow Changelog
 
+## [2.4.0] — 2026-04-28 — DDL fail-fast, DDLFailedError, build_sync surface
+
+Minor release delivering three production-incident fixes from the `dataflow-prod-incident` workstream (shards DPI-A, DPI-C) plus the kailash core floor bump to 2.12.0 required by DPI-B (pool registry leak fix).
+
+- DPI-A: `auto_migrate` now raises `DDLFailedError` (a `DataFlowError` subclass) immediately when DDL fails, rather than silently continuing. Surfaces as `DDLFailedError` on first DataFlow access with a broken schema. `DDLFailedError` is exported from the `dataflow` package top-level.
+- DPI-C: `DataFlowEngineBuilder.build_sync()` added as a synchronous builder surface for sync-only contexts (scripts, CLI tools, Django management commands).
+- Dep floor: `kailash>=2.12.0` required — pulls in `pool_count()` and `_PROCESS_POOL_REGISTRY` (DPI-B pool leak fix from kailash core).
+
+### Added
+
+- `DDLFailedError` raised by `auto_migrate` on DDL failure (DPI-A, closes #696).
+- `DataFlowEngineBuilder.build_sync()` synchronous builder (DPI-C, closes #698).
+
+### Changed
+
+- Minimum kailash core dependency bumped from `>=2.11.0` to `>=2.12.0` (DPI-B pool registry, closes #697).
+
+---
+
 ## [2.3.3] — 2026-04-28 — Migration test-suite + pyright cleanup follow-through
 
 Patch release closing the merged-but-unreleased gap on `kailash-dataflow` main. Three commits since 2.3.2:
