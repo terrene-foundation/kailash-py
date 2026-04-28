@@ -1,6 +1,6 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Migration 0005 — add data-bearing columns to ``_kml_model_versions``.
+"""Migration 0005 — registry data columns + private bookkeeping tables.
 
 Closes GH issue #699: three-way schema drift between migration 0002's
 canonical 8-column ``_kml_model_versions`` table, ``ModelRegistry``'s
@@ -9,15 +9,27 @@ inline DDL (10 columns including 6 data-bearing ones), and spec
 inline DDL became a no-op once 0002 had landed, so the registry's
 INSERT failed against the migration-canonical schema.
 
-This migration adds the 6 data-bearing columns the registry's read
-path depends on (``model_registry.py:148-272`` hydration helper):
+This migration does TWO related things:
 
-- ``metrics_json``    — TEXT NOT NULL DEFAULT '[]'
-- ``signature_json``  — TEXT NULL
-- ``onnx_status``     — TEXT NOT NULL DEFAULT 'pending'
-- ``onnx_error``      — TEXT NULL
-- ``artifact_path``   — TEXT NOT NULL DEFAULT ''
-- ``model_uuid``      — TEXT NOT NULL DEFAULT ''
+1. **Adds 6 data-bearing columns to migration 0002's
+   ``_kml_model_versions``** — the columns the registry's read path
+   depends on (``model_registry.py:148-272`` hydration helper):
+
+   - ``metrics_json``    — TEXT NOT NULL DEFAULT '[]'
+   - ``signature_json``  — TEXT NULL
+   - ``onnx_status``     — TEXT NOT NULL DEFAULT 'pending'
+   - ``onnx_error``      — TEXT NULL
+   - ``artifact_path``   — TEXT NOT NULL DEFAULT ''
+   - ``model_uuid``      — TEXT NOT NULL DEFAULT ''
+
+2. **Creates 2 registry-private bookkeeping tables** that ModelRegistry
+   previously created via inline DDL (Rule 1 violation):
+
+   - ``_kml_models`` — name → latest_version mapping (tenant-scoped).
+   - ``_kml_model_transitions`` — audit trail of stage transitions.
+
+   Both gain a ``tenant_id`` dimension to match the rest of the
+   ``_kml_*`` schema per ``rules/tenant-isolation.md`` Rule 1.
 
 The remaining 9 spec §5A.2 columns (``id`` UUID PK, ``format``,
 ``artifact_uri``, ``artifact_sha256``, ``lineage_*``, ``is_golden``,
@@ -43,28 +55,34 @@ Rule trace
   deleted), Rule 3 (reversible), Rule 4 (append-only — this is a
   NEW migration, NOT an edit to 0002), Rule 5 (real PG + SQLite
   test), Rule 7 (``force_downgrade=True`` required on destructive
-  rollback — ``DROP COLUMN`` is destructive).
+  rollback — ``DROP COLUMN`` and ``DROP TABLE`` are destructive).
 - ``rules/dataflow-identifier-safety.md`` Rule 1 (every dynamic DDL
   identifier through ``quote_identifier``), Rule 5 (hardcoded
   identifiers still validated).
+- ``rules/tenant-isolation.md`` Rule 1 (every multi-tenant write-path
+  store carries a ``tenant_id`` dimension).
 
 Idempotency contract
 --------------------
 ``apply()`` is idempotent: re-running after a successful apply is a
-cheap no-op (every column already exists). Mid-sequence failure
-between column adds is benign — the next ``apply()`` invocation will
-``_column_exists()``-probe each column and add only the missing
-ones.
+cheap no-op (every column exists; both tables exist). Mid-sequence
+failure between adds is benign — the next ``apply()`` invocation
+will probe each surface and add only the missing pieces.
 
 Backwards-compatibility
 -----------------------
-All 6 columns ship with defaults (or NULL-allowed). Existing rows
-(only present if a registry consumer wrote despite the broken
+All 6 added columns ship with defaults (or NULL-allowed). Existing
+rows (only present if a registry consumer wrote despite the broken
 INSERT — none expected since #699 reports the INSERT as failing) get
-the defaults. Forward-compatible with PG 9.6+ and SQLite 3.7+.
-PG 11+ stores DEFAULT in metadata (no table rewrite); PG <11 may
-take a brief table-lock during upgrade — operators on those
-versions can either upgrade PG or apply during low-traffic windows.
+the defaults. The two new tables use ``CREATE TABLE IF NOT EXISTS``
+so any prior inline-DDL state is left intact and the new schema
+takes over write paths once the inline DDL is deleted from
+``model_registry.py``.
+
+Forward-compatible with PG 9.6+ and SQLite 3.7+. PG 11+ stores
+DEFAULT in metadata (no table rewrite); PG <11 may take a brief
+table-lock during upgrade — operators on those versions can either
+upgrade PG or apply during low-traffic windows.
 
 Invariant tests
 ---------------
@@ -93,15 +111,24 @@ from kailash.tracking.migrations._base import MigrationBase, MigrationResult
 __all__ = [
     "Migration",
     "DowngradeRefusedError",
+    "MissingTargetTableError",
     "TARGET_TABLE",
     "ADDED_COLUMNS",
+    "MODELS_TABLE",
+    "TRANSITIONS_TABLE",
 ]
 
 
-# Target table — the canonical name owned by migration 0002. The two
-# values MUST stay byte-for-byte identical so this migration's ALTER
-# TABLE writes against the same table 0002 created.
+# Target table — the canonical name owned by migration 0002. This
+# value MUST stay byte-for-byte identical so the ALTER TABLE writes
+# against the same table 0002 created.
 TARGET_TABLE = "_kml_model_versions"
+
+# Registry-private bookkeeping tables — created by this migration
+# with a tenant_id dimension. Previously emitted by ModelRegistry's
+# inline DDL (Rule 1 violation); now owned by the migration framework.
+MODELS_TABLE = "_kml_models"
+TRANSITIONS_TABLE = "_kml_model_transitions"
 
 
 # Column adds — ``(name, sqlite_type_fragment, postgres_type_fragment)``.
@@ -319,6 +346,79 @@ def _compose_drop_column(dialect: QueryDialect, table: str, column: str) -> str:
     return f"ALTER TABLE {quoted_table} DROP COLUMN {quoted_col}"
 
 
+def _compose_create_models_table(dialect: QueryDialect) -> str:
+    """Compose ``CREATE TABLE _kml_models (...)`` — tenant-scoped.
+
+    Schema:
+        tenant_id        TEXT NOT NULL
+        model_name       TEXT NOT NULL
+        latest_version   INTEGER NOT NULL DEFAULT 0
+        created_at       TEXT NOT NULL
+        updated_at       TEXT NOT NULL
+        PRIMARY KEY (tenant_id, model_name)
+
+    Composite PK ``(tenant_id, model_name)`` mirrors the other
+    ``_kml_*`` tables in migration 0002. ``model_name`` (not ``name``)
+    matches migration 0002's ``_kml_model_versions`` column naming.
+    """
+    table = dialect.quote_identifier(MODELS_TABLE)
+    cols = []
+    for col_name, col_type in (
+        ("tenant_id", "TEXT NOT NULL"),
+        ("model_name", "TEXT NOT NULL"),
+        ("latest_version", "INTEGER NOT NULL DEFAULT 0"),
+        ("created_at", "TEXT NOT NULL"),
+        ("updated_at", "TEXT NOT NULL"),
+    ):
+        cols.append(f"{dialect.quote_identifier(col_name)} {col_type}")
+    body = ", ".join(cols)
+    pk_cols = ", ".join(
+        dialect.quote_identifier(c) for c in ("tenant_id", "model_name")
+    )
+    return f"CREATE TABLE IF NOT EXISTS {table} ({body}, PRIMARY KEY ({pk_cols}))"
+
+
+def _compose_create_transitions_table(dialect: QueryDialect) -> str:
+    """Compose ``CREATE TABLE _kml_model_transitions (...)`` — tenant-scoped.
+
+    Schema:
+        id                TEXT NOT NULL  (UUID, PK)
+        tenant_id         TEXT NOT NULL
+        model_name        TEXT NOT NULL
+        version           INTEGER NOT NULL
+        from_stage        TEXT NOT NULL
+        to_stage          TEXT NOT NULL
+        reason            TEXT NOT NULL DEFAULT ''
+        transitioned_at   TEXT NOT NULL
+        PRIMARY KEY (id)
+
+    ``id`` is the UUID of the transition event. ``model_name`` (not
+    ``name``) matches migration 0002's column naming. ``tenant_id``
+    is required so transition queries scope to the caller's tenant.
+    """
+    table = dialect.quote_identifier(TRANSITIONS_TABLE)
+    cols = []
+    for col_name, col_type in (
+        ("id", "TEXT NOT NULL"),
+        ("tenant_id", "TEXT NOT NULL"),
+        ("model_name", "TEXT NOT NULL"),
+        ("version", "INTEGER NOT NULL"),
+        ("from_stage", "TEXT NOT NULL"),
+        ("to_stage", "TEXT NOT NULL"),
+        ("reason", "TEXT NOT NULL DEFAULT ''"),
+        ("transitioned_at", "TEXT NOT NULL"),
+    ):
+        cols.append(f"{dialect.quote_identifier(col_name)} {col_type}")
+    body = ", ".join(cols)
+    pk_col = dialect.quote_identifier("id")
+    return f"CREATE TABLE IF NOT EXISTS {table} ({body}, PRIMARY KEY ({pk_col}))"
+
+
+def _compose_drop_table(dialect: QueryDialect, table: str) -> str:
+    quoted = dialect.quote_identifier(table)
+    return f"DROP TABLE IF EXISTS {quoted}"
+
+
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
@@ -345,13 +445,13 @@ class MissingTargetTableError(MLError):
 
 
 class Migration(MigrationBase):
-    """Migration 0005 — add data-bearing columns to ``_kml_model_versions``.
+    """Migration 0005 — registry data columns + private bookkeeping tables.
 
     The migration is idempotent: re-running after a successful apply
-    is a cheap no-op (every column already exists). Each column add
-    is independently probed via ``_column_exists`` so a partial
-    failure leaves a clean state — the next apply picks up where the
-    previous one stopped.
+    is a cheap no-op (every column / table already exists). Each
+    surface (column add OR table create) is independently probed so
+    a partial failure leaves a clean state — the next apply picks
+    up where the previous one stopped.
     """
 
     version = "1.0.0"
@@ -392,33 +492,53 @@ class Migration(MigrationBase):
                 resource_id=TARGET_TABLE,
             )
 
-        # Count missing columns first so dry_run reports accurately.
-        missing: list[tuple[str, str, str]] = []
+        # Probe pending column adds.
+        missing_cols: list[tuple[str, str, str]] = []
         for col_name, sqlite_type, pg_type in ADDED_COLUMNS:
             if not await _column_exists(dialect, conn, TARGET_TABLE, col_name):
-                missing.append((col_name, sqlite_type, pg_type))
+                missing_cols.append((col_name, sqlite_type, pg_type))
+
+        # Probe pending table creates.
+        models_missing = not await _table_exists(dialect, conn, MODELS_TABLE)
+        transitions_missing = not await _table_exists(dialect, conn, TRANSITIONS_TABLE)
+
+        pending_total = (
+            len(missing_cols)
+            + (1 if models_missing else 0)
+            + (1 if transitions_missing else 0)
+        )
 
         if dry_run:
             return MigrationResult.now(
                 version=self.version,
                 name=self.name,
-                rows_migrated=len(missing),
+                rows_migrated=pending_total,
                 tenant_id=tenant_id,
                 was_dry_run=True,
                 direction="upgrade",
                 notes=(
-                    f"dry-run: would add {len(missing)} columns to "
-                    f"{TARGET_TABLE}: {[c[0] for c in missing]}"
+                    f"dry-run: would add {len(missing_cols)} columns to "
+                    f"{TARGET_TABLE} ({[c[0] for c in missing_cols]}) "
+                    f"and create "
+                    f"{[t for t, m in [(MODELS_TABLE, models_missing), (TRANSITIONS_TABLE, transitions_missing)] if m]}"
                 ),
             )
 
         added = 0
-        for col_name, sqlite_type, pg_type in missing:
+        for col_name, sqlite_type, pg_type in missing_cols:
             type_fragment = _column_type_for_dialect(dialect, sqlite_type, pg_type)
             await _execute(
                 conn,
                 _compose_add_column(dialect, TARGET_TABLE, col_name, type_fragment),
             )
+            added += 1
+
+        if models_missing:
+            await _execute(conn, _compose_create_models_table(dialect))
+            added += 1
+
+        if transitions_missing:
+            await _execute(conn, _compose_create_transitions_table(dialect))
             added += 1
 
         return MigrationResult.now(
@@ -429,8 +549,9 @@ class Migration(MigrationBase):
             was_dry_run=False,
             direction="upgrade",
             notes=(
-                f"added {added} data-bearing column(s) to {TARGET_TABLE}: "
-                f"{[c[0] for c in missing]}"
+                f"added {len(missing_cols)} column(s) to {TARGET_TABLE} "
+                f"and created {(1 if models_missing else 0) + (1 if transitions_missing else 0)} "
+                f"registry-private table(s)"
             ),
         )
 
@@ -445,59 +566,73 @@ class Migration(MigrationBase):
             raise DowngradeRefusedError(
                 reason=(
                     f"rollback({self.version!r}) refused — down path drops "
-                    f"6 data-bearing columns from {TARGET_TABLE} which is "
-                    f"irreversible data loss; pass force_downgrade=True to "
-                    f"acknowledge per rules/schema-migration.md Rule 7."
+                    f"6 columns from {TARGET_TABLE} and 2 registry-private "
+                    f"tables ({MODELS_TABLE!r}, {TRANSITIONS_TABLE!r}); "
+                    f"this is irreversible data loss. Pass "
+                    f"force_downgrade=True to acknowledge per "
+                    f"rules/schema-migration.md Rule 7."
                 ),
                 resource_id=self.version,
             )
 
         dialect = _get_dialect(conn)
 
-        # If the target table is absent the migration never ran;
-        # rollback is a no-op.
+        reversed_count = 0
+
+        # Drop registry-private tables first (no dependencies).
+        for table_name in (TRANSITIONS_TABLE, MODELS_TABLE):
+            if await _table_exists(dialect, conn, table_name):
+                await _execute(conn, _compose_drop_table(dialect, table_name))
+                reversed_count += 1
+
+        # If the target table is absent the column-add migration never
+        # ran for that table; skip the column-drop loop.
         if not await _table_exists(dialect, conn, TARGET_TABLE):
             return MigrationResult.now(
                 version=self.version,
                 name=self.name,
-                rows_migrated=0,
+                rows_migrated=reversed_count,
                 tenant_id=tenant_id,
                 was_dry_run=False,
                 direction="downgrade",
-                notes=f"no-op: {TARGET_TABLE} absent — nothing to reverse",
+                notes=(
+                    f"reversed {reversed_count} table(s); {TARGET_TABLE} "
+                    f"absent — column-drop loop skipped"
+                ),
             )
 
-        dropped = 0
-        # Drop in reverse order so the sentinel column is the LAST
-        # to go — verify() will return False the moment it's gone,
-        # so a partial-failure rollback can be re-invoked safely.
+        # Drop columns in reverse order so the sentinel column is the
+        # LAST to go — verify() will return False the moment it's
+        # gone, so a partial-failure rollback can be re-invoked safely.
         for col_name, _sqlite_type, _pg_type in reversed(ADDED_COLUMNS):
             if await _column_exists(dialect, conn, TARGET_TABLE, col_name):
                 await _execute(
                     conn, _compose_drop_column(dialect, TARGET_TABLE, col_name)
                 )
-                dropped += 1
+                reversed_count += 1
 
         return MigrationResult.now(
             version=self.version,
             name=self.name,
-            rows_migrated=dropped,
+            rows_migrated=reversed_count,
             tenant_id=tenant_id,
             was_dry_run=False,
             direction="downgrade",
             notes=(
-                f"dropped {dropped} column(s) from {TARGET_TABLE}; "
-                f"data was irreversibly lost"
+                f"reversed {reversed_count} schema element(s) "
+                f"(columns + tables); data was irreversibly lost"
             ),
         )
 
     async def verify(self, conn: Any) -> bool:
-        """Return True iff every column in :data:`ADDED_COLUMNS` exists.
+        """Return True iff every column in :data:`ADDED_COLUMNS` exists
+        AND both :data:`MODELS_TABLE` / :data:`TRANSITIONS_TABLE` exist.
 
         Verifies via the canonical sentinel column ``metrics_json``
         first (cheap short-circuit), then walks the full column set
-        so a partially-applied state surfaces as ``False`` (the next
-        ``apply()`` invocation picks up the missing columns).
+        + table set so a partially-applied state surfaces as
+        ``False`` (the next ``apply()`` invocation picks up the
+        missing pieces).
         """
         try:
             dialect = _get_dialect(conn)
@@ -511,6 +646,10 @@ class Migration(MigrationBase):
             for col_name, _sqlite_type, _pg_type in ADDED_COLUMNS:
                 if not await _column_exists(dialect, conn, TARGET_TABLE, col_name):
                     return False
+            if not await _table_exists(dialect, conn, MODELS_TABLE):
+                return False
+            if not await _table_exists(dialect, conn, TRANSITIONS_TABLE):
+                return False
             return True
         except Exception:
             return False
