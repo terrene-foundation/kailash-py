@@ -22,12 +22,14 @@
 | kailash-kaizen   | `kaizen-v*`        | 2.13.1          |
 | kailash-nexus    | `nexus-v*`         | 2.3.0           |
 | kailash-pact     | `pact-v*`          | 0.11.0          |
-| kailash-ml       | `ml-v*`            | 1.5.0           |
+| kailash-ml       | `ml-v*`            | 1.5.1           |
 | kailash-align    | `align-v*`         | 0.7.0           |
 | kailash-mcp      | `mcp-v*`           | 0.2.10          |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-27 (W7 portfolio remediation cycle — kailash-ml 1.5.0 + kailash-dataflow 2.3.2). kailash-ml 1.5.0 (PR #677, closes #657) ships the cross-engine `LineageGraph` engine module — frozen `LineageGraph`/`LineageNode`/`LineageEdge` dataclasses, BFS walker via DataFlow `ConnectionManager`, numbered migration `0004_kml_lineage_table.py`, `LineageNotImplementedError` deletion per orphan-detection §3, and 13 tests (Tier 2 wiring + Tier 3 README quickstart regression). kailash-dataflow 2.3.2 (PR #678) wires `format_error_for_event` through `emit_train_end` at the emitter (single filter point per `event-payload-classification.md` §1) — caller-sanitization documentation replaced with structural-redaction contract, 4 Tier 2 regression tests. Both clean-venv installability checks passed. No sibling drift — kailash 2.11.3 / kailash-kaizen 2.13.1 / kailash-nexus 2.3.0 / kailash-pact 0.11.0 / kailash-mcp 0.2.10 / kailash-align 0.7.0 / kaizen-agents 0.9.4 all match PyPI.
+Last updated: 2026-04-28 (W7 follow-up — kailash-ml 1.5.1 patch). kailash-ml 1.5.1 (PR #679) routes the `engines/model_registry.py` `ModelNotFoundError` through the canonical `kailash.ml.errors.ModelNotFoundError` (subclass of `ModelRegistryError → MLError`), removing the divergent local `class ModelNotFoundError(Exception)` that surfaced when the W7-001 LineageGraph walker raised canonical while `ModelRegistry.get_model` raised local. 6 raise sites converted to canonical kwargs; 3 regression tests pin class-identity + AST invariant. PR #679 also adds `scripts/development/find-venv-python.sh` — wrapper that resolves `.venv/bin/python` via `git rev-parse --git-common-dir` so pre-commit hooks run from inside `.claude/worktrees/<X>/` without the `core.hooksPath=/dev/null` bypass; 3 regression tests pin the worktree-safe invariants. Clean-venv install verified live: `kailash-ml==1.5.1` + `ModelNotFoundError canonical identity: OK` + `__all__ count: 50 (AST-derived)`. No sibling drift.
+
+Prior 2026-04-27 — W7 portfolio remediation: kailash-ml 1.5.0 (PR #677 closes #657) ships the cross-engine `LineageGraph` engine module; kailash-dataflow 2.3.2 (PR #678) wires `format_error_for_event` through `emit_train_end` at the emitter.
 
 ## Release Runbook
 
