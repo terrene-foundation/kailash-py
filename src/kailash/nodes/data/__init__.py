@@ -90,6 +90,9 @@ from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 from kailash.nodes.data.directory import DirectoryReaderNode
 from kailash.nodes.data.event_generation import EventGeneratorNode
+
+# Typed exceptions
+from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.nodes.data.file_discovery import FileDiscoveryNode
 from kailash.nodes.data.query_router import QueryRouterNode
 from kailash.nodes.data.readers import (
@@ -167,4 +170,6 @@ __all__ = [
     # Connection Pool & Query Routing
     "WorkflowConnectionPool",
     "QueryRouterNode",
+    # Typed exceptions
+    "PoolExhaustedError",
 ]
