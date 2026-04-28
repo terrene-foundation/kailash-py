@@ -18,7 +18,7 @@
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
 | kailash (core)   | `v*`               | 2.11.3          |
-| kailash-dataflow | `dataflow-v*`      | 2.3.2           |
+| kailash-dataflow | `dataflow-v*`      | 2.3.3           |
 | kailash-kaizen   | `kaizen-v*`        | 2.13.1          |
 | kailash-nexus    | `nexus-v*`         | 2.3.0           |
 | kailash-pact     | `pact-v*`          | 0.11.0          |
@@ -27,7 +27,7 @@
 | kailash-mcp      | `mcp-v*`           | 0.2.10          |
 | kaizen-agents    | `kaizen-agents-v*` | 0.9.4           |
 
-Last updated: 2026-04-28 (W7 follow-up — kailash-ml 1.5.1 patch). kailash-ml 1.5.1 (PR #679) routes the `engines/model_registry.py` `ModelNotFoundError` through the canonical `kailash.ml.errors.ModelNotFoundError` (subclass of `ModelRegistryError → MLError`), removing the divergent local `class ModelNotFoundError(Exception)` that surfaced when the W7-001 LineageGraph walker raised canonical while `ModelRegistry.get_model` raised local. 6 raise sites converted to canonical kwargs; 3 regression tests pin class-identity + AST invariant. PR #679 also adds `scripts/development/find-venv-python.sh` — wrapper that resolves `.venv/bin/python` via `git rev-parse --git-common-dir` so pre-commit hooks run from inside `.claude/worktrees/<X>/` without the `core.hooksPath=/dev/null` bypass; 3 regression tests pin the worktree-safe invariants. Clean-venv install verified live: `kailash-ml==1.5.1` + `ModelNotFoundError canonical identity: OK` + `__all__ count: 50 (AST-derived)`. No sibling drift.
+Last updated: 2026-04-28 (kailash-dataflow 2.3.3 patch — closes merged-but-unreleased gap from PRs #684 / #689 / #690: `not_null_handler.py` pyright cleanup + 8 migration unit-test mock-method-drift repairs. No production behavior change beyond type-checking cleanup; 13 pre-existing pytest warnings in the migrations suite remain on separate workstreams). kailash-ml 1.5.1 (PR #679) routes the `engines/model_registry.py` `ModelNotFoundError` through the canonical `kailash.ml.errors.ModelNotFoundError` (subclass of `ModelRegistryError → MLError`), removing the divergent local `class ModelNotFoundError(Exception)` that surfaced when the W7-001 LineageGraph walker raised canonical while `ModelRegistry.get_model` raised local. 6 raise sites converted to canonical kwargs; 3 regression tests pin class-identity + AST invariant. PR #679 also adds `scripts/development/find-venv-python.sh` — wrapper that resolves `.venv/bin/python` via `git rev-parse --git-common-dir` so pre-commit hooks run from inside `.claude/worktrees/<X>/` without the `core.hooksPath=/dev/null` bypass; 3 regression tests pin the worktree-safe invariants. Clean-venv install verified live: `kailash-ml==1.5.1` + `ModelNotFoundError canonical identity: OK` + `__all__ count: 50 (AST-derived)`. No sibling drift.
 
 Prior 2026-04-27 — W7 portfolio remediation: kailash-ml 1.5.0 (PR #677 closes #657) ships the cross-engine `LineageGraph` engine module; kailash-dataflow 2.3.2 (PR #678) wires `format_error_for_event` through `emit_train_end` at the emitter.
 
