@@ -12,7 +12,7 @@ paths:
 
 # Testing Rules
 
-See `.claude/guides/rule-extracts/testing.md` for full evidence, extended examples, and post-mortems.
+See `.claude/guides/rule-extracts/testing.md` for full evidence, the kailash-ml W33b post-mortem, the test-skip triage decision tree, the test-resource-cleanup post-mortems (PR #466 63-warning sweep, 11,917-test block, env-var race), and protocol blocks.
 
 ## Test-Once Protocol (Implementation Mode)
 
@@ -22,34 +22,9 @@ During `/implement`, tests run ONCE per code change, not once per phase. Full su
 
 ## Audit Mode (/redteam)
 
-### MUST: Re-derive coverage from scratch each round
+In audit mode, MUST (1) re-derive coverage from scratch via `pytest --collect-only -q tests/` (NOT `cat .test-results` — BLOCKED); (2) for every NEW module, grep test directory for import — empty = HIGH; (3) for every spec § Security Threats subsection, grep `test_<threat>` — missing = HIGH.
 
-```bash
-# DO
-pytest --collect-only -q tests/
-# DO NOT
-cat .test-results  # BLOCKED in audit mode
-```
-
-**Why:** Prior `.test-results` may claim "5950 tests pass" true for OLD code while new modules have zero tests.
-
-### MUST: Verify NEW modules have NEW tests
-
-For every new module, grep test directory for import of that module. Zero = HIGH.
-
-```bash
-grep -rln "from new_module\|import new_module" tests/   # empty → HIGH
-```
-
-**Why:** Suite-level count lets new functionality ship with zero coverage as long as legacy tests pass.
-
-### MUST: Verify security mitigations have tests
-
-For every § Security Threats subsection in any spec, grep for `test_<threat>`. Missing = HIGH.
-
-**Why:** Documented threats without tests are unmitigated claims.
-
-See `skills/spec-compliance/SKILL.md` for full protocol.
+**Why:** Prior `.test-results` may claim "5950 tests pass" true for OLD code while new modules ship with zero coverage. Documented threats without tests are unmitigated claims. See `skills/spec-compliance/SKILL.md` for full protocol.
 
 ## Regression Testing
 
@@ -79,114 +54,73 @@ assert "\\x00" in open("src/…/connection.py").read()  # breaks on refactor
 Numerical claims (test counts, file counts, coverage) in session notes MUST be produced by a verifying command at the moment of writing. Hand-typed is BLOCKED.
 
 ```bash
-# DO
-pytest tests/regression/ --collect-only -q 2>&1 | grep -c '::'
-# DO NOT — hand-recalled round numbers
+# DO     pytest tests/regression/ --collect-only -q 2>&1 | grep -c '::'
+# DO NOT hand-recalled round numbers
 ```
 
 **Why:** "Claim a number, never verify" produces multi-test discrepancies; 2-second command converts memory bug into script.
 
 ### MUST: `__all__` Symbol Counts Use AST Enumeration, Not Grep
 
-Counts of `__all__` entries (used in spec authority, docstrings, audit findings) MUST be produced by `ast.parse()` enumeration of the `ast.Assign` node — NOT `grep -c '"' __init__.py` or `wc -l` on the assignment block. Grep counts comments, blank lines, and line continuations as elements; AST counts the actual list items.
+Counts of `__all__` entries (spec authority, docstrings, audit findings) MUST be produced by `ast.parse()` enumeration of the `ast.Assign` node — NOT `grep -c '"' __init__.py` or `wc -l`. See guide for the canonical AST snippet.
 
 ```python
-# DO — AST-derived count
-import ast, pathlib
-tree = ast.parse(pathlib.Path("packages/kailash-ml/src/kailash_ml/__init__.py").read_text())
-for n in ast.walk(tree):
-    if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in n.targets):
-        if isinstance(n.value, ast.List):
-            print(len(n.value.elts))  # → 49 (correct)
-
-# DO NOT — grep-based count (counts comments + blank lines as entries)
-grep -c '^\s*"' packages/kailash-ml/src/kailash_ml/__init__.py
-# → 48 (off by N where N = comment + blank-line count inside the __all__ block)
+# DO — AST-derived count: walk ast.Assign for __all__, len(value.elts)
+# DO NOT — grep '^\s*"' (counts comments + blank lines + line continuations as entries)
 ```
 
 **BLOCKED rationalizations:** "Grep is faster" / "I'll subtract the comment lines manually" / "The count is approximate anyway" / "AST is overkill for a docstring number".
 
-**Why:** Wave 6 Round-2 analyst reported 48 via grep; Round-3 AST said 49. Both were used in audit findings AND a docstring claim ("Symbol count: 41" predates Wave 6 additions, also wrong). Grep cannot distinguish `# Group N — comment` from `"Group_N",` when both contain quotes; it cannot follow line continuations across an `__all__ = [...]` block. AST is canonical because it parses Python, not text.
-
-Origin: Session 2026-04-27 W6 /redteam Round 3 (kailash-py portfolio-spec-audit) — fixed `kailash_ml/__init__.py:627` docstring from `Symbol count: 41` to `Symbol count: 49 (verifier-derived via ast.parse)` in PR #674.
+**Why:** Grep cannot distinguish `# Group N — comment` from `"Group_N",` when both contain quotes; it cannot follow line continuations. AST is canonical because it parses Python, not text. See guide for Wave 6 evidence (three incompatible counts: docstring 41, grep 48, AST 49).
 
 ## Test Resource Cleanup
 
-Warnings during `pytest` are real bugs that will surface as production incidents in a different shape.
+Warnings during `pytest` are real bugs that will surface as production incidents. See guide § "PR #466 — 63-Warning Sweep" for full evidence per category below.
 
 ### MUST: Fixtures Yield + Cleanup, Never Return
 
 ```python
-# DO
-@pytest.fixture
-def cli_channel(config):
-    channel = CLIChannel(config=config); yield channel; channel.close()
-# DO NOT — return without cleanup, resource leaks until GC
+# DO    yield channel; channel.close()
+# DO NOT return without cleanup → resource leaks until GC
 ```
 
 **BLOCKED rationalizations:** "class has `__del__`" / "unit test, process exits anyway" / "mock makes it fake".
 
 **Why:** Resource classes emitting `ResourceWarning` from `__del__` flood the runner hiding real signals. See guide for PR #466 (36 unclosed channels).
 
-### MUST: AsyncMock Replaced By Mock When side_effect Is `async def`
+### MUST: AsyncMock Replaced By Mock When `side_effect` Is `async def`
 
 ```python
-# DO
-with patch("asyncio.open_connection", new_callable=Mock) as mock_oc:
-    mock_oc.side_effect = fake_open  # async def
-# DO NOT — default AsyncMock double-wraps the coroutine
+# DO    patch(..., new_callable=Mock); m.side_effect = fake_open  # async def
+# DO NOT default AsyncMock double-wraps the coroutine; never awaited; RuntimeWarning at GC
 ```
 
 **Why:** Default `AsyncMock` wraps the side_effect coroutine again; the wrapper is never awaited; `RuntimeWarning` surfaces at GC, hours later.
 
-### MUST: Helper Classes Use Stub/Helper/Fake Suffix, Not `Test` Prefix
+### MUST: Helper Classes Use Stub/Helper/Fake Suffix; JWT Test Secrets ≥ 32 Bytes
 
-```python
-# DO — class NameStub: bypasses collection
-# DO NOT — class TestName: with __init__ → PytestCollectionWarning
-```
+`class NameStub:` (NOT `class TestName:` with `__init__` — pytest collects `Test*`, triggers `PytestCollectionWarning`, class silently dropped). `JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"` (NOT short — `InsecureKeyLengthWarning` per RFC 7518 §3.2).
 
-**Why:** pytest collects `Test*` classes; `__init__` triggers a warning AND the class is silently dropped.
-
-### MUST: JWT Test Secrets ≥ 32 Bytes (RFC 7518 §3.2)
-
-```python
-# DO
-JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"
-# DO NOT — short secret triggers InsecureKeyLengthWarning
-```
-
-**Why:** Short HMAC keys reduce brute-force resistance; a 10-byte test secret teaches contributors that 10 bytes is acceptable.
+**Why:** Pytest's `Test*` collection silently drops `__init__`-bearing helper classes, hiding real test logic. Short HMAC keys teach contributors that 10 bytes is acceptable when 32 is the floor.
 
 ### MUST: Pytest Plugin + Marker Declaration Pair
 
 Any test using `@pytest.mark.<X>` or `<X>` fixture from a plugin MUST declare the plugin in the owning sub-package's `[dev]` extras AND register the marker in pytest config SAME commit.
 
 ```toml
-# DO
-dev = ["pytest-benchmark>=4.0.0"]
-[tool.pytest.ini_options]
-markers = ["benchmark: Performance tests"]
-# DO NOT — use plugin with either missing → collection fails, whole sub-package blocked
+# DO    dev = ["pytest-benchmark>=4.0.0"]
+#       [tool.pytest.ini_options]
+#       markers = ["benchmark: Performance tests"]
+# DO NOT either layer missing → collection fails, whole sub-package blocked
 ```
 
 **BLOCKED rationalizations:** "plugin is in CI so local works" / "pytest accepts unknown markers" / "we'll register in follow-up" / "fixture imported lazily" / "sub-package venv is separate".
 
 **Why:** Missing any layer breaks collection with an unhelpful error. See guide for 2026-04-20 11,917-test block.
 
-## Env-Var Test Isolation
+## MUST: Serialize Env-Var-Mutating Tests Via Module Lock
 
-### MUST: Serialize Env-Var-Mutating Tests Via Module Lock
-
-Any two tests mutating SAME env var MUST serialize through a module-scope lock held across read-then-mutate.
-
-```python
-_ENV_LOCK = threading.Lock()
-@pytest.fixture
-def _env_serialized():
-    with _ENV_LOCK: yield
-# tests take (monkeypatch, _env_serialized)
-```
+Any two tests mutating SAME env var MUST serialize through a module-scope `threading.Lock` held across read-then-mutate; tests take `(monkeypatch, _env_serialized)`. See guide for full fixture pattern + kailash-rs PR #435 cross-language origin.
 
 **BLOCKED rationalizations:** "passes locally, CI scheduling is the bug" / "lock is overkill" / "pytest one-per-worker default" / "`@pytest.mark.serial`" (only with `--dist=loadgroup`) / "monkeypatch auto-restores".
 
@@ -211,48 +145,31 @@ def _env_serialized():
 
 ## MUST: End-to-End Pipeline Regression Above Unit + Integration
 
-Every canonical pipeline the docs teach (README Quick Start, tutorial, 3-line example) MUST have a Tier-2+ regression test executing DOCS-EXACT code against real infra, asserting the final user-visible outcome. Lives in `tests/regression/` with `@pytest.mark.regression`; name includes "quickstart"/"readme"/tutorial-name (grep-able).
+Every canonical pipeline the docs teach (README Quick Start, tutorial, 3-line example) MUST have a Tier-2+ regression test executing DOCS-EXACT code against real infra, asserting the final user-visible outcome. Lives in `tests/regression/` with `@pytest.mark.regression`; name includes "quickstart"/"readme"/tutorial-name (grep-able). See guide for full example.
 
 ```python
+# DO — DOCS-EXACT chain, asserts handoff field survives
 @pytest.mark.regression
-@pytest.mark.asyncio
 async def test_readme_quickstart_executes_end_to_end():
-    import kailash_ml as km
     result = await km.train(df, target="churned")
     assert result.trainable is not None  # handoff field MUST survive
-    registered = await km.register(result, name="demo")
-    assert "onnx" in registered.artifact_uris
+# DO NOT — only test primitives in isolation; the A→B handoff is invisible to unit tests
 ```
 
 **BLOCKED rationalizations:** "primitives have unit+integration, pipeline is composition" / "README is illustrative" / "Tier 2 per primitive proves interfaces" / "user will file issue" / "E2E is slow and flaky" / "pipeline is demo's concern, not SDK".
 
-**Why:** Unit tests per primitive construct fixtures with exactly the fields THAT primitive needs — they cannot observe a field MISSING from the A→B handoff. Only DOCS-EXACT chain exercises the handoff contract. When docs teach a pipeline, the pipeline IS the public API. Evidence: kailash-ml W33b (2026-04-23) — `km.train → km.register` broken via missing `TrainingResult.trainable`; every unit test passed; canonical Quick Start raised `ValueError` on every fresh install. See `zero-tolerance.md` §2 "Fake integration via missing field".
+**Why:** Unit tests per primitive construct fixtures with exactly the fields THAT primitive needs — they cannot observe a field MISSING from the A→B handoff. Only DOCS-EXACT chain exercises the handoff contract. See guide for kailash-ml W33b evidence + `zero-tolerance.md` §2 "Fake integration via missing field".
 
 ## State Persistence Verification (Tiers 2-3)
 
-Every write MUST be verified with a read-back:
+Every write MUST be verified with a read-back: call create/update, then call get/list, assert the value.
 
 ```python
-# DO — verify persistence
-result = api.create_company(name="Acme")
-company = api.get_company(result.id)
-assert company.name == "Acme"
-# DO NOT — only check status
-assert result.status == 200   # DataFlow may silently ignore params
+# DO    result = api.create_company(name="Acme"); assert api.get_company(result.id).name == "Acme"
+# DO NOT assert result.status == 200  # DataFlow may silently ignore params
 ```
 
 **Why:** DataFlow `UpdateNode` silently ignores unknown parameter names — API returns success but zero bytes written.
-
-## Kailash-Specific
-
-```python
-@pytest.fixture
-def db():
-    db = DataFlow("sqlite:///:memory:"); yield db; db.close()
-
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-```
 
 ## MUST: One Direct Test Per Variant In Every Delegating Pair
 
@@ -267,9 +184,7 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 
 **BLOCKED rationalizations:** "typed calls raw internally, one test covers both" / "shared core" / "integration catches this" / "raw is just less-useful typed".
 
-**Why:** Convergent delegation paths look like one path until they diverge under refactor pressure — the divergent moment is when the test you didn't write would have failed.
-
-`/redteam` MUST mechanically grep each variant pair; any pair with zero direct call site is a finding.
+**Why:** Convergent delegation paths look like one path until they diverge under refactor pressure — the divergent moment is when the test you didn't write would have failed. `/redteam` MUST mechanically grep each variant pair; any pair with zero direct call site is a finding.
 
 ## Rules
 
@@ -281,4 +196,4 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 **Why (deterministic):** Intermittent failures erode trust; developers start ignoring real failures.
 **Why (isolated):** Shared state → order-dependent results; passes individually, fails in CI where order differs.
 
-Origin: PR #466 (warnings sweep, 2026-04-14), #518 (test-skip triage, 2026-04-19), BP-046 (paired-variant coverage, 2026-04-14), kailash-rs #435 (env-var race, 2026-04-20), kailash-ml W33b (E2E regression, 2026-04-23). See guide for full session evidence.
+Origin: PR #466 (warnings sweep), #518 (test-skip triage), BP-046 (paired-variant coverage), kailash-rs #435 (env-var race), kailash-ml W33b (E2E regression). See guide for full session evidence.
