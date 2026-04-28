@@ -86,6 +86,30 @@ pytest tests/regression/ --collect-only -q 2>&1 | grep -c '::'
 
 **Why:** "Claim a number, never verify" produces multi-test discrepancies; 2-second command converts memory bug into script.
 
+### MUST: `__all__` Symbol Counts Use AST Enumeration, Not Grep
+
+Counts of `__all__` entries (used in spec authority, docstrings, audit findings) MUST be produced by `ast.parse()` enumeration of the `ast.Assign` node — NOT `grep -c '"' __init__.py` or `wc -l` on the assignment block. Grep counts comments, blank lines, and line continuations as elements; AST counts the actual list items.
+
+```python
+# DO — AST-derived count
+import ast, pathlib
+tree = ast.parse(pathlib.Path("packages/kailash-ml/src/kailash_ml/__init__.py").read_text())
+for n in ast.walk(tree):
+    if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in n.targets):
+        if isinstance(n.value, ast.List):
+            print(len(n.value.elts))  # → 49 (correct)
+
+# DO NOT — grep-based count (counts comments + blank lines as entries)
+grep -c '^\s*"' packages/kailash-ml/src/kailash_ml/__init__.py
+# → 48 (off by N where N = comment + blank-line count inside the __all__ block)
+```
+
+**BLOCKED rationalizations:** "Grep is faster" / "I'll subtract the comment lines manually" / "The count is approximate anyway" / "AST is overkill for a docstring number".
+
+**Why:** Wave 6 Round-2 analyst reported 48 via grep; Round-3 AST said 49. Both were used in audit findings AND a docstring claim ("Symbol count: 41" predates Wave 6 additions, also wrong). Grep cannot distinguish `# Group N — comment` from `"Group_N",` when both contain quotes; it cannot follow line continuations across an `__all__ = [...]` block. AST is canonical because it parses Python, not text.
+
+Origin: Session 2026-04-27 W6 /redteam Round 3 (kailash-py portfolio-spec-audit) — fixed `kailash_ml/__init__.py:627` docstring from `Symbol count: 41` to `Symbol count: 49 (verifier-derived via ast.parse)` in PR #674.
+
 ## Test Resource Cleanup
 
 Warnings during `pytest` are real bugs that will surface as production incidents in a different shape.

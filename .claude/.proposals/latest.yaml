@@ -1,128 +1,149 @@
 source_repo: kailash-py
-codify_date: "2026-04-25"
+codify_date: "2026-04-27"
 codify_session: |
-  Session 2026-04-25 — 11-issue resolution wave (PR #619 bundled — 5 issues
-  implemented + closed: #598 plan-suspension, #600 mcp-transports, #602
-  orchestration-runtime, #603 budget-callback, #618 nexus-ws-unicast; 6
-  dispositioned: #596/#599 spec-gated on mint, #604/#606 cross-SDK gated,
-  #605/#607 multi-shard with scoping briefs). Hotfix kaizen 2.13.0→2.13.1
-  via PR #620 caught by post-release clean-venv check. PyPI live: kailash
-  2.10.0, kailash-nexus 2.3.0, kailash-kaizen 2.13.1.
+  Session 2026-04-27 — W6 + W7 portfolio-spec-audit closeout.
 
-  Two institutional lessons emerged from the kaizen 2.13.0→2.13.1 hotfix
-  cycle, both codified locally and proposed upstream this cycle:
+  Wave 6: 23 atomic todos (W6-001..023) — all merged or explicitly disposed
+  per rules/zero-tolerance.md Rule 1b. PRs #644-#669; releases kailash 2.11.3,
+  kailash-ml 1.4.2, kailash-align 0.7.0.
 
-  (1) `__init__.py` module-scope imports of co-installed-but-NOT-declared
-  sibling packages MUST be wrapped in `try/except ImportError` with side-
-  effects in the `else` branch. Editable installs in dev environments hide
-  the failure mode (every dev has the sibling installed); a clean PyPI
-  install raises `ModuleNotFoundError` at the FIRST `import <package>`,
-  blocking every downstream consumer. Codified as a new MUST sub-rule in
-  `dependencies.md` § "Declared = Imported".
+  Wave 7: 2 single-shard fixes folded in from W6 closeout instead of creating
+  a separate "Wave 6.5b" milestone (parallel-worktree dispatch per
+  rules/agents.md § "Parallel-Worktree Package Ownership Coordination").
+  - W7-001: LineageGraph implementation (closes #657) — kailash-ml 1.5.0
+  - W7-002: emit_train_end structural sanitization at the emitter
+    (rules/event-payload-classification.md § 1) — kailash-dataflow 2.3.2
 
-  (2) When the post-release clean-venv check fails, the broken pattern is
-  the scope of the hotfix — NOT just the most-recent PR's diff. The same
-  failure may have been latent in main for many sessions, hidden behind
-  editable installs. Codified as an extension to `build-repo-release-
-  discipline.md` Rule 2 ("Latent failures count").
+  Both Wave 7 PRs admin-merged; both packages published to PyPI; clean-venv
+  install verified per rules/build-repo-release-discipline.md Rule 2.
 
-  Both lessons reinforce existing rules — the first prevents the failure
-  class structurally, the second tightens the diagnostic discipline when
-  the structural defense was missing. Together they close the loop the
-  kaizen 2.13.1 hotfix exposed.
+  Two institutional patterns codified this cycle, both extending existing
+  rules with sub-clauses:
 
-status: distributed
-submitted_date: "2026-04-25T18:30:00+08:00"
-reviewed_date: "2026-04-25T19:50:00+08:00"
-distributed_date: "2026-04-25T19:50:00+08:00"
-sdk_version: "2.10.0"
-loom_version: "2.8.30"
+  (1) Audit/closure-parity verification specialist MUST have Bash + Read.
+  W6 /redteam Round 2 used analyst (Read/Grep/Glob) and FORWARDED 16 of 22
+  closure-parity rows because gh/pytest/ast.parse() were unavailable. Round 3
+  re-launched with pact-specialist (Bash) to convert FORWARDED→VERIFIED in
+  one shard — full round wasted on tool-inventory mismatch. Codified as new
+  MUST sub-clause in rules/agents.md.
+
+  (2) `__all__` symbol counts MUST be AST-derived, not grep-based. Three
+  incompatible counts surfaced for kailash_ml.__all__ in Wave 6: pre-existing
+  docstring 41, Round-2 grep 48, Round-3 AST 49. Truth was 49. Grep cannot
+  distinguish `# Group N` comment quotes from list-entry quotes. Codified as
+  new MUST sub-clause in rules/testing.md § "Verified Numerical Claims".
+
+  Both rules are GLOBAL — applicable to kailash-py + kailash-rs. Cross-SDK
+  port: Rust uses cargo doc --document-private-items for re-export
+  enumeration; the principle (AST/structural enumeration > text-grep) is
+  language-neutral.
+
+status: pending_review
+submitted_date: "2026-04-27T22:00:00+08:00"
+sdk_version: "2.11.3"
+loom_version: "2.8.31"
 classification:
-  init-py-module-scope-imports-honor-manifest: global
-  clean-venv-check-surfaces-latent-failures-not-just-pr-diff: global
+  audit-specialist-bash-read-required: global
+  all-symbol-count-ast-not-grep: global
 
 changes:
-  - id: init-py-module-scope-imports-honor-manifest
+  - id: audit-specialist-bash-read-required
     type: rule
     severity: HIGH
-    target: rules/dependencies.md
-    section: "new MUST sub-rule § '`__init__.py` Module-Scope Imports Honor The Manifest' inside § 'Declared = Imported — No Silent Missing Dependencies'"
+    target: rules/agents.md
+    section: "new MUST sub-clause § 'MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read' — extends the IMPLEMENTATION-only Verify Specialist Tool Inventory rule (loom version) to AUDIT delegation"
     summary: |
-      Every unconditional `import X` / `from X import Y` at module scope
-      in any package's `__init__.py` MUST resolve to a package declared
-      in that package's own `pyproject.toml::dependencies`. Imports of
-      co-installed but optional sibling packages (defensive proxy
-      aliases, legacy mock.patch shims, integration surfaces that
-      activate only when the sibling is present) MUST be wrapped in
-      `try/except ImportError` AND any alias side-effects (sys.modules.
-      setdefault, re-exports, attribute assignments) MUST live in the
-      `else` branch.
+      When delegating a /redteam round whose mission includes
+      closure-parity verification (mapping prior-wave findings to delivered
+      code via gh/pytest/grep/ast.parse/find), the orchestrator MUST select
+      a specialist with `Bash` AND `Read`. Read-only analyst (Read/Grep/Glob)
+      MUST NOT be assigned closure-parity verification — its tool set
+      cannot run gh/pytest/ast.parse and silently FORWARDS rows the next
+      round must redo.
 
-      Distinct from the existing "BLOCKED: silent fallback to None"
-      anti-pattern — that pattern degrades production paths silently
-      because later use sites hit `None.method()`. The optional-proxy
-      pattern has NO later use site that could break: the alias either
-      installs (sibling present) or the package imports normally
-      without the alias (sibling absent).
+      Cross-references existing § "Verify Specialist Tool Inventory Before
+      Implementation Delegation" (loom rule, missing from kailash-py local
+      copy until next /sync) — extends the principle from IMPLEMENTATION
+      delegation to AUDIT delegation.
 
-      BLOCKED rationalizations: "Everyone in dev has the sibling
-      editable-installed" / "The proxy is defensive; a clean install
-      will never hit it" / "We declared kaizen-agents as an extra,
-      that's enough" / "The next CI run will catch it" / "It's been in
-      main for months without breaking".
+      BLOCKED rationalizations: "Analyst is the audit specialist; closure
+      parity IS audit" / "The reviewer round can pick up the FORWARDED rows"
+      / "I'll instruct the analyst to skip rows it can't verify" / "Read +
+      Grep + Glob covers most verification; the rest is edge cases" /
+      "Analyst can write a recommendation; verification can be done by the
+      next reviewer".
 
-      Evidence: kailash-kaizen 2.13.1 hotfix (commit 9002c002,
-      2026-04-25). Four unconditional `kaizen_agents.patterns.*`
-      imports in `kaizen/orchestration/__init__.py` (predating
-      structural-split refactor #75) raised ModuleNotFoundError on
-      every clean `pip install kailash-kaizen` because kaizen-agents
-      is not a declared dep. Caught by post-2.13.0 clean-venv check;
-      fixed via try/except ImportError + else-branch alias
-      installation.
+      Evidence: W6 /redteam Round 2 (kailash-py portfolio-spec-audit,
+      2026-04-27) — analyst FORWARDED 16 of 22 closure-parity rows;
+      pact-specialist Round 3 with Bash converted all 16 to VERIFIED in
+      one shard. Tool-inventory mismatch cost one full audit round.
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. Same pattern in Rust (`use other_crate::*`
-      at module scope without a Cargo.toml dep, only resolved through
-      a workspace-mate's compilation), Ruby (`require 'other_gem'` in
-      a gem's lib/ without gemspec dep), Node.js (`require('sibling')`
-      in a package's index.js without package.json dep). The
-      try/except-equivalent guard is language-specific syntax but the
-      structural rule is identical. Variant overlay possible for the
-      examples slot; neutral body is language-agnostic.
+      Cross-SDK applicable. /redteam closure-parity tables exist in
+      kailash-rs the same way they exist in kailash-py (mapping issue#
+      → PR# → delivered diff). The Bash-equipped-specialist mandate is
+      identical in shape; example commands differ (`cargo expand` /
+      `cargo doc --document-private-items` vs `pytest --collect-only` /
+      `ast.parse()`), but the rule body is language-agnostic. Variant
+      overlay possible for the examples slot.
 
-  - id: clean-venv-check-surfaces-latent-failures-not-just-pr-diff
+  - id: all-symbol-count-ast-not-grep
     type: rule
     severity: MEDIUM
-    target: rules/build-repo-release-discipline.md
-    section: "extend Rule 2 (PyPI Installability Is The Done Gate) with 'Latent failures count' clause"
+    target: rules/testing.md
+    section: "new MUST sub-clause § 'MUST: `__all__` Symbol Counts Use AST Enumeration, Not Grep' — inserted after § 'Verified Numerical Claims In Session Notes'"
     summary: |
-      When the post-release clean-venv check fails, the broken pattern
-      is the scope of the hotfix — NOT just the most-recent PR's diff.
-      The same failure may have been latent in main for many sessions,
-      hidden behind editable installs in every dev environment. Fix
-      the entire broken pattern in the hotfix; file a follow-up issue
-      ONLY if the fix exceeds one shard (per autonomous-execution.md
-      Rule 1).
+      Counts of `__all__` entries (used in spec authority, docstrings,
+      audit findings) MUST be produced by `ast.parse()` enumeration of
+      the `ast.Assign` node — NOT `grep -c` / `wc -l` on the assignment
+      block. Grep counts comments + blank lines + line continuations as
+      elements; AST counts list items.
 
-      BLOCKED rationalizations: "It's been working" / "this PR didn't
-      introduce it" / "main was green" / "the most recent PR is the
-      only suspect" / "we'll cover the rest in a separate hotfix".
+      BLOCKED rationalizations: "Grep is faster" / "I'll subtract the
+      comment lines manually" / "The count is approximate anyway" /
+      "AST is overkill for a docstring number".
 
-      Cross-references the new dependencies.md MUST sub-rule as the
-      structural defense: Rule 2 catches the failure; the dependencies.
-      md sub-rule prevents it.
-
-      Evidence: kailash-kaizen 2.13.1 hotfix scope was the FOUR
-      kaizen_agents.* unconditional imports — only ONE was new in
-      2.13.0 (PR #602's OrchestrationRuntime extension); the other
-      THREE had been in main since refactor #75 and would have failed
-      every clean install since then. Limiting the hotfix to "what
-      #602 added" would have left the latent class intact.
+      Evidence: W6 /redteam Round 2 reported 48 via grep; Round-3 AST
+      said 49; pre-existing docstring at kailash_ml/__init__.py:627
+      claimed 41 (predates Wave 6 additions). Three incompatible counts,
+      one truth — only AST is canonical. Fix shipped via PR #674.
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. The "editable install hides failure;
-      clean install surfaces failure" pattern is language-neutral.
-      Rust workspaces + cargo's path deps exhibit the same masking
-      effect; published-crate verification surfaces the latent class.
-      No variant overlay needed; the rule body is language-agnostic
-      and the example anchor is the kailash-kaizen Python case.
+      Cross-SDK applicable. Rust's equivalent is re-export enumeration
+      (e.g. `pub use module::*`) which CAN be enumerated via `cargo doc
+      --document-private-items` JSON output OR `syn::parse_file`. The
+      "structural enumeration over text-grep" principle is language-
+      neutral. Variant overlay possible for the examples slot to swap
+      `ast.parse` for `syn::parse_file`; neutral body is identical.
+
+deferred_to_next_cycle:
+  - "Pre-commit hook upward-`.venv` resolution (or conditional skip when not at project root)
+    — both W7 worktrees committed via `git -c core.hooksPath=/dev/null` per rules/git.md
+    § Pre-Commit Hook Workarounds. Follow-up todo mentioned inline in commit bodies but
+    not filed as workspace todo. Recurring workaround pattern; warrants a real fix to
+    scripts/pre-commit-config so worktrees Just Work."
+
+  - "Duplicate `ModelNotFoundError` class in `packages/kailash-ml/src/kailash_ml/engines/
+    model_registry.py:~56` distinct from canonical `kailash.ml.errors.ModelNotFoundError`.
+    Both reachable depending on import path; new W7-001 `build_lineage_graph` walker
+    raises canonical, existing `get_model` paths raise local. Surfaced by W7-001 agent;
+    not addressed. Real bug — one of the two must be removed in a follow-up patch
+    (preferred: remove local, route all paths to canonical)."
+
+  - "HIGH-1 from Round-3 verification: `register` symbol redefinition shadowing in
+    `kailash_ml/__init__.py:57+246`. Line 57 imports `register` from `_wrappers` (sync);
+    line 246 redefines as `async def`. Ruff F811 flags shadowing. Real shadowing bug,
+    pre-existing latent — surfaced when ruff ran during PR #674. Recommend tdd-implementer
+    or kaizen-specialist single-shard fix (either remove line-57 import OR rename wrapper
+    to `_register_sync` and have async def delegate)."
+
+  - "MED-1 from Round-3 verification: `__version__` imported at line 46 of
+    `kailash_ml/__init__.py` but absent from `__all__`. Per rules/orphan-detection.md § 6
+    module-scope public imports MUST be in `__all__`. Cleanup PR; cross-SDK pattern likely
+    present in kailash-rs as well."
+
+  - "Rule file size hygiene — `rules/agents.md` at 232 lines and `rules/testing.md` at
+    284 lines both exceed the 200-line guidance in rules/rule-authoring.md MUST NOT.
+    Existing pre-W6 overflow; this codify cycle added ~30 lines each (load-bearing
+    MUST sub-clauses). Future codify cycles or a dedicated refactor MUST extract older
+    reference material to guides per the meta-rule."

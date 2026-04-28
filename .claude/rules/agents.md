@@ -155,6 +155,40 @@ Agent(isolation="worktree", prompt="Implement feature X. Report when done.")
 
 **Why:** Worktrees with zero commits are silently deleted. Session 2026-04-19: Shard A wrote 300+ LOC, truncated mid-message, zero commits, work lost. See guide + `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 3.
 
+## MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read
+
+When delegating a /redteam round whose mission includes **closure-parity verification** (mapping prior-wave findings to delivered code via `gh pr view`, `pytest --collect-only`, `grep`, `ast.parse()`, `find`), the orchestrator MUST select a specialist whose tool set includes `Bash` AND `Read`. Read-only analyst (`Read, Grep, Glob`) MUST NOT be assigned closure-parity verification — its tool set cannot run `gh`/`pytest`/`ast.parse()` and silently FORWARDS verification rows the next round must redo.
+
+```python
+# DO — pact-specialist or general-purpose for Round-2+ closure-parity verification
+Agent(subagent_type="pact-specialist", prompt="""
+Verify W5→W6 closure parity. For each row in the closure table, run:
+- gh pr view <PR#> + gh pr diff <PR#>
+- grep <pattern> packages/*/src/
+- pytest --collect-only -q tests/
+- ast.parse() for __all__ symbol enumeration
+Convert FORWARDED rows to VERIFIED with command output as evidence.
+""")
+
+# DO NOT — analyst (Read/Grep/Glob only) for closure-parity verification
+Agent(subagent_type="analyst", prompt="Verify W5→W6 closure parity...")
+# ↑ Cannot run gh / pytest / ast.parse(). Will FORWARD every row that
+#   needs an external command, costing one full round to re-run with
+#   a Bash-equipped specialist.
+```
+
+**BLOCKED rationalizations:**
+
+- "Analyst is the audit specialist; closure parity IS audit"
+- "The reviewer round can pick up the FORWARDED rows"
+- "I'll instruct the analyst to skip rows it can't verify"
+- "Read + Grep + Glob covers most verification; the rest is edge cases"
+- "Analyst can write a recommendation; verification can be done by the next reviewer"
+
+**Why:** Wave 6 Round-2 analyst (Read/Grep/Glob) FORWARDED 16 of 22 W5→W6 closure-parity rows because it could not run `gh pr view`, `gh pr diff`, `pytest --collect-only`, or `ast.parse()`. Round-3 had to re-launch with Bash-equipped pact-specialist to convert FORWARDED→VERIFIED. Tool-inventory mismatch cost one full audit round. Verifying tool-inventory pre-launch is O(1); re-launch is O(N) on row count.
+
+Origin: Session 2026-04-27 W6 /redteam Round 3 (kailash-py portfolio-spec-audit) — analyst Round-2 produced 6 ANALYST-VERIFIED + 16 FORWARDED; pact-specialist Round-3 with Bash converted all 16 FORWARDED to VERIFIED.
+
 ## MUST: Verify Agent Deliverables Exist After Exit
 
 When an agent reports completion of a file-writing task, the parent MUST `ls` or `Read` the claimed file before trusting the completion claim.
