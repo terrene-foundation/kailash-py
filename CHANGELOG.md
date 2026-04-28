@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] — 2026-04-28 — Pool lifecycle hardening (DPI-B: closes #697, #698)
+
+Minor bump — ships the process-pool lifecycle management surface that was missing from the
+async SQL adapter, closing the silent pool-leak class surfaced by the dataflow-prod-incident
+postmortem.
+
+### Added
+
+- **`_PROCESS_POOL_REGISTRY`** — module-level `dict` keying all active `AsyncSQLitePool` /
+  `AsyncProcessPool` instances by pool key for introspection, LRU eviction, and reaper access.
+- **`set_pool_defaults(max_size, idle_timeout_sec)`** — process-level default overrides for
+  newly created pools; lets the operator tune pool size and idle expiry without modifying
+  every call site.
+- **`pool_count() -> int`** — returns the number of currently registered live pool instances;
+  used by tests and monitoring to assert pool bounds after repeated DDL-fail cycles.
+- **`pool_keys() -> list[str]`** — returns a snapshot of registered pool keys for diagnostic
+  enumeration.
+- **`PoolExhaustedError`** — typed exception raised when a new pool cannot be allocated because
+  the process-level registry has reached `max_pool_count`; previously the adapter fell back
+  silently to an unbounded allocation.
+- **Idle-timeout reaper task** — background `asyncio.Task` that fires every `idle_timeout_sec`
+  seconds and closes idle pools; controlled via `set_pool_defaults`.
+- **`cleanup_all_pools()`** — drains the registry and closes all open pools; safe to call from
+  test teardown or process shutdown hooks.
+
+### Fixed
+
+- **#697 — Silent pool leak on `_get_adapter` fallback** — the broad `except Exception` catch
+  in `_get_adapter` previously swallowed adapter-init errors and re-entered the factory,
+  leaking a new unregistered pool on every retry. Narrowed to a typed catch-list; failed
+  adapters now surface with a typed error rather than accumulating dead pool handles.
+- **#698 — Idle-timeout and LRU pool eviction not configurable** — pools older than the idle
+  threshold are now reaped automatically; the registry enforces a configurable LRU cap so
+  long-running processes do not accumulate unbounded pool instances.
+
+### Changed (BREAKING)
+
+- `_get_adapter` fallback path now raises `PoolExhaustedError` (or the narrowed adapter-init
+  error) instead of silently returning a new adapter; callers that relied on the silent
+  fallback will see a typed exception with a descriptive message.
+
 ## [2.11.3] — 2026-04-27 — Patch: ML error classes missed in v2.11.2 wheel (W6-014, W6-020)
 
 Patch bump — ships two `kailash.ml.errors` additions that were committed to main after
