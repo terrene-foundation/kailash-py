@@ -30,6 +30,7 @@ from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyReport,
     DependencyType,
@@ -140,7 +141,7 @@ class TestImpactAnalysisReporter:
         )
 
     @pytest.fixture
-    def sample_mitigation_plan(self):
+    def sample_mitigation_plan(self, sample_risk_assessment):
         """Create sample mitigation plan for testing."""
         strategies = [
             MitigationStrategy(
@@ -169,6 +170,11 @@ class TestImpactAnalysisReporter:
             ),
         ]
 
+        # Mock mirrors PrioritizedMitigationPlan dataclass
+        # (mitigation_strategy_engine.py:118). current_risk_assessment is
+        # mandatory — impact_analysis_reporter.py:388-391 dereferences
+        # mitigation_plan.current_risk_assessment.overall_score to compute
+        # the risk-reduction projection.
         return type(
             "MockMitigationPlan",
             (),
@@ -176,6 +182,7 @@ class TestImpactAnalysisReporter:
                 "operation_id": "test_operation_001",
                 "mitigation_strategies": strategies,
                 "total_estimated_effort": 10.0,
+                "current_risk_assessment": sample_risk_assessment,
                 "projected_overall_risk": 25.0,
                 "total_generation_time": 0.15,
             },
@@ -508,9 +515,7 @@ class TestImpactAnalysisReporter:
                     else (
                         40
                         if risk_level == RiskLevel.MEDIUM
-                        else 60
-                        if risk_level == RiskLevel.HIGH
-                        else 85
+                        else 60 if risk_level == RiskLevel.HIGH else 85
                     )
                 ),
                 risk_level=risk_level,
@@ -1058,9 +1063,9 @@ class TestReportFormatter:
             format_time = time.time() - start_time
 
             # Validate performance (should be fast even for complex reports)
-            assert format_time < 1.0, (
-                f"{report_format.value} formatting took {format_time:.3f}s"
-            )
+            assert (
+                format_time < 1.0
+            ), f"{report_format.value} formatting took {format_time:.3f}s"
 
             # Validate output is generated
             assert isinstance(formatted_report, str)

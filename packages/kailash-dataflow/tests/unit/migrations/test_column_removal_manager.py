@@ -18,6 +18,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from dataflow.migrations.column_removal_manager import (
     BackupInfo,
     BackupStrategy,
@@ -450,8 +451,10 @@ class TestBackupHandlers:
         result = await handler.cleanup_backup(backup_info, mock_connection)
 
         assert result is True
+        # Per rules/dataflow-identifier-safety.md MUST Rule 1, table identifiers
+        # are routed through dialect.quote_identifier() and emerge double-quoted.
         mock_connection.execute.assert_called_once_with(
-            "DROP TABLE IF EXISTS test_backup_table"
+            'DROP TABLE IF EXISTS "test_backup_table"'
         )
 
     @pytest.mark.asyncio

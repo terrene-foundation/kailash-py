@@ -255,10 +255,14 @@ class TestApplicationSafeRenameStrategy:
         rollback_manager = RollbackManager(connection_manager=mock_connection)
 
         # Test rollback execution
+        # Per rules/schema-migration.md MUST Rule 7: destructive orchestrator-
+        # layer downgrades require force_downgrade=True. Tests assert the
+        # caller's intent — the flag IS what the test exercises.
         result = await rollback_manager.execute_rollback(
             failed_strategy=ZeroDowntimeStrategy.VIEW_ALIASING,
             created_objects=["alias_view_users"],
             connection=mock_connection,
+            force_downgrade=True,
         )
 
         assert result.rollback_successful
