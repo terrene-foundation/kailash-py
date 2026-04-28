@@ -1,160 +1,137 @@
 source_repo: kailash-py
-codify_date: "2026-04-27"
+codify_date: "2026-04-28"
 codify_session: |
-  Session 2026-04-27 — W6 + W7 portfolio-spec-audit closeout.
+  Session 2026-04-28 — post-loom-2.9.5-sync follow-through + git reset --hard rule.
 
-  Wave 6: 23 atomic todos (W6-001..023) — all merged or explicitly disposed
-  per rules/zero-tolerance.md Rule 1b. PRs #644-#669; releases kailash 2.11.3,
-  kailash-ml 1.4.2, kailash-align 0.7.0.
+  Three tasks completed cleanly off the prior session's hand-off:
+    1. Loom 2.9.5 sync committed (PR #691, merged 9475aa86) — 262 files,
+       hooks consolidation under .claude/hooks/, multi-CLI architects,
+       autonomize command, 5 new rules, ~30 new skills.
+    2. kailash-dataflow 2.3.3 released to PyPI (PR #692, merged cf945373,
+       tag dataflow-v2.3.3) — closes the merged-but-unreleased gap from
+       PR #684 (production-src pyright cleanup without same-PR bump).
+       Clean-venv install verified.
+    3. #640 closed + spinout #693 filed for the M2-blocked Item 7
+       (specs/dataflow-ml-integration.md graduation).
 
-  Wave 7: 2 single-shard fixes folded in from W6 closeout instead of creating
-  a separate "Wave 6.5b" milestone (parallel-worktree dispatch per
-  rules/agents.md § "Parallel-Worktree Package Ownership Coordination").
-  - W7-001: LineageGraph implementation (closes #657) — kailash-ml 1.5.0
-  - W7-002: emit_train_end structural sanitization at the emitter
-    (rules/event-payload-classification.md § 1) — kailash-dataflow 2.3.2
+  Mid-session, while moving the sync commit off main onto a feature
+  branch, the agent ran `git reset --hard 7ce2d2eb` and silently wiped
+  the prior session's `.session-notes` modifications. Recovery was only
+  possible because the file content had been read into conversation
+  context earlier. The user pushed back: "we should have a rule against
+  git reset, how can you make this mistake".
 
-  Both Wave 7 PRs admin-merged; both packages published to PyPI; clean-venv
-  install verified per rules/build-repo-release-discipline.md Rule 2.
+  Verified no existing rule covered the surface (grep'd every rule file
+  for `reset --hard`, `--keep`, `destructive`). The closest neighbors
+  were:
+    - git.md line 133: "no force push to main" (force-push only)
+    - schema-migration.md Rule 7 + dataflow-identifier-safety.md Rule 4:
+      destructive-DDL-requires-explicit-flag pattern (the sibling
+      structural-confirmation precedent)
 
-  Two institutional patterns codified this cycle, both extending existing
-  rules with sub-clauses:
+  Drafted, redteamed (Loud/Linguistic/Layered per rule-authoring.md),
+  added to git.md, shipped via PR #694 (admin-merged).
 
-  (1) Audit/closure-parity verification specialist MUST have Bash + Read.
-  W6 /redteam Round 2 used analyst (Read/Grep/Glob) and FORWARDED 16 of 22
-  closure-parity rows because gh/pytest/ast.parse() were unavailable. Round 3
-  re-launched with pact-specialist (Bash) to convert FORWARDED→VERIFIED in
-  one shard — full round wasted on tool-inventory mismatch. Codified as new
-  MUST sub-clause in rules/agents.md.
+  Net institutional change: one new MUST clause on git.md ("git reset
+  --hard MUST verify clean working tree"). Universal git semantics —
+  applies to every SDK and every language — strong cross-SDK candidate
+  for upstream classification at loom.
 
-  (2) `__all__` symbol counts MUST be AST-derived, not grep-based. Three
-  incompatible counts surfaced for kailash_ml.__all__ in Wave 6: pre-existing
-  docstring 41, Round-2 grep 48, Round-3 AST 49. Truth was 49. Grep cannot
-  distinguish `# Group N` comment quotes from list-entry quotes. Codified as
-  new MUST sub-clause in rules/testing.md § "Verified Numerical Claims".
-
-  Both rules are GLOBAL — applicable to kailash-py + kailash-rs. Cross-SDK
-  port: Rust uses cargo doc --document-private-items for re-export
-  enumeration; the principle (AST/structural enumeration > text-grep) is
-  language-neutral.
-
-status: distributed
-submitted_date: "2026-04-27T22:00:00+08:00"
-reviewed_date: "2026-04-28T00:00:00+08:00"
-distributed_date: "2026-04-28T00:00:00+08:00"
-distribution_note: |
-  Both proposed changes (audit-specialist Bash+Read in agents.md;
-  __all__/re-export AST-not-grep in testing.md) were already
-  incorporated into loom global rules in v2.9.4 (2026-04-28) ahead
-  of this proposal's review. Distribution to USE templates happened
-  via the v2.9.4 /sync run; the v2.9.5 /sync (this run) is a no-op
-  for these specific changes. Marked distributed so next /codify
-  archives this file and creates fresh per artifact-flow.md
-  § "Archive Before Fresh".
-sdk_version: "2.11.3"
-loom_version: "2.8.31"
-classification:
-  audit-specialist-bash-read-required: global
-  all-symbol-count-ast-not-grep: global
+status: pending_review
 
 changes:
-  - id: audit-specialist-bash-read-required
+  - id: git-reset-hard-discipline
     type: rule
     severity: HIGH
-    target: rules/agents.md
-    section: "new MUST sub-clause § 'MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read' — extends the IMPLEMENTATION-only Verify Specialist Tool Inventory rule (loom version) to AUDIT delegation"
+    target: rules/git.md
+    section: "new MUST sub-clause § 'git reset --hard MUST Verify Clean Working Tree' — inserted before existing § 'Rules' bullet list"
     summary: |
-      When delegating a /redteam round whose mission includes
-      closure-parity verification (mapping prior-wave findings to delivered
-      code via gh/pytest/grep/ast.parse/find), the orchestrator MUST select
-      a specialist with `Bash` AND `Read`. Read-only analyst (Read/Grep/Glob)
-      MUST NOT be assigned closure-parity verification — its tool set
-      cannot run gh/pytest/ast.parse and silently FORWARDS rows the next
-      round must redo.
+      `git reset --hard <ref>` SILENTLY discards every unstaged
+      modification AND every untracked file in the affected paths.
+      Recovery is impossible — unstaged content has no reflog entry.
+      The rule mandates verifying `git status --porcelain` is empty
+      before any `--hard` reset, AND mandates `git reset --keep <ref>`
+      as the preferred form for back-out / branch-reorganization
+      workflows. `--keep` performs the same commit-graph operation but
+      aborts loudly when local changes would be lost — converts a class
+      of silent data-loss failures into "refused — stash first" errors.
 
-      Cross-references existing § "Verify Specialist Tool Inventory Before
-      Implementation Delegation" (loom rule, missing from kailash-py local
-      copy until next /sync) — extends the principle from IMPLEMENTATION
-      delegation to AUDIT delegation.
+      DO/DO NOT examples cover four patterns:
+        1. `--keep` (aborts on conflict — the structurally safest form).
+        2. `git status --porcelain` verify, then `--hard` (when --hard
+           is genuinely needed and tree is clean).
+        3. `git stash push -u -m <reason>`, then `--hard`, then
+           `stash pop` (when --hard with modifications is unavoidable
+           and the work is recoverable from the stash list).
+        4. The "I committed on main by accident, want it on a feature
+           branch" recipe: `git switch -c feat/<name>` to preserve the
+           commit, then `git switch main && git reset --keep
+           origin/main` to back main out safely.
 
-      BLOCKED rationalizations: "Analyst is the audit specialist; closure
-      parity IS audit" / "The reviewer round can pick up the FORWARDED rows"
-      / "I'll instruct the analyst to skip rows it can't verify" / "Read +
-      Grep + Glob covers most verification; the rest is edge cases" /
-      "Analyst can write a recommendation; verification can be done by the
-      next reviewer".
+      BLOCKED rationalizations enumerated:
+        - "The tree is clean, I just committed everything I wanted"
+        - "The reflog will save me"  (false for unstaged content)
+        - "I'm in a fresh worktree, there's nothing to lose"
+        - "It's only `.session-notes`, not load-bearing"
+        - "I'll remember to check next time"
+        - "`--hard` is faster than stashing"
+        - "`--keep` is unfamiliar, `--hard` is the canonical form"
 
-      Evidence: W6 /redteam Round 2 (kailash-py portfolio-spec-audit,
-      2026-04-27) — analyst FORWARDED 16 of 22 closure-parity rows;
-      pact-specialist Round 3 with Bash converted all 16 to VERIFIED in
-      one shard. Tool-inventory mismatch cost one full audit round.
+      Why: `git reset --hard` is the most destructive git operation
+      that doesn't rewrite history. Unlike force-push, the destruction
+      is unrecoverable: unstaged modifications and untracked files have
+      no reflog. `git reset --keep` exists in git specifically for this
+      class of "back out a commit safely" workflow; defaulting to
+      `--keep` converts silent data-loss into loud refusal. Same
+      structural-confirmation pattern as
+      dataflow-identifier-safety.md Rule 4 (DROP requires force_drop=
+      True) and schema-migration.md Rule 7 (downgrade requires
+      force_downgrade=True) — destructive operations require an
+      explicit gate at every layer that can touch them, with the
+      safer-default form preferred.
+
+      Origin: kailash-py session 2026-04-28 (PR #691 sync rebase) —
+      `.session-notes` modifications wiped by `git reset --hard
+      7ce2d2eb` during a "move commit off main" recovery. Content was
+      only recovered because the file had been read into the agent's
+      conversation context earlier in the session; without that, the
+      prior session's hand-off would have been permanently lost.
+
+      Sibling destructive ops (`git checkout --force`, `git checkout
+      -- <path>`, `git clean -fd`) are explicitly out of scope for
+      this rule per rule-authoring.md Rule 6 focus discipline; the
+      system prompt's "destructive operations" guardrail covers them
+      at session level.
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. /redteam closure-parity tables exist in
-      kailash-rs the same way they exist in kailash-py (mapping issue#
-      → PR# → delivered diff). The Bash-equipped-specialist mandate is
-      identical in shape; example commands differ (`cargo expand` /
-      `cargo doc --document-private-items` vs `pytest --collect-only` /
-      `ast.parse()`), but the rule body is language-agnostic. Variant
-      overlay possible for the examples slot.
+      Cross-SDK applicable. `git reset --hard` semantics are universal
+      across every language and SDK; the failure mode (silent unstaged
+      destruction with no reflog) is identical in kailash-rs, atelier,
+      every downstream USE template, and every external consumer's dev
+      workflow. Variant overlay possible if any language-specific git
+      tooling diverges (none expected — git is the variant-invariant
+      surface).
 
-  - id: all-symbol-count-ast-not-grep
-    type: rule
-    severity: MEDIUM
-    target: rules/testing.md
-    section: "new MUST sub-clause § 'MUST: `__all__` Symbol Counts Use AST Enumeration, Not Grep' — inserted after § 'Verified Numerical Claims In Session Notes'"
-    summary: |
-      Counts of `__all__` entries (used in spec authority, docstrings,
-      audit findings) MUST be produced by `ast.parse()` enumeration of
-      the `ast.Assign` node — NOT `grep -c` / `wc -l` on the assignment
-      block. Grep counts comments + blank lines + line continuations as
-      elements; AST counts list items.
+      Recommendation at /sync Gate 1: classify as global, drop into
+      .claude/rules/git.md across all targets (CC, Codex, Gemini —
+      neutral-body, no slot divergence; the example block is git
+      command syntax, not CLI delegation syntax, so cross-cli-parity
+      MUST Rule 1 is preserved by default).
 
-      BLOCKED rationalizations: "Grep is faster" / "I'll subtract the
-      comment lines manually" / "The count is approximate anyway" /
-      "AST is overkill for a docstring number".
-
-      Evidence: W6 /redteam Round 2 reported 48 via grep; Round-3 AST
-      said 49; pre-existing docstring at kailash_ml/__init__.py:627
-      claimed 41 (predates Wave 6 additions). Three incompatible counts,
-      one truth — only AST is canonical. Fix shipped via PR #674.
-    classification_suggestion: global
-    rationale: |
-      Cross-SDK applicable. Rust's equivalent is re-export enumeration
-      (e.g. `pub use module::*`) which CAN be enumerated via `cargo doc
-      --document-private-items` JSON output OR `syn::parse_file`. The
-      "structural enumeration over text-grep" principle is language-
-      neutral. Variant overlay possible for the examples slot to swap
-      `ast.parse` for `syn::parse_file`; neutral body is identical.
+      The sibling precedents (force_drop, force_downgrade) already
+      ship cross-SDK; this rule completes the destructive-confirmation
+      family for the local-workspace surface.
 
 deferred_to_next_cycle:
-  - "Pre-commit hook upward-`.venv` resolution (or conditional skip when not at project root)
-    — both W7 worktrees committed via `git -c core.hooksPath=/dev/null` per rules/git.md
-    § Pre-Commit Hook Workarounds. Follow-up todo mentioned inline in commit bodies but
-    not filed as workspace todo. Recurring workaround pattern; warrants a real fix to
-    scripts/pre-commit-config so worktrees Just Work."
+  - "git.md is now 295 LOC after this addition — exceeds the
+    rule-authoring.md MUST NOT 200-line guidance. Pre-existing overflow;
+    extraction debt for git.md (and the prior-cycle agents.md / testing.md
+    overflows) remains a future codify cycle. The new rule is load-bearing
+    MUST content, not extraction-eligible reference material."
 
-  - "Duplicate `ModelNotFoundError` class in `packages/kailash-ml/src/kailash_ml/engines/
-    model_registry.py:~56` distinct from canonical `kailash.ml.errors.ModelNotFoundError`.
-    Both reachable depending on import path; new W7-001 `build_lineage_graph` walker
-    raises canonical, existing `get_model` paths raise local. Surfaced by W7-001 agent;
-    not addressed. Real bug — one of the two must be removed in a follow-up patch
-    (preferred: remove local, route all paths to canonical)."
-
-  - "HIGH-1 from Round-3 verification: `register` symbol redefinition shadowing in
-    `kailash_ml/__init__.py:57+246`. Line 57 imports `register` from `_wrappers` (sync);
-    line 246 redefines as `async def`. Ruff F811 flags shadowing. Real shadowing bug,
-    pre-existing latent — surfaced when ruff ran during PR #674. Recommend tdd-implementer
-    or kaizen-specialist single-shard fix (either remove line-57 import OR rename wrapper
-    to `_register_sync` and have async def delegate)."
-
-  - "MED-1 from Round-3 verification: `__version__` imported at line 46 of
-    `kailash_ml/__init__.py` but absent from `__all__`. Per rules/orphan-detection.md § 6
-    module-scope public imports MUST be in `__all__`. Cleanup PR; cross-SDK pattern likely
-    present in kailash-rs as well."
-
-  - "Rule file size hygiene — `rules/agents.md` at 232 lines and `rules/testing.md` at
-    284 lines both exceed the 200-line guidance in rules/rule-authoring.md MUST NOT.
-    Existing pre-W6 overflow; this codify cycle added ~30 lines each (load-bearing
-    MUST sub-clauses). Future codify cycles or a dedicated refactor MUST extract older
-    reference material to guides per the meta-rule."
+  - "Sibling destructive-git operations not covered: `git checkout --force`,
+    `git checkout -- <path>`, `git clean -fd`. The system prompt's
+    'destructive operations' guardrail covers them at session level, but
+    the same structural-confirmation discipline could be made loud and
+    linguistic via dedicated MUST clauses. Out of scope for this rule per
+    focus discipline; revisit if the failure modes recur."
