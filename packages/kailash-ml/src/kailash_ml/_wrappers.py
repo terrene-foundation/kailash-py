@@ -489,6 +489,20 @@ def diagnose(
 
         tracker = get_current_run()
 
+    # Unknown-kwargs contract (GH issue #701 part 2): the signature
+    # above is intentionally fixed-arity — no **kwargs — so any
+    # 1.1.x-era keyword argument (title, n_batches, train_losses,
+    # val_losses, forward_returns_tuple) raises Python's native
+    # ``TypeError: diagnose() got an unexpected keyword argument
+    # '<name>'`` at the call site. This satisfies zero-tolerance.md
+    # Rule 3 (no silent fallback / fake integration via missing
+    # handoff field) — every kwarg the caller passes is either
+    # consumed (data, tracker, kind, show, sensitive) or rejected
+    # loudly by the binder. DO NOT add **kwargs here; doing so would
+    # silently swallow misspellings AND re-introduce the silent-drop
+    # failure mode #701 was filed to close. The CHANGELOG migration
+    # section (1.5.0) documents the rejected names.
+
     if kind not in (
         "auto",
         "dl",
