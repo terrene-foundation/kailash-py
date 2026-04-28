@@ -166,18 +166,21 @@ class TestResourceExhaustion:
         mock_connection.fetchval.return_value = 10000000  # Very large table
         mock_connection.fetch.return_value = []
 
-        # Simulate memory error during batch processing
+        # Simulate memory error during batch processing.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_count = {"count": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 batch_count["count"] += 1
                 if batch_count["count"] > 5:
                     raise MemoryError("Out of memory processing large batch")
-                return 10000  # Rows updated
-            return 10000000
+                return [(1,)] * 10000  # 10000 RETURNING rows
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetch = mock_fetch_batch
+        mock_connection.fetchval.return_value = 10000000  # Row count for COUNT(*)
         mock_connection.execute = AsyncMock()
 
         # Transaction context is already properly configured by create_mock_connection()
@@ -402,20 +405,22 @@ class TestPartialFailures:
         mock_connection.fetch.return_value = []
         mock_connection.execute = AsyncMock()
 
-        # Simulate partial batch failure
+        # Simulate partial batch failure.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_count = {"count": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 batch_count["count"] += 1
                 if batch_count["count"] == 3:
                     raise Exception("Batch 3 failed: unique constraint violation")
                 elif batch_count["count"] > 5:
-                    return None  # No more rows
-                return 1000  # Rows updated
-            return 10000
+                    return []  # No more rows
+                return [(1,)] * 1000  # 1000 RETURNING rows
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetch = mock_fetch_batch
 
         # Transaction context is already properly configured by create_mock_connection()
 

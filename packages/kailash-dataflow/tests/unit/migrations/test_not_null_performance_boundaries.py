@@ -115,21 +115,27 @@ class TestProductionScalePerformance:
         mock_connection = create_mock_connection()
         mock_connection.fetch.return_value = []
 
-        # Track batch execution
+        # Track batch execution.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_count = {"count": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetchval_misc(query, *args):
             # Handle constraint validation query (check for NULL values)
             if "IS NULL" in query and "COUNT" in query.upper():
                 return 0  # No NULL violations
+            return 100000  # Default row count for COUNT(*)
+
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 batch_count["count"] += 1
                 if batch_count["count"] * 10000 >= 100000:
-                    return None  # No more rows
-                return 10000  # Rows updated per batch
-            return 100000
+                    return []  # No more rows
+                return [(1,)] * 10000  # 10000 RETURNING rows
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetchval = mock_fetchval_misc
+        mock_connection.fetch = mock_fetch_batch
         mock_connection.execute = AsyncMock()
 
         with patch.object(
@@ -161,23 +167,28 @@ class TestProductionScalePerformance:
         mock_connection = create_mock_connection()
         mock_connection.fetch.return_value = []
 
-        # Simulate realistic batch processing delays
+        # Simulate realistic batch processing delays.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_times = []
 
-        async def mock_fetchval_batch(query, *args):
-            # Handle constraint validation query (check for NULL values)
+        async def mock_fetchval_misc(query, *args):
             if "IS NULL" in query and "COUNT" in query.upper():
-                return 0  # No NULL violations
+                return 0
+            return 1000000
+
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 start = time.time()
                 await asyncio.sleep(0.001)  # Simulate batch processing time
                 batch_times.append(time.time() - start)
                 if len(batch_times) * 10000 >= 1000000:
-                    return None
-                return 10000
-            return 1000000
+                    return []
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetchval = mock_fetchval_misc
+        mock_connection.fetch = mock_fetch_batch
         mock_connection.execute = AsyncMock()
 
         with patch.object(
@@ -214,19 +225,22 @@ class TestProductionScalePerformance:
         mock_connection.fetchval.return_value = 10000000  # 10M rows
         mock_connection.fetch.return_value = []
 
-        # Simulate timeout scenario
+        # Simulate timeout scenario.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_count = {"count": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 batch_count["count"] += 1
                 if batch_count["count"] > 50:
                     # Simulate timeout after 500K rows
                     raise asyncio.TimeoutError("Operation timed out")
-                return 10000
-            return 10000000
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetch = mock_fetch_batch
+        mock_connection.fetchval.return_value = 10000000  # Row count for COUNT(*)
         mock_connection.execute = AsyncMock()
 
         # Mock transaction for rollback
@@ -308,9 +322,9 @@ class TestProductionScalePerformance:
                 plan = await self.handler.plan_not_null_addition("test_table", column)
 
                 # Verify estimation is within reasonable bounds
-                assert min_time <= plan.estimated_duration <= max_time, (
-                    f"Estimation {plan.estimated_duration}s out of range [{min_time}, {max_time}] for {row_count} rows with {default_type}"
-                )
+                assert (
+                    min_time <= plan.estimated_duration <= max_time
+                ), f"Estimation {plan.estimated_duration}s out of range [{min_time}, {max_time}] for {row_count} rows with {default_type}"
 
 
 class TestMemoryUsagePatterns:
@@ -379,9 +393,9 @@ class TestMemoryUsagePatterns:
                 memory_growth_ratio = (
                     avg_last_10 / avg_first_10 if avg_first_10 > 0 else 1
                 )
-                assert memory_growth_ratio < 2.0, (
-                    f"Memory grew too much: {memory_growth_ratio}x"
-                )
+                assert (
+                    memory_growth_ratio < 2.0
+                ), f"Memory grew too much: {memory_growth_ratio}x"
 
     @pytest.mark.asyncio
     async def test_batch_size_optimization(self):
@@ -420,9 +434,9 @@ class TestMemoryUsagePatterns:
                 plan = await self.handler.plan_not_null_addition("test_table", column)
 
                 # Verify batch size is optimized for table size
-                assert plan.batch_size == expected_batch_size, (
-                    f"Expected batch size {expected_batch_size} for {row_count} rows, got {plan.batch_size}"
-                )
+                assert (
+                    plan.batch_size == expected_batch_size
+                ), f"Expected batch size {expected_batch_size} for {row_count} rows, got {plan.batch_size}"
 
 
 class TestTimeoutAndCancellation:
@@ -439,10 +453,12 @@ class TestTimeoutAndCancellation:
         mock_connection.fetchval.return_value = 1000000  # 1M rows
         mock_connection.fetch.return_value = []
 
-        # Track progress
+        # Track progress.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         progress = {"batches_completed": 0, "rows_updated": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 progress["batches_completed"] += 1
                 progress["rows_updated"] += 10000
@@ -452,10 +468,11 @@ class TestTimeoutAndCancellation:
                     raise asyncio.TimeoutError("Operation timed out")
 
                 await asyncio.sleep(0.01)  # Simulate work
-                return 10000
-            return 1000000
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetch = mock_fetch_batch
+        mock_connection.fetchval.return_value = 1000000  # Row count for COUNT(*)
         mock_connection.execute = AsyncMock()
 
         # Mock transaction
@@ -507,11 +524,13 @@ class TestTimeoutAndCancellation:
         mock_connection.fetchval.return_value = 500000
         mock_connection.fetch.return_value = []
 
-        # Track cancellation
+        # Track cancellation.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         cancelled = {"flag": False}
         batch_count = {"count": 0}
 
-        async def mock_fetchval_batch(query, *args):
+        async def mock_fetch_batch(query, *args):
             if "WITH batch AS" in query:
                 batch_count["count"] += 1
 
@@ -523,10 +542,11 @@ class TestTimeoutAndCancellation:
                 if batch_count["count"] == 20:
                     cancelled["flag"] = True
 
-                return 10000
-            return 500000
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_batch
+        mock_connection.fetch = mock_fetch_batch
+        mock_connection.fetchval.return_value = 500000  # Row count for COUNT(*)
         mock_connection.execute = AsyncMock()
 
         # Mock transaction
@@ -784,13 +804,17 @@ class TestProgressTracking:
         mock_connection = create_mock_connection()
         mock_connection.fetch.return_value = []
 
-        # Track progress reports
+        # Track progress reports.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         progress_reports = []
 
-        async def mock_fetchval_with_progress(query, *args):
-            # Handle constraint validation query (check for NULL values)
+        async def mock_fetchval_misc(query, *args):
             if "IS NULL" in query and "COUNT" in query.upper():
-                return 0  # No NULL violations
+                return 0
+            return 1000000
+
+        async def mock_fetch_with_progress(query, *args):
             if "WITH batch AS" in query:
                 # Simulate progress callback
                 progress = len(progress_reports) * 10000 / 1000000 * 100
@@ -803,11 +827,12 @@ class TestProgressTracking:
                 )
 
                 if len(progress_reports) * 10000 >= 1000000:
-                    return None
-                return 10000
-            return 1000000
+                    return []
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_with_progress
+        mock_connection.fetchval = mock_fetchval_misc
+        mock_connection.fetch = mock_fetch_with_progress
         mock_connection.execute = AsyncMock()
 
         with patch.object(
@@ -851,14 +876,18 @@ class TestProgressTracking:
         mock_connection = create_mock_connection()
         mock_connection.fetch.return_value = []
 
-        # Track timing for ETA calculation
+        # Track timing for ETA calculation.
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop; mock the `WITH batch AS` predicate on fetch().
         batch_times = []
         start_time = time.time()
 
-        async def mock_fetchval_with_timing(query, *args):
-            # Handle constraint validation query (check for NULL values)
+        async def mock_fetchval_misc(query, *args):
             if "IS NULL" in query and "COUNT" in query.upper():
-                return 0  # No NULL violations
+                return 0
+            return 500000
+
+        async def mock_fetch_with_timing(query, *args):
             if "WITH batch AS" in query:
                 batch_times.append(time.time() - start_time)
 
@@ -875,13 +904,14 @@ class TestProgressTracking:
                     assert eta < 3600  # Less than 1 hour
 
                 if len(batch_times) >= 50:
-                    return None
+                    return []
 
                 await asyncio.sleep(0.001)  # Simulate work
-                return 10000
-            return 500000
+                return [(1,)] * 10000
+            return []
 
-        mock_connection.fetchval = mock_fetchval_with_timing
+        mock_connection.fetchval = mock_fetchval_misc
+        mock_connection.fetch = mock_fetch_with_timing
         mock_connection.execute = AsyncMock()
 
         with patch.object(
