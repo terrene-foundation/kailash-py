@@ -169,6 +169,7 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Tooling & Quality
 
-| File                                     | Description                                                                                                                                 |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [spec-drift-gate.md](spec-drift-gate.md) | Mechanical pre-commit + CI check that verifies spec assertions against code; section-context inference, override directives, baseline grace |
+| File                                             | Description                                                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [spec-drift-gate.md](spec-drift-gate.md)         | Mechanical pre-commit + CI check that verifies spec assertions against code; section-context inference, override directives, baseline grace |
+| [diagnostics-catalog.md](diagnostics-catalog.md) | Cross-cutting diagnostics catalog — error taxonomy, observability hooks, and protocol-conformance markers shared across packages            |
