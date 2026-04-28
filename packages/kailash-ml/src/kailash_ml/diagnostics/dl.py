@@ -1192,6 +1192,16 @@ class DLDiagnostics:
         torch = self._torch
         F = torch.nn.functional
 
+        # Use the MODEL's actual device — not self.device — so this helper
+        # works whether the user moved the model to GPU/MPS themselves or
+        # left it on CPU. self.device is a backend-detection hint
+        # (specs/ml-backends.md §2); the model owns its real placement.
+        try:
+            model_device = next(self.model.parameters()).device
+        except StopIteration:
+            # Parameter-less module — fall back to detected device.
+            model_device = self.device
+
         n_batches = 0
         n_samples = 0
         was_training = self.model.training
@@ -1211,8 +1221,8 @@ class DLDiagnostics:
                         continue
                     inputs, targets = batch
                     try:
-                        inputs = inputs.to(self.device)
-                        targets = targets.to(self.device)
+                        inputs = inputs.to(model_device)
+                        targets = targets.to(model_device)
                     except AttributeError:
                         # Non-tensor inputs — skip with structured warn so
                         # the operator can correlate. See observability.md
