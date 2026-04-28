@@ -1809,9 +1809,9 @@ class DataFlow(DataFlowEventMixin):
             self._record_failed_ddl(model_name, e, "")
 
             # In fail-fast mode, raise DDLFailedError on this access too —
-            # the operator who just triggered ensure_table_exists() needs the
-            # typed surface, not a silent False return that the caller likely
-            # ignores.
+            # the operator who just triggered ensure_table_exists() needs a
+            # structured exception, not a silent False return that the caller
+            # likely ignores.
             if not self._auto_migrate_warn:
                 raise self._DDLFailedError(
                     model_name=model_name,
@@ -7742,10 +7742,13 @@ class DataFlow(DataFlowEventMixin):
         """
         if not isinstance(statement, str):
             return None
-        # Match: CREATE TABLE [IF NOT EXISTS] [schema.]"table" or table
+        # Match: CREATE/ALTER/DROP TABLE [IF [NOT] EXISTS] [schema.]"table"
+        # The "IF [NOT] EXISTS" optional clause covers BOTH variants:
+        # CREATE uses "IF NOT EXISTS"; DROP uses "IF EXISTS".
         m = re.search(
             r"(?i)\b(?:CREATE|ALTER|DROP)\s+TABLE\s+"
-            r'(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[A-Za-z_][\w]*"?\.)?'
+            r"(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"
+            r'(?:"?[A-Za-z_][\w]*"?\.)?'
             r'"?([A-Za-z_][\w]*)"?',
             statement,
         )
