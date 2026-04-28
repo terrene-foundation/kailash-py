@@ -1385,6 +1385,86 @@ class DataFlow(DataFlowEventMixin):
         # 4. Run migrations if needed
         # 5. Setup monitoring if enabled
 
+    def register_model(
+        self,
+        model_cls: Type,
+        *,
+        replace: bool = False,
+        force_drop: bool = False,
+    ) -> Type:
+        """Register a model with DataFlow non-decoratively.
+
+        Programmatic counterpart to ``@db.model``. Both paths share the
+        same body — ``register_model(Foo)`` produces identical state to
+        ``@db.model class Foo: ...`` (entries in ``_models``,
+        ``_registered_models``, ``_model_fields``; CRUD/bulk node
+        generation; classification-policy registration; deferred
+        relationship detection). Returns ``model_cls`` for chaining.
+
+        Idempotency: by default, calling ``register_model`` on an
+        already-registered model raises ``ValueError`` (consistent with
+        the ``@db.model`` duplicate-registration check). Pass
+        ``replace=True`` AND ``force_drop=True`` to drop the prior
+        table and re-register — see ``rules/dataflow-identifier-safety.md``
+        Rule 4 for the destructive-confirmation pattern.
+
+        Args:
+            model_cls: The model class to register.
+            replace: When ``True``, allow re-registration of an
+                already-registered model. Requires ``force_drop=True``.
+            force_drop: When ``True``, acknowledge that re-registration
+                may drop and recreate the underlying table. Required
+                when ``replace=True``.
+
+        Returns:
+            ``model_cls`` (same class, for chaining).
+
+        Raises:
+            ValueError: Model already registered and ``replace=False``.
+            ValueError: ``replace=True`` without ``force_drop=True``.
+
+        Example:
+            >>> db = DataFlow("sqlite:///app.db")
+            >>> class User:
+            ...     name: str
+            ...     email: str
+            >>> db.register_model(User)
+            <class 'User'>
+        """
+        model_name = model_cls.__name__
+
+        if model_name in self._models:
+            if not replace:
+                raise ValueError(
+                    f"Model '{model_name}' is already registered. "
+                    f"Pass replace=True (and force_drop=True) to "
+                    f"explicitly drop and re-register. "
+                    f"Currently registered models: "
+                    f"{list(self._models.keys())}"
+                )
+            if not force_drop:
+                # Per rules/dataflow-identifier-safety.md Rule 4 —
+                # destructive operations require structural confirmation.
+                raise ValueError(
+                    f"register_model('{model_name}', replace=True) refused "
+                    f"— pass force_drop=True to acknowledge that "
+                    f"re-registration may drop and recreate the "
+                    f"underlying table; data loss is irreversible."
+                )
+            # Tear down the prior registration so model() does not raise
+            # the duplicate-registration enhanced error.
+            self._models.pop(model_name, None)
+            self._registered_models.pop(model_name, None)
+            self._model_fields.pop(model_name, None)
+            self._pending_relationship_detection.discard(model_name)
+            if model_name in self._pending_table_creations:
+                self._pending_table_creations.remove(model_name)
+
+        # Delegate to the canonical decorator body so both surfaces
+        # produce identical state. ``model()`` returns the (possibly
+        # mutated) class; we propagate that back to the caller.
+        return self.model(model_cls)
+
     def model(self, cls: Type) -> Type:
         """Decorator to register a model with DataFlow.
 
