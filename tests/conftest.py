@@ -307,6 +307,64 @@ def manage_node_registry():
     yield
 
 
+# ============================================================================
+# DPI-B2: Process pool registry cleanup between tests (issue #697 + #698)
+# ----------------------------------------------------------------------------
+# Tests that mutate ``_POOL_DEFAULTS`` via ``set_pool_defaults()`` MUST
+# restore them or downstream tests inherit the override (cap=10 from one
+# test leaks into the next test that expects the 100 default). Tests
+# that seed the fallback path also leak entries into
+# ``_PROCESS_POOL_REGISTRY``. The autouse fixture below resets BOTH
+# between every test, in both unit and integration tiers.
+# ============================================================================
+
+
+@pytest.fixture(autouse=True)
+def reset_pool_registry():
+    """Reset process-wide pool registry + defaults between tests (DPI-B2).
+
+    Yields control to the test, then on teardown:
+        1. Restores ``_POOL_DEFAULTS`` to factory values (300 / 100).
+        2. Clears ``_PROCESS_POOL_REGISTRY`` entries that survived the
+           test (deliberate leaks from regression tests).
+        3. Cancels any reaper tasks the test started so the next test
+           gets a clean event-loop background.
+
+    The fixture is a no-op for tests that never touch async_sql state —
+    the imports are lazy and the dict ops are O(1) on an empty registry.
+    """
+    yield
+    # Lazy import — keeps conftest light on tests that don't touch
+    # AsyncSQLDatabaseNode at all.
+    try:
+        from kailash.nodes.data.async_sql import (
+            _PROCESS_POOL_REGISTRY,
+            _REAPER_TASKS,
+            _reset_pool_defaults_for_tests,
+        )
+    except ImportError:
+        return
+
+    # 1. Reset defaults
+    _reset_pool_defaults_for_tests()
+
+    # 2. Clear registry (WeakValueDictionary; clearing drops the
+    #    registry's view of the values, real cleanup happens via the
+    #    test's own teardown of pool objects).
+    _PROCESS_POOL_REGISTRY.clear()
+
+    # 3. Cancel reaper tasks. Tasks belonging to a closed event loop
+    #    raise on .done()/.cancel() — silently drop those.
+    for loop_id, task in list(_REAPER_TASKS.items()):
+        try:
+            if not task.done():
+                task.cancel()
+        except Exception:
+            # Loop closed or task in invalid state — drop the entry.
+            pass
+        _REAPER_TASKS.pop(loop_id, None)
+
+
 @pytest.fixture(scope="session")
 def sdk_infrastructure():
     """Fixture that ensures SDK infrastructure is available."""
