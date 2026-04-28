@@ -127,6 +127,56 @@ CC system prompt provides the template. Additionally, always include a `## Relat
 
 **Why:** Without issue links, PRs become disconnected from their motivation, breaking traceability and preventing automatic issue closure on merge.
 
+## `git reset --hard` MUST Verify Clean Working Tree (MUST)
+
+`git reset --hard <ref>` SILENTLY discards every unstaged modification AND every untracked file in the affected paths. Recovery is impossible — unstaged content has no reflog entry. Running `git reset --hard` without first verifying `git status --porcelain` is empty is BLOCKED.
+
+The structurally safer command `git reset --keep <ref>` performs the same commit-graph operation BUT aborts if it would lose local changes. It MUST be preferred for any back-out or branch-reorganization workflow.
+
+```bash
+# DO — --keep aborts loudly when working tree has changes
+git reset --keep origin/main
+# → "error: Entry '.session-notes' not uptodate. Cannot merge."
+
+# DO — verify clean working tree first if --hard is genuinely needed
+[ -z "$(git status --porcelain)" ] || { echo "stash or commit first"; exit 1; }
+git reset --hard origin/main
+
+# DO — if --hard with modifications present is unavoidable, stash explicitly
+# so the work is recoverable from the stash list
+git stash push -u -m "pre-reset safety net: <reason>"
+git reset --hard origin/main
+git stash pop  # restore intentionally; conflicts are loud, recoverable
+
+# DO — for the "I committed on main by accident, want it on a feature branch"
+# recovery, the safe sequence is:
+git switch -c feat/<name>            # preserve the commit on a new branch
+git switch main
+git reset --keep origin/main         # back main out — refuses if work would be lost
+```
+
+```bash
+# DO NOT — bare --hard with no working-tree check
+git reset --hard origin/main         # silently wipes M files and untracked files
+
+# DO NOT — assume the reflog covers it
+git reset --hard origin/main         # unstaged work has NO reflog; gone forever
+```
+
+**BLOCKED rationalizations:**
+
+- "The tree is clean, I just committed everything I wanted"
+- "The reflog will save me"
+- "I'm in a fresh worktree, there's nothing to lose"
+- "It's only `.session-notes`, not load-bearing"
+- "I'll remember to check next time"
+- "`--hard` is faster than stashing"
+- "`--keep` is unfamiliar, `--hard` is the canonical form"
+
+**Why:** `git reset --hard` is the most destructive git operation that doesn't rewrite history — and unlike force-push, the destruction is unrecoverable: unstaged modifications and untracked files have no reflog. `git reset --keep` exists in git specifically to provide the same commit-graph effect with structural safety; defaulting to `--keep` converts a class of silent data-loss failures into loud "refused — stash first" errors. This rule is the local-git sibling of `dataflow-identifier-safety.md` Rule 4 (DROP requires `force_drop=True`) and `schema-migration.md` Rule 7 (downgrade requires `force_downgrade=True`) — the same structural-confirmation pattern applied to the local-workspace destruction surface.
+
+Origin: kailash-py session 2026-04-28 (PR #691 sync-PR rebase) — `.session-notes` modifications wiped by `git reset --hard 7ce2d2eb` during a "move commit off main" recovery. Content was only recovered because the file had been read into the agent's conversation context earlier in the session; without that, the prior session's hand-off would have been permanently lost. The agent had earlier seen `M .session-notes` in `git status` output but did not re-check working-tree state before the reset. Cross-language principle — applies to every SDK and every language; `git reset --hard` semantics are universal. Sibling destructive ops (`git checkout --force`, `git checkout -- <path>`, `git clean -fd`) are out of scope for this rule per `rule-authoring.md` Rule 6 focus discipline; the system prompt's "destructive operations" guardrail covers them at session level.
+
 ## Rules
 
 - Atomic commits: one logical change per commit, tests + implementation together
