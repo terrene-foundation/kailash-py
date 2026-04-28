@@ -1,5 +1,23 @@
 # DataFlow Changelog
 
+## [2.3.3] — 2026-04-28 — Migration test-suite + pyright cleanup follow-through
+
+Patch release closing the merged-but-unreleased gap on `kailash-dataflow` main. Three commits since 2.3.2:
+
+- `95e8e2c8` (PR #684) — `not_null_handler.py` pyright cleanup: 8 errors / 2 warnings to 0 / 0. Production source change in `packages/kailash-dataflow/src/dataflow/migrations/not_null_handler.py`; per `rules/build-repo-release-discipline.md` Rule 5 this triggers the version bump.
+- `f1dfb194` (PR #689, closes #683) — repaired test mock-method drift in 4 not_null_handler unit-test files where mocks invoked methods that no longer exist on the production class.
+- `391617d1` (PR #690, closes #688) — aligned 4 migration unit-test files (column removal, dependency analyzer, impact analysis reporter, application-safe rename) to the post-refactor production surface.
+
+### Fixed
+
+- Pyright drift in `not_null_handler.py` (PR #684).
+- Test-mock drift across 8 migration unit-test files (PRs #689, #690). Local `pytest packages/kailash-dataflow/tests/unit/migrations/` is GREEN at 717 passed / 0 failed; these tests are not yet in CI per #688.
+
+### Notes
+
+- No production runtime behavior change beyond the type-checking cleanup in `not_null_handler.py`.
+- 13 pre-existing pytest warnings in the migrations suite remain (separate workstreams: `MigrationPerformanceTracker._stop_monitoring` un-awaited coroutine, `AsyncMockMixin._execute_mock_call` un-awaited coroutine in test framework).
+
 ## [2.3.2] — 2026-04-27 — emit_train_end structural error redaction (W7-002, Round-3 LOW-2 carry-forward)
 
 ### Security
@@ -24,7 +42,7 @@
 ### Documentation
 
 - Updated `specs/dataflow-ml-integration.md` § 4A.2 — replaced the "Caller is responsible for sanitizing" docstring contract with the emitter-redacted contract, referencing `format_error_for_event` and `rules/event-payload-classification.md` § 1.
-- Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-* and dataflow-ml-* specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
+- Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-_ and dataflow-ml-_ specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
 
 ## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
 
