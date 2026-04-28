@@ -84,9 +84,11 @@ repos:
         description: "Block fabricated symbol/test-path references in specs/**.md"
         # Read-only sweep: never modifies the working tree (sidesteps the
         # auto-stash interaction documented in rules/git.md § Pre-Commit Hook
-        # Workarounds). Stdlib-only — uses .venv python directly so no extra
-        # virtualenv is provisioned by pre-commit. See SDG-501.
-        entry: .venv/bin/python scripts/spec_drift_gate.py --format human
+        # Workarounds). Stdlib-only — resolves the canonical .venv via
+        # find-venv-python.sh so worktrees (.claude/worktrees/<X>/) inherit
+        # the main checkout's .venv automatically, avoiding the
+        # core.hooksPath=/dev/null bypass W7 worktrees needed on 2026-04-27.
+        entry: scripts/development/find-venv-python.sh scripts/spec_drift_gate.py --format human
         language: system
         files: ^specs/.*\.md$
         pass_filenames: true
@@ -97,15 +99,18 @@ repos:
     hooks:
       - id: pytest-check
         name: Run Tier 1 unit tests
-        # Use the project .venv's Python directly. Plain `python -m pytest`
-        # resolves via PATH and can pick up a pyenv or global Python that
-        # does not have the workspace editable installs (kailash_mcp,
-        # kaizen, nexus, etc.), which breaks any test that imports those
-        # packages. `uv run python` would also work but has a side effect
-        # of regenerating uv.lock on every invocation, which pre-commit
-        # flags as "files were modified by this hook". Direct .venv/bin
-        # avoids both problems. See .claude/rules/python-environment.md.
-        entry: .venv/bin/python -m pytest
+        # Resolve the project .venv's Python via the worktree-safe wrapper.
+        # Plain `python -m pytest` resolves via PATH and can pick up a pyenv
+        # or global Python that lacks the workspace editable installs
+        # (kailash_mcp, kaizen, nexus, etc.), which breaks any test that
+        # imports those packages. `uv run python` would also work but has a
+        # side effect of regenerating uv.lock on every invocation, which
+        # pre-commit flags as "files were modified by this hook".
+        # find-venv-python.sh resolves to <main-checkout>/.venv/bin/python
+        # via git rev-parse --git-common-dir so worktrees
+        # (.claude/worktrees/<X>/) work without bypass. See
+        # .claude/rules/python-environment.md.
+        entry: scripts/development/find-venv-python.sh -m pytest
         language: system
         args: [
             tests/unit/, # Only unit tests
