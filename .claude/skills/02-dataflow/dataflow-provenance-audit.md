@@ -1,6 +1,5 @@
 ---
 description: DataFlow Provenance[T] field tracking and audit trail persistence
-paths: ["packages/kailash-dataflow/**"]
 ---
 
 # Provenance + Audit Trail

@@ -4,11 +4,11 @@ How to create each component type for any domain.
 
 ## Agents
 
-**Location depends on repo type**:
+**Location** depends on repo type:
 
-- **BUILD repos** (kailash-py, kailash-rs, kailash-prism — this repo): canonical subdirectories — `.claude/agents/frameworks/`, `.claude/agents/analysis/`, `.claude/agents/quality/`, etc. BUILD repos do NOT use `agents/project/`.
-- **loom/** (COC authority): canonical subdirectories + `.claude/variants/{lang}/agents/` for language-specific variants. No `project/`.
-- **Downstream USE project repos** (consumer projects): `.claude/agents/project/<name>.md` — project-specific, stays local.
+- **BUILD repos** (kailash-py, kailash-rs, kailash-prism): `.claude/agents/frameworks/`, `.claude/agents/analysis/`, `.claude/agents/quality/`, etc. (canonical locations). `/codify` in a BUILD repo writes to these canonical locations and creates an upstream proposal for loom/.
+- **Downstream USE repos** (consumer project repos that `pip install kailash`): `.claude/agents/project/` for project-specific agents. `/codify` stays local — no upstream proposal.
+- **loom/**: `.claude/agents/` with subdirectories (`analysis/`, `frameworks/`, `implementation/`, `quality/`, `release/`, `testing/`, `frontend/`). No `project/` subdirectory — loom/ is the authority, not a project.
 
 **Purpose**: Specialized sub-processes with deep domain knowledge and procedural directives.
 
@@ -60,7 +60,10 @@ When to hand off to other agents.
 
 ## Skills
 
-**Location**: `.claude/skills/<number>-<name>/` with `SKILL.md` entry point
+**Location** depends on repo type:
+
+- **BUILD repos** and **loom/**: `.claude/skills/<number>-<name>/` with `SKILL.md` entry point (canonical numbered skill directories, e.g., `skills/01-core-sdk/`, `skills/02-dataflow/`). `/codify` updates these in place.
+- **Downstream USE repos**: `.claude/skills/project/<name>/` for project-specific skills. `/codify` stays local.
 
 **Purpose**: Distilled domain knowledge that agents reference. The institutional handbook.
 
@@ -224,7 +227,7 @@ Plus `/wrapup` (session notes).
 
 ## Hooks
 
-**Location**: `scripts/hooks/` with registration in `.claude/settings.json`
+**Location**: `.claude/hooks/` with registration in `.claude/settings.json`
 
 **Purpose**: Deterministic enforcement outside the AI's context. CO L3 Tier 2.
 
@@ -242,7 +245,7 @@ Plus `/wrapup` (session notes).
 ### Hook Template (JavaScript)
 
 ```javascript
-// scripts/hooks/hook-name.js
+// .claude/hooks/hook-name.js
 const fs = require("fs");
 const path = require("path");
 
@@ -270,13 +273,13 @@ console.log(JSON.stringify(result));
     "UserPromptSubmit": [
       {
         "type": "command",
-        "command": "node scripts/hooks/user-prompt-rules-reminder.js"
+        "command": "node .claude/hooks/user-prompt-rules-reminder.js"
       }
     ],
     "PreToolUse": [
       {
         "type": "command",
-        "command": "node scripts/hooks/validate-bash-command.js",
+        "command": "node .claude/hooks/validate-bash-command.js",
         "matcher": { "tool_name": "Bash" }
       }
     ]

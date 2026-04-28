@@ -152,17 +152,12 @@ Discovered during kailash-rs red team. Violations are BLOCK-level findings.
 
 `float('nan')` in context dicts bypasses financial comparisons because `NaN < X` and `NaN > X` are both `False`. `verify_action()` must validate with `math.isfinite()` on ALL numeric context values -- including `transaction_amount`, `cost`, `daily_total`, and any cumulative context values.
 
-## ML Integration Surface (pact 0.10.0+, M10 W32c)
-
-`pact.ml` — ML governance module: `check_trial_admission`, `check_engine_method_clearance`, `check_cross_tenant_op`. See `specs/pact-ml-integration.md`. Every `km.*` engine method routes through D/T/R clearance axes (`axis: Literal["D","T","R"]`, `min_level: Literal["L","M","H"]`) per `ml-engines-v2-addendum.md §E9.2`. Origin: `feat/w32c-pact-ml-governance` merged at `84bd67f4`.
-
 ## When NOT to Use This Agent
 
 - For EATP protocol questions (trust chains, delegation, signing) -> use `co-reference` skill
 - For AI agent execution patterns (signatures, tools) -> use **kaizen-specialist**
 - For database operations -> use **dataflow-specialist**
 - For API deployment -> use **nexus-specialist**
-- For ML engine selection / training / serving -> use **ml-specialist**
 
 ## Full Documentation
 

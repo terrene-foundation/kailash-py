@@ -317,7 +317,7 @@ store.close()
 
 ## Cross-References
 
-- **Agent**: `eatp-expert` — Full EATP framework knowledge
+- **Skill**: `co-reference` — Full EATP framework knowledge
 - **Security patterns**: `eatp-security-patterns.md` — Lock ordering, integer arithmetic, symlink rejection
 - **Posture stores**: `eatp-posture-stores.md` — Related persistence pattern for postures
 - **Source**: `kailash/trust/constraints/budget_tracker.py`, `kailash/trust/constraints/budget_store.py`

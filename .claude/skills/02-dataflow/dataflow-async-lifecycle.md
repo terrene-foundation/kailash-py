@@ -2,7 +2,7 @@
 
 ## Overview
 
-DataFlow current version provides proper async lifecycle methods for use in async contexts like FastAPI lifespan events, pytest async fixtures, and async main functions.
+DataFlow current version provides proper async lifecycle methods for use in async contexts like Nexus lifespan events, pytest async fixtures, and async main functions.
 
 ## The Problem (DF-501 Error)
 
@@ -24,7 +24,7 @@ RuntimeError: Event loop is closed
 ## When to Use Each
 
 **Use Async Methods When:**
-- Inside FastAPI lifespan events (`@asynccontextmanager async def lifespan()`)
+- Inside Nexus lifespan events (`@asynccontextmanager async def lifespan()`)
 - Inside pytest async fixtures (`@pytest.fixture async def db()`)
 - Inside async main functions (`async def main()`)
 - Any code running in an async context with `asyncio.get_running_loop()`
@@ -34,11 +34,11 @@ RuntimeError: Event loop is closed
 - Sync pytest tests (non-async)
 - Any code NOT running in an async context
 
-## FastAPI Integration Pattern
+## Nexus Integration Pattern
 
 ```python
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from nexus import Nexus
 from dataflow import DataFlow
 
 db = DataFlow("postgresql://localhost/mydb")
@@ -50,14 +50,14 @@ class User:
     email: str
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: Nexus):
     # Startup: Use async version
     await db.create_tables_async()
     yield
     # Shutdown: Use async version
     await db.close_async()
 
-app = FastAPI(lifespan=lifespan)
+app = Nexus(lifespan=lifespan)
 
 @app.get("/users/{user_id}")
 async def get_user(user_id: str):
@@ -128,7 +128,7 @@ See DF-501 for details.
 ```python
 # WRONG - Causes DF-501 in async context
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: Nexus):
     db = DataFlow("postgresql://...")
 
     @db.model
@@ -145,7 +145,7 @@ async def lifespan(app: FastAPI):
 ```python
 # CORRECT - Use async methods in async context
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: Nexus):
     db = DataFlow("postgresql://...")
 
     @db.model

@@ -181,21 +181,16 @@ Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agent
 | `AZURE_OPENAI_*` / `AZURE_AI_INFERENCE_*` | Deprecated  | Use `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`  |
 | `kaizen_agents.agents.coordination`       | **REMOVED** | Use `from kaizen_agents import SupervisorWorkerPattern` etc |
 
-## ML Integration Surface (kaizen 2.12.0+, M10 W32a)
-
-`kaizen.ml` — bridge module with `tracker` kwarg on 3 diagnostic classes + `SQLiteSink` auto-emission + `km.engine_info` tool discovery. See `specs/kaizen-ml-integration.md`. Kaizen agents MUST use `km.engine_info` / `km.list_engines` (NOT hardcoded imports) per `ml-engines-v2-addendum.md §E11.3 MUST 1`. Origin: `feat/w32a-kaizen-ml-integration` merged at `de60e383`.
-
 ## Related Agents
 
 - **pattern-expert**: Core SDK workflow patterns for Kaizen integration
 - **testing-specialist**: 3-tier testing strategy for agent validation
 - **mcp-specialist**: MCP integration and tool calling patterns
 - **nexus-specialist**: Deploy Kaizen agents via multi-channel platform
-- **ml-specialist**: Engine discovery via `km.engine_info`; tracker bridge
 
 ## LLM Wire Layer (`kaizen.llm.LlmClient`)
 
-Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: `esperie/kailash-rs#406` + `#393` + `#394`.
+Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: `esperie-enterprise/kailash-rs#406` + `#393` + `#394`.
 
 ## Full Documentation
 

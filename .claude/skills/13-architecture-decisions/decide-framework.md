@@ -310,7 +310,7 @@ After choosing your framework, choose your abstraction layer. See `rules/framewo
 
 ### Detailed Guides
 
-- **Framework Advisor**: [`.claude/agents/implementation/pattern-expert.md`](../../../../.claude/agents/implementation/pattern-expert.md)
+- **Framework Advisor**: [`.claude/agents/framework-advisor.md`](../../../../.claude/agents/framework-advisor.md)
 
 ## Quick Tips
 

@@ -1,3 +1,8 @@
+---
+priority: 0
+scope: baseline
+---
+
 # Security Rules
 
 ALL code changes in the repository.

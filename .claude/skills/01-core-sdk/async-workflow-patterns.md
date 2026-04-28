@@ -1,6 +1,6 @@
 ---
 name: async-workflow-patterns
-description: "Async workflow execution with AsyncLocalRuntime. Use when asking 'async workflow', 'AsyncLocalRuntime', 'async execution', 'Docker deployment', or 'FastAPI workflow'."
+description: "Async workflow execution with AsyncLocalRuntime. Use when asking 'async workflow', 'AsyncLocalRuntime', 'async execution', 'Docker deployment', or 'Nexus workflow'."
 globs: ["**/*.py"]
 ---
 

@@ -168,7 +168,7 @@ A frustrated customer using angry language does NOT necessarily need a human. A 
 
 Models are often **incorrectly confident on hard cases** and **incorrectly uncertain on easy ones**. A model might report 95% confidence on a nuanced legal question (wrong) and 60% confidence on a straightforward address lookup (also wrong).
 
-**Why**: Confidence scores reflect the model's certainty about its output token sequence, not the objective correctness of its answer. These are fundamentally different things.
+**Why:** Confidence scores reflect the model's certainty about its output token sequence, not the objective correctness of its answer. These are fundamentally different things.
 
 **If you need confidence-based routing**, calibrate empirically: measure actual accuracy at each reported confidence level, then set thresholds based on observed performance — not the model's self-assessment.
 

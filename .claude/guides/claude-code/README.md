@@ -44,7 +44,7 @@ Then come back and read the rest when you have time.
 | **[06 - The Skill System](06-the-skill-system.md)**       | Understanding the knowledge base that powers Claude's expertise. How skills are organized and how Claude uses them.            | 20-25 min    |
 | **[07 - The Hook System](07-the-hook-system.md)**         | Automation that runs before and after Claude's actions. How hooks enforce quality, security, and best practices automatically. | 20-25 min    |
 | **[08 - The Rule System](08-the-rule-system.md)**         | Mandatory rules that govern Claude's behavior. Understanding constraints, quality gates, and why they exist.                   | 15-20 min    |
-| **[09 - The Learning System](09-the-learning-system.md)** | How the setup learns from your usage patterns and evolves over time. Observations, instincts, and evolution.                   | 15-20 min    |
+| **[09 - The Learning System](09-the-learning-system.md)** | How the setup learns from your usage patterns and improves over time. Observations, digest aggregation, and codification.      | 15-20 min    |
 
 ### Part 3: Practical Usage
 

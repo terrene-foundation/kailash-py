@@ -1,9 +1,14 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/trust/**"
 ---
 
 # Trust-Plane Security Rules
+
+
+<!-- slot:neutral-body -->
 
 ### 1. No Bare `open()` or `Path.read_text()` for Record Files
 
@@ -168,3 +173,5 @@ norm = os.path.normpath(user_path)  # Platform-dependent, Windows backslashes
 ```
 
 **Why:** `os.path.normpath` produces platform-dependent results (backslashes on Windows), causing constraint patterns that match on Linux to silently fail on other platforms.
+
+<!-- /slot:neutral-body -->

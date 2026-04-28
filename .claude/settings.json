@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/validate-bash-command.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-bash-command.js\"",
             "timeout": 10
           }
         ]
@@ -25,27 +25,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/validate-workflow.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-workflow.js\"",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/validate-deployment.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-deployment.js\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/integration-hygiene.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/integration-hygiene.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/auto-format.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto-format.js\"",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/enforce-framework-first.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/enforce-framework-first.js\"",
             "timeout": 5
           }
         ]
@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/session-start.js\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.js\""
           }
         ]
       }
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/session-end.js\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-end.js\""
           }
         ]
       }
@@ -76,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pre-compact.js\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact.js\""
           }
         ]
       }
@@ -86,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/user-prompt-rules-reminder.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/user-prompt-rules-reminder.js\"",
             "timeout": 5
           }
         ]
@@ -97,12 +97,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/stop.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/log-triage-gate.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-triage-gate.js\"",
             "timeout": 7
           }
         ]

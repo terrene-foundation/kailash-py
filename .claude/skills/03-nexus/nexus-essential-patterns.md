@@ -56,7 +56,7 @@ app = Nexus(auto_discovery=False)  # CRITICAL
 
 db = DataFlow(
     database_url="postgresql://...",
-    auto_migrate=True,  # default: Works in Docker/FastAPI
+    auto_migrate=True,  # default: Works in Docker/Nexus
 )
 ```
 
@@ -95,7 +95,7 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 # Native middleware (Starlette-compatible)
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
-# Include existing FastAPI routers
+# Include existing routers
 app.include_router(legacy_router, prefix="/legacy")
 
 # Plugin protocol (NexusPluginProtocol)

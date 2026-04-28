@@ -3,18 +3,16 @@ name: cc-audit
 description: "Audit project artifacts for quality, completeness, effectiveness, and template alignment"
 ---
 
-# CC Artifact Audit
+# CC Artifact Audit (Project)
 
-Reviews artifacts for quality and template alignment.
+Reviews your repo's artifacts for quality and template alignment. Scope depends on repo type.
 
-## BUILD vs USE Repo Distinction (what gets audited?)
+## BUILD vs USE Repo Distinction
 
-Audit scope depends on repo type:
+- **BUILD repos** (kailash-py, kailash-rs, kailash-prism): no `agents/project/` or `skills/project/` directories. Every artifact lives in a canonical location (`agents/frameworks/`, `skills/01-core-sdk/`, etc.) and is subject to the same fidelity checks as loom/. The Phase 1 inventory in a BUILD repo walks ALL artifact directories, not just `project/`.
+- **Downstream USE repos** (consumer projects): project-specific artifacts live in `agents/project/` and `skills/project/`. The Phase 1 inventory focuses on these, since shared artifacts are owned by the upstream template and audited at loom/.
 
-- **BUILD repos** (kailash-py, kailash-rs, kailash-prism — source of truth): Audit **canonical locations** — `agents/frameworks/`, `agents/analysis/`, `skills/01-core-sdk/`, `skills/NN-name/`, `rules/*.md`, `commands/*.md`. BUILD repos MUST NOT have `agents/project/` or `skills/project/` — those are a USE-repo convention.
-- **USE/downstream project repos** (consumer projects): Audit `agents/project/`, `skills/project/` — project-specific local artifacts. Shared artifacts from the template are checked for drift (template wins on next `/sync`).
-
-This repo is a BUILD repo. Audit canonical locations.
+If this repo is a BUILD repo, skip the `project/`-only inventory below and audit all canonical artifact directories.
 
 ## Your Role
 
@@ -22,7 +20,9 @@ Specify scope: `all`, `fidelity` (quality only), `sync` (template alignment only
 
 ## Phase 1: Fidelity Audit
 
-1. **Inventory**: List canonical artifacts (`agents/**/*.md`, `skills/**/*.md`, `rules/*.md`, `commands/*.md`) with line counts.
+1. **Inventory**:
+   - **USE repos**: list project-specific artifacts (`agents/project/`, `skills/project/`) with line counts.
+   - **BUILD repos**: list all canonical artifacts (`agents/**/*.md`, `skills/**/*`, `rules/*.md`, `commands/*.md`) with line counts; `agents/project/` and `skills/project/` should not exist.
 
 2. **Four-dimension audit** per artifact:
    - **Competency**: Precise instructions? Knows its domain?

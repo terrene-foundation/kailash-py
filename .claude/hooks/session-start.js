@@ -542,7 +542,7 @@ function isOlderThan(a, b) {
 /**
  * Check for packages with commits since their last release tag.
  * Silent when no packages / no matching tags / all released.
- * See scripts/hooks/lib/release-drift.js for detection logic.
+ * See .claude/hooks/lib/release-drift.js for detection logic.
  */
 function checkReleaseDrift(cwd) {
   const { detectUnreleasedPackages } = require("./lib/release-drift");
@@ -557,9 +557,7 @@ function checkReleaseDrift(cwd) {
       `[RELEASE-DRIFT]   ${pkg.name} (${pkg.path}): ${pkg.commits_since_tag} commit(s) since ${pkg.last_tag} — pyproject at v${pkg.current_version}`,
     );
   }
-  console.error(
-    `[RELEASE-DRIFT]   Run /release when ready to publish.`,
-  );
+  console.error(`[RELEASE-DRIFT]   Run /release when ready to publish.`);
 }
 
 function detectFramework(cwd) {

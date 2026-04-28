@@ -51,7 +51,7 @@ CMD ["python", "app.py"]
 ```python
 from kailash.runtime import get_runtime, AsyncLocalRuntime, LocalRuntime
 
-# Docker/FastAPI (async context) - RECOMMENDED
+# Docker/async production (async context) - RECOMMENDED
 runtime = AsyncLocalRuntime()
 # Or use auto-detection
 runtime = get_runtime("async")
@@ -92,44 +92,48 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 
 ### 5. Multi-Worker Connection Pool Management
 
-In Gunicorn + FastAPI deployments, each worker process creates its own database connection pools. This can exhaust database connections (8 workers × 30 connections = 240).
+In multi-worker deployments (e.g., Gunicorn with 8 workers), each worker process creates its own database connection pools. This can exhaust database connections (8 workers x 30 connections = 240).
 
 **Solution**: Use `external_pool` to inject a shared pool per worker:
 
 ```python
 import asyncpg
 import os
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from nexus import Nexus
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Create ONE pool per worker at startup
-    app.state.db_pool = await asyncpg.create_pool(
-        os.environ["DATABASE_URL"],
-        min_size=2,
-        max_size=10,  # DB max connections / number of workers
-    )
-    yield
-    await app.state.db_pool.close()
+app = Nexus(auto_discovery=False)
 
-app = FastAPI(lifespan=lifespan)
+# Create ONE pool at startup (shared across all handlers in this worker)
+_db_pool = None
 
-@app.post("/process")
-async def process_data(data: dict):
+async def get_pool():
+    global _db_pool
+    if _db_pool is None:
+        _db_pool = await asyncpg.create_pool(
+            os.environ["DATABASE_URL"],
+            min_size=2,
+            max_size=10,  # DB max connections / number of workers
+        )
+    return _db_pool
+
+@app.handler("process_data", description="Process data with shared pool")
+async def process_data(value: str) -> dict:
+    pool = await get_pool()
     node = AsyncSQLDatabaseNode(
         name="processor",
         database_type="postgresql",
         query="INSERT INTO results (data) VALUES ($1) RETURNING id",
-        params=[data["value"]],
-        external_pool=app.state.db_pool,
+        params=[value],
+        external_pool=pool,
     )
     try:
         result = await node.execute_async()
         return {"id": result["result"]["data"][0]["id"]}
     finally:
         await node.cleanup()
+
+app.start()
 ```
 
 **Key Rules**:
@@ -178,29 +182,30 @@ async def execute_production_workflow(workflow_def, inputs):
 
 ### 7. Health Check Endpoint
 
+Nexus provides built-in health checks via `app.health_check()`. For custom checks:
+
 ```python
-from fastapi import FastAPI
-from kailash.api.workflow_api import WorkflowAPI
+from nexus import Nexus
 
-app = FastAPI()
+app = Nexus(auto_discovery=False)
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for load balancers."""
+@app.handler("health", description="Health check for load balancers")
+async def health_check() -> dict:
     return {
         "status": "healthy",
         "service": "workflow-api",
         "version": "1.0.0"
     }
 
-@app.get("/ready")
-async def readiness_check():
-    """Readiness check - verify dependencies."""
+@app.handler("ready", description="Readiness check - verify dependencies")
+async def readiness_check() -> dict:
     try:
         # Check database, external APIs, etc.
         return {"status": "ready"}
     except Exception as e:
-        return {"status": "not_ready", "error": str(e)}, 503
+        return {"status": "not_ready", "error": str(e)}
+
+app.start()
 ```
 
 ### 8. Production Logging Pattern
@@ -298,7 +303,7 @@ async def execute_with_metrics(workflow_def, inputs):
 
 ## Critical Production Rules
 
-1. **ALWAYS use AsyncLocalRuntime for Docker/FastAPI**
+1. **ALWAYS use AsyncLocalRuntime for Docker/async production deployments**
 2. **NEVER commit secrets - use environment variables**
 3. **ALWAYS implement health checks**
 4. **ALWAYS use structured logging**

@@ -125,6 +125,7 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 - **[Anti-Patterns Catalog](anti-patterns.md)** — Common mistakes and fixes
 - **[Token Budget Guide](token-budget.md)** — Measurement and optimization
 - **[Parallel Merge Workflow](parallel-merge-workflow.md)** — Merging 5+ parallel worktree changes to the same file via specialist delegation
+- **[Worktree Orchestration Protocol](worktree-orchestration.md)** — Extended evidence + post-mortems for `rules/agents.md` worktree MUSTs and `rules/worktree-isolation.md`
 
 ## When to Use This Skill
 
@@ -135,6 +136,6 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 
 ## Support
 
-- **claude-code-architect** — Primary expert for CC artifact work
+- **cc-architect** — Primary expert for CC artifact work
 - `co-reference` skill — CO methodology (principles, layers)
 - `co-reference` skill — COC methodology (five-layer implementation)

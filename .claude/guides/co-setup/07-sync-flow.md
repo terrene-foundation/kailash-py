@@ -102,9 +102,16 @@ Downstream projects (user applications built on the SDK) receive artifacts from 
 ### How downstream gets updates
 
 1. **Session-start hook** checks `.coc-sync-marker` timestamp
-2. If >7 days old, warns: "COC artifacts may be outdated"
-3. Developer runs `/sync` (the downstream variant) to pull from USE template
-4. Downstream `/sync` reads from the USE template repo, applies additive merge
+2. If >7 days old, warns: "COC artifacts may be outdated. Run `/sync`."
+3. Developer runs `/sync` — the command detects `coc-project` type from `.claude/VERSION`
+4. **Template resolver** (`scripts/resolve-template.js`) locates the USE template:
+   - Checks local sibling directory (e.g., `../kailash-coc-claude-py/`)
+   - Checks cache at `~/.cache/kailash-coc/<template>/`
+   - If not found: shallow clones (`git clone --depth 1`) from GitHub to cache
+   - GitHub slug comes from `upstream.template_repo` in VERSION, or auto-resolved for known templates
+5. Downstream `/sync` diffs template against local, applies additive merge
+
+**No local clone required.** Users who don't have the USE template repo cloned locally get a shallow clone cached automatically. Subsequent `/sync` runs fetch the latest from origin.
 
 ### Downstream merge rules
 
@@ -114,6 +121,7 @@ Same additive semantics as template sync:
 - Downstream-only files are preserved
 - CLAUDE.md is never overwritten
 - settings.json is verified after copy
+- `.claude/VERSION` updated: `upstream.template_version`, `upstream.template_repo`, `upstream.synced_at`
 
 ### What downstream NEVER gets
 

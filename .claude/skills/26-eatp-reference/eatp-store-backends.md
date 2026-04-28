@@ -322,6 +322,6 @@ def _safe_connection(self):
 
 ## See Also
 
-- `workspaces/trust-plane/04-validate/09-R13-store-red-team.md` — R13 findings that informed this skill
-- `workspaces/trust-plane/04-validate/R14-validation-report.md` — R14 findings (PostgreSQL PoolTimeout, exception wrapping)
+- R13 store backend red team findings (informed this skill's error handling patterns)
+- R14 validation findings (PostgreSQL PoolTimeout, exception wrapping)
 - TODO-24: PostgreSQL backend — first real application of this codified pattern

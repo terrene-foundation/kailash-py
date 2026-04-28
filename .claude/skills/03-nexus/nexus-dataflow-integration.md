@@ -9,7 +9,7 @@ tags: [nexus, dataflow, integration, blocking-fix, performance]
 
 CRITICAL: Proper configuration to prevent blocking on startup.
 
-> **DataFlow**: The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been **removed**. The only critical Nexus-side setting is `auto_discovery=False`. DataFlow's `auto_migrate=True` (default) now works correctly in Docker/FastAPI.
+> **DataFlow**: The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been **removed**. The only critical Nexus-side setting is `auto_discovery=False`. DataFlow's `auto_migrate=True` (default) now works correctly in Docker/async.
 
 ## The Problem
 
@@ -33,7 +33,7 @@ app = Nexus(
 # Step 2: Create DataFlow (defaults work fine in the current version)
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    auto_migrate=True,  # Default - works in Docker/FastAPI
+    auto_migrate=True,  # Default - works in Docker/async
 )
 
 # Step 3: Register models
@@ -64,7 +64,7 @@ app.start()
 ### `auto_migrate=True` (DataFlow Default)
 
 - Uses synchronous DDL operations for table creation
-- No event loop issues in Docker/FastAPI
+- No event loop issues in Docker/async
 - Automatic schema creation and updates
 - **This is the default** -- no special configuration needed
 
@@ -188,9 +188,8 @@ def create_production_app():
         api_port=int(os.getenv("API_PORT", "8000")),
         mcp_port=int(os.getenv("MCP_PORT", "3001")),
         auto_discovery=False,
-        enable_auth=True,
-        enable_monitoring=True
     )
+    # Enable auth and monitoring per language-specific configuration
 
     db = DataFlow(
         database_url=os.getenv("DATABASE_URL"),
@@ -263,7 +262,7 @@ def test_nexus_dataflow_integration():
 ## Key Takeaways
 
 - **CRITICAL**: Use `auto_discovery=False` with DataFlow
-- DataFlow default: `auto_migrate=True` (default) works everywhere including Docker/FastAPI
+- DataFlow default: `auto_migrate=True` (default) works everywhere including Docker/async
 - The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been removed
 - All CRUD operations work with default DataFlow config
 - Manual workflow registration required with `auto_discovery=False`

@@ -1,10 +1,15 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/pact/**"
   - "**/governance/**"
 ---
 
 # PACT Governance Rules
+
+
+<!-- slot:neutral-body -->
 
 ### 1. Frozen GovernanceContext
 
@@ -124,3 +129,5 @@ def resolve_envelope(self, address: Address) -> GovernanceEnvelope:
   **Why:** Widening a child envelope beyond its parent is a privilege escalation — the child gains permissions the parent was never granted.
 - Use bare exceptions for governance errors — all MUST inherit `PactError` with structured `.details`
   **Why:** Bare exceptions lose the structured error context (address, envelope, constraint) needed to diagnose governance failures in production.
+
+<!-- /slot:neutral-body -->

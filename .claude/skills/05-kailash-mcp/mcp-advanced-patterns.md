@@ -42,7 +42,7 @@ mcp_servers = [
 ## JWT Authentication
 
 ```python
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp.auth import JWTAuth
 
 jwt_auth = JWTAuth(
     secret_key="your-secret-key",
@@ -61,7 +61,7 @@ async def admin_operation(action: str) -> dict:
 ### Registry-Based Discovery
 
 ```python
-from kailash.mcp_server.discovery import ServiceRegistry
+from kailash_mcp.discovery import ServiceRegistry
 
 registry = ServiceRegistry()
 
@@ -82,7 +82,7 @@ tools_servers = await registry.discover_servers(capability="tools")
 ### Convenience Functions
 
 ```python
-from kailash.mcp_server import discover_mcp_servers, get_mcp_client
+from kailash_mcp import discover_mcp_servers, get_mcp_client
 
 # Auto-discover servers
 servers = await discover_mcp_servers(capability="tools")
@@ -94,7 +94,7 @@ client = await get_mcp_client("database")
 ## Structured Tools with Validation
 
 ```python
-from kailash.mcp_server.advanced_features import structured_tool
+from kailash_mcp.advanced_features import structured_tool
 
 @structured_tool(
     output_schema={
@@ -113,7 +113,7 @@ def search_tool(query: str) -> dict:
 ## Resource Templates and Subscriptions
 
 ```python
-from kailash.mcp_server.advanced_features import ResourceTemplate
+from kailash_mcp.advanced_features import ResourceTemplate
 
 template = ResourceTemplate(
     uri_template="files://{path}",
@@ -131,7 +131,7 @@ subscription = await template.subscribe(
 ## Progress Reporting
 
 ```python
-from kailash.mcp_server.protocol import ProgressManager
+from kailash_mcp.protocol import ProgressManager
 
 progress = ProgressManager()
 

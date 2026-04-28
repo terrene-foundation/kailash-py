@@ -38,8 +38,19 @@ codify_session: |
   enumeration; the principle (AST/structural enumeration > text-grep) is
   language-neutral.
 
-status: pending_review
+status: distributed
 submitted_date: "2026-04-27T22:00:00+08:00"
+reviewed_date: "2026-04-28T00:00:00+08:00"
+distributed_date: "2026-04-28T00:00:00+08:00"
+distribution_note: |
+  Both proposed changes (audit-specialist Bash+Read in agents.md;
+  __all__/re-export AST-not-grep in testing.md) were already
+  incorporated into loom global rules in v2.9.4 (2026-04-28) ahead
+  of this proposal's review. Distribution to USE templates happened
+  via the v2.9.4 /sync run; the v2.9.5 /sync (this run) is a no-op
+  for these specific changes. Marked distributed so next /codify
+  archives this file and creates fresh per artifact-flow.md
+  § "Archive Before Fresh".
 sdk_version: "2.11.3"
 loom_version: "2.8.31"
 classification:

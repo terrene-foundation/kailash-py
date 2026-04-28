@@ -1,4 +1,17 @@
+---
+priority: 10
+scope: path-scoped
+paths:
+  - "**/dataflow/**"
+  - "**/events*"
+  - "**/domain_events/**"
+  - "**/event_bus*"
+---
+
 # Event-Payload Classification Rules
+
+
+<!-- slot:neutral-body -->
 
 Every `DomainEvent` payload emitted from DataFlow write paths MUST be free of raw classified field values. Classified PK values (e.g. an `Account` keyed by `email` with `@classify("email", PII)`) MUST be hashed before emission; classified field names MUST NOT appear in event payloads that list mutated fields (`fields_changed` and friends).
 
@@ -148,3 +161,5 @@ def test_helper_hashes():
 ## Origin
 
 Issue #491 (2026-04-17) — DataFlowExpress `_emit_write_event` shipped raw `record_id` to subscribers. Cross-SDK from kailash-rs v3.17.1 BP-048 commit `2e9dbf94` (Rust `format_record_id_for_event` helper). Fix: single-point filter at `DataFlowEventMixin._emit_write_event` + helper at `dataflow.classification.event_payload`. Verified by 10/10 Tier 2 integration tests at `packages/kailash-dataflow/tests/integration/security/test_event_payload_classification.py`.
+
+<!-- /slot:neutral-body -->

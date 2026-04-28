@@ -33,7 +33,7 @@ description: "CO specification: eight first principles, five-layer architecture,
 ## Five-Layer Architecture
 
 ```
-Layer 5: LEARNING      — Observe, capture, evolve knowledge across sessions
+Layer 5: LEARNING      — Observe, digest, codify knowledge across sessions
 Layer 4: INSTRUCTIONS  — Structured workflows with approval gates
 Layer 3: GUARDRAILS    — Deterministic enforcement outside AI context
 Layer 2: CONTEXT       — Organization's institutional knowledge, machine-readable
@@ -44,14 +44,14 @@ Each layer encodes a different aspect of human judgment: L1 organizational struc
 
 ## Six-Phase Workflow Model
 
-| Phase | Command | Purpose |
-|---|---|---|
-| 01 | `/analyze` | Research and understand the problem space |
-| 02 | `/plan` | Structure the work; **human approves** |
-| 03 | `/execute` | Do the work one task at a time |
-| 04 | `/review` | Adversarial critique; produces finalized output |
-| 05 | `/learn` | Extract knowledge; upgrade CO artifacts |
-| 06 | `/deliver` | Package and hand off |
+| Phase | Command    | Purpose                                         |
+| ----- | ---------- | ----------------------------------------------- |
+| 01    | `/analyze` | Research and understand the problem space       |
+| 02    | `/plan`    | Structure the work; **human approves**          |
+| 03    | `/execute` | Do the work one task at a time                  |
+| 04    | `/review`  | Adversarial critique; produces finalized output |
+| 05    | `/learn`   | Extract knowledge; upgrade CO artifacts         |
+| 06    | `/deliver` | Package and hand off                            |
 
 Phase 05 is unique — output goes OUTSIDE the workspace, back into .claude/ artifacts. This is Principle 7 (Knowledge Compounds) made concrete. Proposals require human approval.
 
@@ -59,15 +59,15 @@ Domains rename commands to fit vocabulary but preserve the 6-phase structure.
 
 ## Domain Applications
 
-| Application | Short Name | Status |
-|---|---|---|
-| CO for Codegen | COC | Production |
-| CO for Research | COR | Production |
-| CO for Governance | COG | Production |
-| CO for Education | COE | Analysis |
-| CO for Compliance | COComp | Sketch |
-| CO for Learners | COL | Development |
-| COL for Finance | COL-F | Production |
+| Application       | Short Name | Status      |
+| ----------------- | ---------- | ----------- |
+| CO for Codegen    | COC        | Production  |
+| CO for Research   | COR        | Production  |
+| CO for Governance | COG        | Production  |
+| CO for Education  | COE        | Analysis    |
+| CO for Compliance | COComp     | Sketch      |
+| CO for Learners   | COL        | Development |
+| COL for Finance   | COL-F      | Production  |
 
 ## Honest Limitations
 

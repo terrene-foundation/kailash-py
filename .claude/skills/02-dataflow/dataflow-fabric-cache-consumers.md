@@ -1,6 +1,5 @@
 ---
 description: Data Fabric cache control, consumer adapters, and MCP tool generation
-paths: ["packages/kailash-dataflow/src/dataflow/fabric/**"]
 ---
 
 # Fabric Cache Control + Consumer Adapters

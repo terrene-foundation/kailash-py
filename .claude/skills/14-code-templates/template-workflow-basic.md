@@ -99,17 +99,17 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-### Docker/FastAPI Template (Async)
+### Docker/async Template (Async)
 
 ```python
-"""FastAPI Workflow Template for asynchronous execution"""
+"""Nexus Workflow Template for asynchronous execution"""
 
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import AsyncLocalRuntime
-from fastapi import FastAPI, HTTPException
+from nexus import Nexus, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI()
+app = Nexus()
 
 class WorkflowRequest(BaseModel):
     input_data: dict = {}

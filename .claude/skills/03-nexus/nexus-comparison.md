@@ -1,25 +1,26 @@
 ---
 name: nexus-comparison
-description: "Nexus vs alternatives (FastAPI, Flask, Typer). Use when asking 'nexus vs fastapi', 'why nexus', or 'nexus benefits'."
+description: "Nexus architecture and capabilities. Use when asking 'why nexus', 'nexus benefits', or 'nexus capabilities'."
 ---
 
-# Nexus vs Alternatives
+# Nexus Architecture & Capabilities
 
 > **Skill Metadata**
 > Category: `nexus`
 > Priority: `MEDIUM`
 > SDK Version: `0.9.25+`
 
-## Nexus vs FastAPI
+## Nexus Capabilities
 
-| Feature | Nexus | FastAPI |
-|---------|-------|---------|
-| **API** | ✅ Built-in | ✅ Native |
-| **CLI** | ✅ Built-in | ❌ Need Typer |
-| **MCP** | ✅ Built-in | ❌ Manual setup |
-| **Session Management** | ✅ Unified | ❌ Manual |
-| **Workflow Integration** | ✅ Native | ❌ Manual |
-| **Learning Curve** | Low | Medium |
+| Feature | Nexus |
+|---------|-------|
+| **API** | Built-in HTTP transport |
+| **CLI** | Built-in CLI generation |
+| **MCP** | Built-in MCP server |
+| **Session Management** | Unified across all channels |
+| **Workflow Integration** | Native workflow execution |
+| **Auth Stack** | NexusAuthPlugin (JWT, RBAC, tenant isolation) |
+| **Learning Curve** | Low — zero-config deployment |
 
 ## When to Use Nexus
 
@@ -36,46 +37,6 @@ app = Nexus(workflow, name="MyApp")
 app.run()  # All channels ready!
 ```
 
-## When to Use FastAPI
-
-```python
-# ✅ Use FastAPI when you need:
-# - Pure REST API only
-# - Custom middleware/auth
-# - Full control over routing
-# - Non-workflow logic
-
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.post("/execute")
-def execute():
-    # Manual workflow execution
-    pass
-```
-
-## Migration from FastAPI to Nexus
-
-```python
-# Before (FastAPI)
-from fastapi import FastAPI
-app = FastAPI()
-
-@app.post("/chat")
-def chat(message: str):
-    # Build workflow
-    # Execute workflow
-    # Return results
-    pass
-
-# After (Nexus)
-from nexus import Nexus
-
-app = Nexus(chat_workflow, name="ChatApp")
-app.run()  # API + CLI + MCP!
-```
-
 ## Key Benefits
 
 1. **Zero boilerplate** - One line deploys all channels
@@ -83,8 +44,25 @@ app.run()  # API + CLI + MCP!
 3. **Native workflows** - Direct workflow execution
 4. **Built-in CLI** - Automatic CLI generation
 5. **MCP ready** - Claude Desktop integration
+6. **Enterprise auth** - JWT, RBAC, tenant isolation via NexusAuthPlugin
+7. **Middleware support** - Starlette-compatible middleware, router inclusion
+
+## Deployment Example
+
+```python
+from nexus import Nexus
+
+app = Nexus(auto_discovery=False)
+
+@app.handler("chat", description="Chat endpoint")
+async def chat(message: str) -> dict:
+    # Build and execute workflow
+    return {"response": "..."}
+
+app.start()  # API + CLI + MCP!
+```
 
 ## Documentation
 
 
-<!-- Trigger Keywords: nexus vs fastapi, why nexus, nexus benefits, nexus vs flask, nexus alternatives -->
+<!-- Trigger Keywords: why nexus, nexus benefits, nexus capabilities, nexus architecture -->

@@ -50,7 +50,7 @@ High-performance wrapper providing ~23x faster execution by bypassing workflow o
 
 ## Sync Express API (`db.express_sync`)
 
-For non-async contexts (CLI scripts, sync FastAPI handlers, pytest without asyncio):
+For non-async contexts (CLI scripts, sync Nexus handlers, pytest without asyncio):
 
 ```python
 from dataflow import DataFlow

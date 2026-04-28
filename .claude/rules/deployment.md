@@ -1,13 +1,4 @@
----
-paths:
-  - "deploy/**"
-  - ".github/**"
-  - "pyproject.toml"
-  - "CHANGELOG.md"
-  - "packages/**/pyproject.toml"
----
-
-# SDK Release Rules (Python)
+<!-- slot:neutral-body -->
 
 ## Before Any Release
 
@@ -33,43 +24,6 @@ python -m venv /tmp/verify --clear
 **Why:** PyPI uploads are immutable -- a broken release cannot be overwritten, only yanked, leaving a permanent gap in the version sequence.
 
 **Exception**: Patch releases may skip TestPyPI with explicit human approval.
-
-## MUST: Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules
-
-Every sibling-package CI job (under `.github/workflows/test-kailash-*.yml`) that installs its sub-package MUST prepend `uv pip install -e "."` when the sub-package imports ANY module from `src/kailash/` that has not yet been released to PyPI. The sub-package's own declared dep on `kailash>=X.Y.Z` resolves from PyPI and MISSES the new module.
-
-```yaml
-# DO — root kailash editable FIRST, sub-package SECOND
-- name: Install kailash-<subpkg>[dev]
-  run: |
-    uv venv .venv
-    # Install root kailash editable so kailash.<new_module> resolves —
-    # the new module is not yet on PyPI; transitive resolve would miss it.
-    uv pip install -e "." --python .venv/bin/python
-    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
-
-# DO NOT — only sub-package, missing root editable
-- name: Install kailash-<subpkg>[dev]
-  run: |
-    uv venv .venv
-    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
-
-# → pip fetches kailash>=X.Y.Z from PyPI (old version)
-# → pytest collection fails: ModuleNotFoundError: No module named 'kailash.<new_module>'
-# → every matrix job in every sibling package fails identically
-```
-
-**BLOCKED rationalizations:**
-
-- "The sub-package declares kailash>=X.Y.Z, so the dep resolves"
-- "This CI job passed last release, no need to update"
-- "The new module will be on PyPI by the time CI runs"
-- "Adding the root install is redundant with the declared dep"
-- "Only the Coverage job needs this; other jobs don't import the new module"
-
-**Why:** Sub-package `[dev]` extras resolve against PyPI, NOT against the local editable tree. Every `uv pip install -e "packages/..."` block MUST be preceded by `uv pip install -e "."` whenever the sub-package imports from a core module that has not been released to PyPI. Silent "works" on other branches is false — the failing branch is the one that actually exercises the new module.
-
-Origin: Session 2026-04-20 (issue #567 PR#577). PR#570 landed `kailash.diagnostics.protocols` in `src/kailash/`; sub-package CI for #574/#575/#576 all failed at collection with `ModuleNotFoundError: No module named 'kailash.diagnostics'` until PR#577 extended the root-editable install to Base/DL/RL/Unit/Inter-Package jobs across `test-kailash-ml.yml` + `test-kailash-align.yml`.
 
 ## Publishing Rules
 
@@ -181,3 +135,110 @@ git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4
 **Why:** GitHub Actions' `push.tags` webhook delivery has undocumented rate-limiting when multiple tags arrive in a single push event. Batch pushes of 3+ tags fail to trigger the workflow for most (or all) of the tags. The failure is silent — the tags are created successfully, but `publish-pypi.yml` runs never appear in the Actions tab. Recovery requires manual `workflow_dispatch` per package, which is error-prone (must remember every package) and leaves a paper-trail asymmetry. Source: 2026-04-14 release where `git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4` triggered zero workflow runs.
 
 Origin: PR #469 (2026-04-14) — validated empirically when the single-tag push of nexus-v2.0.3 auto-triggered correctly while the prior 5-tag batch push triggered zero runs.
+
+## MUST: TestPyPI Trusted-Publisher Registration Is Per-Package
+
+Every package published via PyPI OIDC trusted-publishing MUST be registered as a pending publisher on BOTH `pypi.org` AND `test.pypi.org` separately. TestPyPI registration does NOT carry over from PyPI — they are independent indexes with independent publisher configs.
+
+```yaml
+# DO — register the package on test.pypi.org BEFORE the first
+# workflow_dispatch run with publish_to=testpypi:
+# https://test.pypi.org/manage/account/publishing/
+#
+# Required field values MUST match exactly:
+#   PyPI Project Name:  kailash-ml
+#   Owner:              terrene-foundation
+#   Repository:         kailash-py
+#   Workflow filename:  publish-pypi.yml
+#   Environment name:   testpypi
+
+# DO NOT — assume PyPI registration carries over
+# pypi.org publisher config exists for kailash-ml ✓
+# test.pypi.org publisher config does NOT exist ✗
+# → workflow_dispatch publish_to=testpypi fails:
+#   400 "Non-user identities cannot create new projects"
+```
+
+**BLOCKED rationalizations:**
+
+- "We registered on PyPI, TestPyPI should work"
+- "TestPyPI is just a mirror"
+- "We can register after the first failed run"
+- "The CI error message will explain it"
+
+**Why:** Tag-triggered publishes (`push` of `v*` / `<pkg>-v*`) flow direct to PyPI only and never touch TestPyPI. The TestPyPI path requires `workflow_dispatch` with `publish_to=testpypi`, which requires the project to be pre-registered on test.pypi.org as a pending publisher. Without that one-time UI step, the upload returns `400 "Non-user identities cannot create new projects"` — a confusing error message that costs a release-cycle round-trip. Registration is a one-time UI step per package; document it in the repo's release runbook so the next package release does not re-discover it.
+
+Origin: kailash-py 2026-04-19 release — kailash-ml PyPI publish succeeded via tag push, TestPyPI workflow_dispatch failed with 400 because `kailash_ml` was not pre-registered on test.pypi.org.
+
+## MUST: Sibling-Package CI Installs Root SDK Editable For Unreleased Core Modules
+
+When a new public module lands in `src/kailash/` (or any core SDK module tree) and is not yet published to PyPI, every sibling-package CI workflow that imports from it MUST prepend `uv pip install -e "."` to its install block BEFORE installing the sub-package's own `[dev]` extras. Sub-package CI workflows that install only `packages/<pkg>[dev]` silently resolve `kailash>=X.Y.Z` from PyPI — where the new module does NOT yet exist — and every test importing the new module fails at collection with `ModuleNotFoundError`.
+
+```yaml
+# DO — root kailash editable installed FIRST, then sub-package
+- name: Install kailash-<subpkg>[dev]
+  run: |
+    uv venv .venv
+    # Install root kailash first so kailash.<new_module> resolves
+    # (not yet on PyPI; depends on PR #<N> of issue #<M>).
+    uv pip install -e "." --python .venv/bin/python
+    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
+
+# DO NOT — only sub-package; transitively pulls kailash from PyPI
+- name: Install kailash-<subpkg>[dev]
+  run: |
+    uv venv .venv
+    uv pip install -e "packages/kailash-<subpkg>[dev]" --python .venv/bin/python
+    # → ModuleNotFoundError: No module named 'kailash.<new_module>'
+```
+
+**BLOCKED rationalizations:**
+
+- "The sub-package's `kailash>=X.Y.Z` dep should pull it in"
+- "We'll publish kailash first, then the sub-package CI will resolve"
+- "This workflow happened to pass last time; must be fine"
+- "The leading `uv pip install -e \".\"` is redundant with the sub-package dep"
+- "We'll add the root install when we see the first failure"
+
+**Why:** The sub-package's declared `kailash>=X.Y.Z` dependency resolves against PyPI, where the NEW module is not yet published. The build step succeeds (installs stable kailash from PyPI) but test collection fails because tests import the new module that exists only in the local editable source tree. Every `uv pip install -e "packages/..."` block in every sibling-package CI workflow MUST be preceded by `uv pip install -e "."`. No exceptions — even workflows that happen to pass today silently "work" because they do not import the new module yet. The comment in the CI step explaining the ordering is mandatory institutional knowledge: future contributors must understand that the leading root install is NOT redundant with the sub-package's declared kailash dep.
+
+Origin: kailash-py Session 2026-04-20 (issue #567 Session 3b) — PR #570 landed `kailash.diagnostics.protocols` in `src/kailash/` (not yet on PyPI). PR #577 extended the editable-root prepend to Base/DL/RL/Unit/Inter-Package CI jobs across `test-kailash-ml.yml` + `test-kailash-align.yml`, unblocking PRs #574/#575/#576 which all failed at collection with `ModuleNotFoundError: No module named 'kailash.diagnostics'`.
+
+### Bi-Directional At Bridge Boundaries (MUST)
+
+The rule above covers the one-way case (sub-package imports from root core). At cross-package BRIDGE boundaries — where two sub-packages import each other's modules (e.g. `kailash-ml` ↔ `kailash-align` RL bridge; `kailash-dataflow` ↔ `kailash-ml` fabric bridge) — BOTH sibling CI jobs MUST install BOTH packages editable. The uni-directional form is insufficient at bridges.
+
+```yaml
+# DO — BOTH directions install BOTH packages at bridge boundaries
+# .github/workflows/test-kailash-ml.yml (bridge: ml tests import kailash_align)
+- run: |
+    uv venv .venv
+    uv pip install -e "." --python .venv/bin/python
+    uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python   # reciprocal
+    uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
+# .github/workflows/test-kailash-align.yml (bridge: align tests import kailash_ml.rl.align_adapter)
+- run: |
+    uv venv .venv
+    uv pip install -e "." --python .venv/bin/python
+    uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python      # reciprocal
+    uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
+
+# DO NOT — install only one direction; the other fails on the next test run that imports across
+- run: |
+    uv pip install -e "packages/kailash-ml[dev]"   # ml tests import kailash_align
+    # → ModuleNotFoundError: No module named 'kailash_align'
+```
+
+**BLOCKED rationalizations:**
+
+- "The bridge module is in one direction only" (false — bridges are dual by nature)
+- "We'll add the reverse install when tests fail on it" (cascades: one direction surfaces, the other waits until next PR)
+- "Editable installs are dev-only, CI can rely on PyPI for the sibling"
+- "The sibling's declared version is enough"
+- "We can lazy-import across the bridge to avoid the editable"
+
+**Why:** Bridge modules are by definition dual-import — each side's tests exercise paths that import the other package's modules. A one-way editable install surfaces only one direction's `ModuleNotFoundError`; the other direction surfaces in the NEXT PR that runs the opposite test suite, cascading fixes across two release cycles. Pre-declaring BOTH reciprocal installs in BOTH CI workflows catches it at the FIRST collection pass. Evidence: PR #611 release cycle — align→ml reciprocal install landed at commit `e7c5a33b`; the ml→align direction surfaced as the next collection failure at commit `c59c30da`. Both directions needed identical discipline.
+
+Origin: kailash-py PR #611 release cycle (2026-04-23) — ML↔Align bridge CI cascade.
+
+<!-- /slot:neutral-body -->

@@ -1,10 +1,15 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/trust/**"
   - "**/eatp/**"
 ---
 
 # EATP SDK Rules
+
+
+<!-- slot:neutral-body -->
 
 ## Scope
 
@@ -69,3 +74,5 @@ These rules apply when working with EATP trust code.
 - New spec-level concepts require Rust team coordination before implementation
 
 **Why:** Semantic divergence between SDKs means trust records produced by one cannot be verified by the other, breaking cross-language interoperability.
+
+<!-- /slot:neutral-body -->

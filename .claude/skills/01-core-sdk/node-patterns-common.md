@@ -349,7 +349,7 @@ Use `pattern-expert` subagent when:
 
 ## Version Notes
 
-- **v0.9.25+**: AsyncLocalRuntime default for Docker/FastAPI
+- **v0.9.25+**: AsyncLocalRuntime default for Docker/async
 - **v0.9.20+**: String-based nodes recommended (all examples use this pattern)
 
 ## Keywords for Auto-Trigger

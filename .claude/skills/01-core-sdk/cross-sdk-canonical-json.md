@@ -1,6 +1,5 @@
 ---
 description: "Canonical JSON module (trust._json) for cross-SDK parser parity — DuplicateKeyError, NaN/Inf rejection, sorted-key deterministic output. Use when asking about 'canonical JSON', 'duplicate keys', 'cross-SDK JSON', 'parser differential', 'DuplicateKeyError', or 'canonical_json_loads'."
-paths: ["src/kailash/trust/_json.py", "src/kailash/trust/**"]
 ---
 
 # Cross-SDK Canonical JSON

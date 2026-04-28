@@ -273,7 +273,6 @@ def get_parameters(self):
 Use specialized subagents when:
 - **pattern-expert**: Complex cycle patterns, multi-node cycles
 - **testing-specialist**: Comprehensive cycle testing strategies
-- **sdk-navigator**: Cycle-related errors, parameter issues
 
 ## Documentation References
 

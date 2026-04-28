@@ -106,9 +106,10 @@ Before declaring a test "impossible at this layer" the author MUST attempt to wr
 # Attempted 2026-04-14: tried to wire `wiremock` against 127.0.0.1:randomport
 # and call client.get("/health"). Result: ServiceClientHttpError raised at
 # request time with message "URL points to private/loopback network",
-# from HttpClient::validate_url() at http_client.rs:299. Confirmed the
-# SSRF guard fires BEFORE the allowlist (line 306), so even
-# `allowed_hosts=["127.0.0.1"]` does not bypass it.
+# from HttpClient::validate_url() at http_client.rs:300 (private/loopback
+# block). Confirmed the SSRF guard (Layer 3) fires BEFORE the allowlist
+# (Layer 4 at line 306-307), so even `allowed_hosts=["127.0.0.1"]` does
+# not bypass it. Test confirms this: `allowlist_still_blocks_private_ips`.
 
 # DO NOT — assumed impossibility, no verification
 # (no comment, just "doesn't make sense to test this here")

@@ -1,6 +1,6 @@
 ---
 name: workflow-api-deployment
-description: "Deploy workflows as REST APIs using WorkflowAPI and FastAPI. Use when asking 'workflow API', 'REST API', 'deploy API', 'WorkflowAPI', 'FastAPI workflow', 'API deployment', or 'workflow endpoint'."
+description: "Deploy workflows as REST APIs using WorkflowAPI and Nexus. Use when asking 'workflow API', 'REST API', 'deploy API', 'WorkflowAPI', 'Nexus workflow', 'API deployment', or 'workflow endpoint'."
 ---
 
 # Workflow API Deployment
@@ -17,7 +17,7 @@ Workflow API Deployment guide with patterns, examples, and best practices.
 - **Primary Use**: Workflow API Deployment
 - **Category**: deployment
 - **Priority**: HIGH
-- **Trigger Keywords**: workflow API, REST API, deploy API, WorkflowAPI, FastAPI workflow
+- **Trigger Keywords**: workflow API, REST API, deploy API, WorkflowAPI, Nexus workflow
 
 ## Core Pattern
 
@@ -69,4 +69,4 @@ Use specialized subagents when:
 
 ## Keywords for Auto-Trigger
 
-<!-- Trigger Keywords: workflow API, REST API, deploy API, WorkflowAPI, FastAPI workflow -->
+<!-- Trigger Keywords: workflow API, REST API, deploy API, WorkflowAPI, Nexus workflow -->

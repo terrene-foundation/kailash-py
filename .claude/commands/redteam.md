@@ -88,31 +88,11 @@ Report all detailed steps and results in validation. Include the assertion table
 
 ### 6. Parity check (if required)
 
-If parity with an existing system is required:
-
-- Test run the old system via all required workflows and write down outputs
-- Run multiple times to determine deterministic vs natural-language output
-- For natural-language output: use LLM (gpt-5.2-nano in `.env`) to evaluate confidence + rationale
-- DO NOT use simple keyword/regex assertions
+If parity required: test-run old system, record outputs. For natural-language output, use LLM evaluation (not keyword/regex). See `.env` for model.
 
 ### 7. Log triage gate
 
-Per `observability.md` MUST Rule 5. Scan recent build/test output and `*.log` files for WARN+ entries and state disposition for each unique entry.
-
-```bash
-pytest --tb=short 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
-find . -name "*.log" -mmin -120 -exec grep -HnE 'WARN|ERROR|FAIL' {} +
-pip check 2>&1
-```
-
-Group identical entries (same source + same message pattern). For each unique entry, state one of:
-
-- **Fixed** — commit SHA
-- **Deferred** — explicit reason + tracked todo + human acknowledgment
-- **Upstream** — third-party deprecation, pinned with reason OR upstream issue link
-- **False positive** — why it does not apply
-
-Any unacknowledged WARN+ entries BLOCK convergence. The `log-triage-gate.js` Stop hook surfaces these at session end as a safety net.
+Per `rules/observability.md` MUST Rule 5: scan build/test output + `*.log` for WARN+ entries. Group identical entries, disposition each as Fixed (commit SHA) / Deferred (tracked todo) / Upstream (pinned version) / False positive. Unacknowledged WARN+ entries BLOCK convergence.
 
 ## Agent Teams
 

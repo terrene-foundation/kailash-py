@@ -84,7 +84,7 @@ Some tasks require more than pattern matching. They require:
 
 These agents help understand requirements and plan implementation.
 
-#### `deep-analyst`
+#### `analyst`
 
 **Expertise**: Failure point analysis, root cause investigation, complexity assessment
 
@@ -108,9 +108,9 @@ These agents help understand requirements and plan implementation.
 > Analyze the requirements for adding multi-tenancy to our application
 ```
 
-Claude delegates to `deep-analyst` → Returns executive summary, risk register, implementation phases.
+Claude delegates to `analyst` → Returns executive summary, risk register, implementation phases.
 
-#### `requirements-analyst`
+#### `analyst`
 
 **Expertise**: Requirements breakdown, Architecture Decision Records (ADR)
 
@@ -133,7 +133,6 @@ Claude delegates to `deep-analyst` → Returns executive summary, risk register,
 > Create an ADR for our authentication system choice
 ```
 
-#### `sdk-navigator`
 
 **Expertise**: Finding patterns in SDK documentation
 
@@ -156,7 +155,7 @@ Claude delegates to `deep-analyst` → Returns executive summary, risk register,
 > Find existing patterns for handling workflow errors
 ```
 
-#### `framework-advisor`
+#### ``decide-framework` skill`
 
 **Expertise**: Choosing between Core SDK, DataFlow, Nexus, Kaizen
 
@@ -383,7 +382,7 @@ These agents help write and validate code.
 
 These agents review and validate work.
 
-#### `intermediate-reviewer`
+#### `reviewer`
 
 **Expertise**: Checkpoint reviews and progress critique
 
@@ -430,7 +429,7 @@ These agents review and validate work.
 > Security review this authentication code
 ```
 
-#### `documentation-validator`
+#### `reviewer`
 
 **Expertise**: Documentation accuracy and testing
 
@@ -482,7 +481,7 @@ These agents provide deep expertise in frontend development across frameworks.
 > Analyze the contacts search page layout and identify usability issues
 ```
 
-#### `frontend-developer`
+#### `react-specialist`
 
 **Expertise**: React frontend development and component architecture
 
@@ -559,7 +558,7 @@ These agents provide deep expertise in frontend development across frameworks.
 
 ### Infrastructure Agents
 
-#### `deployment-specialist`
+#### `release-specialist`
 
 **Expertise**: Docker and Kubernetes deployment
 
@@ -583,7 +582,7 @@ These agents provide deep expertise in frontend development across frameworks.
 > Set up Kubernetes deployment for my application
 ```
 
-#### `git-release-specialist`
+#### `release-specialist`
 
 **Expertise**: Git workflows and releases
 
@@ -661,32 +660,30 @@ These agents provide deep expertise in frontend development across frameworks.
 ### Phase 1: Analysis
 
 ```
-deep-analyst → requirements-analyst → sdk-navigator → framework-advisor
 ```
 
 | Agent                  | Purpose in Phase                     |
 | ---------------------- | ------------------------------------ |
-| `deep-analyst`         | Identify risks and failure points    |
-| `requirements-analyst` | Break down requirements, create ADRs |
-| `sdk-navigator`        | Find existing patterns to reuse      |
-| `framework-advisor`    | Select appropriate frameworks        |
+| `analyst`         | Identify risks and failure points    |
+| `analyst` | Break down requirements, create ADRs |
+| ``decide-framework` skill`    | Select appropriate frameworks        |
 
 ### Phase 2: Planning
 
 ```
-todo-manager → gh-manager → intermediate-reviewer
+todo-manager → gh-manager → reviewer
 ```
 
 | Agent                   | Purpose in Phase               |
 | ----------------------- | ------------------------------ |
 | `todo-manager`          | Create detailed task breakdown |
 | `gh-manager`            | Sync tasks to GitHub           |
-| `intermediate-reviewer` | Validate plan completeness     |
+| `reviewer` | Validate plan completeness     |
 
 ### Phase 3: Implementation
 
 ```
-tdd-implementer → pattern-expert → [framework-specialist] → gold-standards-validator → intermediate-reviewer
+tdd-implementer → pattern-expert → [framework-specialist] → gold-standards-validator → reviewer
 ```
 
 | Agent                      | Purpose in Phase             |
@@ -695,49 +692,49 @@ tdd-implementer → pattern-expert → [framework-specialist] → gold-standards
 | `pattern-expert`           | Implement using SDK patterns |
 | `[framework-specialist]`   | Framework-specific guidance  |
 | `gold-standards-validator` | Validate compliance          |
-| `intermediate-reviewer`    | Review implementation        |
+| `reviewer`    | Review implementation        |
 
 ### Phase 4: Testing
 
 ```
-testing-specialist → documentation-validator
+testing-specialist → reviewer
 ```
 
 | Agent                     | Purpose in Phase     |
 | ------------------------- | -------------------- |
 | `testing-specialist`      | Verify test coverage |
-| `documentation-validator` | Test code examples   |
+| `reviewer` | Test code examples   |
 
 ### Phase 5: Deployment
 
 ```
-deployment-specialist
+release-specialist
 ```
 
 | Agent                   | Purpose in Phase        |
 | ----------------------- | ----------------------- |
-| `deployment-specialist` | Docker/Kubernetes setup |
+| `release-specialist` | Docker/Kubernetes setup |
 
 ### Phase 6: Release
 
 ```
-git-release-specialist → security-reviewer
+release-specialist → security-reviewer
 ```
 
 | Agent                    | Purpose in Phase                   |
 | ------------------------ | ---------------------------------- |
-| `git-release-specialist` | Pre-commit validation, PR creation |
+| `release-specialist` | Pre-commit validation, PR creation |
 | `security-reviewer`      | Security audit before commit       |
 
 ### Phase 7: Final
 
 ```
-intermediate-reviewer
+reviewer
 ```
 
 | Agent                   | Purpose in Phase |
 | ----------------------- | ---------------- |
-| `intermediate-reviewer` | Final critique   |
+| `reviewer` | Final critique   |
 
 ---
 
@@ -754,7 +751,7 @@ Claude automatically delegates based on task type:
 | "Nexus", "deploy as API"                 | `nexus-specialist`         |
 | "Kaizen", "AI agent"                     | `kaizen-specialist`        |
 | "test", "testing strategy"               | `testing-specialist`       |
-| "analyze requirements", "failure points" | `deep-analyst`             |
+| "analyze requirements", "failure points" | `analyst`             |
 | "compliance", "gold standards"           | `gold-standards-validator` |
 
 ### Explicit Delegation
@@ -764,7 +761,7 @@ You can explicitly request agent delegation:
 ```
 > Use the dataflow-specialist to help with database design
 
-> Use the deep-analyst to assess risks for this feature
+> Use the analyst to assess risks for this feature
 
 > Use the security-reviewer to audit this authentication code
 ```
@@ -774,7 +771,7 @@ You can explicitly request agent delegation:
 For complex tasks, request multiple agents:
 
 ```
-> Use the deep-analyst, requirements-analyst, and framework-advisor
+> Use the analyst, analyst, and `decide-framework` skill
   to fully analyze this feature request
 ```
 
@@ -919,8 +916,8 @@ Agents document which other agents should be consulted:
 ```markdown
 ## Related Agents
 
-- **requirements-analyst**: Hand off for formal ADR creation
-- **framework-advisor**: Consult for framework selection
+- **analyst**: Hand off for formal ADR creation
+- **`decide-framework` skill**: Consult for framework selection
 - **testing-specialist**: Hand off for test strategy
 ````
 
@@ -933,13 +930,13 @@ Claude uses these hints to coordinate effectively.
 ### Workflow 1: New Feature
 
 ```
-1. deep-analyst
+1. analyst
    └── Analyze risks and complexity
 
-2. requirements-analyst
+2. analyst
    └── Break down requirements
 
-3. framework-advisor
+3. `decide-framework` skill
    └── Select frameworks
 
 4. todo-manager
@@ -948,17 +945,16 @@ Claude uses these hints to coordinate effectively.
 5. [For each component]
    └── tdd-implementer → pattern-expert → gold-standards-validator
 
-6. intermediate-reviewer
+6. reviewer
    └── Review implementation
 
-7. security-reviewer + git-release-specialist
+7. security-reviewer + release-specialist
    └── Prepare for commit
 ```
 
 ### Workflow 2: Bug Fix
 
 ```
-1. sdk-navigator
    └── Find similar issues in documentation
 
 2. pattern-expert
@@ -977,7 +973,7 @@ Claude uses these hints to coordinate effectively.
 ### Workflow 3: Code Review
 
 ```
-1. intermediate-reviewer
+1. reviewer
    └── General code quality
 
 2. security-reviewer
@@ -990,12 +986,12 @@ Claude uses these hints to coordinate effectively.
 ### Workflow 4: Documentation Update
 
 ```
-1. documentation-validator
+1. reviewer
    └── Test existing examples
 
 2. [Make changes]
 
-3. documentation-validator
+3. reviewer
    └── Test new examples
 ```
 
@@ -1021,26 +1017,25 @@ Claude uses these hints to coordinate effectively.
 
 | Need                   | Agent                      |
 | ---------------------- | -------------------------- |
-| Risk analysis          | `deep-analyst`             |
-| Requirements breakdown | `requirements-analyst`     |
-| Find patterns          | `sdk-navigator`            |
-| Choose framework       | `framework-advisor`        |
+| Risk analysis          | `analyst`             |
+| Requirements breakdown | `analyst`     |
+| Choose framework       | ``decide-framework` skill`        |
 | Database help          | `dataflow-specialist`      |
 | API deployment         | `nexus-specialist`         |
 | AI agents              | `kaizen-specialist`        |
 | MCP integration        | `mcp-specialist`           |
 | UI/UX design           | `uiux-designer`            |
-| React components       | `frontend-developer`       |
+| React components       | `react-specialist`       |
 | React 19/Next.js       | `react-specialist`         |
 | Flutter mobile         | `flutter-specialist`       |
 | Write tests first      | `tdd-implementer`          |
 | Test strategy          | `testing-specialist`       |
 | Code compliance        | `gold-standards-validator` |
 | Security audit         | `security-reviewer`        |
-| Implementation review  | `intermediate-reviewer`    |
-| Documentation testing  | `documentation-validator`  |
-| Deployment setup       | `deployment-specialist`    |
-| Git/PR workflow        | `git-release-specialist`   |
+| Implementation review  | `reviewer`    |
+| Documentation testing  | `reviewer`  |
+| Deployment setup       | `release-specialist`    |
+| Git/PR workflow        | `release-specialist`   |
 | Task management        | `todo-manager`             |
 | GitHub projects        | `gh-manager`               |
 

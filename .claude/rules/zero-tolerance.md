@@ -1,3 +1,8 @@
+---
+priority: 0
+scope: baseline
+---
+
 # Zero-Tolerance Rules
 
 See `.claude/guides/rule-extracts/zero-tolerance.md` for extended BLOCKED-pattern examples and Phase 5 audit evidence.
@@ -53,6 +58,45 @@ logger.info("redis.connect", url=redis_url)  # still leaks
 **BLOCKED responses:** "Pre-existing on main, out of scope" / "CodeQL only flags PR diffs" / "Will be addressed when main re-scans" / "Same alert ID upstream" / "Main branch baseline suppresses it".
 
 **Why:** "Same on main" is the institutional ratchet that defers fixes forever. Rule 1 covers this in spirit; an explicit scanner-surface clause closes the rationalization gap. See guide for `__all__` / `__getattr__` second-instance variant (PR #506).
+
+### Rule 1b: Scanner Deferral Requires Tracking Issue + Runtime-Safety Proof
+
+Rule 1a mandates that scanner findings MUST be fixed, not dismissed. A LEGITIMATE deferral disposition exists for findings that are provably runtime-safe AND require architectural refactor out of release-scope — but ONLY if all four conditions are met. Missing any one of them, the "deferral" IS silent dismissal under a different name and is BLOCKED.
+
+Required conditions (ALL four):
+
+1. **Runtime-safety proof** — the finding is verified safe (e.g., every cyclic import is `TYPE_CHECKING`-guarded; the "unsafe" path is unreachable at runtime). Verification is a PR comment citing the guard lines.
+2. **Tracking issue** — filed against the repo with title `codeql: defer <rule-id> — <short-context>`, body including acceptance criteria for the full fix.
+3. **Release PR body link** — the tracking issue is linked from the release PR's body with explicit "deferred, safe per #<issue>" language.
+4. **Release-specialist agreement** — release-specialist confirms the deferral in review OR user explicitly overrides with "full fix".
+
+```markdown
+# DO — release PR body documents the deferred findings
+
+## CodeQL findings
+
+- 23 fixed directly (wrong-arguments, undefined-export, uninitialized-locals, warnings)
+- 17 deferred (py/unsafe-cyclic-import) — all TYPE_CHECKING-guarded per #612;
+  release-specialist approved deferral.
+
+# DO NOT — dismiss without any of the four conditions
+
+## CodeQL findings
+
+- Some deferred (pre-existing, not my concern)
+```
+
+**BLOCKED rationalizations:**
+
+- "The finding is obviously safe, we don't need a tracking issue"
+- "Release-specialist didn't flag it, that's implicit approval"
+- "We'll file the issue after merge"
+- "The PR body is the tracking record; a separate issue is bureaucracy"
+- "Verified by reading the code counts as the runtime-safety proof without writing it down"
+
+**Why:** Without written runtime-safety proof + tracking issue + release PR link + release-specialist signoff, a "deferred" finding is indistinguishable from a silent dismissal — nothing forces the follow-up and nothing surfaces the backlog. The four conditions are the structural defense: verification is the grep-able claim; the tracking issue is the workstream; the release PR link is the audit trail; the release-specialist signoff is the human gate. Rule 1a blocks dismissal; Rule 1b documents the ONLY legitimate path to defer.
+
+Origin: PR #611 release cycle (2026-04-23) — 17 `py/unsafe-cyclic-import` findings deferred via issue #612 after ml-specialist verified all cycles are TYPE_CHECKING-guarded; 23 other CodeQL errors fixed in the release PR.
 
 ## Rule 2: No Stubs, Placeholders, Or Deferred Implementation
 

@@ -37,7 +37,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Common Use Cases
 
 - **Basic Workflows**: Import WorkflowBuilder and LocalRuntime
-- **Async Workflows**: Import AsyncLocalRuntime for Docker/FastAPI
+- **Async Workflows**: Import AsyncLocalRuntime for Docker/async
 - **Type Hints**: Import nodes for IDE support (optional)
 - **Access Control**: Import security components
 - **Custom Nodes**: Import base classes for extensions
@@ -52,10 +52,10 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 ```
 
-### 2. Async Runtime (Docker/FastAPI)
+### 2. Async Runtime (Docker/async)
 
 ```python
-# For async contexts (Docker, FastAPI, etc.)
+# For async contexts (Docker, Nexus, etc.)
 from kailash.runtime.async_local import AsyncLocalRuntime
 ```
 
@@ -92,7 +92,7 @@ from typing import Dict, Any
 | --------------------- | ----------------------------------------------------------- | -------------------- |
 | **WorkflowBuilder**   | `from kailash.workflow.builder import WorkflowBuilder`      | Always (core)        |
 | **LocalRuntime**      | `from kailash.runtime.local import LocalRuntime`            | Sync workflows       |
-| **AsyncLocalRuntime** | `from kailash.runtime.async_local import AsyncLocalRuntime` | Docker/FastAPI       |
+| **AsyncLocalRuntime** | `from kailash.runtime.async_local import AsyncLocalRuntime` | Docker/async       |
 | **Nodes**             | String-based (no import)                                    | Production workflows |
 | **Node classes**      | `from kailash.nodes.<category> import <Node>`               | Type hints only      |
 
@@ -196,7 +196,7 @@ workflow.add_node("PythonCodeNode", "process", {
 
 workflow.add_connection("api_call", "response", "process", "data")
 
-# Use async runtime for Docker/FastAPI
+# Use async runtime for Docker/async
 runtime = AsyncLocalRuntime()
 results = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
@@ -262,12 +262,12 @@ Use `pattern-expert` subagent when:
 - 💡 **Minimal imports**: Only import what you need (WorkflowBuilder + Runtime)
 - 💡 **String-based nodes**: Don't import nodes for production workflows
 - 💡 **Absolute imports**: Always use full module paths
-- 💡 **Async runtime**: Import AsyncLocalRuntime for Docker/FastAPI
+- 💡 **Async runtime**: Import AsyncLocalRuntime for Docker/async
 - 💡 **Type hints**: Import nodes only if you want IDE support
 
 ## Version Notes
 
-- **v0.9.25+**: AsyncLocalRuntime recommended for Docker/FastAPI
+- **v0.9.25+**: AsyncLocalRuntime recommended for Docker/async
 - **v0.9.20+**: String-based nodes recommended (no imports needed)
 - **v0.8.0+**: Absolute imports required for all SDK usage
 

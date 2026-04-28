@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "pyproject.toml"
   - "packages/**/pyproject.toml"
@@ -13,6 +15,8 @@ paths:
 ---
 
 # BUILD Repo Release Discipline
+
+<!-- slot:neutral-body -->
 
 ## Scope
 
@@ -124,6 +128,42 @@ Per `rules/autonomous-execution.md` § "Structural vs Execution Gates", release 
 
 **Why:** The human owns release authorization (version increment + public-API commitment). But the agent owns scope enumeration. Splitting these correctly keeps the human's authority intact while closing the sibling-drift trap.
 
+### 5. PR Review MUST Sweep Sub-Package Version Bumps Before Merge
+
+Every PR-review gate (per `rules/agents.md` § Quality Gates row "Implementation done") MUST mechanically check: for each sub-package whose `packages/<pkg>/src/**/*.py` has changes in the diff, the SAME PR MUST also modify `packages/<pkg>/pyproject.toml::version` AND `packages/<pkg>/src/<pkg>/__init__.py::__version__`. A PR that ships sub-package src changes without a same-PR version bump is BLOCKED at PR-review time, NOT discovered later at `/release` time.
+
+```bash
+# DO — pre-merge mechanical sweep, run on every PR review
+for pkg_dir in packages/*/; do
+  pkg=$(basename "$pkg_dir")
+  src_changed=$(git diff origin/main...HEAD -- "$pkg_dir/src/" --name-only | wc -l)
+  ver_changed=$(git diff origin/main...HEAD -- "$pkg_dir/pyproject.toml" "$pkg_dir/src/*/__init__.py" \
+    | grep -cE '^\+\s*(version|__version__)\s*=' )
+  if [ "$src_changed" -gt 0 ] && [ "$ver_changed" -lt 2 ]; then
+    echo "BLOCKED: $pkg src changed but version bump missing in same PR"
+    exit 1
+  fi
+done
+
+# DO NOT — defer the check to /release
+# (Wave 4 PR #632 modified packages/kailash-mcp/src/.../auth/{providers,oauth}.py
+#  but mcp pyproject stayed at 0.2.9. Caught only at /release-time enumeration,
+#  required a separate fix-PR #634 to bump mcp 0.2.9 → 0.2.10. Net cost:
+#  one extra PR, one extra CI cycle, one extra admin merge, ~15min of pacing.)
+```
+
+**BLOCKED rationalizations:**
+
+- "The mcp changes fold into the next kailash release wave alongside #631"
+- "The bump can be a follow-up PR"
+- "PyPI consumers will get the fix in the dependency tree"
+- "We'll catch it at /release time"
+- "The PR title says 'security' so the version bump is implicit"
+
+**Why:** Sub-package src ships as that sub-package's wheel — there is no transitive path that delivers a `kailash-mcp` source change to consumers without a `kailash-mcp` version bump and a new PyPI publish. PR-review-time mechanical check converts an O(/release-time hotfix) cost into an O(grep) check; the alternative ("fold into next wave") is the exact rationalization that produces the silent sibling-drift this rule's § 1 was authored to prevent. Cross-SDK applicable: same Cargo.toml + lib.rs version atomicity in kailash-rs, same release-cycle / sibling-drift pattern.
+
+Origin: Session 2026-04-26 Wave 4 (kailash-py) — PR #632 (kailash-mcp/auth/\* security fix) merged without bumping mcp 0.2.9. Caught at /release-time scope enumeration; required fix-PR #634 (separate CI + admin merge) to bump mcp 0.2.9 → 0.2.10.
+
 ## MUST NOT
 
 - Report "done" / "complete" / "shipped" at admin-merge for any PR that landed code
@@ -158,3 +198,5 @@ Per `rules/autonomous-execution.md` § "Structural vs Execution Gates", release 
 - `rules/autonomous-execution.md` § "Fix-Immediately When Review Surfaces A Same-Class Gap Within Shard Budget" — sibling rule. Both mandate closing loops within-session rather than deferring to next-session context reload.
 - `rules/zero-tolerance.md` Rule 5 (Version Consistency on Release) — the atomicity requirement for pyproject.toml + **version**. This rule is the orchestration layer that ensures the consistency-checked bump reaches PyPI.
 - `rules/artifact-flow.md` — separate artifact lifecycle (proposals → loom → templates). Code releases follow this rule; COC artifact proposals follow artifact-flow.
+
+<!-- /slot:neutral-body -->

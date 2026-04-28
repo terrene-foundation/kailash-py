@@ -82,7 +82,7 @@ app.start()
 
 ## Authorization (RBAC)
 
-RBAC is configured as part of the NexusAuthPlugin. Use FastAPI dependencies
+RBAC is configured as part of the NexusAuthPlugin. Use Nexus dependencies
 to enforce roles and permissions on individual endpoints.
 
 ```python
@@ -91,7 +91,7 @@ from nexus import Nexus
 from nexus.auth.plugin import NexusAuthPlugin
 from nexus.auth import JWTConfig
 from nexus.auth.dependencies import RequireRole, RequirePermission, get_current_user
-from fastapi import Depends
+from nexus.http import Depends
 
 auth = NexusAuthPlugin.saas_app(
     jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
@@ -362,7 +362,7 @@ app.start()
 | `TypeError: 'secret_key' unexpected`    | Wrong param name                     | Use `secret`, not `secret_key` |
 | `TypeError: 'exclude_paths' unexpected` | JWTConfig uses different name        | Use `exempt_paths`             |
 | `TypeError: 'admin_roles' unexpected`   | TenantConfig uses singular           | Use `admin_role` (string)      |
-| FastAPI dependency injection fails      | `from __future__ import annotations` | Remove PEP 563 import          |
+| Nexus dependency injection fails       | `from __future__ import annotations` | Remove PEP 563 import          |
 | RBAC without JWT                        | RBAC requires JWT                    | Add `jwt=JWTConfig(...)`       |
 
 ## Key Takeaways

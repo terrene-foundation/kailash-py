@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/*.py"
   - "**/*.ts"
@@ -7,6 +9,9 @@ paths:
 ---
 
 # Environment Variables & Model Rules
+
+
+<!-- slot:neutral-body -->
 
 ## .env Is The Single Source of Truth
 
@@ -59,3 +64,5 @@ For pytest: root `conftest.py` auto-loads `.env`.
 NO EXCEPTIONS. If `.env` doesn't have the key, fix the `.env` — don't hardcode.
 
 **Why:** Sending requests with a mismatched model-key pairing produces opaque 401/403 errors that are hard to diagnose downstream.
+
+<!-- /slot:neutral-body -->

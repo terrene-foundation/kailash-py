@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - ".claude/**"
   - "sync-manifest.yaml"
@@ -7,6 +9,9 @@ paths:
 ---
 
 # Artifact Flow Rules
+
+
+<!-- slot:neutral-body -->
 
 ## Authority Chain
 
@@ -113,3 +118,5 @@ Automated suggestions permitted; automated placement is not.
 - Auto-classify global vs variant without human approval
 
 **Why:** Automated classification lacks the domain judgment to distinguish a language-specific pattern from a universal one, risking silent overwrites across all targets.
+
+<!-- /slot:neutral-body -->

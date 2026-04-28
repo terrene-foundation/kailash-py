@@ -571,7 +571,7 @@ Add to `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/hooks/my-custom-hook.js",
+            "command": ".claude/hooks/my-custom-hook.js",
             "timeout": 10
           }
         ]

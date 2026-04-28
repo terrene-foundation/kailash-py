@@ -1,0 +1,19 @@
+# COC Obsoleted Paths — emitted by /sync-to-build (loom v2.9.5)
+#
+# Each entry is a repo-relative path (no leading slash). Trailing slash
+# means directory; recursive delete. Downstream consumers that pull from
+# this BUILD repo via /sync MUST purge every match BEFORE merging the
+# new layout. Source-of-truth: loom/.claude/sync-manifest.yaml::obsoleted.
+#
+# Rules: see loom/.claude/agents/management/coc-sync.md Step 4.5 +
+# loom/.claude/commands/sync.md "Read obsoleted list" step.
+#
+scripts/hooks/
+.claude/scripts/
+scripts/resolve-template.js
+.claude/commands/send-it.md
+.codex/prompts/send-it.md
+.gemini/commands/send-it.toml
+.claude/commands/decisive.md
+.codex/prompts/decisive.md
+.gemini/commands/decisive.toml

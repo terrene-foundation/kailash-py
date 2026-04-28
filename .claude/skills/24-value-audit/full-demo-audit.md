@@ -11,11 +11,11 @@ Orchestrates a complete demo audit in two phases: technical QA (does it work?) f
 
 ## Orchestration Pattern
 
-### Phase 1: Technical Foundation (e2e-runner)
+### Phase 1: Technical Foundation (testing-specialist)
 
 Verify the product works. No point auditing the value story if pages crash.
 
-**Launch as**: Task with `subagent_type: "e2e-runner"`
+**Launch as**: Task with `subagent_type: "testing-specialist"`
 
 **Prompt template**:
 
@@ -134,7 +134,7 @@ After both phases complete, synthesize into a single demo readiness verdict.
 
 ## MCP Access Note
 
-**IMPORTANT**: The `value-auditor` and `e2e-runner` subagent types do NOT have Playwright MCP tool access. MCP tools (`browser_navigate`, `browser_snapshot`, etc.) are only available in the main conversation context.
+**IMPORTANT**: The `value-auditor` and `testing-specialist` subagent types do NOT have Playwright MCP tool access. MCP tools (`browser_navigate`, `browser_snapshot`, etc.) are only available in the main conversation context.
 
 **Workarounds**:
 
@@ -154,7 +154,7 @@ After both phases complete, synthesize into a single demo readiness verdict.
 
 ```
 Run a full demo audit on app.example.com.
-Phase 1: Technical sweep with e2e-runner (all 26 pages, console errors, navigation).
+Phase 1: Technical sweep with testing-specialist (all 26 pages, console errors, navigation).
 Phase 2: Value audit with value-auditor (Five Questions, value flows, narrative coherence).
 Login: ceo@tpc-test.com / [password]
 Output reports to workspaces/axis/04-storyboard-audit/

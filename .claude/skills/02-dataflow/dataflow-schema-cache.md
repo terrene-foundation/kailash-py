@@ -6,7 +6,7 @@ The schema cache is a thread-safe table existence cache that eliminates redundan
 
 ## Key Features
 
-- **Thread-safe**: RLock protection for multi-threaded apps (FastAPI, Flask, Gunicorn)
+- **Thread-safe**: RLock protection for multi-threaded apps (Nexus, Flask, Gunicorn)
 - **Configurable**: TTL, size limits, and validation
 - **Automatic invalidation**: Cache cleared on schema changes
 - **Low overhead**: <1KB per cached table
@@ -114,7 +114,7 @@ with ThreadPoolExecutor(max_workers=10) as executor:
     results = [f.result() for f in futures]
 ```
 
-All cache operations are protected by RLock, ensuring safe concurrent access from FastAPI endpoints, Flask workers, or Gunicorn processes.
+All cache operations are protected by RLock, ensuring safe concurrent access from Nexus endpoints, Flask workers, or Gunicorn processes.
 
 ## Performance Impact Summary
 

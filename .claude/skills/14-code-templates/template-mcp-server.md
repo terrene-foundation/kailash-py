@@ -19,7 +19,7 @@ Production-ready MCP server template using Kailash SDK's built-in MCP implementa
 ```python
 """Basic MCP Server using Kailash SDK"""
 
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 
 # Create server
 server = MCPServer("my-server")
@@ -67,7 +67,7 @@ if __name__ == "__main__":
 ```python
 """Production MCP Server with Authentication and Monitoring"""
 
-from kailash.mcp_server import MCPServer, APIKeyAuth
+from kailash_mcp import MCPServer, APIKeyAuth
 import logging
 
 # Configure logging

@@ -1,15 +1,11 @@
 ---
 name: 29-pact
-description: "PACT governance. Use for D/T/R, envelopes, clearance, governed agents, verification gradient, MCP governance."
+description: "PACT governance framework -- D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations. Use when asking about 'governance', 'D/T/R', 'operating envelope', 'knowledge clearance', 'verification gradient', 'GovernanceEngine', 'PactGovernedAgent', 'access enforcement', 'organizational governance', 'PACT', 'governed agent', 'clearance', 'bridges', 'KSP', 'monotonic tightening', 'MCP governance', 'McpGovernanceEnforcer', 'McpGovernanceMiddleware', 'McpAuditTrail', 'McpToolPolicy', 'MCP tool policy', 'default-deny MCP', or 'governed MCP tools'."
 ---
 
 # PACT Governance Skills
 
 Quick reference for PACT organizational governance patterns.
-
-## When to Use
-
-Use PACT when asking about governance, D/T/R, operating envelope, knowledge clearance, verification gradient, `GovernanceEngine`, `PactGovernedAgent`, access enforcement, organizational governance, PACT, governed agent, clearance, bridges, KSP, monotonic tightening, MCP governance, `McpGovernanceEnforcer`, `McpGovernanceMiddleware`, `McpAuditTrail`, `McpToolPolicy`, MCP tool policy, default-deny MCP, or governed MCP tools.
 
 ## Install
 
@@ -31,7 +27,6 @@ pip install kailash-kaizen>=2.0.0 # For governed Kaizen agents
 | [pact-governed-agents](pact-governed-agents.md)           | PactGovernedAgent, @governed_tool                                                                     |
 | [pact-kaizen-integration](pact-kaizen-integration.md)     | Wrapping Kaizen agents with governance                                                                |
 | [pact-mcp-governance](pact-mcp-governance.md)             | MCP tool governance: enforce, audit, middleware                                                       |
-| [pact-enforcement-modes](pact-enforcement-modes.md)       | ENFORCE/SHADOW/DISABLED modes, HELD verdict handling, envelope adapter                                |
 | [pact-conformance-features](pact-conformance-features.md) | N1-N6: KnowledgeFilter, EnvelopeCache, PlanSuspension, AuditTiers, ObservationSink, cross-SDK vectors |
 
 ## Key Types

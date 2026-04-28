@@ -23,7 +23,7 @@ workflow.add_connection("source_id", "output_key", "target_id", "input_key")
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 
-# Asynchronous pattern (Docker/FastAPI)
+# Asynchronous pattern (Docker/async production)
 async_runtime = AsyncLocalRuntime()
 results = await async_runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
@@ -36,7 +36,7 @@ results = await async_runtime.execute_workflow_async(workflow.build(), inputs={}
 - Import from `kailash.runtime` not `kailash.runtime.local`
 
 ### 4. Runtime Selection
-- **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `get_runtime("async")`
+- **Docker/async production**: Use `AsyncLocalRuntime()` or `get_runtime("async")`
 - **CLI/Scripts**: Use `LocalRuntime()` or `get_runtime("sync")`
 - **Auto-detection**: Use `get_runtime()` (defaults to async)
 

@@ -71,7 +71,6 @@ When writing and testing agents, always utilize the LLM's capabilities instead o
 
 - Use ollama or openai (if ollama is too slow)
 - Always check `.env` for api keys and model names to use in development
-  - Always assume model names in memory are outdated — perform a web check on model names in `.env` before declaring them invalid
 
 ### 7. Spec-verify and close todos
 

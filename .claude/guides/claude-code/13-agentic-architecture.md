@@ -161,7 +161,7 @@ The dominant pattern for multi-agent systems is **hub-and-spoke**: one coordinat
 3. **Context passing** — Provide each subagent with the information it needs
 4. **Result aggregation** — Combine subagent outputs into a coherent response
 
-**How Claude Code implements this**: When you ask Claude Code to "analyze requirements, then implement," it acts as the coordinator — delegating to `deep-analyst`, then `requirements-analyst`, then `pattern-expert`, passing context between each.
+**How Claude Code implements this**: When you ask Claude Code to "analyze requirements, then implement," it acts as the coordinator — delegating to `analyst`, then `analyst`, then `pattern-expert`, passing context between each.
 
 ### Critical Memory Isolation Principle
 
@@ -337,7 +337,7 @@ Use fresh + summary when:
 ### Decisions Made
 
 - Chose DataFlow over raw SQL for the refactor
-- Will use Nexus for API deployment (not FastAPI directly)
+- Will use Nexus for API deployment
 
 ### Open Questions
 

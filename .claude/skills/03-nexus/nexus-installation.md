@@ -25,7 +25,6 @@ python -c "from nexus import Nexus; print('Nexus installed successfully')"
 
 - Python 3.9+
 - kailash SDK 0.9.25+
-- FastAPI (for API mode)
 - Click (for CLI mode)
 
 ## Quick Setup

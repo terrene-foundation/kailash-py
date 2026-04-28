@@ -1,8 +1,6 @@
 ---
-paths:
-  - ".claude/agents/**"
-  - ".claude/commands/**"
-  - "**/agents/**"
+priority: 0
+scope: baseline
 ---
 
 # Worktree Isolation Rules
