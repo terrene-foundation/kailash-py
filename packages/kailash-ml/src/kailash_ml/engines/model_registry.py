@@ -711,12 +711,16 @@ class ModelRegistry:
         Returns
         -------
         list[dict]
-            Model metadata dicts with model_name, latest_version, etc.
+            Model metadata dicts with ``name``, ``latest_version``,
+            ``created_at``, ``updated_at``. The ``name`` field is
+            aliased from the SQL column ``model_name`` (canonical per
+            migration 0002 + 0005) so the public dict surface stays
+            stable across the schema change for #699.
         """
         await self._ensure_tables()
         tenant_id = self._resolve_tenant_id(tenant_id)
         return await self._conn.fetch(
-            "SELECT model_name, latest_version, created_at, updated_at "
+            "SELECT model_name AS name, latest_version, created_at, updated_at "
             "FROM _kml_models WHERE tenant_id = ? ORDER BY model_name",
             tenant_id,
         )

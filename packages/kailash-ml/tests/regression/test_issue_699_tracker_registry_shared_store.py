@@ -151,10 +151,12 @@ async def test_tracker_and_registry_share_kml_model_versions_table(
         assert got.artifact_path != ""
 
         # State persistence verification per rules/testing.md —
-        # list_models surfaces the row.
+        # list_models surfaces the row. Public ``name`` field aliased
+        # from SQL ``model_name`` for backward compat with 1.5.0/1.5.1
+        # consumers.
         listed = await reg.list_models()
         assert len(listed) == 1
-        assert listed[0]["model_name"] == "demo_model"
+        assert listed[0]["name"] == "demo_model"
         assert listed[0]["latest_version"] == 1
 
         # get_model_versions also tenant-scoped.
@@ -218,7 +220,7 @@ async def test_registry_multi_tenant_isolation_via_tenant_id_kwarg(
         # list_models scopes per tenant.
         acme_list = await reg.list_models(tenant_id="acme")
         assert len(acme_list) == 1
-        assert acme_list[0]["model_name"] == "demo"
+        assert acme_list[0]["name"] == "demo"
         assert acme_list[0]["latest_version"] == 2
 
         contoso_list = await reg.list_models(tenant_id="contoso")
