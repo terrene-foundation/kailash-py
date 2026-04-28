@@ -177,6 +177,9 @@ class TestDependencyAnalyzer:
     @pytest.mark.asyncio
     async def test_find_trigger_dependencies_new_old_columns(self):
         """Test detection of trigger dependencies using NEW.column/OLD.column."""
+        # Mock matches the production query schema (joins pg_trigger →
+        # pg_proc via tgfoid; emits action_statement from pg_get_triggerdef
+        # and function_source from p.prosrc).
         mock_trigger_data = [
             {
                 "trigger_name": "audit_user_changes",
@@ -184,6 +187,7 @@ class TestDependencyAnalyzer:
                 "action_timing": "AFTER",
                 "action_statement": "EXECUTE FUNCTION audit_user_changes() WHEN (OLD.email IS DISTINCT FROM NEW.email)",
                 "function_name": "audit_user_changes",
+                "function_source": "BEGIN INSERT INTO audit_log VALUES (OLD.email, NEW.email); RETURN NEW; END",
             }
         ]
         self.mock_connection.fetch.return_value = mock_trigger_data
@@ -202,12 +206,17 @@ class TestDependencyAnalyzer:
     @pytest.mark.asyncio
     async def test_find_index_dependencies_single_column(self):
         """Test detection of single-column index dependencies."""
+        # Mock matches the production query schema (pg_class/pg_index/pg_am
+        # join emits direct_columns, has_expression, is_partial alongside
+        # the existing fields).
         mock_index_data = [
             {
                 "index_name": "idx_users_email_unique",
                 "index_type": "btree",
                 "is_unique": True,
-                "columns": ["email"],
+                "has_expression": False,
+                "is_partial": False,
+                "direct_columns": ["email"],
                 "index_definition": "CREATE UNIQUE INDEX idx_users_email_unique ON users USING btree (email)",
             }
         ]
@@ -233,7 +242,9 @@ class TestDependencyAnalyzer:
                 "index_name": "idx_users_email_created_at",
                 "index_type": "btree",
                 "is_unique": False,
-                "columns": ["email", "created_at"],
+                "has_expression": False,
+                "is_partial": False,
+                "direct_columns": ["email", "created_at"],
                 "index_definition": "CREATE INDEX idx_users_email_created_at ON users USING btree (email, created_at)",
             }
         ]
@@ -309,8 +320,12 @@ class TestDependencyAnalyzer:
         ]
         view_data = [
             {
+                # Qualified `users.id` reference triggers production's strong-
+                # match path; bare `SELECT id FROM users` no longer matches
+                # because " users " (with trailing space) does not appear at
+                # end-of-string.
                 "view_name": "user_view",
-                "view_definition": "SELECT id FROM users",
+                "view_definition": "SELECT users.id FROM users",
                 "schema_name": "public",
             }
         ]
@@ -321,6 +336,7 @@ class TestDependencyAnalyzer:
                 "action_timing": "BEFORE",
                 "action_statement": "EXECUTE FUNCTION test() WHEN OLD.id IS DISTINCT FROM NEW.id",
                 "function_name": "test",
+                "function_source": "BEGIN RETURN NEW.id; END",
             }
         ]
         index_data = [
@@ -328,7 +344,9 @@ class TestDependencyAnalyzer:
                 "index_name": "idx_test",
                 "index_type": "btree",
                 "is_unique": False,
-                "columns": ["id"],
+                "has_expression": False,
+                "is_partial": False,
+                "direct_columns": ["id"],
                 "index_definition": "CREATE INDEX...",
             }
         ]
