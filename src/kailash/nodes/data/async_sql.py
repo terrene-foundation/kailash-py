@@ -49,6 +49,7 @@ import yaml
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 logger = logging.getLogger(__name__)
@@ -4170,7 +4171,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
         return "|".join(key_parts)
 
     async def _get_adapter(self) -> DatabaseAdapter:
-        """Get or create database adapter with optional pool sharing."""
+        """Get or create database adapter with optional pool sharing.
+
+        DPI-B4 (issue #697): The fallback path used to swallow bare
+        ``Exception`` and silently create a dedicated pool with no
+        process-wide registration. That produced the JourneyMate
+        connection-leak class — every per-pool-lock timeout under
+        saturation created a fresh 5-20 connection pool that lived
+        until process shutdown.
+
+        The bounded path:
+            - Catches ONLY (RuntimeError, asyncio.TimeoutError) — known
+              fallback triggers per zero-tolerance.md Rule 3. Bare
+              ``Exception`` no longer reaches here; it propagates to the
+              caller as the original error.
+            - Checks ``len(_PROCESS_POOL_REGISTRY) <
+              _POOL_DEFAULTS['max_pool_count_per_process']`` BEFORE
+              creating the dedicated pool. At cap, raises
+              ``PoolExhaustedError`` with the original exception as
+              ``__cause__``.
+            - Registers EVERY successfully-created pool (shared AND
+              fallback) in ``_PROCESS_POOL_REGISTRY``.
+            - Calls ``_ensure_reaper_started()`` on first successful
+              creation.
+        """
         if not self._adapter:
             # PRIORITY 0: Use externally provided pool (bypasses all internal pool management)
             if self._external_pool is not None:
@@ -4231,26 +4255,64 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         self._adapter = await self._create_adapter()
                         self._shared_pools[self._pool_key] = (self._adapter, 1)
                         AsyncSQLDatabaseNode._total_pools_created += 1  # type: ignore[attr-defined]  # ADR-017
+                        # DPI-B2/B4: register in process-wide registry so
+                        # the cap accounts for shared pools as well.
+                        _PROCESS_POOL_REGISTRY[self._pool_key] = self._adapter
+                        # DPI-B3: ensure the idle-pool reaper is running.
+                        _ensure_reaper_started()
                         logger.debug(
                             f"Created new class-level shared pool for {self.id}"
                         )
 
-                except (RuntimeError, asyncio.TimeoutError, Exception) as e:
-                    # FALLBACK: Graceful degradation to dedicated pool mode
+                except (RuntimeError, asyncio.TimeoutError) as e:
+                    # DPI-B4: bounded fallback. The bare ``except
+                    # Exception`` was zero-tolerance Rule 3 (silent
+                    # fallback) — narrowed to the only legitimate
+                    # triggers (lock-timeout, dead loop). Anything else
+                    # propagates with its original stack trace.
+                    cap = _POOL_DEFAULTS["max_pool_count_per_process"]
+                    current = len(_PROCESS_POOL_REGISTRY)
+                    if current >= cap:
+                        # Cap reached — refuse to create yet another
+                        # dedicated pool. Operator must either raise the
+                        # cap via set_pool_defaults or fix the
+                        # contention root cause.
+                        raise PoolExhaustedError(
+                            current=current,
+                            cap=cap,
+                            pool_key=self._pool_key or "",
+                        ) from e
+
+                    # Under cap — create the dedicated fallback pool
+                    # AND register it so the reaper can reclaim it.
+                    fallback_pool_key = f"fallback_{id(self)}_{self._pool_key}"
                     logger.warning(
-                        f"Per-pool locking failed for {self.id} (pool_key: {self._pool_key}): {e}. "
-                        f"Falling back to dedicated pool mode."
+                        "async_sql.fallback_pool_created",
+                        extra={
+                            "node_id": self.id,
+                            "pool_key": self._pool_key,
+                            "fallback_pool_key": fallback_pool_key,
+                            "registry_size": current,
+                            "cap": cap,
+                            "trigger": type(e).__name__,
+                        },
                     )
                     # Clear pool sharing for this instance and create dedicated pool
                     self._share_pool = False
                     self._pool_key = None
                     self._adapter = await self._create_adapter()
-                    logger.info(
-                        f"Successfully created dedicated connection pool for {self.id} as fallback"
-                    )
+                    # DPI-B2/B4: register the fallback pool. The reaper
+                    # will reap it once idle; the cap honours it.
+                    _PROCESS_POOL_REGISTRY[fallback_pool_key] = self._adapter
+                    _ensure_reaper_started()
             else:
                 # Create dedicated pool
                 self._adapter = await self._create_adapter()
+                # DPI-B2/B4: register dedicated-mode pools too — the
+                # cap is process-wide, share_pool=False is not exempt.
+                dedicated_key = f"dedicated_{id(self)}"
+                _PROCESS_POOL_REGISTRY[dedicated_key] = self._adapter
+                _ensure_reaper_started()
                 logger.debug(f"Created dedicated connection pool for {self.id}")
 
         return self._adapter
