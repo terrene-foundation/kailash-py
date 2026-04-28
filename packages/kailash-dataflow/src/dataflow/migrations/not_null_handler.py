@@ -413,7 +413,6 @@ class NotNullColumnHandler:
             DefaultValueType.STATIC: StaticDefaultStrategy(),
             DefaultValueType.COMPUTED: ComputedDefaultStrategy(),
             DefaultValueType.FUNCTION: FunctionDefaultStrategy(),
-            # TODO: Add more strategies in TODO-136B
         }
 
     async def plan_not_null_addition(
