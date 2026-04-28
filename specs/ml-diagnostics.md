@@ -296,6 +296,7 @@ DLDiagnostics(
     model: "torch.nn.Module",
     *,
     tracker: Optional[ExperimentRun] = None,   # NEW (v0.18.0) — see §4.1
+    data: Optional["torch.utils.data.DataLoader"] = None,  # NEW (v1.5.2) — see §5.1a (GH #701)
     auto: bool = True,                          # NEW — auto-wire via contextvar when tracker=None
     dead_neuron_threshold: float = 0.5,
     window: int = 64,
@@ -311,6 +312,35 @@ DLDiagnostics(
 - `TypeError` if `model` is not `nn.Module`.
 - `ValueError` if `dead_neuron_threshold` ∉ (0, 1), `window < 1`, `run_id == ""`, or `log_every_n_steps < 1`.
 - `ImportError` from `_require_torch()` if torch is absent.
+
+### 5.1a Loader-Driven Evaluation (NEW v1.5.2 — GH issue #701)
+
+`DLDiagnostics` accepts a `DataLoader` either at construction (`DLDiagnostics(model, data=loader)`) OR at `.report()` call time (`diag.report(data=loader)`). When supplied, `.report()` consumes the loader once in `torch.no_grad()` mode, runs the model forward on each batch, and records `record_batch(loss=...)` per batch using a default loss heuristic (`F.cross_entropy` when output rank is 2 AND targets are integer-typed; otherwise `F.mse_loss`). The model's train/eval state is preserved (model is `.eval()`-ed for the forward pass and restored to its original state in a `try/finally`).
+
+**Method signature:**
+
+```python
+DLDiagnostics.report(data: Optional["DataLoader"] = None) -> dict
+```
+
+Resolution order: argument-supplied `data=` wins over construction-time `data=`. If both are `None`, the loader-driven path is skipped and the report reflects only the records the caller pumped via `record_batch` themselves (legacy training-loop-driven path; preserves backward compatibility with every pre-v1.5.2 caller).
+
+**Return-dict additions:**
+
+| Key          | Type | Meaning                                                                                                          |
+| ------------ | ---- | ---------------------------------------------------------------------------------------------------------------- |
+| `n_batches`  | int  | Number of batches the supplied `data` loader yielded during this `report()` call. `0` when no loader supplied.   |
+| `n_samples`  | int  | Total samples seen across the loader's batches (sum of `inputs.shape[0]`). `0` when no loader supplied.          |
+
+**Loader contract** (permissive — non-conforming batches are skipped with a structured WARN log per `observability.md` MUST 2):
+
+- Loader MUST yield `(inputs, targets)` 2-tuples (or 2-element lists). Non-2-tuple batches are skipped with `dl_reason="batch_shape_not_2_tuple"`.
+- `inputs` and `targets` MUST be tensors (have `.to(device)`). Non-tensor inputs are skipped with `dl_reason="inputs_not_tensor"`.
+- The model is moved nowhere; the loader's tensors are moved to the model's actual device (`next(self.model.parameters()).device`) — NOT to `self.device` (the backend-detection hint). This guarantees the helper works whether the user moved the model to GPU/MPS themselves or left it on CPU.
+
+**Why optional, not required:** The 1.5.2 patch closes the GH #701 silent-drop without breaking existing callers (Lightning callbacks, manual `record_batch` loops). Requiring `data=` would break every pre-v1.5.2 caller. The strict-loader requirement applies only when the agent's delegation prompt explicitly contracts for end-to-end loader consumption.
+
+**Closes GH issue #701 (silent drop).** Pre-fix, `data=` was accepted in `km.diagnose()` signature but dropped at the dispatch site (`_wrappers.py:diagnose` for `kind="dl"` and the auto-fallback). Post-fix, `data=` is forwarded into `DLDiagnostics(..., data=data)` at both dispatch sites; iteration occurs only inside `report()`.
 
 ### 5.2 Alternate Constructor: `from_training_result`
 
