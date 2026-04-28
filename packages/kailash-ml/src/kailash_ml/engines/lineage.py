@@ -282,6 +282,7 @@ async def _fetch_model_version_row(
     *,
     name: str,
     version: int,
+    tenant_id: str,
 ) -> Optional[dict[str, Any]]:
     """Fetch the ``_kml_model_versions`` row that owns the model identity.
 
@@ -289,10 +290,16 @@ async def _fetch_model_version_row(
     ``model_version`` node with its ``created_at`` and ``model_uuid``
     metadata so the graph nodes carry the same identity the registry
     surfaces externally.
+
+    Per ``rules/tenant-isolation.md`` MUST Rule 1, the predicate
+    includes ``tenant_id`` and uses ``model_name`` (matching migration
+    0002 + 0005's column naming). Closes GH issue #699.
     """
     rows = await conn.fetch(
-        "SELECT name, version, stage, model_uuid, created_at "
-        "FROM _kml_model_versions WHERE name = ? AND version = ?",
+        "SELECT model_name, version, stage, model_uuid, created_at "
+        "FROM _kml_model_versions WHERE tenant_id = ? "
+        "AND model_name = ? AND version = ?",
+        tenant_id,
         name,
         version,
     )
@@ -386,7 +393,9 @@ async def build_lineage_graph(
     # Verify the root exists in _kml_model_versions — a graph rooted at
     # a non-existent (name, version) is meaningless per
     # ``ml-tracking.md §6.3``.
-    root_model_row = await _fetch_model_version_row(conn, name=name, version=version)
+    root_model_row = await _fetch_model_version_row(
+        conn, name=name, version=version, tenant_id=tenant_id
+    )
     if root_model_row is None:
         raise ModelNotFoundError(
             reason=(
@@ -458,7 +467,7 @@ async def build_lineage_graph(
         # available; fall back to the lineage row for older entries
         # that pre-date a model_versions row.
         model_row = await _fetch_model_version_row(
-            conn, name=cur_name, version=cur_version
+            conn, name=cur_name, version=cur_version, tenant_id=tenant_id
         )
         if model_row is not None:
             mv_id = f"{cur_name}@v{cur_version}"
