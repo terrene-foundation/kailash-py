@@ -1,6 +1,6 @@
 # Kailash DataFlow — Cache, Dialect, Record ID Coercion, Transactions, Pooling
 
-Version: 2.3.1
+Version: 2.4.0
 Package: `kailash-dataflow`
 Parent domain: DataFlow (split from `dataflow.md` per specs-authority Rule 8)
 Scope: Cache layer (backend selection, key format, TTL, invalidation, stats), dialect system (identifier quoting, placeholders, type mapping, feature matrix, upsert SQL, parameter conversion), record ID coercion, transaction manager, connection pooling
@@ -265,3 +265,105 @@ SQLite connections are managed through `AsyncSQLitePool`:
 - URI shared-cache for `:memory:` databases: `file:memdb_NAME?mode=memory&cache=shared`
 - Separate read/write connection acquisition: `acquire_read()` / `acquire_write()`
 - Bounded concurrency via `max_read_connections`
+
+### 13.4 Pool Lifecycle Contract (DPI-B / issue #697 + #698)
+
+`AsyncSQLDatabaseNode` and the underlying `EnterpriseConnectionPool`
+operate against a single, process-wide registry that bounds total pool
+count and reclaims idle pools. The contract was authoritatively defined
+in the JourneyMate / Azure PostgreSQL connection-leak incident
+remediation. Per `rules/dataflow-pool.md` Rule 5 (no orphan runtimes)
+and `rules/zero-tolerance.md` Rule 3 (no silent fallbacks).
+
+**Single source of truth for "how many pools exist":**
+
+```
+kailash.nodes.data.async_sql._PROCESS_POOL_REGISTRY
+    : weakref.WeakValueDictionary[str, EnterpriseConnectionPool]
+```
+
+Every pool created by `AsyncSQLDatabaseNode._get_adapter` is registered
+here — shared-pool path, fallback-pool path, and dedicated-pool path
+(`share_pool=False`) all register. The cap is process-wide and applies
+uniformly.
+
+**Pool lifecycle states:**
+
+```
+created → active → idle → reaped
+```
+
+| State    | Definition                                                                  | Transition trigger                            |
+| -------- | --------------------------------------------------------------------------- | --------------------------------------------- |
+| created  | Pool exists in `_PROCESS_POOL_REGISTRY` and has run zero queries            | `_get_adapter` returns the new pool           |
+| active   | Pool's `_last_activity_at` was refreshed within `idle_timeout` seconds      | Each `get_connection()` call                  |
+| idle     | `now - _last_activity_at >= idle_timeout`; `is_idle()` returns True         | Time elapses                                  |
+| reaped   | Pool removed from registry; `close()` awaited                               | Reaper task processes idle pool, OR loop dies |
+
+**Configurable defaults:**
+
+```python
+from kailash.nodes.data.async_sql import set_pool_defaults
+
+set_pool_defaults(
+    idle_timeout=300,                  # seconds; default 300
+    max_pool_count_per_process=100,    # hard cap; default 100
+)
+```
+
+Both parameters are KEYWORD-ONLY. Unknown kwargs raise `TypeError`.
+Non-positive integers raise `ValueError`. Calling with `None` for a
+parameter leaves that default unchanged.
+
+**Bounded fallback invariant:**
+
+When `_get_adapter`'s per-pool lock acquisition raises `RuntimeError`
+(closed event loop) or `asyncio.TimeoutError` (lock contention), the
+fallback path applies:
+
+- if `len(_PROCESS_POOL_REGISTRY) < max_pool_count_per_process`:
+  create dedicated pool, register as `f"fallback_{id(node)}_{pool_key}"`,
+  emit structured WARN log with `pool_key`, `registry_size`, `cap`,
+  `trigger` fields per `rules/observability.md` Rule 4.
+- if `len(_PROCESS_POOL_REGISTRY) >= max_pool_count_per_process`:
+  raise `kailash.nodes.data.exceptions.PoolExhaustedError(current, cap, pool_key)`
+  with the original error as `__cause__`. Operators see the override
+  entry point (`set_pool_defaults`) named in the message.
+
+The pre-fix code caught bare `Exception` here and silently created
+unbounded pools — the production-incident root cause for #697. The
+narrowed except clause is the structural fix per `rules/zero-tolerance.md`
+Rule 3.
+
+**Idle-timeout reaper:**
+
+`EnterpriseConnectionPool.is_idle(now=None)` returns True once
+`now - self._last_activity_at >= self.idle_timeout`. A module-scope
+reaper task started lazily on first pool creation (one task per event
+loop) walks `_PROCESS_POOL_REGISTRY` every `idle_timeout / 4` seconds,
+closes idle pools, and removes them from the registry. The reaper
+survives per-pool `close()` failures (one bad pool does not kill the
+reaper) and exits cleanly on `CancelledError` (event-loop shutdown).
+
+`__del__` MUST NOT call `close()` per `rules/patterns.md` § "Async
+Resource Cleanup" — the reaper task IS the close mechanism.
+Cross-event-loop dead pools are reaped automatically by the
+`WeakValueDictionary` semantics on next registry access; the reaper
+covers the live-but-idle case.
+
+**Diagnostic surface:**
+
+```python
+AsyncSQLDatabaseNode.pool_count() -> int       # = len(registry)
+AsyncSQLDatabaseNode.pool_keys() -> list[str]  # sorted snapshot
+AsyncSQLDatabaseNode.cleanup_all_pools(graceful=True)
+    # Closes all pools + cancels reaper tasks. Test-fixture friendly.
+```
+
+**Cross-SDK alignment (EATP D6):**
+
+The Rust SDK (`kailash-rs`) MUST expose semantically equivalent
+surface — registry, cap, idle timeout, `PoolExhaustedError` — even
+where the Rust idioms diverge (e.g. tokio task primitives vs asyncio).
+The structural-invariant test (cap-check arithmetic + WARN log shape)
+is the cross-SDK contract per `rules/cross-sdk-inspection.md` Rule 1.

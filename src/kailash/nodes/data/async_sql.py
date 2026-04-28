@@ -46,8 +46,10 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
+
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.data.exceptions import PoolExhaustedError
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 logger = logging.getLogger(__name__)
@@ -512,6 +514,7 @@ class EnterpriseConnectionPool:
         health_check_interval: int = 30,
         enable_analytics: bool = True,
         enable_adaptive_sizing: bool = True,
+        idle_timeout: Optional[int] = None,
     ):
         """Initialize enterprise connection pool.
 
@@ -525,6 +528,13 @@ class EnterpriseConnectionPool:
             health_check_interval: Health check interval in seconds
             enable_analytics: Enable performance analytics
             enable_adaptive_sizing: Enable adaptive pool sizing
+            idle_timeout: Per-pool idle-timeout override (seconds). When
+                ``None`` (the default) the pool reads
+                ``_POOL_DEFAULTS["idle_timeout"]`` at every
+                ``is_idle()`` check, so process-wide
+                ``set_pool_defaults`` overrides take effect immediately.
+                Pass an explicit value to pin a single pool to a
+                non-default timeout (rarely needed).
         """
         self.pool_id = pool_id
         self.database_config = database_config
@@ -534,6 +544,15 @@ class EnterpriseConnectionPool:
         self._shutdown = False  # Shutdown flag for background tasks
         self.initial_size = initial_size
         self.health_check_interval = health_check_interval
+        # DPI-B3: per-pool idle override; None means "follow process default"
+        self._idle_timeout_override: Optional[int] = idle_timeout
+        # DPI-B3: monotonic timestamp of last get_connection() call.
+        # Initialised to "now" so a freshly-created pool is not
+        # immediately reaped on the first reaper iteration.
+        self._last_activity_at: float = time.monotonic()
+        # DPI-B3: forensic counter — operators see "how many pools have
+        # we reaped" via this on health/diagnostic dumps.
+        self._reaped_count: int = 0
         # Disable analytics during tests to prevent background tasks
         import os
 
@@ -611,6 +630,9 @@ class EnterpriseConnectionPool:
             # Update metrics
             with self._metrics_lock:
                 self._metrics.pool_last_used = datetime.now()
+            # DPI-B3: refresh idle timestamp; the reaper uses this to
+            # decide whether to close the pool.
+            self._last_activity_at = time.monotonic()
 
             return connection
 
@@ -620,6 +642,37 @@ class EnterpriseConnectionPool:
                 self._metrics.connections_failed += 1
             logger.error(f"Failed to get connection from pool '{self.pool_id}': {e}")
             raise
+
+    @property
+    def idle_timeout(self) -> int:
+        """Effective idle timeout for this pool (seconds, DPI-B3).
+
+        Returns the per-pool override if one was passed at construction;
+        otherwise reads ``_POOL_DEFAULTS["idle_timeout"]`` so process-wide
+        ``set_pool_defaults`` calls take effect immediately on existing
+        pools without requiring re-instantiation.
+        """
+        if self._idle_timeout_override is not None:
+            return self._idle_timeout_override
+        return _POOL_DEFAULTS["idle_timeout"]
+
+    def is_idle(self, now: Optional[float] = None) -> bool:
+        """Return True when the pool's last activity is older than the timeout.
+
+        Args:
+            now: Optional monotonic timestamp to compare against. When
+                ``None`` the function calls ``time.monotonic()``
+                itself. Tests that need deterministic time-warping
+                pass an explicit value.
+
+        Returns:
+            bool: True when ``now - self._last_activity_at >=
+                self.idle_timeout``. False on a freshly-created pool
+                (the constructor seeds ``_last_activity_at = now``).
+        """
+        if now is None:
+            now = time.monotonic()
+        return (now - self._last_activity_at) >= self.idle_timeout
 
     async def _get_pool_connection(self):
         """Get connection from the underlying pool (adapter-specific)."""
@@ -2575,6 +2628,248 @@ class DatabasePoolCoordinator:
         }
 
 
+# ============================================================================
+# DPI-B2 / B3: Process-wide pool registry + lifecycle defaults (issue #697 + #698)
+# ----------------------------------------------------------------------------
+# The legacy ``AsyncSQLDatabaseNode._shared_pools`` dict tracked POOLS THAT
+# SUCCESSFULLY ATTACHED to the per-pool lock-protected shared path. Pools
+# created on the FALLBACK path (lock-timeout / RuntimeError) were attached
+# only to the requesting node instance and held until the parent process
+# died — the JourneyMate / Azure PostgreSQL connection-leak class.
+#
+# ``_PROCESS_POOL_REGISTRY`` is the single source of truth for "how many
+# pools currently exist in this process." The registry tracks BOTH the
+# shared-path pools AND the fallback-path pools so the cap in
+# ``_POOL_DEFAULTS["max_pool_count_per_process"]`` is honoured uniformly.
+#
+# ``WeakValueDictionary`` semantics provide automatic GC reaping when an
+# event loop closes (the pool drops its last strong ref and disappears
+# from the registry on the next mapping access). The explicit reaper
+# task added in DPI-B3 covers the live-but-idle case the WeakValue
+# semantics cannot.
+# ============================================================================
+
+# Pool registry. Keys are pool keys produced by ``_generate_pool_key()`` for
+# the shared path, or ``f"fallback_{id(node)}_{pool_key}"`` for the fallback
+# path. Values are the EnterpriseConnectionPool / DatabaseAdapter instances.
+# WeakValueDictionary auto-reaps entries whose value has been garbage-collected.
+_PROCESS_POOL_REGISTRY: "weakref.WeakValueDictionary[str, Any]" = (
+    weakref.WeakValueDictionary()
+)
+
+# Lifecycle defaults. ``idle_timeout`` is the seconds-of-no-activity a pool
+# may sit before the reaper closes it. ``max_pool_count_per_process`` is the
+# hard ceiling that turns the silent-fallback bug into a typed
+# ``PoolExhaustedError``. Both values are int-positive; the validator in
+# ``set_pool_defaults`` enforces this.
+_POOL_DEFAULTS: dict[str, int] = {
+    "idle_timeout": 300,
+    "max_pool_count_per_process": 100,
+}
+
+# Reaper task registry — one task per event loop, keyed on
+# ``id(get_running_loop())``. ``_REAPER_TASKS`` holds STRONG refs so the
+# task is not GC'd while the loop is alive; the loop's own task tracking
+# would also keep it but the explicit dict is grep-able.
+_REAPER_TASKS: dict[int, asyncio.Task] = {}
+
+# Lock for thread-safe ``_POOL_DEFAULTS`` mutation. Uses module-scope
+# ``threading.Lock()`` factory; per ``rules/python-environment.md`` Rule 5
+# the FACTORY return value is a class on Python 3.11+, so any future
+# ``isinstance`` check must use ``type(threading.Lock())`` not
+# ``threading.Lock`` — but this site never type-checks, only ``with``-acquires.
+_POOL_DEFAULTS_LOCK = threading.Lock()
+
+
+def set_pool_defaults(
+    *,
+    idle_timeout: Optional[int] = None,
+    max_pool_count_per_process: Optional[int] = None,
+) -> None:
+    """Configure process-wide pool lifecycle defaults (DPI-B2 / issue #697).
+
+    Mutates the ``_POOL_DEFAULTS`` dict that gates the
+    ``AsyncSQLDatabaseNode._get_adapter`` fallback path and the
+    ``EnterpriseConnectionPool`` idle-timeout reaper.
+
+    Both parameters are KEYWORD-ONLY and OPTIONAL. Passing ``None`` for
+    a parameter leaves that default unchanged. Unknown keyword arguments
+    raise ``TypeError`` per ``rules/python-environment.md`` discipline
+    (no silent typos that look like the override worked).
+
+    Args:
+        idle_timeout: Seconds-of-no-activity before the reaper closes a
+            pool. Must be a positive int. Default 300 s.
+        max_pool_count_per_process: Hard ceiling on total pool count.
+            When the registry size exceeds this, the
+            ``_get_adapter`` fallback raises ``PoolExhaustedError``
+            instead of silently creating yet another pool. Must be a
+            positive int. Default 100.
+
+    Raises:
+        TypeError: If an unknown keyword argument is supplied (the
+            keyword-only signature already rejects positional args).
+        ValueError: If a parameter is not a positive int.
+
+    Example:
+        >>> set_pool_defaults(max_pool_count_per_process=50)  # cap lower for tests
+        >>> set_pool_defaults(idle_timeout=2)                 # aggressive reap
+    """
+    if idle_timeout is not None:
+        if not isinstance(idle_timeout, int) or idle_timeout < 1:
+            raise ValueError(
+                f"idle_timeout must be a positive int (got {idle_timeout!r})"
+            )
+    if max_pool_count_per_process is not None:
+        if (
+            not isinstance(max_pool_count_per_process, int)
+            or max_pool_count_per_process < 1
+        ):
+            raise ValueError(
+                "max_pool_count_per_process must be a positive int "
+                f"(got {max_pool_count_per_process!r})"
+            )
+    with _POOL_DEFAULTS_LOCK:
+        if idle_timeout is not None:
+            _POOL_DEFAULTS["idle_timeout"] = idle_timeout
+        if max_pool_count_per_process is not None:
+            _POOL_DEFAULTS["max_pool_count_per_process"] = max_pool_count_per_process
+
+
+def _reset_pool_defaults_for_tests() -> None:
+    """Restore ``_POOL_DEFAULTS`` to factory values (test-fixture helper).
+
+    Tests that mutate the defaults via ``set_pool_defaults()`` MUST
+    restore them afterwards or downstream tests inherit the override.
+    The ``reset_pool_registry`` autouse fixture in ``tests/conftest.py``
+    calls this helper between every test.
+    """
+    with _POOL_DEFAULTS_LOCK:
+        _POOL_DEFAULTS["idle_timeout"] = 300
+        _POOL_DEFAULTS["max_pool_count_per_process"] = 100
+
+
+# ============================================================================
+# DPI-B3: Idle-timeout reaper (issue #698)
+# ----------------------------------------------------------------------------
+# One reaper task per event loop. Started lazily on the first pool
+# creation in that loop. Walks ``_PROCESS_POOL_REGISTRY`` every
+# ``idle_timeout / 4`` seconds, closes any pool whose
+# ``is_idle()`` returns True, and removes it from the registry. Pools
+# whose event loop is already closed are reaped automatically by the
+# WeakValueDictionary; this reaper covers the live-but-idle case.
+# ============================================================================
+
+
+async def _idle_pool_reaper_loop() -> None:
+    """Background task that closes idle pools (DPI-B3).
+
+    Runs forever (until cancelled). Each iteration:
+        1. Sleeps for ``idle_timeout / 4`` seconds (max 75s default).
+        2. Walks ``_PROCESS_POOL_REGISTRY`` keys (snapshot list).
+        3. For each pool whose ``is_idle()`` is True, calls
+           ``await pool.close()`` and pops it from the registry.
+
+    Exits cleanly on ``CancelledError`` (event-loop shutdown). Logs
+    every reap event at INFO with a structured log line per
+    ``rules/observability.md`` Rule 4.
+    """
+    try:
+        while True:
+            interval = max(1, _POOL_DEFAULTS["idle_timeout"] // 4)
+            await asyncio.sleep(interval)
+
+            # Snapshot keys — avoids "dict changed size during iter".
+            try:
+                items = list(_PROCESS_POOL_REGISTRY.items())
+            except RuntimeError:
+                # WeakValueDictionary raises on iteration when finalisers
+                # mutate it. Try once more with a defensive copy.
+                items = []
+
+            now = time.monotonic()
+            for key, pool in items:
+                # Pools must expose is_idle()/close(); fallback adapter
+                # objects that wrap _shared_pools may not. Skip silently.
+                try:
+                    if not hasattr(pool, "is_idle") or not callable(
+                        getattr(pool, "is_idle", None)
+                    ):
+                        continue
+                    if not pool.is_idle(now):
+                        continue
+                except Exception:
+                    # Defensive — never let a bad pool break the reaper.
+                    continue
+
+                # Close + reap.
+                try:
+                    if hasattr(pool, "close") and asyncio.iscoroutinefunction(
+                        pool.close
+                    ):
+                        await asyncio.wait_for(pool.close(), timeout=5.0)
+                    elif hasattr(pool, "close"):
+                        pool.close()
+                    if hasattr(pool, "_reaped_count"):
+                        pool._reaped_count += 1
+                    # WeakValueDictionary.pop is safe on missing keys
+                    # (raises KeyError; suppress).
+                    try:
+                        del _PROCESS_POOL_REGISTRY[key]
+                    except KeyError:
+                        pass
+                    logger.info(
+                        "async_sql.pool_reaped",
+                        extra={
+                            "pool_key": key,
+                            "registry_size_after": len(_PROCESS_POOL_REGISTRY),
+                        },
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "async_sql.pool_reap_timeout",
+                        extra={"pool_key": key},
+                    )
+                except Exception as e:
+                    # Never let a single bad pool kill the reaper.
+                    logger.warning(
+                        "async_sql.pool_reap_error",
+                        extra={"pool_key": key, "error": str(e)},
+                    )
+    except asyncio.CancelledError:
+        # Expected on event-loop shutdown / cleanup_all_pools.
+        logger.info("async_sql.pool_reaper_cancelled")
+        raise
+
+
+def _ensure_reaper_started(loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+    """Start the reaper task for the current event loop if absent (DPI-B3).
+
+    Idempotent: a second call from the same loop is a no-op. A call
+    from a DIFFERENT loop registers a separate task for that loop, so
+    multi-loop test setups (each pytest-asyncio test creates its own
+    loop) get their own reaper.
+
+    Args:
+        loop: Optional event loop. Defaults to the running loop. When
+            no loop is running this function is a no-op (the next
+            ``await`` from the caller will provide a loop).
+    """
+    if loop is None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+    loop_id = id(loop)
+    existing = _REAPER_TASKS.get(loop_id)
+    if existing is not None and not existing.done():
+        return
+
+    task = loop.create_task(_idle_pool_reaper_loop())
+    _REAPER_TASKS[loop_id] = task
+
+
 @register_node()
 class AsyncSQLDatabaseNode(AsyncNode):
     """Asynchronous SQL database node for high-concurrency database operations.
@@ -3876,7 +4171,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
         return "|".join(key_parts)
 
     async def _get_adapter(self) -> DatabaseAdapter:
-        """Get or create database adapter with optional pool sharing."""
+        """Get or create database adapter with optional pool sharing.
+
+        DPI-B4 (issue #697): The fallback path used to swallow bare
+        ``Exception`` and silently create a dedicated pool with no
+        process-wide registration. That produced the JourneyMate
+        connection-leak class — every per-pool-lock timeout under
+        saturation created a fresh 5-20 connection pool that lived
+        until process shutdown.
+
+        The bounded path:
+            - Catches ONLY (RuntimeError, asyncio.TimeoutError) — known
+              fallback triggers per zero-tolerance.md Rule 3. Bare
+              ``Exception`` no longer reaches here; it propagates to the
+              caller as the original error.
+            - Checks ``len(_PROCESS_POOL_REGISTRY) <
+              _POOL_DEFAULTS['max_pool_count_per_process']`` BEFORE
+              creating the dedicated pool. At cap, raises
+              ``PoolExhaustedError`` with the original exception as
+              ``__cause__``.
+            - Registers EVERY successfully-created pool (shared AND
+              fallback) in ``_PROCESS_POOL_REGISTRY``.
+            - Calls ``_ensure_reaper_started()`` on first successful
+              creation.
+        """
         if not self._adapter:
             # PRIORITY 0: Use externally provided pool (bypasses all internal pool management)
             if self._external_pool is not None:
@@ -3937,26 +4255,64 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         self._adapter = await self._create_adapter()
                         self._shared_pools[self._pool_key] = (self._adapter, 1)
                         AsyncSQLDatabaseNode._total_pools_created += 1  # type: ignore[attr-defined]  # ADR-017
+                        # DPI-B2/B4: register in process-wide registry so
+                        # the cap accounts for shared pools as well.
+                        _PROCESS_POOL_REGISTRY[self._pool_key] = self._adapter
+                        # DPI-B3: ensure the idle-pool reaper is running.
+                        _ensure_reaper_started()
                         logger.debug(
                             f"Created new class-level shared pool for {self.id}"
                         )
 
-                except (RuntimeError, asyncio.TimeoutError, Exception) as e:
-                    # FALLBACK: Graceful degradation to dedicated pool mode
+                except (RuntimeError, asyncio.TimeoutError) as e:
+                    # DPI-B4: bounded fallback. The bare ``except
+                    # Exception`` was zero-tolerance Rule 3 (silent
+                    # fallback) — narrowed to the only legitimate
+                    # triggers (lock-timeout, dead loop). Anything else
+                    # propagates with its original stack trace.
+                    cap = _POOL_DEFAULTS["max_pool_count_per_process"]
+                    current = len(_PROCESS_POOL_REGISTRY)
+                    if current >= cap:
+                        # Cap reached — refuse to create yet another
+                        # dedicated pool. Operator must either raise the
+                        # cap via set_pool_defaults or fix the
+                        # contention root cause.
+                        raise PoolExhaustedError(
+                            current=current,
+                            cap=cap,
+                            pool_key=self._pool_key or "",
+                        ) from e
+
+                    # Under cap — create the dedicated fallback pool
+                    # AND register it so the reaper can reclaim it.
+                    fallback_pool_key = f"fallback_{id(self)}_{self._pool_key}"
                     logger.warning(
-                        f"Per-pool locking failed for {self.id} (pool_key: {self._pool_key}): {e}. "
-                        f"Falling back to dedicated pool mode."
+                        "async_sql.fallback_pool_created",
+                        extra={
+                            "node_id": self.id,
+                            "pool_key": self._pool_key,
+                            "fallback_pool_key": fallback_pool_key,
+                            "registry_size": current,
+                            "cap": cap,
+                            "trigger": type(e).__name__,
+                        },
                     )
                     # Clear pool sharing for this instance and create dedicated pool
                     self._share_pool = False
                     self._pool_key = None
                     self._adapter = await self._create_adapter()
-                    logger.info(
-                        f"Successfully created dedicated connection pool for {self.id} as fallback"
-                    )
+                    # DPI-B2/B4: register the fallback pool. The reaper
+                    # will reap it once idle; the cap honours it.
+                    _PROCESS_POOL_REGISTRY[fallback_pool_key] = self._adapter
+                    _ensure_reaper_started()
             else:
                 # Create dedicated pool
                 self._adapter = await self._create_adapter()
+                # DPI-B2/B4: register dedicated-mode pools too — the
+                # cap is process-wide, share_pool=False is not exempt.
+                dedicated_key = f"dedicated_{id(self)}"
+                _PROCESS_POOL_REGISTRY[dedicated_key] = self._adapter
+                _ensure_reaper_started()
                 logger.debug(f"Created dedicated connection pool for {self.id}")
 
         return self._adapter
@@ -4788,6 +5144,49 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         return cleaned_count
 
+    # ------------------------------------------------------------------
+    # DPI-B2: Process-wide pool registry inspection surface (issue #697 + #698)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def pool_count(cls) -> int:
+        """Return total live pool count across the process (DPI-B2).
+
+        Reads ``len(_PROCESS_POOL_REGISTRY)`` — the SINGLE source of truth
+        for "how many pools currently exist." The legacy
+        ``cls._shared_pools`` dict tracks ONLY pools that took the
+        successful shared path; the registry tracks BOTH shared and
+        fallback-path pools, which is the count that matters against the
+        cap.
+
+        Returns:
+            int: Live pool count. Includes pools whose event loop is
+                still running. Pools whose loop closed are reaped by the
+                ``WeakValueDictionary`` semantics on next access.
+        """
+        # Touching len() iterates the mapping; dead-loop pools whose
+        # ``EnterpriseConnectionPool`` instance has been GC'd disappear
+        # at this point.
+        return len(_PROCESS_POOL_REGISTRY)
+
+    @classmethod
+    def pool_keys(cls) -> List[str]:
+        """Return sorted list of live pool keys (DPI-B2 diagnostic surface).
+
+        Used by Tier-2 regression tests and operator diagnostics. Sorted
+        so test assertions are deterministic. The keys mirror the
+        ``pool_key`` log field emitted by the WARN logger on fallback —
+        cross-correlation between live registry state and incident logs
+        works by string equality on this surface.
+
+        Returns:
+            list[str]: Sorted snapshot of pool keys at call time. Read
+                is non-locking; concurrent mutations may produce a
+                count drift between this call and a sibling
+                ``pool_count()`` call (acceptable; both are diagnostic).
+        """
+        return sorted(_PROCESS_POOL_REGISTRY.keys())
+
     @classmethod
     async def clear_shared_pools(cls, graceful: bool = True) -> Dict[str, Any]:
         """Clear all shared connection pools with enhanced error handling (ADR-017).
@@ -4797,6 +5196,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         Returns:
             Dict[str, Any]: Cleanup metrics
+
+        DPI-B2 extension: also clears ``_PROCESS_POOL_REGISTRY`` (the
+        process-wide registry that tracks both shared and fallback
+        pools) so test fixtures get a clean slate. Production callers
+        SHOULD prefer ``cleanup_all_pools()`` (alias defined below) for
+        the registry-clearing semantic.
         """
         total_pools = len(cls._shared_pools)
         pools_cleared = 0
@@ -4851,12 +5256,67 @@ class AsyncSQLDatabaseNode(AsyncNode):
             f"({clear_failures} failures)"
         )
 
+        # DPI-B2: also reap the process-wide registry. Tests that mutate
+        # the cap or seed pools via the fallback path leak entries into
+        # ``_PROCESS_POOL_REGISTRY`` that the legacy ``_shared_pools``
+        # path never tracked. Clearing both keeps the cap honest across
+        # test runs.
+        registry_size = len(_PROCESS_POOL_REGISTRY)
+        if registry_size > 0:
+            # WeakValueDictionary clears in-place; values whose strong
+            # refs live elsewhere stay alive (test fixtures that hold a
+            # ref deliberately are unaffected).
+            _PROCESS_POOL_REGISTRY.clear()
+            logger.info(
+                f"AsyncSQLDatabaseNode: Cleared "
+                f"{registry_size} entries from process pool registry"
+            )
+
+        # DPI-B3: cancel reaper tasks for any closed event loops.
+        # Tasks for the CURRENT loop stay alive; cleanup runs in a
+        # ``cleanup_all_pools`` call to keep ``clear_shared_pools``
+        # signature unchanged.
+
         return {
             "total_pools": total_pools,
             "pools_cleared": pools_cleared,
             "clear_failures": clear_failures,
             "clear_errors": clear_errors,
         }
+
+    @classmethod
+    async def cleanup_all_pools(cls, graceful: bool = True) -> Dict[str, Any]:
+        """Tear down every pool in the process (DPI-B2 alias + reaper cleanup).
+
+        Composed wrapper around ``clear_shared_pools`` that also cancels
+        every reaper task in ``_REAPER_TASKS``. Use this in test
+        teardown and graceful shutdown paths; production callers can
+        invoke ``clear_shared_pools`` directly when reaper cancellation
+        is undesirable (the reaper's own ``CancelledError`` handler
+        already exits cleanly on event-loop shutdown).
+
+        Args:
+            graceful: Forwarded to ``clear_shared_pools``.
+
+        Returns:
+            dict: ``clear_shared_pools`` metrics plus a
+                ``reaper_tasks_cancelled`` count.
+        """
+        result = await cls.clear_shared_pools(graceful=graceful)
+
+        cancelled = 0
+        for loop_id, task in list(_REAPER_TASKS.items()):
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    # Reaper exits via CancelledError — expected
+                    pass
+                cancelled += 1
+            _REAPER_TASKS.pop(loop_id, None)
+        result["reaper_tasks_cancelled"] = cancelled
+        return result
 
     def get_pool_info(self) -> dict[str, Any]:
         """Get information about this instance's connection pool.
