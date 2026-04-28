@@ -241,17 +241,22 @@ class TestRaceConditions:
         batch_updates = []
         update_lock = asyncio.Lock()
 
-        async def mock_fetchval_update(query, *args):
+        # NOTE: production refactored fetchval()→fetch() in the batched-update
+        # loop (returns RETURNING rows for accurate counting). Mock the
+        # `WITH batch AS` predicate on fetch(), and keep fetchval() for
+        # non-batched scalar queries like SELECT COUNT(*).
+        async def mock_fetch_update(query, *args):
             if "WITH batch AS" in query:
                 async with update_lock:
                     batch_updates.append(time.time())
                     # Simulate some batches having no rows left
                     if len(batch_updates) > 3:
-                        return None
-                    return 1000  # Rows updated
-            return 10000
+                        return []  # Empty list breaks the loop
+                    return [(1,)] * 1000  # 1000 RETURNING rows
+            return []
 
-        mock_connection.fetchval = mock_fetchval_update
+        mock_connection.fetch = mock_fetch_update
+        mock_connection.fetchval.return_value = 10000  # Row count for COUNT(*)
         mock_connection.execute = AsyncMock()
 
         with patch.object(

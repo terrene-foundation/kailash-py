@@ -15,6 +15,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from dataflow.migrations.constraint_validator import (
     CheckConstraint,
     ConstraintValidationResult,
@@ -824,11 +825,14 @@ class TestNotNullColumnHandler:
         assert result.result == AdditionResult.SUCCESS
         assert result.affected_rows == 1000
 
-        # Verify SQL was executed
+        # Verify SQL was executed.
+        # NOTE: per rules/dataflow-identifier-safety.md MUST Rule 1, table and
+        # column identifiers route through dialect.quote_identifier() before
+        # interpolation, producing the quoted forms in the emitted DDL.
         self.mock_connection.execute.assert_called_once()
         call_args = self.mock_connection.execute.call_args[0][0]
-        assert "ALTER TABLE test_table" in call_args
-        assert "ADD COLUMN status VARCHAR(50)" in call_args
+        assert 'ALTER TABLE "test_table"' in call_args
+        assert 'ADD COLUMN "status" VARCHAR(50)' in call_args
         assert "NOT NULL DEFAULT 'active'" in call_args
 
 
@@ -909,9 +913,9 @@ class TestIntegrationScenarios:
             strategy_type, reason = self.strategy_manager.recommend_strategy(
                 case["column"], case["table_info"]
             )
-            assert strategy_type == case["expected"], (
-                f"Failed for {case['column'].name}: got {strategy_type}, expected {case['expected']}"
-            )
+            assert (
+                strategy_type == case["expected"]
+            ), f"Failed for {case['column'].name}: got {strategy_type}, expected {case['expected']}"
 
     def test_validation_result_aggregation(self):
         """Test aggregation of validation results from multiple components."""
