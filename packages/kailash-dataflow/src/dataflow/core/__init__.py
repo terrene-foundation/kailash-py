@@ -13,6 +13,7 @@ from .async_utils import (
 )
 from .config import DatabaseConfig, DataFlowConfig, MonitoringConfig, SecurityConfig
 from .engine import DataFlow
+from .exceptions import DDLFailedError
 from .logging_config import (
     DEFAULT_SENSITIVE_PATTERNS,
     LoggingConfig,
@@ -64,4 +65,6 @@ __all__ = [
     "TenantContextSwitch",
     "TenantInfo",
     "get_current_tenant_id",
+    # Engine-layer exceptions (issue #696 — auto_migrate fail-fast)
+    "DDLFailedError",
 ]
