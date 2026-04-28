@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -65,13 +65,9 @@ class ColumnDefinition:
     default_type: DefaultValueType = DefaultValueType.STATIC
     default_expression: Optional[str] = None
     foreign_key_reference: Optional[str] = None
-    check_constraints: List[str] = None
+    check_constraints: List[str] = field(default_factory=list)
     unique: bool = False
     indexed: bool = False
-
-    def __post_init__(self):
-        if self.check_constraints is None:
-            self.check_constraints = []
 
 
 @dataclass
@@ -107,12 +103,8 @@ class NotNullAdditionPlan:
     # Execution details
     estimated_duration: Optional[float] = None
     affected_rows: Optional[int] = None
-    constraint_dependencies: List[str] = None
+    constraint_dependencies: List[str] = field(default_factory=list)
     rollback_plan: Optional[Dict[str, Any]] = None
-
-    def __post_init__(self):
-        if self.constraint_dependencies is None:
-            self.constraint_dependencies = []
 
 
 @dataclass
@@ -124,12 +116,8 @@ class AdditionExecutionResult:
     affected_rows: int
     rollback_executed: bool = False
     error_message: Optional[str] = None
-    constraint_violations: List[str] = None
+    constraint_violations: List[str] = field(default_factory=list)
     performance_metrics: Optional[Dict[str, Any]] = None
-
-    def __post_init__(self):
-        if self.constraint_violations is None:
-            self.constraint_violations = []
 
 
 class DefaultValueStrategy(ABC):
@@ -771,15 +759,14 @@ class NotNullColumnHandler:
             column_exists = await self._check_column_exists(
                 plan.table_name, plan.column.name, connection
             )
+            affected_rows: int = 0
             if column_exists:
                 await connection.execute(
                     f"ALTER TABLE {table_q} DROP COLUMN IF EXISTS {column_q}"
                 )
-                affected_rows = await connection.fetchval(
-                    f"SELECT COUNT(*) FROM {table_q}"
+                affected_rows = (
+                    await connection.fetchval(f"SELECT COUNT(*) FROM {table_q}") or 0
                 )
-            else:
-                affected_rows = 0
 
             execution_time = (datetime.now() - start_time).total_seconds()
 
@@ -933,7 +920,7 @@ class NotNullColumnHandler:
                 "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
                 table_name,
             )
-            return result
+            return bool(result)
         except Exception:
             return False
 
@@ -950,7 +937,7 @@ class NotNullColumnHandler:
                 table_name,
                 column_name,
             )
-            return result
+            return bool(result)
         except Exception:
             return False
 
@@ -958,7 +945,8 @@ class NotNullColumnHandler:
         self, table_name: str, connection: asyncpg.Connection
     ) -> List[Dict[str, Any]]:
         """Get all constraints for the table."""
-        return await self._analyze_table_structure(table_name, connection)
+        analysis = await self._analyze_table_structure(table_name, connection)
+        return analysis["constraints"]
 
     async def _validate_foreign_key_reference(
         self, reference: str, connection: asyncpg.Connection
@@ -978,7 +966,7 @@ class NotNullColumnHandler:
                     ref_table,
                     ref_column,
                 )
-                return result
+                return bool(result)
             return False
         except Exception:
             return False
@@ -995,7 +983,7 @@ class NotNullColumnHandler:
                    WHERE c.relname = $1 AND l.mode != 'AccessShareLock'""",
                 table_name,
             )
-            return result > 0
+            return (result or 0) > 0
         except Exception:
             return False
 
@@ -1025,7 +1013,9 @@ class NotNullColumnHandler:
         await connection.execute(sql)
 
         # Get affected row count
-        affected_rows = await connection.fetchval(f"SELECT COUNT(*) FROM {table_q}")
+        affected_rows = (
+            await connection.fetchval(f"SELECT COUNT(*) FROM {table_q}") or 0
+        )
 
         return AdditionExecutionResult(
             result=AdditionResult.SUCCESS,
