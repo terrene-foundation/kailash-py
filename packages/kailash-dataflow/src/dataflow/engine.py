@@ -232,8 +232,36 @@ class DataFlowEngineBuilder:
         self._dataflow_kwargs.update(kwargs)
         return self
 
-    async def build(self) -> DataFlowEngine:
-        """Build the DataFlowEngine instance (async -- connects to database)."""
+    def build_sync(self) -> DataFlowEngine:
+        """Build the DataFlowEngine instance synchronously.
+
+        Identical body to :meth:`build` (which never awaits in
+        kailash-py); this companion exists for module-import-time
+        patterns where wrapping in ``asyncio.run()`` would conflict with
+        an already-running event loop (Nexus handlers, pytest-asyncio,
+        Jupyter kernels, ``@functools.lru_cache``-decorated factories).
+
+        Use ``build_sync()`` when constructing an engine outside of an
+        async context. Use ``build()`` for cross-SDK parity with
+        kailash-rs (where the equivalent IS legitimately async due to
+        Tokio runtime initialization).
+
+        Both paths produce identical engine state — they delegate to a
+        single body so the two surfaces cannot drift.
+
+        Example::
+
+            # Module-import-time pattern:
+            from functools import lru_cache
+
+            @lru_cache(maxsize=1)
+            def get_engine() -> DataFlowEngine:
+                return (
+                    DataFlowEngine.builder("sqlite:///app.db")
+                    .slow_query_threshold(0.5)
+                    .build_sync()
+                )
+        """
         # Extract fabric-specific config before passing to DataFlow
         kwargs = dict(self._dataflow_kwargs)
         fabric_sources = kwargs.pop("_fabric_sources", [])
@@ -263,6 +291,22 @@ class DataFlowEngineBuilder:
         engine._fabric_config = fabric_config
 
         return engine
+
+    async def build(self) -> DataFlowEngine:
+        """Build the DataFlowEngine instance (async signature).
+
+        The async signature is preserved for cross-SDK parity with
+        kailash-rs, where engine construction IS legitimately async
+        (Tokio runtime initialization). In kailash-py the body has no
+        awaits, so this method delegates to :meth:`build_sync` to
+        guarantee both surfaces produce identical engine state.
+
+        Use this method when building under an existing event loop
+        (Nexus / FastAPI handlers, pytest-asyncio, Jupyter). Use
+        :meth:`build_sync` for module-import-time patterns where no
+        loop is available.
+        """
+        return self.build_sync()
 
 
 class DataFlowEngine:
@@ -328,14 +372,28 @@ class DataFlowEngine:
     def register_model(self, registry: Any, model: Any) -> None:
         """Register a model and generate its CRUD nodes.
 
-        If a ``DataClassificationPolicy`` is set and it exposes a
-        ``register_model`` method, the model is also registered with the
-        classification policy so field metadata is available for
-        ``get_model_classification_report``.
+        Delegates to ``DataFlow.register_model`` (auto-generates 11
+        workflow nodes per SQL model + records the model in
+        ``_models`` / ``_registered_models`` / ``_model_fields``). If a
+        ``DataClassificationPolicy`` is set and exposes a
+        ``register_model`` method, the model is ALSO registered with
+        the classification policy so field metadata is available for
+        :meth:`get_model_classification_report`.
 
-        Delegates to DataFlow's model registration which auto-generates
-        11 workflow nodes per SQL model.
+        Args:
+            registry: Kept for cross-SDK parity with kailash-rs, where
+                the equivalent method takes a model registry instance.
+                kailash-py threads model registration through the
+                DataFlow primitive itself, so this argument is unused
+                here — pass ``None``. Removing the parameter would
+                break the cross-SDK signature contract; see
+                ``rules/cross-sdk-inspection.md`` § 3a.
+            model: The model class to register.
         """
+        # ``DataFlow.register_model`` (DPI-C1) is the underlying
+        # mechanism; both the ``@db.model`` decorator and this engine
+        # surface route through it so registration state is identical
+        # regardless of entry path.
         self._dataflow.register_model(model)
         self._registered_models.append(model)
 

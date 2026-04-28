@@ -245,16 +245,85 @@ await engine.close()
 
 ### 14.1 Builder Methods
 
-| Method                           | Purpose                                         |
-| -------------------------------- | ----------------------------------------------- |
-| `.validation(layer)`             | Set a `ValidationLayer` protocol implementation |
-| `.classification_policy(policy)` | Set a `DataClassificationPolicy`                |
-| `.slow_query_threshold(seconds)` | Slow query detection threshold (default: 1.0s)  |
-| `.validate_on_write(enabled)`    | Enable auto-validation before writes            |
-| `.source(name, config)`          | Register an external data source                |
-| `.fabric(**kwargs)`              | Configure fabric runtime parameters             |
-| `.config(**kwargs)`              | Pass additional kwargs to `DataFlow`            |
-| `.build()`                       | Build the engine (async)                        |
+| Method                           | Purpose                                                                |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `.validation(layer)`             | Set a `ValidationLayer` protocol implementation                        |
+| `.classification_policy(policy)` | Set a `DataClassificationPolicy`                                       |
+| `.slow_query_threshold(seconds)` | Slow query detection threshold (default: 1.0s)                         |
+| `.validate_on_write(enabled)`    | Enable auto-validation before writes                                   |
+| `.source(name, config)`          | Register an external data source                                       |
+| `.fabric(**kwargs)`              | Configure fabric runtime parameters                                    |
+| `.config(**kwargs)`              | Pass additional kwargs to `DataFlow`                                   |
+| `.build()`                       | Build the engine (async — preserved for cross-SDK parity)              |
+| `.build_sync()`                  | Build the engine synchronously (module-import-time / lru_cache safe)   |
+
+**`build()` vs `build_sync()`** — both surfaces produce identical
+engine state. `build()` is `async def` for cross-SDK parity with
+kailash-rs (where engine construction IS legitimately async due to
+Tokio runtime initialization); the kailash-py body has no `await`s and
+delegates to `build_sync()` so the two surfaces share a single body
+and cannot drift.
+
+| Caller context                                        | Use         |
+| ----------------------------------------------------- | ----------- |
+| Module-import-time (`@lru_cache` factory, top-level)  | `build_sync()` |
+| Inside a running event loop (Nexus, FastAPI, Jupyter) | `build_sync()` (or `await build()`) |
+| Cross-SDK polyglot code that awaits build everywhere  | `build()`   |
+
+Per `rules/patterns.md` § "Paired Public Surface — Consistent
+Async-ness", offering both shapes is permitted here because the
+underlying body is genuinely sync (no `asyncio.run` wrap) — neither
+surface raises `RuntimeError` under any caller context. Per
+`rules/cross-sdk-inspection.md` § 3a, a structural invariant test
+pins the `async def` signature on `build()` so a future refactor that
+drops it fails loudly.
+
+### 14.1.1 Model Registration — `DataFlowEngine.register_model`
+
+`DataFlowEngine.register_model(registry, model)` registers a model
+end-to-end through the engine surface:
+
+```python
+engine = DataFlowEngine.builder("sqlite:///app.db").build_sync()
+engine.register_model(None, UserModel)            # ← model registered
+report = engine.get_model_classification_report(UserModel)
+```
+
+The `registry` argument is kept for cross-SDK parity with kailash-rs
+(where the equivalent method takes a model registry instance);
+kailash-py threads model registration through the DataFlow primitive
+itself, so callers pass `None`. Removing the parameter would break
+the cross-SDK signature contract.
+
+`DataFlowEngine.register_model` delegates to
+`DataFlow.register_model` (§ 14.1.2 below), so the engine path and
+the `@db.model` decorator path produce identical state — entries in
+`_models` / `_registered_models` / `_model_fields`, CRUD/bulk node
+generation, classification-policy registration, deferred relationship
+detection. Additionally, when the engine has a
+`DataClassificationPolicy` set via `.classification_policy(policy)`,
+the model is also registered with the policy so per-field
+classification metadata is available for
+`get_model_classification_report`.
+
+### 14.1.2 `DataFlow.register_model` — Underlying Mechanism
+
+`DataFlow.register_model(model_cls, *, replace=False, force_drop=False)`
+is the programmatic counterpart to the `@db.model` decorator. Both
+paths share the same body — `db.register_model(Foo)` produces
+identical state to `@db.model class Foo`.
+
+| Call                                                    | Behaviour                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `db.register_model(Foo)`                                | Registers `Foo`; returns `Foo` for chaining.                       |
+| `db.register_model(Foo)` again                          | Raises `ValueError("already registered")`.                         |
+| `db.register_model(Foo, replace=True)`                  | Refused — raises `ValueError("force_drop=True required")`.         |
+| `db.register_model(Foo, replace=True, force_drop=True)` | Tears down prior registration and re-registers. Destructive.       |
+
+The `replace` + `force_drop` two-flag pattern follows the
+destructive-confirmation discipline mandated by
+`rules/dataflow-identifier-safety.md` Rule 4 — re-registration may
+DROP and recreate the underlying table, which is irreversible.
 
 ### 14.2 QueryEngine
 
