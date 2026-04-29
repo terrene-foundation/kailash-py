@@ -63,48 +63,45 @@ class ModelRegistry:
 
         Args:
             dataflow_instance: The DataFlow instance this registry belongs to.
-            runtime: Optional shared runtime. If provided, the registry acquires
-                a reference (ref-count increment) and uses it for all workflow
-                executions. If None, creates its own runtime with async-context
-                detection to prevent deadlocks.
+            runtime: Optional explicit runtime override. When supplied, the
+                registry pins this runtime for its lifetime (legacy escape
+                hatch). When omitted (the post-MED-S5 default), every
+                ``self.runtime`` access reads ``dataflow_instance.runtime``
+                lazily so the registry follows the parent's runtime swap
+                (issue #713 — manual ``db.runtime = AsyncLocalRuntime()``
+                or first-async-access via S4's per-event-loop cache).
             migration_system: Optional migration system for transactional operations.
         """
         self.dataflow = dataflow_instance
+        # MED-S5: hold a back-reference to the parent so ``self.runtime``
+        # (now a @property below) can resolve lazily on each access.
+        # Pre-S5 the registry snapshotted ``dataflow.runtime`` once at
+        # construction; post-S5 it follows the parent's lazy property
+        # (S4) which detects async context per access.
+        self._dataflow = dataflow_instance
 
         if runtime is not None:
-            # Shared runtime provided — acquire a reference so the caller's
-            # close() won't tear down the loop while we still need it.
+            # Legacy explicit-runtime escape hatch. Acquire a reference so
+            # the caller's close() won't tear down the loop while we
+            # still need it. The pinned runtime overrides the parent's
+            # lazy resolution for this registry only.
             if hasattr(runtime, "acquire"):
-                self.runtime = runtime.acquire()
+                self._explicit_runtime = runtime.acquire()
                 logger.debug(
                     "ModelRegistry: Using injected runtime (ref_count=%d)",
                     getattr(runtime, "ref_count", 0),
                 )
             else:
-                self.runtime = runtime
+                self._explicit_runtime = runtime
             self._owns_runtime = False
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
         else:
-            # No runtime provided — create our own (backward-compatible path).
-            # Detect async context to prevent deadlocks in FastAPI / pytest-async.
-            try:
-                asyncio.get_running_loop()
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
-                logger.debug(
-                    "ModelRegistry: Detected async context, using AsyncLocalRuntime"
-                )
-            except RuntimeError:
-                # The registry manages the runtime's lifecycle via
-                # close() → runtime.release() (ref-count cleanup). Use
-                # the public opt-out so Core SDK suppresses the ad-hoc
-                # usage deprecation warning AND skips atexit cleanup —
-                # the registry calls close() at its own shutdown.
-                # See issue #478.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
-                logger.debug("ModelRegistry: Detected sync context, using LocalRuntime")
-            self._owns_runtime = True
+            # No explicit runtime — defer to parent's lazy property.
+            # ``self.runtime`` (the property) will route every read to
+            # ``self._dataflow.runtime`` so swaps on the parent (manual
+            # ``db.runtime = X`` or first-async-access cache fill) are
+            # visible to this registry without snapshot drift.
+            self._explicit_runtime = None
+            self._owns_runtime = False
 
         self.migration_system = migration_system
         self._initialized = False
@@ -134,6 +131,74 @@ class ModelRegistry:
             logger.warning(
                 "TransactionManager not available, operations will not be transactional"
             )
+
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
+    #
+    # Pre-MED-S5 the registry stored ``self.runtime`` and ``self._is_async``
+    # as plain attributes set once in ``__init__``. Once the parent
+    # DataFlow's runtime swapped (manual ``db.runtime = X`` setter or
+    # first-async-access via S4's per-event-loop cache fill), the
+    # registry kept the stale snapshot and either crashed (sync runtime
+    # used inside an event loop) or routed through the wrong loop.
+    #
+    # Post-MED-S5 ``self.runtime`` is a @property that resolves on each
+    # access:
+    #
+    # 1. If a legacy explicit-runtime override was supplied to
+    #    ``__init__`` (``self._explicit_runtime`` is not None), return
+    #    that pinned runtime — the caller is in charge of its lifecycle.
+    # 2. Otherwise return ``self._dataflow.runtime`` — the parent's
+    #    own lazy property (issue #713 MED-S4 implementation), which
+    #    handles per-event-loop caching, sync singleton fallback, and
+    #    setter override.
+    #
+    # ``self._is_async`` is derived from the resolved runtime so it
+    # never drifts from ``self.runtime``.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this registry (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        return self._dataflow.runtime
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        """Assignment-compat setter.
+
+        Two legitimate writes reach this setter:
+
+        * ``self.runtime = None`` from ``close()`` — clears the explicit
+          override so subsequent reads (if any) return ``None``-like
+          state from the parent's closed runtime.
+        * Direct test-time assignment for backwards compatibility with
+          callers that monkey-patched the registry's runtime directly.
+        """
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        """Whether the active runtime is an :class:`AsyncLocalRuntime`.
+
+        Derived from ``self.runtime`` so it always agrees with the
+        currently-resolved runtime — including after a parent runtime
+        swap.
+        """
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        """No-op setter for backwards compatibility.
+
+        Pre-MED-S5 callers wrote ``self._is_async = True`` alongside
+        ``self.runtime = AsyncLocalRuntime()``. The flag is now derived,
+        so this write is ignored — the next read recomputes from
+        ``self.runtime``.
+        """
+        # Intentional no-op: derived property.
+        pass
 
     def _execute_workflow_sync_safe(
         self, workflow: Any
@@ -1740,21 +1805,31 @@ class ModelRegistry:
                     raise
 
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times — subsequent calls are no-ops.
-        If this registry created its own runtime (_owns_runtime=True),
-        close() decrements its ref-count which triggers cleanup when it
-        reaches zero. If using a shared runtime, close() merely releases
-        one reference so the owner can still use it.
+        Post-MED-S5 the registry no longer owns the runtime in the
+        common case (it delegates to ``self._dataflow.runtime`` which is
+        managed by the parent DataFlow). Only the legacy explicit
+        ``runtime=`` constructor argument creates a reference this
+        registry must release here.
         """
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        # Clear the override either way so subsequent reads fall back
+        # to the parent (which itself returns None when closed).
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Only fires when this registry held an explicit runtime override
+        (legacy path). The lazy-parent path holds no resource of its
+        own — the parent DataFlow's own ``__del__`` / ``close()`` is
+        responsible for cleaning up the per-event-loop cache.
+        """
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
