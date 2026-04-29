@@ -179,6 +179,12 @@ class DataFlow(DataFlowEventMixin):
         trust_audit_enabled: Optional[bool] = None,
         trust_audit_signing_key: Optional[bytes] = None,
         trust_audit_verify_key: Optional[bytes] = None,
+        # Issue #713: explicit runtime override (escape hatch for tests
+        # and advanced usage). When provided, the runtime property's
+        # lazy per-event-loop detection is bypassed and ``runtime``
+        # returns this value unconditionally until the caller assigns
+        # ``db.runtime = None`` to clear the override.
+        runtime: Optional[Any] = None,
         **kwargs,
     ):
         """Initialize DataFlow.
@@ -545,24 +551,47 @@ class DataFlow(DataFlowEventMixin):
         # Register specialized DataFlow nodes
         self._register_specialized_nodes()
 
-        # M2-001: Create exactly ONE shared runtime for the entire DataFlow instance.
-        # All subsystems (ModelRegistry, migration helpers, DDL executors) share this
-        # runtime via acquire()/release() ref-counting instead of creating their own.
+        # M2-001 + issue #713: Lazy per-event-loop runtime resolution.
+        #
+        # Pre-#713: a single AsyncLocalRuntime / LocalRuntime was bound at
+        # __init__ time via asyncio.get_running_loop(). Module-import
+        # construction (the natural FastAPI pattern: `db = DataFlow(...)`
+        # at module scope) bound LocalRuntime PERMANENTLY, so any later
+        # `await db.create_tables_async()` call inside uvicorn's event
+        # loop hit `AttributeError: 'LocalRuntime' object has no
+        # attribute 'execute_workflow_async'`.
+        #
+        # Post-#713: `self.runtime` is a `@property` (see below). The
+        # getter detects async context per access via
+        # `asyncio.get_running_loop()`, caches `AsyncLocalRuntime` per
+        # event-loop id (mirroring `_async_sql_node_cache` at line ~7488),
+        # and falls back to a single cached `LocalRuntime` in sync
+        # contexts. Setter preserves the `db.runtime = X` mutation
+        # pattern for tests + workarounds + descriptor-protocol callers
+        # like `monkeypatch.setattr(db, "runtime", x)`.
+        #
+        # `self._is_async` is a derived property: it always agrees with
+        # `self.runtime` at access time. Subsystem captures of either
+        # attribute at their own __init__ time are addressed in MED-S5.
         self._closed = False
-        try:
-            asyncio.get_running_loop()
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
-            logger.debug("DataFlow: Detected async context, using AsyncLocalRuntime")
-        except RuntimeError:
-            # The DataFlow instance owns the runtime for its full lifetime
-            # and tears it down via ``close()``.  Mark the runtime as
-            # externally-managed via the public opt-out (issue #478) so
-            # the SDK suppresses its ad-hoc-usage deprecation warning and
-            # skips atexit cleanup — DataFlow's own shutdown drives close().
-            self.runtime = LocalRuntime().mark_externally_managed()
-            self._is_async = False
-            logger.debug("DataFlow: Detected sync context, using LocalRuntime")
+        # Issue #713: per-event-loop runtime cache + sync singleton.
+        # MUST be initialized BEFORE any subsystem constructed during
+        # __init__ accesses ``self.runtime`` (the property reads them).
+        self._runtime_override: Any = None  # non-None = setter override active
+        # Per-event-loop AsyncLocalRuntime cache. Keyed by id(loop). MUST
+        # be excluded from pickle/deepcopy (loop refs are not picklable).
+        self._loop_runtime_cache: Dict[int, AsyncLocalRuntime] = {}
+        # Single cached LocalRuntime for sync contexts (no running loop).
+        # Constructed lazily on first access.
+        self._sync_runtime_singleton: Optional[LocalRuntime] = None
+        # Issue #713: kwarg-supplied runtime escape hatch. Applied via
+        # the property setter IMMEDIATELY so any subsystem constructed
+        # during __init__ (ModelRegistry, BulkOperations, etc.) sees the
+        # override on its first ``self.runtime`` read. The plain
+        # attribute write below routes through the @runtime.setter
+        # because the descriptor is on the class.
+        if runtime is not None:
+            self.runtime = runtime
 
         # Initialize feature modules (NodeGenerator now gets TDD context)
         self._node_generator = NodeGenerator(self)
@@ -775,6 +804,238 @@ class DataFlow(DataFlowEventMixin):
 
         self._DDLFailedError = _DDLFailedError  # cached symbol for hot path
         self._failed_table_creations: Dict[str, FailedDDLRecord] = {}
+
+    # ------------------------------------------------------------------
+    # Issue #713: Lazy per-event-loop runtime resolution
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The shared workflow runtime for this DataFlow instance.
+
+        Resolution order (per access):
+
+        1. If a setter-driven override is active (``self._runtime_override``
+           is not None), return it. This preserves the
+           ``db.runtime = X`` mutation pattern, the
+           ``runtime=`` constructor kwarg, and ``monkeypatch.setattr``.
+        2. If the instance has been ``close()``d, return ``None`` so
+           subsystem ``if self.runtime is not None`` checks short-circuit.
+        3. If a running event loop is detected, return a cached
+           ``AsyncLocalRuntime`` keyed by ``id(loop)`` (mirrors the
+           per-event-loop cache pattern used by
+           ``_async_sql_node_cache`` at engine.py:7488). Different loops
+           get different runtimes; the same loop always sees the same
+           runtime.
+        4. Otherwise (sync context: no running loop), return the cached
+           ``LocalRuntime`` singleton, allocating it on first access.
+
+        Pre-#713 behavior bound a single runtime at ``__init__`` time.
+        Module-import construction permanently bound ``LocalRuntime``,
+        breaking ``await db.create_tables_async()`` from inside an event
+        loop. This lazy resolution fixes the module-import case AND
+        preserves backwards compatibility for callers that read
+        ``self.runtime`` synchronously after construction.
+        """
+        # 1. Setter-driven override always wins.
+        override = self._runtime_override
+        if override is not None:
+            return override
+
+        # 2. Closed instance: no runtime. Subsystem callers expect None.
+        if getattr(self, "_closed", False):
+            return None
+
+        # 3. Async context: per-loop AsyncLocalRuntime cache.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            loop_id = id(loop)
+            cached = self._loop_runtime_cache.get(loop_id)
+            if cached is not None:
+                return cached
+            runtime = AsyncLocalRuntime()
+            self._loop_runtime_cache[loop_id] = runtime
+            logger.debug(
+                "engine.lazy_async_runtime_allocated",
+                extra={"loop_id": loop_id},
+            )
+            return runtime
+
+        # 4. Sync context: cached LocalRuntime singleton.
+        if self._sync_runtime_singleton is None:
+            # Mark externally-managed (issue #478) so the SDK suppresses
+            # its ad-hoc-usage deprecation warning and skips atexit
+            # cleanup — DataFlow's own shutdown drives close().
+            self._sync_runtime_singleton = LocalRuntime().mark_externally_managed()
+            logger.debug("engine.lazy_sync_runtime_allocated")
+        return self._sync_runtime_singleton
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        """Override the runtime resolution.
+
+        - Any non-None value is stored in ``self._runtime_override`` and
+          returned unconditionally by every subsequent ``self.runtime``
+          read (until cleared).
+        - ``None`` clears the override; subsequent reads resume lazy
+          per-event-loop detection (or return ``None`` if the instance
+          is closed — see the getter).
+
+        This setter is reached by:
+
+        - The ``runtime=`` ``__init__`` kwarg (explicit escape hatch).
+        - Direct ``db.runtime = X`` assignment (existing test +
+          workaround pattern).
+        - ``monkeypatch.setattr(db, "runtime", X)`` (descriptor protocol).
+        - ``self.runtime = None`` in ``close()`` / ``close_async()``
+          (clears override; getter then returns ``None`` because
+          ``_closed`` is True).
+        """
+        self._runtime_override = value
+
+    @property
+    def _is_async(self) -> bool:
+        """Whether the active runtime is an ``AsyncLocalRuntime``.
+
+        Derived from ``self.runtime`` so it always agrees with the
+        currently-resolved runtime — including after a setter override
+        and across event-loop transitions. Pre-#713 ``_is_async`` was a
+        plain attribute set once in ``__init__``; the derived form
+        prevents drift between ``self.runtime`` and ``self._is_async``
+        when the runtime resolution flips.
+        """
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        """Accept legacy ``self._is_async = X`` writes as no-ops.
+
+        The flag is now derived from ``self.runtime`` (see getter). We
+        accept writes for backwards compatibility with any code path
+        that still assigns ``_is_async`` directly, but the value is
+        ignored — the next read recomputes from ``self.runtime``.
+        """
+        # Intentional no-op: derived property. Legacy callers (Mediscribe
+        # workaround, older subsystems) wrote `db._is_async = True`
+        # alongside `db.runtime = AsyncLocalRuntime()`. Both are
+        # honored: the runtime= write goes through the runtime setter
+        # and the derived _is_async will reflect it on the next read.
+        pass
+
+    # ------------------------------------------------------------------
+    # Pickle / deepcopy support — strip per-loop cache (loop refs are
+    # not picklable). The setter-driven override IS picklable and is
+    # preserved.
+    # ------------------------------------------------------------------
+
+    # Issue #713: state attributes stripped from pickle/deepcopy. Each
+    # holds either an event-loop ref, a thread.Lock, or a non-picklable
+    # functools.lru_cache wrapper. Reconstructed lazily in
+    # ``__setstate__`` (or left None when the unpickled instance is
+    # expected to be re-initialized via ``initialize()``).
+    _PICKLE_STRIPPED_ATTRS = (
+        # Issue #713: setter-driven override. ``LocalRuntime`` /
+        # ``AsyncLocalRuntime`` instances themselves hold thread locks
+        # and are not picklable. The unpickled instance resumes lazy
+        # per-event-loop detection (the canonical post-#713 behaviour).
+        "_runtime_override",
+        # Issue #713 per-event-loop runtime caches (loop refs).
+        "_loop_runtime_cache",
+        "_sync_runtime_singleton",
+        "_async_sql_node_cache",
+        # ErrorEnhancer holds a functools.lru_cache wrapper.
+        "error_enhancer",
+        # Subsystems that hold thread.Lock or RLock instances. These
+        # are reconstructable from ``self.config`` after unpickle by
+        # the caller (typically via ``await db.initialize()``).
+        "_node_generator",
+        "_bulk_operations",
+        "_transaction_manager",
+        "_connection_manager",
+        "_read_connection_manager",
+        "_event_bus",
+        "_express_dataflow",
+        "_retention_engine",
+        "_derived_engine",
+        "_workflow_binder",
+        "_tenant_context_switch",
+        "_connect_lock",
+        "_classification_policy",
+        "_model_registry",
+        "_schema_cache",
+        # Lazily-allocated caches / monitors.
+        "_pool_monitor",
+        "_lightweight_pool",
+        "_memory_connection",
+        "_audit_backend",
+        "_cache_integration",
+        "_migration_system",
+        "_schema_state_manager",
+    )
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return picklable state.
+
+        Strips state that is not picklable or that should not survive a
+        pickle / deepcopy round-trip — primarily:
+
+        - per-event-loop / per-process caches (``_loop_runtime_cache``,
+          ``_sync_runtime_singleton``, ``_async_sql_node_cache``);
+        - the setter-driven runtime override (``LocalRuntime`` /
+          ``AsyncLocalRuntime`` themselves hold thread locks);
+        - subsystems holding thread locks (model registry, connection
+          manager, express, etc.);
+        - ``error_enhancer`` (holds ``functools.lru_cache`` wrapper).
+
+        On unpickle, the runtime resumes lazy per-event-loop detection
+        — the canonical post-#713 behaviour. The unpickled instance is
+        "re-initialization-ready":
+        the caller is expected to call ``await db.initialize()`` or
+        re-trigger ``_ensure_connected()`` before use, matching the
+        existing lazy-connection contract (specs/dataflow-core.md
+        §1.4).
+        """
+        state = self.__dict__.copy()
+        for attr in self._PICKLE_STRIPPED_ATTRS:
+            state.pop(attr, None)
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore from pickled state and re-initialize stripped caches.
+
+        The unpickled instance has the runtime override (if any) and
+        the configuration restored, but subsystems holding thread
+        locks / event-loop refs are left as ``None``. The caller MUST
+        call ``initialize()`` or trigger ``_ensure_connected()``
+        before use — same contract as the lazy-connection pattern.
+        """
+        self.__dict__.update(state)
+        # Re-create the stripped runtime caches — repopulate lazily on
+        # the first runtime access in the destination process / loop.
+        self._runtime_override = None  # resume lazy detection
+        self._loop_runtime_cache = {}
+        self._sync_runtime_singleton = None
+        self._async_sql_node_cache = {}
+        # Lazily recreate ErrorEnhancer if available.
+        self.error_enhancer = (
+            CoreErrorEnhancer() if CoreErrorEnhancer is not None else None
+        )
+        # Subsystems holding locks: leave as None. Caller re-initializes
+        # via ``initialize()`` or first lazy connection. We only set
+        # the attributes if they were present pre-pickle (avoid
+        # AttributeError on subsequent ``hasattr`` checks).
+        for attr in self._PICKLE_STRIPPED_ATTRS:
+            if not hasattr(self, attr):
+                setattr(self, attr, None)
+        # Mark connect_lock specifically — it's needed before
+        # _ensure_connected() runs.
+        import threading as _threading
+
+        self._connect_lock = _threading.Lock()
 
     # ------------------------------------------------------------------
     # TSG-105: Read-replica connection routing
