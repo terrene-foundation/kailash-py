@@ -47,10 +47,11 @@ def test_every_return_predictions_has_device_kwarg() -> None:
     ``pred.device.fallback_reason``. This test catches the drop at
     test-collection time.
 
-    Scope: Predictions() calls appear in 7 predict() methods (one per
-    family). This test walks the AST, filters to Predictions calls that
-    are inside a function whose name is 'predict', and asserts each one
-    passes device= as a kwarg.
+    Scope: Predictions() calls appear in 8 predict() methods (one per
+    family: sklearn / xgboost / lightgbm / catboost / torch / lightning /
+    UMAP / HDBSCAN). This test walks the AST, filters to Predictions calls
+    that are inside a function whose name is 'predict', and asserts each
+    one passes device= as a kwarg.
     """
     src = _trainable_module_path().read_text()
     tree = ast.parse(src)
@@ -105,8 +106,10 @@ def test_every_fit_caches_last_device_report() -> None:
         if isinstance(node, ast.FunctionDef) and node.name == "fit"
     ]
 
-    # Phase 1 ships 7 families; each class has one fit(). Protocol definition
-    # Trainable.fit (a `...` body) brings the total to 8 — filter it out.
+    # Phase 1 ships 8 families (sklearn / xgboost / lightgbm / catboost /
+    # torch / lightning / UMAP / HDBSCAN); each class has one fit().
+    # Protocol definition Trainable.fit (a `...` body) brings the total to
+    # 9 — filter it out.
     real_fits = [
         f
         for f in fit_functions
@@ -116,8 +119,8 @@ def test_every_fit_caches_last_device_report() -> None:
             and isinstance(f.body[0].value, ast.Constant)
         )
     ]
-    assert len(real_fits) == 7, (
-        f"Expected 7 concrete fit() methods (one per Phase 1 family); "
+    assert len(real_fits) == 8, (
+        f"Expected 8 concrete fit() methods (one per Phase 1 family); "
         f"found {len(real_fits)}. If a family was added/removed, update "
         f"this invariant."
     )

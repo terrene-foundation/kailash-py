@@ -73,15 +73,18 @@ def test_every_return_trainingresult_has_device_kwarg() -> None:
 
 
 @pytest.mark.regression
-def test_all_seven_phase_one_trainables_in_kailash_ml_all() -> None:
-    """specs/ml-engines.md §3.0 — all 7 family adapters MUST be in kailash_ml.__all__.
+def test_all_phase_one_trainables_in_kailash_ml_all() -> None:
+    """specs/ml-engines-v2.md §3 — all 8 family adapters MUST be in kailash_ml.__all__.
 
     Origin: round-3 redteam spec-to-code sweep (2026-04-19) found only 2 of
     7 Trainables (UMAP + HDBSCAN — the new ones from Shard C) were in
     kailash_ml.__all__. The 5 pre-existing (Sklearn/XGBoost/LightGBM/
     Torch/Lightning) were accessible via kailash_ml.trainable but absent
     from the top-level export — silent spec violation that had been
-    accumulating since 0.10.x. Fixed in 0.12.0.
+    accumulating since 0.10.x. Fixed in 0.12.0. CatBoostTrainable added
+    to the asserted set in the 1.6.x follow-up (W6-013) — previously
+    silent in the expected set despite being a Phase 1 family per
+    ml-engines-v2.md §2.1 (line 249).
     """
     import kailash_ml
 
@@ -89,6 +92,7 @@ def test_all_seven_phase_one_trainables_in_kailash_ml_all() -> None:
         "SklearnTrainable",
         "XGBoostTrainable",
         "LightGBMTrainable",
+        "CatBoostTrainable",
         "TorchTrainable",
         "LightningTrainable",
         "UMAPTrainable",
@@ -97,7 +101,7 @@ def test_all_seven_phase_one_trainables_in_kailash_ml_all() -> None:
     actual = {n for n in kailash_ml.__all__ if n.endswith("Trainable")}
     missing = expected - actual
     assert not missing, (
-        f"Per specs/ml-engines.md §3.0, all 7 Phase 1 family adapters MUST "
+        f"Per specs/ml-engines-v2.md §3, all 8 Phase 1 family adapters MUST "
         f"be in kailash_ml.__all__. Missing: {sorted(missing)}. "
         f"Add eager imports to packages/kailash-ml/src/kailash_ml/__init__.py "
         f"AND list them in __all__ (per orphan-detection §6)."
