@@ -90,7 +90,13 @@ async def test_readme_lineage_quickstart_executes_end_to_end(
         await Migration().apply(_MigrationConnAdapter(conn))
         # Register a model + record lineage.
         registry = ModelRegistry(conn)
-        await registry.register_model("churn", b"fake-pickle-bytes")
+        # Per #699, register_model now plumbs tenant_id; the lineage
+        # walker (km.lineage) uses tenant_id="_single", so the model
+        # MUST be registered under the same tenant for the read to
+        # find it.
+        await registry.register_model(
+            "churn", b"fake-pickle-bytes", tenant_id="_single"
+        )
         await registry.record_lineage(
             name="churn",
             version=1,

@@ -191,64 +191,78 @@ class ModelVersion:
 # ---------------------------------------------------------------------------
 
 
-async def _create_registry_tables(conn: ConnectionManager) -> None:
-    """Create the model registry tables if they do not exist."""
-    await conn.execute(
-        "CREATE TABLE IF NOT EXISTS _kml_models ("
-        "  name TEXT PRIMARY KEY,"
-        "  latest_version INTEGER NOT NULL DEFAULT 0,"
-        "  created_at TEXT NOT NULL,"
-        "  updated_at TEXT NOT NULL"
-        ")"
-    )
-    await conn.execute(
-        "CREATE TABLE IF NOT EXISTS _kml_model_versions ("
-        "  name TEXT NOT NULL,"
-        "  version INTEGER NOT NULL,"
-        "  stage TEXT NOT NULL DEFAULT 'staging',"
-        "  metrics_json TEXT NOT NULL DEFAULT '[]',"
-        "  signature_json TEXT,"
-        "  onnx_status TEXT NOT NULL DEFAULT 'pending',"
-        "  onnx_error TEXT,"
-        "  artifact_path TEXT NOT NULL DEFAULT '',"
-        "  model_uuid TEXT NOT NULL,"
-        "  created_at TEXT NOT NULL,"
-        "  PRIMARY KEY (name, version)"
-        ")"
-    )
-    await conn.execute(
-        "CREATE TABLE IF NOT EXISTS _kml_model_transitions ("
-        "  id TEXT PRIMARY KEY,"
-        "  name TEXT NOT NULL,"
-        "  version INTEGER NOT NULL,"
-        "  from_stage TEXT NOT NULL,"
-        "  to_stage TEXT NOT NULL,"
-        "  reason TEXT NOT NULL DEFAULT '',"
-        "  transitioned_at TEXT NOT NULL"
-        ")"
-    )
+async def _ensure_registry_tables_via_migration(conn: ConnectionManager) -> None:
+    """Apply pending numbered migrations so the registry schema is canonical.
+
+    Per ``rules/schema-migration.md`` Rule 1, all DDL lives in numbered
+    migrations — NOT in inline application code. Migrations 0002 + 0005
+    own the registry's three tables (``_kml_model_versions``,
+    ``_kml_models``, ``_kml_model_transitions``); this helper bridges the
+    registry's :class:`ConnectionManager` shape to the migration
+    framework's expected ``conn.execute(sql, params_tuple)`` form via
+    :class:`_MigrationConnAdapter` and applies every pending migration
+    idempotently.
+
+    Closes GH issue #699: replaces the inline ``CREATE TABLE IF NOT
+    EXISTS`` block (formerly at L194-229) which was a no-op against
+    migration 0002's tenant-aware schema and silently broke
+    ``register_model`` for every 1.5.0/1.5.1 user.
+    """
+    # Local import — keeps the registry module's import graph minimal
+    # for unit tests that don't exercise migration. Also matches the
+    # pattern used by ``ExperimentTracker._apply_pending_migrations``.
+    from kailash_ml.tracking.tracker import _MigrationConnAdapter
+
+    from kailash.tracking.migrations._registry import get_registry
+
+    registry = get_registry()
+    await registry.apply_pending(_MigrationConnAdapter(conn))
 
 
-async def _get_model_row(conn: ConnectionManager, name: str) -> dict[str, Any] | None:
-    return await conn.fetchone("SELECT * FROM _kml_models WHERE name = ?", name)
+async def _get_model_row(
+    conn: ConnectionManager, name: str, *, tenant_id: str
+) -> dict[str, Any] | None:
+    """Fetch a row from ``_kml_models`` by ``(tenant_id, model_name)``.
+
+    Per ``rules/tenant-isolation.md`` Rule 1, every read against a
+    tenant-scoped table includes the ``tenant_id`` predicate. The
+    column is named ``model_name`` to match migration 0005's schema.
+    """
+    return await conn.fetchone(
+        "SELECT * FROM _kml_models WHERE tenant_id = ? AND model_name = ?",
+        tenant_id,
+        name,
+    )
 
 
 async def _get_version_row(
-    conn: ConnectionManager, name: str, version: int
+    conn: ConnectionManager, name: str, version: int, *, tenant_id: str
 ) -> dict[str, Any] | None:
+    """Fetch a row from ``_kml_model_versions`` by
+    ``(tenant_id, model_name, version)``.
+
+    Composite-PK predicate matching migration 0002's schema. ``model_name``
+    (not ``name``) is the canonical column.
+    """
     return await conn.fetchone(
-        "SELECT * FROM _kml_model_versions WHERE name = ? AND version = ?",
+        "SELECT * FROM _kml_model_versions WHERE tenant_id = ? "
+        "AND model_name = ? AND version = ?",
+        tenant_id,
         name,
         version,
     )
 
 
 async def _get_version_by_stage(
-    conn: ConnectionManager, name: str, stage: str
+    conn: ConnectionManager, name: str, stage: str, *, tenant_id: str
 ) -> dict[str, Any] | None:
+    """Fetch the latest ``_kml_model_versions`` row at ``stage`` for
+    ``(tenant_id, model_name)``."""
     return await conn.fetchone(
-        "SELECT * FROM _kml_model_versions WHERE name = ? AND stage = ? "
+        "SELECT * FROM _kml_model_versions WHERE tenant_id = ? "
+        "AND model_name = ? AND stage = ? "
         "ORDER BY version DESC LIMIT 1",
+        tenant_id,
         name,
         stage,
     )
@@ -262,7 +276,12 @@ def _row_to_model_version(row: dict[str, Any]) -> ModelVersion:
     signature = ModelSignature.from_dict(json.loads(sig_json)) if sig_json else None
 
     return ModelVersion(
-        name=row["name"],
+        # Migration 0002 + 0005 use ``model_name`` as the canonical
+        # column (vs. spec §5A.2's ``name``). Per ``rules/specs-authority.md``
+        # Rule 5, code is canonical when the spec follows established
+        # migrations. The dataclass ``ModelVersion.name`` field is part
+        # of the public API and stays stable.
+        name=row["model_name"],
         version=row["version"],
         stage=row["stage"],
         metrics=metrics,
@@ -430,8 +449,30 @@ class ModelRegistry:
     async def _ensure_tables(self) -> None:
         if not self._initialized:
             if self._auto_migrate:
-                await _create_registry_tables(self._conn)
+                # Per rules/schema-migration.md Rule 1, all DDL lives in
+                # numbered migrations. Migrations 0002 + 0005 own the
+                # registry's three tables; this call is idempotent.
+                await _ensure_registry_tables_via_migration(self._conn)
             self._initialized = True
+
+    @staticmethod
+    def _resolve_tenant_id(tenant_id: str | None) -> str:
+        """Resolve the effective tenant_id for a registry call.
+
+        Returns ``tenant_id`` when explicitly provided; otherwise emits
+        a DEBUG log line per ``rules/observability.md`` Rule 3 (schema-
+        revealing default-applied is NOT WARN — it would leak schema
+        identifiers to log aggregators) and returns the canonical
+        single-tenant sentinel ``"default"``. Multi-tenant deployments
+        MUST pass tenant_id explicitly.
+        """
+        if tenant_id is None or tenant_id == "":
+            logger.debug(
+                "model_registry.tenant_default_applied",
+                extra={"resolved_tenant_id": "default"},
+            )
+            return "default"
+        return tenant_id
 
     # ------------------------------------------------------------------
     # register_model
@@ -444,6 +485,7 @@ class ModelRegistry:
         *,
         metrics: list[MetricSpec] | None = None,
         signature: ModelSignature | None = None,
+        tenant_id: str = "default",
     ) -> ModelVersion:
         """Register a new model version at STAGING.
 
@@ -457,6 +499,12 @@ class ModelRegistry:
             Evaluation metrics.
         signature:
             Input/output schema.
+        tenant_id:
+            Tenant scope. Defaults to the canonical single-tenant
+            sentinel ``"default"``. Multi-tenant deployments MUST pass
+            this explicitly. Per ``rules/tenant-isolation.md`` MUST
+            Rule 1, this dimension is required on every write to the
+            tenant-scoped tables.
 
         Returns
         -------
@@ -464,6 +512,7 @@ class ModelRegistry:
             The newly created version.
         """
         await self._ensure_tables()
+        tenant_id = self._resolve_tenant_id(tenant_id)
 
         metrics = metrics or []
         model_uuid = str(uuid.uuid4())
@@ -475,15 +524,20 @@ class ModelRegistry:
 
         # Wrap all DB reads and writes in a transaction to prevent TOCTOU race (H2)
         async with self._conn.transaction() as tx:
-            # Get or create model entry, determine next version
+            # Get or create model entry, determine next version. Composite-PK
+            # predicate ``(tenant_id, model_name)`` matches migration 0005.
             model_row = await tx.fetchone(
-                "SELECT * FROM _kml_models WHERE name = ?", name
+                "SELECT * FROM _kml_models WHERE tenant_id = ? " "AND model_name = ?",
+                tenant_id,
+                name,
             )
             if model_row is None:
                 version = 1
                 await tx.execute(
-                    "INSERT INTO _kml_models (name, latest_version, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?)",
+                    "INSERT INTO _kml_models "
+                    "(tenant_id, model_name, latest_version, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    tenant_id,
                     name,
                     version,
                     now_iso,
@@ -492,24 +546,33 @@ class ModelRegistry:
             else:
                 version = model_row["latest_version"] + 1
                 await tx.execute(
-                    "UPDATE _kml_models SET latest_version = ?, updated_at = ? WHERE name = ?",
+                    "UPDATE _kml_models SET latest_version = ?, updated_at = ? "
+                    "WHERE tenant_id = ? AND model_name = ?",
                     version,
                     now_iso,
+                    tenant_id,
                     name,
                 )
 
             # Use logical artifact path (protocol-agnostic, no private access)
             artifact_path_str = f"{name}/v{version}/model.pkl"
 
-            # Insert version row
+            # Insert version row — migration 0002 + 0005 column shape:
+            # (tenant_id, model_name, version, stage, run_id, created_at,
+            #  promoted_at, archived_at, metrics_json, signature_json,
+            #  onnx_status, onnx_error, artifact_path, model_uuid).
+            # Composite PK = (tenant_id, model_name, version).
             metrics_json = json.dumps([m.to_dict() for m in metrics])
             sig_json = json.dumps(signature.to_dict()) if signature else None
 
             await tx.execute(
                 "INSERT INTO _kml_model_versions "
-                "(name, version, stage, metrics_json, signature_json, "
-                " onnx_status, onnx_error, artifact_path, model_uuid, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(tenant_id, model_name, version, stage, "
+                " metrics_json, signature_json, "
+                " onnx_status, onnx_error, artifact_path, model_uuid, "
+                " created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                tenant_id,
                 name,
                 version,
                 "staging",
@@ -568,6 +631,7 @@ class ModelRegistry:
         version: int | None = None,
         *,
         stage: str | None = None,
+        tenant_id: str = "default",
     ) -> ModelVersion:
         """Retrieve a model version.
 
@@ -579,6 +643,10 @@ class ModelRegistry:
             Specific version number. If None, returns latest.
         stage:
             Filter by stage (e.g. "production").
+        tenant_id:
+            Tenant scope. Defaults to ``"default"`` (single-tenant
+            sentinel). Multi-tenant deployments MUST pass explicitly
+            per ``rules/tenant-isolation.md`` MUST Rule 1.
 
         Returns
         -------
@@ -590,9 +658,12 @@ class ModelRegistry:
             If the model or version does not exist.
         """
         await self._ensure_tables()
+        tenant_id = self._resolve_tenant_id(tenant_id)
 
         if stage is not None:
-            row = await _get_version_by_stage(self._conn, name, stage)
+            row = await _get_version_by_stage(
+                self._conn, name, stage, tenant_id=tenant_id
+            )
             if row is None:
                 raise ModelNotFoundError(
                     reason=f"No version of model '{name}' at stage '{stage}'.",
@@ -601,7 +672,7 @@ class ModelRegistry:
             return _row_to_model_version(row)
 
         if version is not None:
-            row = await _get_version_row(self._conn, name, version)
+            row = await _get_version_row(self._conn, name, version, tenant_id=tenant_id)
             if row is None:
                 raise ModelNotFoundError(
                     reason=f"Model '{name}' version {version} not found.",
@@ -611,12 +682,14 @@ class ModelRegistry:
             return _row_to_model_version(row)
 
         # Latest version
-        model_row = await _get_model_row(self._conn, name)
+        model_row = await _get_model_row(self._conn, name, tenant_id=tenant_id)
         if model_row is None:
             raise ModelNotFoundError(
                 reason=f"Model '{name}' not found.", resource_id=name
             )
-        row = await _get_version_row(self._conn, name, model_row["latest_version"])
+        row = await _get_version_row(
+            self._conn, name, model_row["latest_version"], tenant_id=tenant_id
+        )
         if row is None:
             raise ModelNotFoundError(
                 reason=f"Model '{name}' has no versions.", resource_id=name
@@ -627,18 +700,29 @@ class ModelRegistry:
     # list_models
     # ------------------------------------------------------------------
 
-    async def list_models(self) -> list[dict[str, Any]]:
-        """List all registered models.
+    async def list_models(self, *, tenant_id: str = "default") -> list[dict[str, Any]]:
+        """List all registered models within ``tenant_id``.
+
+        Parameters
+        ----------
+        tenant_id:
+            Tenant scope. Defaults to ``"default"``.
 
         Returns
         -------
         list[dict]
-            Model metadata dicts with name, latest_version, etc.
+            Model metadata dicts with ``name``, ``latest_version``,
+            ``created_at``, ``updated_at``. The ``name`` field is
+            aliased from the SQL column ``model_name`` (canonical per
+            migration 0002 + 0005) so the public dict surface stays
+            stable across the schema change for #699.
         """
         await self._ensure_tables()
+        tenant_id = self._resolve_tenant_id(tenant_id)
         return await self._conn.fetch(
-            "SELECT name, latest_version, created_at, updated_at "
-            "FROM _kml_models ORDER BY name"
+            "SELECT model_name AS name, latest_version, created_at, updated_at "
+            "FROM _kml_models WHERE tenant_id = ? ORDER BY model_name",
+            tenant_id,
         )
 
     # ------------------------------------------------------------------
@@ -652,6 +736,7 @@ class ModelRegistry:
         target_stage: str,
         *,
         reason: str = "",
+        tenant_id: str = "default",
     ) -> ModelVersion:
         """Transition a model version to a new stage.
 
@@ -679,11 +764,12 @@ class ModelRegistry:
             If the model version does not exist.
         """
         await self._ensure_tables()
+        tenant_id = self._resolve_tenant_id(tenant_id)
 
         if target_stage not in ALL_STAGES:
             raise ValueError(f"Invalid stage: {target_stage}")
 
-        model_version = await self.get_model(name, version)
+        model_version = await self.get_model(name, version, tenant_id=tenant_id)
         current_stage = model_version.stage
 
         valid = VALID_TRANSITIONS.get(current_stage, set())
@@ -696,40 +782,57 @@ class ModelRegistry:
         # If promoting to production, demote current production version
         if target_stage == "production":
             try:
-                current_prod = await self.get_model(name, stage="production")
-                await self._update_stage(name, current_prod.version, "archived")
+                current_prod = await self.get_model(
+                    name, stage="production", tenant_id=tenant_id
+                )
+                await self._update_stage(
+                    name, current_prod.version, "archived", tenant_id=tenant_id
+                )
                 await self._record_transition(
                     name,
                     current_prod.version,
                     "production",
                     "archived",
                     f"replaced by v{version}",
+                    tenant_id=tenant_id,
                 )
             except ModelNotFoundError:
                 pass  # No existing production version
 
-        await self._update_stage(name, version, target_stage)
+        await self._update_stage(name, version, target_stage, tenant_id=tenant_id)
         await self._record_transition(
-            name, version, current_stage, target_stage, reason
+            name, version, current_stage, target_stage, reason, tenant_id=tenant_id
         )
 
-        return await self.get_model(name, version)
+        return await self.get_model(name, version, tenant_id=tenant_id)
 
     # ------------------------------------------------------------------
     # get_model_versions
     # ------------------------------------------------------------------
 
-    async def get_model_versions(self, name: str) -> list[ModelVersion]:
+    async def get_model_versions(
+        self, name: str, *, tenant_id: str = "default"
+    ) -> list[ModelVersion]:
         """Return all versions of a model, newest first.
+
+        Parameters
+        ----------
+        name:
+            Model name.
+        tenant_id:
+            Tenant scope. Defaults to ``"default"``.
 
         Returns
         -------
         list[ModelVersion]
         """
         await self._ensure_tables()
+        tenant_id = self._resolve_tenant_id(tenant_id)
 
         rows = await self._conn.fetch(
-            "SELECT * FROM _kml_model_versions WHERE name = ? ORDER BY version DESC",
+            "SELECT * FROM _kml_model_versions WHERE tenant_id = ? "
+            "AND model_name = ? ORDER BY version DESC",
+            tenant_id,
             name,
         )
         return [_row_to_model_version(r) for r in rows]
@@ -904,10 +1007,17 @@ class ModelRegistry:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _update_stage(self, name: str, version: int, stage: str) -> None:
+    async def _update_stage(
+        self, name: str, version: int, stage: str, *, tenant_id: str
+    ) -> None:
+        """Update the stage of a model version. Composite-PK predicate
+        ``(tenant_id, model_name, version)`` matches migration 0002.
+        """
         await self._conn.execute(
-            "UPDATE _kml_model_versions SET stage = ? WHERE name = ? AND version = ?",
+            "UPDATE _kml_model_versions SET stage = ? "
+            "WHERE tenant_id = ? AND model_name = ? AND version = ?",
             stage,
+            tenant_id,
             name,
             version,
         )
@@ -919,14 +1029,25 @@ class ModelRegistry:
         from_stage: str,
         to_stage: str,
         reason: str = "",
+        *,
+        tenant_id: str,
     ) -> None:
+        """Append an immutable row to ``_kml_model_transitions``.
+
+        Per migration 0005's schema, the row carries ``(id, tenant_id,
+        model_name, version, from_stage, to_stage, reason,
+        transitioned_at)``. ``tenant_id`` is required so transition
+        queries can scope to the caller's tenant.
+        """
         tid = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         await self._conn.execute(
             "INSERT INTO _kml_model_transitions "
-            "(id, name, version, from_stage, to_stage, reason, transitioned_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(id, tenant_id, model_name, version, from_stage, to_stage, "
+            " reason, transitioned_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             tid,
+            tenant_id,
             name,
             version,
             from_stage,
@@ -1037,7 +1158,7 @@ class ModelRegistry:
         name, version = _parse_model_ref(ref)
         if version is None:
             await self._ensure_tables()
-            model_row = await _get_model_row(self._conn, name)
+            model_row = await _get_model_row(self._conn, name, tenant_id=tenant_id)
             if model_row is None:
                 raise ModelNotFoundError(
                     reason=f"Model {name!r} not found; cannot build lineage graph.",

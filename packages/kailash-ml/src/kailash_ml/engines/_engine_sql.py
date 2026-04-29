@@ -10,14 +10,14 @@ identifier-bearing statement in one place.
 Two tables:
 
 * ``_kml_engine_versions`` — tenant-aware model version ledger.
-  Augments :class:`kailash_ml.engines.ModelRegistry` (which stores the
-  registry-wide ``_kml_model_versions`` without a tenant column) by
-  carrying the tenant dimension mandated by
-  `specs/ml-engines.md` §5.1 MUST 4. Primary key is
-  ``(tenant_id, name, version)`` per the spec — ``tenant_id`` is part of
-  the identity scope, not a filter column bolted on later. The literal
-  ``"global"`` is used for single-tenant deployments (§5.1 MUST 2);
-  ``"default"`` is BLOCKED because
+  Augments :class:`kailash_ml.engines.ModelRegistry` (which since
+  GH issue #699 stores ``_kml_model_versions`` with the tenant
+  dimension via migrations 0002 + 0005) by carrying the additional
+  identity scope mandated by `specs/ml-engines.md` §5.1 MUST 4.
+  Primary key is ``(tenant_id, name, version)`` per the spec —
+  ``tenant_id`` is part of the identity scope, not a filter column
+  bolted on later. The literal ``"global"`` is used for single-tenant
+  deployments (§5.1 MUST 2); ``"default"`` is BLOCKED because
   `rules/tenant-isolation.md` § MUST Rule 2 mandates a distinct sentinel.
 
 * ``_kml_engine_audit`` — operation audit trail per §5.2. Every
