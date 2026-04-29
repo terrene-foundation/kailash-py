@@ -265,6 +265,66 @@ An audit row `operation="load_pickle_fallback"` with `actor_id`, `model`, `versi
 3. Retry with `format="torch"` succeeds and loads via native `.pt`.
 4. Pickle fallback refused when `allow_pickle=False`; succeeds + WARN + audit row when `allow_pickle=True`.
 
+### 2.6 Legacy 1.1.x Multi-Model Adapter (deprecated, 1.6.0)
+
+The 1.1.x `InferenceServer(registry=, cache_size=)` + `await server.warm_cache([names])` + `await server.load_model(name, model)` API was removed in 1.5.0 without a deprecation cycle, hard-breaking every multi-model deployment (GH #700). 1.6.0 ships a back-compat `MultiModelAdapter` wrapped behind `InferenceServer.__new__` routing PLUS an additive `from_registry_many` helper. The adapter is a temporary shim AROUND the spec-canonical one-server-one-model surface (§2.1) — NOT a restoration of the 1.1.x architecture.
+
+#### 2.6.1 `MultiModelAdapter` — back-compat 1.1.x shape
+
+```python
+class MultiModelAdapter:
+    """Lazy-construct one InferenceServer per model; back-compat for 1.1.x callers."""
+
+    def __init__(self, *, registry: ModelRegistry, cache_size: int) -> None: ...
+    async def warm_cache(self, names: list[str]) -> None: ...
+    async def load_model(self, name: str, model: Any) -> NoReturn:
+        # MUST raise — 1.1.x user-bytes path is removed; registry is authoritative.
+        raise TypeError(
+            "load_model with user-supplied bytes is removed; register the model "
+            "first via ModelRegistry, then call warm_cache or rely on lazy "
+            "load_from_registry"
+        )
+    async def predict(self, name: str, payload: Any) -> Any: ...
+```
+
+#### 2.6.2 `InferenceServer.__new__` deprecation routing
+
+When 1.1.x kwargs are detected (`cache_size` OR `registry` without `config`), `InferenceServer.__new__` emits `DeprecationWarning` and returns `MultiModelAdapter(...)` instead of `InferenceServer`. Pyright callers MUST type as `Union[InferenceServer, MultiModelAdapter]`.
+
+```python
+# DO — 1.6.0 deprecation adapter (1.1.x callsite still works, with warning)
+server = InferenceServer(registry=reg, cache_size=5)
+# DeprecationWarning: InferenceServer(registry=, cache_size=) is deprecated in 1.6.0
+#   and will be removed in 1.7.0; use InferenceServer.from_registry(name, registry=)
+#   per model, or MultiModelAdapter for the 1.1.x multi-model pattern
+await server.warm_cache(["model_a", "model_b"])
+result = await server.predict("model_a", payload)
+
+# DO — 1.5.x canonical (no warning)
+server = InferenceServer(InferenceServerConfig(...), registry=reg)
+```
+
+#### 2.6.3 `from_registry_many` — additive multi-model helper
+
+The canonical 1.5.x → 1.6.0 migration path for "I want N models served simultaneously" is `from_registry_many`, which returns a `dict[str, InferenceServer]` — one per model, each spec-canonical:
+
+```python
+@classmethod
+def from_registry_many(
+    cls,
+    names: list[str],
+    *,
+    registry: ModelRegistry,
+    **config_kwargs: Any,
+) -> dict[str, InferenceServer]: ...
+```
+
+#### 2.6.4 Removal Schedule
+
+The deprecation adapter is removed in 1.7.0. The DeprecationWarning at 1.6.0 + 1.7.0-removal-window pattern is the structural defense against the 1.5.0 hard-break recurrence. See `rules/api-deprecation.md` (codify candidate § 1, kailash-ml-1.5.x-followup workstream).
+
+Origin: GH #700 (2026-04-28) MLFP M5 notebook smoke-test sweep — 1.1.x callsites in `ex_2/03_production_pipeline.py` + `ex_7/05_production_deployment.py` hard-broke with `TypeError: InferenceServer.__init__() got an unexpected keyword argument 'cache_size'`.
+
 ---
 
 ## 3. Request Lifecycle — Entry, Exit, Error

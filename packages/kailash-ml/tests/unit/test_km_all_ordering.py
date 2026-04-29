@@ -8,9 +8,10 @@ Group 0 (W6 round-3 MED-1 addition, 2026-04-27) is package metadata
 (``__version__``). Group 1 is ``track, autolog, train, diagnose,
 register, serve, watch, dashboard, seed, reproduce, resume, lineage,
 rl_train`` (13 entries per §15.9) plus ``erase_subject`` per W15
-FP-MED-2 → 14. Groups 2-6 sum to 27 (15 + 5 + 2 + 3 + 2). Total:
-1 (Group 0) + 41 + 7 Phase-1 Trainable adapters + ``CatBoostTrainable``
-(W6-013) = 50.
+FP-MED-2 → 14. Groups 2-6 sum to 28 (16 + 5 + 2 + 3 + 2 — Group 2
+gains ``MultiModelAdapter`` per GH #700 1.1.x InferenceServer
+back-compat). Total: 1 (Group 0) + 41 + 7 Phase-1 Trainable adapters
++ ``CatBoostTrainable`` (W6-013) + ``MultiModelAdapter`` (#700) = 51.
 
 This test locks the ordering so a future refactor that silently
 reorders the list — or drops one of the canonical verbs — fails
@@ -42,6 +43,7 @@ EXPECTED_GROUP_1 = (
 )
 EXPECTED_GROUP_2 = (
     "Engine",
+    "MultiModelAdapter",  # GH #700 — 1.1.x InferenceServer back-compat shim
     "Trainable",
     # Phase 1 family adapters (specs/ml-engines.md §3.0)
     "SklearnTrainable",
@@ -89,14 +91,16 @@ EXPECTED_ALL = (
 
 
 def test_all_has_expected_total_symbol_count() -> None:
-    """``__all__`` MUST have exactly 50 symbols.
+    """``__all__`` MUST have exactly 51 symbols.
 
     1 (Group 0 metadata) + 40 §15.9 + W15 ``erase_subject`` + 7 Phase-1
-    Trainable adapters + ``CatBoostTrainable`` (W6-013 / F-E1-01).
+    Trainable adapters + ``CatBoostTrainable`` (W6-013 / F-E1-01) +
+    ``MultiModelAdapter`` (GH #700 — 1.1.x InferenceServer back-compat).
     """
-    assert len(kailash_ml.__all__) == 50, (
-        f"expected 50 symbols (1 Group 0 + §15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 "
-        f"adapters + CatBoostTrainable W6-013), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
+    assert len(kailash_ml.__all__) == 51, (
+        f"expected 51 symbols (1 Group 0 + §15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 "
+        f"adapters + CatBoostTrainable W6-013 + MultiModelAdapter #700), got "
+        f"{len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
 

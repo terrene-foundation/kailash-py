@@ -118,22 +118,29 @@ async def migrated_registry(fresh_conn: ConnectionManager):
 async def test_fresh_db_raises_migration_required_error(
     fresh_conn: ConnectionManager,
 ) -> None:
-    """Walker MUST refuse to traverse a DB whose lineage schema is absent."""
-    registry = ModelRegistry(fresh_conn)
-    await registry._ensure_tables()
-    # Register a model so the model_versions row exists; the lineage
-    # table is the only thing missing.
-    await registry.register_model("churn", b"fake-pickle-bytes")
+    """Walker MUST refuse to traverse a DB whose lineage schema is absent.
 
+    Per #699 the registry's ``_ensure_tables`` now applies the FULL
+    migration registry (0001..0005), which includes migration 0004
+    (the lineage table). To reproduce the "lineage table absent"
+    scenario this invariant guards against, we drive the lower-level
+    engine helper :func:`kailash_ml.engines.lineage.build_lineage_graph`
+    directly against a fresh connection that has NEVER applied any
+    migration — no model row is needed because the migration probe
+    short-circuits before ``_fetch_model_version_row`` runs.
+    """
+    from kailash_ml.engines.lineage import build_lineage_graph
+
+    # NO migrations applied — bypass the registry's auto-migrate path.
     with pytest.raises(MigrationRequiredError) as exc_info:
-        await registry.build_lineage_graph(
-            ref="churn@v1", tenant_id="acme", max_depth=10
+        await build_lineage_graph(
+            fresh_conn, name="churn", version=1, tenant_id="acme", max_depth=10
         )
     err = exc_info.value
     assert err.resource_id == LINEAGE_TABLE
     # No rows were inserted — the engine MUST NOT emit inline DDL.
     rows = await fresh_conn.fetch(
-        "SELECT name FROM sqlite_master " "WHERE type='table' AND name = ?",
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
         LINEAGE_TABLE,
     )
     assert rows == [] or rows is None, (
@@ -154,7 +161,7 @@ async def test_walker_materialises_real_graph(
 ) -> None:
     """End-to-end: register model + record lineage -> graph contains data."""
     registry = migrated_registry
-    await registry.register_model("churn", b"fake-pickle-bytes")
+    await registry.register_model("churn", b"fake-pickle-bytes", tenant_id="acme")
     await registry.record_lineage(
         name="churn",
         version=1,
@@ -219,7 +226,7 @@ async def test_cross_tenant_traversal_blocked(
     write would and verify the walker refuses to surface it.
     """
     registry = migrated_registry
-    await registry.register_model("fraud", b"fake-pickle-bytes")
+    await registry.register_model("fraud", b"fake-pickle-bytes", tenant_id="acme")
     # Insert a row directly under the WRONG tenant; the walker queries
     # by (tenant_id, name, version) so a query for tenant=acme should
     # see ZERO rows. Test that no leak occurs.
@@ -264,8 +271,8 @@ async def test_parent_version_walk_does_not_leak_cross_tenant(
     that NO rival data leaks into the resulting graph.
     """
     registry = migrated_registry
-    await registry.register_model("fraud", b"fake-pickle-bytes")
-    await registry.register_model("fraud", b"fake-pickle-bytes")  # v2
+    await registry.register_model("fraud", b"fake-pickle-bytes", tenant_id="acme")
+    await registry.register_model("fraud", b"fake-pickle-bytes", tenant_id="acme")  # v2
 
     # Insert v2 row owned by 'acme' that points at v1.
     await fresh_conn.execute(
@@ -323,7 +330,7 @@ async def test_walker_aborts_when_row_tenant_mismatches(
     from kailash_ml.engines import lineage as lineage_module
 
     registry = migrated_registry
-    await registry.register_model("fraud", b"fake-pickle-bytes")
+    await registry.register_model("fraud", b"fake-pickle-bytes", tenant_id="acme")
 
     # Patch the fetcher to return a rival-tenant row even when the
     # caller asked for tenant='acme'. This is the defense-in-depth
@@ -393,8 +400,8 @@ async def test_bare_name_ref_resolves_to_latest_version(
 ) -> None:
     """``ref="churn"`` (no @v) resolves to the latest registered version."""
     registry = migrated_registry
-    await registry.register_model("churn", b"v1-bytes")
-    await registry.register_model("churn", b"v2-bytes")
+    await registry.register_model("churn", b"v1-bytes", tenant_id="acme")
+    await registry.register_model("churn", b"v2-bytes", tenant_id="acme")
     await registry.record_lineage(
         name="churn",
         version=2,
@@ -423,7 +430,7 @@ async def test_returned_graph_is_frozen(
 ) -> None:
     """LineageGraph / Node / Edge are @dataclass(frozen=True) per §E10.2."""
     registry = migrated_registry
-    await registry.register_model("seg", b"fake-bytes")
+    await registry.register_model("seg", b"fake-bytes", tenant_id="acme")
     await registry.record_lineage(
         name="seg",
         version=1,

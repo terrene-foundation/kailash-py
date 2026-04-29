@@ -46,8 +46,9 @@ import hashlib
 import logging
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 from kailash_ml.errors import (
     InferenceServerError,
@@ -64,6 +65,13 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
     from kailash_ml.types import ModelSignature
 
+# ``MultiModelAdapter`` is referenced only as the return type of ``__new__``
+# below (1.1.x deprecation routing). We type it via the cycle-free
+# ``MultiModelAdapterProtocol`` in ``_types.py`` to break the static
+# ``serving/server.py`` ↔ ``serving/multi_model_adapter.py`` cycle CodeQL
+# ``py/unsafe-cyclic-import`` flagged after #700 landed. The runtime import
+# of the concrete class stays scoped to the ``__new__`` body (line 320).
+from kailash_ml.serving._types import MultiModelAdapterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +281,65 @@ class InferenceServer:
     registry construction.
     """
 
+    def __new__(
+        cls,
+        config: Optional[InferenceServerConfig] = None,
+        *,
+        registry: Optional["ModelRegistry"] = None,
+        cache_size: Optional[int] = None,
+        server_id: Optional[str] = None,
+    ) -> Union["InferenceServer", "MultiModelAdapterProtocol"]:
+        """Route 1.1.x kwargs to :class:`MultiModelAdapter`.
+
+        Closes GH issue #700. Per ``specs/ml-serving.md`` §1.1 + §2.1
+        the canonical 1.5.x architecture is ONE server per model.
+        1.1.x users wrote::
+
+            server = InferenceServer(registry=registry, cache_size=8)
+
+        That signature was hard-removed in 1.5.0 without a deprecation
+        cycle. This ``__new__`` restores it behind a
+        :class:`DeprecationWarning` by returning a
+        :class:`MultiModelAdapter` — which preserves the 1.1.x
+        ``warm_cache`` / ``load_model`` / ``predict(name, payload)``
+        surface while delegating to one canonical
+        :class:`InferenceServer` per model.
+
+        Detection: if ``cache_size`` is supplied OR ``config`` is
+        ``None`` AND ``registry`` is supplied (the 1.1.x shape:
+        ``InferenceServer(registry=...)`` with no positional config),
+        route to the adapter. Otherwise fall through to the canonical
+        ``__init__``.
+
+        Returns a :class:`MultiModelAdapter` when 1.1.x kwargs are
+        detected; a :class:`InferenceServer` instance otherwise. Per
+        Python semantics, when ``__new__`` returns a non-cls instance
+        the runtime skips ``__init__`` — the adapter's ``__init__``
+        runs once and the canonical ``InferenceServer.__init__`` is
+        not invoked on it.
+        """
+        is_legacy_signature = cache_size is not None or (
+            config is None and registry is not None
+        )
+        if is_legacy_signature:
+            # Lazy import to break the serving<->multi_model_adapter cycle.
+            from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
+
+            warnings.warn(
+                "InferenceServer(registry=, cache_size=) is deprecated in "
+                "kailash-ml 1.6.0 and will be removed in 1.7.0; use "
+                "InferenceServer.from_registry(name, registry=) per model, "
+                "or MultiModelAdapter for the 1.1.x multi-model pattern. "
+                "See specs/ml-serving.md §1.1 + §2.1.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return MultiModelAdapter(
+                registry=registry,  # type: ignore[arg-type]
+                cache_size=cache_size if cache_size is not None else 8,
+            )
+        return super().__new__(cls)
+
     def __init__(
         self,
         config: InferenceServerConfig,
@@ -403,6 +470,70 @@ class InferenceServer:
             runtime=runtime,
         )
         return server
+
+    @classmethod
+    async def from_registry_many(
+        cls,
+        names: list[str],
+        *,
+        registry: "ModelRegistry",
+        **config_kwargs: Any,
+    ) -> dict[str, "InferenceServer"]:
+        """Construct one :class:`InferenceServer` per model name.
+
+        Additive helper introduced for GH issue #700 to give multi-
+        model callers a canonical 1.5.x-shaped surface without
+        reaching for the deprecated :class:`MultiModelAdapter`. Each
+        entry is constructed via :meth:`from_registry` -- distinct
+        config, distinct ``server_id`` (auto-generated), distinct
+        per-server ``asyncio.Lock``.
+
+        Parameters
+        ----------
+        names:
+            Model names. Each routes through the registry's alias
+            layer (a bare name resolves to whichever production /
+            staging stage the registry returns by default).
+        registry:
+            Shared :class:`ModelRegistry`. Per
+            ``rules/facade-manager-detection.md`` MUST 3 every
+            constructed server uses the SAME registry instance --
+            audit/tenant scoping flow through one source of truth.
+        **config_kwargs:
+            Forwarded to :meth:`from_registry` (e.g. ``tenant_id=``,
+            ``runtime=``, ``channels=``, ``batch_size=``). Applied
+            uniformly across every constructed server.
+
+        Returns
+        -------
+        dict[str, InferenceServer]
+            One distinct :class:`InferenceServer` per name. Insertion
+            order matches ``names``.
+
+        Raises
+        ------
+        TypeError
+            When ``names`` is not a list of non-empty strings.
+        """
+        if not isinstance(names, list):
+            raise TypeError(
+                f"InferenceServer.from_registry_many(names=...) expects "
+                f"list[str], got {type(names).__name__}"
+            )
+        for n in names:
+            if not isinstance(n, str) or not n:
+                raise TypeError(
+                    f"InferenceServer.from_registry_many(names=...) every "
+                    f"entry must be a non-empty string; got {n!r}"
+                )
+        servers: dict[str, "InferenceServer"] = {}
+        for name in names:
+            servers[name] = await cls.from_registry(
+                name,
+                registry=registry,
+                **config_kwargs,
+            )
+        return servers
 
     # ------------------------------------------------------------------
     # Lifecycle — start / stop

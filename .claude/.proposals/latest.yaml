@@ -122,6 +122,113 @@ changes:
       ship cross-SDK; this rule completes the destructive-confirmation
       family for the local-workspace surface.
 
+  # ================================================================
+  # APPENDED 2026-04-29 — kailash-ml-1.5.x-followup workstream
+  # Per rules/artifact-flow.md MUST § "Append, Never Overwrite Unprocessed
+  # Proposals" — proposal was at pending_review; new candidates appended.
+  # ================================================================
+
+  - id: api-deprecation-cycle-discipline
+    classification_hint: global
+    rationale: |
+      Public-API removal MUST land with a DeprecationWarning shim
+      covering at least one minor cycle, plus a CHANGELOG migration
+      section explicitly documenting the 1.x → next-1.x callsite
+      change. Removal-without-shim is BLOCKED. Same gap exists
+      structurally in Rust SDK: `pub fn` removal without
+      `#[deprecated(since = "X.Y.Z", note = "...")]`.
+    why: |
+      kailash-ml 1.5.x dropped `InferenceServer(registry=, cache_size=)`
+      + `warm_cache` + `load_model(name, model)` without a deprecation
+      cycle. Every 1.1.x callsite hard-broke in production (#700,
+      MLFP M5 sweep 2026-04-28).
+    likely_placement: |
+      New rules/api-deprecation.md OR extension to rules/zero-tolerance.md
+      Rule 6 ("Implement Fully") with sibling clause "Remove Fully".
+    origin: workspaces/kailash-ml-1.5.x-followup/02-plans/03-codify-candidates.md § 1
+    cross_sdk: applies to both kailash-py and kailash-rs
+
+  - id: inline-ddl-outside-migrations-grep-audit
+    classification_hint: global
+    rationale: |
+      rules/schema-migration.md Rule 1 already says "DDL outside
+      migrations is BLOCKED" but no /redteam mechanical sweep enforces
+      it. Add explicit grep audit for `CREATE TABLE` / `ALTER TABLE` /
+      `DROP TABLE` outside `migrations/` directories. Three-way drift
+      detection (spec ↔ migration ↔ application code) for any
+      workstream touching a migrated table.
+    why: |
+      ModelRegistry shipped inline `CREATE TABLE IF NOT EXISTS
+      _kml_model_versions` for ~3 months; migration 0002 owned the
+      same table with different columns; spec §5A.2 had a third
+      schema. Three-way drift was invisible until a user hit the
+      no-op path (#699).
+    likely_placement: |
+      Audit protocol extension to rules/schema-migration.md § Audit OR
+      new spec-compliance check in skills/16-validation-patterns/.
+    origin: workspaces/kailash-ml-1.5.x-followup/journal/0004-DISCOVERY-three-way-schema-drift-mandates-migration-0005.md
+    cross_sdk: applies to both kailash-py and kailash-rs
+
+  - id: brief-claim-verification-protocol
+    classification_hint: global
+    rationale: |
+      `/analyze` MUST run a brief-verification sweep when issue count
+      ≥ 3. Every factual claim in the brief tagged with file:line
+      citations is independently re-grep'd by parallel deep-dive
+      agents. Inaccuracies recorded in journal AND architecture plan
+      as the gate before /todos.
+    why: |
+      kailash-ml-1.5.x-followup brief had THREE distinct factual
+      inaccuracies (issue #699 root-cause framing, issue #700 file
+      path, issue #701 silent-drop scope) caught only because three
+      parallel deep-dive agents independently verified. Single-agent
+      analysis would have inherited the wrong framing into /todos.
+    likely_placement: |
+      Extension to skills/analyze OR new rules/brief-verification.md.
+      Companion update to rules/agents.md § Parallel Execution.
+    origin: workspaces/kailash-ml-1.5.x-followup/journal/0001-DISCOVERY-brief-root-cause-incorrect-on-three-issues.md
+    cross_sdk: meta-rule about COC analyze phase; applies to all SDKs
+
+  - id: silent-drop-kwargs-as-zero-tolerance-rule-3
+    classification_hint: global
+    rationale: |
+      A documented kwarg accepted in the public signature but with
+      zero effect on the function body IS the silent-fallback failure
+      mode at API surface level. Add explicit subclause "3c: Kwargs
+      accepted but unused" naming the pattern alongside `except: pass`
+      and `except Exception: return None`.
+    why: |
+      `diagnose(model, kind="dl", data=loader)` accepted `data=` in
+      its public signature, documented in spec §3.1 as a DataLoader
+      union member, and silently dropped it on the kind="dl" branch.
+      DLDiagnostics had no method consuming a DataLoader. The kwarg's
+      existence was a lie. (#701)
+    likely_placement: |
+      Extension to rules/zero-tolerance.md Rule 3 with explicit
+      subclause "3c".
+    origin: workspaces/kailash-ml-1.5.x-followup/02-plans/03-codify-candidates.md § 4
+    cross_sdk: structural; Python kwargs more vulnerable than Rust
+
+  - id: accepted-literals-without-dispatch-as-rule-2
+    classification_hint: global
+    rationale: |
+      Accepting a literal in a Literal[...]/Enum dispatch parameter
+      AND not having a branch for it IS the same failure mode class
+      as Rule 2's "fake X" patterns (fake encryption, fake transaction,
+      fake health). Add "fake dispatch" subentry to Rule 2 + /redteam
+      grep protocol that AST-walks the dispatcher to confirm every
+      accepted literal has a branch.
+    why: |
+      `_wrappers.py:474-485` accepted `clustering`, `alignment`, `llm`,
+      `agent` as valid `kind` literals. None had a dispatch branch —
+      every one fell through to DLDiagnostics. Documented in spec as
+      supported, silently broken in practice. (#701 bonus finding)
+    likely_placement: |
+      Extension to rules/zero-tolerance.md Rule 2 § Extended BLOCKED
+      Patterns with "fake dispatch" subentry.
+    origin: workspaces/kailash-ml-1.5.x-followup/journal/0001-DISCOVERY-brief-root-cause-incorrect-on-three-issues.md § "bonus finding"
+    cross_sdk: Rust enum match exhaustiveness covers this; &str dispatch does not
+
 deferred_to_next_cycle:
   - "git.md is now 295 LOC after this addition — exceeds the
     rule-authoring.md MUST NOT 200-line guidance. Pre-existing overflow;

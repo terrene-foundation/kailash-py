@@ -118,6 +118,13 @@ automl-bayes = ["scikit-optimize>=0.9"]
 agents = [
     "kailash-kaizen>=2.7.5",
 ]
+# Cross-package dispatch extras for `km.diagnose(kind=...)` (#701).
+# Each extra installs the sibling package whose engine is dispatched
+# at the call site; missing the extra produces a loud ImportError per
+# `rules/dependencies.md` § BLOCKED Anti-Patterns, NOT silent fallback.
+alignment = ["kailash-align>=0.6"]
+kaizen-judges = ["kailash-kaizen>=2.7"]
+kaizen-observability = ["kailash-kaizen>=2.7"]
 explain = ["shap>=0.44"]
 imbalance = ["imbalanced-learn>=0.12"]
 # RAG evaluation backends for kailash_ml.diagnostics.RAGDiagnostics.
