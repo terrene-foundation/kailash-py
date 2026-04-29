@@ -568,6 +568,47 @@ def diagnose(
         X, y = data
         return diagnose_regressor(subject, X, y, tracker=tracker)
 
+    # GH issue #701 part 2: cross-package dispatch with extras gating.
+    # The diagnostic classes for these kinds live in sibling packages
+    # (kailash-align, kailash-kaizen) so kailash-ml MUST NOT assume they
+    # are installed. Per `rules/dependencies.md` § BLOCKED Anti-Patterns,
+    # the import is wrapped in try/except and re-raises ImportError with
+    # an explicit install hint at the call site — never a silent
+    # fallback to None / partial behaviour.
+    if kind == "alignment":
+        try:
+            from kailash_align.diagnostics.alignment import AlignmentDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='alignment') requires kailash-align>=0.6 "
+                "(install via `pip install kailash-ml[alignment]`)"
+            ) from exc
+        # AlignmentDiagnostics signature: (*, label, window, run_id);
+        # neither tracker nor data is part of its constructor surface
+        # today. Forwarding only what the spec declares; tracker
+        # integration tracked at the spec-amend follow-up.
+        return AlignmentDiagnostics()
+    if kind == "llm":
+        try:
+            from kaizen.judges.llm_diagnostics import LLMDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='llm') requires kailash-kaizen>=2.7 with "
+                "the [judges] extra (install via "
+                "`pip install kailash-ml[kaizen-judges]`)"
+            ) from exc
+        return LLMDiagnostics(tracker=tracker)
+    if kind == "agent":
+        try:
+            from kaizen.observability.agent_diagnostics import AgentDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='agent') requires kailash-kaizen>=2.7 with "
+                "the [observability] extra (install via "
+                "`pip install kailash-ml[kaizen-observability]`)"
+            ) from exc
+        return AgentDiagnostics(tracker=tracker)
+
     # kind == "auto" — inspect subject for dispatch. Ordering here
     # mirrors the §3.2 dispatch table verbatim.
     if isinstance(subject, TrainingResult):
