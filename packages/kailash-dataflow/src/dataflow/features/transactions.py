@@ -12,7 +12,7 @@ atomicity. The connection is returned to the pool on commit/rollback.
 import logging
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,154 @@ _active_transaction: ContextVar[Optional[Any]] = ContextVar(
     "_active_transaction", default=None
 )
 _savepoint_depth: ContextVar[int] = ContextVar("_savepoint_depth", default=0)
+
+
+class TransactionScope:
+    """The yielded scope inside an ``async with db.transactions.begin()`` block.
+
+    Holds the pinned connection for the lifetime of the ``async with`` body
+    and exposes ``execute_raw(sql, params)`` for multi-statement raw SQL the
+    Express API does not express directly (DDL inside a tx, SELECT FOR UPDATE
+    + INSERT, complex UPSERT-or-UPDATE).
+
+    The pinned connection is set in ``_active_transaction`` ContextVar by the
+    enclosing ``TransactionManager`` and cleared on exit. Calling
+    ``execute_raw`` outside the ``async with`` body raises ``RuntimeError``
+    per ``rules/zero-tolerance.md`` Rule 3a (typed delegate guard) — the
+    pinned connection only exists while the scope is active.
+
+    Backward-compat: existing tests / consumer code may treat this as a dict
+    (``txn["id"]``) — ``__getitem__`` maps the canonical attributes through.
+    """
+
+    __slots__ = ("id", "isolation_level", "status", "type", "depth")
+
+    def __init__(
+        self,
+        *,
+        id: str,
+        isolation_level: str,
+        status: str = "active",
+        type: str = "transaction",
+        depth: Optional[int] = None,
+    ) -> None:
+        self.id = id
+        self.isolation_level = isolation_level
+        self.status = status
+        self.type = type
+        self.depth = depth
+
+    def __getitem__(self, key: str) -> Any:
+        """Backward-compat dict-style access.
+
+        ``txn["id"]`` / ``txn["isolation_level"]`` / ``txn["status"]`` MUST
+        keep working for code written against the prior dict-yielding API.
+        Unknown keys raise ``KeyError`` to keep the dict semantics tight.
+        """
+        if key == "id":
+            return self.id
+        if key == "isolation_level":
+            return self.isolation_level
+        if key == "status":
+            return self.status
+        if key == "type":
+            return self.type
+        if key == "depth":
+            return self.depth
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Backward-compat: allow ``txn["status"] = "committed"`` writes.
+
+        Internal manager code historically assigned ``txn_context["status"] =
+        "committed"`` after COMMIT. Preserve that affordance.
+        """
+        if key == "id":
+            self.id = value
+        elif key == "isolation_level":
+            self.isolation_level = value
+        elif key == "status":
+            self.status = value
+        elif key == "type":
+            self.type = value
+        elif key == "depth":
+            self.depth = value
+        else:
+            raise KeyError(key)
+
+    async def execute_raw(self, sql: str, params: Optional[List[Any]] = None) -> Any:
+        """Execute a raw SQL statement on the pinned transaction connection.
+
+        Routes the call through the connection bound by the enclosing
+        ``async with db.transactions.begin()`` block. Use for multi-statement
+        atomicity the Express API does not express directly:
+
+            async with db.transactions.begin() as tx:
+                rows = await tx.execute_raw(
+                    "SELECT id FROM oauth_tokens WHERE user_id = $1 FOR UPDATE",
+                    [user_id],
+                )
+                if rows:
+                    await tx.execute_raw(
+                        "UPDATE oauth_tokens SET refresh_token = $1 "
+                        "WHERE user_id = $2",
+                        [new_refresh, user_id],
+                    )
+
+        Args:
+            sql: SQL statement. PostgreSQL placeholders are ``$1``, ``$2``,
+                ``...``; SQLite placeholders are ``?``; MySQL placeholders are
+                ``%s``. Pass dialect-appropriate placeholders for the
+                underlying connection.
+            params: Optional positional parameter list. asyncpg expects
+                positional unpacking; aiosqlite expects a list/tuple. The
+                method dispatches the binding shape based on the underlying
+                connection type.
+
+        Returns:
+            For SELECT statements on asyncpg: a list of ``asyncpg.Record``
+            rows (use ``dict(row)`` to materialize). For
+            INSERT/UPDATE/DELETE on asyncpg: the command-tag string
+            (e.g. ``"INSERT 0 1"``). For aiosqlite: the cursor object after
+            ``execute()`` — use ``await cursor.fetchall()`` for SELECT.
+
+        Raises:
+            RuntimeError: When called outside the ``async with`` body —
+                the pinned connection only exists while the scope is active.
+        """
+        conn = _active_transaction.get()
+        if conn is None:
+            raise RuntimeError(
+                "TransactionScope.execute_raw called outside the transaction "
+                "body — ensure the call is inside the "
+                "`async with db.transactions.begin()` scope. "
+                "The pinned connection is only valid while the scope is active."
+            )
+
+        # asyncpg: connection.fetch / .execute take *params positional.
+        # aiosqlite: connection.execute takes a single tuple/list arg.
+        # Dispatch by connection type to bind correctly. asyncpg connections
+        # have a `fetch` method; aiosqlite connections do not.
+        is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
+
+        sql_stripped = sql.lstrip()
+        is_select = (
+            sql_stripped[:6].upper() == "SELECT" or sql_stripped[:4].upper() == "WITH"
+        )
+
+        if is_asyncpg:
+            if params is None:
+                if is_select:
+                    return await conn.fetch(sql)
+                return await conn.execute(sql)
+            # asyncpg: positional unpacking
+            if is_select:
+                return await conn.fetch(sql, *params)
+            return await conn.execute(sql, *params)
+        # aiosqlite-style: single tuple param
+        if params is None:
+            return await conn.execute(sql)
+        return await conn.execute(sql, params)
 
 
 class TransactionManager:
@@ -35,12 +183,24 @@ class TransactionManager:
 
     Usage::
 
-        async with db.transactions.begin() as txn:
+        async with db.transactions.begin() as tx:
             await db.express.create("User", {"name": "Alice"})
             await db.express.create("Profile", {"user_id": 1})
             # Both committed atomically on exit
 
-        async with db.transactions.begin() as txn:
+        async with db.transactions.begin() as tx:
+            # Multi-statement raw SQL atomicity via tx.execute_raw
+            existing = await tx.execute_raw(
+                "SELECT id FROM users WHERE email = $1 FOR UPDATE",
+                ["alice@example.com"],
+            )
+            if not existing:
+                await tx.execute_raw(
+                    "INSERT INTO users (email) VALUES ($1)",
+                    ["alice@example.com"],
+                )
+
+        async with db.transactions.begin() as outer:
             await db.express.create("User", {"name": "Bob"})
             async with db.transactions.begin() as nested:
                 # This is a SAVEPOINT
@@ -60,7 +220,7 @@ class TransactionManager:
     @asynccontextmanager
     async def begin(
         self, isolation_level: str = "READ COMMITTED"
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[TransactionScope, None]:
         """Begin a database transaction.
 
         Args:
@@ -70,7 +230,10 @@ class TransactionManager:
                 - "SERIALIZABLE" (strictest, may fail under contention)
 
         Yields:
-            Transaction context dict with metadata (id, isolation_level, status).
+            TransactionScope with metadata (id, isolation_level, status) plus
+            ``execute_raw(sql, params)`` for multi-statement raw SQL on the
+            pinned connection. Backward-compatible dict-style access
+            (``txn["id"]``) is preserved.
 
         Raises:
             Exception: Re-raises any exception from the transaction body
@@ -79,7 +242,7 @@ class TransactionManager:
         current = _active_transaction.get()
         if current is not None:
             # Nested transaction — use SAVEPOINT
-            async for ctx in self._savepoint():
+            async with self._savepoint() as ctx:
                 yield ctx
             return
 
@@ -109,17 +272,18 @@ class TransactionManager:
             # Start the transaction with the requested isolation level
             await conn.execute(f"BEGIN ISOLATION LEVEL {isolation_level}")
 
-            txn_context: Dict[str, Any] = {
-                "id": txn_id,
-                "isolation_level": isolation_level,
-                "status": "active",
-            }
+            scope = TransactionScope(
+                id=txn_id,
+                isolation_level=isolation_level,
+                status="active",
+                type="transaction",
+            )
 
-            yield txn_context
+            yield scope
 
             # Commit on clean exit
             await conn.execute("COMMIT")
-            txn_context["status"] = "committed"
+            scope.status = "committed"
             self._stats["total_committed"] += 1
             logger.info(
                 "transaction.commit",
@@ -150,7 +314,7 @@ class TransactionManager:
             await adapter.connection_pool.release(conn)
 
     @asynccontextmanager
-    async def _savepoint(self) -> AsyncGenerator[Dict[str, Any], None]:
+    async def _savepoint(self) -> AsyncGenerator[TransactionScope, None]:
         """Create a SAVEPOINT within an existing transaction."""
         conn = _active_transaction.get()
         if conn is None:
@@ -168,17 +332,18 @@ class TransactionManager:
         try:
             await conn.execute(f"SAVEPOINT {sp_name}")
 
-            ctx: Dict[str, Any] = {
-                "id": sp_name,
-                "type": "savepoint",
-                "depth": depth,
-                "status": "active",
-            }
+            scope = TransactionScope(
+                id=sp_name,
+                isolation_level="",  # savepoints inherit from outer txn
+                status="active",
+                type="savepoint",
+                depth=depth,
+            )
 
-            yield ctx
+            yield scope
 
             await conn.execute(f"RELEASE SAVEPOINT {sp_name}")
-            ctx["status"] = "released"
+            scope.status = "released"
 
         except Exception as e:
             try:
