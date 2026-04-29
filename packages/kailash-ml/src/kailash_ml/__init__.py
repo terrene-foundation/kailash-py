@@ -85,6 +85,13 @@ from kailash_ml.engines.data_explorer import AlertConfig
 from kailash_ml.engines.lineage import LineageEdge, LineageGraph, LineageNode
 from kailash_ml.engines.model_registry import ModelRegistry
 
+# 1.1.x back-compat shim — issue #700. Eager-import so
+# ``from kailash_ml import MultiModelAdapter`` resolves without a
+# lazy ``__getattr__`` hop and the symbol satisfies
+# ``rules/orphan-detection.md`` Rule 6 (every ``__all__`` entry
+# imported at module scope).
+from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
+
 # Group 6 — Engine Discovery.
 from kailash_ml.engines.registry import (
     ClearanceRequirement,
@@ -651,13 +658,15 @@ def __getattr__(name: str):  # noqa: N807
 # ---------------------------------------------------------------------------
 # Canonical __all__ — exact 6-group ordering per specs/ml-engines-v2.md §15.9
 #
-# Symbol count: 50 (spec §15.9 base 40 groups + W15 FP-MED-2 adds
+# Symbol count: 51 (spec §15.9 base 40 groups + W15 FP-MED-2 adds
 # ``erase_subject`` to Group 1 + W6 wave additions: ``rl_train`` (Group 1,
 # W6-015 RL primary verb), 7 Phase-1 Trainable adapters in Group 2
 # enumeration including ``CatBoostTrainable`` (W6-013), Group 6 discovery
 # primitives ``engine_info`` / ``list_engines`` (W6-012), + Group 0 metadata
 # (``__version__``, W6 round-3 MED-1 — eagerly imported at module scope per
-# ``rules/orphan-detection.md`` §6). The ordering is load-bearing:
+# ``rules/orphan-detection.md`` §6) + GH #700 ``MultiModelAdapter`` (Group 2
+# enumeration — 1.1.x InferenceServer back-compat shim). The ordering is
+# load-bearing:
 # ``from kailash_ml import *`` users observe metadata first, then verbs,
 # then primitives, then diagnostics, then backend, then tracker, then
 # discovery. Reordering requires a spec amendment (§15.9 MUST). Count is
@@ -685,6 +694,7 @@ __all__ = [
     "erase_subject",  # W15 FP-MED-2 — appended per todo invariant 1
     # Group 2 — Engine primitives + MLError hierarchy
     "Engine",
+    "MultiModelAdapter",  # GH #700 — 1.1.x InferenceServer back-compat shim
     "Trainable",
     # Phase 1 family adapters (specs/ml-engines.md §3.0)
     "SklearnTrainable",
