@@ -98,7 +98,7 @@ Ensure user-facing documentation reflects new capabilities. Verify README.md, do
 
 ### 6. Red team the agents and skills
 
-Validate that generated agents and skills are correct, complete, and secure. **claude-code-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
+Validate that generated agents and skills are correct, complete, and secure. **cc-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
 
 ### 7. Create upstream proposal (BUILD repos) / 8. Upstream to atelier (loom only)
 
@@ -125,7 +125,7 @@ Deploy these agents as a team for codification:
 
 **Validation team (red team the agents and skills):**
 
-- **claude-code-architect** — Verify cc-artifacts compliance: descriptions <120 chars, agents <400 lines, commands <150 lines, rules have `paths:` frontmatter, SKILL.md progressive disclosure, no CLAUDE.md duplication
+- **cc-architect** — Verify cc-artifacts compliance: descriptions <120 chars, agents <400 lines, commands <150 lines, rules have `paths:` frontmatter, SKILL.md progressive disclosure, no CLAUDE.md duplication
 - **gold-standards-validator** — Terrene naming, licensing accuracy, terminology standards
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure

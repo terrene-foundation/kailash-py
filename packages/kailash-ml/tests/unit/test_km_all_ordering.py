@@ -5,13 +5,25 @@
 Per ``specs/ml-engines-v2.md §15.9``, the package-level ``__all__``
 MUST be organised into 7 groups in the exact order documented there.
 Group 0 (W6 round-3 MED-1 addition, 2026-04-27) is package metadata
-(``__version__``). Group 1 is ``track, autolog, train, diagnose,
-register, serve, watch, dashboard, seed, reproduce, resume, lineage,
-rl_train`` (13 entries per §15.9) plus ``erase_subject`` per W15
-FP-MED-2 → 14. Groups 2-6 sum to 28 (16 + 5 + 2 + 3 + 2 — Group 2
-gains ``MultiModelAdapter`` per GH #700 1.1.x InferenceServer
-back-compat). Total: 1 (Group 0) + 41 + 7 Phase-1 Trainable adapters
-+ ``CatBoostTrainable`` (W6-013) + ``MultiModelAdapter`` (#700) = 51.
+(``__version__``). Group 1 is the 13 lifecycle verbs per §15.9
+(``track, autolog, train, diagnose, register, serve, watch, dashboard,
+seed, reproduce, resume, lineage, rl_train``) plus ``erase_subject``
+per W15 FP-MED-2.
+
+Group lengths (load-bearing — locked by the per-group tests below):
+
+* Group 0 — package metadata: 1 (``__version__``)
+* Group 1 — lifecycle verbs: 14 (13 §15.9 verbs + W15 ``erase_subject``)
+* Group 2 — primitives + 8 Phase-1 Trainable adapters (incl.
+  ``CatBoostTrainable`` per F-3 family-count invariant 7→8) +
+  ``MultiModelAdapter`` (GH #700 InferenceServer back-compat) +
+  12 ``MLError`` hierarchy classes: 24
+* Group 3 — diagnostics: 5
+* Group 4 — backend pair: 2
+* Group 5 — tracker primitives: 3
+* Group 6 — discovery: 2
+
+Total: 1 + 14 + 24 + 5 + 2 + 3 + 2 = 51.
 
 This test locks the ordering so a future refactor that silently
 reorders the list — or drops one of the canonical verbs — fails
@@ -21,7 +33,6 @@ loudly at the unit tier instead of at the downstream consumer's
 from __future__ import annotations
 
 import kailash_ml
-
 
 # Canonical ordering per spec §15.9 plus W15 clarification + Group 0 metadata.
 EXPECTED_GROUP_0 = ("__version__",)
@@ -93,14 +104,13 @@ EXPECTED_ALL = (
 def test_all_has_expected_total_symbol_count() -> None:
     """``__all__`` MUST have exactly 51 symbols.
 
-    1 (Group 0 metadata) + 40 §15.9 + W15 ``erase_subject`` + 7 Phase-1
-    Trainable adapters + ``CatBoostTrainable`` (W6-013 / F-E1-01) +
-    ``MultiModelAdapter`` (GH #700 — 1.1.x InferenceServer back-compat).
+    Sum of canonical group lengths (locked by the per-group tests below):
+    1 (Group 0) + 14 (Group 1) + 24 (Group 2) + 5 (Group 3) + 2 (Group 4)
+    + 3 (Group 5) + 2 (Group 6) = 51.
     """
     assert len(kailash_ml.__all__) == 51, (
-        f"expected 51 symbols (1 Group 0 + §15.9 40 + W15 erase_subject + 7 ml-engines.md §3.0 "
-        f"adapters + CatBoostTrainable W6-013 + MultiModelAdapter #700), got "
-        f"{len(kailash_ml.__all__)}: {kailash_ml.__all__}"
+        f"expected 51 symbols (1 + 14 + 24 + 5 + 2 + 3 + 2 per §15.9 group "
+        f"lengths), got {len(kailash_ml.__all__)}: {kailash_ml.__all__}"
     )
 
 
