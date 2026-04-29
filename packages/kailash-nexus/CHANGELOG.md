@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Pluggable webhook signature verification (#687)**: `WebhookTransport` accepts a `signer: WebhookSigner` parameter. Built-in `HmacSha256Signer` (default — preserves prior behavior, output `sha256=<hex>`) and `TwilioSigner` (HMAC-SHA1 over `request_url + sorted(key+value)`-canonicalized form params, base64 raw digest, no prefix). Custom signers — Stripe, GitHub, Slack, Shopify — implement the `WebhookSigner` Protocol as user-defined classes. Backward-compatible: existing `WebhookTransport(secret=...)` callers see zero behavior change. New URL-canonicalized entry points `compute_signature_for_request(*, url, form_params, payload_bytes=b"")` / `verify_signature_for_request(*, signature, url, form_params, payload_bytes=b"")` for request-aware signers. Twilio canonical test vector pinned in `tests/unit/transports/test_webhook_signer.py` (auth token `12345`, URL `https://mycompany.com/myapp.php?foo=1&bar=2`, params `{CallSid, Caller, Digits, From, To}` → signature `RSOYDt4T1cUTdK1PDd93/VVr8B8=`). Verify-failure emits a structured WARN log with `signer_class` field per `rules/observability.md`; secret and provided signature are NEVER logged per `rules/security.md`. Cross-SDK alignment to be filed against `esperie/kailash-rs`.
+
 ### Documentation
 
 - **W6-009 — Canonicalized ML mount path on `mount_ml_endpoints()` (closes F-C-26)**: `specs/nexus-ml-integration.md` previously cited `nexus.register_service("inference", server.as_nexus_service())` and an `InferenceServer.as_nexus_service()` API that were never shipped. The canonical entry — verified at `packages/kailash-nexus/src/nexus/ml/__init__.py:222` — is `nexus.ml.mount_ml_endpoints(nexus, serve_handle, *, prefix="/ml")`. Spec sections §5.1, §5.2, §6 (error class), §7.2 (Tier-2 test name), §10 (Migration Path), and §12 (Cross-References) updated to reference the shipped surface; absent legacy names retracted per `rules/orphan-detection.md` §3 (Removed = Deleted, Not Deprecated).
