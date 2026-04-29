@@ -131,6 +131,7 @@ __all__ = [
     "EnterpriseMiddlewareConfig",
     # Middleware API
     "MiddlewareInfo",
+    "MountInfo",
     "RouterInfo",
     "NexusPluginProtocol",
     # Preset System
