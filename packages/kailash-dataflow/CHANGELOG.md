@@ -1,6 +1,8 @@
 # DataFlow Changelog
 
-## [Unreleased]
+## [2.5.0] — 2026-04-29 — `TransactionScope.execute_raw` for multi-statement raw-SQL atomicity
+
+Minor release adding the `TransactionScope.execute_raw` surface from issue #707 (closed by PR #716). Backward-compatible: every prior `db.transactions.begin()` consumer keeps working unchanged via the dict-style `__getitem__`/`__setitem__` shim. Bundles a latent savepoint async-context-manager bug fix discovered during implementation review.
 
 ### Added
 
