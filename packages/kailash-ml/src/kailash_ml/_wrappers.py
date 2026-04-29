@@ -503,18 +503,39 @@ def diagnose(
     # failure mode #701 was filed to close. The CHANGELOG migration
     # section (1.5.0) documents the rejected names.
 
+    # GH issue #701 part 2: kind aliases — `classifier` / `regressor`
+    # normalize at the entry to the canonical literals. Keep this BEFORE
+    # the literal validation so the alias map is the single source of
+    # truth and downstream dispatch only sees the canonical names.
+    _KIND_ALIASES = {
+        "classifier": "classical_classifier",
+        "regressor": "classical_regressor",
+    }
+    if kind in _KIND_ALIASES:
+        kind = _KIND_ALIASES[kind]
+
     if kind not in (
         "auto",
         "dl",
         "classical_classifier",
         "classical_regressor",
-        "clustering",
         "rag",
         "rl",
         "alignment",
         "llm",
         "agent",
     ):
+        # `clustering` was previously accepted but had no dispatch branch;
+        # per `rules/zero-tolerance.md` Rule 2 (no fake dispatch) it has
+        # been removed from the accepted-literals list. Surfacing it here
+        # gives users an explicit migration message rather than the
+        # generic literal-mismatch error.
+        if kind == "clustering":
+            raise ValueError(
+                "diagnose(kind='clustering') is not yet implemented; "
+                "if needed, file a GH issue and use the clustering "
+                "engine directly (kailash_ml.engines.clustering)"
+            )
         raise ValueError(
             f"diagnose(kind={kind!r}) — kind must be one of the §3.1 literals"
         )
