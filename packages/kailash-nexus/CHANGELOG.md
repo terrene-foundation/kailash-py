@@ -1,6 +1,8 @@
 # Nexus Changelog
 
-## [Unreleased]
+## [2.4.0] — 2026-04-29 — Pluggable WebhookSigner + Twilio support + ML mount-path canonicalization
+
+Minor release adding pluggable webhook signature verification (PR #717, closes #687), canonicalizing the ML mount path documentation (W6-009, closes F-C-26), and registering the long-standing `regression` pytest marker. Backward-compatible: every existing `WebhookTransport(secret=...)` caller sees zero behavior change (default signer preserves the historical `sha256=<hex>` HMAC-SHA256 raw-body shape).
 
 ### Added
 
