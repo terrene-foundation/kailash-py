@@ -4,7 +4,7 @@ from .bulk import BulkOperations
 from .derived import DerivedModelEngine, DerivedModelMeta, RefreshResult
 from .express import ExpressDataFlow
 from .multi_tenant import MultiTenantManager
-from .transactions import TransactionManager
+from .transactions import TransactionManager, TransactionScope
 
 __all__ = [
     "BulkOperations",
@@ -14,4 +14,5 @@ __all__ = [
     "MultiTenantManager",
     "RefreshResult",
     "TransactionManager",
+    "TransactionScope",
 ]

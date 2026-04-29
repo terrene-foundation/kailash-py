@@ -1,5 +1,35 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Added
+
+- **`TransactionScope.execute_raw(sql, params=None)` for multi-statement raw-SQL atomicity (#707)**: `db.transactions.begin()` now yields a `TransactionScope` (replacing the prior bare `dict`) carrying the canonical metadata (`id`, `isolation_level`, `status`, `type`, `depth`) AND an `execute_raw` method that routes every call to the connection pinned for the lifetime of the `async with` body. Closes the OAuth credential rotation use case from #707: SELECT FOR UPDATE + UPDATE-or-INSERT now expressible in one atomic transaction without the Express API. Calling `tx.execute_raw` outside the `async with` body raises `RuntimeError` per `rules/zero-tolerance.md` Rule 3a (typed delegate guard) — the pinned connection only exists while the scope is active. The asyncpg vs aiosqlite parameter-binding shape is dispatched by connection type. SELECT-style statements return rows; INSERT/UPDATE/DELETE return the driver's command-tag string (asyncpg) or cursor (aiosqlite). Backward-compat: existing `txn["id"]` / `txn["status"]= "..."` dict-style access preserved via `__getitem__` / `__setitem__` that map through to attributes — every prior consumer keeps working unchanged. Public surface: `TransactionScope` exported from `dataflow.features` (and via `dataflow.features.transactions`).
+
+### Fixed
+
+- **Savepoint context-manager invocation (#707, bundled fix)**: `TransactionManager.begin()` previously invoked the nested-transaction (savepoint) path with `async for ctx in self._savepoint(): yield ctx`, which iterates an `@asynccontextmanager`-decorated method as if it were an async generator. Corrected to `async with self._savepoint() as ctx: yield ctx`. The bug was latent because no test exercised nested `db.transactions.begin()` calls; the new #707 regression suite covers the canonical surface and the reviewer flagged the savepoint path as adjacent.
+
+### Tests
+
+- Added Tier 2 regression suite at `packages/kailash-dataflow/tests/regression/test_issue_707_transaction_pins_connection.py`:
+  - `test_multi_statement_atomicity_via_tx_execute_raw` — BEGIN-INSERT-INSERT-COMMIT verified via fresh-connection read-back.
+  - `test_auto_rollback_on_exception` — exception inside `async with` body MUST roll back; OAuth-rotation invariant.
+  - `test_oauth_credential_rotation_pattern` — full SELECT FOR UPDATE + UPDATE-or-INSERT cycle across 4 transactions.
+  - `test_select_for_update_then_insert_idempotency` — two concurrent transactions racing on the same idempotency token serialize on `SELECT ... FOR UPDATE`; exactly-one-insert invariant.
+  - `test_partial_failure_within_transaction_rolls_back_all` — UNIQUE-constraint violation mid-txn rolls back the prior row.
+  - `test_execute_raw_outside_scope_raises_runtime_error` — Rule 3a typed delegate guard, runs without infrastructure.
+
+### Cross-SDK
+
+- kailash-rs#688 tracks the equivalent `TransactionScope::execute_raw` surface for the Rust SDK (cross-SDK alignment per `rules/cross-sdk-inspection.md` Rule 1 + EATP D6 matching semantics).
+
+### Specification
+
+- `specs/dataflow-cache.md` §12.6 documents the multi-statement atomicity surface and pins the `_active_transaction` ContextVar contract that `tx.execute_raw` and `db.execute_raw_lightweight` (called inside the `async with` body) both honor.
+
+---
+
 ## [2.4.0] — 2026-04-28 — DDL fail-fast, DDLFailedError, build_sync surface
 
 Minor release delivering three production-incident fixes from the `dataflow-prod-incident` workstream (shards DPI-A, DPI-C) plus the kailash core floor bump to 2.12.0 required by DPI-B (pool registry leak fix).

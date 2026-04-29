@@ -231,6 +231,43 @@ stats = db.transactions.get_stats()
 # {"total_started": int, "total_committed": int, "total_rolled_back": int}
 ```
 
+### 12.6 Multi-Statement Raw-SQL Atomicity
+
+The yielded `TransactionScope` exposes `execute_raw(sql, params=None)`,
+routing every call to the pinned connection. Use this for multi-statement
+patterns the Express API does not express directly (DDL inside a tx,
+SELECT FOR UPDATE + INSERT, complex UPSERT-or-UPDATE).
+
+```python
+async with db.transactions.begin() as tx:
+    existing = await tx.execute_raw(
+        "SELECT id FROM oauth_tokens WHERE user_id = $1 FOR UPDATE",
+        [user_id],
+    )
+    if existing:
+        await tx.execute_raw(
+            "UPDATE oauth_tokens SET refresh_token = $1, "
+            "rotated_at = NOW() WHERE user_id = $2",
+            [new_refresh, user_id],
+        )
+    else:
+        await tx.execute_raw(
+            "INSERT INTO oauth_tokens (user_id, refresh_token) VALUES ($1, $2)",
+            [user_id, new_refresh],
+        )
+    # BEGIN / SELECT / UPDATE-or-INSERT / COMMIT all run on one connection.
+    # Auto-rollback on any exception; auto-commit on clean exit.
+```
+
+Calling `tx.execute_raw` outside the `async with` body raises
+`RuntimeError` per `rules/zero-tolerance.md` Rule 3a (typed delegate
+guard) — the pinned connection only exists while the scope is active.
+
+`db.execute_raw_lightweight()` called inside the `async with` body still
+routes through the pinned connection via the `_active_transaction`
+ContextVar — the two surfaces are functionally equivalent. Prefer
+`tx.execute_raw` for grep-able multi-statement transactions.
+
 ---
 
 ## 13. Connection Pooling
@@ -293,12 +330,12 @@ uniformly.
 created → active → idle → reaped
 ```
 
-| State    | Definition                                                                  | Transition trigger                            |
-| -------- | --------------------------------------------------------------------------- | --------------------------------------------- |
-| created  | Pool exists in `_PROCESS_POOL_REGISTRY` and has run zero queries            | `_get_adapter` returns the new pool           |
-| active   | Pool's `_last_activity_at` was refreshed within `idle_timeout` seconds      | Each `get_connection()` call                  |
-| idle     | `now - _last_activity_at >= idle_timeout`; `is_idle()` returns True         | Time elapses                                  |
-| reaped   | Pool removed from registry; `close()` awaited                               | Reaper task processes idle pool, OR loop dies |
+| State   | Definition                                                             | Transition trigger                            |
+| ------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| created | Pool exists in `_PROCESS_POOL_REGISTRY` and has run zero queries       | `_get_adapter` returns the new pool           |
+| active  | Pool's `_last_activity_at` was refreshed within `idle_timeout` seconds | Each `get_connection()` call                  |
+| idle    | `now - _last_activity_at >= idle_timeout`; `is_idle()` returns True    | Time elapses                                  |
+| reaped  | Pool removed from registry; `close()` awaited                          | Reaper task processes idle pool, OR loop dies |
 
 **Configurable defaults:**
 
