@@ -5,7 +5,6 @@ WorkflowAPIGateway with clearer naming and better organization.
 """
 
 import asyncio
-import inspect
 import logging
 import time
 from collections import defaultdict, deque
@@ -21,6 +20,10 @@ from starlette.websockets import WebSocket
 
 from ..api.workflow_api import WorkflowAPI
 from ..runtime.shutdown import ShutdownCoordinator
+from ..utils.lifespan import (
+    drive_router_lifespan_shutdown,
+    drive_router_lifespan_startup,
+)
 from ..workflow import Workflow
 from .connection_metrics_router import (
     ConnectionMetricsProvider,
@@ -221,20 +224,21 @@ class WorkflowServer:
                 extra={"title": title, "version": version},
             )
             try:
-                # Iterate `router.on_startup` directly rather than
+                # Drive `router.on_startup` via the shared helper rather than
                 # calling a dispatch method. FastAPI has shipped both
-                # `.startup()` (older) and `._startup()` (newer) over
-                # the years and upgrades flip which one exists; the
-                # on_startup list itself is the only stable surface.
-                # Issue #531: nexus 2.1.0 shipped with `app.router.startup()`
-                # which crashed production FastAPI builds that only
-                # expose `_startup`. Driving the list directly matches
-                # what `_DefaultLifespan` does internally and survives
-                # FastAPI/Starlette version churn.
-                for handler in app.router.on_startup:
-                    result = handler()
-                    if inspect.iscoroutine(result):
-                        await result
+                # `.startup()` (older) and `._startup()` (newer) over the
+                # years and upgrades flip which one exists; the on_startup
+                # list itself is the only stable surface. Issue #531: nexus
+                # 2.1.0 shipped with `app.router.startup()` which crashed
+                # production FastAPI builds that only expose `_startup`.
+                # Driving the list directly matches what `_DefaultLifespan`
+                # does internally and survives FastAPI/Starlette version
+                # churn. The helper (kailash.utils.lifespan) is the single
+                # source of truth used by every Kailash FastAPI surface that
+                # sets `lifespan=` so the cross-version invariant lives in
+                # one place — see #712 for the discoverability + multi-site
+                # context.
+                await drive_router_lifespan_startup(app)
                 # Run injected Nexus plugin startup hooks inside uvicorn's
                 # loop so any background tasks they spawn survive (#501).
                 if startup_hook is not None:
@@ -276,10 +280,14 @@ class WorkflowServer:
                         )
                 try:
                     # Paired with the on_startup iteration above — see #531.
-                    for handler in app.router.on_shutdown:
-                        result = handler()
-                        if inspect.iscoroutine(result):
-                            await result
+                    # propagate_errors=False because shutdown is best-effort
+                    # cleanup: one failing on_shutdown handler MUST NOT block
+                    # the ShutdownCoordinator below from running. The helper
+                    # already emits a structured WARN per failing handler
+                    # (observability.md Rule 7), and the ASGI server is
+                    # already tearing down — re-raising here would only mask
+                    # the real shutdown chain.
+                    await drive_router_lifespan_shutdown(app, propagate_errors=False)
                 except Exception:
                     logger.warning(
                         "workflow_server.lifespan.router_shutdown_failed",
