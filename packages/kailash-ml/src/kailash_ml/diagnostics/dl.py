@@ -225,6 +225,14 @@ class DLDiagnostics:
     Args:
         model: The ``nn.Module`` to instrument. The model is NOT modified;
             only forward/backward hooks are attached.
+        tracker: Optional experiment tracker (any object with the
+            ``log_figure(figure, name, *, step)`` duck-typed contract).
+            Used by :meth:`as_lightning_callback`.
+        data: Optional ``torch.utils.data.DataLoader`` consumed by
+            :meth:`report` when called with ``data=None``. The same loader
+            may be supplied at :meth:`report` call time instead — see GH
+            issue #701. Stored on the instance as ``self._data``; not
+            iterated at construction time.
         dead_neuron_threshold: Fraction of zero outputs above which a
             layer is flagged as "dead" in :meth:`report`. Must lie in
             ``(0, 1)``. Defaults to ``0.5``.
@@ -252,10 +260,11 @@ class DLDiagnostics:
         self,
         model: Any,
         *,
+        tracker: Optional[Any] = None,
+        data: Optional[Any] = None,
         dead_neuron_threshold: float = 0.5,
         window: int = 64,
         run_id: Optional[str] = None,
-        tracker: Optional[Any] = None,
     ) -> None:
         torch, nn = _require_torch()
         if not isinstance(model, nn.Module):
@@ -279,6 +288,13 @@ class DLDiagnostics:
         # any object with a ``log_figure(figure, name, *, step)`` method (sync or
         # async return) satisfies the contract. See as_lightning_callback().
         self._tracker = tracker
+
+        # Optional DataLoader consumed by report(data=None). Either supplied
+        # at construction OR at report() call time — see GH issue #701.
+        # Stored as-is; the loader is iterated only inside report() when the
+        # caller chooses the loader-driven path. NOT validated here so the
+        # legacy zero-data construction path keeps working unchanged.
+        self._data = data
 
         # Time series storage — lists of dicts, converted to Polars on demand.
         self._grad_log: list[dict[str, Any]] = []
@@ -1138,9 +1154,128 @@ class DLDiagnostics:
         )
         return fig
 
+    # ── Loader-driven evaluation helper (GH issue #701) ────────────────────
+
+    def _consume_loader(self, loader: Any) -> tuple[int, int]:
+        """Iterate ``loader`` once, run forward, record per-batch loss.
+
+        Drives :meth:`record_batch` for each batch of ``loader`` so the
+        ``loss_trend`` finding has signal even when the caller hasn't
+        wired the training loop into ``record_batch`` themselves. Used by
+        :meth:`report` when ``data=loader`` is supplied at construction or
+        at call time (issue #701 — ``diagnose(kind="dl", data=loader)``
+        contract).
+
+        The forward pass runs in ``torch.no_grad()`` to avoid mutating
+        gradients (the caller may still be mid-training). The model's
+        train/eval state is preserved.
+
+        Loss function: ``F.mse_loss`` for regression-shaped targets,
+        ``F.cross_entropy`` when the model output rank is 2 and targets
+        are integer-typed (classification heuristic). The choice keeps
+        the helper self-contained — production callers wanting custom
+        losses should drive ``record_batch`` themselves.
+
+        Args:
+            loader: A DataLoader-like iterable yielding ``(inputs,
+                targets)`` 2-tuples. Iterables that don't yield 2-tuples
+                are skipped silently with a WARN log line per
+                ``observability.md`` — the loader's contract is the
+                user's, not ours, and the method MUST NOT crash on a
+                non-conforming loader.
+
+        Returns:
+            ``(n_batches, n_samples)`` — total batches consumed and
+            total samples seen across those batches. Both ``0`` when the
+            loader yielded nothing or every batch was skipped.
+        """
+        torch = self._torch
+        F = torch.nn.functional
+
+        # Use the MODEL's actual device — not self.device — so this helper
+        # works whether the user moved the model to GPU/MPS themselves or
+        # left it on CPU. self.device is a backend-detection hint
+        # (specs/ml-backends.md §2); the model owns its real placement.
+        try:
+            model_device = next(self.model.parameters()).device
+        except StopIteration:
+            # Parameter-less module — fall back to detected device.
+            model_device = self.device
+
+        n_batches = 0
+        n_samples = 0
+        was_training = self.model.training
+        try:
+            self.model.eval()
+            with torch.no_grad():
+                for batch in loader:
+                    if not (isinstance(batch, (tuple, list)) and len(batch) == 2):
+                        logger.warning(
+                            "dldiagnostics.report.loader_skipped_batch",
+                            extra={
+                                "dl_run_id": self.run_id,
+                                "dl_reason": "batch_shape_not_2_tuple",
+                                "dl_batch_idx": n_batches,
+                            },
+                        )
+                        continue
+                    inputs, targets = batch
+                    try:
+                        inputs = inputs.to(model_device)
+                        targets = targets.to(model_device)
+                    except AttributeError:
+                        # Non-tensor inputs — skip with structured warn so
+                        # the operator can correlate. See observability.md
+                        # MUST 2.
+                        logger.warning(
+                            "dldiagnostics.report.loader_skipped_batch",
+                            extra={
+                                "dl_run_id": self.run_id,
+                                "dl_reason": "inputs_not_tensor",
+                                "dl_batch_idx": n_batches,
+                            },
+                        )
+                        continue
+                    outputs = self.model(inputs)
+                    # Heuristic loss: int targets + 2D outputs ⇒ classification;
+                    # otherwise MSE. The caller wanting a custom loss drives
+                    # record_batch themselves.
+                    is_classification = outputs.ndim == 2 and targets.dtype in (
+                        torch.long,
+                        torch.int64,
+                        torch.int32,
+                    )
+                    if is_classification:
+                        loss = F.cross_entropy(outputs, targets)
+                    else:
+                        # Broadcast targets to outputs' shape when shapes
+                        # differ by a trailing singleton (common for
+                        # regression of a 1D target).
+                        if targets.shape != outputs.shape:
+                            try:
+                                targets = targets.view_as(outputs)
+                            except RuntimeError:
+                                pass
+                        loss = F.mse_loss(outputs, targets.to(outputs.dtype))
+                    self.record_batch(loss=float(loss.item()))
+                    n_batches += 1
+                    n_samples += int(inputs.shape[0])
+        finally:
+            if was_training:
+                self.model.train()
+        logger.info(
+            "dldiagnostics.report.loader_consumed",
+            extra={
+                "dl_run_id": self.run_id,
+                "dl_n_batches": n_batches,
+                "dl_n_samples": n_samples,
+            },
+        )
+        return n_batches, n_samples
+
     # ── Automated report (Diagnostic.report contract) ─────────────────────
 
-    def report(self) -> dict[str, Any]:
+    def report(self, data: Optional[Any] = None) -> dict[str, Any]:
         """Return a structured summary of the captured diagnostic session.
 
         The return shape satisfies :meth:`kailash.diagnostics.protocols.
@@ -1149,9 +1284,25 @@ class DLDiagnostics:
           * ``run_id`` — the session identifier (matches ``self.run_id``).
           * ``batches`` — total per-batch scalar records captured.
           * ``epochs`` — total per-epoch summary records captured.
+          * ``n_batches`` — number of batches the supplied ``data`` loader
+            yielded during this report() call (0 when no loader supplied).
+          * ``n_samples`` — total samples seen across the loader's batches
+            (0 when no loader supplied).
           * ``gradient_flow`` — ``{"severity": ..., "message": ...}``
           * ``dead_neurons`` — ``{"severity": ..., "message": ...}``
           * ``loss_trend`` — ``{"severity": ..., "message": ...}``
+
+        Args:
+            data: Optional ``torch.utils.data.DataLoader``. When provided
+                (either here or at construction via ``DLDiagnostics(...,
+                data=loader)``), :meth:`report` iterates the loader once
+                in ``torch.no_grad()`` mode, runs the model forward on
+                each batch, and records ``record_batch(loss=...)`` per
+                batch using ``F.mse_loss`` against the targets — counted
+                under ``n_batches`` / ``n_samples``. The model's training
+                state is preserved. Pass ``data=None`` (default) for the
+                legacy training-loop-driven path where the caller already
+                pumped ``record_batch`` per batch.
 
         Severity values are ``"HEALTHY"`` / ``"WARNING"`` / ``"CRITICAL"``
         / ``"UNKNOWN"``. The method does not print — callers who want a
@@ -1159,10 +1310,27 @@ class DLDiagnostics:
         :func:`print_report` (exported alongside the class) or format it
         themselves.
         """
+        # Resolve loader: argument wins over construction-time default. Per
+        # GH issue #701, supplying data=loader either at construction OR at
+        # report() call time is the contract; if BOTH are None, the loader
+        # is simply skipped (legacy behaviour preserved). Earlier drafts
+        # raised when both were None, but that breaks every existing caller
+        # that drives record_batch from a Lightning callback or a manual
+        # loop — so the strict-loader requirement is moved to the agent
+        # delegation prompt's Tier 2 contract, not the runtime contract.
+        loader = data if data is not None else self._data
+
+        n_batches = 0
+        n_samples = 0
+        if loader is not None:
+            n_batches, n_samples = self._consume_loader(loader)
+
         findings: dict[str, Any] = {
             "run_id": self.run_id,
             "batches": len(self._batch_log),
             "epochs": len(self._epoch_log),
+            "n_batches": n_batches,
+            "n_samples": n_samples,
         }
 
         # 1. Gradient flow — uses SCALE-INVARIANT per-element RMS (grad_rms)

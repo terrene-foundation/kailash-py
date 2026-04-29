@@ -124,7 +124,12 @@ km.diagnose(
                    "torch.nn.Module", "sklearn.base.BaseEstimator", RunId, ExperimentRun],
     *,
     kind: Literal["auto", "dl", "classical_classifier", "classical_regressor",
-                  "clustering", "rag", "rl", "alignment", "llm", "agent"] = "auto",
+                  "rag", "rl", "alignment", "llm", "agent",
+                  # Aliases (GH #701) — normalised to canonical literals
+                  # at entry, before validation:
+                  "classifier",      # → "classical_classifier"
+                  "regressor",       # → "classical_regressor"
+                  ] = "auto",
     data: Optional[Union["polars.DataFrame", tuple, "torch.utils.data.DataLoader"]] = None,
     tracker: Optional[ExperimentRun] = None,
     show: bool = True,
@@ -133,6 +138,10 @@ km.diagnose(
 ```
 
 Returns the appropriate `Diagnostic` adapter, already run (for one-shot diagnosers) or opened as a context manager (for streaming ones). Caller accesses `.report()` / DataFrame accessors / `plot_*` from the return value.
+
+**Kind aliases (GH #701).** `kind="classifier"` and `kind="regressor"` are accepted as colloquial aliases for `kind="classical_classifier"` and `kind="classical_regressor"` respectively. The alias map is applied at the entry of `diagnose()`, BEFORE literal validation, so downstream dispatch sees only the canonical literals.
+
+**Clustering disposition (GH #701).** `kind="clustering"` is currently **not yet implemented** at the `km.diagnose` engine entry point. Calling with this literal raises `ValueError("diagnose(kind='clustering') is not yet implemented; if needed, file a GH issue and use the clustering engine directly (kailash_ml.engines.clustering)")`. The literal was previously accepted by the validator but had no dispatch branch (silent fall-through to `DLDiagnostics` — `rules/zero-tolerance.md` Rule 2 violation). Per Rule 2, accepting a literal without a real dispatch is BLOCKED; the explicit refusal is the structural defense until a clustering diagnostic is wired through `km.diagnose`.
 
 ### 3.2 Dispatch Table
 
@@ -153,6 +162,16 @@ Returns the appropriate `Diagnostic` adapter, already run (for one-shot diagnose
 
 `kind="dl"` / `"classical_classifier"` / ... forces the dispatch, bypassing inspection.
 
+**Cross-package dispatch (GH #701).** Three of the explicit `kind` literals route to diagnostic classes that live in **sibling packages**, NOT in `kailash-ml` itself:
+
+| `kind`        | Dispatched class                                    | Sibling package    | Required extra                      |
+| ------------- | --------------------------------------------------- | ------------------ | ----------------------------------- |
+| `"alignment"` | `kailash_align.diagnostics.alignment.AlignmentDiagnostics` | `kailash-align`    | `pip install kailash-ml[alignment]` |
+| `"llm"`       | `kaizen.judges.llm_diagnostics.LLMDiagnostics`      | `kailash-kaizen`   | `pip install kailash-ml[kaizen-judges]` |
+| `"agent"`     | `kaizen.observability.agent_diagnostics.AgentDiagnostics` | `kailash-kaizen` | `pip install kailash-ml[kaizen-observability]` |
+
+When the sibling package is not installed, the dispatch raises `ImportError` at the call site (per `rules/dependencies.md` § BLOCKED Anti-Patterns) with an explicit install hint naming the kailash-ml extra. Silent fallback is BLOCKED. The error message MUST name the install command so users can recover without consulting docs.
+
 ### 3.3 Rendering Contract
 
 When `show=True` (default):
@@ -165,8 +184,11 @@ When `show=True` (default):
 ### 3.4 Errors
 
 - `TypeError` when `subject` is not a dispatchable type — error message lists the accepted types.
-- `ValueError` when `kind="classical_classifier"` and the dispatched model is not a classifier (likewise for regressor / clustering).
-- `ImportError` (from adapters) when the diagnostic kind requires an extra that is not installed — error message names the extra.
+- `TypeError` (from Python's binder) when an unsupported keyword argument is passed — the 1.1.x kwargs (`title`, `n_batches`, `train_losses`, `val_losses`, `forward_returns_tuple`) were removed in 1.5.0; CHANGELOG documents the migration.
+- `ValueError` when `kind="classical_classifier"` and the dispatched model is not a classifier (likewise for regressor).
+- `ValueError` when `kind="clustering"` — currently not yet implemented at the `km.diagnose` entry point per §3.1; users should call the clustering engine directly.
+- `ValueError` when `kind` is not one of the §3.1 literals (or aliases) — error message names the rejected literal.
+- `ImportError` (per GH #701) when `kind="alignment"`, `"llm"`, or `"agent"` is dispatched and the sibling package's extra is not installed — error message MUST name the kailash-ml extra (`pip install kailash-ml[alignment]` / `[kaizen-judges]` / `[kaizen-observability]`) AND the missing sibling package so the user can recover from the traceback alone.
 
 ### 3.5 Why One Entry Point
 
@@ -296,6 +318,7 @@ DLDiagnostics(
     model: "torch.nn.Module",
     *,
     tracker: Optional[ExperimentRun] = None,   # NEW (v0.18.0) — see §4.1
+    data: Optional["torch.utils.data.DataLoader"] = None,  # NEW (v1.5.2) — see §5.1a (GH #701)
     auto: bool = True,                          # NEW — auto-wire via contextvar when tracker=None
     dead_neuron_threshold: float = 0.5,
     window: int = 64,
@@ -311,6 +334,35 @@ DLDiagnostics(
 - `TypeError` if `model` is not `nn.Module`.
 - `ValueError` if `dead_neuron_threshold` ∉ (0, 1), `window < 1`, `run_id == ""`, or `log_every_n_steps < 1`.
 - `ImportError` from `_require_torch()` if torch is absent.
+
+### 5.1a Loader-Driven Evaluation (NEW v1.5.2 — GH issue #701)
+
+`DLDiagnostics` accepts a `DataLoader` either at construction (`DLDiagnostics(model, data=loader)`) OR at `.report()` call time (`diag.report(data=loader)`). When supplied, `.report()` consumes the loader once in `torch.no_grad()` mode, runs the model forward on each batch, and records `record_batch(loss=...)` per batch using a default loss heuristic (`F.cross_entropy` when output rank is 2 AND targets are integer-typed; otherwise `F.mse_loss`). The model's train/eval state is preserved (model is `.eval()`-ed for the forward pass and restored to its original state in a `try/finally`).
+
+**Method signature:**
+
+```python
+DLDiagnostics.report(data: Optional["DataLoader"] = None) -> dict
+```
+
+Resolution order: argument-supplied `data=` wins over construction-time `data=`. If both are `None`, the loader-driven path is skipped and the report reflects only the records the caller pumped via `record_batch` themselves (legacy training-loop-driven path; preserves backward compatibility with every pre-v1.5.2 caller).
+
+**Return-dict additions:**
+
+| Key          | Type | Meaning                                                                                                          |
+| ------------ | ---- | ---------------------------------------------------------------------------------------------------------------- |
+| `n_batches`  | int  | Number of batches the supplied `data` loader yielded during this `report()` call. `0` when no loader supplied.   |
+| `n_samples`  | int  | Total samples seen across the loader's batches (sum of `inputs.shape[0]`). `0` when no loader supplied.          |
+
+**Loader contract** (permissive — non-conforming batches are skipped with a structured WARN log per `observability.md` MUST 2):
+
+- Loader MUST yield `(inputs, targets)` 2-tuples (or 2-element lists). Non-2-tuple batches are skipped with `dl_reason="batch_shape_not_2_tuple"`.
+- `inputs` and `targets` MUST be tensors (have `.to(device)`). Non-tensor inputs are skipped with `dl_reason="inputs_not_tensor"`.
+- The model is moved nowhere; the loader's tensors are moved to the model's actual device (`next(self.model.parameters()).device`) — NOT to `self.device` (the backend-detection hint). This guarantees the helper works whether the user moved the model to GPU/MPS themselves or left it on CPU.
+
+**Why optional, not required:** The 1.5.2 patch closes the GH #701 silent-drop without breaking existing callers (Lightning callbacks, manual `record_batch` loops). Requiring `data=` would break every pre-v1.5.2 caller. The strict-loader requirement applies only when the agent's delegation prompt explicitly contracts for end-to-end loader consumption.
+
+**Closes GH issue #701 (silent drop).** Pre-fix, `data=` was accepted in `km.diagnose()` signature but dropped at the dispatch site (`_wrappers.py:diagnose` for `kind="dl"` and the auto-fallback). Post-fix, `data=` is forwarded into `DLDiagnostics(..., data=data)` at both dispatch sites; iteration occurs only inside `report()`.
 
 ### 5.2 Alternate Constructor: `from_training_result`
 

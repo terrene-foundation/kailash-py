@@ -466,6 +466,22 @@ def diagnose(
     The default tracker is resolved from the ambient ``km.track()`` run
     via :func:`kailash_ml.tracking.get_current_run` (§3.3 step 4) when
     ``tracker is None``.
+
+    Per-``kind`` ``data`` semantics:
+
+      * ``kind="dl"`` — ``data`` MAY be a ``torch.utils.data.DataLoader``;
+        forwarded to :class:`DLDiagnostics` and consumed inside
+        ``report()`` when invoked. Closes GH issue #701 (silent drop).
+      * ``kind="classical_classifier"`` / ``kind="classical_regressor"``
+        — ``data`` MUST be a ``(X, y)`` tuple.
+      * Other kinds — ``data`` is currently inert per spec §3.2.
+
+    The signature is fixed-arity (no ``**kwargs``); unsupported kwargs
+    raise ``TypeError`` directly from Python's binding mechanism. The
+    1.1.x kwargs (``title``, ``n_batches``, ``train_losses``,
+    ``val_losses``, ``forward_returns_tuple``) were removed in 1.5.0
+    and now surface as a Python-level ``TypeError`` naming the unknown
+    keyword — see CHANGELOG migration section.
     """
     # Resolve ambient tracker only when the caller did not supply one.
     if tracker is None:
@@ -473,25 +489,64 @@ def diagnose(
 
         tracker = get_current_run()
 
+    # Unknown-kwargs contract (GH issue #701 part 2): the signature
+    # above is intentionally fixed-arity — no **kwargs — so any
+    # 1.1.x-era keyword argument (title, n_batches, train_losses,
+    # val_losses, forward_returns_tuple) raises Python's native
+    # ``TypeError: diagnose() got an unexpected keyword argument
+    # '<name>'`` at the call site. This satisfies zero-tolerance.md
+    # Rule 3 (no silent fallback / fake integration via missing
+    # handoff field) — every kwarg the caller passes is either
+    # consumed (data, tracker, kind, show, sensitive) or rejected
+    # loudly by the binder. DO NOT add **kwargs here; doing so would
+    # silently swallow misspellings AND re-introduce the silent-drop
+    # failure mode #701 was filed to close. The CHANGELOG migration
+    # section (1.5.0) documents the rejected names.
+
+    # GH issue #701 part 2: kind aliases — `classifier` / `regressor`
+    # normalize at the entry to the canonical literals. Keep this BEFORE
+    # the literal validation so the alias map is the single source of
+    # truth and downstream dispatch only sees the canonical names.
+    _KIND_ALIASES = {
+        "classifier": "classical_classifier",
+        "regressor": "classical_regressor",
+    }
+    if kind in _KIND_ALIASES:
+        kind = _KIND_ALIASES[kind]
+
     if kind not in (
         "auto",
         "dl",
         "classical_classifier",
         "classical_regressor",
-        "clustering",
         "rag",
         "rl",
         "alignment",
         "llm",
         "agent",
     ):
+        # `clustering` was previously accepted but had no dispatch branch;
+        # per `rules/zero-tolerance.md` Rule 2 (no fake dispatch) it has
+        # been removed from the accepted-literals list. Surfacing it here
+        # gives users an explicit migration message rather than the
+        # generic literal-mismatch error.
+        if kind == "clustering":
+            raise ValueError(
+                "diagnose(kind='clustering') is not yet implemented; "
+                "if needed, file a GH issue and use the clustering "
+                "engine directly (kailash_ml.engines.clustering)"
+            )
         raise ValueError(
             f"diagnose(kind={kind!r}) — kind must be one of the §3.1 literals"
         )
 
     # Explicit-kind dispatch first — the §3.2 table.
     if kind == "dl":
-        return DLDiagnostics(subject, tracker=tracker)
+        # Per GH issue #701: data= MUST be forwarded into DLDiagnostics
+        # so report() can iterate the loader. Pre-fix, data was silently
+        # dropped at this dispatch site (zero-tolerance.md Rule 3 — fake
+        # integration via missing handoff field).
+        return DLDiagnostics(subject, tracker=tracker, data=data)
     if kind == "rl":
         return RLDiagnostics(
             algo=subject if isinstance(subject, str) else "ppo", tracker=tracker
@@ -512,6 +567,47 @@ def diagnose(
             )
         X, y = data
         return diagnose_regressor(subject, X, y, tracker=tracker)
+
+    # GH issue #701 part 2: cross-package dispatch with extras gating.
+    # The diagnostic classes for these kinds live in sibling packages
+    # (kailash-align, kailash-kaizen) so kailash-ml MUST NOT assume they
+    # are installed. Per `rules/dependencies.md` § BLOCKED Anti-Patterns,
+    # the import is wrapped in try/except and re-raises ImportError with
+    # an explicit install hint at the call site — never a silent
+    # fallback to None / partial behaviour.
+    if kind == "alignment":
+        try:
+            from kailash_align.diagnostics.alignment import AlignmentDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='alignment') requires kailash-align>=0.6 "
+                "(install via `pip install kailash-ml[alignment]`)"
+            ) from exc
+        # AlignmentDiagnostics signature: (*, label, window, run_id);
+        # neither tracker nor data is part of its constructor surface
+        # today. Forwarding only what the spec declares; tracker
+        # integration tracked at the spec-amend follow-up.
+        return AlignmentDiagnostics()
+    if kind == "llm":
+        try:
+            from kaizen.judges.llm_diagnostics import LLMDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='llm') requires kailash-kaizen>=2.7 with "
+                "the [judges] extra (install via "
+                "`pip install kailash-ml[kaizen-judges]`)"
+            ) from exc
+        return LLMDiagnostics(tracker=tracker)
+    if kind == "agent":
+        try:
+            from kaizen.observability.agent_diagnostics import AgentDiagnostics
+        except ImportError as exc:
+            raise ImportError(
+                "diagnose(kind='agent') requires kailash-kaizen>=2.7 with "
+                "the [observability] extra (install via "
+                "`pip install kailash-ml[kaizen-observability]`)"
+            ) from exc
+        return AgentDiagnostics(tracker=tracker)
 
     # kind == "auto" — inspect subject for dispatch. Ordering here
     # mirrors the §3.2 dispatch table verbatim.
@@ -562,8 +658,9 @@ def diagnose(
         X, y = data
         return diagnose_regressor(subject, X, y, tracker=tracker)
 
-    # Fallback — treat as a DL / Lightning module.
-    return DLDiagnostics(subject, tracker=tracker)
+    # Fallback — treat as a DL / Lightning module. Forward data= so the
+    # auto-dispatched DL path honours #701 the same as kind="dl".
+    return DLDiagnostics(subject, tracker=tracker, data=data)
 
 
 # ---------------------------------------------------------------------------
