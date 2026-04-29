@@ -62,15 +62,20 @@ class DataFlowGateway:
         pool_config: Optional[Dict[str, Any]] = None,
         # Runtime injection
         runtime=None,
+        dataflow_instance=None,
         **kwargs,
     ):
         """Initialize DataFlow Gateway.
 
         Args:
-            runtime: Optional shared runtime. If provided, the gateway acquires
-                a reference (ref-count increment) and uses it for all workflow
-                executions. If None, creates its own runtime with async-context
-                detection to prevent deadlocks.
+            runtime: Optional explicit runtime override (legacy path).
+                When supplied, pinned for the gateway's lifetime.
+            dataflow_instance: Optional DataFlow parent reference. When
+                supplied, ``self.runtime`` resolves lazily via
+                ``dataflow_instance.runtime`` on every access (issue
+                #713 — MED-S5 lazy lookup). Without this parameter the
+                gateway creates and owns its own runtime (legacy
+                self-owned path).
         """
         self.name = name
         self.description = description
@@ -87,20 +92,27 @@ class DataFlowGateway:
         self.enable_monitoring = enable_monitoring
         self.enable_connection_pooling = enable_connection_pooling
 
-        # Initialize runtime
+        # MED-S5 (issue #713): hold parent back-reference so self.runtime
+        # / self._is_async can resolve lazily on each access.
+        self._dataflow = dataflow_instance
+
         if runtime is not None:
-            self.runtime = runtime.acquire()
+            # Legacy explicit-runtime escape hatch.
+            self._explicit_runtime = runtime.acquire()
             self._owns_runtime = False
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
                 "DataFlowGateway: Using injected runtime (ref_count=%d)",
                 runtime.ref_count,
             )
+        elif dataflow_instance is not None:
+            # Lazy parent lookup — no runtime owned here.
+            self._explicit_runtime = None
+            self._owns_runtime = False
         else:
+            # Legacy self-owned path (no parent + no explicit runtime).
             try:
                 asyncio.get_running_loop()
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
+                self._explicit_runtime = AsyncLocalRuntime()
                 logger.debug(
                     "DataFlowGateway: Detected async context, using AsyncLocalRuntime"
                 )
@@ -109,8 +121,7 @@ class DataFlowGateway:
                 # public opt-out so Core SDK suppresses the ad-hoc-usage
                 # deprecation warning AND skips atexit cleanup; the gateway
                 # calls close() at its own shutdown.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
+                self._explicit_runtime = LocalRuntime().mark_externally_managed()
                 logger.debug(
                     "DataFlowGateway: Detected sync context, using LocalRuntime"
                 )
@@ -701,18 +712,47 @@ class DataFlowGateway:
             )
             await self.nexus.stop()
 
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this gateway (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        if self._dataflow is not None:
+            return self._dataflow.runtime
+        return None
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        pass  # No-op — derived property.
+
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
+        Post-MED-S5: only the legacy explicit-runtime path or the
+        self-owned fallback (no parent dataflow_instance) holds a
+        reference here.
         """
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
