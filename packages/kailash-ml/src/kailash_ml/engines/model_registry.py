@@ -463,15 +463,15 @@ class ModelRegistry:
         a DEBUG log line per ``rules/observability.md`` Rule 3 (schema-
         revealing default-applied is NOT WARN — it would leak schema
         identifiers to log aggregators) and returns the canonical
-        single-tenant sentinel ``"default"``. Multi-tenant deployments
+        single-tenant sentinel ``"_single"``. Multi-tenant deployments
         MUST pass tenant_id explicitly.
         """
         if tenant_id is None or tenant_id == "":
             logger.debug(
                 "model_registry.tenant_default_applied",
-                extra={"resolved_tenant_id": "default"},
+                extra={"resolved_tenant_id": "_single"},
             )
-            return "default"
+            return "_single"
         return tenant_id
 
     # ------------------------------------------------------------------
@@ -485,7 +485,7 @@ class ModelRegistry:
         *,
         metrics: list[MetricSpec] | None = None,
         signature: ModelSignature | None = None,
-        tenant_id: str = "default",
+        tenant_id: str = "_single",
     ) -> ModelVersion:
         """Register a new model version at STAGING.
 
@@ -501,7 +501,7 @@ class ModelRegistry:
             Input/output schema.
         tenant_id:
             Tenant scope. Defaults to the canonical single-tenant
-            sentinel ``"default"``. Multi-tenant deployments MUST pass
+            sentinel ``"_single"``. Multi-tenant deployments MUST pass
             this explicitly. Per ``rules/tenant-isolation.md`` MUST
             Rule 1, this dimension is required on every write to the
             tenant-scoped tables.
@@ -631,7 +631,7 @@ class ModelRegistry:
         version: int | None = None,
         *,
         stage: str | None = None,
-        tenant_id: str = "default",
+        tenant_id: str = "_single",
     ) -> ModelVersion:
         """Retrieve a model version.
 
@@ -644,7 +644,7 @@ class ModelRegistry:
         stage:
             Filter by stage (e.g. "production").
         tenant_id:
-            Tenant scope. Defaults to ``"default"`` (single-tenant
+            Tenant scope. Defaults to ``"_single"`` (single-tenant
             sentinel). Multi-tenant deployments MUST pass explicitly
             per ``rules/tenant-isolation.md`` MUST Rule 1.
 
@@ -700,13 +700,13 @@ class ModelRegistry:
     # list_models
     # ------------------------------------------------------------------
 
-    async def list_models(self, *, tenant_id: str = "default") -> list[dict[str, Any]]:
+    async def list_models(self, *, tenant_id: str = "_single") -> list[dict[str, Any]]:
         """List all registered models within ``tenant_id``.
 
         Parameters
         ----------
         tenant_id:
-            Tenant scope. Defaults to ``"default"``.
+            Tenant scope. Defaults to ``"_single"``.
 
         Returns
         -------
@@ -736,7 +736,7 @@ class ModelRegistry:
         target_stage: str,
         *,
         reason: str = "",
-        tenant_id: str = "default",
+        tenant_id: str = "_single",
     ) -> ModelVersion:
         """Transition a model version to a new stage.
 
@@ -811,7 +811,7 @@ class ModelRegistry:
     # ------------------------------------------------------------------
 
     async def get_model_versions(
-        self, name: str, *, tenant_id: str = "default"
+        self, name: str, *, tenant_id: str = "_single"
     ) -> list[ModelVersion]:
         """Return all versions of a model, newest first.
 
@@ -820,7 +820,7 @@ class ModelRegistry:
         name:
             Model name.
         tenant_id:
-            Tenant scope. Defaults to ``"default"``.
+            Tenant scope. Defaults to ``"_single"``.
 
         Returns
         -------
