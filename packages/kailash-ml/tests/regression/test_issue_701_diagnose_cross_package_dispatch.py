@@ -53,9 +53,8 @@ def test_diagnose_kind_classifier_alias_dispatches_to_classical_classifier() -> 
     """
     sklearn = pytest.importorskip("sklearn")  # noqa: F841
     import numpy as np
-    from sklearn.linear_model import LogisticRegression
-
     from kailash_ml import diagnose
+    from sklearn.linear_model import LogisticRegression
 
     # Tiny deterministic dataset — Tier-2 NO mocking, real sklearn.
     rng = np.random.default_rng(seed=0)
@@ -84,9 +83,8 @@ def test_diagnose_kind_regressor_alias_dispatches_to_classical_regressor() -> No
     """``kind="regressor"`` aliases ``classical_regressor`` end-to-end."""
     sklearn = pytest.importorskip("sklearn")  # noqa: F841
     import numpy as np
-    from sklearn.linear_model import LinearRegression
-
     from kailash_ml import diagnose
+    from sklearn.linear_model import LinearRegression
 
     rng = np.random.default_rng(seed=0)
     X = rng.standard_normal((40, 4))
@@ -146,7 +144,7 @@ def test_diagnose_kind_alignment_raises_importerror_when_kailash_align_missing(
 
 @pytest.mark.regression
 @pytest.mark.integration
-def test_diagnose_kind_llm_dispatches_to_kaizen_when_installed() -> None:
+def test_diagnose_kind_llm_dispatches_to_kaizen_when_installed(monkeypatch) -> None:
     """``kind="llm"`` dispatches to LLMDiagnostics when kailash-kaizen present.
 
     Tier-2: skipped cleanly when kailash-kaizen is not installed
@@ -157,9 +155,13 @@ def test_diagnose_kind_llm_dispatches_to_kaizen_when_installed() -> None:
     failure mode).
     """
     pytest.importorskip("kaizen.judges.llm_diagnostics")
-    from kaizen.judges.llm_diagnostics import LLMDiagnostics
-
+    # LLMJudge resolves model from .env per rules/env-models.md; tests
+    # set a placeholder so construction does not raise. Monkeypatch is
+    # acceptable in test scope.
+    monkeypatch.setenv("KAIZEN_JUDGE_MODEL", "gpt-4o-mini")
     from kailash_ml import diagnose
+
+    from kaizen.judges.llm_diagnostics import LLMDiagnostics
 
     diag = diagnose("subject_irrelevant", kind="llm")
 

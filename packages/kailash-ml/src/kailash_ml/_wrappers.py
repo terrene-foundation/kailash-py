@@ -326,14 +326,15 @@ async def watch(
     # DriftMonitor's canonical ``"_single"`` tenant (same convention
     # :class:`MLEngine` uses for single-tenant persistence).
     monitor_tenant = tenant_id if tenant_id else "_single"
+    if conn is None:
+        raise RuntimeError(
+            "km.watch() requires the engine to expose _connection_manager; "
+            "got None — ensure the engine has been initialized via build()"
+        )
     monitor = DriftMonitor(conn, tenant_id=monitor_tenant, alerts=alerts)
-    # Ensure schema exists before the caller queries it.
-    if hasattr(monitor, "initialize"):
-        init_fn = monitor.initialize
-        if asyncio.iscoroutinefunction(init_fn):
-            await init_fn()
-        else:
-            init_fn()
+    # DriftMonitor schema is owned by migrations 0002+ — no initialize() call needed.
+    # (Pre-2026-04 versions exposed monitor.initialize(); the dead check was kept
+    # defensively; rules/zero-tolerance.md Rule 1 surfaces it as unreachable code.)
     if reference is not None:
         # Persist the reference distribution eagerly so the monitor is
         # ready for ``check_drift`` immediately. The engine method is
@@ -614,7 +615,12 @@ def diagnose(
     if isinstance(subject, TrainingResult):
         framework = getattr(subject, "framework", "")
         if framework in ("lightning", "torch"):
-            return DLDiagnostics.from_training_result(subject, tracker=tracker)
+            return DLDiagnostics(
+                subject.trainable.model
+                if hasattr(subject, "trainable") and subject.trainable is not None
+                else subject,
+                tracker=tracker,
+            )
         if framework == "sklearn":
             if data is None:
                 raise ValueError(
