@@ -1,5 +1,152 @@
 # kailash-ml Changelog
 
+## [1.6.0] — 2026-04-29 — 1.5.x follow-up: closes #699, #700, #701
+
+Closes three production issues surfaced by the MLFP M5 notebook smoke-test
+on 2026-04-28. All three trace to the same `1.5.x release-migration-debt`
+class (1.5.0 hard-removed surfaces without deprecation cycle, schema
+drifted across migration + inline DDL + spec, accepted-literals fell
+through silently). Shipped via PR
+[#708](https://github.com/terrene-foundation/kailash-py/pull/708) on a
+single integration branch with 25 commits across S1/S2/S3a/S3b shards
+and three /redteam rounds.
+
+This 1.6.0 minor supersedes the originally-scoped 1.5.2 patch — `#700`
+adds new public API (`MultiModelAdapter` + `InferenceServer.__new__`
+deprecation routing) so semver mandates a minor bump. `#700` is strictly
+additive: 1.5.x callers using `InferenceServer.from_registry(name,
+registry=)` get bit-identical behavior in 1.6.0; only 1.1.x-shape
+callers (`InferenceServer(registry=, cache_size=)`) trigger the new
+deprecation routing.
+
+### Added
+
+- **`MultiModelAdapter`** at
+  `kailash_ml/serving/multi_model_adapter.py` (closes
+  [#700](https://github.com/terrene-foundation/kailash-py/issues/700)).
+  Back-compat shim restoring the 1.1.x `InferenceServer(registry=,
+cache_size=)` signature behind a `DeprecationWarning`. Lazy-constructs
+  one canonical `InferenceServer` per model name via
+  `InferenceServer.from_registry`. Surfaces `warm_cache(names)`,
+  `predict(name, payload)`, and refuses `load_model(name, model)` with
+  a typed migration hint per `rules/zero-tolerance.md` Rule 6
+  (Implement Fully). Wired through
+  `InferenceServer.__new__` deprecation routing — 1.1.x kwargs
+  (`cache_size is not None` OR `config is None and registry is not
+None`) route to the adapter; canonical 1.5.x callers fall through to
+  `__init__` unchanged.
+- **`InferenceServer.from_registry_many(names, *, registry)` helper**
+  — additive convenience for bulk per-model server construction. The
+  canonical migration path away from `MultiModelAdapter` for users who
+  want N servers without going through the deprecation surface.
+- **`diagnose(kind="classifier"/"regressor")` aliases** (part of
+  [#701](https://github.com/terrene-foundation/kailash-py/issues/701)).
+  Resolve to the same `ClassicalDiagnostics` engine as
+  `kind="classical"`. Documented as "convenience aliases for the most
+  common task names" in `specs/ml-diagnostics.md §3`.
+- **Cross-package dispatch in `km.diagnose`** for
+  `kind="alignment"` / `kind="llm"` / `kind="agent"` (rest of #701).
+  Routes to `kailash_align.diagnostics.alignment.AlignmentDiagnostics`,
+  `kaizen.judges.llm_diagnostics.LLMDiagnostics`, and
+  `kaizen.observability.agent_diagnostics.AgentDiagnostics`
+  respectively. Sibling-package not installed → `ImportError` with
+  explicit install hint naming the kailash-ml extra. Per
+  `rules/dependencies.md` § BLOCKED Anti-Patterns silent fallback is
+  BLOCKED. `kind="clustering"` raises `ValueError` with explicit
+  "no dispatch" message per `rules/zero-tolerance.md` Rule 2 (no fake
+  dispatch).
+- **Optional extras `[alignment]`, `[kaizen-judges]`,
+  `[kaizen-observability]`** in `pyproject.toml` declaring the
+  cross-package dispatch dependencies.
+- **`MultiModelAdapterProtocol`** + widened
+  **`InferenceServerProtocol`** in `kailash_ml/serving/_types.py`.
+  Type-only protocol layer that breaks the static
+  `serving/server.py` ↔ `serving/multi_model_adapter.py` cycle CodeQL
+  `py/unsafe-cyclic-import` flagged after #700 landed; runtime imports
+  stay scoped to method bodies (`__new__`, `warm_cache`).
+
+### Fixed
+
+- **`_kml_model_versions` schema 3-way drift** (closes
+  [#699](https://github.com/terrene-foundation/kailash-py/issues/699)).
+  Migration `0002_kml_models` shipped a 7-column schema, ModelRegistry
+  inline DDL added 6 data columns the migration never had, and
+  `specs/ml-engines.md §5A.2` declared a 13-column shape neither
+  matched. Resolution per ADR-1 (revised post-redteam Round 1):
+  numbered migration
+  `0005_kml_model_versions_data_columns` adds the 6 missing columns
+  (`metrics_json`, `signature_json`, `onnx_status`, `onnx_error`,
+  `artifact_path`, `model_uuid`) with reversible up/down SQL; inline
+  DDL deleted from `ModelRegistry`. All `WHERE name = ?` queries in
+  `model_registry.py` plumbed `tenant_id` + `model_name` per Option B
+  (multi-tenant safe). Includes `tenant_id` parameter on
+  `_lineage_walker_query` and `ModelRegistry.delete_model_version`.
+- **`DLDiagnostics` silent `data=` drop** (part of #701). 1.5.x
+  `km.diagnose(kind="dl", data=loader)` silently dropped the
+  `DataLoader` — the report reflected only the records the caller
+  pumped manually via `record_batch`. Now `.report(data=loader)`
+  consumes the loader once in `torch.no_grad()` mode, runs the model
+  forward on each batch, and records `record_batch(loss=...)` per
+  batch using a default loss heuristic (`F.cross_entropy` when output
+  rank is 2 AND targets are integer-typed; otherwise `F.mse_loss`).
+  Model train/eval state preserved via `try/finally`. Resolution
+  order: argument-supplied `data=` wins over construction-time
+  `data=`. Permissive batch contract — non-conforming batches skipped
+  with structured WARN log per `observability.md` MUST 2. Adds
+  `n_batches` + `n_samples` keys to the report dict.
+- **Tenant sentinel `"default"` → `"_single"`** across
+  `model_registry.py`, `tracker.py`, and the lineage walker (#699
+  redteam Round 2 finding F-1). Aligns with the spec sentinel for
+  single-tenant deployments and matches `kailash-rs` posture per
+  `rules/cross-sdk-inspection.md` Rule 3 (EATP D6 semantic parity).
+- **Spec drift gate compliance** — added
+  `<!-- spec-assert-skip: class:DataLoader -->` directive at
+  `specs/ml-diagnostics.md §5.1a` for the `torch.utils.data.DataLoader`
+  external symbol cite per `specs/spec-drift-gate.md §3.2`.
+- **CodeQL `py/empty-except` at `dl.py:1257`** — heuristic-loss
+  broadcast path's `except RuntimeError: pass` now carries an
+  explanatory comment documenting the fall-through-to-`mse_loss`
+  intent per `rules/zero-tolerance.md` Rule 3.
+
+### Tests
+
+- **14 new regression tests** — one per acceptance criterion across
+  the three issues. All DOCS-EXACT pipeline tests per
+  `rules/testing.md` § "End-to-End Pipeline Regression":
+  - `test_issue_699_*` (3 tests): tenant-aware schema, lineage walker
+    parity, registry round-trip on shared store.
+  - `test_issue_700_*` (4 tests): canonical-per-model predict path,
+    legacy multi-model adapter predict path, deprecation routing
+    detection, `from_registry_many` bulk construction.
+  - `test_issue_701_*` (7 tests): `data=` wiring, alias dispatch,
+    cross-package dispatch (alignment/llm/agent), clustering rejection,
+    extras-gating ImportError messages.
+- **Tier-2 wiring tests** for `MultiModelAdapter` per
+  `rules/facade-manager-detection.md` MUST Rule 2.
+- **Spec sibling re-derivation** across 16 `ml-*.md` specs (Round 2 +
+  Round 3) per `rules/specs-authority.md` § 7.
+
+### Migration notes
+
+`@db.model`-driven schemas pick up the migration automatically on
+first connect. Shared databases require running the numbered migration
+explicitly: `MigrationManager.apply_migration(0005, dataflow)`. The
+`down_sql` is reversible but drops the 6 added columns — pass
+`force_downgrade=True` per `rules/schema-migration.md` Rule 7.
+
+`MultiModelAdapter` is a deprecation shim — new code SHOULD construct
+one `InferenceServer` per model via `InferenceServer.from_registry` or
+the new `from_registry_many` helper. The shim will be removed in 1.7.0
+per the deprecation warning's stated removal version.
+
+### Cross-SDK posture
+
+Verified ABSENT in `esperie/kailash-rs` — Rust uses trait-object backends
+
+- `DashMap` `InferenceServer` + no `diagnose()` dispatcher, so none of
+  the three Python issues have a Rust analog (per
+  `rules/cross-sdk-inspection.md` Rule 1 cross-check).
+
 ## [1.5.1] — 2026-04-28 — W7 follow-up: ModelNotFoundError canonical identity
 
 ### Fixed
