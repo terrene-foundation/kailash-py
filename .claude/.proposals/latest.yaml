@@ -37,7 +37,52 @@ codify_session: |
   applies to every SDK and every language — strong cross-SDK candidate
   for upstream classification at loom.
 
-status: pending_review
+status: distributed
+reviewed_date: "2026-04-29"
+distributed_date: "2026-04-29T14:30:00+08:00"
+distributed_session: |
+  /sync py 2026-04-29 — bundled the in-flight 2.9.7 (git reset --hard rule)
+  with 5 NEW candidates from kailash-ml-1.5.x-followup. Loom 2.9.7 → 2.10.0.
+
+  Distributed to:
+    - kailash-coc-claude-py 3.5.28 → 3.5.29 (legacy CC-only template;
+      4 rule files updated: zero-tolerance + schema-migration + agents + git;
+      pyproject pins kailash 2.11.3 → 2.12.0, dataflow 2.3.3 → 2.4.0,
+      ml 1.5.1 → 1.6.0; uv sync clean; 12/12 hooks resolve.)
+    - kailash-coc-py 1.0.12 → 1.0.13 (multi-CLI template;
+      6 rule files updated; AGENTS.md regenerated 57,459 B (6.48% under
+      block_cap), GEMINI.md 57,468 B (6.46%); brief-verification clause
+      confirmed cross-CLI in CLAUDE.md / AGENTS.md / GEMINI.md.)
+
+  Classification of all 6 entries (all GLOBAL, all cross-SDK):
+    - git-reset-hard-discipline: rules/git.md (already in 2.9.7)
+    - api-deprecation-cycle-discipline: rules/zero-tolerance.md NEW Rule 6a
+      "Remove Fully — Public-API Removal Requires Deprecation Cycle"
+    - inline-ddl-outside-migrations-grep-audit:
+      rules/schema-migration.md NEW Rule 1a "/redteam MUST Grep For
+      Inline DDL Outside Migrations"
+    - brief-claim-verification-protocol: rules/agents.md § Parallel
+      Execution NEW MUST "Parallel Brief-Claim Verification When Issue
+      Count ≥ 3"; variant cascade across codex + gemini + rs
+    - silent-drop-kwargs-as-zero-tolerance-rule-3:
+      rules/zero-tolerance.md NEW Rule 3c "Documented Kwargs Accepted
+      But Unused"
+    - accepted-literals-without-dispatch-as-rule-2:
+      rules/zero-tolerance.md Rule 2 § Extended BLOCKED Patterns NEW
+      "Fake dispatch" bullet
+
+  Block-cap headroom WARN (institutional knowledge):
+    Multi-CLI baselines AGENTS.md / GEMINI.md dropped from 14.51% / 14.49%
+    to 6.48% / 6.46% under 61,440 B cap. Next cycle adding CRIT-baseline
+    content MUST extract or demote-to-path-scoped FIRST.
+
+  Pre-existing extraction debt (deferred to next cycle, not blocking):
+    - rules/zero-tolerance.md 189 → 277 LOC (exceeds ≤200 guidance)
+    - rules/agents.md 196 → 245 LOC
+    - rules/schema-migration.md 203 → 245 LOC
+    - rules/git.md 295 LOC (carried from 2.9.7)
+    All four are load-bearing MUST content; not extraction-eligible
+    reference material.
 
 changes:
   - id: git-reset-hard-discipline
