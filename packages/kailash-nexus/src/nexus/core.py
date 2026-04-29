@@ -875,9 +875,10 @@ class Nexus:
 
         try:
             # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
-            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
             from kailash_mcp import MCPServer
             from kailash_mcp.auth.providers import APIKeyAuth
+
+            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
 
             # Create production-ready MCP server using Core SDK
             self._mcp_server = self._create_sdk_mcp_server()
@@ -2002,6 +2003,114 @@ Check the documentation or explore available resources.
         logger.info(f"Plugin installed: {plugin_name}")
         return self
 
+    def add_startup_handler(self, func: Callable[[], Any]) -> "Nexus":
+        """Register a callable to run during Nexus startup.
+
+        The handler is appended to the same internal ``_startup_hooks`` list
+        that powers the plugin protocol's ``on_startup`` lifecycle hook, and
+        runs from inside the FastAPI lifespan (uvicorn's event loop) — so any
+        ``asyncio.create_task(...)`` it schedules survives for the server's
+        lifetime (issue #501 contract).
+
+        Use this for the canonical "run once at server start" pattern —
+        e.g. DataFlow async DDL, warming caches, opening upstream
+        connections — instead of writing a Plugin class for a single
+        callback or reaching for ``nexus.fastapi_app.on_event(...)``
+        (which has a timing trap: the property returns ``None`` until
+        :meth:`register` or :meth:`start` triggers lazy gateway init).
+
+        Both sync ``def`` and ``async def`` callables are supported.
+
+        Args:
+            func: A zero-argument callable. May be ``async def``.
+
+        Returns:
+            ``self`` (for method chaining).
+
+        Raises:
+            TypeError: If ``func`` is not callable.
+            RuntimeError: If called after :meth:`start` — startup hooks
+                MUST be registered before the server boots, because the
+                lifespan dispatches them once at uvicorn startup. After
+                ``start()`` the lifespan has already fired or is firing,
+                and a late append cannot be guaranteed to run.
+
+        Example:
+            >>> from nexus import Nexus
+            >>> from dataflow import DataFlow
+            >>>
+            >>> app = Nexus()
+            >>> db = DataFlow("postgresql://...")
+            >>>
+            >>> @db.model
+            ... class User:
+            ...     id: int
+            ...     name: str
+            >>>
+            >>> async def create_schema() -> None:
+            ...     await db.create_tables_async()
+            >>>
+            >>> app.add_startup_handler(create_schema)
+            >>> app.register("greet", greet_workflow)
+            >>> app.start()  # create_schema runs inside uvicorn's event loop
+        """
+        if not callable(func):
+            raise TypeError(
+                f"add_startup_handler(func) requires a callable; "
+                f"got {type(func).__name__}"
+            )
+        if self._running:
+            raise RuntimeError(
+                "cannot register startup handler after Nexus.start(); "
+                "register before start()"
+            )
+        self._startup_hooks.append(func)
+        logger.info("Startup handler registered: %s", getattr(func, "__name__", func))
+        return self
+
+    def add_shutdown_handler(self, func: Callable[[], Any]) -> "Nexus":
+        """Register a callable to run during Nexus shutdown.
+
+        Symmetric to :meth:`add_startup_handler`. The handler is appended
+        to ``_shutdown_hooks`` and runs from the FastAPI lifespan exit
+        path (or from :meth:`stop` if the server is torn down out-of-band).
+        Hooks fire in reverse registration order — the last installed
+        runs first — so pairs of (open_resource, close_resource)
+        registered in init order tear down LIFO.
+
+        Both sync ``def`` and ``async def`` callables are supported.
+
+        Args:
+            func: A zero-argument callable. May be ``async def``.
+
+        Returns:
+            ``self`` (for method chaining).
+
+        Raises:
+            TypeError: If ``func`` is not callable.
+            RuntimeError: If called after :meth:`start` — see
+                :meth:`add_startup_handler` for rationale.
+
+        Example:
+            >>> async def close_clients() -> None:
+            ...     await upstream_client.aclose()
+            >>>
+            >>> app.add_shutdown_handler(close_clients)
+        """
+        if not callable(func):
+            raise TypeError(
+                f"add_shutdown_handler(func) requires a callable; "
+                f"got {type(func).__name__}"
+            )
+        if self._running:
+            raise RuntimeError(
+                "cannot register shutdown handler after Nexus.start(); "
+                "register before start()"
+            )
+        self._shutdown_hooks.append(func)
+        logger.info("Shutdown handler registered: %s", getattr(func, "__name__", func))
+        return self
+
     def _run_async_hook(self, hook) -> None:
         """Run an async hook, handling both running and non-running event loops."""
         import asyncio
@@ -2804,6 +2913,7 @@ Check the documentation or explore available resources.
             HTTPException: If workflow not found, input invalid, or execution fails
         """
         from fastapi import HTTPException
+
         from nexus.validation import validate_workflow_inputs, validate_workflow_name
 
         # P0-5: Validate workflow name (prevent path traversal)
