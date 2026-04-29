@@ -63,9 +63,15 @@ from kailash_ml.serving.channels.rest import bind_rest
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from kailash_ml.engines.model_registry import ModelRegistry, ModelVersion
-    from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
     from kailash_ml.types import ModelSignature
 
+# ``MultiModelAdapter`` is referenced only as the return type of ``__new__``
+# below (1.1.x deprecation routing). We type it via the cycle-free
+# ``MultiModelAdapterProtocol`` in ``_types.py`` to break the static
+# ``serving/server.py`` ↔ ``serving/multi_model_adapter.py`` cycle CodeQL
+# ``py/unsafe-cyclic-import`` flagged after #700 landed. The runtime import
+# of the concrete class stays scoped to the ``__new__`` body (line 320).
+from kailash_ml.serving._types import MultiModelAdapterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +288,7 @@ class InferenceServer:
         registry: Optional["ModelRegistry"] = None,
         cache_size: Optional[int] = None,
         server_id: Optional[str] = None,
-    ) -> Union["InferenceServer", "MultiModelAdapter"]:
+    ) -> Union["InferenceServer", "MultiModelAdapterProtocol"]:
         """Route 1.1.x kwargs to :class:`MultiModelAdapter`.
 
         Closes GH issue #700. Per ``specs/ml-serving.md`` §1.1 + §2.1

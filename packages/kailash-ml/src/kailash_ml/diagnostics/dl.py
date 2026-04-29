@@ -1255,6 +1255,10 @@ class DLDiagnostics:
                             try:
                                 targets = targets.view_as(outputs)
                             except RuntimeError:
+                                # Shapes are incompatible for view_as (not a
+                                # trailing-singleton mismatch). Fall through
+                                # so F.mse_loss raises its own typed error,
+                                # which is more informative than a custom one.
                                 pass
                         loss = F.mse_loss(outputs, targets.to(outputs.dtype))
                     self.record_batch(loss=float(loss.item()))

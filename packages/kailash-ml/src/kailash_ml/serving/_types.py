@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Protocol, runtime_checkable
+from typing import Any, Literal, Mapping, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +28,51 @@ logger = logging.getLogger(__name__)
 ServeStatus = Literal["starting", "ready", "draining", "stopped"]
 
 
-__all__ = ["ServeStatus", "ServeHandle", "InferenceServerProtocol"]
+__all__ = [
+    "ServeStatus",
+    "ServeHandle",
+    "InferenceServerProtocol",
+    "MultiModelAdapterProtocol",
+]
 
 
 @runtime_checkable
 class InferenceServerProtocol(Protocol):
-    """Structural shape of :class:`InferenceServer` used by :class:`ServeHandle`.
+    """Structural shape of :class:`InferenceServer` used by :class:`ServeHandle`
+    and :class:`MultiModelAdapter`.
 
     The real implementation lives in ``server.py``. This protocol captures
-    only the surface the handle depends on so the types module stays free
-    of back-edges.
+    only the surface the handle and adapter depend on so the types module
+    stays free of back-edges.
     """
 
     @property
     def status(self) -> ServeStatus: ...
 
     async def stop(self) -> None: ...
+
+    async def start(self) -> "ServeHandle": ...
+
+    async def predict(
+        self,
+        features: Mapping[str, Any],
+        *,
+        tenant_id: Optional[str] = None,
+    ) -> Mapping[str, Any]: ...
+
+
+@runtime_checkable
+class MultiModelAdapterProtocol(Protocol):
+    """Structural shape of :class:`MultiModelAdapter` used by
+    :meth:`InferenceServer.__new__` for 1.1.x deprecation routing.
+
+    The real implementation lives in ``multi_model_adapter.py``. This
+    protocol captures only the surface ``__new__`` returns so server.py
+    stays free of a back-edge to multi_model_adapter at module load.
+    """
+
+    @property
+    def cache_size(self) -> int: ...
 
 
 @dataclass(frozen=False, slots=True)

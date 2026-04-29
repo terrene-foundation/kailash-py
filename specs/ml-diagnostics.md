@@ -164,11 +164,11 @@ Returns the appropriate `Diagnostic` adapter, already run (for one-shot diagnose
 
 **Cross-package dispatch (GH #701).** Three of the explicit `kind` literals route to diagnostic classes that live in **sibling packages**, NOT in `kailash-ml` itself:
 
-| `kind`        | Dispatched class                                    | Sibling package    | Required extra                      |
-| ------------- | --------------------------------------------------- | ------------------ | ----------------------------------- |
-| `"alignment"` | `kailash_align.diagnostics.alignment.AlignmentDiagnostics` | `kailash-align`    | `pip install kailash-ml[alignment]` |
-| `"llm"`       | `kaizen.judges.llm_diagnostics.LLMDiagnostics`      | `kailash-kaizen`   | `pip install kailash-ml[kaizen-judges]` |
-| `"agent"`     | `kaizen.observability.agent_diagnostics.AgentDiagnostics` | `kailash-kaizen` | `pip install kailash-ml[kaizen-observability]` |
+| `kind`        | Dispatched class                                           | Sibling package  | Required extra                                 |
+| ------------- | ---------------------------------------------------------- | ---------------- | ---------------------------------------------- |
+| `"alignment"` | `kailash_align.diagnostics.alignment.AlignmentDiagnostics` | `kailash-align`  | `pip install kailash-ml[alignment]`            |
+| `"llm"`       | `kaizen.judges.llm_diagnostics.LLMDiagnostics`             | `kailash-kaizen` | `pip install kailash-ml[kaizen-judges]`        |
+| `"agent"`     | `kaizen.observability.agent_diagnostics.AgentDiagnostics`  | `kailash-kaizen` | `pip install kailash-ml[kaizen-observability]` |
 
 When the sibling package is not installed, the dispatch raises `ImportError` at the call site (per `rules/dependencies.md` § BLOCKED Anti-Patterns) with an explicit install hint naming the kailash-ml extra. Silent fallback is BLOCKED. The error message MUST name the install command so users can recover without consulting docs.
 
@@ -337,6 +337,8 @@ DLDiagnostics(
 
 ### 5.1a Loader-Driven Evaluation (NEW v1.5.2 — GH issue #701)
 
+<!-- spec-assert-skip: class:DataLoader reason:"external symbol — torch.utils.data.DataLoader; qualified at line 133 + 321" -->
+
 `DLDiagnostics` accepts a `DataLoader` either at construction (`DLDiagnostics(model, data=loader)`) OR at `.report()` call time (`diag.report(data=loader)`). When supplied, `.report()` consumes the loader once in `torch.no_grad()` mode, runs the model forward on each batch, and records `record_batch(loss=...)` per batch using a default loss heuristic (`F.cross_entropy` when output rank is 2 AND targets are integer-typed; otherwise `F.mse_loss`). The model's train/eval state is preserved (model is `.eval()`-ed for the forward pass and restored to its original state in a `try/finally`).
 
 **Method signature:**
@@ -349,10 +351,10 @@ Resolution order: argument-supplied `data=` wins over construction-time `data=`.
 
 **Return-dict additions:**
 
-| Key          | Type | Meaning                                                                                                          |
-| ------------ | ---- | ---------------------------------------------------------------------------------------------------------------- |
-| `n_batches`  | int  | Number of batches the supplied `data` loader yielded during this `report()` call. `0` when no loader supplied.   |
-| `n_samples`  | int  | Total samples seen across the loader's batches (sum of `inputs.shape[0]`). `0` when no loader supplied.          |
+| Key         | Type | Meaning                                                                                                        |
+| ----------- | ---- | -------------------------------------------------------------------------------------------------------------- |
+| `n_batches` | int  | Number of batches the supplied `data` loader yielded during this `report()` call. `0` when no loader supplied. |
+| `n_samples` | int  | Total samples seen across the loader's batches (sum of `inputs.shape[0]`). `0` when no loader supplied.        |
 
 **Loader contract** (permissive — non-conforming batches are skipped with a structured WARN log per `observability.md` MUST 2):
 

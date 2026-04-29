@@ -37,8 +37,14 @@ from typing import TYPE_CHECKING, Any, Mapping, NoReturn
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from kailash_ml.engines.model_registry import ModelRegistry
-    from kailash_ml.serving.server import InferenceServer
 
+# ``InferenceServer`` is referenced only as a string annotation; we route
+# annotations through the cycle-free ``InferenceServerProtocol`` in
+# ``_types.py`` to break the static ``serving/server.py`` ↔
+# ``serving/multi_model_adapter.py`` cycle CodeQL ``py/unsafe-cyclic-import``
+# flagged after #700 landed. Both runtime imports of the concrete class stay
+# scoped to method bodies (lines 152, 176).
+from kailash_ml.serving._types import InferenceServerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +110,7 @@ class MultiModelAdapter:
             )
         self._registry = registry
         self._cache_size = cache_size
-        self._servers: dict[str, "InferenceServer"] = {}
+        self._servers: dict[str, "InferenceServerProtocol"] = {}
 
     # ------------------------------------------------------------------
     # Public surface (read-only)
@@ -120,7 +126,7 @@ class MultiModelAdapter:
         return self._cache_size
 
     @property
-    def servers(self) -> Mapping[str, "InferenceServer"]:
+    def servers(self) -> Mapping[str, "InferenceServerProtocol"]:
         """Read-only view of the per-model server cache."""
         return dict(self._servers)
 
