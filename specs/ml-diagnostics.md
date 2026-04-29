@@ -124,7 +124,12 @@ km.diagnose(
                    "torch.nn.Module", "sklearn.base.BaseEstimator", RunId, ExperimentRun],
     *,
     kind: Literal["auto", "dl", "classical_classifier", "classical_regressor",
-                  "clustering", "rag", "rl", "alignment", "llm", "agent"] = "auto",
+                  "rag", "rl", "alignment", "llm", "agent",
+                  # Aliases (GH #701) — normalised to canonical literals
+                  # at entry, before validation:
+                  "classifier",      # → "classical_classifier"
+                  "regressor",       # → "classical_regressor"
+                  ] = "auto",
     data: Optional[Union["polars.DataFrame", tuple, "torch.utils.data.DataLoader"]] = None,
     tracker: Optional[ExperimentRun] = None,
     show: bool = True,
@@ -133,6 +138,10 @@ km.diagnose(
 ```
 
 Returns the appropriate `Diagnostic` adapter, already run (for one-shot diagnosers) or opened as a context manager (for streaming ones). Caller accesses `.report()` / DataFrame accessors / `plot_*` from the return value.
+
+**Kind aliases (GH #701).** `kind="classifier"` and `kind="regressor"` are accepted as colloquial aliases for `kind="classical_classifier"` and `kind="classical_regressor"` respectively. The alias map is applied at the entry of `diagnose()`, BEFORE literal validation, so downstream dispatch sees only the canonical literals.
+
+**Clustering disposition (GH #701).** `kind="clustering"` is currently **not yet implemented** at the `km.diagnose` engine entry point. Calling with this literal raises `ValueError("diagnose(kind='clustering') is not yet implemented; if needed, file a GH issue and use the clustering engine directly (kailash_ml.engines.clustering)")`. The literal was previously accepted by the validator but had no dispatch branch (silent fall-through to `DLDiagnostics` — `rules/zero-tolerance.md` Rule 2 violation). Per Rule 2, accepting a literal without a real dispatch is BLOCKED; the explicit refusal is the structural defense until a clustering diagnostic is wired through `km.diagnose`.
 
 ### 3.2 Dispatch Table
 
@@ -153,6 +162,16 @@ Returns the appropriate `Diagnostic` adapter, already run (for one-shot diagnose
 
 `kind="dl"` / `"classical_classifier"` / ... forces the dispatch, bypassing inspection.
 
+**Cross-package dispatch (GH #701).** Three of the explicit `kind` literals route to diagnostic classes that live in **sibling packages**, NOT in `kailash-ml` itself:
+
+| `kind`        | Dispatched class                                    | Sibling package    | Required extra                      |
+| ------------- | --------------------------------------------------- | ------------------ | ----------------------------------- |
+| `"alignment"` | `kailash_align.diagnostics.alignment.AlignmentDiagnostics` | `kailash-align`    | `pip install kailash-ml[alignment]` |
+| `"llm"`       | `kaizen.judges.llm_diagnostics.LLMDiagnostics`      | `kailash-kaizen`   | `pip install kailash-ml[kaizen-judges]` |
+| `"agent"`     | `kaizen.observability.agent_diagnostics.AgentDiagnostics` | `kailash-kaizen` | `pip install kailash-ml[kaizen-observability]` |
+
+When the sibling package is not installed, the dispatch raises `ImportError` at the call site (per `rules/dependencies.md` § BLOCKED Anti-Patterns) with an explicit install hint naming the kailash-ml extra. Silent fallback is BLOCKED. The error message MUST name the install command so users can recover without consulting docs.
+
 ### 3.3 Rendering Contract
 
 When `show=True` (default):
@@ -165,8 +184,11 @@ When `show=True` (default):
 ### 3.4 Errors
 
 - `TypeError` when `subject` is not a dispatchable type — error message lists the accepted types.
-- `ValueError` when `kind="classical_classifier"` and the dispatched model is not a classifier (likewise for regressor / clustering).
-- `ImportError` (from adapters) when the diagnostic kind requires an extra that is not installed — error message names the extra.
+- `TypeError` (from Python's binder) when an unsupported keyword argument is passed — the 1.1.x kwargs (`title`, `n_batches`, `train_losses`, `val_losses`, `forward_returns_tuple`) were removed in 1.5.0; CHANGELOG documents the migration.
+- `ValueError` when `kind="classical_classifier"` and the dispatched model is not a classifier (likewise for regressor).
+- `ValueError` when `kind="clustering"` — currently not yet implemented at the `km.diagnose` entry point per §3.1; users should call the clustering engine directly.
+- `ValueError` when `kind` is not one of the §3.1 literals (or aliases) — error message names the rejected literal.
+- `ImportError` (per GH #701) when `kind="alignment"`, `"llm"`, or `"agent"` is dispatched and the sibling package's extra is not installed — error message MUST name the kailash-ml extra (`pip install kailash-ml[alignment]` / `[kaizen-judges]` / `[kaizen-observability]`) AND the missing sibling package so the user can recover from the traceback alone.
 
 ### 3.5 Why One Entry Point
 
