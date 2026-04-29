@@ -1,5 +1,13 @@
 # Nexus Changelog
 
+## [2.4.1] — 2026-04-29 — `MountInfo` exported in `__all__`
+
+Patch release closing the build-repo-release-discipline.md Rule 5 drift from PR #720. `MountInfo` (`nexus/core.py`) was already imported at module-scope in `nexus/__init__.py` but absent from `__all__`, triggering `pyright` "MountInfo is not accessed" and violating `orphan-detection.md` Rule 6 (Module-Scope Public Imports Appear In `__all__`). No behavioral change; pure public-API contract repair.
+
+### Fixed
+
+- `MountInfo` added to `__all__` alongside its sibling middleware-API entries (`MiddlewareInfo`, `RouterInfo`, `NexusPluginProtocol`). Pre-existing oversight surfaced during the 2.4.0 release-prep cycle; deferred to this patch per `git.md` § release-branch metadata-only convention.
+
 ## [2.4.0] — 2026-04-29 — Pluggable WebhookSigner + Twilio support + ML mount-path canonicalization
 
 Minor release adding pluggable webhook signature verification (PR #717, closes #687), canonicalizing the ML mount path documentation (W6-009, closes F-C-26), and registering the long-standing `regression` pytest marker. Backward-compatible: every existing `WebhookTransport(secret=...)` caller sees zero behavior change (default signer preserves the historical `sha256=<hex>` HMAC-SHA256 raw-body shape).
