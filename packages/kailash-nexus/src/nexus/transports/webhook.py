@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import asyncio
-import collections
+import base64
+import binascii
 import hashlib
 import hmac
 import ipaddress
@@ -15,14 +16,197 @@ import urllib.parse
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 from nexus.registry import HandlerDef, HandlerRegistry
 from nexus.transports.base import Transport
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["WebhookTransport", "DeliveryStatus", "WebhookDelivery"]
+__all__ = [
+    "WebhookTransport",
+    "DeliveryStatus",
+    "WebhookDelivery",
+    "WebhookSigner",
+    "HmacSha256Signer",
+    "TwilioSigner",
+]
+
+
+# -- Pluggable signature scheme ------------------------------------------------
+
+
+@runtime_checkable
+class WebhookSigner(Protocol):
+    """Pluggable webhook signature scheme.
+
+    A ``WebhookSigner`` computes and verifies the signature carried in a
+    webhook request's signature header. Different providers use different
+    canonical-input shapes and digest algorithms (Stripe / GitHub / Slack
+    use HMAC-SHA256 over the raw body; Twilio uses HMAC-SHA1 over
+    URL+sorted-form-params with base64 output).
+
+    Implementations MUST use ``hmac.compare_digest`` for verification to
+    prevent timing attacks. Implementations MUST NOT log the secret or
+    the provided/computed signature value.
+
+    Issue #687.
+    """
+
+    def compute(
+        self,
+        *,
+        secret: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Compute the signature value to send in the signature header."""
+        ...
+
+    def verify(
+        self,
+        *,
+        secret: str,
+        provided_signature: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        """Verify a provided signature against the canonical input.
+
+        Returns True if the signature is valid, False otherwise. Uses
+        constant-time comparison.
+        """
+        ...
+
+
+class HmacSha256Signer:
+    """Default signer: HMAC-SHA256 over raw payload bytes, hex-encoded.
+
+    Output shape is ``sha256=<hex>``. This preserves the historical
+    ``WebhookTransport`` behavior — Stripe, GitHub, Slack, Shopify, and
+    most modern providers use this scheme. The ``request_url`` and
+    ``form_params`` arguments are ignored (raw-body signing).
+    """
+
+    def compute(
+        self,
+        *,
+        secret: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> str:
+        # Raw-body signing — Protocol mandates these kwargs but this signer
+        # ignores them by design. Listed to satisfy the WebhookSigner contract.
+        del request_url, form_params
+        mac = hmac.new(
+            secret.encode("utf-8"),
+            payload_bytes,
+            hashlib.sha256,
+        )
+        return f"sha256={mac.hexdigest()}"
+
+    def verify(
+        self,
+        *,
+        secret: str,
+        provided_signature: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        del request_url, form_params  # see compute() — raw-body signing
+        expected = self.compute(secret=secret, payload_bytes=payload_bytes)
+        return hmac.compare_digest(expected, provided_signature)
+
+
+class TwilioSigner:
+    """Twilio signer: HMAC-SHA1 over URL+sorted-form-params, base64-encoded.
+
+    Per https://www.twilio.com/docs/usage/webhooks/webhooks-security:
+
+    * **Form-encoded webhooks** (the common case): the canonical input is
+      ``request_url`` followed by the concatenation of every form
+      parameter as ``key + URL-decoded-value``, sorted alphabetically by
+      key. The caller MUST pass already-URL-decoded values in
+      ``form_params``.
+
+    * **JSON-body webhooks** (e.g. Voice Recording webhooks): when
+      ``form_params`` is None and ``payload_bytes`` is non-empty, the
+      canonical input is ``request_url`` followed by the lowercase hex
+      SHA-256 digest of the raw body. This matches Twilio's published
+      validation rule for JSON webhooks.
+
+    The output is the base64-encoded raw HMAC-SHA1 digest with no prefix.
+    Twilio sends this value in the ``X-Twilio-Signature`` header.
+    """
+
+    def _canonical_input(
+        self,
+        *,
+        request_url: str,
+        form_params: Optional[Dict[str, str]],
+        payload_bytes: bytes,
+    ) -> bytes:
+        if form_params is not None:
+            buf = request_url
+            for k in sorted(form_params.keys()):
+                buf += k + form_params[k]
+            return buf.encode("utf-8")
+        # JSON-body fallback: url + sha256(body) hex digest
+        if payload_bytes:
+            body_hash = hashlib.sha256(payload_bytes).hexdigest()
+            return (request_url + body_hash).encode("utf-8")
+        # No params, no body — sign the URL alone (degenerate case)
+        return request_url.encode("utf-8")
+
+    def compute(
+        self,
+        *,
+        secret: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> str:
+        canonical = self._canonical_input(
+            request_url=request_url,
+            form_params=form_params,
+            payload_bytes=payload_bytes,
+        )
+        mac = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha1)
+        return base64.b64encode(mac.digest()).decode("ascii")
+
+    def verify(
+        self,
+        *,
+        secret: str,
+        provided_signature: str,
+        payload_bytes: bytes,
+        request_url: str = "",
+        form_params: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        # Constant-time compare on raw digest bytes after base64-decoding
+        # the provided signature. Decode-error → False (not raise) to
+        # match HmacSha256Signer's "wrong-shape signature is just invalid"
+        # contract.
+        canonical = self._canonical_input(
+            request_url=request_url,
+            form_params=form_params,
+            payload_bytes=payload_bytes,
+        )
+        expected_digest = hmac.new(
+            secret.encode("utf-8"), canonical, hashlib.sha1
+        ).digest()
+        try:
+            provided_digest = base64.b64decode(
+                provided_signature.encode("ascii"), validate=True
+            )
+        except (ValueError, UnicodeEncodeError, binascii.Error):
+            return False
+        return hmac.compare_digest(expected_digest, provided_digest)
+
 
 _BLOCKED_IPV4 = [
     ipaddress.ip_network("0.0.0.0/8"),
@@ -125,12 +309,13 @@ class WebhookTransport(Transport):
     with retry logic and exponential backoff.
 
     Args:
-        secret: Shared secret for HMAC-SHA256 signature verification.
-            When set, every inbound request must include a valid signature
-            header. When None, signature verification is skipped (not
-            recommended for production).
-        signature_header: Name of the HTTP header carrying the HMAC
-            signature (default ``X-Webhook-Signature``).
+        secret: Shared secret for signature verification. When set, every
+            inbound request must include a valid signature header. When
+            None, signature verification is skipped (not recommended for
+            production).
+        signature_header: Name of the HTTP header carrying the signature
+            (default ``X-Webhook-Signature``). Twilio integrations should
+            set this to ``X-Twilio-Signature``.
         idempotency_header: Name of the HTTP header carrying the
             idempotency key for deduplication (default
             ``X-Idempotency-Key``).
@@ -144,6 +329,11 @@ class WebhookTransport(Transport):
         max_idempotency_keys: Maximum number of idempotency keys to
             retain. Oldest keys are evicted when this limit is exceeded
             (default 10000).
+        signer: Pluggable signature scheme implementing the
+            :class:`WebhookSigner` Protocol. Defaults to
+            :class:`HmacSha256Signer` (preserves prior behavior). Use
+            :class:`TwilioSigner` for Twilio webhooks. Implement custom
+            signers for Stripe / GitHub / Slack / etc. Issue #687.
     """
 
     def __init__(
@@ -158,6 +348,7 @@ class WebhookTransport(Transport):
         idempotency_ttl: float = 3600.0,
         max_idempotency_keys: int = 10000,
         max_deliveries: int = 10000,
+        signer: Optional[WebhookSigner] = None,
     ):
         self._secret = secret
         self._signature_header = signature_header
@@ -168,6 +359,11 @@ class WebhookTransport(Transport):
         self._idempotency_ttl = idempotency_ttl
         self._max_idempotency_keys = max_idempotency_keys
         self._max_deliveries = max_deliveries
+        # Default to HMAC-SHA256 raw-body signer for backward compatibility
+        # with every existing WebhookTransport(secret=...) caller. Issue #687.
+        self._signer: WebhookSigner = (
+            signer if signer is not None else HmacSha256Signer()
+        )
 
         self._running = False
         self._registry: Optional[HandlerRegistry] = None
@@ -225,13 +421,17 @@ class WebhookTransport(Transport):
     # -- Signature verification --------------------------------------------
 
     def compute_signature(self, payload_bytes: bytes) -> str:
-        """Compute HMAC-SHA256 signature for a payload.
+        """Compute the signature for a raw payload via the configured signer.
+
+        Default signer (``HmacSha256Signer``) returns ``sha256=<hex>``.
+        Custom signers may return any string shape required by the
+        provider (e.g. base64 for Twilio).
 
         Args:
             payload_bytes: Raw request body bytes.
 
         Returns:
-            Hex-encoded HMAC-SHA256 digest prefixed with ``sha256=``.
+            Signature string ready for the signature header.
 
         Raises:
             ValueError: If no secret is configured.
@@ -241,22 +441,61 @@ class WebhookTransport(Transport):
                 "Cannot compute signature: no secret configured. "
                 "Set the 'secret' parameter on WebhookTransport."
             )
-        mac = hmac.new(
-            self._secret.encode("utf-8"),
-            payload_bytes,
-            hashlib.sha256,
+        return self._signer.compute(
+            secret=self._secret,
+            payload_bytes=payload_bytes,
         )
-        return f"sha256={mac.hexdigest()}"
+
+    def compute_signature_for_request(
+        self,
+        *,
+        url: str,
+        form_params: Optional[Dict[str, str]] = None,
+        payload_bytes: bytes = b"",
+    ) -> str:
+        """Compute the signature for a URL-canonicalized request.
+
+        Use this entry point with signers whose canonical input includes
+        the request URL and form parameters (e.g. :class:`TwilioSigner`).
+        For raw-body signers (:class:`HmacSha256Signer`), ``url`` and
+        ``form_params`` are ignored.
+
+        Args:
+            url: Full request URL (including scheme, host, path, query).
+                For Twilio webhooks this MUST be the URL Twilio used to
+                make the request (including any ``?foo=bar`` query string).
+            form_params: URL-decoded form parameters as ``{key: value}``.
+                Pass ``None`` for JSON-body webhooks; the signer's
+                JSON-body fallback path will be used.
+            payload_bytes: Raw request body bytes (used by JSON-body
+                signers; ignored when ``form_params`` is provided).
+
+        Returns:
+            Signature string ready for the signature header.
+
+        Raises:
+            ValueError: If no secret is configured.
+        """
+        if self._secret is None:
+            raise ValueError(
+                "Cannot compute signature: no secret configured. "
+                "Set the 'secret' parameter on WebhookTransport."
+            )
+        return self._signer.compute(
+            secret=self._secret,
+            payload_bytes=payload_bytes,
+            request_url=url,
+            form_params=form_params,
+        )
 
     def verify_signature(self, payload_bytes: bytes, signature: str) -> bool:
-        """Verify an inbound webhook signature.
+        """Verify an inbound webhook signature against the raw payload.
 
         Uses constant-time comparison to prevent timing attacks.
 
         Args:
             payload_bytes: Raw request body bytes.
-            signature: The signature value from the request header,
-                expected in ``sha256=<hex>`` format.
+            signature: The signature value from the request header.
 
         Returns:
             True if the signature is valid, False otherwise.
@@ -265,8 +504,61 @@ class WebhookTransport(Transport):
             # No secret configured — verification is vacuously true
             return True
 
-        expected = self.compute_signature(payload_bytes)
-        return hmac.compare_digest(expected, signature)
+        ok = self._signer.verify(
+            secret=self._secret,
+            provided_signature=signature,
+            payload_bytes=payload_bytes,
+        )
+        if not ok:
+            # Per rules/observability.md Rule 1 + Rule 4: log the verification
+            # failure with the signer class name so operators can triage
+            # which scheme rejected. NEVER log the secret or the signature.
+            logger.warning(
+                "webhook.signature.verify_failed",
+                extra={"signer_class": type(self._signer).__name__},
+            )
+        return ok
+
+    def verify_signature_for_request(
+        self,
+        *,
+        url: str,
+        form_params: Optional[Dict[str, str]] = None,
+        payload_bytes: bytes = b"",
+        signature: str,
+    ) -> bool:
+        """Verify a URL-canonicalized request signature.
+
+        Use this entry point with signers whose canonical input includes
+        the request URL and form parameters (e.g. :class:`TwilioSigner`).
+        For raw-body signers (:class:`HmacSha256Signer`), ``url`` and
+        ``form_params`` are ignored.
+
+        Args:
+            url: Full request URL (see :meth:`compute_signature_for_request`).
+            form_params: URL-decoded form parameters, or ``None``.
+            payload_bytes: Raw request body bytes.
+            signature: The signature value from the request header.
+
+        Returns:
+            True if the signature is valid, False otherwise.
+        """
+        if self._secret is None:
+            return True
+
+        ok = self._signer.verify(
+            secret=self._secret,
+            provided_signature=signature,
+            payload_bytes=payload_bytes,
+            request_url=url,
+            form_params=form_params,
+        )
+        if not ok:
+            logger.warning(
+                "webhook.signature.verify_failed",
+                extra={"signer_class": type(self._signer).__name__},
+            )
+        return ok
 
     # -- Idempotency -------------------------------------------------------
 
@@ -371,8 +663,10 @@ class WebhookTransport(Transport):
             if not self.verify_signature(payload_bytes, signature):
                 raise ValueError("Invalid webhook signature")
 
-        # Idempotency deduplication
-        if self.is_duplicate(idempotency_key):
+        # Idempotency deduplication. is_duplicate() returns False for None
+        # keys; the explicit narrowing satisfies the str-only signature on
+        # get_cached_response().
+        if idempotency_key is not None and self.is_duplicate(idempotency_key):
             cached = self.get_cached_response(idempotency_key)
             if cached is not None:
                 logger.debug(
@@ -455,7 +749,7 @@ class WebhookTransport(Transport):
         handler_name: str,
         payload: Dict[str, Any],
         target_url: str,
-        send_func: Optional[Callable] = None,
+        send_func: Optional[Callable[..., Any]] = None,
     ) -> WebhookDelivery:
         """Deliver a payload to a target URL with retry and backoff.
 
@@ -668,8 +962,8 @@ class WebhookTransport(Transport):
         Production deployments should provide an httpx or aiohttp sender
         via the ``send_func`` parameter of :meth:`deliver`.
         """
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         loop = asyncio.get_event_loop()
 
@@ -682,8 +976,8 @@ class WebhookTransport(Transport):
             )
             try:
                 with urllib.request.urlopen(req, timeout=30) as resp:
-                    return resp.status
+                    return int(resp.status)
             except urllib.error.HTTPError as e:
-                return e.code
+                return int(e.code)
 
         return await loop.run_in_executor(None, _do_send)

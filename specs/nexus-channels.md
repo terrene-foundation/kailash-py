@@ -191,6 +191,7 @@ Inbound webhook reception and outbound delivery with retry logic.
 ```python
 WebhookTransport(
     secret: Optional[str] = None,
+    signer: Optional[WebhookSigner] = None,
     signature_header: str = "X-Webhook-Signature",
     idempotency_header: str = "X-Idempotency-Key",
     max_retries: int = 5,
@@ -202,9 +203,14 @@ WebhookTransport(
 )
 ```
 
+`signer` is the pluggable signature scheme. Defaults to
+`HmacSha256Signer()` (preserves prior behavior). Use `TwilioSigner()`
+for Twilio webhooks. Implement the `WebhookSigner` Protocol for other
+providers (Stripe, GitHub, Slack — each ships as a user-defined class).
+
 **Inbound features:**
 
-- HMAC-SHA256 signature verification (constant-time comparison).
+- Pluggable signature verification (default HMAC-SHA256, Twilio HMAC-SHA1 included, custom signers via the `WebhookSigner` Protocol). Constant-time comparison.
 - Idempotency key deduplication with TTL-based expiration.
 - Response caching for duplicate requests.
 
@@ -213,7 +219,7 @@ WebhookTransport(
 - Retry with exponential backoff (capped at `max_delay`).
 - DNS pinning to prevent DNS rebinding attacks.
 - SSRF prevention: rejects URLs resolving to private/internal IP ranges (RFC 1918, IPv4-mapped IPv6, loopback).
-- HMAC-SHA256 signature on outbound payloads when `secret` is set.
+- Pluggable signature on outbound payloads when `secret` is set (default HMAC-SHA256; Twilio / custom signers compose the same way).
 - 2xx = success. 4xx (except 429) = permanent failure (no retry). 429 and 5xx trigger retries.
 
 **Key methods:**
@@ -221,8 +227,30 @@ WebhookTransport(
 - `receive(handler_name, payload, ...)` -- process an inbound webhook.
 - `deliver(handler_name, payload, target_url, send_func=None)` -- deliver payload with retry.
 - `register_target(handler_name, url)` -- register outbound target.
-- `compute_signature(payload_bytes) -> str` -- compute `sha256=<hex>` signature.
-- `verify_signature(payload_bytes, signature) -> bool` -- constant-time verify.
+- `compute_signature(payload_bytes) -> str` -- raw-body delegate to `self._signer.compute()`. Default returns `sha256=<hex>`.
+- `verify_signature(payload_bytes, signature) -> bool` -- raw-body delegate to `self._signer.verify()`, constant-time.
+- `compute_signature_for_request(*, url, form_params, payload_bytes=b"")` / `verify_signature_for_request(*, signature, url, form_params, payload_bytes=b"")` -- URL-canonicalized signing (used by `TwilioSigner` and any future signer whose canonical input is request-aware).
+
+#### 4.5.1 Built-in Signers
+
+```python
+class WebhookSigner(Protocol):
+    def compute(self, *, secret: str, payload_bytes: bytes,
+                request_url: str = "", form_params: dict[str, str] | None = None) -> str: ...
+    def verify(self, *, secret: str, provided_signature: str, payload_bytes: bytes,
+               request_url: str = "", form_params: dict[str, str] | None = None) -> bool: ...
+```
+
+| Signer             | Algorithm   | Canonical input                                                | Output                        | Header                |
+| ------------------ | ----------- | -------------------------------------------------------------- | ----------------------------- | --------------------- |
+| `HmacSha256Signer` | HMAC-SHA256 | raw `payload_bytes`                                            | `sha256=<hex>`                | `X-Webhook-Signature` |
+| `TwilioSigner`     | HMAC-SHA1   | `url + sorted(key+value for k,v in form_params)` (URL-decoded) | base64(raw digest), no prefix | `X-Twilio-Signature`  |
+
+Twilio's JSON-body fallback (Voice Recording webhooks): when `form_params is None`, the canonical input is `url + sha256(payload_bytes).hexdigest()`. Verified against Twilio's published test vector — auth token `12345`, URL `https://mycompany.com/myapp.php?foo=1&bar=2`, params `{CallSid, Caller, Digits, From, To}` — produces signature `RSOYDt4T1cUTdK1PDd93/VVr8B8=` (pinned in `tests/unit/transports/test_webhook_signer.py`).
+
+Verify-failure emits a structured WARN log with `signer_class` field (the signer class name only — the secret and provided signature are NEVER logged per `rules/security.md` "No secrets in logs").
+
+Cross-SDK: kailash-rs ships the equivalent `Signer` trait. The Python `HmacSha256Signer` output (`sha256=<hex>`) is byte-identical to the Rust `HmacSha256Signer` output for the same `(secret, payload_bytes)` input. `TwilioSigner` ditto for `(secret, url, form_params)` inputs.
 
 ---
 
