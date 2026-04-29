@@ -758,7 +758,11 @@ class DataFlow(DataFlowEventMixin):
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
 
-        self._model_registry = ModelRegistry(self, runtime=self.runtime)
+        # MED-S5: drop eager runtime=self.runtime — pins _explicit_runtime at
+        # construction time and defeats lazy parent-lookup. ModelRegistry.runtime
+        # is now a @property returning self._dataflow.runtime when no explicit
+        # override is set, which is exactly the post-S4 behavior we want.
+        self._model_registry = ModelRegistry(self)
 
         # Cache integration (initialized lazily in _ensure_connected)
         self._cache_integration = None
@@ -1529,6 +1533,10 @@ class DataFlow(DataFlowEventMixin):
                     dir_err,
                 )
 
+            # MED-S5: drop eager runtime=self.runtime — same reasoning as
+            # ModelRegistry construction. AutoMigrationSystem.runtime is now a
+            # @property returning self._dataflow.runtime when no explicit
+            # override is set.
             self._migration_system = AutoMigrationSystem(
                 connection_string=self.config.database.get_connection_url(
                     self.config.environment
@@ -1537,7 +1545,6 @@ class DataFlow(DataFlowEventMixin):
                 migrations_dir=migrations_dir,
                 dataflow_instance=self,
                 lock_timeout=self._migration_lock_timeout,
-                runtime=self.runtime,
             )
 
             logger.debug(
