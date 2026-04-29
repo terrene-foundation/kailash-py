@@ -572,9 +572,34 @@ class Nexus:
 
     @property
     def fastapi_app(self):
-        """The underlying FastAPI app (replaces _gateway.app access).
+        """The underlying FastAPI app (replaces ``_gateway.app`` access).
 
-        Returns None if the gateway hasn't been created yet.
+        **Timing trap (issue #712):** this property returns ``None`` until
+        the enterprise gateway has been initialized. Gateway init is
+        **lazy** — it fires on the first :meth:`register` call or, failing
+        that, at :meth:`start`. Code that accesses ``fastapi_app``
+        immediately after ``Nexus(...)`` therefore sees ``None`` and any
+        downstream attribute access (e.g.
+        ``nexus.fastapi_app.on_event("startup")``) raises
+        ``AttributeError: 'NoneType' object has no attribute 'on_event'``.
+
+        **Recommended pattern for startup/shutdown hooks** —
+        :meth:`add_startup_handler` / :meth:`add_shutdown_handler`
+        instead of ``fastapi_app.on_event``. The new methods are safe to
+        call before any ``register()`` / ``start()`` — they queue the
+        handler in ``_startup_hooks`` / ``_shutdown_hooks`` and the
+        FastAPI lifespan dispatches them at the right moment.
+
+        **Direct ``on_event`` is supported** (post-init): once a
+        ``register()`` or ``start()`` has triggered gateway construction,
+        ``fastapi_app.router.on_startup.append(fn)`` is iterated by the
+        custom lifespan (see :file:`workflow_server.py` and the shared
+        helper from MED-S1) and your handler will fire. The discoverability
+        problem is the timing trap above, not the dispatch path itself.
+
+        Returns:
+            The constructed FastAPI app, or ``None`` if the gateway has
+            not yet been initialized.
         """
         return self._http_transport.app
 
