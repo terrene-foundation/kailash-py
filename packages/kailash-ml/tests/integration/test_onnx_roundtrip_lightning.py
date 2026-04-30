@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("lightning")
+pytest.importorskip("pytorch_lightning")
 pytest.importorskip("onnxruntime")
 
 
@@ -30,11 +30,10 @@ def test_lightning_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     ``to_onnx`` wrapper when available (that's the user-facing API path
     Lightning documents).
     """
-    import lightning.pytorch as pl
     import onnxruntime as ort
+    import pytorch_lightning as pl
     import torch
     import torch.nn as nn
-
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)

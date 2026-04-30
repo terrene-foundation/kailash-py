@@ -1,5 +1,65 @@
 # kailash-ml Changelog
 
+## [1.7.0] — 2026-05-01 — Lightning quarantine migration: closes #752
+
+Migrates kailash-ml's PyTorch Lightning dependency from the umbrella
+`lightning` package to the standalone `pytorch-lightning` distribution.
+The umbrella `lightning` package was QUARANTINED on PyPI in 2026-04
+(`pypi:project-status="quarantined"` on
+https://pypi.org/simple/lightning/), breaking every fresh
+`pip install kailash-ml` at dep resolution.
+[`pytorch-lightning`](https://pypi.org/project/pytorch-lightning/) (latest
+2.6.1) is the authoritative active distribution from Lightning-AI with
+full API parity at every call site this package uses (`Trainer`,
+`LightningModule`, `Callback`, `ModelCheckpoint`, `Trainer.fit` —
+`__init__` signatures and method surfaces are byte-for-byte identical).
+
+### Changed
+
+- **Base + `[dl]` dep**: `lightning>=2.2` → `pytorch-lightning>=2.2` in
+  `pyproject.toml` (lines 56 + 75 of the manifest).
+- **Source imports**: every `import lightning.pytorch as <alias>` and
+  `from lightning.pytorch[.callbacks] import <X>` in `src/kailash_ml/`
+  rewritten to the `pytorch_lightning` import path. Six source files
+  touched: `engine.py`, `trainable.py`, `engines/training_pipeline.py`,
+  `diagnostics/dl.py`, `tracking/runner.py`, `autolog/_lightning.py`.
+- **Test imports**: same rewrite across 11 test files (unit + integration).
+- **`pytest.importorskip("lightning")` /
+  `pytest.importorskip("lightning.pytorch")`** rewritten to
+  `pytest.importorskip("pytorch_lightning")` in 3 test files.
+- **`_seed.py` lightning seed-everything fallback chain**: now tries
+  `pytorch_lightning` first, then `lightning.pytorch`, then `lightning`
+  — so users with the (still-installed) umbrella package keep working
+  while clean installs resolve to `pytorch_lightning`.
+- **Specs**: `specs/ml-autolog.md`, `specs/ml-engines-v2.md`,
+  `specs/ml-diagnostics.md`, `specs/ml-tracking.md` — every
+  `lightning.pytorch.*` reference rewritten to the `pytorch_lightning`
+  path. Framework integration string keys (e.g.,
+  `km.autolog("lightning")`) remain unchanged — they are stable
+  user-facing identifiers, not import paths.
+
+### Added
+
+- **Tier-2 regression test**:
+  `tests/regression/test_issue_752_pytorch_lightning_install.py` asserts
+  `pytorch_lightning.Trainer` / `pytorch_lightning.LightningModule` /
+  `pytorch_lightning.callbacks.{Callback,ModelCheckpoint}` are
+  importable. If a future quarantine of `pytorch-lightning` happens, CI
+  surfaces it before users hit broken installs.
+
+### Migration notes
+
+- **No public API breaks** for kailash-ml callers. Users who only use
+  `kailash_ml.*` symbols see no change.
+- **Direct `import lightning.pytorch` users** (i.e., users who imported
+  the umbrella package directly in their own code) MUST migrate to
+  `import pytorch_lightning`. The umbrella was already broken on PyPI
+  before 1.7.0 ships, so any 1.6.x consumer doing this had already lost
+  the ability to `pip install` cleanly.
+- **Frozen requirements files** pinning `lightning>=2.2` will conflict
+  with kailash-ml 1.7.0's `pytorch-lightning>=2.2` declaration. Users
+  MUST update their requirements files to `pytorch-lightning>=2.2`.
+
 ## [1.6.0] — 2026-04-29 — 1.5.x follow-up: closes #699, #700, #701
 
 Closes three production issues surfaced by the MLFP M5 notebook smoke-test

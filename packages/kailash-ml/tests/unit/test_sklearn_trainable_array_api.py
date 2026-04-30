@@ -14,7 +14,7 @@ Off-allowlist requests on a non-CPU backend MUST log WARN
 ``sklearn.array_api.offlist`` with ``fallback_reason="array_api_offlist"``
 and proceed on CPU numpy.
 
-Tests patch ``lightning.pytorch.Trainer`` so no GPU / Lightning runtime
+Tests patch ``pytorch_lightning.Trainer`` so no GPU / Lightning runtime
 is required (Tier 1 per rules/testing.md §"3-Tier Testing").
 """
 from __future__ import annotations
@@ -32,7 +32,6 @@ from kailash_ml.trainable import (
     SklearnTrainable,
     TrainingContext,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -97,7 +96,7 @@ def _install_recording_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any
     """
     import contextlib
 
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
     import sklearn
     import torch
 
@@ -271,7 +270,7 @@ def _install_runtime_failing_array_api_trainer(
     """
     import contextlib
 
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
     import sklearn
     import torch
 
@@ -393,7 +392,7 @@ def test_non_array_api_runtime_error_re_raises_unchanged(
     """
     import contextlib
 
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
     import sklearn
     import torch
 
@@ -515,7 +514,7 @@ def test_log_extra_keys_avoid_logrecord_collisions(
     )
     trainable.fit(sample_data, context=cuda_context)
 
-    reserved = {
+    reserved = {  # noqa: F841 — documentation of LogRecord-reserved keys
         "msg",
         "args",
         "module",

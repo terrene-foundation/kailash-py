@@ -10,7 +10,7 @@ Non-OOM exceptions MUST re-raise unchanged. LightGBM probes the GPU
 build at ``set_params(device_type='gpu')`` time, so the test must stub
 that probe out.
 
-Tests patch ``lightning.pytorch.Trainer`` so no GPU / Lightning runtime
+Tests patch ``pytorch_lightning.Trainer`` so no GPU / Lightning runtime
 is required (Tier 1 per rules/testing.md §"3-Tier Testing").
 """
 from __future__ import annotations
@@ -110,7 +110,7 @@ def test_oom_helper_recognizes_common_messages() -> None:
 
 
 def _install_oom_then_ok_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0, "instances": []}
 
@@ -133,7 +133,7 @@ def _install_oom_then_ok_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, A
 
 
 def _install_non_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0, "instances": []}
 
@@ -152,7 +152,7 @@ def _install_non_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 def _install_always_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0}
 

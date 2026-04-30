@@ -21,7 +21,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
 from kailash_ml.engine import _build_auto_callbacks
 
 
@@ -41,8 +40,8 @@ def test_enable_checkpointing_false_with_none_user_cb_returns_none() -> None:
 
 
 def test_auto_checkpoint_prepended_before_user_callback() -> None:
-    pytest.importorskip("lightning.pytorch")
-    from lightning.pytorch.callbacks import ModelCheckpoint
+    pytest.importorskip("pytorch_lightning")
+    from pytorch_lightning.callbacks import ModelCheckpoint
 
     user_cb = _UserCallback()
     out = _build_auto_callbacks(user_callbacks=[user_cb], enable_checkpointing=True)
@@ -56,8 +55,8 @@ def test_auto_checkpoint_prepended_before_user_callback() -> None:
 
 
 def test_auto_checkpoint_fires_with_no_user_callbacks() -> None:
-    pytest.importorskip("lightning.pytorch")
-    from lightning.pytorch.callbacks import ModelCheckpoint
+    pytest.importorskip("pytorch_lightning")
+    from pytorch_lightning.callbacks import ModelCheckpoint
 
     out = _build_auto_callbacks(user_callbacks=None, enable_checkpointing=True)
     assert out is not None
@@ -67,8 +66,8 @@ def test_auto_checkpoint_fires_with_no_user_callbacks() -> None:
 
 def test_user_modelcheckpoint_does_not_displace_engine_checkpoint() -> None:
     """User's own ModelCheckpoint coexists — does NOT override `last.ckpt`."""
-    pytest.importorskip("lightning.pytorch")
-    from lightning.pytorch.callbacks import ModelCheckpoint
+    pytest.importorskip("pytorch_lightning")
+    from pytorch_lightning.callbacks import ModelCheckpoint
 
     user_mc = ModelCheckpoint(filename="user_best", save_top_k=1, monitor="val_loss")
     out = _build_auto_callbacks(user_callbacks=[user_mc], enable_checkpointing=True)
@@ -84,22 +83,20 @@ def test_user_modelcheckpoint_does_not_displace_engine_checkpoint() -> None:
 def test_helper_returns_user_cb_when_lightning_missing(monkeypatch: Any) -> None:
     """Classical-only install — the helper MUST NOT raise ImportError."""
     # Simulate Lightning's absence by short-circuiting the import.
-    # lightning.pytorch.callbacks is what _build_auto_callbacks imports.
+    # pytorch_lightning.callbacks is what _build_auto_callbacks imports.
     sentinel = _UserCallback()
 
-    real_lightning = sys.modules.pop("lightning.pytorch.callbacks", None)
-    real_lightning_pt = sys.modules.pop("lightning.pytorch", None)
-    real_lightning_top = sys.modules.pop("lightning", None)
+    real_callbacks = sys.modules.pop("pytorch_lightning.callbacks", None)
+    real_pl = sys.modules.pop("pytorch_lightning", None)
     try:
-        sys.modules["lightning"] = MagicMock()
-        sys.modules["lightning.pytorch"] = MagicMock()
+        sys.modules["pytorch_lightning"] = MagicMock()
 
         # Force the submodule import to raise
         class _BrokenCallbacks:
             def __getattr__(self, name: str) -> Any:
-                raise ImportError("lightning.pytorch.callbacks simulated missing")
+                raise ImportError("pytorch_lightning.callbacks simulated missing")
 
-        sys.modules["lightning.pytorch.callbacks"] = _BrokenCallbacks()
+        sys.modules["pytorch_lightning.callbacks"] = _BrokenCallbacks()
 
         out = _build_auto_callbacks(
             user_callbacks=[sentinel], enable_checkpointing=True
@@ -111,9 +108,8 @@ def test_helper_returns_user_cb_when_lightning_missing(monkeypatch: Any) -> None
     finally:
         # Restore real modules
         for name, mod in (
-            ("lightning", real_lightning_top),
-            ("lightning.pytorch", real_lightning_pt),
-            ("lightning.pytorch.callbacks", real_lightning),
+            ("pytorch_lightning", real_pl),
+            ("pytorch_lightning.callbacks", real_callbacks),
         ):
             if mod is not None:
                 sys.modules[name] = mod

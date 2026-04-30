@@ -246,7 +246,7 @@ assert setup1.split_seed == setup2.split_seed
 
 #### 7. `compare()` MUST Route Every Family Through The Lightning Trainer
 
-Every family in the compare sweep — sklearn, xgboost, lightgbm, catboost, torch, lightning — MUST be trained via `lightning.pytorch.Trainer`. Non-torch families are wrapped as LightningModule adapters at the family boundary (see §3 `Trainable`).
+Every family in the compare sweep — sklearn, xgboost, lightgbm, catboost, torch, lightning — MUST be trained via `pytorch_lightning.Trainer`. Non-torch families are wrapped as LightningModule adapters at the family boundary (see §3 `Trainable`).
 
 ```python
 # DO — every family goes through Lightning
@@ -462,7 +462,7 @@ Every model family that can be fitted by `MLEngine.fit()` MUST implement the `Tr
 ```python
 from typing import Protocol, runtime_checkable
 import polars as pl
-import lightning.pytorch as pl_trainer
+import pytorch_lightning as pl_trainer
 import torch
 
 @runtime_checkable
@@ -699,11 +699,11 @@ def _train_lightning(
 4. Assert `ModelCheckpoint` wrote `last.ckpt` under the run's artifact path (via `registry.get_run(run.run_id).artifact_paths["checkpoint"]` + `Path(...).exists()`).
 5. Assert the engine-supplied callbacks list contains exactly one instance of each callback class.
 
-Skip conditions: `pytest.importorskip("lightning.pytorch")`; `pytest.importorskip("torch")`. Runs on CPU-only CI (Decision 7 — blocking tier) per `ml-backends-draft.md §6.3`.
+Skip conditions: `pytest.importorskip("pytorch_lightning")`; `pytest.importorskip("torch")`. Runs on CPU-only CI (Decision 7 — blocking tier) per `ml-backends-draft.md §6.3`.
 
 #### 6. `MLEngine.fit(..., strategy=None)` MUST Accept Lightning `strategy=` Kwarg Passthrough
 
-`MLEngine.fit()` MUST accept a `strategy=` kwarg whose type is `str | lightning.pytorch.strategies.Strategy | None`. Accepted string values: `"ddp"`, `"fsdp"`, `"deepspeed"`. An explicit Strategy instance (e.g. `L.pytorch.strategies.DDPStrategy(process_group_backend="nccl")`) is also accepted. `None` leaves Lightning's default (single-device) behaviour unchanged.
+`MLEngine.fit()` MUST accept a `strategy=` kwarg whose type is `str | pytorch_lightning.strategies.Strategy | None`. Accepted string values: `"ddp"`, `"fsdp"`, `"deepspeed"`. An explicit Strategy instance (e.g. `L.pytorch.strategies.DDPStrategy(process_group_backend="nccl")`) is also accepted. `None` leaves Lightning's default (single-device) behaviour unchanged.
 
 When `strategy` is non-None, `TrainingPipeline._train_lightning` MUST:
 
@@ -726,7 +726,7 @@ result = await engine.fit(
 # }
 
 # DO — explicit Strategy instance for advanced configuration
-from lightning.pytorch.strategies import DeepSpeedStrategy
+from pytorch_lightning.strategies import DeepSpeedStrategy
 result = await engine.fit(
     family="huggingface",
     hyperparameters={"model_name_or_path": "meta-llama/Llama-3.1-8B", "task": "causal_lm"},
@@ -754,7 +754,7 @@ class MyTrainable:
 [project.optional-dependencies]
 dl = [
     "torch>=2.3",
-    "lightning>=2.2",
+    "pytorch-lightning>=2.2",
     "transformers>=4.30",
     "peft>=0.10.0",              # PEFT / LoRA / QLoRA (HuggingFaceTrainable §9)
 ]
@@ -772,7 +772,7 @@ Both `[dl-deepspeed]` and `[dl-fsdp]` MUST be added to the canonical extras cata
 
 **Regression test (release-blocking):** `tests/integration/test_fit_ddp_strategy_rank0_emission.py` MUST:
 
-1. Use `lightning.pytorch.Trainer(strategy="ddp", devices=2, accelerator="cpu")` (CPU-DDP is deterministic for CI).
+1. Use `pytorch_lightning.Trainer(strategy="ddp", devices=2, accelerator="cpu")` (CPU-DDP is deterministic for CI).
 2. Fit a toy module via `engine.fit(..., strategy="ddp", devices=2)` inside `km.track("ddp-test")`.
 3. Assert the tracker run has exactly ONE copy of each metric (no rank-1 duplicates) — `len(run.query_metrics("loss")) == N_batches`, not `2 * N_batches`.
 4. Assert `result.lightning_trainer_config["strategy"] == "ddp"` and `result.lightning_trainer_config["num_nodes"] == 1`.
@@ -782,12 +782,12 @@ A companion Tier-1 mocked-distributed test (`test_ddp_rank1_skips_emission.py`) 
 
 #### 7. `ModelCheckpoint` Default + `km.resume()` Top-Level — `enable_checkpointing` Default Flips To `True`
 
-`TrainingPipeline._train_lightning` MUST auto-append a `lightning.pytorch.callbacks.ModelCheckpoint` instance to the `L.Trainer` callbacks list (in addition to the `DLDiagnostics` callback from MUST 5) whenever `enable_checkpointing=True` (the new default). The ModelCheckpoint instance MUST be constructed with:
+`TrainingPipeline._train_lightning` MUST auto-append a `pytorch_lightning.callbacks.ModelCheckpoint` instance to the `L.Trainer` callbacks list (in addition to the `DLDiagnostics` callback from MUST 5) whenever `enable_checkpointing=True` (the new default). The ModelCheckpoint instance MUST be constructed with:
 
 ```python
 # kailash-ml/src/kailash_ml/engines/training_pipeline.py  (MUST 7 helper)
 from pathlib import Path
-from lightning.pytorch.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 def _default_model_checkpoint(run: ExperimentRun | None) -> ModelCheckpoint:
     """MUST 7 — canonical checkpoint callback.
@@ -951,7 +951,7 @@ Shipping in 1.0.0 (NOT deferred to 1.1) because `transformers` is the dominant D
 # kailash-ml/src/kailash_ml/trainables/huggingface.py
 
 from typing import Literal
-import lightning.pytorch as L
+import pytorch_lightning as L
 import transformers
 from transformers import AutoTokenizer
 
@@ -1076,7 +1076,7 @@ Extras requirement: `[dl]` (torch + lightning + transformers + peft) — already
 6. Assert the resulting `TrainingResult.family == "huggingface"` AND `result.lightning_trainer_config["callbacks"]` contains both a DLDiagnostics callback and a ModelCheckpoint callback (MUST 5 + MUST 7 auto-attach verified end-to-end).
 7. Assert HF-native `compute_metrics` returned values were logged to the run (via `run.query_metrics("val_*")`).
 
-Skip via `pytest.importorskip("transformers")` + `pytest.importorskip("lightning.pytorch")`.
+Skip via `pytest.importorskip("transformers")` + `pytest.importorskip("pytorch_lightning")`.
 
 ---
 
@@ -1174,7 +1174,7 @@ return TrainingResult(
 
 #### 2. `lightning_trainer_config` MUST Be The Literal `L.Trainer` Kwargs That Ran
 
-The `lightning_trainer_config` dict MUST capture the exact keyword arguments passed to `lightning.pytorch.Trainer(...)` for this run — not the Engine's resolved-but-not-yet-passed config, not the user's request, but the actual kwargs.
+The `lightning_trainer_config` dict MUST capture the exact keyword arguments passed to `pytorch_lightning.Trainer(...)` for this run — not the Engine's resolved-but-not-yet-passed config, not the user's request, but the actual kwargs.
 
 ```python
 # DO — capture what L.Trainer received
@@ -1622,7 +1622,7 @@ These clauses MUST be implemented with language-specific substitutions, semantic
 | ----------------------- | ------------------------------------------------ | ---------------------------------------- |
 | §2 Engine facade        | `kailash_ml.Engine`                              | `kailash_ml::Engine` struct              |
 | §3 `Trainable` protocol | Python `Protocol` + `@runtime_checkable`         | Rust `trait Trainable`                   |
-| Lightning Trainer spine | `lightning.pytorch.Trainer`                      | `burn::Trainer` or `tch::train::Trainer` |
+| Lightning Trainer spine | `pytorch_lightning.Trainer`                      | `burn::Trainer` or `tch::train::Trainer` |
 | ONNX export             | `skl2onnx` / `onnxmltools` / `torch.onnx.export` | `tract-onnx` / `ort` export              |
 | MCP server              | `fastmcp` (Python)                               | `mcp-rs` crate                           |
 | Async runtime           | asyncio / async-context-managers                 | tokio / async-trait                      |

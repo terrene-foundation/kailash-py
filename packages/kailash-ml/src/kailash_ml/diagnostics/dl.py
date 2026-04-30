@@ -446,7 +446,7 @@ class DLDiagnostics:
 
     @classmethod
     def is_available(cls) -> bool:
-        """Return ``True`` iff torch AND lightning.pytorch can both be imported.
+        """Return ``True`` iff torch AND pytorch_lightning can both be imported.
 
         Used by :meth:`TrainingPipeline._train_lightning` to decide whether to
         auto-attach a diagnostics callback per ``specs/ml-diagnostics.md §5.3
@@ -454,7 +454,7 @@ class DLDiagnostics:
         Install-time import probe — no module-level side effects.
         """
         try:
-            import lightning.pytorch  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
+            import pytorch_lightning  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
             import torch  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
         except ImportError:
             return False
@@ -486,7 +486,7 @@ class DLDiagnostics:
         emit_every_n_epochs: int = 1,
         plots: Optional[list[str]] = None,
     ) -> Any:
-        """Return a ``lightning.pytorch.callbacks.Callback`` bound to this diag.
+        """Return a ``pytorch_lightning.callbacks.Callback`` bound to this diag.
 
         The callback's ``on_train_epoch_end`` hook is rank-0-gated (Decision 4 —
         hardcoded via :func:`kailash_ml.tracking.runner._is_rank_zero`) and
@@ -509,7 +509,7 @@ class DLDiagnostics:
                 Unknown names raise ``ValueError``.
 
         Returns:
-            A ``lightning.pytorch.callbacks.Callback`` subclass instance.
+            A ``pytorch_lightning.callbacks.Callback`` subclass instance.
 
         Raises:
             ImportError: If the ``[dl]`` extra is not installed (lightning
@@ -541,7 +541,7 @@ class DLDiagnostics:
 
         try:
             # pyright: ignore[reportMissingImports]  # optional dl extra
-            from lightning.pytorch.callbacks import Callback as _LCallback
+            from pytorch_lightning.callbacks import Callback as _LCallback
         except ImportError as exc:  # pragma: no cover — [dl] extra missing
             raise ImportError(
                 "DLDiagnostics.as_lightning_callback() requires the [dl] "

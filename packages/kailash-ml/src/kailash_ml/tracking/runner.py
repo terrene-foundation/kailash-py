@@ -647,9 +647,9 @@ def _capture_versions() -> dict[str, Optional[str]]:
 
     lightning_version: Optional[str] = None
     try:
-        import lightning  # noqa: PLC0415
+        import pytorch_lightning as _pl  # noqa: PLC0415
 
-        lightning_version = getattr(lightning, "__version__", None)
+        lightning_version = getattr(_pl, "__version__", None)
     except ImportError:
         pass
     except Exception as exc:  # noqa: BLE001

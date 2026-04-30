@@ -41,7 +41,7 @@ import polars as pl
 import pytest
 
 try:  # [dl] extra required for the whole module
-    import lightning.pytorch as L  # noqa: F401
+    import pytorch_lightning as L  # noqa: F401
     import torch  # noqa: F401
 except ImportError:  # pragma: no cover — [dl] extra missing on CI
     pytest.skip(

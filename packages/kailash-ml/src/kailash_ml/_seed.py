@@ -161,12 +161,16 @@ def seed(
                 # best-effort; we still report False.
                 pass
 
-    # Lightning — both "lightning" (2.x) and "pytorch_lightning" (1.x)
-    # ship ``seed_everything``. Prefer the 2.x name.
+    # Lightning — `pytorch-lightning` is the active distribution after the
+    # `lightning` umbrella was quarantined on PyPI in 2026-04 (#752). Try
+    # `pytorch_lightning` first, then fall back to the umbrella for installs
+    # that still have the (quarantined-but-installed) `lightning` package.
     if lightning:
-        L = _try_import("lightning.pytorch") or _try_import("lightning")
-        if L is None:
-            L = _try_import("pytorch_lightning")
+        L = (
+            _try_import("pytorch_lightning")
+            or _try_import("lightning.pytorch")
+            or _try_import("lightning")
+        )
         if L is None or not hasattr(L, "seed_everything"):
             skipped.append(("lightning", "missing_dep"))
         else:

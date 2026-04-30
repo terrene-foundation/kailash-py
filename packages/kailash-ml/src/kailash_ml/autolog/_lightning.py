@@ -4,7 +4,7 @@
 
 Implements ``specs/ml-autolog.md §3.1`` row 1 + §3.3:
 
-- Wraps :meth:`lightning.pytorch.Trainer.__init__` at the class level,
+- Wraps :meth:`pytorch_lightning.Trainer.__init__` at the class level,
   scoped to the ``km.autolog()`` block via the ABC's :meth:`detach`
   contract (§3.2). Global / persistent monkey-patching is BLOCKED per
   §1.3; the class-level wrap restores in the CM's ``finally:`` even
@@ -49,7 +49,7 @@ explicit-name resolution (§4.2).
 Framework imports (``lightning``, ``pytorch_lightning``) are deferred
 to :meth:`attach` so importing this module does NOT pull Lightning
 into ``sys.modules``. The auto-detect path is preserved for users
-who never ``import lightning``.
+who never ``import pytorch_lightning``.
 """
 from __future__ import annotations
 
@@ -60,10 +60,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from kailash_ml.autolog._distribution import is_main_process
-from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
-    register_integration,
-)
+from kailash_ml.autolog._registry import FrameworkIntegration, register_integration
 
 if TYPE_CHECKING:
     from kailash_ml.autolog.config import AutologConfig
@@ -137,12 +134,10 @@ class LightningIntegration(FrameworkIntegration):
 
         # Local import — only fires when the user has explicitly
         # chosen "lightning" (§4.2) or is_available returned True.
-        # Prefer the post-1.9 `lightning.pytorch` namespace; fall back
-        # to the legacy `pytorch_lightning` name.
-        try:
-            from lightning.pytorch import Trainer as _Trainer  # noqa: PLC0415
-        except ImportError:
-            from pytorch_lightning import Trainer as _Trainer  # noqa: PLC0415
+        # Use the `pytorch_lightning` distribution. The umbrella
+        # `lightning` package was quarantined on PyPI in 2026-04 (#752);
+        # `pytorch-lightning` is the authoritative active publisher.
+        from pytorch_lightning import Trainer as _Trainer  # noqa: PLC0415
 
         self._trainer_cls = _Trainer
         self._original_init = _Trainer.__init__
@@ -374,7 +369,7 @@ def _kailash_autolog_callback_base() -> Any:
     path (§4.1).
     """
     try:
-        from lightning.pytorch.callbacks import Callback  # noqa: PLC0415
+        from pytorch_lightning.callbacks import Callback  # noqa: PLC0415
     except ImportError:
         from pytorch_lightning.callbacks import Callback  # noqa: PLC0415
     return Callback
