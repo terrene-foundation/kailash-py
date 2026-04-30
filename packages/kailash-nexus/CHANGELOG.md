@@ -1,13 +1,13 @@
 # Nexus Changelog
 
-## [2.5.0] — 2026-04-30 — `Nexus.add_startup_handler` / `add_shutdown_handler` (Mediscribe cluster: closes #712)
+## [2.5.0] — 2026-04-30 — `Nexus.add_startup_handler` / `add_shutdown_handler` (the v2.13.0 cluster: closes #712)
 
 Minor release adding the canonical "run-once at server start" hook surface so consumers no longer need to reach for `nexus.fastapi_app.on_event(...)` (which has the lazy-init timing trap — `fastapi_app` returns `None` until the enterprise gateway is initialized) or author a full `NexusPluginProtocol` implementation for a single callback.
 
 ### Added
 
-- **`Nexus.add_startup_handler(func)` (#712 / MED-S3)** — registers a zero-argument callable (sync `def` or `async def`) that fires during the FastAPI lifespan startup phase, in registration order, inside uvicorn's event loop. Appends to the same internal `_startup_hooks` list that powers the plugin protocol's `on_startup` lifecycle hook (§10.2). Returns `self` for chaining. Raises `TypeError` on non-callables and `RuntimeError` if called after `Nexus.start()` (the lifespan has already fired or is firing; a late append cannot be guaranteed to run). The canonical pattern for "run DataFlow async DDL at server start" — `app.add_startup_handler(create_schema)` where `create_schema` is `async def create_schema(): await db.create_tables_async()`.
-- **`Nexus.add_shutdown_handler(func)` (#712 / MED-S3)** — symmetric to `add_startup_handler`. Appends to `_shutdown_hooks`. Hooks fire in REVERSE registration order — the last installed runs first — so pairs of (open_resource, close_resource) registered in init order tear down LIFO. Same validation contract.
+- **`Nexus.add_startup_handler(func)` (#712 / S3)** — registers a zero-argument callable (sync `def` or `async def`) that fires during the FastAPI lifespan startup phase, in registration order, inside uvicorn's event loop. Appends to the same internal `_startup_hooks` list that powers the plugin protocol's `on_startup` lifecycle hook (§10.2). Returns `self` for chaining. Raises `TypeError` on non-callables and `RuntimeError` if called after `Nexus.start()` (the lifespan has already fired or is firing; a late append cannot be guaranteed to run). The canonical pattern for "run DataFlow async DDL at server start" — `app.add_startup_handler(create_schema)` where `create_schema` is `async def create_schema(): await db.create_tables_async()`.
+- **`Nexus.add_shutdown_handler(func)` (#712 / S3)** — symmetric to `add_startup_handler`. Appends to `_shutdown_hooks`. Hooks fire in REVERSE registration order — the last installed runs first — so pairs of (open_resource, close_resource) registered in init order tear down LIFO. Same validation contract.
 
 ### Documented
 

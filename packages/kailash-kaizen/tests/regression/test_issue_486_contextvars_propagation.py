@@ -8,7 +8,7 @@ ThreadPoolExecutor site in kaizen) used the bare pattern::
 Python's :class:`concurrent.futures.ThreadPoolExecutor` does NOT propagate
 :mod:`contextvars` into its worker threads — a contextvar set on the
 caller thread reverts to its default inside the worker. This broke
-production provider-dispatch patterns (e.g. the MediScribe WS-bridge-backed
+production provider-dispatch patterns (e.g. a WS-bridge-backed
 OllamaBrowserProvider) that thread request-scoped state (active provider,
 active session, tracing IDs) through contextvars: the strategy spawned a
 worker, the contextvar reverted, and the routing shim silently dispatched
@@ -22,13 +22,13 @@ The fix is to capture the caller's context via
 
 These tests exercise the **real** code paths — they do not patch or mock
 the submit-to-executor site. A test that succeeds against a patched
-wrapper (which is the MediScribe workaround) proves only that the
+wrapper (which is the downstream consumer's workaround) proves only that the
 workaround is consistent, not that Kaizen is fixed. Each test below sets
 a contextvar immediately before invoking the production entry point and
 asserts that the value is observable inside the coroutine the thread-pool
 worker eventually runs.
 
-Reported by @vflores-io (MediScribe).
+Reported by @vflores-io.
 
 Cross-SDK: Rust ``tokio`` has analogous task-local-storage semantics; a
 parallel check on ``kailash-rs`` is in-scope for a follow-up issue.
@@ -119,7 +119,7 @@ ACTIVE_SESSION: contextvars.ContextVar[str] = contextvars.ContextVar(
 class _AsyncProviderDispatchStrategy:
     """Minimal async strategy that records what contextvars it observed.
 
-    Mirrors the MediScribe routing shim: a custom provider decides
+    Mirrors the downstream consumer's routing shim: a custom provider decides
     which backend to dispatch to based on the ``active_provider``
     contextvar. Without the fix, it always reads ``default_provider``
     because the ThreadPoolExecutor worker has no access to the
@@ -178,7 +178,7 @@ class TestIssue486ExecuteStrategyContextvars:
 
         async def _caller() -> dict:
             # Set contextvars exactly as a production caller would
-            # (e.g. a request middleware, an auth handler, MediScribe's
+            # (e.g. a request middleware, an auth handler, the downstream consumer's
             # routing shim). This MUST be observable inside the
             # strategy's async execute().
             ACTIVE_PROVIDER.set("ollama_browser")
@@ -280,7 +280,7 @@ class TestIssue486BaseAgentRunContextvars:
     def test_base_agent_run_from_async_caller_preserves_contextvars(self):
         """#486: BaseAgent.run() from async caller preserves contextvars.
 
-        This is the production shape MediScribe reported: caller sets
+        This is the production shape the downstream consumer reported: caller sets
         provider-dispatch contextvars, then awaits something that
         internally calls agent.run(), which goes through
         ``_execute_strategy`` + ThreadPoolExecutor.
@@ -318,7 +318,7 @@ class TestIssue486BaseAgentRunContextvars:
             "via the kaizen provider registry would observe "
             f"{strategy.observed_provider!r} at dispatch time instead "
             "of the caller's 'ollama_browser'. This is the exact "
-            "production misrouting reported by MediScribe."
+            "production misrouting reported by the downstream consumer."
         )
         assert strategy.observed_session == "req-e2e-99"
         assert result["_observed_provider"] == "ollama_browser"

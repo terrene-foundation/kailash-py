@@ -5,7 +5,7 @@ issue: 712,713,714
 phase: 01-analyze
 ---
 
-# All three bugs surface from one Mediscribe bring-up sequence
+# All three bugs surface from one downstream-consumer bring-up sequence
 
 ## Connection
 
@@ -14,10 +14,10 @@ DataFlow DDL) but they were discovered in a single chain by a single
 downstream consumer:
 
 ```
-Mediscribe wires DataFlow into Nexus FastAPI app
+the downstream consumer wires DataFlow into Nexus FastAPI app
 ↓
 Step A: Try @nexus.app.on_event("startup") to call create_tables_async()
-        → silently fails (Mediscribe likely on stale Nexus pre-2.1.1)
+        → silently fails (The downstream consumer likely on stale Nexus pre-2.1.1)
         → bug filed as #712
         → workaround: wrap app.router.lifespan_context
 
@@ -39,7 +39,7 @@ the Nexus + DataFlow integration seam:
 
 - 2026-04-12 to 19: PR cluster #500 / #501 / #531 / #533 / #538 / #540
   (impact-verse downstream incident — Nexus FastAPI lifespan hooks)
-- 2026-04-29: This cluster (Mediscribe — full Nexus + DataFlow bring-up)
+- 2026-04-29: This cluster (the downstream consumer — full Nexus + DataFlow bring-up)
 
 Both incidents are **integration-seam bugs**, not unit-level bugs. Unit
 tests for `WorkflowServer`, `DataFlow`, `AsyncSQLDatabaseNode` all pass
@@ -70,6 +70,6 @@ Worth a rule-strengthening discussion at /codify.
 
 - Architecture: `01-analysis/01-architecture.md`
 - Implementation plan: `02-plans/01-implementation-plan.md` § Test plan
-  (includes `test_mediscribe_pattern_end_to_end.py` Tier-3 regression)
+  (includes `test_downstream_consumer_pattern_end_to_end.py` Tier-3 regression)
 - Prior cluster journal: `workspaces/issues-500-501/01-analysis/01-root-cause-unified.md`
   (impact-verse incident, similar shape)

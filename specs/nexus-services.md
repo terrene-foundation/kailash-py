@@ -497,7 +497,7 @@ Runs a coroutine as a background task via `asyncio.create_task()`. Truly concurr
 
 ## 29. FastAPI Lifespan + `fastapi_app` Property
 
-Origin: GitHub issue #712 (2026-04-30). Mediscribe and similar consumers needed an async startup hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) and reached for `nexus.fastapi_app.on_event("startup")`. The property returned `None` immediately after `Nexus(...)` because the enterprise gateway is built lazily, and the downstream `.on_event(...)` raised `AttributeError`. The fix is documented here so consumers can pick the right surface.
+Origin: GitHub issue #712 (2026-04-30). Downstream consumers needed an async startup hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) and reached for `nexus.fastapi_app.on_event("startup")`. The property returned `None` immediately after `Nexus(...)` because the enterprise gateway is built lazily, and the downstream `.on_event(...)` raised `AttributeError`. The fix is documented here so consumers can pick the right surface.
 
 ### 29.1 `fastapi_app` Lazy-Init Timing Trap
 
@@ -518,7 +518,7 @@ Code that accesses `fastapi_app` immediately after `Nexus(...)` therefore sees `
 
 ### 29.2 Lifespan-Handler Chain Order
 
-When a Nexus consumer wraps the FastAPI app in a custom lifespan (the documented "I want to add my own startup logic" pattern), the chain MUST drive every registered handler list in the canonical order. The shared helper module `kailash.utils.lifespan` (issue #712 / MED-S1) exposes the two drivers Nexus and every sibling FastAPI gateway uses:
+When a Nexus consumer wraps the FastAPI app in a custom lifespan (the documented "I want to add my own startup logic" pattern), the chain MUST drive every registered handler list in the canonical order. The shared helper module `kailash.utils.lifespan` (issue #712 / S1) exposes the two drivers Nexus and every sibling FastAPI gateway uses:
 
 ```python
 from kailash.utils import (

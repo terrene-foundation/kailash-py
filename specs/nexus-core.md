@@ -515,7 +515,7 @@ For one-off async hooks without authoring a Plugin class, use §10.3 `add_startu
 
 ### 10.3 add_startup_handler / add_shutdown_handler
 
-Origin: GitHub issue #712 (2026-04-30). Mediscribe and other consumers needed a "run async DDL once at server start" hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) but reaching for `nexus.fastapi_app.on_event("startup")` hit the §10.3 timing trap (the property returns `None` until lazy gateway init fires). Authoring a full `NexusPluginProtocol` implementation for a single callback was the only documented escape. The two new methods close that gap: register a callable directly against the same `_startup_hooks` / `_shutdown_hooks` lists the plugin protocol uses.
+Origin: GitHub issue #712 (2026-04-30). Downstream consumers needed a "run async DDL once at server start" hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) but reaching for `nexus.fastapi_app.on_event("startup")` hit the §10.3 timing trap (the property returns `None` until lazy gateway init fires). Authoring a full `NexusPluginProtocol` implementation for a single callback was the only documented escape. The two new methods close that gap: register a callable directly against the same `_startup_hooks` / `_shutdown_hooks` lists the plugin protocol uses.
 
 ```python
 def add_startup_handler(self, func: Callable[[], Any]) -> "Nexus"
@@ -538,7 +538,7 @@ def add_shutdown_handler(self, func: Callable[[], Any]) -> "Nexus"
 
 **Lifespan dispatch chain order** (see `specs/nexus-services.md` § FastAPI lifespan for full detail):
 
-1. `app.router.on_startup` — driven via `kailash.utils.drive_router_lifespan_startup` (the shared helper from MED-S1 / issue #712). Iterates the same list Starlette's `_DefaultLifespan` walks; preserves `@app.on_event("startup")` and `app.router.on_startup.append(...)` registrations.
+1. `app.router.on_startup` — driven via `kailash.utils.drive_router_lifespan_startup` (the shared helper from S1 / issue #712). Iterates the same list Starlette's `_DefaultLifespan` walks; preserves `@app.on_event("startup")` and `app.router.on_startup.append(...)` registrations.
 2. Plugin / handler `_startup_hooks` — populated by `add_plugin` (§10.2), `add_startup_handler` (this section), and any internal Nexus initialization. Run in registration order.
 3. User code inside the lifespan body (between Nexus's startup and shutdown halves).
 4. Plugin / handler `_shutdown_hooks` — REVERSE registration order.

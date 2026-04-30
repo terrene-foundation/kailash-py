@@ -9,7 +9,7 @@ phase: 01-analyze
 
 ## Finding
 
-Issue #712 (Mediscribe: `@nexus.app.on_event("startup")` silently ignored) is the
+Issue #712 (the downstream consumer: `@nexus.app.on_event("startup")` silently ignored) is the
 **third instance of the same FastAPI-lifespan-footgun bug class** in this repo:
 
 | #   | Date       | Bug                                                                     | Fix                      |
@@ -35,9 +35,9 @@ hit the same list — and both should be honored by the #533 fix that drives
    it before `on_event` decorators have a chance to register, OR FastAPI
    upstream changed `_startup()` semantics.
 
-2. **Stale consumer**: Mediscribe is pinned to a pre-2.1.1 nexus, in which
+2. **Stale consumer**: the downstream consumer is pinned to a pre-2.1.1 nexus, in which
    case #712 is the same bug as #500 surfacing under a slightly different
-   API. Fix is "upgrade nexus." The linked Mediscribe commit `d5b3bd15`
+   API. Fix is "upgrade nexus." The linked the downstream consumer commit `d5b3bd15`
    workaround is the SAME `app.router.lifespan_context` wrapper from impact-verse
    commit `f1186b28` referenced in #500.
 
@@ -59,7 +59,7 @@ enough that /todos cannot be drafted without ground truth.
 
 - #500 close comment / PR #533 merge commit: `1e184541b74c813541191e270b0321612b06feed`
 - #531 fix-of-fix commit: same PR #533 (kailash 2.8.9, PR #540 hotfix)
-- Mediscribe workaround: `d5b3bd15` (referenced in #712 body)
+- the downstream consumer workaround: `d5b3bd15` (referenced in #712 body)
 - impact-verse same-class workaround: `f1186b28` (referenced in #500 body)
 - Cross-SDK note: kailash-rs uses axum + tokio, no equivalent custom lifespan
   wrapper, so this bug class does not exist on the Rust side.

@@ -572,7 +572,7 @@ class DataFlow(DataFlowEventMixin):
         #
         # `self._is_async` is a derived property: it always agrees with
         # `self.runtime` at access time. Subsystem captures of either
-        # attribute at their own __init__ time are addressed in MED-S5.
+        # attribute at their own __init__ time are addressed in S5.
         self._closed = False
         # Issue #713: per-event-loop runtime cache + sync singleton.
         # MUST be initialized BEFORE any subsystem constructed during
@@ -758,7 +758,7 @@ class DataFlow(DataFlowEventMixin):
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
 
-        # MED-S5: drop eager runtime=self.runtime — pins _explicit_runtime at
+        # S5: drop eager runtime=self.runtime — pins _explicit_runtime at
         # construction time and defeats lazy parent-lookup. ModelRegistry.runtime
         # is now a @property returning self._dataflow.runtime when no explicit
         # override is set, which is exactly the post-S4 behavior we want.
@@ -923,7 +923,7 @@ class DataFlow(DataFlowEventMixin):
         that still assigns ``_is_async`` directly, but the value is
         ignored — the next read recomputes from ``self.runtime``.
         """
-        # Intentional no-op: derived property. Legacy callers (Mediscribe
+        # Intentional no-op: derived property. Legacy callers (the downstream consumer
         # workaround, older subsystems) wrote `db._is_async = True`
         # alongside `db.runtime = AsyncLocalRuntime()`. Both are
         # honored: the runtime= write goes through the runtime setter
@@ -1533,7 +1533,7 @@ class DataFlow(DataFlowEventMixin):
                     dir_err,
                 )
 
-            # MED-S5: drop eager runtime=self.runtime — same reasoning as
+            # S5: drop eager runtime=self.runtime — same reasoning as
             # ModelRegistry construction. AutoMigrationSystem.runtime is now a
             # @property returning self._dataflow.runtime when no explicit
             # override is set.

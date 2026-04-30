@@ -594,7 +594,7 @@ class Nexus:
         ``register()`` or ``start()`` has triggered gateway construction,
         ``fastapi_app.router.on_startup.append(fn)`` is iterated by the
         custom lifespan (see :file:`workflow_server.py` and the shared
-        helper from MED-S1) and your handler will fire. The discoverability
+        helper from S1) and your handler will fire. The discoverability
         problem is the timing trap above, not the dispatch path itself.
 
         Returns:
@@ -900,10 +900,9 @@ class Nexus:
 
         try:
             # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
+            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
             from kailash_mcp import MCPServer
             from kailash_mcp.auth.providers import APIKeyAuth
-
-            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
 
             # Create production-ready MCP server using Core SDK
             self._mcp_server = self._create_sdk_mcp_server()
@@ -2938,7 +2937,6 @@ Check the documentation or explore available resources.
             HTTPException: If workflow not found, input invalid, or execution fails
         """
         from fastapi import HTTPException
-
         from nexus.validation import validate_workflow_inputs, validate_workflow_name
 
         # P0-5: Validate workflow name (prevent path traversal)

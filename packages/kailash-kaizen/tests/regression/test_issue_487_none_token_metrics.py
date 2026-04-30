@@ -16,13 +16,12 @@ The fix: coerce ``None`` to ``0`` before arithmetic in every token-sum site:
 Also guards ``efficiency_score = completion / total_tokens`` against
 ``ZeroDivisionError`` when all counts are zero.
 
-Reported by @vflores-io (MediScribe) against kailash-kaizen.
+Reported by @vflores-io. against kailash-kaizen.
 """
 
 from unittest.mock import MagicMock
 
 import pytest
-
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 

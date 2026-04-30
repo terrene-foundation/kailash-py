@@ -33,9 +33,9 @@ The block carries explicit comments at lines 186-202 documenting that this itera
 
 ## What #712 actually surfaces
 
-The Mediscribe reproduction (per #712 body) shows their hook silently failing. Three plausible reasons, only one of which matches the brief framing:
+The the downstream consumer reproduction (per #712 body) shows their hook silently failing. Three plausible reasons, only one of which matches the brief framing:
 
-1. **Mediscribe is on a stale Nexus** (pre-2.1.1 — the #500/#501 fix release). Their `app.router.lifespan_context`-wrapping workaround is the same one referenced in impact-verse `f1186b28` from the #500 era. If true, the fix is "upgrade nexus" + a runtime-detection that errors loudly when consumers register `on_event` against a stale version.
+1. **the downstream consumer is on a stale Nexus** (pre-2.1.1 — the #500/#501 fix release). Their `app.router.lifespan_context`-wrapping workaround is the same one referenced in impact-verse `f1186b28` from the #500 era. If true, the fix is "upgrade nexus" + a runtime-detection that errors loudly when consumers register `on_event` against a stale version.
 
 2. **Timing trap**: `nexus.fastapi_app` (the property at `core.py:573-579`) returns `None` until `_initialize_gateway()` runs — and gateway init is lazy on first `nexus.register(...)` call. A consumer pattern of:
 
@@ -78,7 +78,7 @@ The brief's "silent disable" framing is better fitted to the SIBLING sites, not 
   - Add `Nexus.add_startup_handler(func)` / `Nexus.add_shutdown_handler(func)` public methods that route into `_startup_hooks` / `_shutdown_hooks` (already exists internally for plugins)
   - Sweep the 3 sibling FastAPI sites and either add router-iteration mitigation, mark them deprecated, or extract a shared helper (preferred, per `security.md` § Multi-Site Kwarg Plumbing)
 
-- The Mediscribe-specific path also needs an upgrade-guidance note — if they're on a pre-2.1.1 Nexus, they need to upgrade. This is documentation only.
+- The the downstream consumer-specific path also needs an upgrade-guidance note — if they're on a pre-2.1.1 Nexus, they need to upgrade. This is documentation only.
 
 - The Tier-2 regression test for #712 must exercise BOTH the canonical and the sibling paths. The #500-era test (`test_issue_500_router_on_startup.py`) only covered `WorkflowServer`. Per `rules/orphan-detection.md` § "Every Manager-Shape Class Has a Tier 2 Test", every FastAPI() construction with `lifespan=` should have a wiring test.
 

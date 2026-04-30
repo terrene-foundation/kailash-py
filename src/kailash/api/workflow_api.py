@@ -15,11 +15,6 @@ import uvicorn
 
 logger = logging.getLogger(__name__)
 from fastapi import BackgroundTasks, FastAPI
-from pydantic import BaseModel, Field
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
-
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.lifespan import (
     drive_router_lifespan_shutdown,
@@ -27,6 +22,10 @@ from kailash.utils.lifespan import (
 )
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
+from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, StreamingResponse
 
 
 class ExecutionMode(str, Enum):
@@ -172,7 +171,7 @@ class WorkflowAPI:
     async def _lifespan(self, app: FastAPI):
         """Manage app lifecycle."""
         # Startup
-        # MED-S2 (#712): drive router.on_startup hooks (e.g. consumer
+        # S2 (#712): drive router.on_startup hooks (e.g. consumer
         # @app.on_event("startup")). Without this iteration, the custom
         # _lifespan above replaces Starlette's _DefaultLifespan and
         # silently drops every router-registered hook (the #500 bug class).

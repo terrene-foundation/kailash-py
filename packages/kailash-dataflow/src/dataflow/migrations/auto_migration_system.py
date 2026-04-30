@@ -249,10 +249,10 @@ class PostgreSQLSchemaInspector:
             dataflow_instance: Optional DataFlow parent reference. When
                 supplied, ``self.runtime`` resolves lazily via
                 ``dataflow_instance.runtime`` on every access (issue
-                #713 — MED-S5 lazy lookup).
+                #713 — S5 lazy lookup).
         """
         self.connection_string = connection_string
-        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        # S5: hold parent back-reference for lazy runtime lookup.
         self._dataflow = dataflow_instance
 
         if runtime is not None:
@@ -583,7 +583,7 @@ class PostgreSQLSchemaInspector:
         return False
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # S5 (issue #713): lazy runtime via parent DataFlow.
     # ------------------------------------------------------------------
 
     @property
@@ -611,7 +611,7 @@ class PostgreSQLSchemaInspector:
         """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
-        Post-MED-S5: only the legacy explicit-runtime path or the
+        Post-S5: only the legacy explicit-runtime path or the
         self-owned fallback (no parent dataflow_instance) holds a
         reference here.
         """
@@ -1038,10 +1038,10 @@ class SQLiteSchemaInspector:
             runtime: Optional explicit runtime override (legacy path).
             dataflow_instance: Optional DataFlow parent reference. When
                 supplied, ``self.runtime`` resolves lazily via
-                ``dataflow_instance.runtime`` (issue #713 — MED-S5).
+                ``dataflow_instance.runtime`` (issue #713 — S5).
         """
         self.connection_string = connection_string
-        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        # S5: hold parent back-reference for lazy runtime lookup.
         self._dataflow = dataflow_instance
 
         if runtime is not None:
@@ -1315,7 +1315,7 @@ class SQLiteSchemaInspector:
         return diff
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # S5 (issue #713): lazy runtime via parent DataFlow.
     # ------------------------------------------------------------------
 
     @property
@@ -1658,7 +1658,7 @@ class AutoMigrationSystem:
         """
         self.connection_string = connection_string
 
-        # MED-S5 (issue #713): hold parent back-reference so self.runtime
+        # S5 (issue #713): hold parent back-reference so self.runtime
         # / self._is_async can resolve lazily on each access. Pre-S5 the
         # system snapshotted at __init__; post-S5 it follows the parent's
         # lazy property (S4) which detects async context per access.
@@ -1742,7 +1742,7 @@ class AutoMigrationSystem:
 
         # Use database-specific components (pass parent reference for lazy
         # runtime lookup; legacy explicit-runtime path falls back when no
-        # parent is available — see MED-S5 / issue #713).
+        # parent is available — see S5 / issue #713).
         if self.dialect == "sqlite":
             self.inspector = SQLiteSchemaInspector(
                 connection_string,
@@ -1766,7 +1766,7 @@ class AutoMigrationSystem:
         self._existing_schema_mode: bool = False
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
+    # S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
     # See ModelRegistry for the same pattern + rationale.
     # ------------------------------------------------------------------
 
@@ -1791,7 +1791,7 @@ class AutoMigrationSystem:
 
     @_is_async.setter
     def _is_async(self, value: bool) -> None:
-        """No-op setter — derived from ``self.runtime`` post-MED-S5."""
+        """No-op setter — derived from ``self.runtime`` post-S5."""
         pass
 
     def _detect_database_type(self, connection_string: str) -> str:
@@ -3198,7 +3198,7 @@ class AutoMigrationSystem:
         Safe to call multiple times -- subsequent calls are no-ops.
         Also closes sub-component runtimes (inspector).
 
-        Post-MED-S5: only the legacy explicit-runtime path or the
+        Post-S5: only the legacy explicit-runtime path or the
         self-owned fallback (no parent dataflow_instance) holds a
         reference here. The lazy-parent path delegates lifecycle to
         the parent DataFlow, so this close() is a no-op for that case.

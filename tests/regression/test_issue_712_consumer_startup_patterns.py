@@ -16,7 +16,7 @@ two-pronged:
     often wrapped in ``try/except`` that swallows the error and silently
     drops the startup logic.
 
-Fix (this PR / MED-S3): added ``Nexus.add_startup_handler(func)`` and
+Fix (this PR / S3): added ``Nexus.add_startup_handler(func)`` and
 ``Nexus.add_shutdown_handler(func)`` public methods that route into the
 existing ``_startup_hooks`` / ``_shutdown_hooks`` lists already wired
 into the FastAPI lifespan (#501 contract). Methods refuse post-start
@@ -26,14 +26,14 @@ silently drop the hook.
 This regression test reproduces the consumer-facing patterns and MUST
 NOT be deleted per orphan-detection rules.
 
-Acceptance per ``todos/active/MED-S3-nexus-add-startup-handler-public-api.md``:
+Acceptance per ``todos/active/S3-nexus-add-startup-handler-public-api.md``:
 
 - ``add_startup_handler`` accepts callable, appends to ``_startup_hooks``,
   refuses post-start with ``RuntimeError``, returns ``self``.
 - ``add_shutdown_handler`` symmetric.
 - Both async ``def`` and sync ``def`` are supported.
-- Mediscribe-pattern E2E (DataFlow ``create_tables_async`` from a
-  startup hook) is the canonical use case AND depends on #713 / MED-S4
+- downstream-consumer pattern E2E (DataFlow ``create_tables_async`` from a
+  startup hook) is the canonical use case AND depends on #713 / S4
   (lazy DataFlow runtime). This file ships with that test SKIPPED with
   an explicit reason — orchestrator MUST remove the skip after
   ``feat/issue-713-dataflow-lazy-runtime`` merges to main.
@@ -47,7 +47,6 @@ import socket
 import httpx
 import pytest
 import uvicorn
-
 from nexus import Nexus
 
 
@@ -394,7 +393,7 @@ async def test_add_shutdown_handler_fires_during_uvicorn_teardown() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Mediscribe pattern — DataFlow async DDL from a startup hook
+# downstream-consumer pattern — DataFlow async DDL from a startup hook
 # ---------------------------------------------------------------------------
 
 
@@ -402,7 +401,7 @@ async def test_add_shutdown_handler_fires_during_uvicorn_teardown() -> None:
 @pytest.mark.asyncio
 @pytest.mark.skip(
     reason=(
-        "Depends on #713 / MED-S4 (lazy DataFlow runtime). The Mediscribe "
+        "Depends on #713 / S4 (lazy DataFlow runtime). The the downstream consumer "
         "pattern is `db = DataFlow(url)` at module scope, then "
         "`await db.create_tables_async()` inside a startup hook. Today this "
         "fails with `AttributeError: 'LocalRuntime' object has no attribute "
@@ -413,7 +412,7 @@ async def test_add_shutdown_handler_fires_during_uvicorn_teardown() -> None:
     )
 )
 async def test_add_startup_handler_runs_dataflow_create_tables_async() -> None:
-    """Regression: #712 + #713 — Mediscribe E2E pattern.
+    """Regression: #712 + #713 — downstream-consumer E2E pattern.
 
     The canonical consumer pattern this PR enables:
 

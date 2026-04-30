@@ -48,7 +48,7 @@ Three real failure modes (in priority order):
    pattern depends on a default that could silently change. Robust fix
    removes the dependency.
 
-## Why Mediscribe specifically hit `MaxClientsInSessionMode`
+## Why the downstream consumer specifically hit `MaxClientsInSessionMode`
 
 Most likely (one or more of):
 

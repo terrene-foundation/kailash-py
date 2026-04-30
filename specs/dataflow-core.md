@@ -167,7 +167,7 @@ DataFlow uses lazy connection initialization. The constructor (`__init__`) store
 
 ### 1.5 Runtime Detection
 
-Origin: GitHub issue #713 (2026-04-30). Pre-#713 DataFlow bound a single runtime at construction time. Module-import construction (the `db = DataFlow(...)` at module scope pattern Mediscribe and similar consumers use) permanently bound `LocalRuntime` because no event loop is running at import time, then `await db.create_tables_async()` raised "no running event loop" or quietly used the wrong runtime when later invoked from inside FastAPI/uvicorn. The fix replaces eager construction-time selection with lazy per-access resolution via a per-event-loop cache.
+Origin: GitHub issue #713 (2026-04-30). Pre-#713 DataFlow bound a single runtime at construction time. Module-import construction (the `db = DataFlow(...)` at module scope pattern Downstream consumers use) permanently bound `LocalRuntime` because no event loop is running at import time, then `await db.create_tables_async()` raised "no running event loop" or quietly used the wrong runtime when later invoked from inside FastAPI/uvicorn. The fix replaces eager construction-time selection with lazy per-access resolution via a per-event-loop cache.
 
 **Runtime resolution is now lazy** — performed on every read of `db.runtime`, not at construction. Resolution order:
 

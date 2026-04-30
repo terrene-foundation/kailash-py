@@ -1,11 +1,11 @@
-"""Regression: #713 (MED-S5) — DataFlow subsystems follow parent runtime swap.
+"""Regression: #713 (S5) — DataFlow subsystems follow parent runtime swap.
 
-After MED-S4 made `DataFlow.runtime` a lazy `@property`, four subsystems
+After S4 made `DataFlow.runtime` a lazy `@property`, four subsystems
 (ModelRegistry, AutoMigrationSystem, MigrationHistoryManager via
 SchemaStateManager, GatewayIntegration) previously snapshotted `self.runtime`
 at __init__ and held a stale reference after the parent's runtime swapped.
 
-MED-S5 converts each subsystem's `runtime` to a lazy `@property` that returns
+S5 converts each subsystem's `runtime` to a lazy `@property` that returns
 `self._dataflow.runtime` (or the legacy explicit-runtime override). This test
 verifies the swap-following behavior end-to-end against real PostgreSQL.
 
@@ -25,7 +25,6 @@ import asyncio
 import os
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
@@ -106,10 +105,10 @@ def test_schema_state_manager_follows_runtime_swap():
 @pytest.mark.regression
 @pytest.mark.integration
 def test_module_level_dataflow_then_async_ddl_succeeds_via_subsystems():
-    """Mediscribe-shape: module-level DataFlow + async DDL no longer crashes.
+    """downstream-consumer shape: module-level DataFlow + async DDL no longer crashes.
 
     Pre-fix the framework crashed at create_tables_async because subsystems
-    captured LocalRuntime. Post-MED-S4 + MED-S5: parent property is lazy AND
+    captured LocalRuntime. Post-S4 + S5: parent property is lazy AND
     subsystems read it lazily, so the same call works.
     """
     from dataflow import DataFlow
@@ -185,7 +184,7 @@ def test_subsystem_explicit_runtime_override_pins():
 def test_subsystem_runtime_assignment_setter_compat():
     """Legacy callers that wrote subsystem.runtime = X still work.
 
-    MED-S5 preserves backwards compat for code that mutates
+    S5 preserves backwards compat for code that mutates
     ``model_registry.runtime`` directly — the @property has a setter that
     stores the value as the explicit override.
     """
@@ -209,7 +208,7 @@ def test_subsystem_runtime_assignment_setter_compat():
 def test_subsystem_audit_grep_no_orphan_runtime_captures():
     """Mechanical sweep: subsystem files MUST NOT capture self.runtime in __init__.
 
-    Per MED-S5 + rules/orphan-detection.md, every subsystem with a runtime
+    Per S5 + rules/orphan-detection.md, every subsystem with a runtime
     surface MUST read via lazy @property (returning self._dataflow.runtime).
     Plain attribute capture in __init__ is BLOCKED — that is the failure mode
     this shard fixed.
@@ -259,7 +258,7 @@ def test_subsystem_audit_grep_no_orphan_runtime_captures():
             pytest.fail(
                 f"Orphan runtime capture detected in {subsystem.name}:\n"
                 f"  {line.strip()}\n"
-                f"This violates MED-S5 — subsystems MUST read runtime via "
+                f"This violates S5 — subsystems MUST read runtime via "
                 f"lazy @property delegating to self._dataflow.runtime. "
                 f"See rules/orphan-detection.md and "
                 f"workspaces/issues-712-714/01-analysis/01-architecture.md."

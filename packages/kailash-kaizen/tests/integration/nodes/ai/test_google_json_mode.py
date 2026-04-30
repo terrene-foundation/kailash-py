@@ -361,11 +361,11 @@ class TestAdditionalPropertiesFalseRegression:
         assert "London" in parsed["city"] or "london" in parsed["city"].lower()
 
 
-class TestMediScribeScenario:
-    """Test scenario from the original MediScribe issue report."""
+class TestDownstreamConsumerScenario:
+    """Test scenario from the original the downstream consumer issue report."""
 
     def test_medical_soap_extraction(self):
-        """Reproduce the MediScribe SOAP note extraction scenario."""
+        """Reproduce a SOAP note extraction scenario."""
         from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
@@ -441,7 +441,7 @@ class TestMediScribeScenario:
             "headache" in s.lower() for s in parsed["symptoms"]
         )
 
-        print(f"\n=== MediScribe Test Result ===")
+        print(f"\n=== Downstream Consumer Test Result ===")
         print(f"Chief Complaint: {parsed['chief_complaint']}")
         print(f"Symptoms: {parsed['symptoms']}")
         if "duration" in parsed:

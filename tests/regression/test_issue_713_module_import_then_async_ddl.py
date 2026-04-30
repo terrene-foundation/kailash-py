@@ -12,7 +12,7 @@ uvicorn's running event loop hit::
     AttributeError: 'LocalRuntime' object has no attribute
                     'execute_workflow_async'
 
-Post-fix (MED-S4), ``self.runtime`` is a ``@property`` that detects the async
+Post-fix (S4), ``self.runtime`` is a ``@property`` that detects the async
 context per access via ``asyncio.get_running_loop()``, caches an
 ``AsyncLocalRuntime`` per event-loop id, and falls back to a
 ``LocalRuntime`` singleton in sync contexts. The test exercises FOUR
@@ -40,9 +40,9 @@ import pickle
 import threading
 
 import pytest
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 from dataflow import DataFlow
-from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # ---------------------------------------------------------------------------
 # Postgres test container at port 5434 (per
@@ -66,7 +66,7 @@ POSTGRES_URL = os.getenv(
 
 # ---------------------------------------------------------------------------
 # Tier-3 regression: module-import construction + async DDL via PostgreSQL.
-# Mirrors the Mediscribe deployment pattern: DataFlow constructed at module
+# Mirrors the downstream consumer deployment pattern: DataFlow constructed at module
 # scope (uvicorn imports the FastAPI app first, runs the lifespan in the
 # event loop second).
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ def test_explicit_runtime_kwarg_succeeds() -> None:
 def test_post_init_setter_override_succeeds() -> None:
     """``db.runtime = AsyncLocalRuntime()`` setter override is honored.
 
-    Mirrors the Mediscribe workaround pattern. Verifies the setter is
+    Mirrors the downstream consumer's workaround pattern. Verifies the setter is
     reachable via direct ``db.runtime = X`` assignment AND that the
     override is returned by every subsequent ``self.runtime`` access.
     """

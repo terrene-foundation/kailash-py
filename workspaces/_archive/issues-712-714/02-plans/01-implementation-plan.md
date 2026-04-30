@@ -5,7 +5,7 @@ during `/todos`.
 
 ## Goal
 
-Land all three fixes such that the downstream `mediscribe-v2/backend/app/main.py:417-486`
+Land all three fixes such that the downstream `<external consumer codebase>`
 workaround can be deleted entirely. Per brief constraint:
 
 ```
@@ -37,9 +37,9 @@ S7 specs + docs      — dataflow-core, nexus-core, sibling re-derive
 - PR-C: #714 work (S6)
 - PR-D: specs + docs (S7) — can land after the code PRs once final state is known
 
-All four PRs target same release window. PR-A unblocks Mediscribe's startup
+All four PRs target same release window. PR-A unblocks the downstream consumer's startup
 registration; PR-B unblocks the async DDL call; PR-C unblocks pgbouncer
-deployment. Mediscribe needs all three to drop their workaround.
+deployment. The downstream consumer needs all three to drop their workaround.
 
 ## Wave plan (per worktree-isolation.md Rule 4 — waves of ≤3)
 
@@ -76,7 +76,7 @@ passes on the fix branch:
 
 Per `rules/testing.md` § "End-to-End Pipeline Regression", also add:
 
-- `tests/regression/test_mediscribe_pattern_end_to_end.py` — Tier-3: replicates the exact Mediscribe bring-up sequence (Nexus + DataFlow at module scope, register hook for create_tables_async via new public API, no workarounds) and asserts the full path works.
+- `tests/regression/test_downstream_consumer_pattern_end_to_end.py` — Tier-3: replicates the exact downstream-consumer bring-up sequence (Nexus + DataFlow at module scope, register hook for create_tables_async via new public API, no workarounds) and asserts the full path works.
 
 ## Cross-SDK parity
 
@@ -91,7 +91,7 @@ Per `rules/cross-cli-parity.md` and the analysis:
 
 | Risk                                                                                                                           | Mitigation                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mediscribe is on stale Nexus and #712 is just upgrade-guidance, not real bug                                                   | Confirm at S3 implementation — write the test against current Nexus head; if it passes, file an upgrade-guidance issue and skip the public API. If it fails, the public API is justified. |
+| the downstream consumer is on stale Nexus and #712 is just upgrade-guidance, not real bug                                                   | Confirm at S3 implementation — write the test against current Nexus head; if it passes, file an upgrade-guidance issue and skip the public API. If it fails, the public API is justified. |
 | Converting `self.runtime` to property breaks pickle / copy / deepcopy of DataFlow                                              | S4 acceptance test must include pickle round-trip of DataFlow and assert it survives. If pickle fails, fall back to keeping plain attribute + lazy resolver method.                       |
 | `monkeypatch.setattr(db, "runtime", x)` test patterns bypass the setter                                                        | S4 setter MUST also accept `__set__` from descriptor protocol; `monkeypatch.setattr` uses `setattr()` which goes through descriptors. Verify with a Tier-1 test.                          |
 | Removing `AsyncSQLDatabaseNode` from DDL path loses observability / metrics that the node provides                             | S6 acceptance: log every DDL statement at INFO with timing; emit DDL counter metric. Same observability as before, just without the node wrapper.                                         |
