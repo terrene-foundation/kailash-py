@@ -268,6 +268,68 @@ routes through the pinned connection via the `_active_transaction`
 ContextVar — the two surfaces are functionally equivalent. Prefer
 `tx.execute_raw` for grep-able multi-statement transactions.
 
+### 12.7 Sync Surface — `db.transactions_sync.begin()`
+
+Sync analogue of §12.6 for callers that cannot `await` (CLI scripts, sync
+FastAPI handlers, pytest non-async tests, Jupyter sync cells). Yields a
+`SyncTransactionScope` whose `tx.execute_raw(sql, params)` runs on a
+pinned connection; auto-commit on clean exit, auto-rollback on exception.
+
+```python
+with db.transactions_sync.begin() as tx:
+    existing = tx.execute_raw(
+        "SELECT id FROM oauth_tokens WHERE user_id = $1 FOR UPDATE",
+        [user_id],
+    )
+    if existing:
+        tx.execute_raw(
+            "UPDATE oauth_tokens SET refresh_token = $1, "
+            "rotated_at = NOW() WHERE user_id = $2",
+            [new_refresh, user_id],
+        )
+    else:
+        tx.execute_raw(
+            "INSERT INTO oauth_tokens (user_id, refresh_token) VALUES ($1, $2)",
+            [user_id, new_refresh],
+        )
+    # BEGIN / SELECT / UPDATE-or-INSERT / COMMIT all run on one
+    # asyncpg connection bound to a private background event loop.
+```
+
+Calling `tx.execute_raw` outside the `with` body raises `RuntimeError`
+per `rules/zero-tolerance.md` Rule 3a (typed delegate guard) — the
+pinned connection only exists while the scope is active.
+
+**BG event loop semantics.** `db.transactions_sync` owns a persistent
+daemon-thread event loop (mirror of `db.express_sync`) and submits every
+coroutine via `asyncio.run_coroutine_threadsafe(coro, loop).result()`.
+The same loop is shared across all `begin()` calls so the pinned
+connection (loop-bound for asyncpg) survives across multiple
+`tx.execute_raw` invocations inside one `with` block.
+
+**Connection lifecycle.** Unlike the async surface (which acquires from
+the shared DataFlow pool), the sync surface opens a fresh
+`asyncpg.connect()` / `aiosqlite.connect()` on its BG loop for each
+`begin()` and closes it on exit. asyncpg connections are loop-bound;
+sharing the DataFlow pool across the host loop and the BG loop produces
+`RuntimeError: Future ... attached to a different loop`. The private
+connection lifecycle is the structural fix for cross-loop usage and is
+why the sync surface is safe inside pytest-asyncio / Nexus handlers /
+Jupyter cells without raising
+`RuntimeError: This event loop is already running`.
+
+**Statistics counter.** The async and sync surfaces share
+`db.transactions._stats` — `db.transactions.get_stats()` reflects both
+async (`begin()`) and sync (`transactions_sync.begin()`) transaction
+totals. Sync transaction IDs are prefixed `sync_txn_` to distinguish
+them in logs.
+
+**Lifecycle integration.** The BG loop thread is stopped cleanly during
+`db.close()` / `await db.close_async()` so callers do not need to invoke
+`transactions_sync.close_sync()` manually. An un-closed manager emits
+`ResourceWarning` on garbage collection per `rules/patterns.md` § Async
+Resource Cleanup.
+
 ---
 
 ## 13. Connection Pooling

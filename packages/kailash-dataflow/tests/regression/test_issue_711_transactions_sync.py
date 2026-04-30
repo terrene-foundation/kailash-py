@@ -1,32 +1,35 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""
-Regression test for issue #707 — `db.transactions.begin()` MUST pin one
-connection across all `tx.execute_raw` calls, auto-commit on clean exit,
-auto-rollback on exception. Tier 2 (real PostgreSQL).
+"""Regression test for issue #711 — sync surface for transactions.
 
-The yielded `TransactionScope` exposes `execute_raw(sql, params=None)` so
-consumers can express multi-statement atomic patterns (DDL inside a tx,
-SELECT FOR UPDATE + INSERT, complex UPSERT-or-UPDATE) the Express API
-does not express directly. Calling `tx.execute_raw` outside the
-`async with` body raises `RuntimeError` per `rules/zero-tolerance.md`
-Rule 3a (typed delegate guard).
+`db.transactions_sync.begin()` MUST pin one connection across all
+`tx.execute_raw` calls (sync), auto-commit on clean exit, auto-rollback
+on exception. Tier 2 (real PostgreSQL).
 
-Per `rules/testing.md` § "3-Tier Testing" Tier 2: NO mocking. Every
+This is the sync analogue of issue #707 (which covered the async
+surface ``db.transactions.begin()``). Per
+``rules/cross-sdk-inspection.md`` § 3a "Structural API-Divergence
+Disposition" and ``rules/testing.md`` § "One Direct Test Per Variant",
+the sync paired variant gets its own direct-call regression coverage —
+delegation through the async path does not satisfy the contract.
+
+Per ``rules/testing.md`` § "3-Tier Testing" Tier 2: NO mocking. Every
 test runs against the real PostgreSQL test instance via the
-`test_suite` fixture from `tests/integration/conftest.py`.
+``IntegrationTestSuite`` fixture from ``tests/infrastructure/test_harness``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
 
 import pytest
 
 from dataflow import DataFlow
-from dataflow.features.transactions import TransactionScope
+from dataflow.features.transactions import (
+    SyncTransactionManager,
+    SyncTransactionScope,
+)
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.regression, pytest.mark.integration]
@@ -61,7 +64,7 @@ async def pg_test_suite():
 @pytest.fixture
 async def temp_table_name():
     """Unique temp table name per test for isolation."""
-    return f"tx_707_{int(time.time() * 1_000_000)}_{uuid.uuid4().hex[:8]}"
+    return f"tx_711_{int(time.time() * 1_000_000)}_{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
@@ -94,22 +97,26 @@ async def temp_table(pg_test_suite, temp_table_name):
 async def df(pg_test_suite):
     """A DataFlow against the real Postgres infra; closed on teardown.
 
+    The fixture is async because IntegrationTestSuite is async; the
+    DataFlow returned is used SYNCHRONOUSLY by the body (no await on
+    db.transactions_sync.begin()). Sync surface is exercised inside a
+    pytest-asyncio context — proves no `RuntimeError: event loop already
+    running` per the issue's cross-context safety acceptance criterion.
+
     NOTE: ``await instance.initialize()`` is required for the DataFlow
     connection adapter to be created on the host event loop. Without
-    it, ``TransactionManager._get_adapter()`` returns None and
-    ``db.transactions.begin()`` raises "no database connection
-    available" before reaching the BEGIN statement. This is the
-    pre-existing bug Issue #711 surfaced when the sync fixture was
-    derived from this one — applied here too for symmetry per
-    rules/zero-tolerance.md Rule 1 (fix-immediately, same bug class).
+    it, ``TransactionManager._get_adapter()`` returns None and the
+    sync surface raises "no database connection available" before it
+    can even reach the BG-loop dispatch.
     """
     instance = DataFlow(database_url=pg_test_suite.config.url, auto_migrate=False)
     await instance.initialize()
     try:
         yield instance
     finally:
-        # Explicit close per rules/testing.md § "Fixtures Yield + Cleanup"
-        # — avoids the GC-finalizer deadlock the __del__ rule warns about.
+        # Explicit close per rules/testing.md § "Fixtures Yield + Cleanup".
+        # close_async() also stops the SyncTransactionManager BG thread
+        # if `db.transactions_sync` was accessed during the test.
         try:
             await instance.close_async()
         except Exception:
@@ -117,7 +124,7 @@ async def df(pg_test_suite):
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 regression coverage
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -132,33 +139,45 @@ async def _count_rows(pg_test_suite, table: str) -> int:
         return await conn.fetchval(f"SELECT COUNT(*) FROM {table}")
 
 
-async def test_multi_statement_atomicity_via_tx_execute_raw(
+# ---------------------------------------------------------------------------
+# Tier 2 regression coverage — mirrors test_issue_707 for the SYNC surface
+# ---------------------------------------------------------------------------
+
+
+async def test_multi_statement_atomicity_via_sync_tx_execute_raw(
     df, pg_test_suite, temp_table
 ):
-    """Issue #707 canonical: BEGIN-INSERT-INSERT-COMMIT all via tx.execute_raw.
+    """Issue #711 canonical: BEGIN-INSERT-INSERT-COMMIT all via sync tx.execute_raw.
 
     Asserts both rows are visible after commit when read back from a fresh
-    connection — proves the COMMIT actually persisted state to the database.
+    connection — proves the COMMIT actually persisted state to the database
+    AND that the sync wrapper preserved the connection pinning across calls.
     """
-    async with df.transactions.begin() as tx:
-        assert isinstance(tx, TransactionScope), (
-            f"transactions.begin() yielded {type(tx).__name__}, expected "
-            "TransactionScope (issue #707 contract)"
+    # NOTE: The fixture body is async (pytest-asyncio), but the with block
+    # below uses the SYNC surface — this is exactly the cross-context
+    # scenario the issue calls out. If the sync surface tried to call
+    # ``asyncio.run()`` per statement, this test would raise
+    # ``RuntimeError: This event loop is already running``.
+    assert isinstance(df.transactions_sync, SyncTransactionManager)
+
+    with df.transactions_sync.begin() as tx:
+        assert isinstance(tx, SyncTransactionScope), (
+            f"transactions_sync.begin() yielded {type(tx).__name__}, "
+            "expected SyncTransactionScope (issue #711 contract)"
         )
         assert tx.status == "active"
+        assert tx.type == "transaction"
 
-        await tx.execute_raw(
+        tx.execute_raw(
             f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
             ["alice@example.test", "row-1"],
         )
-        await tx.execute_raw(
+        tx.execute_raw(
             f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
             ["bob@example.test", "row-2"],
         )
         # Read-within-transaction: the pinned connection sees its own writes.
-        in_tx_rows = await tx.execute_raw(
-            f"SELECT email FROM {temp_table} ORDER BY email"
-        )
+        in_tx_rows = tx.execute_raw(f"SELECT email FROM {temp_table} ORDER BY email")
         assert len(in_tx_rows) == 2
         assert {dict(r)["email"] for r in in_tx_rows} == {
             "alice@example.test",
@@ -169,17 +188,16 @@ async def test_multi_statement_atomicity_via_tx_execute_raw(
     assert await _count_rows(pg_test_suite, temp_table) == 2
 
 
-async def test_auto_rollback_on_exception(df, pg_test_suite, temp_table):
-    """Exceptions inside the `async with` body MUST roll back the entire txn.
+async def test_sync_auto_rollback_on_exception(df, pg_test_suite, temp_table):
+    """Exceptions inside the `with` body MUST roll back the entire txn.
 
     Insert one row, raise, then read back from a FRESH connection — zero
-    rows MUST persist. This is the load-bearing invariant for the OAuth
-    credential rotation pattern (failure mid-rotation MUST NOT leave a
-    partially-written token row).
+    rows MUST persist. Sync analogue of the load-bearing rollback
+    invariant for the OAuth credential rotation pattern.
     """
     with pytest.raises(RuntimeError, match="forced rollback"):
-        async with df.transactions.begin() as tx:
-            await tx.execute_raw(
+        with df.transactions_sync.begin() as tx:
+            tx.execute_raw(
                 f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
                 ["alice@example.test", "should-not-persist"],
             )
@@ -189,59 +207,59 @@ async def test_auto_rollback_on_exception(df, pg_test_suite, temp_table):
     assert await _count_rows(pg_test_suite, temp_table) == 0
 
 
-async def test_oauth_credential_rotation_pattern(df, pg_test_suite, temp_table):
-    """Canonical use case from issue #707: SELECT existing token + UPDATE-or-INSERT.
+async def test_sync_oauth_credential_rotation_pattern(df, pg_test_suite, temp_table):
+    """Canonical use case from issue #711: SELECT existing token + UPDATE-or-INSERT.
 
     1. Tx A inserts the initial token row (commit).
     2. Tx B reads the row, decides to UPDATE, commits.
     3. Tx C reads the row, decides to UPDATE again, commits.
     4. Tx D for a NEW user — row missing, INSERT branch fires.
 
-    All steps run via `tx.execute_raw` only. Read-back from a fresh
+    All steps run via sync `tx.execute_raw` only. Read-back from a fresh
     connection verifies the final state.
     """
     user_a = "user-a@example.test"
     user_b = "user-b@example.test"
 
     # Tx A: initial INSERT for user A
-    async with df.transactions.begin() as tx:
-        await tx.execute_raw(
+    with df.transactions_sync.begin() as tx:
+        tx.execute_raw(
             f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
             [user_a, "refresh-v1"],
         )
 
     # Tx B: rotation 1 — SELECT then UPDATE
-    async with df.transactions.begin() as tx:
-        existing = await tx.execute_raw(
+    with df.transactions_sync.begin() as tx:
+        existing = tx.execute_raw(
             f"SELECT id FROM {temp_table} WHERE email = $1 FOR UPDATE",
             [user_a],
         )
         assert len(existing) == 1, "user_a row MUST exist for UPDATE branch"
-        await tx.execute_raw(
+        tx.execute_raw(
             f"UPDATE {temp_table} SET payload = $1 WHERE email = $2",
             ["refresh-v2", user_a],
         )
 
     # Tx C: rotation 2 — same UPDATE branch
-    async with df.transactions.begin() as tx:
-        existing = await tx.execute_raw(
+    with df.transactions_sync.begin() as tx:
+        existing = tx.execute_raw(
             f"SELECT id FROM {temp_table} WHERE email = $1 FOR UPDATE",
             [user_a],
         )
         assert len(existing) == 1
-        await tx.execute_raw(
+        tx.execute_raw(
             f"UPDATE {temp_table} SET payload = $1 WHERE email = $2",
             ["refresh-v3", user_a],
         )
 
     # Tx D: new user — row missing, INSERT branch fires
-    async with df.transactions.begin() as tx:
-        existing = await tx.execute_raw(
+    with df.transactions_sync.begin() as tx:
+        existing = tx.execute_raw(
             f"SELECT id FROM {temp_table} WHERE email = $1 FOR UPDATE",
             [user_b],
         )
         assert len(existing) == 0, "user_b row MUST be absent for INSERT branch"
-        await tx.execute_raw(
+        tx.execute_raw(
             f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
             [user_b, "refresh-v1"],
         )
@@ -255,61 +273,7 @@ async def test_oauth_credential_rotation_pattern(df, pg_test_suite, temp_table):
     assert by_email == {user_a: "refresh-v3", user_b: "refresh-v1"}
 
 
-async def test_select_for_update_then_insert_idempotency(pg_test_suite, temp_table):
-    """Two concurrent transactions racing on SELECT FOR UPDATE + INSERT.
-
-    The canonical idempotency pattern: each caller checks for an existing
-    row keyed by an idempotency token, and INSERTs only if absent. SELECT
-    FOR UPDATE serializes the two transactions on the row that the first
-    caller inserts, so the second caller observes the inserted row and
-    skips its own INSERT.
-
-    Asserts exactly one row exists post-race.
-    """
-    idempotency_token = "idem-707-abc"
-
-    async def maybe_insert(label: str) -> str:
-        # Each task uses its OWN DataFlow instance — distinct connection
-        # pools, so the two tasks genuinely race against each other on
-        # the database, not on a shared in-process lock.
-        local_df = DataFlow(database_url=pg_test_suite.config.url, auto_migrate=False)
-        await local_df.initialize()
-        try:
-            async with local_df.transactions.begin() as tx:
-                # Use the idempotency token in the email column for uniqueness.
-                # Insert a tiny delay so both tasks reliably overlap on the
-                # SELECT FOR UPDATE.
-                existing = await tx.execute_raw(
-                    f"SELECT id FROM {temp_table} WHERE email = $1 FOR UPDATE",
-                    [idempotency_token],
-                )
-                if len(existing) == 0:
-                    await asyncio.sleep(0.05)
-                    await tx.execute_raw(
-                        f"INSERT INTO {temp_table} (email, payload) "
-                        f"VALUES ($1, $2)",
-                        [idempotency_token, label],
-                    )
-                    return "inserted"
-                return "observed-existing"
-        finally:
-            try:
-                await local_df.close_async()
-            except Exception:
-                pass
-
-    results = await asyncio.gather(maybe_insert("task-1"), maybe_insert("task-2"))
-
-    # Exactly one task inserted, exactly one observed the existing row.
-    assert sorted(results) == [
-        "inserted",
-        "observed-existing",
-    ], f"Race did not serialize on FOR UPDATE: results={results!r}"
-    # And exactly one row persists.
-    assert await _count_rows(pg_test_suite, temp_table) == 1
-
-
-async def test_partial_failure_within_transaction_rolls_back_all(
+async def test_sync_partial_failure_within_transaction_rolls_back_all(
     df, pg_test_suite, temp_table
 ):
     """INSERT row 1, INSERT row 2 with constraint violation, expect rollback.
@@ -320,13 +284,13 @@ async def test_partial_failure_within_transaction_rolls_back_all(
     duplicate_email = "duplicate@example.test"
 
     with pytest.raises(Exception):  # asyncpg.UniqueViolationError or wrapper
-        async with df.transactions.begin() as tx:
-            await tx.execute_raw(
+        with df.transactions_sync.begin() as tx:
+            tx.execute_raw(
                 f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
                 [duplicate_email, "row-1"],
             )
             # Same email — UNIQUE constraint violation, rolls back row-1 too.
-            await tx.execute_raw(
+            tx.execute_raw(
                 f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
                 [duplicate_email, "row-2"],
             )
@@ -335,28 +299,66 @@ async def test_partial_failure_within_transaction_rolls_back_all(
     assert await _count_rows(pg_test_suite, temp_table) == 0
 
 
-# ---------------------------------------------------------------------------
-# Outside-scope guard — typed delegate per rules/zero-tolerance.md Rule 3a
-# ---------------------------------------------------------------------------
+async def test_sync_execute_raw_outside_scope_raises_runtime_error(df):
+    """Calling `tx.execute_raw` AFTER the `with` block raises RuntimeError.
 
+    The typed delegate guard converts an opaque AttributeError into an
+    actionable RuntimeError that names the scope contract. Sync analogue
+    of the test_execute_raw_outside_scope_raises_runtime_error from the
+    async regression file.
 
-async def test_execute_raw_outside_scope_raises_runtime_error():
-    """Calling `tx.execute_raw` AFTER the `async with` block raises RuntimeError.
-
-    The typed delegate guard converts an opaque AttributeError ("None has
-    no attribute 'execute'") into an actionable RuntimeError that names
-    the scope contract.
-
-    This test does not need real Postgres — it exercises the guard purely.
+    This test does need a real DataFlow because the sync `begin()` runs
+    on the BG event loop and calls into the async `begin()` which needs
+    a live adapter — but only the RuntimeError-on-out-of-scope branch is
+    asserted here, NOT the database side-effect.
     """
-    # Construct a TransactionScope without entering any begin() — the
-    # ContextVar is unset, so execute_raw MUST raise the typed guard.
-    scope = TransactionScope(
-        id="manual",
-        isolation_level="READ COMMITTED",
-        status="active",
-        type="transaction",
-    )
+    captured_scope: SyncTransactionScope | None = None
 
+    with df.transactions_sync.begin() as tx:
+        captured_scope = tx
+        # Inside the with block: execute_raw works.
+        result = tx.execute_raw("SELECT 1 AS one")
+        assert len(result) == 1
+        assert dict(result[0])["one"] == 1
+
+    # Outside the with block: the typed guard fires.
+    assert captured_scope is not None
     with pytest.raises(RuntimeError, match="outside the transaction body"):
-        await scope.execute_raw("SELECT 1")
+        captured_scope.execute_raw("SELECT 1")
+
+
+async def test_sync_surface_inside_pytest_asyncio_does_not_raise_event_loop_error(
+    df, pg_test_suite, temp_table
+):
+    """Cross-context safety: sync surface MUST work inside pytest-asyncio.
+
+    This is the load-bearing acceptance criterion from issue #711 — the
+    sync surface MUST work without raising
+    ``RuntimeError: This event loop is already running`` when the caller
+    is inside an active event loop (pytest-asyncio, Nexus handler,
+    Jupyter cell). The other tests in this module already exercise the
+    sync surface from inside an async test body (every test in this file
+    is async because the fixture is async), but this test asserts the
+    invariant explicitly with a comment that pins the contract.
+
+    If a future refactor moves the sync surface to per-call
+    ``asyncio.run()``, every other test in this file will start raising
+    ``RuntimeError`` — and this test makes the failure mode legible by
+    naming it.
+    """
+    # We are inside a pytest-asyncio test → there IS an active event loop
+    # in this thread. The sync surface uses a SEPARATE BG-thread event
+    # loop, so calling ``begin()`` here MUST NOT raise.
+    import asyncio
+
+    assert (
+        asyncio.get_running_loop() is not None
+    ), "test precondition: must run inside pytest-asyncio event loop"
+
+    with df.transactions_sync.begin() as tx:
+        tx.execute_raw(
+            f"INSERT INTO {temp_table} (email, payload) VALUES ($1, $2)",
+            ["nested@example.test", "from-async-context"],
+        )
+
+    assert await _count_rows(pg_test_suite, temp_table) == 1
