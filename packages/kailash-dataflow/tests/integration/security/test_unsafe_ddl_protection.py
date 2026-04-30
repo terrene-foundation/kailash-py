@@ -66,7 +66,10 @@ class TestUnsafeDDLProtection:
 
         # Should include "IF NOT EXISTS" clause
         assert "CREATE TABLE IF NOT EXISTS" in sql.upper()
-        assert "users (" in sql.lower()  # Table names are pluralized
+        # Table names are pluralized; identifier-quoting wraps the table
+        # name in double-quotes for PostgreSQL (per dataflow-identifier-safety.md
+        # MUST Rule 1), so accept both quoted and unquoted forms.
+        assert ('"users" (' in sql.lower()) or ("users (" in sql.lower())
 
     @pytest.mark.skip(reason="MySQL test infrastructure not configured in CI")
     def test_create_table_includes_if_not_exists_mysql(self):
@@ -101,7 +104,9 @@ class TestUnsafeDDLProtection:
 
             # Should include "IF NOT EXISTS" clause
             assert "CREATE TABLE IF NOT EXISTS" in sql.upper()
-            assert "products (" in sql.lower()  # Table names are pluralized
+            # Identifier-quoting wraps the table name (per
+            # dataflow-identifier-safety.md MUST Rule 1); accept both forms.
+            assert ('"products" (' in sql.lower()) or ("products (" in sql.lower())
         finally:
             try:
                 dataflow.close()
@@ -290,7 +295,9 @@ class TestUnsafeDDLProtection:
 
         # Should be safe and include IF NOT EXISTS
         assert "CREATE TABLE IF NOT EXISTS" in sql.upper()
-        assert "articles (" in sql.lower()  # Table names are pluralized
+        # Identifier-quoting wraps the table name (per
+        # dataflow-identifier-safety.md MUST Rule 1); accept both forms.
+        assert ('"articles" (' in sql.lower()) or ("articles (" in sql.lower())
 
         # Should include all field definitions
         assert "title" in sql.lower()

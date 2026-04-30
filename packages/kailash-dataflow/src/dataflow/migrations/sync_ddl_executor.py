@@ -265,6 +265,105 @@ class SyncDDLExecutor:
                 except Exception:
                     pass
 
+    def execute_ddl_batch_per_statement(
+        self, sql_statements: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Execute multiple DDL statements on ONE connection, per-statement results.
+
+        Issue #714 — DDL connection thrash. Routing every DDL through a
+        fresh ``AsyncSQLDatabaseNode`` (or fresh sync connection) is
+        overkill: DDL is single-connection work that does NOT need a
+        pool, transaction-mode, or fetch-mode plumbing. This method
+        acquires ONE sync connection from the dialect driver
+        (psycopg2 / sqlite3 / pymysql), iterates the statements in
+        order, and releases the connection in a try/finally.
+
+        Unlike :meth:`execute_ddl_batch`, this method does NOT abort on
+        first error. Each statement's success/error is captured and
+        returned as a separate dict so the caller (DataFlow's
+        ``_execute_ddl`` path) can apply the issue #696 fail-fast
+        circuit-breaker per CREATE TABLE failure while continuing past
+        index/FK/auxiliary failures (legacy semantics).
+
+        Args:
+            sql_statements: List of DDL SQL statements (CREATE/ALTER/INDEX/etc.)
+
+        Returns:
+            List of per-statement result dicts with shape::
+
+                {"sql": str, "success": bool, "error": Optional[str], "duration_ms": float}
+
+            One entry per input statement; ordering preserved.
+        """
+        import time
+
+        conn = None
+        results: List[Dict[str, Any]] = []
+        try:
+            conn = self._get_sync_connection()
+            for sql in sql_statements:
+                if not sql or not sql.strip():
+                    # Preserve indexing parity with the input list.
+                    results.append(
+                        {
+                            "sql": sql,
+                            "success": True,
+                            "error": None,
+                            "duration_ms": 0.0,
+                        }
+                    )
+                    continue
+
+                t0 = time.monotonic()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(sql)
+                    # Per-statement commit for sqlite; psycopg2/pymysql
+                    # are autocommit-true at connection setup time.
+                    if hasattr(conn, "autocommit") and not conn.autocommit:
+                        conn.commit()
+                    elif self._db_type == "sqlite":
+                        conn.commit()
+                    cursor.close()
+                    duration_ms = (time.monotonic() - t0) * 1000.0
+                    results.append(
+                        {
+                            "sql": sql,
+                            "success": True,
+                            "error": None,
+                            "duration_ms": duration_ms,
+                        }
+                    )
+                except Exception as e:
+                    # Per-statement failure: preserve traceback chain
+                    # via _last_exception so caller can re-raise as
+                    # DDLFailedError without losing the original cause.
+                    duration_ms = (time.monotonic() - t0) * 1000.0
+                    results.append(
+                        {
+                            "sql": sql,
+                            "success": False,
+                            "error": str(e),
+                            "exception": e,
+                            "duration_ms": duration_ms,
+                        }
+                    )
+                    # Cursor may be in a bad state on PostgreSQL after a
+                    # failed DDL — rollback so the connection is reusable
+                    # for subsequent statements (legacy semantics).
+                    try:
+                        if hasattr(conn, "rollback"):
+                            conn.rollback()
+                    except Exception:
+                        pass
+            return results
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
     def execute_query(self, sql: str, params: Optional[Tuple] = None) -> Dict[str, Any]:
         """
         Execute a query and return results (for schema inspection).
