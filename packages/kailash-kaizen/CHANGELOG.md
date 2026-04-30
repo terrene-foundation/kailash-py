@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`from kaizen.core import BaseAgent, Signature, InputField, OutputField` raised `ImportError` on every fresh install** — the canonical Quick Start documented in `specs/kaizen-core.md` §3 BaseAgent AND the project rule `rules/patterns.md` § Kaizen Quick Start crashed before any agent code ran. `BaseAgent` lives at `kaizen.core.base_agent`; `Signature` / `InputField` / `OutputField` live in `kaizen.signatures`. Neither was re-exported through `kaizen/core/__init__.py`. Surfaced by /sweep Sweep 6 spec-vs-code drift audit (2026-04-30, HIGH-2). Fix: re-export all four symbols from `kaizen.core` and add them to `__all__`. Also adds `StructuredOutput` to `__all__` (pre-existing orphan-detection §6 violation — eagerly imported but absent). Three Tier-1 regression tests in `packages/kailash-kaizen/tests/regression/test_kaizen_core_quickstart_imports.py` pin the contract structurally (import-resolution, `__all__` membership, canonical-module identity).
+
 ### Changed
 
 - **Removed hardcoded model strings from `CoreAgent` + `GovernedSupervisor`; both now read from `KAIZEN_DEFAULT_MODEL` env var (closes F-D-02 + F-D-50).** `CoreAgent` (`kaizen.core.agents.Agent`) and `GovernedSupervisor` (`kaizen_agents.supervisor.GovernedSupervisor`) previously defaulted to `"gpt-3.5-turbo"` and `"claude-sonnet-4-6"` respectively when the caller omitted `model=`. This violated `rules/env-models.md` (model identifiers MUST come from `.env`) and locked every default-API deployment to a single provider. Both constructors now resolve the default from `KAIZEN_DEFAULT_MODEL` and raise `kaizen.errors.EnvModelMissing` (new typed error) with an actionable message when the env var is unset. Existing callers passing explicit `model=<literal>` are unaffected. Tier-1 unit tests in `tests/unit/test_kaizen_default_model_env.py` cover env-set, caller-override, env-unset, and empty-string env paths for both constructors.

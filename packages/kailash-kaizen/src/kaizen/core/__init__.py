@@ -9,6 +9,7 @@ This module contains the foundational classes and interfaces for the Kaizen fram
 """
 
 from .agents import Agent, AgentManager
+from .base_agent import BaseAgent
 from .config import KaizenConfig, MemoryProvider, OptimizationEngine
 from .structured_output import StructuredOutput
 
@@ -32,7 +33,11 @@ from .token_counter import (
     get_token_counter,
 )
 
-# Signature classes available in kaizen.signatures (Option 3: DSPy-inspired)
+# Signature primitives — re-exported here so the canonical Quick Start
+# (`from kaizen.core import BaseAgent, Signature, InputField, OutputField`)
+# documented in specs/kaizen-core.md §3 and rules/patterns.md § Kaizen
+# resolves on a fresh install.
+from kaizen.signatures import InputField, OutputField, Signature
 
 __all__ = [
     "Kaizen",
@@ -41,6 +46,12 @@ __all__ = [
     "KaizenConfig",
     "Agent",
     "AgentManager",
+    "BaseAgent",
+    "StructuredOutput",
+    # Signature primitives (re-exported from kaizen.signatures)
+    "Signature",
+    "InputField",
+    "OutputField",
     # Specialist System (ADR-013)
     "KaizenOptions",
     "SpecialistDefinition",
