@@ -64,6 +64,11 @@ jobs:
 
   test:
     name: Test (Python ${{ matrix.python-version }})
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # the source-change PRs already exercised this matrix. version-check
+    # above stays unguarded to verify pyproject.toml ↔ _version.py
+    # consistency on the release-cut diff (release-relevant gate).
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     needs: version-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -131,8 +136,11 @@ jobs:
   test-gpu:
     name: GPU Tests (optional)
     needs: version-check
+    # workflow_dispatch + run-gpu opt-in only; release/v* exclusion is
+    # implicit (release branches don't carry workflow_dispatch inputs)
+    # but kept explicit per ci-runners.md MUST Rule 8.
     if: >-
-      github.event_name == 'workflow_dispatch' && inputs.run-gpu == true
+      github.event_name == 'workflow_dispatch' && inputs.run-gpu == true && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -165,6 +173,10 @@ jobs:
 
   inter-package:
     name: Inter-Package (align + dev ML)
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # release-prep diffs are metadata-only; cross-package compat already
+    # verified on the source-change PRs that the release bundles.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     needs: version-check
     runs-on: ubuntu-latest
     timeout-minutes: 15

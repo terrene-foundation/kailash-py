@@ -23,6 +23,12 @@ env:
 
 jobs:
   test-with-infrastructure:
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # release diffs touch only version anchors + CHANGELOG; Docker
+    # infrastructure compatibility was already verified on the source-
+    # change PRs the release bundles. Scheduled weekly + workflow_dispatch
+    # still cover release-cut SHAs.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20 # Prevent hanging workflows
     env:

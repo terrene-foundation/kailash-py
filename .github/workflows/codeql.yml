@@ -20,6 +20,9 @@ permissions:
 jobs:
   analyze:
     name: Analyze Python
+    # Skip release-prep PRs (release/v*) — they are metadata-only per
+    # ci-runners.md MUST Rule 8. Tag-triggered scans cover release-cut SHAs.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

@@ -77,6 +77,11 @@ jobs:
 
   test-base:
     name: Base (Python ${{ matrix.python-version }})
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # the source-change PRs already exercised this matrix. version-check
+    # above stays unguarded to verify pyproject.toml ↔ _version.py
+    # consistency on the release-cut diff (release-relevant gate).
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     needs: version-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -161,9 +166,13 @@ jobs:
   test-dl:
     name: Deep Learning
     needs: version-check
+    # workflow_dispatch-only; release/v* exclusion is implicit (release
+    # branches don't carry workflow_dispatch inputs) but kept explicit
+    # per ci-runners.md MUST Rule 8.
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'dl' || inputs.variant == 'all')
+      (inputs.variant == 'dl' || inputs.variant == 'all') &&
+      !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -194,9 +203,12 @@ jobs:
   test-rl:
     name: Reinforcement Learning
     needs: version-check
+    # workflow_dispatch-only; release/v* exclusion is implicit but kept
+    # explicit per ci-runners.md MUST Rule 8.
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'rl' || inputs.variant == 'all')
+      (inputs.variant == 'rl' || inputs.variant == 'all') &&
+      !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -245,9 +257,12 @@ jobs:
   test-cuda:
     name: CUDA smoke (km.doctor + DeviceReport)
     needs: version-check
+    # workflow_dispatch-only; release/v* exclusion is implicit but kept
+    # explicit per ci-runners.md MUST Rule 8.
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'cuda' || inputs.variant == 'all')
+      (inputs.variant == 'cuda' || inputs.variant == 'all') &&
+      !startsWith(github.head_ref, 'release/')
     # IT-1: route to self-hosted GPU runner once provisioned.
     # Keep this runs-on value — as soon as the runner registers with these
     # labels, GitHub will assign jobs here automatically.
@@ -319,9 +334,12 @@ jobs:
   test-cuda-dl:
     name: CUDA deep learning (torch training on GPU)
     needs: version-check
+    # workflow_dispatch-only; release/v* exclusion is implicit but kept
+    # explicit per ci-runners.md MUST Rule 8.
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'cuda' || inputs.variant == 'all')
+      (inputs.variant == 'cuda' || inputs.variant == 'all') &&
+      !startsWith(github.head_ref, 'release/')
     # IT-1: route to self-hosted GPU runner once provisioned.
     runs-on: [self-hosted, cuda, gpu]
     # IT-1: non-blocking until runner live — remove this line to make blocking

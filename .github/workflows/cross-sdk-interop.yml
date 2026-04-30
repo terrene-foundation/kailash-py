@@ -28,6 +28,10 @@ concurrency:
 jobs:
   conformance:
     name: PACT N6 Conformance Vectors
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # they are metadata-only (paths filter rarely matches anyway, but
+    # defense-in-depth in case a release-prep PR touches trust/pact).
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

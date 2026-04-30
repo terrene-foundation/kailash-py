@@ -21,6 +21,10 @@ concurrency:
 jobs:
   validate-examples:
     name: Validate Autonomy Examples
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # release/v* paths rarely match the kaizen-agents examples filter, but
+    # defense-in-depth keeps the rule's enforcement uniform.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

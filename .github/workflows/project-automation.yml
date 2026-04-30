@@ -27,7 +27,9 @@ jobs:
   label-based-on-files:
     name: Auto-label based on files changed
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # they are metadata-only and don't need path-based label assignment.
+    if: github.event_name == 'pull_request' && github.event.action == 'opened' && !startsWith(github.head_ref, 'release/')
     permissions:
       contents: read
       pull-requests: write
