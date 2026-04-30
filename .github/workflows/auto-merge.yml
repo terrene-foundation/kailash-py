@@ -9,7 +9,9 @@ on:
 
 jobs:
   notify:
-    if: github.event.label.name == 'auto-fix' || github.event.label.name == 'needs-review'
+    # Skip release-prep PRs (release/v*) — they should never carry the auto-fix
+    # / needs-review labels per ci-runners.md MUST Rule 8 (defense-in-depth).
+    if: (github.event.label.name == 'auto-fix' || github.event.label.name == 'needs-review') && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     steps:
       - name: Notify Discord

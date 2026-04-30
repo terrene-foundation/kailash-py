@@ -49,6 +49,11 @@ jobs:
   # Skip push CI when an open PR already covers the branch
   check-duplicate:
     name: Check for Duplicate Run
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
+    # On push events, head_ref is empty so this expression evaluates to true,
+    # leaving push-event behavior intact. On pull_request events from
+    # release/v*, this short-circuits before the duplicate-PR check fires.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     outputs:
       should-skip: ${{ steps.check.outputs.skip }}
@@ -78,7 +83,11 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     needs: check-duplicate
-    if: needs.check-duplicate.outputs.should-skip != 'true'
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # release diffs are metadata-only (pyproject.toml version anchors +
+    # CHANGELOG); the source-change PRs the release bundles already
+    # exercised this matrix. Saves ~45 min × matrix-size per release cycle.
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: false
@@ -143,7 +152,8 @@ jobs:
   test-pact:
     name: Test PACT (Python 3.11)
     needs: check-duplicate
-    if: needs.check-duplicate.outputs.should-skip != 'true'
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

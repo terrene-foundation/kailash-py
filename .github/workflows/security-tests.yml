@@ -26,6 +26,12 @@ env:
 jobs:
   security-tests:
     name: Adversarial Security Tests
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # release-prep diffs touch only version anchors + CHANGELOG (paths
+    # filter on trust modules rarely matches), and the source-change PRs
+    # that the release bundles already exercised this suite. Scheduled
+    # weekly + workflow_dispatch still cover release-cut SHAs.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

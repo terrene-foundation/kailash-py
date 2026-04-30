@@ -34,6 +34,11 @@ concurrency:
 jobs:
   trust-unit-tests:
     name: Trust Unit Tests
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 —
+    # paths filter on trust modules rarely matches release-cut diffs, but
+    # defense-in-depth keeps the rule's enforcement uniform. Scheduled
+    # weekly + workflow_dispatch still cover release-cut SHAs.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
