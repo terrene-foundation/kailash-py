@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from typing import (
@@ -218,8 +218,13 @@ class TraceEvent:
         # Enum values → strings.
         d["event_type"] = self.event_type.value
         d["status"] = self.status.value if self.status is not None else None
-        # Timestamp → ISO-8601 with explicit +00:00 offset.
-        d["timestamp"] = self.timestamp.isoformat()
+        # Timestamp → ISO-8601 with explicit +00:00 offset AND fixed
+        # six-digit microsecond precision. ``isoformat()`` alone elides
+        # the decimal portion when ``microsecond == 0``, breaking
+        # cross-SDK byte-equality with kailash-rs (which always emits
+        # six microsecond digits via its own canonical path). See #731
+        # and ``rules/cross-sdk-inspection.md`` MUST Rule 4.
+        d["timestamp"] = self.timestamp.isoformat(timespec="microseconds")
         return d
 
     @classmethod

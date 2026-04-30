@@ -1,0 +1,58 @@
+{
+  "spec_version": "1.0",
+  "description": "Cross-SDK canonical fixtures for TraceEvent.to_dict() byte-equality + fingerprint stability between kailash-py and kailash-rs. Generated 2026-04-30 from the corrected isoformat(timespec=microseconds) path. Source: kailash-py issue #731 fix; vector inputs are reproducible from the embedded `input_repr` field.",
+  "vectors": [
+    {
+      "name": "V1_zero_microsecond",
+      "input_repr": {
+        "event_id": "evt-V1",
+        "run_id": "run-V1",
+        "agent_id": "agent-V1",
+        "cost_microdollars": 0,
+        "event_type": "agent.run.start",
+        "timestamp": "2026-04-20T12:00:00.000000+00:00"
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-V1\",\"completion_tokens\":null,\"cost_microdollars\":0,\"duration_ms\":null,\"envelope_id\":null,\"event_id\":\"evt-V1\",\"event_type\":\"agent.run.start\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":null,\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-V1\",\"span_id\":null,\"status\":null,\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.000000+00:00\",\"tool_name\":null,\"trace_id\":null}",
+      "expected_fingerprint": "792c13984825844cac0f9446730a0e63183632369827311009ae52ee1ce3023c"
+    },
+    {
+      "name": "V2_nonzero_microsecond",
+      "input_repr": {
+        "event_id": "evt-V2",
+        "run_id": "run-V2",
+        "agent_id": "agent-V2",
+        "cost_microdollars": 150,
+        "tool_name": "search",
+        "duration_ms": 42.5,
+        "event_type": "tool.call.start",
+        "timestamp": "2026-04-20T12:00:00.123456+00:00"
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-V2\",\"completion_tokens\":null,\"cost_microdollars\":150,\"duration_ms\":42.5,\"envelope_id\":null,\"event_id\":\"evt-V2\",\"event_type\":\"tool.call.start\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":null,\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-V2\",\"span_id\":null,\"status\":null,\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.123456+00:00\",\"tool_name\":\"search\",\"trace_id\":null}",
+      "expected_fingerprint": "049db1a3d005c455df3f457a11603d9de5dee446601af0034fb1a82dc6ef3577"
+    },
+    {
+      "name": "V3_full_event",
+      "input_repr": {
+        "event_id": "evt-V3",
+        "run_id": "run-V3",
+        "agent_id": "agent-V3",
+        "cost_microdollars": 2500,
+        "trace_id": "trace-V3",
+        "span_id": "span-V3",
+        "tenant_id": "tenant-V3",
+        "envelope_id": "env-V3",
+        "llm_model": "gpt-4o",
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "duration_ms": 1234.5,
+        "payload_hash": "sha256:deadbeef",
+        "payload": null,
+        "event_type": "agent.run.end",
+        "timestamp": "2026-12-31T23:59:59.999999+00:00",
+        "status": "ok"
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-V3\",\"completion_tokens\":50,\"cost_microdollars\":2500,\"duration_ms\":1234.5,\"envelope_id\":\"env-V3\",\"event_id\":\"evt-V3\",\"event_type\":\"agent.run.end\",\"llm_model\":\"gpt-4o\",\"parent_event_id\":null,\"payload\":null,\"payload_hash\":\"sha256:deadbeef\",\"prompt_tokens\":100,\"run_id\":\"run-V3\",\"span_id\":\"span-V3\",\"status\":\"ok\",\"tenant_id\":\"tenant-V3\",\"timestamp\":\"2026-12-31T23:59:59.999999+00:00\",\"tool_name\":null,\"trace_id\":\"trace-V3\"}",
+      "expected_fingerprint": "ff114cf1a11dd6b9296644fde32e95a6a560839f5d0dbcc47a8846c226b7f5a1"
+    }
+  ]
+}
