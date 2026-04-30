@@ -1,5 +1,26 @@
 # Nexus Changelog
 
+## [2.5.0] — 2026-04-30 — `Nexus.add_startup_handler` / `add_shutdown_handler` (Mediscribe cluster: closes #712)
+
+Minor release adding the canonical "run-once at server start" hook surface so consumers no longer need to reach for `nexus.fastapi_app.on_event(...)` (which has the lazy-init timing trap — `fastapi_app` returns `None` until the enterprise gateway is initialized) or author a full `NexusPluginProtocol` implementation for a single callback.
+
+### Added
+
+- **`Nexus.add_startup_handler(func)` (#712 / MED-S3)** — registers a zero-argument callable (sync `def` or `async def`) that fires during the FastAPI lifespan startup phase, in registration order, inside uvicorn's event loop. Appends to the same internal `_startup_hooks` list that powers the plugin protocol's `on_startup` lifecycle hook (§10.2). Returns `self` for chaining. Raises `TypeError` on non-callables and `RuntimeError` if called after `Nexus.start()` (the lifespan has already fired or is firing; a late append cannot be guaranteed to run). The canonical pattern for "run DataFlow async DDL at server start" — `app.add_startup_handler(create_schema)` where `create_schema` is `async def create_schema(): await db.create_tables_async()`.
+- **`Nexus.add_shutdown_handler(func)` (#712 / MED-S3)** — symmetric to `add_startup_handler`. Appends to `_shutdown_hooks`. Hooks fire in REVERSE registration order — the last installed runs first — so pairs of (open_resource, close_resource) registered in init order tear down LIFO. Same validation contract.
+
+### Documented
+
+- **`fastapi_app` lazy-init timing trap (issue #712)** — the `fastapi_app` property returns `None` until the enterprise gateway has been initialized; gateway init is lazy (fires on the first `register()` call, or at `start()` if no `register()` was called first). Code that accesses `fastapi_app` immediately after `Nexus(...)` therefore sees `None` and any downstream attribute access (e.g. `nexus.fastapi_app.on_event("startup")`) raises `AttributeError: 'NoneType' object has no attribute 'on_event'`. Docstring on `fastapi_app` now warns explicitly and points to `add_startup_handler` as the safe pre-init surface. See `specs/nexus-services.md` §29 for the full timing contract.
+
+### Tests
+
+- `tests/regression/test_issue_712_consumer_startup_patterns.py` — Tier 2 regression (in the kailash root repo) verifying the new API against real DataFlow async DDL + sibling FastAPI lifespan sites.
+
+### Cross-SDK
+
+- kailash-rs uses axum + tokio; no equivalent custom-lifespan footgun. No companion issue.
+
 ## [2.4.1] — 2026-04-29 — `MountInfo` exported in `__all__`
 
 Patch release closing the build-repo-release-discipline.md Rule 5 drift from PR #720. `MountInfo` (`nexus/core.py`) was already imported at module-scope in `nexus/__init__.py` but absent from `__all__`, triggering `pyright` "MountInfo is not accessed" and violating `orphan-detection.md` Rule 6 (Module-Scope Public Imports Appear In `__all__`). No behavioral change; pure public-API contract repair.
