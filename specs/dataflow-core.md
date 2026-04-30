@@ -66,43 +66,43 @@ DataFlow(
 
 **Parameter reference:**
 
-| Parameter                      | Type                       | Default | Purpose                                                                                                                       |
-| ------------------------------ | -------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `database_url`                 | `Optional[str]`            | `None`  | Database connection URL. Falls back to `DATABASE_URL` env var. `None` with no config triggers `DataFlowConfig.from_env()`.    |
-| `config`                       | `Optional[DataFlowConfig]` | `None`  | Full configuration object. Individual parameters override matching config fields.                                             |
-| `pool_size`                    | `Optional[int]`            | `None`  | Connection pool size. `None` defers to `DatabaseConfig.get_pool_size()`.                                                      |
-| `pool_max_overflow`            | `Optional[int]`            | `None`  | Maximum overflow connections beyond `pool_size`.                                                                              |
-| `pool_recycle`                 | `int`                      | `3600`  | Seconds before recycling idle connections.                                                                                    |
-| `echo`                         | `bool`                     | `False` | Echo SQL statements to log.                                                                                                   |
-| `multi_tenant`                 | `bool`                     | `False` | Enable multi-tenant data isolation. When `True`, every Express operation requires a tenant context.                           |
-| `encryption_key`               | `Optional[str]`            | `None`  | Encryption key for sensitive data.                                                                                            |
-| `audit_logging`                | `bool`                     | `False` | Enable audit trail persistence.                                                                                               |
-| `cache_enabled`                | `bool`                     | `True`  | Enable query result caching in Express.                                                                                       |
-| `cache_ttl`                    | `int`                      | `3600`  | Default cache TTL in seconds.                                                                                                 |
-| `monitoring`                   | `Optional[bool]`           | `None`  | Enable performance monitoring. `None` = disabled.                                                                             |
-| `slow_query_threshold`         | `float`                    | `1.0`   | Seconds above which a query is logged as slow.                                                                                |
-| `debug`                        | `bool`                     | `False` | Enable debug logging.                                                                                                         |
-| `migration_enabled`            | `bool`                     | `True`  | Enable automatic database migrations.                                                                                         |
+| Parameter                      | Type                       | Default | Purpose                                                                                                                                                                                                                                                                                      |
+| ------------------------------ | -------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `database_url`                 | `Optional[str]`            | `None`  | Database connection URL. Falls back to `DATABASE_URL` env var. `None` with no config triggers `DataFlowConfig.from_env()`.                                                                                                                                                                   |
+| `config`                       | `Optional[DataFlowConfig]` | `None`  | Full configuration object. Individual parameters override matching config fields.                                                                                                                                                                                                            |
+| `pool_size`                    | `Optional[int]`            | `None`  | Connection pool size. `None` defers to `DatabaseConfig.get_pool_size()`.                                                                                                                                                                                                                     |
+| `pool_max_overflow`            | `Optional[int]`            | `None`  | Maximum overflow connections beyond `pool_size`.                                                                                                                                                                                                                                             |
+| `pool_recycle`                 | `int`                      | `3600`  | Seconds before recycling idle connections.                                                                                                                                                                                                                                                   |
+| `echo`                         | `bool`                     | `False` | Echo SQL statements to log.                                                                                                                                                                                                                                                                  |
+| `multi_tenant`                 | `bool`                     | `False` | Enable multi-tenant data isolation. When `True`, every Express operation requires a tenant context.                                                                                                                                                                                          |
+| `encryption_key`               | `Optional[str]`            | `None`  | Encryption key for sensitive data.                                                                                                                                                                                                                                                           |
+| `audit_logging`                | `bool`                     | `False` | Enable audit trail persistence.                                                                                                                                                                                                                                                              |
+| `cache_enabled`                | `bool`                     | `True`  | Enable query result caching in Express.                                                                                                                                                                                                                                                      |
+| `cache_ttl`                    | `int`                      | `3600`  | Default cache TTL in seconds.                                                                                                                                                                                                                                                                |
+| `monitoring`                   | `Optional[bool]`           | `None`  | Enable performance monitoring. `None` = disabled.                                                                                                                                                                                                                                            |
+| `slow_query_threshold`         | `float`                    | `1.0`   | Seconds above which a query is logged as slow.                                                                                                                                                                                                                                               |
+| `debug`                        | `bool`                     | `False` | Enable debug logging.                                                                                                                                                                                                                                                                        |
+| `migration_enabled`            | `bool`                     | `True`  | Enable automatic database migrations.                                                                                                                                                                                                                                                        |
 | `auto_migrate`                 | `Union[bool, str]`         | `True`  | Auto-migration mode. `True` (fail-fast on DDL failure, default since v2.4.0), `False` (no DDL execution), or `"warn"` (legacy log-and-continue escape hatch). See § 1.6 Auto-Migrate Semantics. Typo strings (`"WARN"`, `"warning"`, etc.) raise `DataFlowConfigurationError` at `__init__`. |
-| `existing_schema_mode`         | `bool`                     | `False` | Safe mode for existing databases -- validates compatibility without modifying schema.                                         |
-| `enable_model_persistence`     | `bool`                     | `True`  | Enable persistent model registry for multi-application support.                                                               |
-| `tdd_mode`                     | `bool`                     | `False` | Enable TDD mode for testing. Also settable via `DATAFLOW_TDD_MODE` env var.                                                   |
-| `test_mode`                    | `Optional[bool]`           | `None`  | `None` = auto-detect (checks for pytest env), `True` = enable, `False` = disable.                                             |
-| `test_mode_aggressive_cleanup` | `bool`                     | `True`  | Enable aggressive pool cleanup in test mode.                                                                                  |
-| `migration_lock_timeout`       | `int`                      | `30`    | Migration lock timeout in seconds for concurrent safety. Minimum 1 second.                                                    |
-| `enable_connection_pooling`    | `bool`                     | `True`  | Enable connection pooling.                                                                                                    |
-| `validate_on_write`            | `bool`                     | `True`  | Run `@field_validator` rules before every Express write operation.                                                            |
-| `log_level`                    | `Optional[int]`            | `None`  | Override log level (e.g. `logging.DEBUG`).                                                                                    |
-| `log_config`                   | `Optional[LoggingConfig]`  | `None`  | Full logging configuration for category-specific control.                                                                     |
-| `read_url`                     | `Optional[str]`            | `None`  | Read replica URL for read/write splitting (TSG-105).                                                                          |
-| `read_pool_size`               | `Optional[int]`            | `None`  | Separate pool size for the read replica.                                                                                      |
-| `redis_url`                    | `Optional[str]`            | `None`  | Redis URL for Express cache backend. Falls back to `REDIS_URL` env var. When absent or unreachable, uses in-memory LRU cache. |
-| `trust_enforcement_mode`       | `Optional[str]`            | `None`  | Trust plane enforcement: `"disabled"` (default), `"permissive"`, `"enforcing"`.                                               |
-| `trust_audit_enabled`          | `Optional[bool]`           | `None`  | Enable trust audit store.                                                                                                     |
-| `trust_audit_signing_key`      | `Optional[bytes]`          | `None`  | Ed25519 signing key for audit entries.                                                                                        |
-| `trust_audit_verify_key`       | `Optional[bytes]`          | `None`  | Ed25519 verification key for audit entries.                                                                                   |
-| `enable_caching`               | `Optional[bool]`           | `None`  | Alias for `cache_enabled`.                                                                                                    |
-| `max_overflow`                 | `Optional[int]`            | `None`  | Alias for `pool_max_overflow`.                                                                                                |
+| `existing_schema_mode`         | `bool`                     | `False` | Safe mode for existing databases -- validates compatibility without modifying schema.                                                                                                                                                                                                        |
+| `enable_model_persistence`     | `bool`                     | `True`  | Enable persistent model registry for multi-application support.                                                                                                                                                                                                                              |
+| `tdd_mode`                     | `bool`                     | `False` | Enable TDD mode for testing. Also settable via `DATAFLOW_TDD_MODE` env var.                                                                                                                                                                                                                  |
+| `test_mode`                    | `Optional[bool]`           | `None`  | `None` = auto-detect (checks for pytest env), `True` = enable, `False` = disable.                                                                                                                                                                                                            |
+| `test_mode_aggressive_cleanup` | `bool`                     | `True`  | Enable aggressive pool cleanup in test mode.                                                                                                                                                                                                                                                 |
+| `migration_lock_timeout`       | `int`                      | `30`    | Migration lock timeout in seconds for concurrent safety. Minimum 1 second.                                                                                                                                                                                                                   |
+| `enable_connection_pooling`    | `bool`                     | `True`  | Enable connection pooling.                                                                                                                                                                                                                                                                   |
+| `validate_on_write`            | `bool`                     | `True`  | Run `@field_validator` rules before every Express write operation.                                                                                                                                                                                                                           |
+| `log_level`                    | `Optional[int]`            | `None`  | Override log level (e.g. `logging.DEBUG`).                                                                                                                                                                                                                                                   |
+| `log_config`                   | `Optional[LoggingConfig]`  | `None`  | Full logging configuration for category-specific control.                                                                                                                                                                                                                                    |
+| `read_url`                     | `Optional[str]`            | `None`  | Read replica URL for read/write splitting (TSG-105).                                                                                                                                                                                                                                         |
+| `read_pool_size`               | `Optional[int]`            | `None`  | Separate pool size for the read replica.                                                                                                                                                                                                                                                     |
+| `redis_url`                    | `Optional[str]`            | `None`  | Redis URL for Express cache backend. Falls back to `REDIS_URL` env var. When absent or unreachable, uses in-memory LRU cache.                                                                                                                                                                |
+| `trust_enforcement_mode`       | `Optional[str]`            | `None`  | Trust plane enforcement: `"disabled"` (default), `"permissive"`, `"enforcing"`.                                                                                                                                                                                                              |
+| `trust_audit_enabled`          | `Optional[bool]`           | `None`  | Enable trust audit store.                                                                                                                                                                                                                                                                    |
+| `trust_audit_signing_key`      | `Optional[bytes]`          | `None`  | Ed25519 signing key for audit entries.                                                                                                                                                                                                                                                       |
+| `trust_audit_verify_key`       | `Optional[bytes]`          | `None`  | Ed25519 verification key for audit entries.                                                                                                                                                                                                                                                  |
+| `enable_caching`               | `Optional[bool]`           | `None`  | Alias for `cache_enabled`.                                                                                                                                                                                                                                                                   |
+| `max_overflow`                 | `Optional[int]`            | `None`  | Alias for `pool_max_overflow`.                                                                                                                                                                                                                                                               |
 
 **Known `**kwargs`:\*\*
 
@@ -163,14 +163,40 @@ DataFlow uses lazy connection initialization. The constructor (`__init__`) store
 
 **Design rationale:** Lazy connection means `DataFlow("sqlite:///app.db")` returns instantly with zero I/O. This allows `@db.model` decorators to register models at import time without blocking module loading. Connection is deferred until the application actually needs the database, which also means misconfigured connection URLs fail at first use, not at import time.
 
+**DDL connection lifecycle (issue #714):** `db.create_tables()` / `await db.create_tables_async()` no longer construct one `AsyncSQLDatabaseNode` per CREATE TABLE / index statement. The entire DDL batch runs on a single sync connection acquired via `SyncDDLExecutor.execute_ddl_batch_per_statement` (sync path direct, async path via `asyncio.to_thread`). See §1.6.5 for the connection-reuse contract and the cross-reference to `dataflow.migrations.sync_ddl_executor`.
+
 ### 1.5 Runtime Detection
 
-DataFlow detects whether it is running in an async or sync context at construction time:
+Origin: GitHub issue #713 (2026-04-30). Pre-#713 DataFlow bound a single runtime at construction time. Module-import construction (the `db = DataFlow(...)` at module scope pattern Mediscribe and similar consumers use) permanently bound `LocalRuntime` because no event loop is running at import time, then `await db.create_tables_async()` raised "no running event loop" or quietly used the wrong runtime when later invoked from inside FastAPI/uvicorn. The fix replaces eager construction-time selection with lazy per-access resolution via a per-event-loop cache.
 
-- **Async context** (running event loop detected): uses `AsyncLocalRuntime`
-- **Sync context** (no running event loop): uses `LocalRuntime`
+**Runtime resolution is now lazy** — performed on every read of `db.runtime`, not at construction. Resolution order:
 
-All subsystems share a single runtime via `acquire()`/`release()` ref-counting to prevent orphan runtimes and pool exhaustion.
+1. **Setter override** — if `db.runtime = X` (or `runtime=X` kwarg in `__init__`) is active, return the override unconditionally. Preserves the existing `db.runtime = AsyncLocalRuntime()` workaround pattern, the `monkeypatch.setattr(db, "runtime", X)` test idiom, and explicit caller control.
+2. **Closed instance** — if the DataFlow has been `close()`d, return `None`. Subsystem callers expect `None` from a closed instance and short-circuit accordingly.
+3. **Async context (running event loop)** — return a per-event-loop cached `AsyncLocalRuntime`, keyed by `id(loop)`. Different loops get different runtimes; the same loop always sees the same runtime. Cache mirrors the per-event-loop pattern already used by `_async_sql_node_cache` (engine.py:7488).
+4. **Sync context (no running loop)** — return the cached `LocalRuntime` singleton, allocated on first access. The singleton is marked `mark_externally_managed()` (issue #478) so the SDK suppresses its ad-hoc-usage deprecation warning and skips atexit cleanup — DataFlow's own shutdown drives `close()`.
+
+#### `runtime` property — getter / setter
+
+| Surface             | Behavior                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `db.runtime` (read) | Resolves via the 4-step order above. Returns `Any` (LocalRuntime or AsyncLocalRuntime).               |
+| `db.runtime = X`    | Stores `X` in `_runtime_override`. Every subsequent read returns `X` unconditionally.                 |
+| `db.runtime = None` | Clears the override. Subsequent reads resume lazy per-loop detection (or return `None` if `_closed`). |
+
+#### `runtime=` constructor kwarg
+
+`DataFlow(database_url, runtime=AsyncLocalRuntime())` routes the kwarg through the `@runtime.setter` (descriptor protocol), so the value lands in `_runtime_override` and behaves identically to a post-construction `db.runtime = X` assignment. Explicit escape hatch for callers that need a specific runtime instance from the start.
+
+#### Subsystem-capture pattern
+
+Subsystems (`DataFlowExpress`, `DataFlowExpressSync`, `BulkOperations`, `TransactionManager`, `_DataFlowAuditQueryProxy`, `_DataFlowAuditExportProxy`) MUST hold a back-reference to the DataFlow parent (`self._dataflow = dataflow`) and read `self._dataflow.runtime` lazily on each operation — NOT capture the runtime at subsystem `__init__` time. Captured runtimes do NOT follow setter overrides, do NOT survive a `db.runtime = X` mutation, and miss the per-event-loop cache. Per the lazy-resolution contract, `runtime` is per-access; subsystems that snapshot it ship the same #713 footgun at a different layer.
+
+#### Pickle / deepcopy round-trip
+
+`__getstate__` / `__setstate__` exclude `_loop_runtime_cache` and `_sync_runtime_singleton` from the pickled state. The cache is rebuilt lazily on first `runtime` access in the unpickled instance. This makes DataFlow safe to ship across process boundaries (multiprocessing pools, Ray actors, Dask workers) without dragging an event-loop-bound runtime that would be invalid in the destination process.
+
+All subsystems still share a single runtime instance per `DataFlow` per event loop via `acquire()`/`release()` ref-counting to prevent orphan runtimes and pool exhaustion. Per-loop caching does NOT spawn N runtimes per loop — it spawns ONE runtime per loop, shared by every subsystem invocation in that loop.
 
 ### 1.6 Auto-Migrate Semantics
 
@@ -178,21 +204,21 @@ Origin: GitHub issue #696 (per `workspaces/dataflow-prod-incident`, 2026-04-28).
 
 The `auto_migrate` parameter accepts three values, each with a distinct behavioural contract. Strings other than `"warn"` (case-sensitive) are rejected at `__init__` with `DataFlowConfigurationError` so a typo (`"WARN"`, `"warning"`, `"true"`) cannot silently degrade behavior at deploy time.
 
-| Value     | DDL execution        | On DDL failure (e.g. invalid type, FK ordering, role permission)                                                                                                                                                                                                                       | Subsequent access to failed model                                                                                                                                              |
-| --------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `True`    | Yes (default)        | Records the failure on `_failed_table_creations[model_name] = FailedDDLRecord(timestamp, error_message, statement_preview)`. Emits exactly ONE `engine.ddl_failed_recorded` ERROR log per `(model, DataFlow instance)` pair. Raises `DDLFailedError` to the caller of the first access. | Fail-fast: raises `DDLFailedError` from the head of `ensure_table_exists()` BEFORE re-entering the DDL path. NO connection acquired, NO DDL fired, NO additional log emitted. |
-| `False`   | No (skip mode)       | N/A — DDL never runs. Schema is assumed managed externally (Alembic, Liquibase, dba-issued DDL).                                                                                                                                                                                       | Standard SQL-layer access. SELECT/INSERT errors surface from the database normally; no circuit-breaker engagement.                                                             |
-| `"warn"`  | Yes (legacy)         | Records the failure on `_failed_table_creations` AND emits the `engine.ddl_failed_recorded` ERROR log (same as fail-fast). Returns `False` from `ensure_table_exists()`. **Does NOT raise.**                                                                                            | Legacy retry-on-access: `_check_failed_ddl()` is a no-op, the DDL path resumes pre-#696 semantics. Operators who explicitly opt in accept the pool-leak risk this entails.    |
+| Value    | DDL execution  | On DDL failure (e.g. invalid type, FK ordering, role permission)                                                                                                                                                                                                                        | Subsequent access to failed model                                                                                                                                             |
+| -------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `True`   | Yes (default)  | Records the failure on `_failed_table_creations[model_name] = FailedDDLRecord(timestamp, error_message, statement_preview)`. Emits exactly ONE `engine.ddl_failed_recorded` ERROR log per `(model, DataFlow instance)` pair. Raises `DDLFailedError` to the caller of the first access. | Fail-fast: raises `DDLFailedError` from the head of `ensure_table_exists()` BEFORE re-entering the DDL path. NO connection acquired, NO DDL fired, NO additional log emitted. |
+| `False`  | No (skip mode) | N/A — DDL never runs. Schema is assumed managed externally (Alembic, Liquibase, dba-issued DDL).                                                                                                                                                                                        | Standard SQL-layer access. SELECT/INSERT errors surface from the database normally; no circuit-breaker engagement.                                                            |
+| `"warn"` | Yes (legacy)   | Records the failure on `_failed_table_creations` AND emits the `engine.ddl_failed_recorded` ERROR log (same as fail-fast). Returns `False` from `ensure_table_exists()`. **Does NOT raise.**                                                                                            | Legacy retry-on-access: `_check_failed_ddl()` is a no-op, the DDL path resumes pre-#696 semantics. Operators who explicitly opt in accept the pool-leak risk this entails.    |
 
 #### 1.6.1 The `DDLFailedError` Typed Surface
 
 `DDLFailedError` (`dataflow.core.exceptions.DDLFailedError`, also exported at `dataflow.DDLFailedError`) is the structured exception raised by the fail-fast circuit breaker. It subclasses `DataFlowError` so callers using `except DataFlowError` continue to catch the new type without explicit import.
 
-| Attribute            | Type             | Description                                                                                                                                                              |
-| -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model_name`         | `str`            | The model whose `CREATE TABLE` / `ALTER TABLE` failed.                                                                                                                   |
-| `original_error`     | `BaseException`  | The underlying exception from the DDL execution (PostgreSQL `UndefinedObject`, MySQL `OperationalError`, etc.). Operators do not need to chain `__cause__` to diagnose. |
-| `statement_preview`  | `str` (≤200 ch)  | First 200 characters of the failed DDL statement. Bounded to avoid leaking large schema bodies through error chains shipped to log aggregators.                          |
+| Attribute           | Type            | Description                                                                                                                                                             |
+| ------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model_name`        | `str`           | The model whose `CREATE TABLE` / `ALTER TABLE` failed.                                                                                                                  |
+| `original_error`    | `BaseException` | The underlying exception from the DDL execution (PostgreSQL `UndefinedObject`, MySQL `OperationalError`, etc.). Operators do not need to chain `__cause__` to diagnose. |
+| `statement_preview` | `str` (≤200 ch) | First 200 characters of the failed DDL statement. Bounded to avoid leaking large schema bodies through error chains shipped to log aggregators.                         |
 
 The `str(DDLFailedError)` rendering includes `model_name`, `original_error` type+message, optionally `statement_preview` (when non-empty), and inline operator guidance: "Subsequent access to this model will fail-fast without re-firing the DDL. Diagnose the root cause, then restart the application to retry. Use `auto_migrate='warn'` (legacy) to opt into log-and-continue behavior instead of fail-fast."
 
@@ -220,6 +246,38 @@ The log line is structured (per `rules/observability.md` Rule 1) and carries `mo
 - `rules/observability.md` Rule 7 — bulk operations MUST log partial failures at WARN. Issue #696 surfaced the analogous gap for DDL operations: a per-model failure that re-fires every 30 seconds with no aggregation-pipeline visibility. The idempotent-once ERROR log + the `auto_migrate_mode` field together close that gap for the DDL surface.
 - `rules/dataflow-pool.md` Rule 2 — fail-fast at startup. The DDL fail-fast circuit breaker is the model-access-time analogue of the pool-config validator: convert a silent degradation into a deployment-time failure that surfaces before users observe broken endpoints.
 
+#### 1.6.5 DDL Connection Reuse — Single Sync Connection Per Batch
+
+Origin: GitHub issue #714 (2026-04-30). Pre-#714 `_execute_ddl` / `_execute_ddl_async` routed every CREATE TABLE / CREATE INDEX through a fresh `AsyncSQLDatabaseNode` instance — one connection acquire/release per statement. Under `auto_migrate=True` with N models, this produced ≈ 2N+ connection acquires at startup (one per CREATE TABLE, one per index batch, one per FK addition). Against pgbouncer transaction-pooling or a constrained Azure PostgreSQL `max_connections`, the burst exhausted available slots before the application opened to traffic — the same failure-mode class as #696 (model-access-time DDL spam) but at a different surface (startup-time DDL spam).
+
+The refactor replaces the per-statement `AsyncSQLDatabaseNode` plumbing with `SyncDDLExecutor.execute_ddl_batch_per_statement` — a single sync connection from the dialect driver (`psycopg2` / `sqlite3` / `pymysql`) that iterates the entire batch in order and releases the connection in `try/finally`. Per-statement results are captured (success / error / duration_ms) so the #696 fail-fast circuit-breaker still fires on individual CREATE TABLE failures while index/FK/auxiliary failures continue past (legacy semantics).
+
+**Sync vs async pathing:**
+
+| DataFlow method                          | Path                                                                                               | Connection model                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `db.create_tables()` (sync)              | `_execute_ddl()` → `SyncDDLExecutor.execute_ddl_batch_per_statement()` directly                    | One sync connection, in-thread                                                          |
+| `await db.create_tables_async()` (async) | `_execute_ddl_async()` → `asyncio.to_thread(SyncDDLExecutor.execute_ddl_batch_per_statement, ...)` | One sync connection, off-loop via `asyncio.to_thread` so the event loop stays unblocked |
+
+**`asyncio.to_thread` rationale:** `SyncDDLExecutor` uses blocking `psycopg2.connect()`. Calling it directly from `_execute_ddl_async` would block the running event loop for the duration of the DDL batch (potentially seconds on large schemas against high-latency PostgreSQL). `asyncio.to_thread` off-loads the blocking call to the default executor, preserving event-loop responsiveness for concurrent requests during startup.
+
+**Per-statement result shape** (from `execute_ddl_batch_per_statement`):
+
+```python
+[
+    {"sql": str, "success": bool, "error": Optional[str], "duration_ms": float},
+    ...  # one entry per input statement, ordering preserved
+]
+```
+
+Failed-statement entries also carry `"exception": e` so the `_execute_ddl` caller can re-raise as `DDLFailedError` per #696 without losing the original cause chain.
+
+**Cross-reference:**
+
+- Issue #696 (auto-migrate semantics, §1.6 above) — the model-access-time DDL spam this fix's startup-time analogue closes for.
+- `packages/kailash-dataflow/src/dataflow/migrations/sync_ddl_executor.py::SyncDDLExecutor.execute_ddl_batch_per_statement` — the new helper used by both DDL paths.
+- `packages/kailash-dataflow/tests/regression/test_issue_714_ddl_single_connection.py` — structural + behavioral regression suite pinning the single-connection contract.
+
 ---
 
 ## 14. DataFlowEngine (Builder Pattern)
@@ -245,17 +303,17 @@ await engine.close()
 
 ### 14.1 Builder Methods
 
-| Method                           | Purpose                                                                |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| `.validation(layer)`             | Set a `ValidationLayer` protocol implementation                        |
-| `.classification_policy(policy)` | Set a `DataClassificationPolicy`                                       |
-| `.slow_query_threshold(seconds)` | Slow query detection threshold (default: 1.0s)                         |
-| `.validate_on_write(enabled)`    | Enable auto-validation before writes                                   |
-| `.source(name, config)`          | Register an external data source                                       |
-| `.fabric(**kwargs)`              | Configure fabric runtime parameters                                    |
-| `.config(**kwargs)`              | Pass additional kwargs to `DataFlow`                                   |
-| `.build()`                       | Build the engine (async — preserved for cross-SDK parity)              |
-| `.build_sync()`                  | Build the engine synchronously (module-import-time / lru_cache safe)   |
+| Method                           | Purpose                                                              |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `.validation(layer)`             | Set a `ValidationLayer` protocol implementation                      |
+| `.classification_policy(policy)` | Set a `DataClassificationPolicy`                                     |
+| `.slow_query_threshold(seconds)` | Slow query detection threshold (default: 1.0s)                       |
+| `.validate_on_write(enabled)`    | Enable auto-validation before writes                                 |
+| `.source(name, config)`          | Register an external data source                                     |
+| `.fabric(**kwargs)`              | Configure fabric runtime parameters                                  |
+| `.config(**kwargs)`              | Pass additional kwargs to `DataFlow`                                 |
+| `.build()`                       | Build the engine (async — preserved for cross-SDK parity)            |
+| `.build_sync()`                  | Build the engine synchronously (module-import-time / lru_cache safe) |
 
 **`build()` vs `build_sync()`** — both surfaces produce identical
 engine state. `build()` is `async def` for cross-SDK parity with
@@ -264,11 +322,11 @@ Tokio runtime initialization); the kailash-py body has no `await`s and
 delegates to `build_sync()` so the two surfaces share a single body
 and cannot drift.
 
-| Caller context                                        | Use         |
-| ----------------------------------------------------- | ----------- |
-| Module-import-time (`@lru_cache` factory, top-level)  | `build_sync()` |
+| Caller context                                        | Use                                 |
+| ----------------------------------------------------- | ----------------------------------- |
+| Module-import-time (`@lru_cache` factory, top-level)  | `build_sync()`                      |
 | Inside a running event loop (Nexus, FastAPI, Jupyter) | `build_sync()` (or `await build()`) |
-| Cross-SDK polyglot code that awaits build everywhere  | `build()`   |
+| Cross-SDK polyglot code that awaits build everywhere  | `build()`                           |
 
 Per `rules/patterns.md` § "Paired Public Surface — Consistent
 Async-ness", offering both shapes is permitted here because the
@@ -313,12 +371,12 @@ is the programmatic counterpart to the `@db.model` decorator. Both
 paths share the same body — `db.register_model(Foo)` produces
 identical state to `@db.model class Foo`.
 
-| Call                                                    | Behaviour                                                          |
-| ------------------------------------------------------- | ------------------------------------------------------------------ |
-| `db.register_model(Foo)`                                | Registers `Foo`; returns `Foo` for chaining.                       |
-| `db.register_model(Foo)` again                          | Raises `ValueError("already registered")`.                         |
-| `db.register_model(Foo, replace=True)`                  | Refused — raises `ValueError("force_drop=True required")`.         |
-| `db.register_model(Foo, replace=True, force_drop=True)` | Tears down prior registration and re-registers. Destructive.       |
+| Call                                                    | Behaviour                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `db.register_model(Foo)`                                | Registers `Foo`; returns `Foo` for chaining.                 |
+| `db.register_model(Foo)` again                          | Raises `ValueError("already registered")`.                   |
+| `db.register_model(Foo, replace=True)`                  | Refused — raises `ValueError("force_drop=True required")`.   |
+| `db.register_model(Foo, replace=True, force_drop=True)` | Tears down prior registration and re-registers. Destructive. |
 
 The `replace` + `force_drop` two-flag pattern follows the
 destructive-confirmation discipline mandated by

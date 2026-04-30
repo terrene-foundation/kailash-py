@@ -494,3 +494,82 @@ task = app.run_in_background(send_email(user))
 ```
 
 Runs a coroutine as a background task via `asyncio.create_task()`. Truly concurrent and decoupled from any HTTP request lifecycle. Task errors are logged, not propagated. Returns the `asyncio.Task` (can be cancelled).
+
+## 29. FastAPI Lifespan + `fastapi_app` Property
+
+Origin: GitHub issue #712 (2026-04-30). Mediscribe and similar consumers needed an async startup hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) and reached for `nexus.fastapi_app.on_event("startup")`. The property returned `None` immediately after `Nexus(...)` because the enterprise gateway is built lazily, and the downstream `.on_event(...)` raised `AttributeError`. The fix is documented here so consumers can pick the right surface.
+
+### 29.1 `fastapi_app` Lazy-Init Timing Trap
+
+`Nexus.fastapi_app` returns the underlying `FastAPI` app once the enterprise gateway is initialized — and `None` until then. Gateway init is **lazy**: it fires on the first `Nexus.register(...)` call or, failing that, at `Nexus.start()`. The state machine:
+
+| Lifecycle event                          | `nexus.fastapi_app` returns          |
+| ---------------------------------------- | ------------------------------------ |
+| `Nexus(...)` (constructor only)          | `None`                               |
+| `nexus.register("workflow", w)`          | `FastAPI` instance (lazy init fires) |
+| `nexus.start()` (without prior register) | `FastAPI` instance (lazy init fires) |
+| After `start()`                          | `FastAPI` instance                   |
+
+Code that accesses `fastapi_app` immediately after `Nexus(...)` therefore sees `None`; any downstream attribute access (e.g. `nexus.fastapi_app.on_event("startup")`) raises `AttributeError: 'NoneType' object has no attribute 'on_event'`.
+
+**Recommended pattern** for one-off async startup/shutdown hooks: `Nexus.add_startup_handler(func)` / `Nexus.add_shutdown_handler(func)` (see `specs/nexus-core.md` §10.3). Both methods queue the handler in `_startup_hooks` / `_shutdown_hooks` BEFORE the gateway is initialized, so they're safe to call immediately after `Nexus(...)`.
+
+**Direct `on_event` is supported** — but only after a `register()` or `start()` has triggered gateway construction. Authors who hold a reference to `fastapi_app` early MUST either gate on `nexus.fastapi_app is not None` or migrate to `add_startup_handler`.
+
+### 29.2 Lifespan-Handler Chain Order
+
+When a Nexus consumer wraps the FastAPI app in a custom lifespan (the documented "I want to add my own startup logic" pattern), the chain MUST drive every registered handler list in the canonical order. The shared helper module `kailash.utils.lifespan` (issue #712 / MED-S1) exposes the two drivers Nexus and every sibling FastAPI gateway uses:
+
+```python
+from kailash.utils import (
+    drive_router_lifespan_startup,
+    drive_router_lifespan_shutdown,
+)
+```
+
+**Canonical lifespan chain** (Nexus's own lifespan implements this; custom lifespans MUST mirror it):
+
+1. **`app.router.on_startup`** — driven via `drive_router_lifespan_startup(app)`. Iterates the SAME list Starlette's default `_DefaultLifespan` walks. Without this step, every handler registered via `@app.on_event("startup")` or `app.router.on_startup.append(...)` is silently dropped (the #500 bug pattern).
+2. **Plugin / handler `_startup_hooks`** — populated by `add_plugin` (`specs/nexus-core.md` §10.2), `add_startup_handler` (§10.3), and Nexus's own internal init. Run in registration order. Per-hook exceptions are isolated; the FIRST captured exception is re-raised after all hooks complete.
+3. **User code inside the lifespan body** (between Nexus's startup and shutdown halves).
+4. **Plugin / handler `_shutdown_hooks`** — REVERSE registration order (last-registered runs first), mirroring resource (open, close) LIFO.
+5. **`app.router.on_shutdown`** — driven via `drive_router_lifespan_shutdown(app, propagate_errors=False)`. The `propagate_errors=False` flag is correct for shutdown: cleanup paths are best-effort and a later handler MUST run even if an earlier one raises.
+
+**`drive_router_lifespan_startup` / `_shutdown` contract:**
+
+- Iterate `app.router.on_startup` / `app.router.on_shutdown` in registration order.
+- Sync handlers (return `None`) are accepted; async handlers (return a coroutine) are awaited.
+- Per-handler exceptions are isolated: if handler N raises, handlers N+1, N+2, ... still run.
+- After all handlers complete, the FIRST captured exception is re-raised when `propagate_errors=True` (startup default — preserves uvicorn fail-fast). `propagate_errors=False` logs failures and returns normally (shutdown convention).
+
+**Why a shared helper:** four sibling FastAPI sites (`WorkflowServer`, `KailashAPIGateway`, `WorkflowAPIGateway`, `WorkflowAPI`) each construct `FastAPI(lifespan=...)` and historically hand-rolled the iteration. Three of them shipped with the iteration missing entirely (the #500 silent-drop bug). Routing every site through one helper localizes the cross-version invariant per `rules/framework-first.md` § "Drive The Data, Not The Dispatch" — `app.router.on_startup` is the data structure FastAPI's own internal dispatcher walks, and is strictly more stable than any dispatch method name.
+
+**Example — custom lifespan honoring router hooks:**
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from kailash.utils import (
+    drive_router_lifespan_startup,
+    drive_router_lifespan_shutdown,
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await drive_router_lifespan_startup(app)
+    try:
+        yield
+    finally:
+        await drive_router_lifespan_shutdown(app, propagate_errors=False)
+
+app = FastAPI(lifespan=lifespan)
+
+@app.on_event("startup")
+async def warm_cache(): ...
+```
+
+**Cross-reference:**
+
+- `specs/nexus-core.md` §10.3 `add_startup_handler` / `add_shutdown_handler` — the recommended Nexus-level surface for one-off hooks.
+- `kailash.utils.lifespan` (`src/kailash/utils/lifespan.py`) — the shared driver module.
+- `rules/framework-first.md` § "Drive The Data, Not The Dispatch" — the version-stable rationale.
