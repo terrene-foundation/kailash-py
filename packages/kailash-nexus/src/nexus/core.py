@@ -644,7 +644,12 @@ class Nexus:
     # Class-based WebSocket message handlers (issue #448)
     # ------------------------------------------------------------------
 
-    def websocket(self, path: str):
+    def websocket(
+        self,
+        path: str,
+        *,
+        allowed_origins: Optional[List[str]] = None,
+    ):
         """Register a class-based WebSocket message handler on ``path``.
 
         Use as a class decorator. The decorated class MUST subclass
@@ -659,7 +664,11 @@ class Nexus:
 
             app = Nexus()
 
-            @app.websocket("/events")
+            @app.websocket(
+                "/events",
+                allowed_origins=["https://app.example.com",
+                                 "https://*.example.com"],
+            )
             class EventStream(MessageHandler):
                 async def on_connect(self, conn):
                     conn.state.subscriptions = set()
@@ -677,6 +686,10 @@ class Nexus:
             path: URL path for the WebSocket endpoint (e.g. ``"/events"``).
                 Must start with ``/``. Cannot collide with an existing
                 class-based handler path.
+            allowed_origins: optional list of HTTP ``Origin`` header
+                values allowed to upgrade. See
+                :meth:`register_websocket` for the full ``allowed_origins``
+                contract (issue #673 — DNS-rebinding defense).
 
         Returns:
             A decorator that registers the class and returns it
@@ -684,19 +697,82 @@ class Nexus:
         """
 
         def _decorator(cls):
-            self.register_websocket(path, cls)
+            self.register_websocket(path, cls, allowed_origins=allowed_origins)
             return cls
 
         return _decorator
 
-    def register_websocket(self, path: str, handler_cls) -> Any:
+    def register_websocket(
+        self,
+        path: str,
+        handler_cls,
+        *,
+        allowed_origins: Optional[List[str]] = None,
+    ) -> Any:
         """Imperative form of :meth:`websocket`.
 
         Useful when the handler class is defined elsewhere and you
         want to register it conditionally. Returns the instantiated
         handler so the caller can wire external publishers.
+
+        Args:
+            path: URL path (must start with ``/``).
+            handler_cls: subclass of
+                :class:`~nexus.websocket_handlers.MessageHandler`.
+            allowed_origins: optional list of HTTP ``Origin`` header
+                values allowed to open this WebSocket. When set, the
+                SDK rejects every handshake whose ``Origin`` header
+                does NOT match an entry BEFORE invoking
+                ``on_connect`` — closing the WebSocket with code
+                1008 (RFC 6455 policy violation) and a fingerprinted
+                reason that does NOT echo the rejected Origin back
+                to the client.
+
+                Entries:
+
+                - **Exact origin** (``"https://app.example.com"``) —
+                  case-sensitive byte-equal match against the request's
+                  ``Origin`` header.
+                - **Wildcard subdomain** (``"https://*.example.com"``) —
+                  matches strict subdomains of ``example.com`` whose
+                  scheme matches the entry's scheme. Does NOT match
+                  the bare ``example.com`` (the entry says ``*.``,
+                  requiring at least one subdomain label) and does
+                  NOT match ``example.com.evil.com`` (suffix-with-dot
+                  defense).
+                - **Literal ``"*"``** — accepts any non-empty origin.
+                  BLOCKED at registration unless the env var
+                  ``KAILASH_NEXUS_ALLOW_WILDCARD_ORIGIN=true`` is
+                  set. Fail-closed default: production deployments
+                  MUST list explicit origins; the ``"*"`` opt-in is
+                  for development / private internal services where
+                  the operator has explicitly accepted that any
+                  browser-reachable origin can open the socket.
+
+                When ``None`` (the default), the SDK does NOT
+                enforce — the registry emits a one-time WARN log at
+                registration naming the path so operators see the
+                gap. Consumers needing custom enforcement (signed-
+                token auth, per-tenant header validation) MUST use
+                :attr:`~nexus.websocket_handlers.Connection.headers`
+                from inside ``on_connect``.
+
+        Returns:
+            The instantiated handler so the caller can wire external
+            publishers.
+
+        Raises:
+            ValueError: if ``allowed_origins`` fails validation
+                (empty list, non-string entry, malformed wildcard,
+                literal ``"*"`` without env opt-in).
+
+        Cross-SDK parity: kailash-rs is expected to ship the same
+        surface semantically (per EATP D6) at the equivalent
+        register_websocket surface. Issue #673.
         """
-        return self._ws_message_handlers.register(path, handler_cls)
+        return self._ws_message_handlers.register(
+            path, handler_cls, allowed_origins=allowed_origins
+        )
 
     async def websocket_broadcast(self, path: str, event: Any) -> None:
         """Fire ``on_event`` on the handler registered at ``path``.
@@ -900,9 +976,10 @@ class Nexus:
 
         try:
             # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
-            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
             from kailash_mcp import MCPServer
             from kailash_mcp.auth.providers import APIKeyAuth
+
+            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
 
             # Create production-ready MCP server using Core SDK
             self._mcp_server = self._create_sdk_mcp_server()
@@ -2937,6 +3014,7 @@ Check the documentation or explore available resources.
             HTTPException: If workflow not found, input invalid, or execution fails
         """
         from fastapi import HTTPException
+
         from nexus.validation import validate_workflow_inputs, validate_workflow_name
 
         # P0-5: Validate workflow name (prevent path traversal)
