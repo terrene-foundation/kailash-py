@@ -23,6 +23,10 @@ from pydantic import BaseModel, Field
 from ...nodes.base import NodeRegistry
 from ...nodes.security import CredentialManagerNode
 from ...nodes.transform import DataTransformer
+from ...utils.lifespan import (
+    drive_router_lifespan_shutdown,
+    drive_router_lifespan_startup,
+)
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
 from ..core.agent_ui import AgentUIMiddleware
@@ -192,10 +196,16 @@ class APIGateway:
         async def lifespan(app: FastAPI):
             # Startup
             logger.info(f"Starting {title} v{version}")
+            # MED-S2 (#712): drive router.on_startup hooks (e.g. consumer
+            # @app.on_event("startup")). Without this iteration, the custom
+            # lifespan above replaces Starlette's _DefaultLifespan and
+            # silently drops every router-registered hook (the #500 bug class).
+            await drive_router_lifespan_startup(app)
             await self._log_startup()
             yield
             # Shutdown
             logger.info("Shutting down gateway")
+            await drive_router_lifespan_shutdown(app)
             await self._cleanup()
 
         self.app = FastAPI(

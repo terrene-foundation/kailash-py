@@ -56,13 +56,17 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 from starlette.websockets import WebSocket
-from pydantic import BaseModel, Field
 
 from ..runtime.local import LocalRuntime
+from ..utils.lifespan import (
+    drive_router_lifespan_shutdown,
+    drive_router_lifespan_startup,
+)
 from ..workflow import Workflow
 from .workflow_api import WorkflowAPI
 
@@ -137,9 +141,15 @@ class WorkflowAPIGateway:
         async def lifespan(app: FastAPI):
             # Startup
             logger.info(f"Starting {title} v{version}")
+            # MED-S2 (#712): drive router.on_startup hooks (e.g. consumer
+            # @app.on_event("startup")). Custom lifespan replaces Starlette's
+            # _DefaultLifespan; without this iteration consumer hooks
+            # silently drop (the #500 bug class).
+            await drive_router_lifespan_startup(app)
             yield
             # Shutdown
             logger.info("Shutting down gateway")
+            await drive_router_lifespan_shutdown(app)
             if self._proxy_client:
                 await self._proxy_client.aclose()
             self.executor.shutdown(wait=True)
