@@ -202,10 +202,15 @@ def test_sync_scope_execute_raw_after_inactive_raises():
     """
     # Construct a sync scope without entering any begin(); the inactive
     # marker is set explicitly so ``execute_raw`` MUST raise the typed
-    # guard.
+    # guard. ``conn`` is a placeholder — the test exercises the guard
+    # path before any DB call could fire.
     sync_scope = SyncTransactionScope(
-        async_scope=None,  # type: ignore[arg-type] — sentinel path
+        conn=object(),
         run_sync=lambda coro: None,
+        id="test_scope",
+        isolation_level="READ COMMITTED",
+        status="active",
+        type="transaction",
     )
     sync_scope._mark_inactive()
 

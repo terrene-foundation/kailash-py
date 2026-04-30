@@ -456,18 +456,84 @@ class _PoolWrapper:
 _SCOPE_INACTIVE = object()
 
 
+# --- Async helpers used by SyncTransactionManager ------------------------
+#
+# These are module-level coroutines (NOT methods on the class) so the BG
+# loop can await them without holding a reference to the manager — keeps
+# the coroutine objects pickle-light and avoids retaining the manager
+# across the BG loop's lifetime.
+
+
+async def _open_connection_for_url(url: str) -> Any:
+    """Open a fresh asyncpg/aiosqlite connection on the current loop.
+
+    Dispatches by URL scheme. The returned connection is bound to the
+    event loop currently executing this coroutine — for the sync surface,
+    that is the SyncTransactionManager's BG loop.
+    """
+    scheme = url.split(":", 1)[0].lower()
+    if scheme in ("postgresql", "postgres"):
+        import asyncpg
+
+        return await asyncpg.connect(url)
+    if scheme == "sqlite":
+        import aiosqlite
+
+        # Strip the sqlite:// prefix; aiosqlite expects the path.
+        path = url.split("://", 1)[1] if "://" in url else url
+        # aiosqlite.connect returns a connection-context object; calling
+        # ``__aenter__`` opens the connection and returns the conn.
+        conn = aiosqlite.connect(path)
+        return await conn.__aenter__()
+    raise RuntimeError(
+        f"SyncTransactionManager: unsupported database scheme '{scheme}' "
+        f"in URL — only postgresql and sqlite are wired."
+    )
+
+
+async def _begin_isolation(conn: Any, isolation_level: str) -> None:
+    """Issue ``BEGIN ISOLATION LEVEL <level>`` on the connection."""
+    is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
+    if is_asyncpg:
+        await conn.execute(f"BEGIN ISOLATION LEVEL {isolation_level}")
+    else:
+        # SQLite ignores ISOLATION LEVEL; use plain BEGIN.
+        await conn.execute("BEGIN")
+
+
+async def _commit(conn: Any) -> None:
+    """Issue COMMIT on the pinned transaction connection."""
+    await conn.execute("COMMIT")
+
+
+async def _rollback(conn: Any) -> None:
+    """Issue ROLLBACK on the pinned transaction connection."""
+    await conn.execute("ROLLBACK")
+
+
+async def _close_connection(conn: Any) -> None:
+    """Close the connection. Dispatches by connection type."""
+    is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
+    if is_asyncpg:
+        await conn.close()
+    else:
+        # aiosqlite Connection has ``close`` returning a coroutine.
+        await conn.close()
+
+
 class SyncTransactionScope:
     """Sync analogue of :class:`TransactionScope`.
 
-    Yielded by :func:`SyncTransactionManager.begin`. Holds a reference to the
-    underlying async :class:`TransactionScope` and the BG-loop submitter so
-    ``tx.execute_raw(sql, params)`` can invoke the async ``execute_raw`` from
-    sync code without the caller awaiting anything.
+    Yielded by :func:`SyncTransactionManager.begin`. Holds the BG-loop
+    submitter and a reference to the pinned asyncpg/aiosqlite connection
+    so ``tx.execute_raw(sql, params)`` can issue async DB calls from sync
+    code without the caller awaiting anything.
 
-    The scope is single-use — exiting the ``with`` block sets ``_async_scope``
-    to ``_SCOPE_INACTIVE`` so any further ``execute_raw`` calls raise the
-    typed-guard ``RuntimeError`` instead of silently re-using a connection
-    that has been returned to the pool.
+    The scope is single-use — exiting the ``with`` block clears the
+    pinned connection reference so any further ``execute_raw`` calls
+    raise the typed-guard ``RuntimeError`` (per
+    ``rules/zero-tolerance.md`` Rule 3a) instead of silently re-using a
+    connection that has been returned to the pool / closed.
 
     Mirrors the async ``TransactionScope`` metadata surface (id,
     isolation_level, status, type) for parity with the async API; the
@@ -476,37 +542,62 @@ class SyncTransactionScope:
     the canonical attribute access only.
     """
 
-    __slots__ = ("_async_scope", "_run_sync")
+    __slots__ = (
+        "_conn",
+        "_run_sync",
+        "_id",
+        "_isolation_level",
+        "_status",
+        "_type",
+        "_depth",
+    )
 
-    def __init__(self, async_scope: TransactionScope, run_sync: Any) -> None:
-        # ``run_sync`` is a callable: ``run_sync(coro) -> result``. It submits
-        # the coroutine to the manager's BG event loop and blocks for the
-        # result. Stored on the scope so it survives the ``with`` body even
-        # when the manager is closed mid-call (rare).
-        self._async_scope: Any = async_scope
+    def __init__(
+        self,
+        *,
+        conn: Any,
+        run_sync: Any,
+        id: str,
+        isolation_level: str,
+        status: str = "active",
+        type: str = "transaction",
+        depth: Optional[int] = None,
+    ) -> None:
+        # ``conn`` is the pinned asyncpg/aiosqlite connection (NOT a pool)
+        # bound to the manager's BG event loop. Set to ``_SCOPE_INACTIVE``
+        # when the with-block exits so post-block ``execute_raw`` raises.
+        self._conn: Any = conn
+        # ``run_sync`` is a callable: ``run_sync(coro) -> result``. It
+        # submits the coroutine to the manager's BG event loop and blocks
+        # for the result. Stored on the scope so it survives the with body.
         self._run_sync = run_sync
+        self._id = id
+        self._isolation_level = isolation_level
+        self._status = status
+        self._type = type
+        self._depth = depth
 
     # --- Metadata mirror of the async scope (read-only attribute proxies) ---
 
     @property
     def id(self) -> str:
-        return self._guarded_async_scope().id
+        return self._id
 
     @property
     def isolation_level(self) -> str:
-        return self._guarded_async_scope().isolation_level
+        return self._isolation_level
 
     @property
     def status(self) -> str:
-        return self._guarded_async_scope().status
+        return self._status
 
     @property
     def type(self) -> str:
-        return self._guarded_async_scope().type
+        return self._type
 
     @property
     def depth(self) -> Optional[int]:
-        return self._guarded_async_scope().depth
+        return self._depth
 
     # --- Sync execute_raw — the load-bearing surface ---
 
@@ -531,16 +622,18 @@ class SyncTransactionScope:
             params: Optional positional parameter list.
 
         Returns:
-            Same return shape as :meth:`TransactionScope.execute_raw` — the
-            sync wrapper does not transform the result.
+            For SELECT statements on asyncpg: a list of ``asyncpg.Record``
+            rows (use ``dict(row)`` to materialize). For
+            INSERT/UPDATE/DELETE on asyncpg: the command-tag string. For
+            aiosqlite: the cursor object after ``execute()``.
         """
-        async_scope = self._guarded_async_scope()
-        return self._run_sync(async_scope.execute_raw(sql, params))
+        conn = self._guarded_conn()
+        return self._run_sync(_execute_raw_on_conn(conn, sql, params))
 
     # --- Internal: typed guard for out-of-scope access ---
 
-    def _guarded_async_scope(self) -> TransactionScope:
-        if self._async_scope is _SCOPE_INACTIVE:
+    def _guarded_conn(self) -> Any:
+        if self._conn is _SCOPE_INACTIVE:
             raise RuntimeError(
                 "SyncTransactionScope.execute_raw called outside the "
                 "transaction body — ensure the call is inside the "
@@ -548,32 +641,68 @@ class SyncTransactionScope:
                 "The pinned connection is only valid while the scope is "
                 "active."
             )
-        return self._async_scope  # type: ignore[return-value]
+        return self._conn
 
     def _mark_inactive(self) -> None:
         """Called by the manager when the ``with`` block exits.
 
-        Replaces the async-scope reference with the inactive sentinel so the
-        guarded accessor raises a typed error rather than silently re-using
-        a connection that has been returned to the pool.
+        Replaces the connection reference with the inactive sentinel so
+        the guarded accessor raises a typed error rather than silently
+        re-using a connection that has been returned to the pool.
         """
-        self._async_scope = _SCOPE_INACTIVE
+        self._conn = _SCOPE_INACTIVE
+
+
+async def _execute_raw_on_conn(
+    conn: Any, sql: str, params: Optional[List[Any]] = None
+) -> Any:
+    """Execute a raw SQL statement on an asyncpg/aiosqlite connection.
+
+    Mirrors :meth:`TransactionScope.execute_raw`'s connection-type
+    dispatch — asyncpg takes positional ``*params``, aiosqlite takes a
+    single tuple/list. SELECT vs INSERT/UPDATE/DELETE chooses
+    ``fetch`` vs ``execute`` for asyncpg.
+    """
+    is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
+    sql_stripped = sql.lstrip()
+    is_select = (
+        sql_stripped[:6].upper() == "SELECT" or sql_stripped[:4].upper() == "WITH"
+    )
+    if is_asyncpg:
+        if params is None:
+            if is_select:
+                return await conn.fetch(sql)
+            return await conn.execute(sql)
+        if is_select:
+            return await conn.fetch(sql, *params)
+        return await conn.execute(sql, *params)
+    # aiosqlite-style: single tuple param.
+    if params is None:
+        return await conn.execute(sql)
+    return await conn.execute(sql, params)
 
 
 class SyncTransactionManager:
     """Sync surface for :class:`TransactionManager` (issue #711).
 
     Mirror of :func:`TransactionManager.begin` for sync callers. Owns a
-    persistent daemon-thread event loop and submits every coroutine to it
-    via ``asyncio.run_coroutine_threadsafe`` — the same pattern
-    :class:`SyncExpress` uses. One BG loop is shared across all
-    ``begin()`` calls so the pinned connection survives across multiple
-    ``tx.execute_raw`` invocations inside one ``with`` block.
+    persistent daemon-thread event loop AND a private asyncpg/aiosqlite
+    connection lifecycle on that loop — every ``begin()`` opens a fresh
+    connection on the BG loop, runs the transaction body, and closes the
+    connection. The same BG loop is shared across all ``begin()`` calls
+    so the pinned connection survives across multiple ``tx.execute_raw``
+    invocations inside one ``with`` block.
 
     Cross-context safe — the BG loop thread is independent of any host
     event loop. The surface works inside pytest-asyncio, Nexus handlers,
     and Jupyter cells without raising
-    ``RuntimeError: This event loop is already running``.
+    ``RuntimeError: This event loop is already running`` AND without
+    sharing the DataFlow asyncpg pool (which is bound to whatever loop
+    initialized it). asyncpg connections are loop-bound; sharing a pool
+    across the host loop and the BG loop produces
+    ``RuntimeError: Future ... attached to a different loop``. Owning
+    a private connection lifecycle on the BG loop is the structural
+    fix for cross-loop usage.
 
     Lifecycle::
 
@@ -583,13 +712,13 @@ class SyncTransactionManager:
         # Use:
         with sync_mgr.begin() as tx:
             existing = tx.execute_raw(
-                "SELECT id FROM oauth_tokens WHERE user_id = %s FOR UPDATE",
+                "SELECT id FROM oauth_tokens WHERE user_id = $1 FOR UPDATE",
                 [user_id],
             )
             if existing:
                 tx.execute_raw(
-                    "UPDATE oauth_tokens SET refresh_token = %s "
-                    "WHERE user_id = %s",
+                    "UPDATE oauth_tokens SET refresh_token = $1 "
+                    "WHERE user_id = $2",
                     [new_refresh, user_id],
                 )
 
@@ -598,9 +727,11 @@ class SyncTransactionManager:
     """
 
     def __init__(self, transactions: TransactionManager) -> None:
-        # Reference to the async manager — every ``begin()`` call delegates
-        # to the async ``begin()`` context manager so the sync surface
-        # cannot drift from the async semantics (single source of truth).
+        # Reference to the async manager — used to read the database URL
+        # via ``transactions.dataflow`` AND to participate in the shared
+        # transaction-statistics counter. The sync surface does NOT drive
+        # the async ``begin()`` directly because asyncpg connections are
+        # loop-bound (see class docstring).
         self._transactions = transactions
 
         # Persistent BG event loop in a daemon thread. Mirrors
@@ -620,6 +751,16 @@ class SyncTransactionManager:
         # (ResourceWarning) from "user closed correctly" (silent).
         self._closed = False
 
+        # Counter shared with the async manager so `db.transactions.get_stats`
+        # reflects sync transactions too. Falls back to a private counter
+        # when the async manager has no `_stats` attribute (defensive).
+        if not hasattr(self._transactions, "_stats"):
+            self._transactions._stats = {  # type: ignore[attr-defined]
+                "total_started": 0,
+                "total_committed": 0,
+                "total_rolled_back": 0,
+            }
+
     # --- BG-loop dispatch ---
 
     def _run_sync(self, coro: Any) -> Any:
@@ -637,6 +778,43 @@ class SyncTransactionManager:
             )
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
+
+    def _resolve_database_url(self) -> str:
+        """Resolve the database URL from the wrapped DataFlow instance.
+
+        The URL is the only state the sync manager needs from the
+        DataFlow — the asyncpg connection is opened fresh on the BG loop
+        for each transaction. Raises a typed error if the URL cannot be
+        resolved (per rules/zero-tolerance.md Rule 3a).
+        """
+        dataflow = getattr(self._transactions, "dataflow", None)
+        if dataflow is None:
+            raise RuntimeError(
+                "SyncTransactionManager: TransactionManager has no "
+                "`dataflow` back-reference; cannot resolve database URL."
+            )
+        # DataFlow's canonical URL accessor — falls back to config.database.url.
+        url = None
+        for attr_path in (
+            ("config", "database", "url"),
+            ("_database_url",),
+            ("database_url",),
+        ):
+            obj = dataflow
+            try:
+                for attr in attr_path:
+                    obj = getattr(obj, attr)
+            except AttributeError:
+                continue
+            if obj:
+                url = obj
+                break
+        if not url:
+            raise RuntimeError(
+                "SyncTransactionManager: could not resolve database URL "
+                "from DataFlow instance."
+            )
+        return url
 
     # --- Public: begin() ---
 
@@ -662,49 +840,79 @@ class SyncTransactionManager:
         Raises:
             Re-raises any exception from the body after rollback.
         """
-        # The async ``begin()`` is itself an ``@asynccontextmanager`` — we
-        # cannot directly enter it from sync code, so we drive it manually
-        # via ``__aenter__`` / ``__aexit__`` on the BG loop. This preserves
-        # the async manager's commit-on-clean-exit / rollback-on-exception
-        # semantics WITHOUT duplicating the SQL or the ContextVar wiring.
-        async_cm = self._transactions.begin(isolation_level)
+        url = self._resolve_database_url()
+        # Acquire a fresh connection on the BG loop, BEGIN the transaction.
+        # The connection is loop-bound to the BG loop, NOT the host loop,
+        # so subsequent ``execute_raw`` calls (also routed via the BG loop)
+        # use the same connection without cross-loop drift.
+        conn = self._run_sync(_open_connection_for_url(url))
+        try:
+            self._run_sync(_begin_isolation(conn, isolation_level))
+        except BaseException:
+            # If BEGIN fails, close the conn before propagating so we
+            # don't leak the asyncpg socket on the BG loop.
+            try:
+                self._run_sync(_close_connection(conn))
+            except Exception:
+                pass
+            raise
 
-        # Enter the async context manager on the BG loop. The pinned
-        # connection (set in `_active_transaction` ContextVar) becomes
-        # visible to every subsequent ``execute_raw`` submitted to the
-        # same loop.
-        async_scope = self._run_sync(async_cm.__aenter__())
-        sync_scope = SyncTransactionScope(async_scope, self._run_sync)
+        self._transactions._stats["total_started"] += 1
+        txn_id = f"sync_txn_{self._transactions._stats['total_started']}"
+
+        logger.info(
+            "transaction.sync.begin",
+            extra={
+                "transaction_id": txn_id,
+                "isolation_level": isolation_level,
+            },
+        )
+
+        sync_scope = SyncTransactionScope(
+            conn=conn,
+            run_sync=self._run_sync,
+            id=txn_id,
+            isolation_level=isolation_level,
+            status="active",
+            type="transaction",
+        )
 
         try:
             yield sync_scope
         except BaseException:
-            # Propagate the exception type/value/tb to the async CM so it
-            # rolls back. Use ``sys.exc_info()`` shape via a wrapper coro
-            # — the async CM expects ``(exc_type, exc_val, exc_tb)``.
-            import sys
-
-            exc_type, exc_val, exc_tb = sys.exc_info()
+            # Rollback on exception — mirror TransactionManager.begin's
+            # rollback path.
             try:
-                # Returns True iff the async CM swallowed the exception.
-                # ``TransactionManager.begin`` re-raises after rollback so
-                # we expect this to return False; we re-raise either way to
-                # preserve the original traceback chain.
-                self._run_sync(async_cm.__aexit__(exc_type, exc_val, exc_tb))
-            except BaseException:
-                # The async CM may itself raise during rollback — surface
-                # that to the caller. Either way, mark the scope inactive
-                # so any post-with ``execute_raw`` raises the typed guard.
-                sync_scope._mark_inactive()
-                raise
-            sync_scope._mark_inactive()
+                self._run_sync(_rollback(conn))
+            except Exception:
+                logger.warning(
+                    "transaction.sync.rollback_failed",
+                    extra={"transaction_id": txn_id},
+                )
+            self._transactions._stats["total_rolled_back"] += 1
+            logger.error(
+                "transaction.sync.rollback",
+                extra={"transaction_id": txn_id},
+            )
             raise
         else:
-            # Clean-exit: drive the async CM exit, then mark the scope
-            # inactive so post-with ``execute_raw`` calls raise the typed
-            # guard (rules/zero-tolerance.md Rule 3a).
-            self._run_sync(async_cm.__aexit__(None, None, None))
+            # Commit on clean exit.
+            self._run_sync(_commit(conn))
+            sync_scope._status = "committed"
+            self._transactions._stats["total_committed"] += 1
+            logger.info(
+                "transaction.sync.commit",
+                extra={"transaction_id": txn_id},
+            )
+        finally:
             sync_scope._mark_inactive()
+            try:
+                self._run_sync(_close_connection(conn))
+            except Exception:
+                logger.debug(
+                    "transaction.sync.close_failed",
+                    extra={"transaction_id": txn_id},
+                )
 
     # --- Lifecycle ---
 
