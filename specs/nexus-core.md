@@ -82,18 +82,18 @@ The `enforce-framework-first` hook (see `scripts/hooks/enforce-framework-first.j
 
 **Tier 1 — Engine/Foundation layer** (raw `starlette`/`fastapi` imports required):
 
-| Exempted directory            | Reason                                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/kailash/servers/`        | Server hierarchy creates FastAPI apps directly via `create_gateway()`. Importing from `nexus` would create `kailash -> nexus -> kailash` circular import. |
-| `src/kailash/api/`            | API route definitions consumed during `kailash` init; same circular import chain as `servers/`.                                         |
-| `src/kailash/gateway/`        | Gateway layer creates FastAPI apps and uses `APIRouter`, `Depends`, `BackgroundTasks`, `CORSMiddleware` directly. Circular: `kailash -> nexus -> kailash`. |
-| `src/kailash/middleware/communication/` | `APIGateway` and `RealtimeMiddleware` are loaded during `kailash.middleware.__init__`. `api_gateway.py` uses full FastAPI features; `realtime.py` uses Starlette types (`Request`, `Response`, `WebSocket`, `StreamingResponse`). |
-| `src/kailash/middleware/auth/` | Auth middleware is loaded during `kailash.middleware.__init__`. Uses `fastapi.Depends`, `HTTPBearer`, `starlette.requests.Request`, `starlette.exceptions.HTTPException`. |
-| `src/kailash/middleware/gateway/` | Durable gateway layer uses Starlette types directly. Loaded as part of the middleware init chain.                                     |
-| `src/kailash/middleware/database/` | Database middleware uses FastAPI dependency injection (`get_middleware_db_session`). Part of the middleware init chain.                |
-| `src/kailash/channels/`      | Channel implementations are loaded during `kailash` init; circular chain through `kailash.middleware -> nexus -> kailash`.               |
-| `adapters/`, `backends/`, `transports/`, `providers/`, `drivers/` | Infrastructure layer: database adapters, cache backends, transport implementations. These are below the framework abstraction and use raw driver imports. |
-| `trust/*store`, `trust/constraints/`, `trust/enforce/` | Trust plane persistence and enforcement layer operates below the framework boundary.                                                |
+| Exempted directory                                                | Reason                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/kailash/servers/`                                            | Server hierarchy creates FastAPI apps directly via `create_gateway()`. Importing from `nexus` would create `kailash -> nexus -> kailash` circular import.                                                                         |
+| `src/kailash/api/`                                                | API route definitions consumed during `kailash` init; same circular import chain as `servers/`.                                                                                                                                   |
+| `src/kailash/gateway/`                                            | Gateway layer creates FastAPI apps and uses `APIRouter`, `Depends`, `BackgroundTasks`, `CORSMiddleware` directly. Circular: `kailash -> nexus -> kailash`.                                                                        |
+| `src/kailash/middleware/communication/`                           | `APIGateway` and `RealtimeMiddleware` are loaded during `kailash.middleware.__init__`. `api_gateway.py` uses full FastAPI features; `realtime.py` uses Starlette types (`Request`, `Response`, `WebSocket`, `StreamingResponse`). |
+| `src/kailash/middleware/auth/`                                    | Auth middleware is loaded during `kailash.middleware.__init__`. Uses `fastapi.Depends`, `HTTPBearer`, `starlette.requests.Request`, `starlette.exceptions.HTTPException`.                                                         |
+| `src/kailash/middleware/gateway/`                                 | Durable gateway layer uses Starlette types directly. Loaded as part of the middleware init chain.                                                                                                                                 |
+| `src/kailash/middleware/database/`                                | Database middleware uses FastAPI dependency injection (`get_middleware_db_session`). Part of the middleware init chain.                                                                                                           |
+| `src/kailash/channels/`                                           | Channel implementations are loaded during `kailash` init; circular chain through `kailash.middleware -> nexus -> kailash`.                                                                                                        |
+| `adapters/`, `backends/`, `transports/`, `providers/`, `drivers/` | Infrastructure layer: database adapters, cache backends, transport implementations. These are below the framework abstraction and use raw driver imports.                                                                         |
+| `trust/*store`, `trust/constraints/`, `trust/enforce/`            | Trust plane persistence and enforcement layer operates below the framework boundary.                                                                                                                                              |
 
 **Tier 2 — Framework layer** (imports from `nexus` re-exports):
 
@@ -510,6 +510,68 @@ def add_plugin(self, plugin: Any) -> Nexus
 **Startup hooks:** Called in registration order during `start()`. Errors are logged but do not prevent other hooks.
 
 **Shutdown hooks:** Called in reverse registration order during `stop()`.
+
+For one-off async hooks without authoring a Plugin class, use §10.3 `add_startup_handler` / `add_shutdown_handler`. The two surfaces share the same internal `_startup_hooks` / `_shutdown_hooks` lists and run from the same FastAPI lifespan dispatch.
+
+### 10.3 add_startup_handler / add_shutdown_handler
+
+Origin: GitHub issue #712 (2026-04-30). Mediscribe and other consumers needed a "run async DDL once at server start" hook (DataFlow `await db.create_tables_async()`, cache warming, upstream connection pre-open) but reaching for `nexus.fastapi_app.on_event("startup")` hit the §10.3 timing trap (the property returns `None` until lazy gateway init fires). Authoring a full `NexusPluginProtocol` implementation for a single callback was the only documented escape. The two new methods close that gap: register a callable directly against the same `_startup_hooks` / `_shutdown_hooks` lists the plugin protocol uses.
+
+```python
+def add_startup_handler(self, func: Callable[[], Any]) -> "Nexus"
+def add_shutdown_handler(self, func: Callable[[], Any]) -> "Nexus"
+```
+
+| Surface                      | Behavior                                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `add_startup_handler(func)`  | Append `func` to `_startup_hooks`. Runs once during the FastAPI lifespan startup phase, in registration order, inside uvicorn's event loop. Both `def` and `async def` callables accepted.                                 |
+| `add_shutdown_handler(func)` | Append `func` to `_shutdown_hooks`. Runs during the lifespan exit path (or via `Nexus.stop()` if torn down out-of-band) in REVERSE registration order — last-registered runs first, mirroring resource (open, close) LIFO. |
+
+**Validation:**
+
+- `func` MUST be callable. Non-callables raise `TypeError`.
+- Both methods MUST be called BEFORE `Nexus.start()`. Post-start registration raises `RuntimeError` — the lifespan has already fired or is firing, and a late append cannot be guaranteed to run.
+
+**Returns:** `self`, for method chaining.
+
+**Why prefer over `fastapi_app.on_event`:** the `fastapi_app` property returns `None` until the enterprise gateway is lazily initialized (gateway init fires on the first `register()` call or, failing that, at `start()`). Code that accesses `fastapi_app` immediately after `Nexus(...)` therefore sees `None` and `nexus.fastapi_app.on_event("startup")` raises `AttributeError: 'NoneType' object has no attribute 'on_event'`. The two new methods are safe to call before any `register()` / `start()` because they queue against the Nexus's own hook lists, not the FastAPI app's.
+
+**Lifespan dispatch chain order** (see `specs/nexus-services.md` § FastAPI lifespan for full detail):
+
+1. `app.router.on_startup` — driven via `kailash.utils.drive_router_lifespan_startup` (the shared helper from MED-S1 / issue #712). Iterates the same list Starlette's `_DefaultLifespan` walks; preserves `@app.on_event("startup")` and `app.router.on_startup.append(...)` registrations.
+2. Plugin / handler `_startup_hooks` — populated by `add_plugin` (§10.2), `add_startup_handler` (this section), and any internal Nexus initialization. Run in registration order.
+3. User code inside the lifespan body (between Nexus's startup and shutdown halves).
+4. Plugin / handler `_shutdown_hooks` — REVERSE registration order.
+5. `app.router.on_shutdown` — driven via `drive_router_lifespan_shutdown(app, propagate_errors=False)`.
+
+**Example:**
+
+```python
+from nexus import Nexus
+from dataflow import DataFlow
+
+app = Nexus()
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: int
+    name: str
+
+async def create_schema() -> None:
+    await db.create_tables_async()
+
+app.add_startup_handler(create_schema)
+app.register("greet", greet_workflow)
+app.start()  # create_schema runs inside uvicorn's event loop
+```
+
+**Cross-reference:**
+
+- §10.2 `add_plugin` — registers a full `NexusPluginProtocol` whose optional `on_startup` / `on_shutdown` methods land in the same internal lists.
+- `specs/nexus-services.md` § Lifespan + `fastapi_app` timing trap — full lifespan-handler chain order and the `fastapi_app` lazy-init timing contract.
+- `kailash.utils.drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` — the shared helpers that drive `app.router.on_startup` / `on_shutdown` from inside any custom FastAPI lifespan.
+- `rules/framework-first.md` § "Drive The Data, Not The Dispatch" — the version-stable rationale for iterating the registered-handlers list instead of calling `app.router.startup()` by name.
 
 ---
 
