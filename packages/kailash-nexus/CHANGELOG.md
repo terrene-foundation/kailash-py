@@ -1,5 +1,20 @@
 # Nexus Changelog
 
+## [2.6.0] — 2026-04-30 — WebSocket Origin allowlist + `Connection.headers` (#673)
+
+Minor release closing the WebSocket Origin-header bypass: every `register_websocket(...)` registration now hoists Origin-allowlist enforcement to the framework so consumer handlers no longer have to re-implement the check (and silently drop it on copy-paste).
+
+### Added
+
+- **`Nexus.websocket(allowed_origins=...)` + `register_websocket(allowed_origins=...)` (#673)** — opt-in per-route Origin allowlist. The Origin validator runs before the handler is invoked; mismatched / missing Origin closes the socket with WebSocket close code `1008 (policy violation)` and emits a structured WARN log keyed on the request id.
+- **`Connection.headers` (#673)** — the request `Headers` mapping is now exposed on the `Connection` object so handlers needing per-request header inspection (auth tokens, correlation IDs) no longer parse the raw scope dict.
+- Tier 1 unit suite for the Origin validator and `Connection.headers` plumbing.
+- Tier 2 regression suite for end-to-end allowlist enforcement on a live `register_websocket` registration.
+
+### Dependencies
+
+- `kailash>=2.13.1` (was `>=2.11.0`).
+
 ## [2.5.0] — 2026-04-30 — `Nexus.add_startup_handler` / `add_shutdown_handler` (the v2.13.0 cluster: closes #712)
 
 Minor release adding the canonical "run-once at server start" hook surface so consumers no longer need to reach for `nexus.fastapi_app.on_event(...)` (which has the lazy-init timing trap — `fastapi_app` returns `None` until the enterprise gateway is initialized) or author a full `NexusPluginProtocol` implementation for a single callback.

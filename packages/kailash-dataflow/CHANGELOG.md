@@ -1,5 +1,24 @@
 # DataFlow Changelog
 
+## [2.7.0] — 2026-04-30 — Sync transaction surface (#711) + #707 test fix
+
+Minor release adding `db.transactions_sync` — a sync-style transaction manager that owns its connection lifecycle on a dedicated background event loop, so synchronous callers can compose multi-statement atomic units of work without juggling `asyncio.run()` boundaries.
+
+### Added
+
+- **`db.transactions_sync` property + `SyncTransactionManager` + `SyncTransactionScope` (#711)** — the sync surface owns its own background loop and connection acquisition. Multi-statement atomic blocks survive process restarts, fail with typed `TransactionRolledBack` on any inner exception, and return per-statement diagnostics. Spec: `packages/kailash-dataflow/specs/dataflow-cache.md` § 12.7.
+- Tier 1 unit suite for `SyncTransactionManager` lifecycle + rollback paths.
+- Tier 2 integration suite for `db.transactions_sync` against real Postgres.
+
+### Fixed
+
+- **#707 — idempotency regression test rewritten to canonical `INSERT ... ON CONFLICT DO NOTHING` pattern (#748)** — the original repro relied on `tx.execute_raw` routing `INSERT … RETURNING` through `fetch`, which is not how the sync surface dispatches statements (only `SELECT` / `WITH` are SELECT-shape). The test now follows the canonical pattern and parses the asyncpg command-tag rowcount instead.
+- **#707 — fixture missing `db.initialize()` call** — added explicit `await db.initialize()` to the sync-transaction fixture so the connection is reachable before the regression test runs.
+
+### Dependencies
+
+- `kailash>=2.13.1` (was `>=2.12.0`).
+
 ## [2.6.0] — 2026-04-30 — Lazy runtime resolution + DDL connection-reuse (the v2.13.0 cluster: closes #713, #714)
 
 Minor release closing the two remaining DataFlow surfaces in the the v2.13.0 cluster. Backward-compatible: every existing `db.runtime`-reading consumer keeps working unchanged because the new `@property` resolves to the same runtime instance per event loop, and the existing `db.runtime = X` mutation pattern is preserved through the new setter.
