@@ -31,7 +31,6 @@ from typing import AsyncIterator
 
 import pytest
 from fastapi import FastAPI
-
 from kailash.utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,

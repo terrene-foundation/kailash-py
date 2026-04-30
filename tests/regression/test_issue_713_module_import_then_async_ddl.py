@@ -40,9 +40,9 @@ import pickle
 import threading
 
 import pytest
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 from dataflow import DataFlow
-from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # ---------------------------------------------------------------------------
 # Postgres test container at port 5434 (per
