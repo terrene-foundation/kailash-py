@@ -1,5 +1,31 @@
 # DataFlow Changelog
 
+## [2.6.0] — 2026-04-30 — Lazy runtime resolution + DDL connection-reuse (Mediscribe cluster: closes #713, #714)
+
+Minor release closing the two remaining DataFlow surfaces in the Mediscribe cluster. Backward-compatible: every existing `db.runtime`-reading consumer keeps working unchanged because the new `@property` resolves to the same runtime instance per event loop, and the existing `db.runtime = X` mutation pattern is preserved through the new setter.
+
+### Added
+
+- **`DataFlow.runtime` lazy `@property` + setter + `runtime=` `__init__` kwarg (#713 / MED-S4)** — `DataFlow.runtime` is now resolved per access via a per-event-loop cache rather than bound at construction time. Resolution order: (1) setter override (`db.runtime = X`, `runtime=` kwarg, `monkeypatch.setattr`), (2) `None` if `_closed`, (3) per-event-loop `AsyncLocalRuntime` cache (mirrors the per-loop `_async_sql_node_cache` pattern at engine.py:7488), (4) cached sync `LocalRuntime` singleton. The `runtime=` `__init__` kwarg is the explicit escape hatch for callers that need a specific runtime from construction. Pickle / deepcopy round-trip support: the per-loop cache is excluded from `__getstate__` and rebuilt lazily on first access in the unpickled instance, making DataFlow safe to ship across multiprocessing / Ray / Dask workers.
+- **DDL connection reuse via `SyncDDLExecutor.execute_ddl_batch_per_statement` (#714 / MED-S6)** — `_execute_ddl` (sync) and `_execute_ddl_async` (async, via `asyncio.to_thread`) now run the entire DDL batch on a single sync connection acquired from the dialect driver (`psycopg2` / `sqlite3` / `pymysql`). Per-statement results are captured (success/error/duration_ms) so the #696 fail-fast circuit-breaker continues to fire on individual CREATE TABLE failures while index/FK/auxiliary failures continue past (legacy semantics).
+
+### Fixed
+
+- **#713 — module-import construction permanently bound `LocalRuntime` (MED-S4)** — pre-fix, `db = DataFlow(...)` at module scope ran with no event loop and bound `LocalRuntime` for the instance's lifetime, so `await db.create_tables_async()` from inside FastAPI/uvicorn either raised "no running event loop" or quietly used the wrong runtime. Lazy per-loop resolution fixes this without breaking the synchronous CLI path.
+- **#713 — subsystem captures snapshot the runtime at `__init__` time (MED-S5)** — `DataFlowExpress`, `DataFlowExpressSync`, `BulkOperations`, `TransactionManager`, `_DataFlowAuditQueryProxy`, `_DataFlowAuditExportProxy` previously captured `self.runtime = dataflow.runtime` at construction. Captured runtimes did not follow setter overrides and missed the per-event-loop cache. All six subsystems now hold `self._dataflow = dataflow` and read `self._dataflow.runtime` lazily on each operation, picking up `db.runtime = X` mutations and the per-loop cache transparently.
+- **#714 — DDL connection thrash (MED-S6)** — pre-fix, `_execute_ddl` / `_execute_ddl_async` routed every CREATE TABLE / CREATE INDEX through a fresh `AsyncSQLDatabaseNode` instance (one connection acquire/release per statement). Under `auto_migrate=True` with N models, this produced ≈ 2N+ connection acquires at startup, exhausting pgbouncer transaction-pool slots or constrained Azure PostgreSQL `max_connections` before the application opened to traffic. The single-sync-connection path closes that failure mode.
+
+### Tests
+
+- `packages/kailash-dataflow/tests/regression/test_issue_713_module_import_then_async_ddl.py` — Tier 3 regression for the module-import construction → async DDL path.
+- `packages/kailash-dataflow/tests/regression/test_issue_713_subsystems_follow_runtime_swap.py` — Tier 2 regression for subsystem lazy lookups (every subsystem follows `db.runtime = X` mutations).
+- `packages/kailash-dataflow/tests/regression/test_issue_714_ddl_single_connection.py` — structural + behavioral regression suite pinning the single-connection contract; verifies the #696 fail-fast circuit-breaker is preserved through the refactor.
+
+### Cross-SDK
+
+- kailash-rs Tokio runtime is always present at construction time; no equivalent module-import footgun for #713. No companion issue.
+- kailash-rs may have analogous DDL connection thrash for #714 — companion issue to be filed.
+
 ## [2.5.0] — 2026-04-29 — `TransactionScope.execute_raw` for multi-statement raw-SQL atomicity
 
 Minor release adding the `TransactionScope.execute_raw` surface from issue #707 (closed by PR #716). Backward-compatible: every prior `db.transactions.begin()` consumer keeps working unchanged via the dict-style `__getitem__`/`__setitem__` shim. Bundles a latent savepoint async-context-manager bug fix discovered during implementation review.
