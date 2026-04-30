@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.1] — 2026-04-30 — TraceEvent timestamp microsecond padding (#731)
+
+Patch — pins the `TraceEvent` timestamp string to a fixed-width microsecond field so cross-tool log correlation no longer drifts when sub-millisecond events are emitted.
+
+### Fixed
+
+- **#731 — TraceEvent timestamp microsecond padding** — `TraceEvent` formatted timestamps with variable-width microseconds (e.g. `2026-04-30T12:34:56.7Z` for tenths-of-millisecond events), breaking lexical ordering and downstream parsers that assumed fixed-width ISO-8601. Timestamps now pad microseconds to six digits (`2026-04-30T12:34:56.700000Z`).
+
 ## [2.13.0] — 2026-04-30 — `kailash.utils.lifespan` shared FastAPI helpers (the v2.13.0 cluster: closes #712)
 
 Minor bump — ships the cross-FastAPI-site lifespan helper module that drives `app.router.on_startup` / `on_shutdown` from any custom `FastAPI(lifespan=...)` and patches three sibling sites that historically dropped router hooks silently.
