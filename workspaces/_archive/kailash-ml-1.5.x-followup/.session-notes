@@ -1,0 +1,94 @@
+# Session Notes — 2026-04-29
+
+## Where we are
+
+Workspace's last open question (TestPyPI per-package pre-registration)
+is closed. All 9 BUILD packages now have working OIDC trusted-publisher
+rows on test.pypi.org — verified end-to-end via 11 workflow_dispatch
+runs of `publish-pypi.yml` (publish_to=testpypi). User swept stale
+pending entries; exactly 9 publisher rows remain. F-3 family-count
+fix from prior session is still merged at `065a29f8`. No new code
+landed this session.
+
+## Carry-over actions taken this resume (working tree only — not committed)
+
+* **Discarded** the 2 SessionEnd auto-stubs in `journal/.pending/`
+  (commits `f6f277ec` + `d78ac267`) — bodies were commit-message
+  echoes; `journal/0003-GAP` already covers the engine-existence
+  decision behind cross-package dispatch + clustering disposition.
+  `git log --grep '#701'` is the canonical surface.
+* **Cosmetic docstring fix** in
+  `packages/kailash-ml/tests/unit/test_km_all_ordering.py` — file
+  docstring (line 3+), function docstring + assertion message
+  (`test_all_has_expected_total_symbol_count`). Replaced brittle
+  "7 Phase-1 + CatBoost separately" arithmetic with structural
+  group-length breakdown (1 + 14 + 24 + 5 + 2 + 3 + 2 = 51) that
+  doesn't drift on family-count invariant changes. 10/10 unit tests
+  still pass. Tests-only — no `src/` touch, no version bump, no
+  release cycle per `build-repo-release-discipline.md` §5.
+* **Workspace closed** — `todos/active/00-todos-plan.md` moved to
+  `todos/completed/`. All 3 underlying issues (#699, #700, #701)
+  closed 2026-04-29 02:45 UTC via PR #709 (kailash-ml 1.6.0) + #710
+  (CatBoost family-count invariant fix). `**/todos/` is gitignored
+  → no commit needed.
+
+## Ready for user to commit
+
+| Path                                          | Atomic-commit suggestion                                                |
+|-----------------------------------------------|-------------------------------------------------------------------------|
+| `.claude/.proposals/latest.yaml`              | `chore(proposal): mark 2026-04-29 codify proposal distributed`          |
+| `packages/kailash-ml/tests/unit/test_km_all_ordering.py` | `docs(ml): replace stale family-count arithmetic in __all__ ordering test` |
+
+The proposal yaml change came from loom's `/sync py 2026-04-29`
+distribution (status `pending_review` → `distributed` with full
+metadata). Loom has already published; the local working-tree change
+is just kailash-py recording it. Pattern matches commit `57219f02`
+(`chore(proposal): mark 2026-04-25 codify proposal distributed`).
+
+## Read first
+
+1. `workspaces/kailash-ml-1.5.x-followup/.session-notes` (THIS file)
+   plus the prior session's notes immediately above this entry —
+   ground truth for the workspace.
+2. `.github/workflows/publish-pypi.yml` lines 15–37 — `workflow_dispatch`
+   inputs: `package` (choice of all 9) + `publish_to` (testpypi|pypi).
+   Now usable on every package per `rules/deployment.md` § TestPyPI.
+3. `packages/kailash-ml/CHANGELOG.md` — 1.6.0 entry remains canonical.
+4. `.claude/.proposals/latest.yaml` — still modified locally; loom
+   owns it. Do NOT re-edit at kailash-py.
+
+## In-flight state
+
+- `.claude/.proposals/latest.yaml` modified (status: distributed) —
+  loom-side edit propagating; reconcile on next pull.
+- `workspaces/.../journal/.pending/` carries 2 SessionEnd-hook
+  DECISION stubs from prior session's #701 commits (`f6f277ec`,
+  `d78ac267`). Promote-or-discard still outstanding.
+- `stash@{0}` = nexus #449 WIP (`use_middleware before worktree
+  split`) — preserve.
+
+## Traps
+
+- `gh workflow run` returns the dispatch URL, NOT the resulting
+  workflow run ID. The actual run ID can drift in zsh array
+  iterations; use `gh run view <id> --json jobs` to confirm which
+  package a run was for, never trust array-position labels.
+- TestPyPI `400 "Non-user identities cannot create new projects"`
+  on a package whose pending publisher exists almost always means
+  byte-mismatch (underscore vs hyphen, plural/singular,
+  capitalization). The wheel filename uses underscores; the
+  publisher form requires hyphens. kaizen-agents tripped this twice
+  before the third add stuck.
+- Pre-commit `python-use-type-annotations` regex matches any
+  `# type` prefix incl. prose — phrase as `# annotations route
+  through X`. (Carryover from prior session.)
+- `tests/unit/test_km_all_ordering.py` line 96–103 stale "7 + CatBoost"
+  arithmetic — FIXED in this resume (working tree, not committed).
+  See "Carry-over actions" above. Sibling site at
+  `packages/kailash-ml/src/kailash_ml/__init__.py:663` (comment block,
+  same "7 Phase-1 Trainable adapters … including CatBoostTrainable"
+  phrasing) is **deferred** — touching `src/` would force kailash-ml
+  1.6.0 → 1.6.1 + sibling-sweep release (per
+  `build-repo-release-discipline.md` §1 + §5), asymmetric for a
+  comment fix. Sweep into next ml release that has substantive
+  code changes.
