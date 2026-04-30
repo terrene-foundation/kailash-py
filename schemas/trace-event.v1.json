@@ -7,7 +7,7 @@
   "version": "1.0.0",
   "canonicalization": {
     "json_serialization": "sort_keys=true, separators=(',', ':'), ensure_ascii=true, default=str (Python) / serde_json::to_string(&BTreeMap) (Rust)",
-    "timestamp_format": "RFC 3339 with explicit +00:00 UTC offset; never Z",
+    "timestamp_format": "RFC 3339 with explicit +00:00 UTC offset AND fixed six-digit microsecond precision (`YYYY-MM-DDThh:mm:ss.uuuuuu+00:00`); never Z; never elide microseconds when zero. Eliding the decimal portion when microsecond == 0 is the failure mode kailash-py issue #731 fixed — both SDKs MUST emit six microsecond digits unconditionally.",
     "fingerprint_algorithm": "SHA-256 of the UTF-8 bytes of the canonical JSON, hex-encoded lowercase",
     "comparison": "hmac.compare_digest (Python) / subtle::ConstantTimeEq (Rust). Never == on hex digests (timing side-channel).",
     "cross_sdk_note": "Python and Rust MUST produce byte-identical canonical JSON and byte-identical SHA-256 fingerprints for the same logical input. Paired with `schemas/audit-anchor.v1.json` (kailash-rs#449) — same canonicalization contract."
@@ -47,8 +47,8 @@
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
-      "description": "RFC 3339 timestamp with explicit +00:00 UTC offset. Z-form is BLOCKED to keep the byte-level form stable across SDKs."
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}\\+00:00$",
+      "description": "RFC 3339 timestamp with explicit +00:00 UTC offset AND fixed six-digit microsecond precision. Z-form is BLOCKED; eliding the decimal portion when microsecond == 0 is BLOCKED — both make the byte form non-canonical across SDKs. See kailash-py issue #731 for the originating defect (Python `datetime.isoformat()` elided the decimal when microsecond was zero, breaking cross-SDK fingerprint parity for any TraceEvent landing on a whole second)."
     },
     "run_id": {
       "type": "string",
