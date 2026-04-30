@@ -255,20 +255,35 @@ async def test_oauth_credential_rotation_pattern(df, pg_test_suite, temp_table):
     assert by_email == {user_a: "refresh-v3", user_b: "refresh-v1"}
 
 
-async def test_select_for_update_then_insert_idempotency(pg_test_suite, temp_table):
-    """Two concurrent transactions racing on SELECT FOR UPDATE + INSERT.
+async def test_insert_on_conflict_do_nothing_idempotency(pg_test_suite, temp_table):
+    """Two concurrent transactions racing on the canonical PostgreSQL
+    idempotency pattern: ``INSERT ... ON CONFLICT DO NOTHING``.
 
-    The canonical idempotency pattern: each caller checks for an existing
-    row keyed by an idempotency token, and INSERTs only if absent. SELECT
-    FOR UPDATE serializes the two transactions on the row that the first
-    caller inserts, so the second caller observes the inserted row and
-    skips its own INSERT.
+    The unique constraint on ``email`` makes the second concurrent INSERT
+    collide; ``ON CONFLICT DO NOTHING`` returns 0 affected rows for the
+    losing task without raising. Net effect: exactly one row persists,
+    both tasks complete cleanly, and neither task sees a
+    ``UniqueViolationError``.
 
-    Asserts exactly one row exists post-race.
+    Why this pattern (not ``SELECT FOR UPDATE`` + conditional INSERT):
+    PostgreSQL's READ COMMITTED isolation (DataFlow's default per
+    ``transactions.py:244``) does NOT predicate-lock empty result sets.
+    A ``SELECT ... WHERE x = $1 FOR UPDATE`` that matches zero rows
+    takes no lock at all — both concurrent transactions see no
+    pre-existing row, both proceed to INSERT, and the second hits
+    ``UniqueViolationError`` on the unique constraint. SERIALIZABLE
+    isolation + retry-on-serialization-failure would also work but
+    has worse throughput; ``ON CONFLICT DO NOTHING`` is the documented
+    canonical pattern for this exact scenario:
+    https://www.postgresql.org/docs/current/sql-insert.html#SQL-ON-CONFLICT
+
+    This test exercises ``db.transactions.begin()`` + ``tx.execute_raw``
+    end-to-end against real PostgreSQL with two genuinely concurrent
+    DataFlow instances racing on the same row.
     """
     idempotency_token = "idem-707-abc"
 
-    async def maybe_insert(label: str) -> str:
+    async def maybe_insert(label: str) -> int:
         # Each task uses its OWN DataFlow instance — distinct connection
         # pools, so the two tasks genuinely race against each other on
         # the database, not on a shared in-process lock.
@@ -276,22 +291,25 @@ async def test_select_for_update_then_insert_idempotency(pg_test_suite, temp_tab
         await local_df.initialize()
         try:
             async with local_df.transactions.begin() as tx:
-                # Use the idempotency token in the email column for uniqueness.
-                # Insert a tiny delay so both tasks reliably overlap on the
-                # SELECT FOR UPDATE.
-                existing = await tx.execute_raw(
-                    f"SELECT id FROM {temp_table} WHERE email = $1 FOR UPDATE",
-                    [idempotency_token],
+                # Insert a tiny delay so both tasks reliably overlap on
+                # the unique-constraint race.
+                await asyncio.sleep(0.05)
+                # ON CONFLICT DO NOTHING is the canonical PostgreSQL
+                # idempotency pattern — atomic INSERT-or-skip with no
+                # SELECT-then-INSERT race window. tx.execute_raw on
+                # INSERT routes through asyncpg .execute() (it only
+                # treats SELECT/WITH as fetch-shape), so the return
+                # value is the asyncpg command tag — "INSERT 0 1" if
+                # the row was inserted, "INSERT 0 0" if the conflict
+                # triggered DO NOTHING. The rowcount is the trailing
+                # integer.
+                tag = await tx.execute_raw(
+                    f"INSERT INTO {temp_table} (email, payload) "
+                    f"VALUES ($1, $2) ON CONFLICT (email) DO NOTHING",
+                    [idempotency_token, label],
                 )
-                if len(existing) == 0:
-                    await asyncio.sleep(0.05)
-                    await tx.execute_raw(
-                        f"INSERT INTO {temp_table} (email, payload) "
-                        f"VALUES ($1, $2)",
-                        [idempotency_token, label],
-                    )
-                    return "inserted"
-                return "observed-existing"
+                # Parse rowcount from "INSERT <oid> <count>" command tag.
+                return int(str(tag).rsplit(" ", 1)[-1]) if tag else 0
         finally:
             try:
                 await local_df.close_async()
@@ -300,11 +318,12 @@ async def test_select_for_update_then_insert_idempotency(pg_test_suite, temp_tab
 
     results = await asyncio.gather(maybe_insert("task-1"), maybe_insert("task-2"))
 
-    # Exactly one task inserted, exactly one observed the existing row.
-    assert sorted(results) == [
-        "inserted",
-        "observed-existing",
-    ], f"Race did not serialize on FOR UPDATE: results={results!r}"
+    # Exactly one task's INSERT took effect (rowcount=1); the other's
+    # ON CONFLICT DO NOTHING returned rowcount=0. Neither raised.
+    assert sorted(results) == [0, 1], (
+        f"ON CONFLICT idempotency failed: results={results!r} "
+        f"(expected exactly one rowcount=1 and one rowcount=0)"
+    )
     # And exactly one row persists.
     assert await _count_rows(pg_test_suite, temp_table) == 1
 
