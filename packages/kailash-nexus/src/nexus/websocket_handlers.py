@@ -59,8 +59,14 @@ import json
 import logging
 import time
 import uuid
-from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Type
+from types import MappingProxyType, SimpleNamespace
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Set, Type
+
+from nexus.websocket_origin import (
+    fingerprint_origin,
+    origin_matches_allowlist,
+    validate_origin_allowlist,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +75,102 @@ __all__ = [
     "MessageHandler",
     "MessageHandlerRegistry",
 ]
+
+
+# Empty case-insensitive headers fallback: an immutable Mapping returned
+# when a connection arrives without parsable handshake headers (e.g. a
+# test using a bare mock socket). Letting handlers see ``conn.headers``
+# as ``None`` would force every site to ``if conn.headers is not None``;
+# returning an empty Mapping keeps the read-only API surface stable.
+_EMPTY_HEADERS: Mapping[str, str] = MappingProxyType({})
+
+
+class _CaseInsensitiveHeaders(Mapping[str, str]):
+    """Read-only case-insensitive mapping over a snapshot of HTTP headers.
+
+    Used when the underlying handshake headers come back as a plain
+    ``dict`` (test fixtures, future transports). When the websockets
+    library passes its own ``Headers`` object (which is already
+    case-insensitive), :func:`_freeze_headers` returns it wrapped in
+    ``MappingProxyType`` directly so case-insensitive lookups still
+    work at zero copy cost.
+    """
+
+    __slots__ = ("_lower",)
+
+    def __init__(self, source: Mapping[str, str]) -> None:
+        # Snapshot at construction so later mutation of the source
+        # does NOT mutate the headers handlers see.
+        self._lower: Dict[str, str] = {}
+        for k, v in source.items():
+            self._lower[k.lower()] = v
+
+    def __getitem__(self, key: str) -> str:
+        return self._lower[key.lower()]
+
+    def __iter__(self):
+        return iter(self._lower)
+
+    def __len__(self) -> int:
+        return len(self._lower)
+
+    def __contains__(self, key: object) -> bool:
+        if not isinstance(key, str):
+            return False
+        return key.lower() in self._lower
+
+
+def _freeze_headers(source: Any) -> Mapping[str, str]:
+    """Return an immutable case-insensitive view of ``source``.
+
+    - ``None`` → empty mapping.
+    - ``dict`` (or any mutable Mapping) → fresh
+      :class:`_CaseInsensitiveHeaders` snapshot wrapped in
+      :class:`types.MappingProxyType` semantics (mutation refused).
+    - ``websockets.datastructures.Headers`` (or any other Mapping
+      subclass that already implements case-insensitive lookup) →
+      wrapped in a thin proxy that forbids mutation.
+
+    The returned object MUST raise on any mutation attempt so
+    handlers cannot mutate the source headers via ``conn.headers``
+    (operators MUST not be able to falsify the captured handshake
+    headers from inside ``on_connect``).
+    """
+    if source is None:
+        return _EMPTY_HEADERS
+    if isinstance(source, Mapping):
+        # Even though ``websockets.Headers`` is already case-insensitive,
+        # snapshotting via _CaseInsensitiveHeaders normalizes the
+        # underlying type so handlers see one consistent surface.
+        return _CaseInsensitiveHeaders(source)
+    # Best effort: try to coerce iterable-of-pairs to a Mapping.
+    try:
+        coerced = dict(source)
+    except (TypeError, ValueError):
+        return _EMPTY_HEADERS
+    return _CaseInsensitiveHeaders(coerced)
+
+
+def _extract_handshake_headers(ws: Any) -> Mapping[str, str]:
+    """Return the handshake headers from the underlying ``websockets`` socket.
+
+    websockets 16+ exposes the parsed handshake at
+    ``ws.request.headers`` (a
+    :class:`websockets.datastructures.Headers` instance). Other
+    transports may set ``ws.request_headers`` directly. Test fixtures
+    can pass a bare object; in all of those cases we fall through to
+    the empty mapping rather than raising.
+    """
+    request = getattr(ws, "request", None)
+    if request is not None:
+        headers = getattr(request, "headers", None)
+        if headers is not None:
+            return _freeze_headers(headers)
+    # Older / alternate code paths may attach headers directly.
+    direct = getattr(ws, "request_headers", None)
+    if direct is not None:
+        return _freeze_headers(direct)
+    return _EMPTY_HEADERS
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +192,15 @@ class Connection:
       the handler.
     - ``connected_at``: monotonic timestamp of connection open.
     - ``path``: the URL path the client connected on (e.g. ``/events``).
+    - ``headers``: read-only :class:`~typing.Mapping` of HTTP
+      handshake headers (Origin, Host, User-Agent, Sec-WebSocket-*,
+      cookies, custom auth headers). Captured AT HANDSHAKE; NOT
+      refreshed during the connection lifetime. Lookups are
+      case-insensitive (``conn.headers["origin"]`` and
+      ``conn.headers["Origin"]`` return the same value). The mapping
+      is structurally immutable — attempts to assign or delete keys
+      raise ``TypeError``. Operators MUST NOT be able to falsify
+      captured headers from inside ``on_connect`` (issue #673).
 
     Handlers send messages back to the client with :meth:`send_json`
     (JSON-serialized) or :meth:`send_text` (raw text frame). Both
@@ -110,9 +221,16 @@ class Connection:
         "state",
         "connected_at",
         "_alive",
+        "_headers",
     )
 
-    def __init__(self, ws: Any, connection_id: str, path: str) -> None:
+    def __init__(
+        self,
+        ws: Any,
+        connection_id: str,
+        path: str,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> None:
         self.ws = ws
         self.connection_id = connection_id
         self.path = path
@@ -120,6 +238,30 @@ class Connection:
         self.state: SimpleNamespace = SimpleNamespace()
         self.connected_at: float = time.monotonic()
         self._alive: bool = True
+        # Headers captured at handshake. Frozen via _freeze_headers so
+        # any mutation attempt raises TypeError. Defaults to the empty
+        # mapping when the caller (test fixture, alternate transport)
+        # does not supply headers.
+        self._headers: Mapping[str, str] = _freeze_headers(headers)
+
+    @property
+    def headers(self) -> Mapping[str, str]:
+        """HTTP handshake headers (Origin, Host, User-Agent, Sec-WebSocket-*).
+
+        Read-only case-insensitive Mapping. Captured AT HANDSHAKE;
+        NOT refreshed during the connection lifetime. Mutation
+        attempts (``conn.headers["X"] = "Y"`` /
+        ``del conn.headers["X"]``) raise ``TypeError``.
+
+        Issue #673: surfaces the request headers to ``on_connect`` so
+        consumers needing custom enforcement (signed-token check,
+        per-tenant auth header validation) beyond the SDK's built-in
+        ``allowed_origins`` allowlist have a structural way in. The
+        SDK-level allowlist (see :meth:`Nexus.register_websocket`'s
+        ``allowed_origins`` parameter) is the recommended default;
+        ``conn.headers`` is the escape hatch.
+        """
+        return self._headers
 
     @property
     def alive(self) -> bool:
@@ -427,21 +569,46 @@ class MessageHandlerRegistry:
         self._handlers: Dict[str, MessageHandler] = {}
         # path -> set of connection_id -> Connection
         self._connections_by_path: Dict[str, Dict[str, Connection]] = {}
+        # path -> validated allowed_origins list (None == SDK does
+        # not enforce; handler must use conn.headers itself).
+        self._allowed_origins_by_path: Dict[str, Optional[List[str]]] = {}
 
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------
 
-    def register(self, path: str, handler_cls: Type[MessageHandler]) -> MessageHandler:
+    def register(
+        self,
+        path: str,
+        handler_cls: Type[MessageHandler],
+        *,
+        allowed_origins: Optional[List[str]] = None,
+    ) -> MessageHandler:
         """Register a handler class against a URL path.
 
         The class is instantiated immediately (with no arguments). A
         handler's ``__init__`` is therefore not a place for per-request
         work; it runs once at registration time.
 
+        Args:
+            path: URL path (must start with ``/``).
+            handler_cls: subclass of :class:`MessageHandler`.
+            allowed_origins: optional list of HTTP ``Origin`` header
+                values allowed to upgrade to this WebSocket path.
+                When set, the registry rejects every handshake whose
+                ``Origin`` does NOT match an entry BEFORE invoking
+                ``on_connect``. See :func:`validate_origin_allowlist`
+                for the entry shape (exact origins, ``https://*.x.com``
+                wildcards, fail-closed ``"*"``). When ``None``, the
+                SDK does NOT enforce — operators MUST either use
+                ``conn.headers`` from inside ``on_connect`` for custom
+                enforcement OR explicitly accept that the endpoint is
+                Origin-unfiltered. Issue #673.
+
         Raises:
-            ValueError: if ``path`` is already registered or is not a
-                valid WebSocket path (must start with ``/``).
+            ValueError: if ``path`` is already registered, is not a
+                valid WebSocket path (must start with ``/``), or
+                ``allowed_origins`` fails validation.
             TypeError: if ``handler_cls`` is not a subclass of
                 :class:`MessageHandler`.
         """
@@ -463,15 +630,44 @@ class MessageHandlerRegistry:
                 f"(got {handler_cls!r})"
             )
 
+        # Validate allowed_origins at registration time (typed
+        # ValueError on failure; raises BEFORE the handler is
+        # instantiated so a bad allowlist never silently registers).
+        validated_origins = validate_origin_allowlist(allowed_origins)
+
         handler = handler_cls()
         handler._registry = self
         handler._path = path
         self._handlers[path] = handler
         self._connections_by_path[path] = {}
+        self._allowed_origins_by_path[path] = validated_origins
         logger.info(
             "ws.handler.registered",
-            extra={"path": path, "handler": handler_cls.__name__},
+            extra={
+                "path": path,
+                "handler": handler_cls.__name__,
+                "origin_enforcement": (
+                    "sdk" if validated_origins is not None else "none"
+                ),
+            },
         )
+        if validated_origins is None:
+            # One-time WARN at registration so operators see the gap
+            # without per-request log spam. Per rules/observability.md
+            # Rule 3: WARN means "succeeded but used a degraded
+            # path" — accepting the registration without SDK Origin
+            # enforcement IS the degraded path.
+            logger.warning(
+                "ws.handler.origin_enforcement_disabled",
+                extra={
+                    "path": path,
+                    "handler": handler_cls.__name__,
+                    "remediation": (
+                        "pass allowed_origins=[...] to register_websocket "
+                        "OR enforce manually via conn.headers in on_connect"
+                    ),
+                },
+            )
         return handler
 
     def get(self, path: str) -> Optional[MessageHandler]:
@@ -493,6 +689,16 @@ class MessageHandlerRegistry:
                 conn._alive = False
         self._handlers.clear()
         self._connections_by_path.clear()
+        self._allowed_origins_by_path.clear()
+
+    def get_allowed_origins(self, path: str) -> Optional[List[str]]:
+        """Return the validated allowed_origins list for ``path``.
+
+        Returns ``None`` if no SDK enforcement is active (or no
+        handler is registered). Test-only inspection helper —
+        production code should NOT need to read this.
+        """
+        return self._allowed_origins_by_path.get(path)
 
     # ------------------------------------------------------------------
     # Connection dispatch (called from WebSocketTransport)
@@ -508,20 +714,78 @@ class MessageHandlerRegistry:
         registered handler (even if it errored), ``False`` if no
         handler was registered for the path.
 
+        Issue #673 — Origin enforcement: BEFORE invoking
+        ``on_connect``, if the path's ``allowed_origins`` list is
+        non-``None``, the request's ``Origin`` header is checked
+        against the allowlist. Mismatches close the WebSocket with
+        code 1008 (per RFC 6455 — policy violation) and a
+        fingerprinted reason; ``on_connect`` and ``on_disconnect``
+        do NOT fire (the connection never reached the handler's
+        lifecycle).
+
         State isolation invariant: each call creates a fresh
         :class:`Connection`, so ``conn.state`` is always a new
         :class:`types.SimpleNamespace`.
 
         Lifecycle invariant: ``on_disconnect`` is called for every
         ``on_connect`` that returned normally, even if the receive
-        loop raises or the socket closes abnormally.
+        loop raises or the socket closes abnormally. Origin-rejected
+        connections are NOT subject to this invariant — they never
+        invoke ``on_connect``.
         """
         handler = self._handlers.get(path)
         if handler is None:
             return False
 
+        # Extract handshake headers BEFORE constructing Connection so
+        # the headers are available to on_connect from the first
+        # millisecond of the handler's lifecycle.
+        headers = _extract_handshake_headers(ws)
+
+        # Issue #673 — Origin allowlist enforcement (pre-on_connect).
+        allowed_origins = self._allowed_origins_by_path.get(path)
+        if allowed_origins is not None:
+            origin = headers.get("origin")
+            if not origin_matches_allowlist(origin, allowed_origins):
+                # Fingerprint per rules/observability.md Rule 6 + 8:
+                # never echo the raw Origin to log aggregators.
+                fingerprint = fingerprint_origin(origin)
+                logger.warning(
+                    "ws.handler.origin_rejected",
+                    extra={
+                        "path": path,
+                        "handler": type(handler).__name__,
+                        "origin_fingerprint": fingerprint,
+                        "reason": (
+                            "missing_origin_header"
+                            if origin is None
+                            else "origin_not_in_allowlist"
+                        ),
+                    },
+                )
+                # Generic close reason — never echo the rejected
+                # Origin back to the client (would let an attacker
+                # confirm a probe). Code 1008 = "policy violation"
+                # per RFC 6455 §7.4.1.
+                try:
+                    await ws.close(1008, f"origin rejected ({fingerprint})")
+                except Exception as exc:  # noqa: BLE001 — best-effort
+                    logger.debug(
+                        "ws.handler.origin_close_failed",
+                        extra={
+                            "path": path,
+                            "origin_fingerprint": fingerprint,
+                            "error": str(exc),
+                        },
+                    )
+                # Returning True signals the transport that the
+                # connection was handled (rejected by policy is a
+                # form of handling); without it the transport falls
+                # through to the legacy single-path guard.
+                return True
+
         connection_id = uuid.uuid4().hex
-        conn = Connection(ws, connection_id, path)
+        conn = Connection(ws, connection_id, path, headers=headers)
         self._connections_by_path[path][connection_id] = conn
 
         connect_ok = False
