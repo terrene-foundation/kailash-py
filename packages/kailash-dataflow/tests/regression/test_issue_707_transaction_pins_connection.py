@@ -92,8 +92,19 @@ async def temp_table(pg_test_suite, temp_table_name):
 
 @pytest.fixture
 async def df(pg_test_suite):
-    """A DataFlow against the real Postgres infra; closed on teardown."""
+    """A DataFlow against the real Postgres infra; closed on teardown.
+
+    NOTE: ``await instance.initialize()`` is required for the DataFlow
+    connection adapter to be created on the host event loop. Without
+    it, ``TransactionManager._get_adapter()`` returns None and
+    ``db.transactions.begin()`` raises "no database connection
+    available" before reaching the BEGIN statement. This is the
+    pre-existing bug Issue #711 surfaced when the sync fixture was
+    derived from this one — applied here too for symmetry per
+    rules/zero-tolerance.md Rule 1 (fix-immediately, same bug class).
+    """
     instance = DataFlow(database_url=pg_test_suite.config.url, auto_migrate=False)
+    await instance.initialize()
     try:
         yield instance
     finally:
@@ -262,6 +273,7 @@ async def test_select_for_update_then_insert_idempotency(pg_test_suite, temp_tab
         # pools, so the two tasks genuinely race against each other on
         # the database, not on a shared in-process lock.
         local_df = DataFlow(database_url=pg_test_suite.config.url, auto_migrate=False)
+        await local_df.initialize()
         try:
             async with local_df.transactions.begin() as tx:
                 # Use the idempotency token in the email column for uniqueness.
