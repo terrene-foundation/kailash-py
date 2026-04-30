@@ -8,7 +8,7 @@ single WARN, retry on CPU, and return a TrainingResult whose
 ``device.fallback_reason`` is ``"oom"`` with ``device.backend == "cpu"``.
 Non-OOM exceptions MUST re-raise unchanged.
 
-Tests patch ``lightning.pytorch.Trainer`` so no GPU / Lightning runtime
+Tests patch ``pytorch_lightning.Trainer`` so no GPU / Lightning runtime
 is required (Tier 1 per rules/testing.md §"3-Tier Testing").
 """
 from __future__ import annotations
@@ -109,7 +109,7 @@ def _install_oom_then_ok_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, A
     "instances": [trainer1, trainer2]}`` — one Trainer is constructed
     per attempt (the OOM fallback rebuilds on CPU).
     """
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0, "instances": []}
 
@@ -133,7 +133,7 @@ def _install_oom_then_ok_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, A
 
 def _install_non_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Replace the Trainer so fit raises a non-OOM RuntimeError."""
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0, "instances": []}
 
@@ -153,7 +153,7 @@ def _install_non_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 def _install_always_oom_trainer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Trainer that always raises OOM — used to confirm CPU-start re-raises."""
-    import lightning.pytorch as pl_trainer
+    import pytorch_lightning as pl_trainer
 
     state: dict[str, Any] = {"calls": 0}
 

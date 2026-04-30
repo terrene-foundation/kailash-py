@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "1.6.0"
+version = "1.7.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -46,10 +46,14 @@ dependencies = [
     # UMAP across MPS/ROCm/XPU.
     "umap-learn>=0.5",
     # Lightning is the training spine for every family per ml-engines.md
-    # §3 MUST 2 — every training call routes through lightning.pytorch.Trainer.
-    # Therefore lightning + torch are base dependencies, not optional extras.
+    # §3 MUST 2 — every training call routes through pytorch_lightning.Trainer.
+    # We depend on the standalone `pytorch-lightning` distribution rather than
+    # the umbrella `lightning` package because PyPI quarantined `lightning`
+    # in 2026-04 (#752); `pytorch-lightning` is the authoritative active
+    # distribution from Lightning-AI with full API parity at every call site.
+    # Therefore pytorch-lightning + torch are base dependencies, not optional extras.
     "torch>=2.2",
-    "lightning>=2.2",
+    "pytorch-lightning>=2.2",
     "plotly>=5.18",
     "skl2onnx>=1.16",
     "onnxmltools>=1.12",
@@ -68,7 +72,7 @@ dependencies = [
 [project.optional-dependencies]
 dl = [
     "torch>=2.2",
-    "lightning>=2.2",
+    "pytorch-lightning>=2.2",
     "torchvision>=0.17",
     "torchaudio>=2.2",
     "timm>=1.0",
@@ -192,7 +196,7 @@ markers = [
 # rank-degenerate synthetic test fixtures; filters suppress the known-harmless
 # categories while letting production warnings through.
 # Rule: use bare message-match (no module path) — module-scoped filters
-# that reference lazy-imported packages (lightning.fabric.utilities,
+# that reference lazy-imported packages (pytorch_lightning.fabric.utilities,
 # sklearn.exceptions, kailash_ml._decorators) cause pytest to import those
 # modules at filter-parse time and intermittently segfault during
 # xgboost/aiosqlite cleanup (observed on python 3.13 + pytest 9).

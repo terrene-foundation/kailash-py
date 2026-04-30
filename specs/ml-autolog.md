@@ -389,7 +389,7 @@ def is_available(cls) -> bool:
 @classmethod
 def is_available(cls) -> bool:
     try:
-        import lightning  # surprise-imports torch, transitively surprises many deps
+        import pytorch_lightning  # surprise-imports torch, transitively surprises many deps
         return True
     except ImportError:
         return False
@@ -611,7 +611,7 @@ packages/kailash-ml/tests/integration/autolog/
 ```toml
 # packages/kailash-ml/pyproject.toml
 [project.optional-dependencies]
-autolog-lightning    = ["lightning>=2.0"]
+autolog-lightning    = ["pytorch-lightning>=2.0"]
 autolog-sklearn      = ["scikit-learn>=1.3", "skl2onnx>=1.15"]
 autolog-transformers = ["transformers>=4.35"]
 autolog-xgboost      = ["xgboost>=2.0"]
@@ -622,12 +622,12 @@ autolog-all          = ["kailash-ml[autolog-lightning,autolog-sklearn,autolog-tr
 
 **MUST**: `FrameworkIntegration.is_available()` MUST gate cleanly — if the framework is not installed, `autolog()` skips attaching the integration (it simply is not in the enabled set). Raising `ImportError` from `is_available()` is BLOCKED.
 
-Per `rules/dependencies.md` § Declared = Gated Consistently, every module that does `import lightning` etc. at module scope MUST be gated behind the matching extra. The pattern is:
+Per `rules/dependencies.md` § Declared = Gated Consistently, every module that does `import pytorch_lightning` etc. at module scope MUST be gated behind the matching extra. The pattern is:
 
 ```python
 # src/kailash_ml/autolog/_lightning.py
 try:
-    import lightning.pytorch as pl
+    import pytorch_lightning as pl
 except ImportError:
     pl = None
 

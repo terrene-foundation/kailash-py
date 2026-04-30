@@ -53,7 +53,7 @@ def _build_auto_callbacks(
     user-supplied ModelCheckpoint coexists instead of displacing the
     engine guarantee.
 
-    The import is lazy and failure-soft: when ``lightning.pytorch`` is
+    The import is lazy and failure-soft: when ``pytorch_lightning`` is
     unavailable (classical-only install or ``enable_checkpointing=False``
     opt-out), this function returns the user's callback list unchanged.
     sklearn / xgboost / lightgbm adapters ignore the callbacks list so
@@ -79,7 +79,7 @@ def _build_auto_callbacks(
         logger.debug("engine.auto_checkpoint.run_context_unavailable", exc_info=True)
 
     try:
-        from lightning.pytorch.callbacks import ModelCheckpoint
+        from pytorch_lightning.callbacks import ModelCheckpoint
     except ImportError:
         # Classical-only install: Lightning is absent and the user won't
         # consume the callbacks list anyway.
@@ -273,7 +273,7 @@ class Patience:
 # ---------------------------------------------------------------------------
 
 
-from kailash_ml._env import resolve_store_url as _resolve_store_url
+from kailash_ml._env import resolve_store_url as _resolve_store_url  # noqa: E402
 
 
 def _default_store_url() -> str:

@@ -24,7 +24,6 @@ import pytest
 from kailash_ml.autolog import autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
@@ -46,7 +45,7 @@ def _build_toy_module():
     so the Tier-2 wiring test can assert ≥3 metric rows round-trip.
     """
     import torch
-    from lightning.pytorch import LightningModule
+    from pytorch_lightning import LightningModule
 
     class ToyModule(LightningModule):
         def __init__(self):
@@ -85,8 +84,8 @@ async def test_lightning_autolog_emits_metrics_params_and_checkpoint(
     """trainer.fit inside km.autolog("lightning") emits metrics +
     params + checkpoint artifact per §3.1 row 1 + §8.1.
     """
-    from lightning.pytorch import Trainer
-    from lightning.pytorch.callbacks import ModelCheckpoint
+    from pytorch_lightning import Trainer
+    from pytorch_lightning.callbacks import ModelCheckpoint
 
     ckpt_dir = tmp_path / "ckpts"
     ckpt_dir.mkdir()
@@ -164,7 +163,7 @@ async def test_lightning_autolog_restores_trainer_init_on_exit(
     guards against the cross-test contamination failure mode called
     out in §1.3.
     """
-    from lightning.pytorch import Trainer
+    from pytorch_lightning import Trainer
 
     original_init = Trainer.__init__
 
@@ -185,7 +184,7 @@ async def test_lightning_autolog_restores_trainer_init_even_when_body_raises(
     """Per §8.5 + §3.2: detach runs in ``finally:`` even when the
     wrapped block raises, and Trainer.__init__ is still restored.
     """
-    from lightning.pytorch import Trainer
+    from pytorch_lightning import Trainer
 
     original_init = Trainer.__init__
 

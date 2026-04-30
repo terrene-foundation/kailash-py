@@ -383,7 +383,7 @@ Re-hydrates a `DLDiagnostics` session from a completed `TrainingResult`. Used by
 ### 5.3 Lightning Callback
 
 ```python
-def as_lightning_callback(self) -> "lightning.pytorch.Callback": ...
+def as_lightning_callback(self) -> "pytorch_lightning.Callback": ...
 ```
 
 Returns a `lightning.Callback` instance wired to:

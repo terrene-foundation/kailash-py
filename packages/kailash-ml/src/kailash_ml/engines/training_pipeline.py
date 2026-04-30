@@ -533,7 +533,7 @@ class TrainingPipeline:
         install instructions if the ``[dl]`` extra is not installed.
 
         The model_class should be a fully qualified Lightning Module class,
-        e.g. ``"lightning.pytorch.demos.boring_classes.BoringModel"``.
+        e.g. ``"pytorch_lightning.demos.boring_classes.BoringModel"``.
         Hyperparameters are passed to both the module constructor and the
         Trainer (separated by prefix ``trainer_`` for Trainer kwargs).
 
@@ -544,7 +544,7 @@ class TrainingPipeline:
         in ``model_spec.hyperparameters`` override the resolver.
         """
         try:
-            import lightning as L  # pyright: ignore[reportMissingImports]  # optional dl extra
+            import pytorch_lightning as L  # pyright: ignore[reportMissingImports]  # optional dl extra
             import torch  # pyright: ignore[reportMissingImports]  # optional dl extra
             from torch.utils.data import (  # pyright: ignore[reportMissingImports]
                 DataLoader,

@@ -27,7 +27,7 @@ import pytest
 
 # Tier-2 gating — extras + heavy deps + polars are required.
 pytest.importorskip("catboost")
-pytest.importorskip("lightning.pytorch")
+pytest.importorskip("pytorch_lightning")
 pytest.importorskip("polars")
 
 # Mirror the host-skip gate from test_engine_register_onnx_matrix.py.
@@ -61,9 +61,8 @@ def test_catboost_trainable_fit_predict_classification_round_trip() -> None:
     """
     import numpy as np
     import polars as pl
-    from sklearn.datasets import make_classification
-
     from kailash_ml import CatBoostTrainable
+    from sklearn.datasets import make_classification
 
     X, y = make_classification(
         n_samples=120,
@@ -123,9 +122,8 @@ def test_catboost_trainable_fit_regression_round_trip() -> None:
     """Regression task — task='regression' constructs CatBoostRegressor."""
     import numpy as np
     import polars as pl
-    from sklearn.datasets import make_regression
-
     from kailash_ml import CatBoostTrainable
+    from sklearn.datasets import make_regression
 
     X, y = make_regression(
         n_samples=120,

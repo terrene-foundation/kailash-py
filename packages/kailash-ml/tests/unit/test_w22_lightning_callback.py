@@ -5,7 +5,7 @@
 Covers the dispatch-layer invariants from the master wave plan §W22 that
 do NOT require a real CPU-DDP run:
 
-1. ``as_lightning_callback()`` returns a ``lightning.pytorch.callbacks.
+1. ``as_lightning_callback()`` returns a ``pytorch_lightning.callbacks.
    Callback`` instance (invariant 4 — "callback appended by MLEngine.fit"
    precondition).
 2. ``tracker=None`` → the callback's on_train_epoch_end is a structural
@@ -34,9 +34,9 @@ from unittest.mock import patch
 import pytest
 
 try:  # [dl] extra required for the whole module
-    import torch
+    import pytorch_lightning as L  # noqa: F401 — imported to gate module collection
+    import torch  # noqa: F401 — imported to gate module collection
     import torch.nn as nn
-    import lightning.pytorch as L  # noqa: F401 — imported to gate module collection
 except ImportError:  # pragma: no cover — [dl] extra missing on CI
     pytest.skip(
         "kailash-ml[dl] extra is required for W22 Lightning callback tests",
@@ -44,7 +44,6 @@ except ImportError:  # pragma: no cover — [dl] extra missing on CI
     )
 
 from kailash_ml.diagnostics.dl import DLDiagnostics
-
 
 # ----------------------------------------------------------------------
 # Helpers
@@ -87,7 +86,7 @@ class _AsyncTracker:
 
 
 class _TrainerStub:
-    """Minimal stand-in for lightning.pytorch.Trainer inside the callback."""
+    """Minimal stand-in for pytorch_lightning.Trainer inside the callback."""
 
     def __init__(self, current_epoch: int = 0) -> None:
         self.current_epoch = current_epoch
@@ -114,7 +113,7 @@ class TestInvariant4CallbackConstruction:
     """`as_lightning_callback()` returns a real Lightning Callback."""
 
     def test_returns_lightning_callback_instance(self) -> None:
-        from lightning.pytorch.callbacks import Callback as LCallback
+        from pytorch_lightning.callbacks import Callback as LCallback
 
         diag = DLDiagnostics(_tiny_model())
         cb = diag.as_lightning_callback()

@@ -1073,7 +1073,7 @@ async def log_metric(self, key, value, *, step=None, timestamp=None):
     # ... normal path
 ```
 
-**Why:** Lightning DDP, HF Trainer deepspeed integration, and raw `torch.distributed` launchers all spawn N processes (1 per GPU). Without the rank-0 gate, every metric is written N times, corrupting every dashboard panel and every `log_metrics` row. Rank-0-only is the industry convention (W&B, MLflow Lightning integration, `lightning.pytorch.loggers.*`). Decision 4 locks it as a MUST clause, not an opt-in flag — making it configurable re-introduces the N-duplicate failure mode.
+**Why:** Lightning DDP, HF Trainer deepspeed integration, and raw `torch.distributed` launchers all spawn N processes (1 per GPU). Without the rank-0 gate, every metric is written N times, corrupting every dashboard panel and every `log_metrics` row. Rank-0-only is the industry convention (W&B, MLflow Lightning integration, `pytorch_lightning.loggers.*`). Decision 4 locks it as a MUST clause, not an opt-in flag — making it configurable re-introduces the N-duplicate failure mode.
 
 **Tier 2 test**: `tests/integration/test_tracker_ddp_rank0_only_emission.py` MUST mock `torch.distributed.get_rank()` to return 1 on a worker process, call `run.log_metric(...)`, and assert NO row appears in `_kml_metric`. The companion test on rank 0 MUST assert the row DOES appear. Rank-API-unavailable path (non-distributed execution) MUST pass-through normally.
 

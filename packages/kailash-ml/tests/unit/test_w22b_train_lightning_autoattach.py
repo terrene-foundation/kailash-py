@@ -33,7 +33,7 @@ import polars as pl
 import pytest
 
 try:  # [dl] extra required for this whole module
-    import lightning.pytorch as L  # noqa: F401
+    import pytorch_lightning as L  # noqa: F401
     import torch  # noqa: F401
 except ImportError:  # pragma: no cover — [dl] extra missing on CI
     pytest.skip(
@@ -88,7 +88,7 @@ def model_spec() -> ModelSpec:
     :class:`DLDiagnostics` ``nn.Module`` isinstance check.
     """
     return ModelSpec(
-        model_class="lightning.pytorch.demos.boring_classes.BoringModel",
+        model_class="pytorch_lightning.demos.boring_classes.BoringModel",
         hyperparameters={"trainer_max_epochs": 1},
         framework="lightning",
     )
@@ -140,12 +140,11 @@ def _run_train_lightning(
     Returns the ``Trainer`` class mock and the kwargs it was called with
     so assertions can inspect the composed callback list.
     """
-    import lightning  # real import — BoringModel instantiation needs it
 
-    original_trainer = lightning.Trainer
+    original_trainer = L.Trainer
     trainer_cls_mock = MagicMock(name="L.Trainer")
     trainer_cls_mock.return_value = MagicMock(name="L.Trainer.instance")
-    lightning.Trainer = trainer_cls_mock  # type: ignore[misc]
+    L.Trainer = trainer_cls_mock  # type: ignore[misc]
     try:
         pipeline._train_lightning(
             train_data=train_data,
@@ -154,7 +153,7 @@ def _run_train_lightning(
             model_spec=model_spec,
         )
     finally:
-        lightning.Trainer = original_trainer  # type: ignore[misc]
+        L.Trainer = original_trainer  # type: ignore[misc]
     assert (
         trainer_cls_mock.call_count == 1
     ), f"L.Trainer must be instantiated exactly once; got {trainer_cls_mock.call_count}"
@@ -308,7 +307,7 @@ class TestDuplicateCallbackDeduped:
         user_cb = user_diag.as_lightning_callback()
 
         model_spec_with_cbs = ModelSpec(
-            model_class="lightning.pytorch.demos.boring_classes.BoringModel",
+            model_class="pytorch_lightning.demos.boring_classes.BoringModel",
             hyperparameters={
                 "trainer_max_epochs": 1,
                 "trainer_callbacks": [user_cb],
@@ -349,14 +348,14 @@ class TestNonDLCallbacksCompose:
         train_data: pl.DataFrame,
         feature_cols: list[str],
     ) -> None:
-        from lightning.pytorch.callbacks import Callback as LCallback
+        from pytorch_lightning.callbacks import Callback as LCallback
 
         class _UserPlainCallback(LCallback):
             pass
 
         user_cb = _UserPlainCallback()
         model_spec_with_cbs = ModelSpec(
-            model_class="lightning.pytorch.demos.boring_classes.BoringModel",
+            model_class="pytorch_lightning.demos.boring_classes.BoringModel",
             hyperparameters={
                 "trainer_max_epochs": 1,
                 "trainer_callbacks": [user_cb],
@@ -399,8 +398,8 @@ class TestIsAvailableProbe:
         def _blocked_import(
             name: str, globals=None, locals=None, fromlist=(), level=0  # noqa: A002
         ):
-            if name == "lightning.pytorch" or name.startswith("lightning.pytorch"):
-                raise ImportError("simulated: lightning.pytorch not installed")
+            if name == "pytorch_lightning" or name.startswith("pytorch_lightning"):
+                raise ImportError("simulated: pytorch_lightning not installed")
             return real_import(name, globals, locals, fromlist, level)
 
         with patch.object(builtins, "__import__", side_effect=_blocked_import):

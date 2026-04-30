@@ -162,7 +162,7 @@ Key operations: `register_model()`, `promote()`, `get_model()`, `list_models()`,
 from kailash_ml.engines.training_pipeline import TrainingPipeline, ModelSpec, EvalSpec
 ```
 
-Orchestrates the full training lifecycle: load features, train a model, evaluate metrics, and register the result. Supports scikit-learn and LightGBM model classes out of the box. Model class imports are restricted to a security allowlist (`sklearn.*`, `lightgbm.*`, `xgboost.*`, `catboost.*`, `torch.*`, `lightning.*`, `kailash_ml.*`) to prevent arbitrary code execution. Includes model calibration (Platt scaling, isotonic regression) and optional auto-logging to ExperimentTracker.
+Orchestrates the full training lifecycle: load features, train a model, evaluate metrics, and register the result. Supports scikit-learn and LightGBM model classes out of the box. Model class imports are restricted to a security allowlist (`sklearn.*`, `lightgbm.*`, `xgboost.*`, `catboost.*`, `torch.*`, `pytorch_lightning.*`, `lightning.*`, `kailash_ml.*`) to prevent arbitrary code execution. Includes model calibration (Platt scaling, isotonic regression) and optional auto-logging to ExperimentTracker.
 
 Key operations: `train()`, `calibrate()`, `retrain()`.
 
@@ -796,6 +796,7 @@ For security, `TrainingPipeline` and `EnsembleEngine` restrict model class impor
 - `xgboost.*`
 - `catboost.*`
 - `torch.*`
+- `pytorch_lightning.*`
 - `lightning.*`
 - `kailash_ml.*`
 

@@ -28,11 +28,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from kailash_ml.autolog import _distribution
-from kailash_ml.autolog import autolog
+from kailash_ml.autolog import _distribution, autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
-
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -52,7 +49,7 @@ def _build_toy_trainer_fit() -> Any:
     callback hooks. Returns the fitted trainer for introspection.
     """
     import torch
-    from lightning.pytorch import LightningModule, Trainer
+    from pytorch_lightning import LightningModule, Trainer
     from torch.utils.data import DataLoader, TensorDataset
 
     class ToyModule(LightningModule):

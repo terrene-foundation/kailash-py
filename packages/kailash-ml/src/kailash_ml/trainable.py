@@ -131,7 +131,7 @@ class TrainingContext:
     trial_number: Optional[int] = None
     # Lightning passthrough (ml-engines-v2.md §3.2 MUST 6-8 / §2.2).
     # `strategy` is typed Any because concrete values are `str | None |
-    # lightning.pytorch.strategies.Strategy` and importing lightning at
+    # pytorch_lightning.strategies.Strategy` and importing pytorch_lightning at
     # module-load time would force the `[dl]` extra.
     strategy: Any = None
     num_nodes: int = 1
@@ -380,8 +380,8 @@ def _make_single_epoch_module(
     module_name: str,
 ) -> Any:
     """Build a LightningModule that fits `estimator` once during on_train_start."""
-    import lightning.pytorch as pl_trainer
     import numpy as np
+    import pytorch_lightning as pl_trainer
     import torch
 
     X_arr = np.asarray(X)
@@ -579,7 +579,7 @@ class SklearnTrainable:
           stamp the ``DeviceReport`` with
           ``fallback_reason="array_api_offlist"``.
 
-        Routes through ``lightning.pytorch.Trainer(accelerator="cpu",
+        Routes through ``pytorch_lightning.Trainer(accelerator="cpu",
         devices=1, precision="32-true", max_epochs=1)`` per
         ``ml-engines.md`` §3 MUST 2 in both paths — Lightning is the
         enforcement point for accelerator / precision resolution even
@@ -660,7 +660,7 @@ class SklearnTrainable:
             module_name="SklearnLightningAdapter",
         )
 
-        import lightning.pytorch as pl_trainer
+        import pytorch_lightning as pl_trainer
 
         trainer_kwargs = _log_backend_selection(cpu_ctx, max_epochs=1)
         trainer = pl_trainer.Trainer(**trainer_kwargs)
@@ -878,8 +878,8 @@ class TorchTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
         import numpy as np
+        import pytorch_lightning as pl_trainer
         import torch
 
         if hyperparameters and "learning_rate" in hyperparameters:
@@ -1030,11 +1030,11 @@ class LightningTrainable:
         batch_size: int = 32,
         task: str = "regression",
     ) -> None:
-        import lightning.pytorch as pl_trainer
+        import pytorch_lightning as pl_trainer
 
         if module is None or not isinstance(module, pl_trainer.LightningModule):
             raise TypeError(
-                "LightningTrainable requires a lightning.pytorch.LightningModule. "
+                "LightningTrainable requires a pytorch_lightning.LightningModule. "
                 f"Got {type(module).__name__}. Use TorchTrainable for raw nn.Module."
             )
         self._module = module
@@ -1070,8 +1070,8 @@ class LightningTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
         import numpy as np
+        import pytorch_lightning as pl_trainer
         import torch
 
         max_epochs = int(hyperparameters.get("max_epochs", 1)) if hyperparameters else 1
@@ -1256,7 +1256,7 @@ class XGBoostTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
+        import pytorch_lightning as pl_trainer
 
         ctx = _effective_context(context)
 
@@ -1508,7 +1508,7 @@ class LightGBMTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
+        import pytorch_lightning as pl_trainer
 
         ctx = _effective_context(context)
 
@@ -1788,7 +1788,7 @@ class CatBoostTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
+        import pytorch_lightning as pl_trainer
 
         ctx = _effective_context(context)
 
@@ -2051,8 +2051,8 @@ class UMAPTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
         import numpy as np
+        import pytorch_lightning as pl_trainer
 
         try:
             import umap  # umap-learn package
@@ -2281,8 +2281,8 @@ class HDBSCANTrainable:
         hyperparameters: Optional[Mapping[str, Any]] = None,
         context: Optional[TrainingContext] = None,
     ) -> TrainingResult:
-        import lightning.pytorch as pl_trainer
         import numpy as np
+        import pytorch_lightning as pl_trainer
         from sklearn.cluster import HDBSCAN
 
         ctx = _effective_context(context)

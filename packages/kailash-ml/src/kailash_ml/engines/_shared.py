@@ -53,6 +53,11 @@ ALLOWED_MODEL_PREFIXES = frozenset(
         "catboost.",
         "kailash_ml.",
         "torch.",
+        # `pytorch_lightning.*` is the canonical Lightning import path after
+        # the umbrella `lightning` package was quarantined on PyPI in 2026-04
+        # (#752). `lightning.*` remains for users who still have the umbrella
+        # package installed via a pre-quarantine pin or vendored copy.
+        "pytorch_lightning.",
         "lightning.",
     }
 )
