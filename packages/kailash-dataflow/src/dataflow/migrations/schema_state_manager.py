@@ -670,48 +670,63 @@ class MigrationHistoryManager:
         Initialize migration history manager.
 
         Args:
-            dataflow_instance: DataFlow instance for database access via WorkflowBuilder
-            runtime: Optional shared runtime. If provided, the manager acquires
-                a reference (ref-count increment). If None, creates its own.
+            dataflow_instance: DataFlow instance for database access via
+                WorkflowBuilder. Post-MED-S5 (issue #713) ``self.runtime``
+                resolves lazily via ``dataflow_instance.runtime`` on every
+                access so the manager follows the parent's runtime swap
+                without snapshot drift.
+            runtime: Optional explicit runtime override (legacy path).
+                When supplied, pinned for the manager's lifetime.
         """
         self.dataflow = dataflow_instance
+        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        self._dataflow = dataflow_instance
 
-        # Initialize runtime
         if runtime is not None:
-            self.runtime = runtime.acquire()
+            # Legacy explicit-runtime escape hatch.
+            self._explicit_runtime = runtime.acquire()
             self._owns_runtime = False
-            from kailash.runtime import AsyncLocalRuntime
-
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
                 "MigrationHistoryManager: Using injected runtime (ref_count=%d)",
                 runtime.ref_count,
             )
         else:
-            try:
-                asyncio.get_running_loop()
-                from kailash.runtime import AsyncLocalRuntime
-
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
-                logger.debug(
-                    "MigrationHistoryManager: Detected async context, using AsyncLocalRuntime"
-                )
-            except RuntimeError:
-                from kailash.runtime.local import LocalRuntime
-
-                # Issue #478 — registry-style long-lived runtime.  Use the
-                # public opt-out so Core SDK suppresses the ad-hoc-usage
-                # deprecation warning AND skips atexit cleanup; the manager
-                # calls close() at its own shutdown.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
-                logger.debug(
-                    "MigrationHistoryManager: Detected sync context, using LocalRuntime"
-                )
-            self._owns_runtime = True
+            # Lazy parent lookup — no runtime owned here. The @property
+            # below will resolve via self._dataflow.runtime on each
+            # access.
+            self._explicit_runtime = None
+            self._owns_runtime = False
 
         self._ensure_history_table()
+
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this manager (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        if self._dataflow is not None:
+            return self._dataflow.runtime
+        return None
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        """Assignment-compat setter; sets the explicit override."""
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        """Whether the active runtime is :class:`AsyncLocalRuntime`."""
+        from kailash.runtime import AsyncLocalRuntime
+
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        pass  # No-op — derived property.
 
     def _extract_query_data(
         self, results: Dict[str, Any], node_id: str
@@ -1420,17 +1435,24 @@ class MigrationHistoryManager:
         return risk_levels.get(operation_type, "MEDIUM")
 
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
+        Post-MED-S5: only the legacy explicit-runtime path holds a
+        reference here. The lazy-parent path delegates lifecycle to
+        the parent DataFlow.
         """
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Only fires when the manager held an explicit runtime override.
+        """
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,

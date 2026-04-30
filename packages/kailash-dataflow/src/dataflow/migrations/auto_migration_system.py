@@ -239,41 +239,44 @@ class SchemaDiff:
 class PostgreSQLSchemaInspector:
     """PostgreSQL schema inspector for DataFlow with advanced optimizations."""
 
-    def __init__(self, connection_string, runtime=None):
+    def __init__(self, connection_string, runtime=None, dataflow_instance=None):
         """
         Initialize PostgreSQL schema inspector.
 
         Args:
             connection_string: Database connection string
-            runtime: Optional shared runtime. If provided, the inspector acquires
-                a reference (ref-count increment). If None, creates its own.
+            runtime: Optional explicit runtime override (legacy path).
+            dataflow_instance: Optional DataFlow parent reference. When
+                supplied, ``self.runtime`` resolves lazily via
+                ``dataflow_instance.runtime`` on every access (issue
+                #713 — MED-S5 lazy lookup).
         """
         self.connection_string = connection_string
+        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        self._dataflow = dataflow_instance
 
-        # Initialize runtime
         if runtime is not None:
-            self.runtime = runtime.acquire()
+            self._explicit_runtime = runtime.acquire()
             self._owns_runtime = False
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
                 "PostgreSQLSchemaInspector: Using injected runtime (ref_count=%d)",
                 runtime.ref_count,
             )
+        elif dataflow_instance is not None:
+            # Lazy parent lookup — no runtime owned here.
+            self._explicit_runtime = None
+            self._owns_runtime = False
         else:
+            # Legacy self-owned path (no parent + no explicit runtime).
             try:
                 asyncio.get_running_loop()
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
+                self._explicit_runtime = AsyncLocalRuntime()
                 logger.debug(
                     "PostgreSQLSchemaInspector: Detected async context, using AsyncLocalRuntime"
                 )
             except RuntimeError:
-                # Issue #478 — registry-style long-lived runtime.  Use the
-                # public opt-out so Core SDK suppresses the ad-hoc-usage
-                # deprecation warning AND skips atexit cleanup; the
-                # inspector calls close() at its own shutdown.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
+                # Issue #478 — registry-style long-lived runtime.
+                self._explicit_runtime = LocalRuntime().mark_externally_managed()
                 logger.debug(
                     "PostgreSQLSchemaInspector: Detected sync context, using LocalRuntime"
                 )
@@ -579,18 +582,47 @@ class PostgreSQLSchemaInspector:
 
         return False
 
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this inspector (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        if self._dataflow is not None:
+            return self._dataflow.runtime
+        return None
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        pass  # No-op — derived property.
+
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
+        Post-MED-S5: only the legacy explicit-runtime path or the
+        self-owned fallback (no parent dataflow_instance) holds a
+        reference here.
         """
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
@@ -997,31 +1029,37 @@ class PostgreSQLMigrationGenerator:
 class SQLiteSchemaInspector:
     """SQLite schema inspector for DataFlow."""
 
-    def __init__(self, connection_string, runtime=None):
+    def __init__(self, connection_string, runtime=None, dataflow_instance=None):
         """
         Initialize SQLite schema inspector.
 
         Args:
             connection_string: Database connection string
-            runtime: Optional shared runtime. If provided, the inspector acquires
-                a reference (ref-count increment). If None, creates its own.
+            runtime: Optional explicit runtime override (legacy path).
+            dataflow_instance: Optional DataFlow parent reference. When
+                supplied, ``self.runtime`` resolves lazily via
+                ``dataflow_instance.runtime`` (issue #713 — MED-S5).
         """
         self.connection_string = connection_string
+        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        self._dataflow = dataflow_instance
 
-        # Initialize runtime
         if runtime is not None:
-            self.runtime = runtime.acquire()
+            self._explicit_runtime = runtime.acquire()
             self._owns_runtime = False
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
                 "SQLiteSchemaInspector: Using injected runtime (ref_count=%d)",
                 runtime.ref_count,
             )
+        elif dataflow_instance is not None:
+            # Lazy parent lookup — no runtime owned here.
+            self._explicit_runtime = None
+            self._owns_runtime = False
         else:
+            # Legacy self-owned path.
             try:
                 asyncio.get_running_loop()
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
+                self._explicit_runtime = AsyncLocalRuntime()
                 logger.debug(
                     "SQLiteSchemaInspector: Detected async context, using AsyncLocalRuntime"
                 )
@@ -1030,8 +1068,7 @@ class SQLiteSchemaInspector:
                 # public opt-out so Core SDK suppresses the ad-hoc-usage
                 # deprecation warning AND skips atexit cleanup; the
                 # inspector calls close() at its own shutdown.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
+                self._explicit_runtime = LocalRuntime().mark_externally_managed()
                 logger.debug(
                     "SQLiteSchemaInspector: Detected sync context, using LocalRuntime"
                 )
@@ -1277,18 +1314,44 @@ class SQLiteSchemaInspector:
 
         return diff
 
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this inspector (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        if self._dataflow is not None:
+            return self._dataflow.runtime
+        return None
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        pass  # No-op — derived property.
+
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
         """
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
@@ -1582,27 +1645,47 @@ class AutoMigrationSystem:
             connection_string: Database connection string
             dialect: Database dialect (auto-detected from connection string)
             migrations_dir: Directory for migration files
-            dataflow_instance: Optional DataFlow instance
+            dataflow_instance: Optional DataFlow instance. When provided,
+                ``self.runtime`` resolves lazily via
+                ``dataflow_instance.runtime`` on every access (issue
+                #713 — follows the parent's lazy property without
+                snapshot drift).
             lock_timeout: Lock timeout in seconds
-            runtime: Optional shared runtime. If provided, the system acquires
-                a reference (ref-count increment). If None, creates its own.
+            runtime: Optional explicit runtime override. When supplied,
+                pinned for the system's lifetime. When omitted AND
+                ``dataflow_instance`` is None, falls back to legacy
+                self-owned runtime (async-context detection).
         """
         self.connection_string = connection_string
 
-        # Initialize runtime
+        # MED-S5 (issue #713): hold parent back-reference so self.runtime
+        # / self._is_async can resolve lazily on each access. Pre-S5 the
+        # system snapshotted at __init__; post-S5 it follows the parent's
+        # lazy property (S4) which detects async context per access.
+        self._dataflow = dataflow_instance
+
         if runtime is not None:
-            self.runtime = runtime.acquire()
+            # Legacy explicit-runtime escape hatch. Acquire a reference
+            # so the caller's close() won't tear down the loop while we
+            # still need it.
+            self._explicit_runtime = runtime.acquire()
             self._owns_runtime = False
-            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
                 "AutoMigrationSystem: Using injected runtime (ref_count=%d)",
                 runtime.ref_count,
             )
+        elif dataflow_instance is not None:
+            # No explicit runtime AND parent available — defer to parent
+            # via the @property (lazy lookup, follows db.runtime swaps).
+            self._explicit_runtime = None
+            self._owns_runtime = False
         else:
+            # No explicit runtime AND no parent — legacy self-owned
+            # runtime path (preserved for callers that build the system
+            # standalone, e.g. CLI migration tools).
             try:
                 asyncio.get_running_loop()
-                self.runtime = AsyncLocalRuntime()
-                self._is_async = True
+                self._explicit_runtime = AsyncLocalRuntime()
                 logger.debug(
                     "AutoMigrationSystem: Detected async context, using AsyncLocalRuntime"
                 )
@@ -1611,8 +1694,7 @@ class AutoMigrationSystem:
                 # public opt-out so Core SDK suppresses the ad-hoc-usage
                 # deprecation warning AND skips atexit cleanup; the system
                 # calls close() at its own shutdown.
-                self.runtime = LocalRuntime().mark_externally_managed()
-                self._is_async = False
+                self._explicit_runtime = LocalRuntime().mark_externally_managed()
                 logger.debug(
                     "AutoMigrationSystem: Detected sync context, using LocalRuntime"
                 )
@@ -1658,15 +1740,21 @@ class AutoMigrationSystem:
         self.migrations_dir = Path(migrations_dir)
         self.migrations_dir.mkdir(exist_ok=True)
 
-        # Use database-specific components (pass shared runtime to sub-components)
+        # Use database-specific components (pass parent reference for lazy
+        # runtime lookup; legacy explicit-runtime path falls back when no
+        # parent is available — see MED-S5 / issue #713).
         if self.dialect == "sqlite":
             self.inspector = SQLiteSchemaInspector(
-                connection_string, runtime=self.runtime
+                connection_string,
+                runtime=self._explicit_runtime if self._dataflow is None else None,
+                dataflow_instance=self._dataflow,
             )
             self.generator = SQLiteMigrationGenerator()
         else:
             self.inspector = PostgreSQLSchemaInspector(
-                connection_string, runtime=self.runtime
+                connection_string,
+                runtime=self._explicit_runtime if self._dataflow is None else None,
+                dataflow_instance=self._dataflow,
             )
             self.generator = PostgreSQLMigrationGenerator()
 
@@ -1676,6 +1764,35 @@ class AutoMigrationSystem:
 
         # DataFlow integration: existing schema mode
         self._existing_schema_mode: bool = False
+
+    # ------------------------------------------------------------------
+    # MED-S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
+    # See ModelRegistry for the same pattern + rationale.
+    # ------------------------------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The runtime used by this system (lazy parent lookup)."""
+        if self._explicit_runtime is not None:
+            return self._explicit_runtime
+        if self._dataflow is not None:
+            return self._dataflow.runtime
+        return None
+
+    @runtime.setter
+    def runtime(self, value: Any) -> None:
+        """Assignment-compat setter; sets the explicit override."""
+        self._explicit_runtime = value
+
+    @property
+    def _is_async(self) -> bool:
+        """Whether the active runtime is :class:`AsyncLocalRuntime`."""
+        return isinstance(self.runtime, AsyncLocalRuntime)
+
+    @_is_async.setter
+    def _is_async(self, value: bool) -> None:
+        """No-op setter — derived from ``self.runtime`` post-MED-S5."""
+        pass
 
     def _detect_database_type(self, connection_string: str) -> str:
         """Detect database type from connection string."""
@@ -3076,20 +3193,30 @@ class AutoMigrationSystem:
             raise RuntimeError(f"Lock table creation failed: {error_msg}")
 
     def close(self):
-        """Release the runtime reference.
+        """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
         Also closes sub-component runtimes (inspector).
+
+        Post-MED-S5: only the legacy explicit-runtime path or the
+        self-owned fallback (no parent dataflow_instance) holds a
+        reference here. The lazy-parent path delegates lifecycle to
+        the parent DataFlow, so this close() is a no-op for that case.
         """
         if hasattr(self, "inspector") and self.inspector is not None:
             self.inspector.close()
-        if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.release()
-            self.runtime = None
+        explicit = getattr(self, "_explicit_runtime", None)
+        if explicit is not None and hasattr(explicit, "release"):
+            explicit.release()
+        self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
-        if getattr(self, "runtime", None) is not None:
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Only fires when the system held an explicit runtime override or
+        a self-owned runtime (legacy / no-parent paths).
+        """
+        if getattr(self, "_explicit_runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
