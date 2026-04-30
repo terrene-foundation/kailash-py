@@ -7802,192 +7802,167 @@ class DataFlow(DataFlowEventMixin):
         IMPORTANT: This is the sync version. If you are calling from an async context,
         use _execute_ddl_async() instead.
 
+        Issue #714 fix: routes the entire DDL batch through ONE sync connection
+        via :meth:`SyncDDLExecutor.execute_ddl_batch_per_statement` instead of
+        opening a fresh ``AsyncSQLDatabaseNode`` (and its asyncpg pool) per
+        statement. DDL is single-connection work; the prior path required the
+        operator to size ``pool_size`` to handle DDL bursts, which collided with
+        pgbouncer session-mode caps (``MaxClientsInSessionMode``).
+
         Args:
             schema_sql: Optional pre-generated schema SQL statements
         """
-        # Use connection manager to execute DDL statements
-        connection_manager = self._connection_manager
-
         if schema_sql is None:
             # Auto-detect database type from URL
             db_type = self._detect_database_type()
             schema_sql = self.generate_complete_schema_sql(db_type)
 
-        # Execute all DDL statements in order
-        all_statements = []
-
-        # 1. Create tables
+        all_statements: List[str] = []
         all_statements.extend(schema_sql.get("tables", []))
-
-        # 2. Create indexes
         all_statements.extend(schema_sql.get("indexes", []))
-
-        # 3. Add foreign keys
         all_statements.extend(schema_sql.get("foreign_keys", []))
 
-        # Execute statements using the connection manager
-        for statement in all_statements:
-            if statement.strip():
-                try:
-                    # Execute synchronously for now
-                    import asyncio
+        non_empty = [s for s in all_statements if s and s.strip()]
+        if not non_empty:
+            return
 
-                    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+        from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
-                    # Get the final connection string (handles :memory: properly)
-                    from ..adapters.connection_parser import ConnectionParser
+        database_url = self.config.database.get_connection_url(self.config.environment)
+        executor = SyncDDLExecutor(database_url)
+        results = executor.execute_ddl_batch_per_statement(non_empty)
 
-                    raw_url = self.config.database.url
-                    safe_connection_string = self.config.database.get_connection_url(
-                        self.config.environment
-                    )
+        for stmt_result in results:
+            statement = stmt_result["sql"]
+            if stmt_result.get("success"):
+                logger.debug(
+                    "engine.executed_ddl",
+                    extra={
+                        "statement": statement[:100],
+                        "duration_ms": stmt_result.get("duration_ms"),
+                    },
+                )
+                continue
 
-                    # Auto-detect database type from connection string
-                    database_type = ConnectionParser.detect_database_type(
-                        safe_connection_string
-                    )
+            error = stmt_result.get("exception") or RuntimeError(
+                stmt_result.get("error") or "DDL failed"
+            )
+            # "already exists" is acceptable per legacy semantics.
+            err_text = str(stmt_result.get("error") or "")
+            if "already exists" in err_text.lower():
+                logger.debug(
+                    "engine.ddl_already_exists",
+                    extra={"statement": statement[:100]},
+                )
+                continue
 
-                    # Create a temporary node to execute DDL
-                    ddl_node = AsyncSQLDatabaseNode(
-                        node_id="ddl_executor",
-                        connection_string=safe_connection_string,
-                        database_type=database_type,
-                        query=statement,
-                        fetch_mode="all",  # Use 'all' even though DDL doesn't return results
-                        validate_queries=False,  # Disable validation for DDL statements
-                    )
-
-                    # Execute the DDL statement
-                    result = ddl_node.execute()
-                    logger.debug(
-                        "engine.executed_ddl", extra={"statement": statement[:100]}
-                    )
-
-                    # Check if this was a successful CREATE TABLE
-                    if "CREATE TABLE" in statement and result:
-                        logger.debug(
-                            f"Successfully created table from statement: {statement[:50]}..."
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to execute DDL: {statement[:100]}... Error: {e}"
-                    )
-                    # Issue #696: record the failure under the extracted table
-                    # name so the next ensure_table_exists() for that model
-                    # raises DDLFailedError instead of re-firing the DDL.
-                    table = self._extract_table_from_statement(statement)
-                    if table is not None:
-                        self._record_failed_ddl(table, e, statement)
-                        # CREATE TABLE failures abort the batch in fail-fast
-                        # mode (per plan: index/FK failures may continue;
-                        # CREATE TABLE failure means dependent statements are
-                        # guaranteed to fail too).
-                        if not self._auto_migrate_warn and re.search(
-                            r"(?i)\bCREATE\s+TABLE\b", statement
-                        ):
-                            raise self._DDLFailedError(
-                                model_name=table,
-                                original_error=e,
-                                statement_preview=statement,
-                            ) from e
-                    # Otherwise (index, FK, type definition, schema setup),
-                    # continue with other statements (legacy semantics).
-                    continue
+            logger.error(
+                "engine.ddl_failed",
+                extra={"statement": statement[:100], "error": err_text},
+            )
+            # Issue #696: record the failure under the extracted table name so
+            # the next ensure_table_exists() for that model raises
+            # DDLFailedError instead of re-firing the DDL.
+            table = self._extract_table_from_statement(statement)
+            if table is not None:
+                self._record_failed_ddl(table, error, statement)
+                if not self._auto_migrate_warn and re.search(
+                    r"(?i)\bCREATE\s+TABLE\b", statement
+                ):
+                    raise self._DDLFailedError(
+                        model_name=table,
+                        original_error=error,
+                        statement_preview=statement,
+                    ) from error
+            # Index / FK / type / schema setup failures continue under legacy
+            # semantics — same disposition as the prior AsyncSQLDatabaseNode path.
 
     async def _execute_ddl_async(self, schema_sql: Dict[str, List[str]] = None):
         """Execute DDL statements to create tables (async version).
 
-        This method properly executes DDL statements using async execution,
-        avoiding event loop conflicts in FastAPI, pytest async fixtures, etc.
+        Issue #714 fix: routes the entire DDL batch through ONE sync connection
+        via :meth:`SyncDDLExecutor.execute_ddl_batch_per_statement` (off the event
+        loop via :func:`asyncio.to_thread`) instead of building a per-statement
+        ``WorkflowBuilder`` + ``AsyncSQLDatabaseNode`` whose acquire-then-release
+        cycle multiplies pgbouncer client-connection pressure. DDL is a one-shot
+        single-connection workload; the workflow runtime's pool plumbing was
+        overkill and forced the operator to size ``pool_size`` against the
+        pgbouncer session-mode cap.
+
+        Async-safety: ``execute_ddl_batch_per_statement`` is fully synchronous
+        (psycopg2 / sqlite3 / pymysql); calling it directly would block the event
+        loop for the duration of the DDL batch. ``asyncio.to_thread`` offloads
+        the call to the default thread pool so FastAPI / Nexus event loops keep
+        servicing other requests during the migration.
 
         Args:
             schema_sql: Optional pre-generated schema SQL statements
         """
         if schema_sql is None:
-            # Auto-detect database type from URL
             db_type = self._detect_database_type()
             schema_sql = self.generate_complete_schema_sql(db_type)
 
-        # Execute all DDL statements in order
-        all_statements = []
-
-        # 1. Create tables
+        all_statements: List[str] = []
         all_statements.extend(schema_sql.get("tables", []))
-
-        # 2. Create indexes
         all_statements.extend(schema_sql.get("indexes", []))
-
-        # 3. Add foreign keys
         all_statements.extend(schema_sql.get("foreign_keys", []))
 
-        # Get connection info once
-        from ..adapters.connection_parser import ConnectionParser
+        non_empty = [s for s in all_statements if s and s.strip()]
+        if not non_empty:
+            return
 
-        safe_connection_string = self.config.database.get_connection_url(
-            self.config.environment
+        from ..migrations.sync_ddl_executor import SyncDDLExecutor
+
+        database_url = self.config.database.get_connection_url(self.config.environment)
+        executor = SyncDDLExecutor(database_url)
+        # Off-loop the synchronous DDL batch so the running event loop
+        # (FastAPI lifespan / Nexus startup / pytest-asyncio) keeps servicing
+        # other tasks while the migration runs.
+        results = await asyncio.to_thread(
+            executor.execute_ddl_batch_per_statement, non_empty
         )
-        database_type = ConnectionParser.detect_database_type(safe_connection_string)
 
-        # M2-001: Reuse shared runtime instead of creating a new one
-        runtime = self.runtime
+        for stmt_result in results:
+            statement = stmt_result["sql"]
+            if stmt_result.get("success"):
+                logger.debug(
+                    "engine.executed_ddl_async",
+                    extra={
+                        "statement": statement[:100],
+                        "duration_ms": stmt_result.get("duration_ms"),
+                    },
+                )
+                continue
 
-        # Execute statements using async runtime
-        for idx, statement in enumerate(all_statements):
-            if statement.strip():
-                try:
-                    # Build workflow for this DDL statement
-                    workflow = WorkflowBuilder()
-                    workflow.add_node(
-                        "AsyncSQLDatabaseNode",
-                        f"ddl_{idx}",
-                        {
-                            "connection_string": safe_connection_string,
-                            "database_type": database_type,
-                            "query": statement,
-                            "fetch_mode": "all",
-                            "validate_queries": False,
-                            # DDL statements don't need transactions, and this avoids
-                            # SQLite adapter bug where begin_transaction returns tuple
-                            "transaction_mode": "none",
-                        },
-                    )
+            error = stmt_result.get("exception") or RuntimeError(
+                stmt_result.get("error") or "DDL failed"
+            )
+            err_text = str(stmt_result.get("error") or "")
+            if "already exists" in err_text.lower():
+                logger.debug(
+                    "engine.ddl_async_already_exists",
+                    extra={"statement": statement[:100]},
+                )
+                continue
 
-                    # DF-501 FIX: Execute using async runtime
-                    results, _ = await runtime.execute_workflow_async(
-                        workflow.build(), inputs={}
-                    )
-
-                    logger.debug(
-                        "engine.executed_ddl_async",
-                        extra={"statement": statement[:100]},
-                    )
-
-                    # Check if this was a successful CREATE TABLE
-                    if "CREATE TABLE" in statement:
-                        logger.debug(
-                            f"Successfully created table from statement (async): {statement[:50]}..."
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to execute DDL (async): {statement[:100]}... Error: {e}"
-                    )
-                    # Issue #696: same circuit-breaker semantics as the sync
-                    # path above — record under the extracted table name and
-                    # abort the batch in fail-fast mode for CREATE TABLE.
-                    table = self._extract_table_from_statement(statement)
-                    if table is not None:
-                        self._record_failed_ddl(table, e, statement)
-                        if not self._auto_migrate_warn and re.search(
-                            r"(?i)\bCREATE\s+TABLE\b", statement
-                        ):
-                            raise self._DDLFailedError(
-                                model_name=table,
-                                original_error=e,
-                                statement_preview=statement,
-                            ) from e
-                    # Continue with other statements (index/FK/etc.) under
-                    # legacy semantics.
-                    continue
+            logger.error(
+                "engine.ddl_async_failed",
+                extra={"statement": statement[:100], "error": err_text},
+            )
+            # Issue #696: same circuit-breaker semantics as the sync path —
+            # record under the extracted table name and abort the batch in
+            # fail-fast mode for CREATE TABLE failures.
+            table = self._extract_table_from_statement(statement)
+            if table is not None:
+                self._record_failed_ddl(table, error, statement)
+                if not self._auto_migrate_warn and re.search(
+                    r"(?i)\bCREATE\s+TABLE\b", statement
+                ):
+                    raise self._DDLFailedError(
+                        model_name=table,
+                        original_error=error,
+                        statement_preview=statement,
+                    ) from error
 
     # ------------------------------------------------------------------
     # Issue #696 — auto_migrate fail-fast circuit breaker
