@@ -156,11 +156,37 @@ Server push:
 
 #### 4.4.1 Class-based MessageHandler API
 
-For per-connection state, subscription fanout, or any pattern that exceeds stateless request/response, register a `MessageHandler` subclass at a path via `Nexus.websocket(path)` decorator or `Nexus.register_websocket(path, handler_cls)`. The `MessageHandlerRegistry` (`app.websocket_handlers`) routes incoming frames to the handler's lifecycle hooks and tracks `Connection` objects with isolated `state: SimpleNamespace`.
+For per-connection state, subscription fanout, or any pattern that exceeds stateless request/response, register a `MessageHandler` subclass at a path via `Nexus.websocket(path, *, allowed_origins=None)` decorator or `Nexus.register_websocket(path, handler_cls, *, allowed_origins=None)`. The `MessageHandlerRegistry` (`app.websocket_handlers`) routes incoming frames to the handler's lifecycle hooks and tracks `Connection` objects with isolated `state: SimpleNamespace`.
+
+**Connection object (`nexus.websocket_handlers.Connection`):**
+
+- `connection_id: str` — stable UUID hex for the lifetime of the connection.
+- `path: str` — URL path the client connected on (e.g. `/events`).
+- `state: SimpleNamespace` — handler-owned bookkeeping; the framework never writes to it.
+- `connected_at: float` — monotonic timestamp of connection open.
+- `headers: Mapping[str, str]` — read-only case-insensitive Mapping of HTTP handshake headers (Origin, Host, User-Agent, Sec-WebSocket-*, cookies, custom auth headers). **Captured AT HANDSHAKE; NOT refreshed during the connection lifetime.** Lookups are case-insensitive (`conn.headers["origin"]` and `conn.headers["Origin"]` return the same value). The mapping is structurally immutable — assignment / deletion raise `TypeError`. Consumers needing custom enforcement (signed-token check, per-tenant header validation) beyond the static `allowed_origins` allowlist read from this surface inside `on_connect` (issue #673).
+- `alive: bool` — whether the registry still considers the connection open.
+- `await conn.send_json(payload)`, `await conn.send_text(message)`, `await conn.close(code, reason)` — outbound helpers.
+
+**Origin allowlist enforcement (issue #673 — DNS-rebinding defense):**
+
+`register_websocket(path, handler_cls, *, allowed_origins=None)` and the `@app.websocket(path, *, allowed_origins=None)` decorator accept an optional `allowed_origins: list[str] | None`. When set, the SDK enforces the HTTP `Origin` header against the allowlist BEFORE invoking `on_connect` — a mismatch closes the WebSocket with code 1008 (RFC 6455 policy violation) and a fingerprinted reason that does NOT echo the rejected Origin back to the client. This is the structural defense against DNS-rebinding attacks per `rules/security.md` § Network Transport Hardening.
+
+Allowlist entry shapes:
+
+- **Exact origin** (`"https://app.example.com"`) — case-sensitive byte-equal match.
+- **Wildcard subdomain** (`"https://*.example.com"`) — matches strict subdomains of `example.com` whose scheme matches the entry's scheme. Does NOT match the bare `example.com` and does NOT match `example.com.evil.com` (suffix-with-dot defense).
+- **Literal `"*"`** — accepts any non-empty origin. **BLOCKED at registration** with `WildcardOriginRefusedError` (subclass of `ValueError`) unless `KAILASH_NEXUS_ALLOW_WILDCARD_ORIGIN=true` is set in env. Fail-closed default: production deployments MUST list explicit origins; the `"*"` opt-in is for development / private internal services where the operator has explicitly accepted that any browser-reachable origin can open the socket.
+
+When `allowed_origins` is `None` (the default), the SDK does NOT enforce — the registry emits a one-time `ws.handler.origin_enforcement_disabled` WARN log at registration naming the path so operators see the gap. Consumers needing custom enforcement MUST use `Connection.headers` from inside `on_connect` to implement their own rejection (e.g. raising from `on_connect`, which closes the WebSocket with code 4500).
+
+Rejection emits a `ws.handler.origin_rejected` WARN log carrying `path`, `handler`, `origin_fingerprint` (sha256(origin)[:8] per `rules/observability.md` Rule 6 + Rule 8), and `reason` (`missing_origin_header` | `origin_not_in_allowlist`). The raw Origin is NEVER echoed to log aggregators.
+
+**Cross-SDK parity:** kailash-rs is expected to ship the same surface semantically (per EATP D6) at the equivalent `register_websocket` surface — the `allowed_origins` parameter, the wildcard-subdomain shape, the fail-closed `"*"` env flag, the close code 1008 + fingerprinted reason, and the `Connection::headers` exposure.
 
 **Lifecycle hooks (override in subclass, all async):**
 
-- `async on_connect(self, conn)` — fired after handshake; initialize `conn.state.*`.
+- `async on_connect(self, conn)` — fired after handshake AND after Origin allowlist check (if any). Initialize `conn.state.*`. Read `conn.headers` for custom enforcement beyond the static allowlist.
 - `async on_message(self, conn, msg) -> Any` — fired per JSON-decoded frame; **return value contract** (issue #618):
   - `None` → no auto-reply (handler-owned `await conn.send_*`).
   - `dict` / `list` → auto-sent as JSON text frame via `conn.send_json`.
@@ -168,7 +194,7 @@ For per-connection state, subscription fanout, or any pattern that exceeds state
   - `bytes` → UTF-8 decoded then `conn.send_text`; invalid UTF-8 logged at WARN and dropped.
   - any other → best-effort `conn.send_json` with `default=str`; `TypeError`/`ValueError` logged at WARN.
 - `async on_text(self, conn, text) -> Any` — same return-value contract as `on_message`.
-- `async on_disconnect(self, conn)` — fired after socket close; `conn` already removed from `self.connections`.
+- `async on_disconnect(self, conn)` — fired after socket close; `conn` already removed from `self.connections`. Origin-rejected connections do NOT invoke `on_disconnect` (they never reached `on_connect`).
 - `async on_event(self, event)` — fanout hook called by `broadcast_event` (NOT by the framework directly).
 
 **Tenant safety:** `on_message` auto-replies are scoped to the originating socket — no broadcast leakage. Per-connection unicast push from external publishers uses `Nexus.websocket_send_to(path, connection_id, payload)` (issue #618), which scopes dispatch to one tracked connection.
