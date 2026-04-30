@@ -70,7 +70,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from ..features.bulk import BulkOperations
 from ..features.express import ExpressDataFlow, SyncExpress
 from ..features.multi_tenant import MultiTenantManager
-from ..features.transactions import TransactionManager
+from ..features.transactions import SyncTransactionManager, TransactionManager
 from ..migrations.auto_migration_system import AutoMigrationSystem
 from ..migrations.schema_state_manager import SchemaStateManager
 from ..utils.connection import ConnectionManager
@@ -3504,6 +3504,43 @@ class DataFlow(DataFlowEventMixin):
     def transactions(self) -> TransactionManager:
         """Access transaction manager."""
         return self._transaction_manager
+
+    @property
+    def transactions_sync(self) -> SyncTransactionManager:
+        """Access SyncTransactionManager — sync surface for transactions (#711).
+
+        Mirror of :attr:`transactions` for sync callers (CLI scripts, sync
+        FastAPI handlers, pytest non-async tests, Jupyter sync cells).
+        Owns a persistent daemon-thread event loop and submits coroutines
+        via ``asyncio.run_coroutine_threadsafe`` so the pinned transaction
+        connection survives across multiple ``tx.execute_raw`` calls.
+
+        Cross-context safe — works inside pytest-asyncio / Nexus / Jupyter
+        without raising ``RuntimeError: This event loop is already running``
+        because the BG loop thread is independent of any host event loop.
+
+        Example::
+
+            with db.transactions_sync.begin() as tx:
+                existing = tx.execute_raw(
+                    "SELECT id FROM oauth_tokens "
+                    "WHERE user_id = %s FOR UPDATE",
+                    [user_id],
+                )
+                if existing:
+                    tx.execute_raw(
+                        "UPDATE oauth_tokens SET refresh_token = %s "
+                        "WHERE user_id = %s",
+                        [new_refresh, user_id],
+                    )
+
+        Returns:
+            :class:`SyncTransactionManager` — sync transaction surface.
+        """
+        self._ensure_connected()
+        if not hasattr(self, "_transactions_sync") or self._transactions_sync is None:
+            self._transactions_sync = SyncTransactionManager(self._transaction_manager)
+        return self._transactions_sync
 
     @property
     def connection(self) -> ConnectionManager:
@@ -9808,6 +9845,21 @@ class DataFlow(DataFlowEventMixin):
                     "engine.error_closing_migration_system", extra={"error": str(e)}
                 )
 
+        # Issue #711 — stop the SyncTransactionManager BG event loop thread
+        # BEFORE the pool/adapter teardown so any in-flight sync transactions
+        # do not strand on closed connections. Lazy attribute — only present
+        # if a caller actually accessed `db.transactions_sync`.
+        if hasattr(self, "_transactions_sync") and self._transactions_sync is not None:
+            try:
+                self._transactions_sync.close_sync()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_transactions_sync",
+                    extra={"error": str(e)},
+                )
+            finally:
+                self._transactions_sync = None
+
         # Stop pool monitor
         if self._pool_monitor is not None:
             try:
@@ -9891,6 +9943,21 @@ class DataFlow(DataFlowEventMixin):
                     "engine.error_releasing_model_registry_runtime",
                     extra={"error": str(e)},
                 )
+
+        # Issue #711 — stop the SyncTransactionManager BG event loop thread
+        # BEFORE the pool/adapter teardown so any in-flight sync transactions
+        # do not strand on closed connections. Lazy attribute — only present
+        # if a caller actually accessed `db.transactions_sync`.
+        if hasattr(self, "_transactions_sync") and self._transactions_sync is not None:
+            try:
+                self._transactions_sync.close_sync()
+            except Exception as e:
+                logger.debug(
+                    "engine.error_closing_transactions_sync",
+                    extra={"error": str(e)},
+                )
+            finally:
+                self._transactions_sync = None
 
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:
