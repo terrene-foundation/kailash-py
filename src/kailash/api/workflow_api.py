@@ -172,7 +172,7 @@ class WorkflowAPI:
     async def _lifespan(self, app: FastAPI):
         """Manage app lifecycle."""
         # Startup
-        # MED-S2 (#712): drive router.on_startup hooks (e.g. consumer
+        # S2 (#712): drive router.on_startup hooks (e.g. consumer
         # @app.on_event("startup")). Without this iteration, the custom
         # _lifespan above replaces Starlette's _DefaultLifespan and
         # silently drops every router-registered hook (the #500 bug class).

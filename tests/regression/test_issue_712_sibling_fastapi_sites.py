@@ -1,4 +1,4 @@
-"""Regression: #712 (MED-S2) — sibling FastAPI sites drive router.on_startup.
+"""Regression: #712 (S2) — sibling FastAPI sites drive router.on_startup.
 
 Three public classes were confirmed (in `workspaces/issues-712-714/01-analysis/`)
 to construct FastAPI with `lifespan=` set BUT NOT iterate `app.router.on_startup` /
@@ -10,7 +10,7 @@ to construct FastAPI with `lifespan=` set BUT NOT iterate `app.router.on_startup
 
 The fix routes their custom `lifespan` through the shared helpers
 `drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` (added in
-MED-S1). This test exercises the lifespan via Starlette's public
+S1). This test exercises the lifespan via Starlette's public
 `router.lifespan_context` — the same context manager uvicorn invokes in
 production — registering `@app.on_event("startup")` and asserting it fires.
 
@@ -25,7 +25,7 @@ import pytest
 @pytest.mark.regression
 @pytest.mark.asyncio
 async def test_workflow_api_drives_router_on_startup():
-    """WorkflowAPI lifespan iterates router.on_startup post-MED-S2."""
+    """WorkflowAPI lifespan iterates router.on_startup post-S2."""
     from fastapi import FastAPI
 
     from kailash.api.workflow_api import WorkflowAPI
@@ -53,7 +53,7 @@ async def test_workflow_api_drives_router_on_startup():
 
     assert fired == [1, -1], (
         f"WorkflowAPI router-iteration broken: hooks did not fire (got {fired}). "
-        f"Pre-MED-S2 the custom _lifespan replaced Starlette's _DefaultLifespan "
+        f"Pre-S2 the custom _lifespan replaced Starlette's _DefaultLifespan "
         f"and silently dropped every router.on_startup/on_shutdown handler."
     )
 
@@ -85,7 +85,7 @@ async def test_workflow_api_gateway_drives_router_on_startup():
 
     assert fired == [1, -1], (
         f"WorkflowAPIGateway router-iteration broken: hooks did not fire "
-        f"(got {fired}). Pre-MED-S2 this was an unmitigated #500-class bug."
+        f"(got {fired}). Pre-S2 this was an unmitigated #500-class bug."
     )
 
 
@@ -121,7 +121,7 @@ async def test_kailash_api_gateway_drives_router_on_startup():
 
     assert fired == [1, -1], (
         f"APIGateway router-iteration broken: hooks did not fire "
-        f"(got {fired}). Pre-MED-S2 this was an unmitigated #500-class bug."
+        f"(got {fired}). Pre-S2 this was an unmitigated #500-class bug."
     )
 
 

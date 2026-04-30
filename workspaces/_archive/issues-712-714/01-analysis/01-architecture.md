@@ -34,7 +34,7 @@ causes.
    - `WorkflowAPI` at `src/kailash/api/workflow_api.py:144-173` — `_lifespan` only `yield`s + clears `_execution_cache`, NO router iteration. Public class.
      Two sites without `lifespan=` are safe by default (`visualization/api.py`, `gateway/api.py`). Possible additional audits needed in `kailash-kaizen/.../metrics_endpoint.py`, `metrics_auth.py`, `dashboard.py`, `kailash-pact/.../router.py`. Per `security.md` § Multi-Site Kwarg Plumbing + `rules/agents.md` Rule 3 fix-immediately, all confirmed sites MUST be patched in the same PR.
 
-3. **Mediscribe likely on stale Nexus** (pre-2.1.1, where the #500 fix landed). Their `app.router.lifespan_context` workaround is the same one impact-verse used pre-2.1.1.
+3. **The downstream consumer likely on stale Nexus** (pre-2.1.1, where the #500 fix landed). Their `app.router.lifespan_context` workaround is the same one impact-verse used pre-2.1.1.
 
 **Fix surface (#712)**:
 
@@ -48,7 +48,7 @@ causes.
 | `src/kailash/api/gateway.py:136-149` (WorkflowAPIGateway lifespan)                                                    | Add calls to shared helper. Confirmed #500-class bug.                                                                                                                                     | Same                                                                                                                                      |
 | `src/kailash/api/workflow_api.py:144-173` (WorkflowAPI `_lifespan`)                                                   | Add calls to shared helper. Confirmed #500-class bug.                                                                                                                                     | Same                                                                                                                                      |
 | Audit pass: `kailash-kaizen/.../metrics_endpoint.py`, `metrics_auth.py`, `dashboard.py`, `kailash-pact/.../router.py` | Verify whether each constructs FastAPI with `lifespan=`. If yes, route through shared helper. If internal-only with no consumer surface, document as "internal — `on_event` not exposed". | Sweep per `rules/agents.md` Rule 3 fix-immediately                                                                                        |
-| `tests/regression/test_issue_712_lifespan_consumer_patterns.py`                                                       | New regression test exercising `@nexus.app.on_event("startup")` from CONSUMER perspective (Mediscribe pattern) AND `nexus.add_startup_handler(func)` from new public API                  | Tier-2/3 per `testing.md` §3-tier; behavioral assertion (call hook, observe side effect)                                                  |
+| `tests/regression/test_issue_712_lifespan_consumer_patterns.py`                                                       | New regression test exercising `@nexus.app.on_event("startup")` from CONSUMER perspective (downstream-consumer pattern) AND `nexus.add_startup_handler(func)` from new public API                  | Tier-2/3 per `testing.md` §3-tier; behavioral assertion (call hook, observe side effect)                                                  |
 | `specs/nexus-core.md` §10                                                                                             | Add §10.3 documenting `Nexus.add_startup_handler/add_shutdown_handler`. Update §10.2 cross-reference.                                                                                     | Spec authority Rule 5                                                                                                                     |
 | Docs / docstrings on `Nexus`, `Nexus.fastapi_app`                                                                     | Document the timing trap on `fastapi_app` (None before gateway init)                                                                                                                      | Discoverability                                                                                                                           |
 
@@ -56,7 +56,7 @@ causes.
 
 **Real failure mode**: `DataFlow.__init__` (lines 552-565) selects `LocalRuntime` vs `AsyncLocalRuntime` ONCE at construction via `asyncio.get_running_loop()`. Module-import construction (the natural FastAPI pattern) binds `LocalRuntime` permanently, so any later `db.create_tables_async()` call inside uvicorn's loop hits `AttributeError: 'LocalRuntime' object has no attribute 'execute_workflow_async'`.
 
-**Workaround Mediscribe found**: `db.runtime = AsyncLocalRuntime(); db._is_async = True`. Works for `_execute_ddl_async` (which reads `self.runtime` fresh per call at line 7664) but does NOT propagate to subsystems that captured `self.runtime` in their own `__init__`: `ModelRegistry`, `BulkOperations`, `TransactionManager`, `auto_migration_system`, `schema_state_manager`, `gateway_integration` (6 subsystems, ~12 capture sites). The workaround is fragile.
+**Workaround the downstream consumer found**: `db.runtime = AsyncLocalRuntime(); db._is_async = True`. Works for `_execute_ddl_async` (which reads `self.runtime` fresh per call at line 7664) but does NOT propagate to subsystems that captured `self.runtime` in their own `__init__`: `ModelRegistry`, `BulkOperations`, `TransactionManager`, `auto_migration_system`, `schema_state_manager`, `gateway_integration` (6 subsystems, ~12 capture sites). The workaround is fragile.
 
 **Fix surface (#713)** — combination of two approaches:
 
@@ -80,7 +80,7 @@ Actual failure modes:
 
 2. **DDL via `AsyncSQLDatabaseNode` is overkill**: DDL is single-connection work. Routing it through a pool-aware, transaction-mode-aware, fetch-mode-aware node creates a connection pool the operator must size for DDL bursts. With `pool_size=10`, that's 10 client connections held against pgbouncer — even with `share_pool`. If the pgbouncer session-mode cap is below `pool_size`, the cap is hit.
 
-3. **Mediscribe's specific `MaxClientsInSessionMode`** likely triggered when (a) `share_pool` was disabled by config, (b) `pool_size` was configured > pgbouncer cap, or (c) a sibling DataFlow code path concurrently allocated against the same cap. The brief's "19 models × per-model pool" is an oversimplification but the symptom is real.
+3. **the downstream consumer's specific `MaxClientsInSessionMode`** likely triggered when (a) `share_pool` was disabled by config, (b) `pool_size` was configured > pgbouncer cap, or (c) a sibling DataFlow code path concurrently allocated against the same cap. The brief's "19 models × per-model pool" is an oversimplification but the symptom is real.
 
 **Fix surface (#714)**:
 
@@ -92,7 +92,7 @@ Actual failure modes:
 
 ## Why all three ship together
 
-Mediscribe's recovery requires all three fixes:
+the downstream consumer's recovery requires all three fixes:
 
 ```
 WITHOUT #712: consumer cannot register startup hook                    → blocked
@@ -101,7 +101,7 @@ WITHOUT #714: consumer falls back to sync, hits pgbouncer cap          → MaxCl
 ```
 
 Each fix removes one workaround; only all three together reduce the
-downstream `mediscribe-v2/backend/app/main.py:417-486` workaround to zero.
+downstream `<external consumer codebase>` workaround to zero.
 
 Per the brief's constraint: "Fixes MUST land such that the downstream
 workaround can be deleted entirely."

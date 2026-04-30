@@ -671,7 +671,7 @@ class MigrationHistoryManager:
 
         Args:
             dataflow_instance: DataFlow instance for database access via
-                WorkflowBuilder. Post-MED-S5 (issue #713) ``self.runtime``
+                WorkflowBuilder. Post-S5 (issue #713) ``self.runtime``
                 resolves lazily via ``dataflow_instance.runtime`` on every
                 access so the manager follows the parent's runtime swap
                 without snapshot drift.
@@ -679,7 +679,7 @@ class MigrationHistoryManager:
                 When supplied, pinned for the manager's lifetime.
         """
         self.dataflow = dataflow_instance
-        # MED-S5: hold parent back-reference for lazy runtime lookup.
+        # S5: hold parent back-reference for lazy runtime lookup.
         self._dataflow = dataflow_instance
 
         if runtime is not None:
@@ -700,7 +700,7 @@ class MigrationHistoryManager:
         self._ensure_history_table()
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # S5 (issue #713): lazy runtime via parent DataFlow.
     # ------------------------------------------------------------------
 
     @property
@@ -1438,7 +1438,7 @@ class MigrationHistoryManager:
         """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
-        Post-MED-S5: only the legacy explicit-runtime path holds a
+        Post-S5: only the legacy explicit-runtime path holds a
         reference here. The lazy-parent path delegates lifecycle to
         the parent DataFlow.
         """

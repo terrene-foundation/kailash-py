@@ -42,7 +42,7 @@ def _make_app_with_helper_lifespan() -> FastAPI:
     """Build a FastAPI app whose lifespan is driven by the shared helper.
 
     The custom ``lifespan=`` here is the EXACT pattern WorkflowServer (and
-    the three sibling FastAPI sites patched in MED-S2) use: a custom
+    the three sibling FastAPI sites patched in S2) use: a custom
     asynccontextmanager that calls the helper to drive ``router.on_startup``
     / ``router.on_shutdown``. Without those helper calls, the custom
     lifespan replaces Starlette's default and silently drops every

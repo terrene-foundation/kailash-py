@@ -73,7 +73,7 @@ class DataFlowGateway:
             dataflow_instance: Optional DataFlow parent reference. When
                 supplied, ``self.runtime`` resolves lazily via
                 ``dataflow_instance.runtime`` on every access (issue
-                #713 — MED-S5 lazy lookup). Without this parameter the
+                #713 — S5 lazy lookup). Without this parameter the
                 gateway creates and owns its own runtime (legacy
                 self-owned path).
         """
@@ -92,7 +92,7 @@ class DataFlowGateway:
         self.enable_monitoring = enable_monitoring
         self.enable_connection_pooling = enable_connection_pooling
 
-        # MED-S5 (issue #713): hold parent back-reference so self.runtime
+        # S5 (issue #713): hold parent back-reference so self.runtime
         # / self._is_async can resolve lazily on each access.
         self._dataflow = dataflow_instance
 
@@ -713,7 +713,7 @@ class DataFlowGateway:
             await self.nexus.stop()
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime via parent DataFlow.
+    # S5 (issue #713): lazy runtime via parent DataFlow.
     # ------------------------------------------------------------------
 
     @property
@@ -741,7 +741,7 @@ class DataFlowGateway:
         """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times -- subsequent calls are no-ops.
-        Post-MED-S5: only the legacy explicit-runtime path or the
+        Post-S5: only the legacy explicit-runtime path or the
         self-owned fallback (no parent dataflow_instance) holds a
         reference here.
         """

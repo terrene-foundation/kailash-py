@@ -2,18 +2,18 @@
 
 ## Where we are
 
-Mediscribe cluster (#712/#713/#714) at the goal-line. Wave 2 PRs admin-merged
-(#724 S3, #725 S5, #726 S2). MED-S6 (#714 DDL refactor) shipped as PR #727 —
+the v2.13.0 cluster (#712/#713/#714) at the goal-line. Wave 2 PRs admin-merged
+(#724 S3, #725 S5, #726 S2). S6 (#714 DDL refactor) shipped as PR #727 —
 single-sync-connection DDL via `SyncDDLExecutor.execute_ddl_batch_per_statement`,
 async path off-loops via `asyncio.to_thread`. CI in flight at session end.
-Only MED-S7 (specs + sibling re-derive) and `/release` for kailash +
+Only S7 (specs + sibling re-derive) and `/release` for kailash +
 kailash-nexus + kailash-dataflow remain.
 
 ## Read first
 
 1. `todos/active/MED-000-milestone-tracker.md` — current shard status + PR map (gitignored, local-only)
 2. `journal/0003-DISCOVERY-714-share-pool-true-real-bug-is-ddl-via-asyncsql-overkill.md` — why the brief was wrong; "fresh pool per model" is FALSE in spirit, the real bug is DDL via AsyncSQLDatabaseNode being overkill
-3. `todos/active/MED-S7-specs-and-docs.md` — next shard (specs/dataflow-core.md + specs/nexus-core.md updates after #727 merges)
+3. `todos/active/S7-specs-and-docs.md` — next shard (specs/dataflow-core.md + specs/nexus-core.md updates after #727 merges)
 4. `packages/kailash-dataflow/tests/regression/test_issue_714_ddl_single_connection.py` — the contract pin for the refactor (structural + behavioral)
 5. `packages/kailash-dataflow/src/dataflow/migrations/sync_ddl_executor.py` — `execute_ddl_batch_per_statement` is the new helper used by both DDL paths
 6. `CLAUDE.md` — repo orientation if cold
@@ -28,7 +28,7 @@ kailash-nexus + kailash-dataflow remain.
 
 - 11 pre-existing test failures in `packages/kailash-dataflow/tests/regression/` (cache/transaction/runtime — unrelated to DDL). Verified identical on main and on the branch — DO NOT try to fix them under #714.
 - The brief misframed THREE issues (#712 silent-disable framing, #713 line numbers drifted, #714 pool-per-model wrong). Use `journal/` corrections, NOT the brief, for any follow-up.
-- pgbouncer container + Tier-3 + Mediscribe E2E test were DEFERRED from S6 scope. The structural+behavioral SQLite regression suite covers the single-connection contract; pgbouncer reproduction can land as follow-up if the next session wants exact cap-cap reproduction.
+- pgbouncer container + Tier-3 + downstream-consumer E2E test were DEFERRED from S6 scope. The structural+behavioral SQLite regression suite covers the single-connection contract; pgbouncer reproduction can land as follow-up if the next session wants exact cap-cap reproduction.
 - `workspaces/issues-712-714/todos/` is gitignored — local-only. Do not try `git add` it.
 - Cross-SDK companion for #714 (kailash-rs has same DDL surface) is owed; will follow up on the merged PR per `rules/cross-sdk-inspection.md`.
 
@@ -36,5 +36,5 @@ kailash-nexus + kailash-dataflow remain.
 
 Skipped release-drift check this turn. Cluster spans `kailash` core +
 `kailash-nexus` + `kailash-dataflow`; once #727 merges all three need
-`/release`. MED-S7 specs update should land in the same release-prep PR
+`/release`. S7 specs update should land in the same release-prep PR
 or as a `chore/specs-712-714-cluster` branch immediately before.

@@ -17,13 +17,13 @@ each shard MUST stay within ≤500 LOC load-bearing logic / ≤5-10 invariants /
 
 | Shard  | Issue     | Why a separate shard                                                                                                                                            |
 | ------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MED-S1 | #712      | Helper extraction is independent (no consumer depends on it yet); blocks S2/S3                                                                                  |
-| MED-S2 | #712      | Sibling-site patches need the helper; coordinate-different file from S1 to allow parallel work later                                                            |
-| MED-S3 | #712      | Public API + spec is a discrete change; touches different files than S1/S2; can land in same PR                                                                 |
-| MED-S4 | #713      | Property + setter + kwarg + per-loop cache + pickle compat is ~265 LOC of load-bearing logic                                                                    |
-| MED-S5 | #713      | Subsystem captures across 6 files is mechanical but spans multiple files; budgeted as separate shard so an agent isn't holding S4's invariants AND S5's at once |
-| MED-S6 | #714      | DDL refactor + pgbouncer test infrastructure is a clean separable surface                                                                                       |
-| MED-S7 | spec/docs | Spec re-derivation per Rule 5b is non-trivial; doing it after all code lands lets it observe actual final surface                                               |
+| S1 | #712      | Helper extraction is independent (no consumer depends on it yet); blocks S2/S3                                                                                  |
+| S2 | #712      | Sibling-site patches need the helper; coordinate-different file from S1 to allow parallel work later                                                            |
+| S3 | #712      | Public API + spec is a discrete change; touches different files than S1/S2; can land in same PR                                                                 |
+| S4 | #713      | Property + setter + kwarg + per-loop cache + pickle compat is ~265 LOC of load-bearing logic                                                                    |
+| S5 | #713      | Subsystem captures across 6 files is mechanical but spans multiple files; budgeted as separate shard so an agent isn't holding S4's invariants AND S5's at once |
+| S6 | #714      | DDL refactor + pgbouncer test infrastructure is a clean separable surface                                                                                       |
+| S7 | spec/docs | Spec re-derivation per Rule 5b is non-trivial; doing it after all code lands lets it observe actual final surface                                               |
 
 ### 2. 4 PRs, not 7 (review efficiency)
 

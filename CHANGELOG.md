@@ -5,17 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.13.0] — 2026-04-30 — `kailash.utils.lifespan` shared FastAPI helpers (Mediscribe cluster: closes #712)
+## [2.13.0] — 2026-04-30 — `kailash.utils.lifespan` shared FastAPI helpers (the v2.13.0 cluster: closes #712)
 
 Minor bump — ships the cross-FastAPI-site lifespan helper module that drives `app.router.on_startup` / `on_shutdown` from any custom `FastAPI(lifespan=...)` and patches three sibling sites that historically dropped router hooks silently.
 
 ### Added
 
-- **`kailash.utils.drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` (#712 / MED-S1)** — shared async helpers that iterate `app.router.on_startup` / `app.router.on_shutdown` (the same lists Starlette's default `_DefaultLifespan` walks) from inside any custom FastAPI lifespan. Both sync (`def`) and async (`async def`) handlers are accepted; per-handler exceptions are isolated and logged at WARN per `rules/observability.md` Rule 7. The first captured exception is re-raised when `propagate_errors=True` (the default for startup, preserves uvicorn fail-fast); shutdown callers typically pass `propagate_errors=False` for best-effort cleanup. Drives the data structure FastAPI's own internal dispatcher walks rather than calling `app.router.startup()` / `.shutdown()` by name — version-stable per `rules/framework-first.md` § "Drive The Data, Not The Dispatch" (the dispatch method names drift across FastAPI / Starlette versions; the registration lists do not).
+- **`kailash.utils.drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` (#712 / S1)** — shared async helpers that iterate `app.router.on_startup` / `app.router.on_shutdown` (the same lists Starlette's default `_DefaultLifespan` walks) from inside any custom FastAPI lifespan. Both sync (`def`) and async (`async def`) handlers are accepted; per-handler exceptions are isolated and logged at WARN per `rules/observability.md` Rule 7. The first captured exception is re-raised when `propagate_errors=True` (the default for startup, preserves uvicorn fail-fast); shutdown callers typically pass `propagate_errors=False` for best-effort cleanup. Drives the data structure FastAPI's own internal dispatcher walks rather than calling `app.router.startup()` / `.shutdown()` by name — version-stable per `rules/framework-first.md` § "Drive The Data, Not The Dispatch" (the dispatch method names drift across FastAPI / Starlette versions; the registration lists do not).
 
 ### Fixed
 
-- **#712 — three sibling FastAPI lifespan sites silently drop router-registered handlers (MED-S2)** — `KailashAPIGateway`, `WorkflowAPIGateway`, and `WorkflowAPI` each constructed `FastAPI(lifespan=...)` without iterating `app.router.on_startup` / `app.router.on_shutdown`, so every handler registered via `@app.on_event("startup")` or `app.router.on_startup.append(...)` was silently dropped (the #500 silent-drop bug pattern at three additional sites). All three now route through `drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` so router-registered hooks fire correctly.
+- **#712 — three sibling FastAPI lifespan sites silently drop router-registered handlers (S2)** — `KailashAPIGateway`, `WorkflowAPIGateway`, and `WorkflowAPI` each constructed `FastAPI(lifespan=...)` without iterating `app.router.on_startup` / `app.router.on_shutdown`, so every handler registered via `@app.on_event("startup")` or `app.router.on_startup.append(...)` was silently dropped (the #500 silent-drop bug pattern at three additional sites). All three now route through `drive_router_lifespan_startup` / `drive_router_lifespan_shutdown` so router-registered hooks fire correctly.
 
 ### Tests
 

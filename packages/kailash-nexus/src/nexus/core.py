@@ -594,7 +594,7 @@ class Nexus:
         ``register()`` or ``start()`` has triggered gateway construction,
         ``fastapi_app.router.on_startup.append(fn)`` is iterated by the
         custom lifespan (see :file:`workflow_server.py` and the shared
-        helper from MED-S1) and your handler will fire. The discoverability
+        helper from S1) and your handler will fire. The discoverability
         problem is the timing trap above, not the dispatch path itself.
 
         Returns:

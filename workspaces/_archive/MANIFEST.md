@@ -17,7 +17,7 @@ Restoring a workspace: `git mv workspaces/_archive/<name> workspaces/<name>` and
 | `connection-pool-prevention` | 38d      | Connection-pool exhaustion prevention patterns                                                             |
 | `eatp-merge`                 | 38d      | EATP SDK merge into kailash-py                                                                             |
 | `enterprise-infrastructure`  | 41d      | Enterprise infrastructure level migration (Level 0/1/2)                                                    |
-| `issues-712-714`             | 0d       | Mediscribe cluster (#712 lifespan, #713 runtime, #714 DDL) — kailash 2.13.0 + nexus 2.5.0 + dataflow 2.6.0 |
+| `issues-712-714`             | 0d       | the v2.13.0 cluster (#712 lifespan, #713 runtime, #714 DDL) — kailash 2.13.0 + nexus 2.5.0 + dataflow 2.6.0 |
 | `kailash-ml-1.5.x-followup`  | 1d       | kailash-ml 1.5.x followup (#699/#700/#701) — released as ml-v1.6.0 (PR #708/#709)                          |
 | `kailash-pact`               | 34d      | PACT framework initial implementation                                                                      |
 | `kaizen-agents`              | 34d      | Kaizen agents framework initial implementation                                                             |

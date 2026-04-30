@@ -65,7 +65,7 @@ class ModelRegistry:
             dataflow_instance: The DataFlow instance this registry belongs to.
             runtime: Optional explicit runtime override. When supplied, the
                 registry pins this runtime for its lifetime (legacy escape
-                hatch). When omitted (the post-MED-S5 default), every
+                hatch). When omitted (the post-S5 default), every
                 ``self.runtime`` access reads ``dataflow_instance.runtime``
                 lazily so the registry follows the parent's runtime swap
                 (issue #713 — manual ``db.runtime = AsyncLocalRuntime()``
@@ -73,7 +73,7 @@ class ModelRegistry:
             migration_system: Optional migration system for transactional operations.
         """
         self.dataflow = dataflow_instance
-        # MED-S5: hold a back-reference to the parent so ``self.runtime``
+        # S5: hold a back-reference to the parent so ``self.runtime``
         # (now a @property below) can resolve lazily on each access.
         # Pre-S5 the registry snapshotted ``dataflow.runtime`` once at
         # construction; post-S5 it follows the parent's lazy property
@@ -133,23 +133,23 @@ class ModelRegistry:
             )
 
     # ------------------------------------------------------------------
-    # MED-S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
+    # S5 (issue #713): lazy runtime / _is_async via parent DataFlow.
     #
-    # Pre-MED-S5 the registry stored ``self.runtime`` and ``self._is_async``
+    # Pre-S5 the registry stored ``self.runtime`` and ``self._is_async``
     # as plain attributes set once in ``__init__``. Once the parent
     # DataFlow's runtime swapped (manual ``db.runtime = X`` setter or
     # first-async-access via S4's per-event-loop cache fill), the
     # registry kept the stale snapshot and either crashed (sync runtime
     # used inside an event loop) or routed through the wrong loop.
     #
-    # Post-MED-S5 ``self.runtime`` is a @property that resolves on each
+    # Post-S5 ``self.runtime`` is a @property that resolves on each
     # access:
     #
     # 1. If a legacy explicit-runtime override was supplied to
     #    ``__init__`` (``self._explicit_runtime`` is not None), return
     #    that pinned runtime — the caller is in charge of its lifecycle.
     # 2. Otherwise return ``self._dataflow.runtime`` — the parent's
-    #    own lazy property (issue #713 MED-S4 implementation), which
+    #    own lazy property (issue #713 S4 implementation), which
     #    handles per-event-loop caching, sync singleton fallback, and
     #    setter override.
     #
@@ -192,7 +192,7 @@ class ModelRegistry:
     def _is_async(self, value: bool) -> None:
         """No-op setter for backwards compatibility.
 
-        Pre-MED-S5 callers wrote ``self._is_async = True`` alongside
+        Pre-S5 callers wrote ``self._is_async = True`` alongside
         ``self.runtime = AsyncLocalRuntime()``. The flag is now derived,
         so this write is ignored — the next read recomputes from
         ``self.runtime``.
@@ -1808,7 +1808,7 @@ class ModelRegistry:
         """Release the explicit runtime reference if one was provided.
 
         Safe to call multiple times — subsequent calls are no-ops.
-        Post-MED-S5 the registry no longer owns the runtime in the
+        Post-S5 the registry no longer owns the runtime in the
         common case (it delegates to ``self._dataflow.runtime`` which is
         managed by the parent DataFlow). Only the legacy explicit
         ``runtime=`` constructor argument creates a reference this

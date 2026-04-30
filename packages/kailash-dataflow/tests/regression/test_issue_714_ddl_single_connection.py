@@ -5,7 +5,7 @@
 Origin
 ------
 
-Mediscribe production incident (2026-04-29): pgbouncer in session mode
+production incident (2026-04-29): pgbouncer in session mode
 hit ``MaxClientsInSessionMode`` whenever ``DataFlow.create_tables_async()``
 ran during FastAPI startup with multiple registered models.
 
@@ -227,7 +227,7 @@ def test_create_tables_sync_completes_for_many_models():
 async def test_create_tables_async_completes_for_many_models():
     """``await db.create_tables_async()`` runs DDL via ``asyncio.to_thread``.
 
-    Repro of the Mediscribe pattern: many models registered, async
+    Repro of the downstream-consumer pattern: many models registered, async
     startup, single-connection DDL.
     """
     db_path = _new_sqlite_db()

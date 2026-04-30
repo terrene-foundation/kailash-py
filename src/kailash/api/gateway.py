@@ -141,7 +141,7 @@ class WorkflowAPIGateway:
         async def lifespan(app: FastAPI):
             # Startup
             logger.info(f"Starting {title} v{version}")
-            # MED-S2 (#712): drive router.on_startup hooks (e.g. consumer
+            # S2 (#712): drive router.on_startup hooks (e.g. consumer
             # @app.on_event("startup")). Custom lifespan replaces Starlette's
             # _DefaultLifespan; without this iteration consumer hooks
             # silently drop (the #500 bug class).
