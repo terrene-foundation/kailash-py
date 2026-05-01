@@ -7,6 +7,7 @@ Related: TODO-153 - Type-Aware Model Processing
 """
 
 import logging
+import types
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, Optional, Union, get_args, get_origin
@@ -48,9 +49,18 @@ class TypeAwareFieldProcessor:
             )
 
     def _resolve_type(self, field_type: Any) -> Any:
-        """Resolve a field type, unwrapping Optional and Union types.
+        """Resolve a field type, unwrapping Optional/Union and parameterized generics.
 
-        Returns the base type, unwrapping Optional[T] to T.
+        Returns a type usable as the second argument to ``isinstance``:
+        - ``Optional[T]`` / ``T | None`` -> resolved ``T``
+        - parameterized generic (``list[str]``, ``dict[str, Any]``) -> origin
+          (``list``, ``dict``)
+        - parameterized + Optional (``Optional[list[str]]``,
+          ``list[str] | None``) -> origin of inner non-None type
+
+        Python 3.11+ raises ``TypeError`` when a parameterized generic is
+        passed to ``isinstance``; stripping to the origin keeps the runtime
+        validation path working without changing the model annotation.
 
         Args:
             field_type: The type annotation to resolve
@@ -62,13 +72,26 @@ class TypeAwareFieldProcessor:
             return None
 
         origin = get_origin(field_type)
-        if origin is Union:
+
+        # ``Optional[T]`` / ``Union[T, None]`` (legacy typing form) and PEP 604
+        # ``T | None`` (the ``X | Y`` syntax) both reach this branch. The
+        # legacy form returns ``Union`` from ``get_origin``; PEP 604 returns
+        # ``types.UnionType``. Match either.
+        if origin is Union or origin is types.UnionType:
             args = get_args(field_type)
             non_none_types = [t for t in args if t is not type(None)]
             if len(non_none_types) == 1:
-                return non_none_types[0]
+                # Recurse so Optional[list[str]] resolves through list[str] to list.
+                return self._resolve_type(non_none_types[0])
             # Multi-type union, return as-is
             return field_type
+
+        if origin is not None:
+            # Parameterized builtin generic — strip parameters so isinstance() can
+            # use it. list[str] -> list, dict[str, Any] -> dict, tuple[int, ...] -> tuple.
+            # Python 3.11+ raises TypeError if the parameterized form reaches isinstance.
+            return origin
+
         return field_type
 
     def validate_field(self, field_name: str, value: Any, strict: bool = False) -> Any:

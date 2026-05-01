@@ -1,5 +1,26 @@
 # DataFlow Changelog
 
+## [2.7.3] — 2026-05-01 — `@db.model` accepts parameterized generics on Python 3.11+ (#768)
+
+Patch release closing issue #768. `FieldTypeProcessor._resolve_type` returned parameterized builtin generics (`list[str]`, `dict[str, Any]`, `typing.List[str]`, PEP 604 `list[str] | None`) verbatim. The next `isinstance(value, expected_type)` call raised `TypeError: isinstance() argument 2 cannot be a parameterized generic` on Python 3.11+, crashing every CRUD operation against models that used the standard, idiomatic form of list / dict / tuple annotations.
+
+### Fixed
+
+- **#768 — `_resolve_type` strips parameterized generics down to their origin.** `list[str]` / `typing.List[str]` resolves to `list`; `dict[str, Any]` resolves to `dict`; `tuple[int, ...]` resolves to `tuple`. The Optional / Union path now recurses on the inner non-None type so `Optional[list[str]]` resolves through `list[str]` to `list`.
+- **#768 — PEP 604 union form (`list[str] | None`) handled.** `get_origin` returns `types.UnionType` for PEP 604 syntax (vs `typing.Union` for the legacy form). The resolver now matches both and recurses identically through the parameterized inner type.
+
+### Tests
+
+- `tests/regression/test_issue_768_parameterized_generics.py` — 15 tests covering: structural invariants on `_resolve_type` for every generic shape called out in the issue acceptance (`list[str]`, `dict[str, Any]`, `tuple[int, ...]`, `typing.List[str]`, `typing.Dict[str, Any]`, `typing.Optional[list[str]]`, PEP 604 `list[str] | None`, `dict[str, Any] | None`, plain types unchanged); end-to-end CRUD against SQLite for `@db.model` with `list[str]`, `dict[str, Any]`, `typing.List[str]`, and PEP 604 `list[str] | None` field annotations. Pre-fix behavior: `TypeError("isinstance() argument 2 cannot be a parameterized generic")` on every CRUD operation. Post-fix: 15/15 pass.
+
+### Cross-SDK
+
+- kailash-rs uses `syn`-time parsing for model derivation and is structurally immune to this Python-runtime `isinstance` failure mode (Rust types are erased at compile time; runtime isinstance equivalent does not exist). Cross-SDK loop closure pending explicit human approval per `rules/upstream-issue-hygiene.md` MUST Rule 1.
+
+### Follow-up
+
+- `_resolve_type` and `dataflow.core.nodes._normalize_type_annotation` remain as parallel implementations of essentially the same logic. Consolidation into a single shared helper is recommended (issue acceptance criterion 6). Deferred to follow-up issue — exceeds the one-shard budget for this fix and would expand blast radius beyond the surface the bug class touched.
+
 ## [2.7.2] — 2026-05-01 — Express list/count cache invalidation aligned with producer key shape (#750)
 
 Patch release closing issue #750. `db.express.list(...)` returned STALE rows after `db.express.update / .delete / .create` because the `ListNodeCacheIntegration` invalidation patterns never matched the actual cache keys. Disk state was always correct; the bug was a silent no-op invalidation in the read-path cache layer.
