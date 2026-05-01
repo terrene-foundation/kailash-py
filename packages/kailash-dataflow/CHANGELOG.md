@@ -1,5 +1,24 @@
 # DataFlow Changelog
 
+## [2.7.1] — 2026-05-01 — DPI-A propagation: Express raises `DDLFailedError` instead of returning failure dict (#759)
+
+Patch release closing issue #759. DataFlow Express's `create` / `update` / `delete` / `upsert` / `upsert_advanced` previously returned the underlying CRUD node's `{"success": False, "error": ...}` failure dict to the caller when an auto-migration DDL failure recorded the model as failed. This broke the DPI-A 2.4.0 fail-fast contract — `await db.express.create(...)` returned a "result" with `success=False` instead of raising the typed `DDLFailedError` the user-facing API documented.
+
+### Fixed
+
+- **#759 — `DataFlowExpress.{create,update,delete,upsert,upsert_advanced}` raise `DDLFailedError` on recorded DDL failure (PR #43eb851f + this release).** Express now invokes a single helper `_raise_for_failed_result` immediately after the underlying `node.async_run(...)` returns. The helper first delegates to `engine._check_failed_ddl(model)` so a recorded DDL failure surfaces as the documented typed exception with the original `statement_preview`; otherwise it raises a generic `RuntimeError("express.<op> failed for model <m>: <error>")` so callers still observe a typed exception rather than the legacy dict shape. `_trust_record_failure` is invoked on the raise path (audit trail no longer records a phantom success).
+- **#759 (refinement) — `_check_failed_ddl` probed under both model-name and table-name keys.** The engine's bulk-DDL path (`_execute_ddl` / `_execute_ddl_async`, engine.py:7903 / 7992 / 8466) records failures under the extracted SQL identifier (`dpi_d2_children`) returned by `_extract_table_from_statement`, while the single-model path (engine.py:2157, 8263) records under the model class name (`DpiD2Child`). Express now probes both shapes via the new `_class_name_to_table_name` helper before falling through to the generic `RuntimeError`. Without the table-name fallback, the bulk-DDL path (the common DPI-A failure mode) silently emitted the generic error instead of `DDLFailedError`.
+- **#759 (refinement) — `CreateNode.async_run` re-raises `DDLFailedError` instead of converting to the legacy failure dict.** The CreateNode-level swallow at the operation-error boundary is preserved for backward compatibility with WorkflowBuilder consumers (their `{"success": False}` contract is intact), but the typed DDL circuit-breaker exception is now treated as a structural failure that propagates through to express. `ensure_table_exists`'s exception handler also re-raises `DDLFailedError` rather than logging-and-continuing — log-and-continue would mask the engine-recorded DDL failure exactly as the original swallow did.
+
+### Tests
+
+- `tests/regression/test_issue_759_express_propagates_ddl_failure.py` — deterministic Tier 1+2 propagation matrix covering `create` / `update` / `delete` / `upsert` and the `auto_migrate="warn"` legacy log-and-continue contract. Pre-records a synthetic DDL failure on each test's DataFlow instance via `engine._record_failed_ddl(...)` then asserts `DDLFailedError` propagates (or, in warn mode, MUST NOT propagate as `DDLFailedError`).
+- `tests/regression/test_dataflow_pool_bridge.py::test_failed_ddl_does_not_leak_pools_under_saturation` — pre-existing concurrent-saturation test rewritten to pre-record a synthetic DDL failure on each instance (the original FK-misordering setup did not actually emit any FK constraints — the failures observed were pool exhaustion, never DDL). The test still asserts the DPI-D2 pool-bound invariant (≤5 pools) AND now asserts at least one of the 10 instances raises `DDLFailedError` through the express layer.
+
+### Cross-SDK
+
+- See cross-SDK note appended at the bottom of this release-prep PR — kailash-rs DataFlow's CRUD-Express path may carry the same swallow pattern. Companion issue filed against `esperie-enterprise/kailash-rs` per `rules/cross-sdk-inspection.md` MUST Rule 1.
+
 ## [2.7.0] — 2026-04-30 — Sync transaction surface (#711) + #707 test fix
 
 Minor release adding `db.transactions_sync` — a sync-style transaction manager that owns its connection lifecycle on a dedicated background event loop, so synchronous callers can compose multi-statement atomic units of work without juggling `asyncio.run()` boundaries.

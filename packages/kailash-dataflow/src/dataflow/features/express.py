@@ -57,6 +57,7 @@ from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
 from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
+from dataflow.core.exceptions import DDLFailedError
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.tenant_context import get_current_tenant_id
 
@@ -480,6 +481,80 @@ class DataFlowExpress:
             model, rows, clearance
         )
 
+    def _raise_for_failed_result(self, model: str, operation: str, result: Any) -> None:
+        """Convert a dict-shaped node failure into a raised typed exception.
+
+        Express documents create/update/delete/upsert as raise-on-failure
+        (see read() at line 653 + the docstring at the top of this module).
+        The underlying CRUD nodes in ``dataflow/core/nodes.py`` swallow
+        exceptions in the auto-migration path and return
+        ``{"success": False, "error": ...}`` for backward compatibility
+        with WorkflowBuilder consumers. Without this helper, every
+        Express call returns the failure dict instead of raising — which
+        breaks the DPI-A 2.4.0 fail-fast contract for DDL failures
+        (issue #759) and silently records a TRUST success while the
+        underlying op failed.
+
+        Single filter point at the express layer (mirroring
+        ``rules/event-payload-classification.md`` Rule 1) is the only
+        structural defense against drift across create/update/delete/
+        upsert and any future mutation primitive.
+
+        Classification:
+          * If the engine recorded a DDL failure for ``model`` AND
+            fail-fast mode is active, raise :class:`DDLFailedError` with
+            the original statement preview attached.
+          * Otherwise, raise a generic :class:`RuntimeError` carrying
+            the node's error string so the caller still sees a typed
+            exception rather than a success-shaped failure dict.
+
+        warn-mode preserves the legacy log-and-continue path because
+        ``_check_failed_ddl`` skips raising when
+        ``_auto_migrate_warn`` is True; the dict-failure result then
+        flows through the normal success path. See issue #759 acceptance
+        criteria + ``test_failed_ddl_with_warn_mode_still_bounded``.
+        """
+        if not (isinstance(result, dict) and result.get("success") is False):
+            return
+        error_msg = result.get("error") or "operation failed"
+        # Try the typed DDL classification first: the engine already
+        # recorded the failed DDL via ``_record_failed_ddl`` upstream.
+        # The engine records under TWO key shapes depending on the
+        # call path:
+        #   * single-model path (engine.py:2157, 8263) records under
+        #     model class name (``DpiD2Child``)
+        #   * bulk-DDL path (engine.py:7903, 7992, 8466) records under
+        #     extracted SQL identifier (``dpi_d2_children``) because
+        #     ``_extract_table_from_statement`` operates on raw DDL.
+        # ``_check_failed_ddl`` matches by exact key so we MUST probe
+        # both shapes; without the table-name fallback the bulk-DDL
+        # failures (the common DPI-A path) silently fall through to
+        # the generic RuntimeError and downstream callers expecting
+        # ``DDLFailedError`` (issue #759 acceptance) miss it.
+        check = getattr(self._db, "_check_failed_ddl", None)
+        if callable(check):
+            candidates = [model]
+            class_to_table = getattr(self._db, "_class_name_to_table_name", None)
+            if callable(class_to_table):
+                try:
+                    table_candidate = class_to_table(model)
+                except Exception:
+                    table_candidate = None
+                if table_candidate and table_candidate not in candidates:
+                    candidates.append(table_candidate)
+            for candidate in candidates:
+                try:
+                    check(candidate)  # raises DDLFailedError when applicable
+                except DDLFailedError:
+                    raise
+                except Exception:
+                    # If the typed check itself fails for any reason, fall
+                    # through to the generic raise — never swallow.
+                    pass
+        raise RuntimeError(
+            f"express.{operation} failed for model {model!r}: {error_msg}"
+        )
+
     # ========================================================================
     # CRUD Operations
     # ========================================================================
@@ -515,6 +590,21 @@ class DataFlowExpress:
                     model, "create", plan, exc, query_params=data
                 )
                 raise
+
+            # Issue #759 (DPI-A): the underlying CreateNode swallows
+            # auto-migration / DDL failures and returns a failure dict
+            # instead of raising. Convert that to a typed exception BEFORE
+            # any side effect (cache invalidation, event emit, trust
+            # success record) so failures propagate end-to-end through
+            # the user-facing express API. See _raise_for_failed_result.
+            if isinstance(result, dict) and result.get("success") is False:
+                try:
+                    self._raise_for_failed_result(model, "create", result)
+                except Exception as exc:
+                    await self._trust_record_failure(
+                        model, "create", plan, exc, query_params=data
+                    )
+                    raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -691,6 +781,24 @@ class DataFlowExpress:
                 )
                 raise
 
+            # Issue #759 (DPI-A): convert dict-shaped node failure into a
+            # raised typed exception before any side effect. See
+            # _raise_for_failed_result.
+            if isinstance(result, dict) and result.get("success") is False:
+                try:
+                    self._raise_for_failed_result(model, "update", result)
+                except Exception as exc:
+                    await self._trust_record_failure(
+                        model,
+                        "update",
+                        plan,
+                        exc,
+                        query_params=self._safe_query_params(
+                            model, {"id": id, "fields": fields}
+                        ),
+                    )
+                    raise
+
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
 
@@ -755,6 +863,21 @@ class DataFlowExpress:
                     query_params=self._safe_query_params(model, {"id": id}),
                 )
                 raise
+
+            # Issue #759 (DPI-A): convert dict-shaped node failure into a
+            # raised typed exception before any side effect.
+            if isinstance(result, dict) and result.get("success") is False:
+                try:
+                    self._raise_for_failed_result(model, "delete", result)
+                except Exception as exc:
+                    await self._trust_record_failure(
+                        model,
+                        "delete",
+                        plan,
+                        exc,
+                        query_params=self._safe_query_params(model, {"id": id}),
+                    )
+                    raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -1070,6 +1193,11 @@ class DataFlowExpress:
 
             result = await node.async_run(**params)
 
+            # Issue #759 (DPI-A): convert dict-shaped node failure into a
+            # raised typed exception before any side effect.
+            if isinstance(result, dict) and result.get("success") is False:
+                self._raise_for_failed_result(model, "upsert", result)
+
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
 
@@ -1142,6 +1270,11 @@ class DataFlowExpress:
                 params["conflict_on"] = conflict_on
 
             result = await node.async_run(**params)
+
+            # Issue #759 (DPI-A): convert dict-shaped node failure into a
+            # raised typed exception before any side effect.
+            if isinstance(result, dict) and result.get("success") is False:
+                self._raise_for_failed_result(model, "upsert_advanced", result)
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
