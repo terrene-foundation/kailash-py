@@ -1,5 +1,38 @@
 # kailash-ml Changelog
 
+## [1.7.1] — 2026-05-01 — Re-export `MultiModelAdapter` from `kailash_ml.serving`: closes #741
+
+`MultiModelAdapter` (the 1.5.0 → 1.6.0 hard-break recovery shim, GH
+#700) is now re-exported through `kailash_ml.serving.__init__` and
+listed in `kailash_ml.serving.__all__`. The class previously existed
+at `kailash_ml.serving.multi_model_adapter.MultiModelAdapter` and was
+also exported from top-level `kailash_ml.MultiModelAdapter`, but the
+spec-documented import path
+
+```python
+from kailash_ml.serving import MultiModelAdapter
+```
+
+raised `ImportError` on a fresh install, contradicting
+`specs/ml-serving.md` § 2.6.1.
+
+Per `rules/orphan-detection.md` § 6 every public module-scope import
+in a package's `__init__.py` MUST appear in that module's `__all__`;
+this release closes the orphan with no behavioural change beyond the
+re-export.
+
+### Fixed
+
+- `kailash_ml/serving/__init__.py`: re-export `MultiModelAdapter`;
+  add `"MultiModelAdapter"` to `__all__`.
+
+### Tests
+
+- `tests/regression/test_issue_741_multi_model_adapter_serving_export.py`
+  (Tier 1) — pins the re-export, structural `ast.parse` verification of
+  `__all__`, and identity check `kailash_ml.serving.MultiModelAdapter
+is kailash_ml.MultiModelAdapter`.
+
 ## [1.7.0] — 2026-05-01 — Lightning quarantine migration: closes #752
 
 Migrates kailash-ml's PyTorch Lightning dependency from the umbrella
