@@ -39,6 +39,7 @@ from typing import Any, Dict, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
+from kailash.runtime.async_local import AsyncLocalRuntime
 
 from dataflow.core.model_registry import ModelRegistry, _normalize_runtime_result
 
@@ -109,8 +110,20 @@ class _FakeSyncRuntime:
         return self.return_value
 
 
-class _FakeAsyncRuntime:
+class _FakeAsyncRuntime(AsyncLocalRuntime):
     """Stand-in for AsyncLocalRuntime.
+
+    Subclasses ``AsyncLocalRuntime`` so ``ModelRegistry._is_async``
+    (post-S5 refactor — derived from ``isinstance(runtime,
+    AsyncLocalRuntime)`` per ``model_registry.py:182-189``) resolves
+    True for instances of this fake. Pre-S5 the test set
+    ``registry._is_async = True`` directly; the S5 setter is now a
+    no-op so the parent-class isinstance check IS the dispatch.
+
+    Bypasses the parent ``__init__`` (thread pool, profiler) — the
+    fake never executes a real workflow, so the parent setup is dead
+    weight. Methods below override every entry point the helper might
+    reach so the inherited parent paths cannot run.
 
     * ``execute()`` mimics the real refusal: raises RuntimeError if a
       loop is running. The helper must NEVER hit this path because the
@@ -120,6 +133,8 @@ class _FakeAsyncRuntime:
     """
 
     def __init__(self) -> None:
+        # Intentionally skip AsyncLocalRuntime.__init__ — no thread pool
+        # or profiler needed; the fake's methods override every entry.
         self.sync_execute_calls = 0
         self.async_calls: list[Any] = []
         self.return_value: Tuple[Dict[str, Any], str] = (

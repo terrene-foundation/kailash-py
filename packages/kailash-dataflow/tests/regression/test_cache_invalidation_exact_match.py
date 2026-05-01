@@ -129,7 +129,13 @@ async def test_redis_invalidation_matches_real_key_format():
     """Regression: Redis SCAN pattern must match the actual key format.
 
     Before fix, AsyncRedisCacheAdapter used ``dataflow:{model}:*`` which
-    does NOT match Express keys ``dataflow:v1:{model}:...``.
+    does NOT match Express keys ``dataflow:v*:{model}:...``.
+
+    Per ``rules/tenant-isolation.md`` § 3a "Keyspace Version Bumps Require
+    Invalidation-Path Sweep", the canonical invalidation pattern uses a
+    ``v*`` wildcard so legacy v1 keys AND current v2 keys are swept in
+    one call. This test locks BOTH the produced key format (currently
+    v2-versioned) AND the wildcard SCAN patterns the adapter emits.
     """
     from dataflow.cache.async_redis_adapter import AsyncRedisCacheAdapter
 
@@ -138,9 +144,13 @@ async def test_redis_invalidation_matches_real_key_format():
     # Generate a real Express key to understand the format
     real_key = key_gen.generate_express_key("User", "list", {"active": True})
 
-    # The key must start with "dataflow:v1:User:"
-    assert real_key.startswith(
-        "dataflow:v1:User:"
+    # The key must start with "dataflow:v<N>:User:" — version-prefix
+    # locked, but the specific N (currently v2) intentionally NOT pinned
+    # so a legitimate keyspace bump (Rule 3a) does not require this test
+    # update. The invalidation-path assertion below uses the v* wildcard
+    # which is the canonical form per Rule 3a.
+    assert (
+        real_key.startswith("dataflow:v") and ":User:" in real_key
     ), f"Express key format changed unexpectedly: {real_key}"
 
     # Create a mock RedisCacheManager that records SCAN patterns
@@ -158,19 +168,23 @@ async def test_redis_invalidation_matches_real_key_format():
     adapter = AsyncRedisCacheAdapter(mock_redis)
     await adapter.invalidate_model("User")
 
-    # Must include the Express key pattern
+    # Must include the Express key pattern with v* wildcard so legacy
+    # v1 entries (if any survive in Redis) AND current v2+ entries are
+    # both swept. Rule 3a: producer-side keyspace bump MUST NOT silently
+    # break consumer-side invalidation pinned to one version.
     assert (
-        "dataflow:v1:User:*" in scanned_patterns
+        "dataflow:v*:User:*" in scanned_patterns
     ), f"Express key pattern not scanned. Patterns used: {scanned_patterns}"
-    # Must also include the SQL query key pattern
+    # Must also include the SQL query key pattern (different shape:
+    # version segment AFTER model name).
     assert (
-        "dataflow:User:v1:*" in scanned_patterns
+        "dataflow:User:v*:*" in scanned_patterns
     ), f"SQL query key pattern not scanned. Patterns used: {scanned_patterns}"
 
     # Verify the Express pattern would actually match a real key
     import fnmatch
 
-    express_pattern = "dataflow:v1:User:*"
+    express_pattern = "dataflow:v*:User:*"
     assert fnmatch.fnmatch(
         real_key, express_pattern
     ), f"Pattern '{express_pattern}' does not match real key '{real_key}'"
@@ -181,9 +195,10 @@ async def test_redis_invalidation_matches_real_key_format():
 async def test_redis_invalidation_does_not_match_similar_models():
     """Regression: Redis SCAN for 'User' must not match 'UserAudit'.
 
-    The SCAN pattern ``dataflow:v1:User:*`` must NOT match
-    ``dataflow:v1:UserAudit:*`` because the glob ``User:*`` requires a
-    colon immediately after 'User'.
+    The SCAN pattern ``dataflow:v*:User:*`` must NOT match
+    ``dataflow:v*:UserAudit:*`` because the glob ``User:*`` requires a
+    colon immediately after 'User'. Pattern uses v* wildcard per
+    ``rules/tenant-isolation.md`` § 3a.
     """
     import fnmatch
 
@@ -192,7 +207,7 @@ async def test_redis_invalidation_does_not_match_similar_models():
     user_key = key_gen.generate_express_key("User", "list")
     audit_key = key_gen.generate_express_key("UserAudit", "list")
 
-    express_pattern = "dataflow:v1:User:*"
+    express_pattern = "dataflow:v*:User:*"
 
     assert fnmatch.fnmatch(user_key, express_pattern)
     assert not fnmatch.fnmatch(

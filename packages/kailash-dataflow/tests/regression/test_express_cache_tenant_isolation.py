@@ -84,22 +84,40 @@ def _reset_tenant_context() -> Any:
 
 
 def test_generate_express_key_without_tenant_matches_legacy_shape() -> None:
-    """Back-compat: no tenant → legacy shape unchanged."""
+    """Back-compat: no tenant → legacy shape unchanged.
+
+    Version segment locked as a prefix-shape (`v<digit>`) but specific
+    digit NOT pinned — Rule 3a (`rules/tenant-isolation.md`) makes
+    keyspace bumps a normal operation provided the invalidation-path
+    sweep moves with the producer. The shape's structural property
+    (5 colon-separated segments, version prefix, model name in slot 2,
+    op in slot 3) is what this test locks.
+    """
     gen = CacheKeyGenerator()
     key = gen.generate_express_key("User", "list", {"active": True})
-    # dataflow:v1:User:list:<8-hex-hash>
-    assert key.startswith("dataflow:v1:User:list:")
+    # dataflow:v<N>:User:list:<8-hex-hash>
     segments = key.split(":")
     assert len(segments) == 5
+    assert segments[0] == "dataflow"
+    assert segments[1].startswith("v") and segments[1][1:].isdigit()
+    assert segments[2] == "User"
+    assert segments[3] == "list"
 
 
 def test_generate_express_key_with_tenant_inserts_tenant_segment() -> None:
-    """With tenant → dataflow:v1:{tenant}:{model}:{op}:{hash}."""
+    """With tenant → dataflow:v<N>:{tenant}:{model}:{op}:{hash}.
+
+    See note above on version-segment shape pinning.
+    """
     gen = CacheKeyGenerator()
     key = gen.generate_express_key("User", "list", {"active": True}, tenant_id="acme")
-    assert key.startswith("dataflow:v1:acme:User:list:")
     segments = key.split(":")
     assert len(segments) == 6
+    assert segments[0] == "dataflow"
+    assert segments[1].startswith("v") and segments[1][1:].isdigit()
+    assert segments[2] == "acme"
+    assert segments[3] == "User"
+    assert segments[4] == "list"
 
 
 def test_generate_express_key_two_tenants_produce_distinct_keys() -> None:
