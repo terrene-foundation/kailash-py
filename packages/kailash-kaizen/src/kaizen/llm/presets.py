@@ -35,6 +35,7 @@ import re
 from typing import Any, Callable, Dict, Optional
 
 from kailash.utils.url_credentials import fingerprint_secret
+
 from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.auth.gcp import GcpOauth
@@ -202,6 +203,7 @@ def openai_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="openai",
     )
 
 
@@ -300,6 +302,7 @@ def anthropic_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="anthropic",
     )
 
 
@@ -331,6 +334,7 @@ def google_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="google",
     )
 
 
@@ -359,6 +363,7 @@ def cohere_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="cohere",
     )
 
 
@@ -392,6 +397,7 @@ def mistral_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="mistral",
     )
 
 
@@ -423,6 +429,7 @@ def perplexity_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="perplexity",
     )
 
 
@@ -451,6 +458,7 @@ def huggingface_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="huggingface",
     )
 
 
@@ -482,6 +490,7 @@ def ollama_preset(
         endpoint=endpoint,
         auth=StaticNone(),
         default_model=model,
+        preset_name="ollama",
     )
 
 
@@ -513,6 +522,7 @@ def docker_model_runner_preset(
         endpoint=endpoint,
         auth=StaticNone(),
         default_model=model,
+        preset_name="docker_model_runner",
     )
 
 
@@ -539,6 +549,7 @@ def groq_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="groq",
     )
 
 
@@ -567,6 +578,7 @@ def together_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="together",
     )
 
 
@@ -595,6 +607,7 @@ def fireworks_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="fireworks",
     )
 
 
@@ -623,6 +636,7 @@ def openrouter_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="openrouter",
     )
 
 
@@ -651,6 +665,7 @@ def deepseek_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=model,
+        preset_name="deepseek",
     )
 
 
@@ -677,6 +692,7 @@ def lm_studio_preset(
         endpoint=endpoint,
         auth=StaticNone(),
         default_model=model,
+        preset_name="lm_studio",
     )
 
 
@@ -703,6 +719,7 @@ def llama_cpp_preset(
         endpoint=endpoint,
         auth=StaticNone(),
         default_model=model,
+        preset_name="llama_cpp",
     )
 
 
@@ -877,6 +894,7 @@ def bedrock_claude_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        preset_name="bedrock_claude",
     )
     logger.info(
         "llm.deployment.bedrock_claude.constructed",
@@ -973,6 +991,7 @@ def _build_bedrock_deployment(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        preset_name=preset_name,
     )
     logger.info(
         f"llm.deployment.{preset_name}.constructed",
@@ -1258,6 +1277,7 @@ def _build_vertex_deployment(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_model,
+        preset_name=preset_name,
     )
     logger.info(
         f"llm.deployment.{preset_name}.constructed",
@@ -1500,6 +1520,7 @@ def azure_openai_preset(
         endpoint=endpoint,
         auth=auth,
         default_model=resolved_deployment,
+        preset_name="azure_openai",
     )
     logger.info(
         "llm.deployment.azure_openai.constructed",
@@ -1565,6 +1586,140 @@ def _register_and_attach_session_6_presets() -> None:
 _register_and_attach_session_6_presets()
 
 
+# ---------------------------------------------------------------------------
+# Compatible-endpoint presets — wrap an arbitrary HTTPS endpoint with a
+# canonical wire protocol. Cross-SDK parity with kailash-rs PR #722
+# (openai_compatible) and PR #724 (anthropic_compatible).
+#
+# Use cases: vLLM, llama.cpp servers, LM Studio remotes, LiteLLM proxies,
+# OpenRouter Anthropic mode, internal gateways, third-party OpenAI/Anthropic-
+# compatible providers. SSRF guard runs on `Endpoint.base_url` via the
+# field validator in `deployment.py:129` (mode="before"), so loopback /
+# private / link-local / cloud-metadata URLs are rejected at construction.
+#
+# `preset_name()` returns the literal `"openai_compatible"` /
+# `"anthropic_compatible"` (NOT the host) per spec § 6.M2 — this prevents
+# log-aggregator label cardinality blow-up and credential enumeration via
+# observability (`rules/observability.md` § 8).
+# ---------------------------------------------------------------------------
+
+
+def openai_compatible_preset(
+    base_url: str,
+    api_key: str,
+    *,
+    path_prefix: str = "/v1",
+) -> LlmDeployment:
+    """OpenAI-compatible endpoint at a caller-provided base URL.
+
+    Wire:     `OpenAiChat`
+    Endpoint: caller-provided (e.g. `https://vllm.example.com`)
+    Auth:     `Authorization: Bearer <api_key>` via
+              `ApiKeyBearer(Authorization_Bearer)`
+
+    Both `base_url` and `api_key` are REQUIRED non-empty strings. SSRF
+    guard runs on `base_url` automatically via the `Endpoint` field
+    validator — loopback / private / link-local / cloud-metadata /
+    non-HTTP(S) URLs raise the appropriate typed error.
+
+    Cross-SDK parity with kailash-rs `LlmDeployment::openai_compatible`
+    (PR #722). The preset name on the constructed deployment is the
+    literal `"openai_compatible"` — never the caller-provided host.
+    """
+    _validate_required_str(base_url, name="openai_compatible_preset.base_url")
+    _validate_required_str(
+        api_key,
+        name="openai_compatible_preset.api_key",
+        env_hint="OPENAI_COMPATIBLE_API_KEY",
+    )
+
+    endpoint = Endpoint(base_url=base_url, path_prefix=path_prefix)
+    auth = ApiKeyBearer(
+        kind=ApiKeyHeaderKind.Authorization_Bearer,
+        key=ApiKey(api_key),
+    )
+    return LlmDeployment(
+        wire=WireProtocol.OpenAiChat,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=None,
+        preset_name="openai_compatible",
+    )
+
+
+def anthropic_compatible_preset(
+    base_url: str,
+    api_key: str,
+    *,
+    path_prefix: str = "/v1",
+    anthropic_version: str = "2023-06-01",
+) -> LlmDeployment:
+    """Anthropic-compatible endpoint at a caller-provided base URL.
+
+    Wire:     `AnthropicMessages`
+    Endpoint: caller-provided (e.g. `https://anthropic-proxy.example.com`)
+    Auth:     `X-Api-Key: <api_key>` via `ApiKeyBearer(X_Api_Key)`
+    Headers:  `anthropic-version` on `Endpoint.required_headers` (default
+              `"2023-06-01"`, override for proxies pinned to a different
+              wire version)
+
+    Both `base_url` and `api_key` are REQUIRED non-empty strings. SSRF
+    guard runs on `base_url` automatically via the `Endpoint` field
+    validator.
+
+    Cross-SDK parity with kailash-rs `LlmDeployment::anthropic_compatible`
+    (PR #724). The preset name on the constructed deployment is the
+    literal `"anthropic_compatible"` — never the caller-provided host.
+    """
+    _validate_required_str(base_url, name="anthropic_compatible_preset.base_url")
+    _validate_required_str(
+        api_key,
+        name="anthropic_compatible_preset.api_key",
+        env_hint="ANTHROPIC_COMPATIBLE_API_KEY",
+    )
+
+    endpoint = Endpoint(
+        base_url=base_url,
+        path_prefix=path_prefix,
+        required_headers={"anthropic-version": anthropic_version},
+    )
+    auth = ApiKeyBearer(kind=ApiKeyHeaderKind.X_Api_Key, key=ApiKey(api_key))
+    return LlmDeployment(
+        wire=WireProtocol.AnthropicMessages,
+        endpoint=endpoint,
+        auth=auth,
+        default_model=None,
+        preset_name="anthropic_compatible",
+    )
+
+
+def _attach_compatible_classmethods() -> None:
+    """Register `openai_compatible` / `anthropic_compatible` AND attach as
+    `LlmDeployment.<name>` classmethods. Mirrors the
+    `_register_and_attach_session_*` pattern.
+    """
+    register_preset("openai_compatible", openai_compatible_preset)
+    register_preset("anthropic_compatible", anthropic_compatible_preset)
+
+    @classmethod  # type: ignore[misc]
+    def openai_compatible(
+        cls, base_url: str, api_key: str, **kwargs: Any
+    ) -> LlmDeployment:
+        return openai_compatible_preset(base_url, api_key, **kwargs)
+
+    @classmethod  # type: ignore[misc]
+    def anthropic_compatible(
+        cls, base_url: str, api_key: str, **kwargs: Any
+    ) -> LlmDeployment:
+        return anthropic_compatible_preset(base_url, api_key, **kwargs)
+
+    LlmDeployment.openai_compatible = openai_compatible  # type: ignore[attr-defined]
+    LlmDeployment.anthropic_compatible = anthropic_compatible  # type: ignore[attr-defined]
+
+
+_attach_compatible_classmethods()
+
+
 __all__ = [
     # S1
     "openai_preset",
@@ -1597,4 +1752,9 @@ __all__ = [
     # S5 -- Vertex AI presets
     "vertex_claude_preset",
     "vertex_gemini_preset",
+    # S6 -- Azure OpenAI
+    "azure_openai_preset",
+    # S7 -- Compatible-endpoint presets (#761, #762)
+    "openai_compatible_preset",
+    "anthropic_compatible_preset",
 ]

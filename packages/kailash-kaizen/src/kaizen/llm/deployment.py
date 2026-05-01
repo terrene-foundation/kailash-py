@@ -313,6 +313,18 @@ class LlmDeployment(BaseModel):
     default_model: Optional[str] = None
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
+    preset_name: Optional[str] = None
+    """Canonical preset literal (e.g. ``"openai"``, ``"openai_compatible"``).
+
+    Set by every preset factory to the literal registered in ``_PRESETS``.
+    Manual constructions leave it ``None``. The literal — NOT the host or
+    any caller-supplied URL fragment — prevents log-aggregator label
+    cardinality blow-up and credential enumeration via observability per
+    ``rules/observability.md`` § 8 (schema-revealing field names) and
+    cross-SDK parity with kailash-rs ``LlmDeployment::preset_name()``.
+    Python idiom is field access (``dep.preset_name``) rather than the
+    Rust method-style ``dep.preset_name()``.
+    """
 
     # -------------------------------------------------------------
     # Preset classmethod STUBS — only `.openai` is implemented in S1+S2.
