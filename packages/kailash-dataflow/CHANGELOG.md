@@ -1,5 +1,22 @@
 # DataFlow Changelog
 
+## [2.7.2] — 2026-05-01 — Express list/count cache invalidation aligned with producer key shape (#750)
+
+Patch release closing issue #750. `db.express.list(...)` returned STALE rows after `db.express.update / .delete / .create` because the `ListNodeCacheIntegration` invalidation patterns never matched the actual cache keys. Disk state was always correct; the bug was a silent no-op invalidation in the read-path cache layer.
+
+### Fixed
+
+- **#750 — `ListNodeCacheIntegration._setup_invalidation_patterns` now uses the producer-side key prefix.** `CacheKeyGenerator.generate_key` produces keys of shape `{prefix}:{model}:{version}:{hash}` where `prefix` defaults to `"dataflow:query"` (per `DataFlowConfig.cache_key_prefix`). Previous patterns `"{model}:list:*"` / `"{model}:record:{id}"` / `"{model}:count:*"` substring-matched against expanded patterns like `"Tag:list:"` — which never appears in any real key — so every create/update/delete/bulk\__ invalidation was a silent no-op. Patterns now use a version-wildcard sweep `f"{prefix}:{{model}}:_"`so every cache entry for the model is swept regardless of operation kind, and the format survives future keyspace bumps unchanged (per`rules/tenant-isolation.md`Rule 3a). Affects all DataFlow consumers with`enable_query_cache=True`(the default) — every`list()`/`count()` / filtered-list call after a mutation served stale data.
+- **`asyncio.iscoroutinefunction` deprecated since Python 3.14, scheduled for removal in 3.16.** Replaced with `inspect.iscoroutinefunction` in `packages/kailash-dataflow/src/dataflow/cache/list_node_integration.py` and `packages/kailash-dataflow/src/dataflow/cache/invalidation.py` (3 call sites total) per `rules/zero-tolerance.md` Rule 1. The `asyncio.iscoroutine` form remains valid and is unchanged.
+
+### Tests
+
+- `tests/regression/test_issue_750_express_list_cache_invalidation.py` — Tier-2 SQLite regression test asserting list reflects update / delete / create across the full express → node → cache_integration path (the path that the broken patterns silently no-op'd). Includes a structural-invariant test that pins the actual key shape against a registered invalidation pattern, so any future refactor that introduces a producer/invalidator key-format drift fails loudly at gate time.
+
+### Cross-SDK
+
+- kailash-rs DataFlow's read-path cache layer (if it exposes a comparable invalidation pattern system) is expected to carry the same gap if its producer key shape and invalidator pattern strings were drafted independently. Cross-SDK verification ticket per `rules/cross-sdk-inspection.md` MUST Rule 1 — disposition pending explicit human approval per `rules/upstream-issue-hygiene.md` MUST Rule 1.
+
 ## [2.7.1] — 2026-05-01 — DPI-A propagation: Express raises `DDLFailedError` instead of returning failure dict (#759)
 
 Patch release closing issue #759. DataFlow Express's `create` / `update` / `delete` / `upsert` / `upsert_advanced` previously returned the underlying CRUD node's `{"success": False, "error": ...}` failure dict to the caller when an auto-migration DDL failure recorded the model as failed. This broke the DPI-A 2.4.0 fail-fast contract — `await db.express.create(...)` returned a "result" with `success=False` instead of raising the typed `DDLFailedError` the user-facing API documented.

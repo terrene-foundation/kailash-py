@@ -5,6 +5,7 @@ Integrates Redis caching with DataFlow ListNode operations
 for automatic query result caching and cache invalidation.
 """
 
+import inspect
 import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -73,9 +74,7 @@ class ListNodeCacheIntegration:
         # FIX: Properly await async cache.can_cache() method
         if not cache_enabled or not await self.cache_manager.can_cache():
             # Execute directly without caching
-            import asyncio
-
-            if asyncio.iscoroutinefunction(executor_func):
+            if inspect.iscoroutinefunction(executor_func):
                 result = await executor_func()
             else:
                 result = executor_func()
@@ -100,9 +99,8 @@ class ListNodeCacheIntegration:
         logger.debug(
             "list_node_integration.cache_miss_for_key", extra={"cache_key": cache_key}
         )
-        import asyncio
 
-        if asyncio.iscoroutinefunction(executor_func):
+        if inspect.iscoroutinefunction(executor_func):
             result = await executor_func()
         else:
             result = executor_func()
@@ -212,40 +210,56 @@ class ListNodeCacheIntegration:
         return result
 
     def _setup_invalidation_patterns(self):
-        """Setup default invalidation patterns for common operations."""
+        """Setup default invalidation patterns for common operations.
+
+        Issue #750 — patterns MUST match the actual cache key format produced
+        by ``self.key_generator.generate_key()``: ``{prefix}:{model}:{version}:{hash}``
+        where ``{prefix}`` defaults to ``"dataflow:query"``. The previous
+        ``{model}:list:*`` shape never matched any real key and silently
+        no-op'd every invalidation, leaving stale list/count entries served
+        forever. Per ``rules/tenant-isolation.md`` Rule 3a, patterns use a
+        version-wildcard sweep (``{prefix}:{model}:*``) so v1, v2, and any
+        future keyspace bump are all swept in one call.
+        """
+        # Anchor patterns at the producer-side prefix so InMemoryCache /
+        # AsyncRedisCacheAdapter substring-matchers find the real keys.
+        prefix = self.key_generator.prefix
+
         # Create patterns for common CRUD operations
         create_pattern = InvalidationPattern(
             model="*",  # Apply to all models
             operation="create",
-            invalidates=["{model}:list:*", "{model}:count:*"],
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         update_pattern = InvalidationPattern(
             model="*",
             operation="update",
-            invalidates=["{model}:record:{id}", "{model}:list:*"],
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         delete_pattern = InvalidationPattern(
             model="*",
             operation="delete",
-            invalidates=["{model}:record:{id}", "{model}:list:*", "{model}:count:*"],
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         bulk_create_pattern = InvalidationPattern(
             model="*",
             operation="bulk_create",
-            invalidates=["{model}:list:*", "{model}:count:*"],
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         bulk_update_pattern = InvalidationPattern(
-            model="*", operation="bulk_update", invalidates=["{model}:list:*"]
+            model="*",
+            operation="bulk_update",
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         bulk_delete_pattern = InvalidationPattern(
             model="*",
             operation="bulk_delete",
-            invalidates=["{model}:list:*", "{model}:count:*"],
+            invalidates=[f"{prefix}:{{model}}:*"],
         )
 
         # Register patterns
