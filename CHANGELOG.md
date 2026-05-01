@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.3] — 2026-05-02 — auth Rule 2 cleanup release (#779)
+
+Patch release cutting PyPI for the auth-stub Rule 2 cleanup that landed in
+PR #779 (commit `9364027b`, merged 2026-05-01) without a same-PR version bump.
+No new code in this release; the bump catches PyPI up to main per
+`rules/build-repo-release-discipline.md` Rule 5 (sub-package src changes
+require same-PR version bump — when the bump is missed, a follow-up
+release-prep PR closes the gap).
+
+### Fixed (recap from #779)
+
+- **7 `raise NotImplementedError` stubs eliminated across `src/kailash/{nodes,middleware}/auth/`** per `rules/zero-tolerance.md` Rule 2 § "Fake dispatch" and `rules/orphan-detection.md` Rule 3. Default-config users previously hit `NotImplementedError` from documented public APIs (`SSOAuthenticationNode(provider="saml")`, `EnterpriseAuthProviderNode(method="passwordless")`, the unconditional `_assess_behavior_risk` call). Each surface now either raises a typed `ValueError` naming the override path, returns a documented no-op default, or — for orphan helpers with zero production callers — was deleted outright.
+- Locked by `tests/regression/test_auth_stub_rule2_cleanup.py` (11 tests, all passing), including a structural sweep that fails if `raise NotImplementedError` re-appears anywhere in `src/kailash/{nodes,middleware}/auth/`.
+
 ## [2.13.2] — 2026-05-01 — `durability_middleware` passes through SSE / `StreamingResponse` (#767)
 
 Patch release closing issue #767. `DurableWorkflowServer._add_durability_middleware` (the durability middleware that `EnterpriseWorkflowServer` and `Nexus()` mount on every 2xx response) drained `response.body_iterator` before forwarding any bytes. For `StreamingResponse` (SSE, chunked transfer, file streams, gRPC streaming) this destroyed streaming semantics on the first request and replayed the captured stream as a JSON envelope on every cache hit, breaking every SSE / `EventSource` client.
