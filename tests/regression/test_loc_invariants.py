@@ -38,10 +38,18 @@ def test_delegate_loc():
 
 @pytest.mark.regression
 def test_pact_engine_loc():
-    """Guard: pact/engine.py must stay under 1148 LOC after convergence extraction."""
+    """Guard: pact/engine.py must stay under threshold.
+
+    Baseline re-anchored 2026-05-01 from 998 (pre-#567) → 1414 (post-#567,
+    commit 9ffc23d0 absorbed three MLFP-rejected GovernanceDiagnostics
+    capabilities — verify_audit_chain, envelope_snapshot,
+    iter_audit_anchors — as first-class PactEngine methods, +387 LOC of
+    legitimate feature code, NOT a re-inlining merge regression).
+    Threshold = 1414 × 1.15 ≈ 1626 per rules/refactor-invariants.md Rule 1.
+    """
     path = Path("packages/kailash-pact/src/pact/engine.py")
     lines = len(path.read_text().splitlines())
-    limit = 1148  # 998 post-refactor + 15% margin
+    limit = 1626  # 1414 post-#567 baseline + 15% margin
     assert lines <= limit, (
         f"engine.py: {lines} lines (limit {limit}). "
         f"Code may have been re-inlined by a merge. "
