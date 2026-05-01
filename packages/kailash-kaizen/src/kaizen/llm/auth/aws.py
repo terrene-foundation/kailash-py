@@ -40,10 +40,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, FrozenSet, Optional
 
 try:
     from botocore.auth import SigV4Auth as _BotocoreSigV4Auth
@@ -126,7 +128,33 @@ class RegionNotAllowed(AuthError):
         super().__init__(
             f"region not allowed for AWS Bedrock: {region!r} "
             f"(allowed: {len(BEDROCK_SUPPORTED_REGIONS)} published regions -- "
-            f"see kaizen.llm.auth.aws.BEDROCK_SUPPORTED_REGIONS)"
+            f"see kaizen.llm.auth.aws.BEDROCK_SUPPORTED_REGIONS; an additional "
+            f"runtime registry can be opted into via "
+            f"LlmDeployment.register_bedrock_region(region))"
+        )
+
+
+class InvalidRegionFormat(AuthError):
+    """A region string failed the AWS region format check (#764).
+
+    Distinct from :class:`RegionNotAllowed` — this exception fires when
+    the input does not even resemble an AWS region (uppercase letters,
+    underscores, missing trailing digit, etc.). ``RegionNotAllowed``
+    fires when the input IS well-formed but is not in the static
+    allowlist NOR in the runtime override registry.
+
+    The two-tier signaling lets operators distinguish "I typo'd the
+    region string" from "I'm on a region kailash-py hasn't released
+    support for yet". Both errors echo the rejected region — region
+    strings are PUBLIC identifiers per :class:`RegionNotAllowed`.
+    """
+
+    def __init__(self, region: Any) -> None:
+        self.region = region
+        super().__init__(
+            f"invalid AWS region format: {region!r} "
+            f"(expected match against ^[a-z]{{2,3}}-[a-z]+-\\d+$ — e.g. "
+            f"us-east-1, eu-west-3, ap-northeast-2)"
         )
 
 
@@ -146,12 +174,153 @@ def _validate_region_or_raise(region: Any) -> str:
 
     Centralized so `AwsBearerToken.__init__` and `AwsSigV4.__init__` apply
     the same check -- drift between the two constructors is BLOCKED.
+
+    Order of checks (matters for #764):
+
+    1. Must be a non-empty string (else :class:`RegionNotAllowed`).
+    2. Static allowlist short-circuit — if ``region`` is in
+       :data:`BEDROCK_SUPPORTED_REGIONS`, accept immediately. The
+       runtime override registry is NOT consulted in this branch; the
+       static set is authoritative for everything kailash-py ships.
+    3. Runtime override registry — consulted only for regions NOT in the
+       static allowlist. Operators on newly-published AWS regions opt
+       into the override path by calling
+       :meth:`LlmDeployment.register_bedrock_region`. If the region
+       appears in the registry, accept; otherwise raise
+       :class:`RegionNotAllowed`.
     """
     if not isinstance(region, str) or not region:
         raise RegionNotAllowed(repr(region))
-    if region not in BEDROCK_SUPPORTED_REGIONS:
-        raise RegionNotAllowed(region)
-    return region
+    if region in BEDROCK_SUPPORTED_REGIONS:
+        return region
+    if _bedrock_region_registry_contains(region):
+        return region
+    raise RegionNotAllowed(region)
+
+
+# ---------------------------------------------------------------------------
+# Bedrock region runtime override registry (#764)
+# ---------------------------------------------------------------------------
+#
+# Process-local registry of additional Bedrock regions an operator opts into
+# beyond the static :data:`BEDROCK_SUPPORTED_REGIONS` allowlist. Populated
+# exclusively via :meth:`LlmDeployment.register_bedrock_region` (wired in
+# `presets.py` via runtime classmethod attachment to mirror the existing
+# preset-attachment pattern).
+#
+# Hatch-of-last-resort. The canonical fix for a missing region is a
+# kailash-py release that adds it to BEDROCK_SUPPORTED_REGIONS;
+# this hatch exists for the days/weeks before that release lands.
+#
+# Process-local — NOT shared across replicas of a distributed service.
+# Operators behind a load balancer MUST register the override on every
+# replica at boot. There is no env-var auto-population path: the only way to
+# enter the registry is via an explicit code-level call, so the audit trail
+# in startup logs is grep-able.
+#
+# Thread-safety: a copy-on-write update under :data:`_BEDROCK_REGIONS_LOCK`
+# atomically swaps :data:`_BEDROCK_REGIONS_EXTRA` for a new ``frozenset``.
+# Reads are lock-free — callers fetch the current frozenset reference and
+# query membership without acquiring the lock; the GIL guarantees the
+# pointer-load is atomic. Equivalent to the Rust ``arc_swap::ArcSwap``
+# pattern used by kailash-rs PR #726.
+
+# AWS region format. Two or three lowercase letters (region group), a hyphen,
+# one or more lowercase letters (sub-region), a hyphen, one or more digits.
+# Anchored at both ends so leading / trailing whitespace + extra segments
+# reject. Byte-identical to kailash-rs ``r"^[a-z]{2,3}-[a-z]+-\d+$"``.
+_BEDROCK_REGION_RE = re.compile(r"^[a-z]{2,3}-[a-z]+-\d+$")
+
+_BEDROCK_REGIONS_LOCK = threading.RLock()
+_BEDROCK_REGIONS_EXTRA: FrozenSet[str] = frozenset()
+
+
+def _bedrock_region_registry_contains(region: str) -> bool:
+    """Lock-free membership check on the runtime override registry.
+
+    Snapshots the current frozenset reference under the GIL (atomic
+    pointer-load) and queries membership without acquiring the lock.
+    Writers acquire :data:`_BEDROCK_REGIONS_LOCK` and atomically swap
+    the module-global to a NEW frozenset — readers either see the old
+    set or the new set, never a partial state.
+    """
+    snapshot = _BEDROCK_REGIONS_EXTRA
+    return region in snapshot
+
+
+def register_bedrock_region(region: str) -> None:
+    """Register an additional Bedrock region beyond the static allowlist.
+
+    Use only when an operator is on a newly-published AWS Bedrock region
+    that has not yet landed in kailash-py's release-cadence-refreshed
+    :data:`BEDROCK_SUPPORTED_REGIONS` allowlist. The canonical fix for a
+    missing region is to ship a kailash-py release that adds it to
+    ``BEDROCK_SUPPORTED_REGIONS``; this hatch exists for the days /
+    weeks before that release lands.
+
+    Idempotent: repeated registration of the same region is a no-op.
+
+    Thread-safe: writers serialize through :data:`_BEDROCK_REGIONS_LOCK`
+    and atomically swap the module-global frozenset; readers (every
+    Bedrock-preset construction calling
+    :func:`_validate_region_or_raise`) are lock-free.
+
+    Process-local: the registry is NOT shared across replicas of a
+    distributed service. Operators behind a load balancer MUST register
+    the override on every replica at boot.
+
+    Raises:
+        InvalidRegionFormat: ``region`` does not match the AWS region
+            pattern ``^[a-z]{2,3}-[a-z]+-\\d+$``. Distinct from
+            :class:`RegionNotAllowed` — see the latter's docstring.
+
+    Example::
+
+        import kailash
+        kailash.LlmDeployment.register_bedrock_region("xx-newregion-1")
+        dep = kailash.LlmDeployment.bedrock_claude(
+            "xx-newregion-1",
+            auth=AwsBearerToken(token=..., region="xx-newregion-1"),
+        )
+
+    Cross-SDK parity: format regex is byte-identical to kailash-rs
+    ``register_bedrock_region`` per
+    ``rules/cross-sdk-inspection.md`` § 3a; behavioral contract
+    (idempotent, format-validated, static-allowlist short-circuit
+    first, process-local) mirrors the Rust implementation.
+    """
+    global _BEDROCK_REGIONS_EXTRA
+    if not isinstance(region, str) or not _BEDROCK_REGION_RE.match(region):
+        raise InvalidRegionFormat(region)
+    with _BEDROCK_REGIONS_LOCK:
+        if region in _BEDROCK_REGIONS_EXTRA:
+            return  # idempotent — no log spam, no audit churn
+        # Copy-on-write: rebuild the frozenset and swap atomically. The
+        # whole point of using frozenset is so readers can hold a stale
+        # reference (the OLD frozenset) safely while a writer installs
+        # the new one.
+        _BEDROCK_REGIONS_EXTRA = frozenset(_BEDROCK_REGIONS_EXTRA | {region})
+    logger.info(
+        "bedrock_region.registered",
+        extra={
+            "region": region,
+            "registry_size": len(_BEDROCK_REGIONS_EXTRA),
+            "rationale": "hatch_of_last_resort",
+        },
+    )
+
+
+def _bedrock_region_registry_clear_for_tests() -> None:
+    """Reset the runtime override registry. **Test-only.**
+
+    Mirrors the Rust ``clear_for_tests`` pattern. Production code MUST
+    NOT call this — registered regions are append-only across the
+    process lifetime per the public contract on
+    :func:`register_bedrock_region`.
+    """
+    global _BEDROCK_REGIONS_EXTRA
+    with _BEDROCK_REGIONS_LOCK:
+        _BEDROCK_REGIONS_EXTRA = frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -611,8 +780,10 @@ def _zeroize_awscredentials(creds: AwsCredentials) -> None:
 __all__ = [
     "BEDROCK_SUPPORTED_REGIONS",
     "RegionNotAllowed",
+    "InvalidRegionFormat",
     "ClockSkew",
     "AwsBearerToken",
     "AwsCredentials",
     "AwsSigV4",
+    "register_bedrock_region",
 ]

@@ -31,7 +31,9 @@ from kaizen.llm.auth.aws import (
     AwsCredentials,
     AwsSigV4,
     ClockSkew,
+    InvalidRegionFormat,
     RegionNotAllowed,
+    register_bedrock_region,
 )
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.auth.gcp import (
@@ -119,6 +121,8 @@ __all__ = [
     "AwsSigV4",
     "BEDROCK_SUPPORTED_REGIONS",
     "RegionNotAllowed",
+    "InvalidRegionFormat",
+    "register_bedrock_region",
     "ClockSkew",
     # GCP OAuth (S5)
     "GcpOauth",

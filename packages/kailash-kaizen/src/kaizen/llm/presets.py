@@ -1720,6 +1720,33 @@ def _attach_compatible_classmethods() -> None:
 _attach_compatible_classmethods()
 
 
+# ---------------------------------------------------------------------------
+# Session 7 (#764) — Bedrock region runtime override
+# ---------------------------------------------------------------------------
+
+
+def _attach_bedrock_region_classmethod() -> None:
+    """Attach `LlmDeployment.register_bedrock_region` (#764).
+
+    Wires :func:`kaizen.llm.auth.aws.register_bedrock_region` onto
+    :class:`LlmDeployment` as a classmethod so the public API surface
+    matches kailash-rs's ``LlmDeployment::register_bedrock_region`` and
+    callers reach it via the same canonical path:
+
+        kailash.LlmDeployment.register_bedrock_region("xx-newregion-1")
+    """
+    from kaizen.llm.auth.aws import register_bedrock_region as _register
+
+    @classmethod  # type: ignore[misc]
+    def register_bedrock_region(cls, region: str) -> None:
+        _register(region)
+
+    LlmDeployment.register_bedrock_region = register_bedrock_region  # type: ignore[attr-defined]
+
+
+_attach_bedrock_region_classmethod()
+
+
 __all__ = [
     # S1
     "openai_preset",

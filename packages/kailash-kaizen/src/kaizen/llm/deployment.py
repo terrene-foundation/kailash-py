@@ -355,6 +355,48 @@ class LlmDeployment(BaseModel):
     # azure_openai and azure_entra are attached by presets.py at import time
     # (Session 6). No stubs remain on LlmDeployment after S6.
 
+    def supports(self) -> Dict[str, bool]:
+        """Return the capability matrix for this deployment (#763).
+
+        Returns a dict with five boolean keys: ``tools``, ``vision``,
+        ``batch``, ``caching``, ``audio``. Per-preset values are derived
+        from current provider documentation at release time. The matrix
+        is coarse — it reports what the deployment's wire protocol +
+        endpoint surface CAN carry, NOT what every model served by the
+        preset will accept (per-model gating like ``gpt-4o`` supports
+        vision but ``gpt-3.5-turbo`` does not is the caller's
+        responsibility, typically wired through model registry metadata).
+
+        Fail-closed default (``rules/security.md`` § Fail-Closed Security
+        Defaults): manual constructions whose ``preset_name`` is ``None``
+        AND any unknown / future preset name return all-False. Adding a
+        new preset constructor without wiring its capability row in
+        :mod:`kaizen.llm.capabilities` leaves the deployment marked
+        uncapable until the wiring lands.
+
+        Returned dicts are independent copies — mutating one does not
+        mutate the matrix table or any other call's result.
+
+        Example::
+
+            dep = LlmDeployment.openai(api_key, model=os.environ["OPENAI_PROD_MODEL"])
+            caps = dep.supports()
+            if caps["batch"]:
+                ...  # caller can opt into the OpenAI Batch API
+
+        Cross-SDK parity: rows are byte-identical to kailash-rs
+        ``LlmDeployment::supports()`` per
+        ``rules/cross-sdk-inspection.md`` § 3a.
+        """
+        # Local import: presets.py + capabilities.py both import deployment.py;
+        # importing capabilities.py at module scope here would be fine (no
+        # cycle), but a function-local import keeps deployment.py free of
+        # additional import-time side effects per the existing structure
+        # where preset wiring also happens via runtime attachment.
+        from kaizen.llm.capabilities import for_preset
+
+        return for_preset(self.preset_name)
+
 
 __all__ = [
     "WireProtocol",
