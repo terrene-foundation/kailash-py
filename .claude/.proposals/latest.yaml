@@ -1,289 +1,91 @@
 source_repo: kailash-py
-codify_date: "2026-04-28"
+codify_date: "2026-05-01"
 codify_session: |
-  Session 2026-04-28 — post-loom-2.9.5-sync follow-through + git reset --hard rule.
+  Session 2026-05-01 — paired patch cut (#767 SSE durability + #768 parameterized
+  generics + #750 list-cache invalidation) shipped end-to-end through
+  admin-merge → tag → publish-pypi → clean-venv install verification.
 
-  Three tasks completed cleanly off the prior session's hand-off:
-    1. Loom 2.9.5 sync committed (PR #691, merged 9475aa86) — 262 files,
-       hooks consolidation under .claude/hooks/, multi-CLI architects,
-       autonomize command, 5 new rules, ~30 new skills.
-    2. kailash-dataflow 2.3.3 released to PyPI (PR #692, merged cf945373,
-       tag dataflow-v2.3.3) — closes the merged-but-unreleased gap from
-       PR #684 (production-src pyright cleanup without same-PR bump).
-       Clean-venv install verified.
-    3. #640 closed + spinout #693 filed for the M2-blocked Item 7
-       (specs/dataflow-ml-integration.md graduation).
+  Two narrow tooling-quirk learnings surfaced during the cycle:
 
-  Mid-session, while moving the sync commit off main onto a feature
-  branch, the agent ran `git reset --hard 7ce2d2eb` and silently wiped
-  the prior session's `.session-notes` modifications. Recovery was only
-  possible because the file content had been read into conversation
-  context earlier. The user pushed back: "we should have a rule against
-  git reset, how can you make this mistake".
+  1. **Pre-commit `python-use-type-annotations` hook regex matches `# type`
+     not `# type:`.** Hit while writing the #768 fix in
+     `dataflow/core/type_processor.py` — comment said
+     `# types.UnionType for PEP 604` and the hook flagged it as a legacy
+     `# type:` annotation comment. Cost one commit-retry cycle to diagnose.
+     The regex source is
+     `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep` =>
+     `'# type(?!: *ignore([^a-zA-Z0-9]|$))'`. Any comment starting with
+     `# type` (no colon) followed by anything but `: ignore` triggers.
 
-  Verified no existing rule covered the surface (grep'd every rule file
-  for `reset --hard`, `--keep`, `destructive`). The closest neighbors
-  were:
-    - git.md line 133: "no force push to main" (force-push only)
-    - schema-migration.md Rule 7 + dataflow-identifier-safety.md Rule 4:
-      destructive-DDL-requires-explicit-flag pattern (the sibling
-      structural-confirmation precedent)
+  2. **PyPI simple-index lag requires `uv pip install --refresh`.** Hit
+     during the #770 / #771 release verification — `pypi.org/.../json`
+     returned the new version metadata immediately after publish-pypi.yml
+     succeeded, but `uv pip install "kailash-dataflow==2.7.3"` reported
+     `No solution found, no version of kailash-dataflow==2.7.3`. Cause:
+     `uv`'s local index cache. Adding `--refresh` resolved it instantly.
+     `build-repo-release-discipline.md` Rule 2 already mandated retry
+     with 60s pause but did not name `--refresh` as the unblocker.
 
-  Drafted, redteamed (Loud/Linguistic/Layered per rule-authoring.md),
-  added to git.md, shipped via PR #694 (admin-merged).
+  Neither is a new structural pattern — both extend existing rules with
+  one-paragraph clarifications.
 
-  Net institutional change: one new MUST clause on git.md ("git reset
-  --hard MUST verify clean working tree"). Universal git semantics —
-  applies to every SDK and every language — strong cross-SDK candidate
-  for upstream classification at loom.
-
-status: distributed
-reviewed_date: "2026-04-29"
-distributed_date: "2026-04-29T14:30:00+08:00"
-distributed_session: |
-  /sync py 2026-04-29 — bundled the in-flight 2.9.7 (git reset --hard rule)
-  with 5 NEW candidates from kailash-ml-1.5.x-followup. Loom 2.9.7 → 2.10.0.
-
-  Distributed to:
-    - kailash-coc-claude-py 3.5.28 → 3.5.29 (legacy CC-only template;
-      4 rule files updated: zero-tolerance + schema-migration + agents + git;
-      pyproject pins kailash 2.11.3 → 2.12.0, dataflow 2.3.3 → 2.4.0,
-      ml 1.5.1 → 1.6.0; uv sync clean; 12/12 hooks resolve.)
-    - kailash-coc-py 1.0.12 → 1.0.13 (multi-CLI template;
-      6 rule files updated; AGENTS.md regenerated 57,459 B (6.48% under
-      block_cap), GEMINI.md 57,468 B (6.46%); brief-verification clause
-      confirmed cross-CLI in CLAUDE.md / AGENTS.md / GEMINI.md.)
-
-  Classification of all 6 entries (all GLOBAL, all cross-SDK):
-    - git-reset-hard-discipline: rules/git.md (already in 2.9.7)
-    - api-deprecation-cycle-discipline: rules/zero-tolerance.md NEW Rule 6a
-      "Remove Fully — Public-API Removal Requires Deprecation Cycle"
-    - inline-ddl-outside-migrations-grep-audit:
-      rules/schema-migration.md NEW Rule 1a "/redteam MUST Grep For
-      Inline DDL Outside Migrations"
-    - brief-claim-verification-protocol: rules/agents.md § Parallel
-      Execution NEW MUST "Parallel Brief-Claim Verification When Issue
-      Count ≥ 3"; variant cascade across codex + gemini + rs
-    - silent-drop-kwargs-as-zero-tolerance-rule-3:
-      rules/zero-tolerance.md NEW Rule 3c "Documented Kwargs Accepted
-      But Unused"
-    - accepted-literals-without-dispatch-as-rule-2:
-      rules/zero-tolerance.md Rule 2 § Extended BLOCKED Patterns NEW
-      "Fake dispatch" bullet
-
-  Block-cap headroom WARN (institutional knowledge):
-    Multi-CLI baselines AGENTS.md / GEMINI.md dropped from 14.51% / 14.49%
-    to 6.48% / 6.46% under 61,440 B cap. Next cycle adding CRIT-baseline
-    content MUST extract or demote-to-path-scoped FIRST.
-
-  Pre-existing extraction debt (deferred to next cycle, not blocking):
-    - rules/zero-tolerance.md 189 → 277 LOC (exceeds ≤200 guidance)
-    - rules/agents.md 196 → 245 LOC
-    - rules/schema-migration.md 203 → 245 LOC
-    - rules/git.md 295 LOC (carried from 2.9.7)
-    All four are load-bearing MUST content; not extraction-eligible
-    reference material.
+status: pending_review
 
 changes:
-  - id: git-reset-hard-discipline
-    type: rule
-    severity: HIGH
-    target: rules/git.md
-    section: "new MUST sub-clause § 'git reset --hard MUST Verify Clean Working Tree' — inserted before existing § 'Rules' bullet list"
-    summary: |
-      `git reset --hard <ref>` SILENTLY discards every unstaged
-      modification AND every untracked file in the affected paths.
-      Recovery is impossible — unstaged content has no reflog entry.
-      The rule mandates verifying `git status --porcelain` is empty
-      before any `--hard` reset, AND mandates `git reset --keep <ref>`
-      as the preferred form for back-out / branch-reorganization
-      workflows. `--keep` performs the same commit-graph operation but
-      aborts loudly when local changes would be lost — converts a class
-      of silent data-loss failures into "refused — stash first" errors.
-
-      DO/DO NOT examples cover four patterns:
-        1. `--keep` (aborts on conflict — the structurally safest form).
-        2. `git status --porcelain` verify, then `--hard` (when --hard
-           is genuinely needed and tree is clean).
-        3. `git stash push -u -m <reason>`, then `--hard`, then
-           `stash pop` (when --hard with modifications is unavoidable
-           and the work is recoverable from the stash list).
-        4. The "I committed on main by accident, want it on a feature
-           branch" recipe: `git switch -c feat/<name>` to preserve the
-           commit, then `git switch main && git reset --keep
-           origin/main` to back main out safely.
-
-      BLOCKED rationalizations enumerated:
-        - "The tree is clean, I just committed everything I wanted"
-        - "The reflog will save me"  (false for unstaged content)
-        - "I'm in a fresh worktree, there's nothing to lose"
-        - "It's only `.session-notes`, not load-bearing"
-        - "I'll remember to check next time"
-        - "`--hard` is faster than stashing"
-        - "`--keep` is unfamiliar, `--hard` is the canonical form"
-
-      Why: `git reset --hard` is the most destructive git operation
-      that doesn't rewrite history. Unlike force-push, the destruction
-      is unrecoverable: unstaged modifications and untracked files have
-      no reflog. `git reset --keep` exists in git specifically for this
-      class of "back out a commit safely" workflow; defaulting to
-      `--keep` converts silent data-loss into loud refusal. Same
-      structural-confirmation pattern as
-      dataflow-identifier-safety.md Rule 4 (DROP requires force_drop=
-      True) and schema-migration.md Rule 7 (downgrade requires
-      force_downgrade=True) — destructive operations require an
-      explicit gate at every layer that can touch them, with the
-      safer-default form preferred.
-
-      Origin: kailash-py session 2026-04-28 (PR #691 sync rebase) —
-      `.session-notes` modifications wiped by `git reset --hard
-      7ce2d2eb` during a "move commit off main" recovery. Content was
-      only recovered because the file had been read into the agent's
-      conversation context earlier in the session; without that, the
-      prior session's hand-off would have been permanently lost.
-
-      Sibling destructive ops (`git checkout --force`, `git checkout
-      -- <path>`, `git clean -fd`) are explicitly out of scope for
-      this rule per rule-authoring.md Rule 6 focus discipline; the
-      system prompt's "destructive operations" guardrail covers them
-      at session level.
+  - id: pre-commit-comment-matcher-quirk
+    type: rule_addition
+    location: rules/git.md § Discipline
     classification_suggestion: global
     rationale: |
-      Cross-SDK applicable. `git reset --hard` semantics are universal
-      across every language and SDK; the failure mode (silent unstaged
-      destruction with no reflog) is identical in kailash-rs, atelier,
-      every downstream USE template, and every external consumer's dev
-      workflow. Variant overlay possible if any language-specific git
-      tooling diverges (none expected — git is the variant-invariant
-      surface).
+      Pre-commit hooks are language-agnostic and CLI-agnostic. The
+      `python-use-type-annotations` hook ships with `pre-commit-hooks`,
+      which every BUILD repo uses. Same regex would trigger on `kailash-rs`
+      Python tooling if any. No language or CLI variance.
+    diff_summary: |
+      Adds a new Discipline bullet between "Pre-commit hook workarounds"
+      and "Commit-message claim accuracy":
 
-      Recommendation at /sync Gate 1: classify as global, drop into
-      .claude/rules/git.md across all targets (CC, Codex, Gemini —
-      neutral-body, no slot divergence; the example block is git
-      command syntax, not CLI delegation syntax, so cross-cli-parity
-      MUST Rule 1 is preserved by default).
+        - **Pre-commit comment-syntax matchers**: the
+          `python-use-type-annotations` hook regex matches `# type` (NOT
+          `# type:`) per `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep`.
+          Comments referencing the `types` module — `# types.UnionType for
+          PEP 604` — trigger a false positive. Reword to avoid `# type` as
+          a literal substring (e.g. "PEP 604 produces `types.UnionType`"
+          → "PEP 604 produces a union type"). Same class for any future
+          `pygrep` hook that matches comment fragments without the
+          trailing punctuation.
 
-      The sibling precedents (force_drop, force_downgrade) already
-      ship cross-SDK; this rule completes the destructive-confirmation
-      family for the local-workspace surface.
-
-  # ================================================================
-  # APPENDED 2026-04-29 — kailash-ml-1.5.x-followup workstream
-  # Per rules/artifact-flow.md MUST § "Append, Never Overwrite Unprocessed
-  # Proposals" — proposal was at pending_review; new candidates appended.
-  # ================================================================
-
-  - id: api-deprecation-cycle-discipline
-    classification_hint: global
+  - id: uv-index-cache-refresh
+    type: rule_clarification
+    location: rules/build-repo-release-discipline.md § MUST Rule 2
+    classification_suggestion: global
     rationale: |
-      Public-API removal MUST land with a DeprecationWarning shim
-      covering at least one minor cycle, plus a CHANGELOG migration
-      section explicitly documenting the 1.x → next-1.x callsite
-      change. Removal-without-shim is BLOCKED. Same gap exists
-      structurally in Rust SDK: `pub fn` removal without
-      `#[deprecated(since = "X.Y.Z", note = "...")]`.
-    why: |
-      kailash-ml 1.5.x dropped `InferenceServer(registry=, cache_size=)`
-      + `warm_cache` + `load_model(name, model)` without a deprecation
-      cycle. Every 1.1.x callsite hard-broke in production (#700,
-      MLFP M5 sweep 2026-04-28).
-    likely_placement: |
-      New rules/api-deprecation.md OR extension to rules/zero-tolerance.md
-      Rule 6 ("Implement Fully") with sibling clause "Remove Fully".
-    origin: workspaces/kailash-ml-1.5.x-followup/02-plans/03-codify-candidates.md § 1
-    cross_sdk: applies to both kailash-py and kailash-rs
+      `uv` is the mandated package manager per `python-environment.md`
+      Rule 1; the cache-override is `uv`-specific (`pip` has shorter index
+      TTL and does not need the flag). Same surface for kailash-rs if it
+      ever moves to a `uv`-equivalent index cache. No language variance.
+    diff_summary: |
+      Adds a paragraph after the existing "PyPI cache lag" note:
 
-  - id: inline-ddl-outside-migrations-grep-audit
-    classification_hint: global
-    rationale: |
-      rules/schema-migration.md Rule 1 already says "DDL outside
-      migrations is BLOCKED" but no /redteam mechanical sweep enforces
-      it. Add explicit grep audit for `CREATE TABLE` / `ALTER TABLE` /
-      `DROP TABLE` outside `migrations/` directories. Three-way drift
-      detection (spec ↔ migration ↔ application code) for any
-      workstream touching a migrated table.
-    why: |
-      ModelRegistry shipped inline `CREATE TABLE IF NOT EXISTS
-      _kml_model_versions` for ~3 months; migration 0002 owned the
-      same table with different columns; spec §5A.2 had a third
-      schema. Three-way drift was invisible until a user hit the
-      no-op path (#699).
-    likely_placement: |
-      Audit protocol extension to rules/schema-migration.md § Audit OR
-      new spec-compliance check in skills/16-validation-patterns/.
-    origin: workspaces/kailash-ml-1.5.x-followup/journal/0004-DISCOVERY-three-way-schema-drift-mandates-migration-0005.md
-    cross_sdk: applies to both kailash-py and kailash-rs
+        **`uv` index-cache override**: when `pypi.org/pypi/<pkg>/<ver>/json`
+        returns the new metadata BUT `uv pip install "<pkg>==<ver>"` reports
+        `No solution found ... no version of <pkg>==<ver>`, the gap is
+        `uv`'s local index cache, not PyPI. Pass `--refresh` to force a
+        re-fetch: `uv pip install --refresh "<pkg>==<ver>"`. The pip-direct
+        path (`/tmp/verify/bin/pip install ...`) does not need this flag
+        because pip's index TTL is shorter, but the
+        build-repo-release-discipline standard is `uv` per
+        `python-environment.md` Rule 1, so `--refresh` is the documented
+        unblocker for the install-verification step.
 
-  - id: brief-claim-verification-protocol
-    classification_hint: global
-    rationale: |
-      `/analyze` MUST run a brief-verification sweep when issue count
-      ≥ 3. Every factual claim in the brief tagged with file:line
-      citations is independently re-grep'd by parallel deep-dive
-      agents. Inaccuracies recorded in journal AND architecture plan
-      as the gate before /todos.
-    why: |
-      kailash-ml-1.5.x-followup brief had THREE distinct factual
-      inaccuracies (issue #699 root-cause framing, issue #700 file
-      path, issue #701 silent-drop scope) caught only because three
-      parallel deep-dive agents independently verified. Single-agent
-      analysis would have inherited the wrong framing into /todos.
-    likely_placement: |
-      Extension to skills/analyze OR new rules/brief-verification.md.
-      Companion update to rules/agents.md § Parallel Execution.
-    origin: workspaces/kailash-ml-1.5.x-followup/journal/0001-DISCOVERY-brief-root-cause-incorrect-on-three-issues.md
-    cross_sdk: meta-rule about COC analyze phase; applies to all SDKs
-
-  - id: silent-drop-kwargs-as-zero-tolerance-rule-3
-    classification_hint: global
-    rationale: |
-      A documented kwarg accepted in the public signature but with
-      zero effect on the function body IS the silent-fallback failure
-      mode at API surface level. Add explicit subclause "3c: Kwargs
-      accepted but unused" naming the pattern alongside `except: pass`
-      and `except Exception: return None`.
-    why: |
-      `diagnose(model, kind="dl", data=loader)` accepted `data=` in
-      its public signature, documented in spec §3.1 as a DataLoader
-      union member, and silently dropped it on the kind="dl" branch.
-      DLDiagnostics had no method consuming a DataLoader. The kwarg's
-      existence was a lie. (#701)
-    likely_placement: |
-      Extension to rules/zero-tolerance.md Rule 3 with explicit
-      subclause "3c".
-    origin: workspaces/kailash-ml-1.5.x-followup/02-plans/03-codify-candidates.md § 4
-    cross_sdk: structural; Python kwargs more vulnerable than Rust
-
-  - id: accepted-literals-without-dispatch-as-rule-2
-    classification_hint: global
-    rationale: |
-      Accepting a literal in a Literal[...]/Enum dispatch parameter
-      AND not having a branch for it IS the same failure mode class
-      as Rule 2's "fake X" patterns (fake encryption, fake transaction,
-      fake health). Add "fake dispatch" subentry to Rule 2 + /redteam
-      grep protocol that AST-walks the dispatcher to confirm every
-      accepted literal has a branch.
-    why: |
-      `_wrappers.py:474-485` accepted `clustering`, `alignment`, `llm`,
-      `agent` as valid `kind` literals. None had a dispatch branch —
-      every one fell through to DLDiagnostics. Documented in spec as
-      supported, silently broken in practice. (#701 bonus finding)
-    likely_placement: |
-      Extension to rules/zero-tolerance.md Rule 2 § Extended BLOCKED
-      Patterns with "fake dispatch" subentry.
-    origin: workspaces/kailash-ml-1.5.x-followup/journal/0001-DISCOVERY-brief-root-cause-incorrect-on-three-issues.md § "bonus finding"
-    cross_sdk: Rust enum match exhaustiveness covers this; &str dispatch does not
-
-deferred_to_next_cycle:
-  - "git.md is now 295 LOC after this addition — exceeds the
-    rule-authoring.md MUST NOT 200-line guidance. Pre-existing overflow;
-    extraction debt for git.md (and the prior-cycle agents.md / testing.md
-    overflows) remains a future codify cycle. The new rule is load-bearing
-    MUST content, not extraction-eligible reference material."
-
-  - "Sibling destructive-git operations not covered: `git checkout --force`,
-    `git checkout -- <path>`, `git clean -fd`. The system prompt's
-    'destructive operations' guardrail covers them at session level, but
-    the same structural-confirmation discipline could be made loud and
-    linguistic via dedicated MUST clauses. Out of scope for this rule per
-    focus discipline; revisit if the failure modes recur."
+origin_session_artifacts:
+  prs_merged: [769, 770, 771]
+  pypi_published:
+    - kailash 2.13.2
+    - kailash-dataflow 2.7.3
+  rule_edits_landed_locally:
+    - .claude/rules/git.md
+    - .claude/rules/build-repo-release-discipline.md
+  session_notes: .session-notes
+  related_journal:
+    - "(none — narrow tooling quirks; not journal-worthy individually)"
