@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] — 2026-05-02 — LlmDeployment.supports() + register_bedrock_region
+
+Cross-SDK parity with kailash-rs PR #725 (`CapabilityMatrix::for_preset`)
+and PR #726 (`LlmDeployment::register_bedrock_region`). Both build on the
+`preset_name` field landed in 2.15.0 (#761/#762).
+
+### Added
+
+- **`LlmDeployment.supports() -> dict[str, bool]` capability negotiation matrix (closes #763; cross-SDK parity with kailash-rs PR #725).** Returns a five-key dict (`tools`, `vision`, `batch`, `caching`, `audio`) describing what the deployment's wire protocol + endpoint surface CAN carry. Per-preset rows are byte-identical to kailash-rs `CapabilityMatrix::for_preset` per `rules/cross-sdk-inspection.md` § 3a so cross-SDK callers see the same capability bits for the same preset name. Fail-closed default (`rules/security.md` § Fail-Closed): unknown / future preset names AND manual constructions whose `preset_name` is `None` return all-False — adding a new preset constructor without wiring its capability row in `kaizen.llm.capabilities._PRESET_CAPABILITIES` leaves the new deployment marked uncapable until the wiring lands. Returned dicts are independent copies; mutating one cannot corrupt the matrix table or another caller's result. Per-model gating (e.g. `gpt-4o` supports vision but `gpt-3.5-turbo` does not) remains the caller's responsibility — the matrix reports the deployment surface, not per-model capability. New module `kaizen.llm.capabilities` (`for_preset`, `ALL_FALSE_CAPABILITIES`, `CAPABILITY_KEYS`).
+- **`LlmDeployment.register_bedrock_region(region)` runtime override (closes #764; cross-SDK parity with kailash-rs PR #726).** Hatch-of-last-resort for operators on a newly-published AWS Bedrock region not yet in `BEDROCK_SUPPORTED_REGIONS` (the canonical fix is a kailash-py release that adds the region to the static set; this hatch covers the days/weeks before that release lands). Process-local registry (NOT shared across replicas — operators behind a load balancer MUST register on every replica at boot). Idempotent (repeated registration is a no-op). Format-validated against `^[a-z]{2,3}-[a-z]+-\d+$` (byte-identical regex to kailash-rs); malformed input raises the new typed `kaizen.llm.auth.aws.InvalidRegionFormat`, distinct from `RegionNotAllowed` (well-formed-but-unknown). Static allowlist short-circuits first; runtime registry is consulted only for regions not in `BEDROCK_SUPPORTED_REGIONS`. Thread-safe — copy-on-write `frozenset` swap under `threading.RLock`; readers are lock-free. Kailash-rs gates this behind `cargo feature = "bedrock-region-override"` (default OFF); Python is single-feature-set, so the function exists unconditionally and the call site IS the explicit opt-in.
+- **`InvalidRegionFormat` typed error in `kaizen.llm.auth.aws.__all__`.** Distinct from `RegionNotAllowed` so operators can grep "I typo'd" vs "kailash-py hasn't released this region yet" — two-tier signaling per kailash-rs PR #726.
+
+### Tested
+
+- `tests/unit/llm/test_supports_capability_matrix.py` — 13 tests covering shape (five-key dict, all booleans), provider-distinct matrices for openai / anthropic / ollama / perplexity / bedrock_claude (issue AC: ≥3 presets), fail-closed for unknown preset names AND manual `preset_name=None` constructions, returned-dict independence (mutation cannot corrupt the table), compatible-preset inheritance from openai / anthropic rows (#761/#762), and a parametrized cross-SDK row-completeness sweep across 19 documented presets.
+- `tests/unit/llm/auth/test_register_bedrock_region.py` — 13 tests covering static-allowlist short-circuit, registered-region validates, registered-region flows through `bedrock_claude(region, auth)` (issue AC), idempotency, malformed-input format rejection (10 parametrized cases mirroring kailash-rs `invalid_format_rejected`), non-string type-confusion rejection, two-tier `InvalidRegionFormat` vs `RegionNotAllowed` signal isolation, classmethod attachment on `LlmDeployment`, and a 16-thread concurrent registration / read soak test for thread-safety.
+
 ## [2.15.0] — 2026-05-02 — LlmDeployment escape-hatch presets + `preset_name` retrofit
 
 Minor bump. Two cross-SDK parity issues close together:
