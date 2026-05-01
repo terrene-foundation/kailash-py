@@ -27,6 +27,7 @@ shard (W33). Callers do:
 from __future__ import annotations
 
 from kailash_ml.serving._types import InferenceServerProtocol, ServeHandle, ServeStatus
+from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
 from kailash_ml.serving.server import (
     ALLOWED_CHANNELS,
     ALLOWED_RUNTIMES,
@@ -43,6 +44,8 @@ __all__ = [
     "InferenceServerProtocol",
     "ServeHandle",
     "ServeStatus",
+    # 1.1.x back-compat shim (GH #700; subpackage export GH #741)
+    "MultiModelAdapter",
     # Constants
     "ALLOWED_CHANNELS",
     "ALLOWED_RUNTIMES",
