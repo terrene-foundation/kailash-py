@@ -1,5 +1,21 @@
 # DataFlow Changelog
 
+## [2.7.4] — 2026-05-01 — Declare `psycopg2-binary` as baseline dependency (#753)
+
+Patch release closing issue #753. The synchronous DDL / migration path (`SyncDDLExecutor._get_postgresql_connection`, `MigrationConnectionManager._connect_with_retry`, `dataflow.core.pool_utils._is_postgresql_url`) imports `psycopg2` to bootstrap registry tables and run `auto_migrate=True` against PostgreSQL. The package declared `asyncpg` (covering runtime DML) but did NOT declare `psycopg2` / `psycopg2-binary` as a baseline dep nor as an optional extra. Every fresh install pointed at a PostgreSQL `DATABASE_URL` failed at the first `auto_migrate` trigger with `ModuleNotFoundError: No module named 'psycopg2'`, then crashed downstream DML with `relation "<table>" does not exist` because the registry/schema bootstrap silently failed earlier in the stack trace.
+
+### Fixed
+
+- **#753 — `psycopg2-binary>=2.9` added to baseline `dependencies`.** Treatment matches the existing baseline-driver pattern (`asyncpg`, `aiosqlite`, `aiomysql`, `motor`, `pymongo` are all baseline) — DataFlow bundles all DB drivers so users pick which they use; the asymmetric "asyncpg baseline + psycopg2 missing" was a packaging bug, not a design choice.
+
+### Tests
+
+- `tests/regression/test_issue_753_psycopg2_dep_declared.py` — structural regression covering: (a) `pyproject.toml::dependencies` declares `psycopg2-binary` (catches a future "dep cleanup" that removes it without test signal); (b) `import psycopg2` resolves at module-scope from the dataflow package; (c) `SyncDDLExecutor._get_postgresql_connection` no longer raises `ImportError` when invoked against a postgres URL.
+
+### Cross-SDK
+
+- N/A — kailash-rs uses `tokio_postgres` / `sqlx` natively and has no equivalent Python-driver-declaration failure mode.
+
 ## [2.7.3] — 2026-05-01 — `@db.model` accepts parameterized generics on Python 3.11+ (#768)
 
 Patch release closing issue #768. `FieldTypeProcessor._resolve_type` returned parameterized builtin generics (`list[str]`, `dict[str, Any]`, `typing.List[str]`, PEP 604 `list[str] | None`) verbatim. The next `isinstance(value, expected_type)` call raised `TypeError: isinstance() argument 2 cannot be a parameterized generic` on Python 3.11+, crashing every CRUD operation against models that used the standard, idiomatic form of list / dict / tuple annotations.
