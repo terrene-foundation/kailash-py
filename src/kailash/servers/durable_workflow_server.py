@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from ..middleware.gateway.checkpoint_manager import CheckpointManager
 from ..middleware.gateway.deduplicator import RequestDeduplicator
@@ -239,6 +239,33 @@ class DurableWorkflowServer(WorkflowServer):
 
                 # Update state to completed
                 durable_request.state = RequestState.COMPLETED
+
+                # Streaming responses (SSE, chunked, file streams, gRPC streaming)
+                # cannot be buffered without breaking the protocol. Draining
+                # ``response.body_iterator`` for an open SSE stream never
+                # returns; for a finite stream it captures the bytes and
+                # replays them on cache hit as a JSON envelope, not as a
+                # stream. Detect both ``StreamingResponse`` instances AND
+                # bare ``Response`` objects whose handler set
+                # ``content-type: text/event-stream``, then short-circuit.
+                # See issue #767.
+                content_type = response.headers.get("content-type", "")
+                if isinstance(response, StreamingResponse) or content_type.startswith(
+                    "text/event-stream"
+                ):
+                    # Emit completion event for the request lifecycle, but
+                    # skip both the body drain and the dedup cache step —
+                    # the response is already on the wire.
+                    await self.event_store.append(
+                        EventType.REQUEST_COMPLETED,
+                        request_id,
+                        {
+                            "status_code": response.status_code,
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "streaming": True,
+                        },
+                    )
+                    return response
 
                 # Cache response for deduplication
                 if response.status_code < 400:

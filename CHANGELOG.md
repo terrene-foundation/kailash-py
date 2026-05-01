@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.2] — 2026-05-01 — `durability_middleware` passes through SSE / `StreamingResponse` (#767)
+
+Patch release closing issue #767. `DurableWorkflowServer._add_durability_middleware` (the durability middleware that `EnterpriseWorkflowServer` and `Nexus()` mount on every 2xx response) drained `response.body_iterator` before forwarding any bytes. For `StreamingResponse` (SSE, chunked transfer, file streams, gRPC streaming) this destroyed streaming semantics on the first request and replayed the captured stream as a JSON envelope on every cache hit, breaking every SSE / `EventSource` client.
+
+### Fixed
+
+- **#767 — `durability_middleware` short-circuits before drain when the response is streaming.** Detects `isinstance(response, StreamingResponse)` AND `content-type: text/event-stream` so a bare `Response(content=..., media_type="text/event-stream")` (used by some handlers) is also handled correctly. The completion event still fires (with `streaming=true`) so request lifecycle observability is preserved; only the body drain and the dedup cache step are skipped, since neither is meaningful for an open-ended stream.
+
+### Tests
+
+- `tests/regression/test_issue_767_durability_sse_passthrough.py` — 4 tests: (1) first SSE request keeps `text/event-stream` content-type and full SSE body; (2) bare `Response` with `content-type: text/event-stream` also passes through; (3) cache-hit replay keeps streaming semantics — pre-fix the second identical SSE GET returned `JSONResponse(content={"content": ..., "status_code": 200, ...})` at `application/json`, breaking every SSE client; (4) JSON / non-streaming responses retain the original drain + dedup-cache behaviour. Pre-fix verification: cache-replay test asserts `application/json` on second GET (failure mode); post-fix all 4 pass.
+
+### Cross-SDK
+
+- kailash-rs may carry the same architectural pattern in its durable-server middleware. Cross-SDK loop closure pending explicit human approval per `rules/upstream-issue-hygiene.md` MUST Rule 1.
+
 ## [2.13.1] — 2026-04-30 — TraceEvent timestamp microsecond padding (#731)
 
 Patch — pins the `TraceEvent` timestamp string to a fixed-width microsecond field so cross-tool log correlation no longer drifts when sub-millisecond events are emitted.
