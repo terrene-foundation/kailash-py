@@ -1,6 +1,6 @@
 {
   "spec_version": "1.0",
-  "description": "Cross-SDK canonical fixtures for TraceEvent.to_dict() byte-equality + fingerprint stability between kailash-py and kailash-rs. Generated 2026-04-30 from the corrected isoformat(timespec=microseconds) path. Source: kailash-py issue #731 fix; vector inputs are reproducible from the embedded `input_repr` field.",
+  "description": "Cross-SDK canonical fixtures for TraceEvent.to_dict() byte-equality + fingerprint stability between kailash-py and kailash-rs. Generated 2026-04-30 from the corrected isoformat(timespec=microseconds) path. Source: kailash-py issue #731 fix (V1/V2/V3) + #756 Unicode pin (V4 BMP non-ASCII, V5 above-BMP/emoji surrogate pairs). Vector inputs are reproducible from the embedded `input_repr` field. The `ensure_ascii=True` contract requires non-ASCII codepoints render as \\uXXXX escapes (U+FFFF and below) and surrogate pairs (above U+FFFF) per RFC 8259 §7.",
   "vectors": [
     {
       "name": "V1_zero_microsecond",
@@ -53,6 +53,35 @@
       },
       "expected_canonical_json": "{\"agent_id\":\"agent-V3\",\"completion_tokens\":50,\"cost_microdollars\":2500,\"duration_ms\":1234.5,\"envelope_id\":\"env-V3\",\"event_id\":\"evt-V3\",\"event_type\":\"agent.run.end\",\"llm_model\":\"gpt-4o\",\"parent_event_id\":null,\"payload\":null,\"payload_hash\":\"sha256:deadbeef\",\"prompt_tokens\":100,\"run_id\":\"run-V3\",\"span_id\":\"span-V3\",\"status\":\"ok\",\"tenant_id\":\"tenant-V3\",\"timestamp\":\"2026-12-31T23:59:59.999999+00:00\",\"tool_name\":null,\"trace_id\":\"trace-V3\"}",
       "expected_fingerprint": "ff114cf1a11dd6b9296644fde32e95a6a560839f5d0dbcc47a8846c226b7f5a1"
+    },
+    {
+      "name": "V4_bmp_non_ascii_agent_id",
+      "input_repr": {
+        "event_id": "evt-v4-bmp",
+        "run_id": "run-v4",
+        "agent_id": "agent-café-中文",
+        "cost_microdollars": 0,
+        "event_type": "agent.run.start",
+        "timestamp": "2026-04-20T12:00:00.000000+00:00"
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-caf\\u00e9-\\u4e2d\\u6587\",\"completion_tokens\":null,\"cost_microdollars\":0,\"duration_ms\":null,\"envelope_id\":null,\"event_id\":\"evt-v4-bmp\",\"event_type\":\"agent.run.start\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":null,\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-v4\",\"span_id\":null,\"status\":null,\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.000000+00:00\",\"tool_name\":null,\"trace_id\":null}",
+      "expected_fingerprint": "67bade44e4044933396f8035e725929a4aa54ae274d4e2058871367a93abe95b"
+    },
+    {
+      "name": "V5_above_bmp_emoji_tool_name",
+      "input_repr": {
+        "event_id": "evt-v5-above-bmp",
+        "run_id": "run-v5",
+        "agent_id": "agent-v5",
+        "cost_microdollars": 0,
+        "tool_name": "🎉🚀",
+        "duration_ms": 10.0,
+        "event_type": "tool.call.end",
+        "timestamp": "2026-04-20T12:00:00.000000+00:00",
+        "status": "ok"
+      },
+      "expected_canonical_json": "{\"agent_id\":\"agent-v5\",\"completion_tokens\":null,\"cost_microdollars\":0,\"duration_ms\":10.0,\"envelope_id\":null,\"event_id\":\"evt-v5-above-bmp\",\"event_type\":\"tool.call.end\",\"llm_model\":null,\"parent_event_id\":null,\"payload\":null,\"payload_hash\":null,\"prompt_tokens\":null,\"run_id\":\"run-v5\",\"span_id\":null,\"status\":\"ok\",\"tenant_id\":null,\"timestamp\":\"2026-04-20T12:00:00.000000+00:00\",\"tool_name\":\"\\ud83c\\udf89\\ud83d\\ude80\",\"trace_id\":null}",
+      "expected_fingerprint": "2d372a1a42a2221ba3fb014062d735b076d11371b0f1390919b53fe908a23d1f"
     }
   ]
 }

@@ -141,7 +141,9 @@ class TestCrossSDKFixtureParity:
 
     def test_fixture_loads(self, fixture: dict) -> None:
         assert fixture["spec_version"] == "1.0"
-        assert len(fixture["vectors"]) >= 3
+        # V1/V2/V3 (#731 microsecond padding) + V4/V5 (#756 Unicode pin).
+        # Floor stays >= so future cross-SDK additions land cleanly.
+        assert len(fixture["vectors"]) >= 5
 
     def test_every_vector_canonical_json_byte_equal(self, fixture: dict) -> None:
         for v in fixture["vectors"]:

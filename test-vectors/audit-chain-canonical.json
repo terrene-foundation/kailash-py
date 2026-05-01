@@ -1,0 +1,41 @@
+{
+  "spec_version": "1.0",
+  "description": "Cross-SDK canonical fixtures for AuditAnchor.compute_hash() byte-equality + SHA-256 hex digest stability between kailash-py and kailash-rs (per `kailash-rs#449` audit-chain canonical-input contract). Source: kailash-py issue #757 (U1 BMP non-ASCII, U2 above-BMP/emoji surrogate pairs). Vector inputs are reproducible from the embedded `input_repr` field. The canonical content is `{anchor_id}:{sequence}:{previous_hash_or_GENESIS_HASH}:{agent_id}:{action}:{verification_level}:{envelope_id_or_empty}:{result}:{iso8601_+00:00}[:{metadata_json_sorted_compact_ensure_ascii}]`. The `ensure_ascii=True` contract in metadata serialization requires non-ASCII codepoints render as \\uXXXX escapes (U+FFFF and below) and surrogate pairs (above U+FFFF) per RFC 8259 §7.",
+  "genesis_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "vectors": [
+    {
+      "name": "U1_bmp_metadata_key_and_value",
+      "input_repr": {
+        "anchor_id": "anc-u1-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u1",
+        "action": "envelope_created",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u1",
+        "result": "success",
+        "timestamp": "2026-01-15T11:00:00+00:00",
+        "metadata": { "role": "café", "中文": "value" }
+      },
+      "expected_canonical_input": "anc-u1-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u1:envelope_created:AUTO_APPROVED:env-u1:success:2026-01-15T11:00:00+00:00:{\"role\":\"caf\\u00e9\",\"\\u4e2d\\u6587\":\"value\"}",
+      "expected_sha256": "6946e734daa8279d4dc173918109995e0d10b647a7d3cd0b36aeb4114e8e12c3"
+    },
+    {
+      "name": "U2_above_bmp_emoji_metadata_value",
+      "input_repr": {
+        "anchor_id": "anc-u2-001",
+        "sequence": 0,
+        "previous_hash": null,
+        "agent_id": "agent-u2",
+        "action": "envelope_created",
+        "verification_level": "AUTO_APPROVED",
+        "envelope_id": "env-u2",
+        "result": "success",
+        "timestamp": "2026-01-15T12:00:00+00:00",
+        "metadata": { "celebration": "🎉🚀" }
+      },
+      "expected_canonical_input": "anc-u2-001:0:0000000000000000000000000000000000000000000000000000000000000000:agent-u2:envelope_created:AUTO_APPROVED:env-u2:success:2026-01-15T12:00:00+00:00:{\"celebration\":\"\\ud83c\\udf89\\ud83d\\ude80\"}",
+      "expected_sha256": "4bba3681171049d96f6ba5863ae33dafdfa6bc0d82e26dca5267f21021872427"
+    }
+  ]
+}
