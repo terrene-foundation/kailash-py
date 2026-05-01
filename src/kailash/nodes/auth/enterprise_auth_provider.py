@@ -69,7 +69,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             "sso",
             "mfa",
             "directory",
-            "passwordless",
             "social",
             "api_key",
             "jwt",
@@ -446,11 +445,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 method=credentials.get("mfa_method", "totp"),
             )
 
-        elif auth_method == "passwordless":
-            return await self._authenticate_passwordless(
-                credentials, user_id, risk_context
-            )
-
         elif auth_method == "social":
             return await self._authenticate_social(credentials, user_id, risk_context)
 
@@ -460,26 +454,18 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         elif auth_method == "jwt":
             return await self._authenticate_jwt(credentials, user_id, risk_context)
 
-        elif auth_method == "certificate":
-            return await self._authenticate_certificate(
-                credentials, user_id, risk_context
+        elif auth_method in {"passwordless", "certificate"}:
+            raise ValueError(
+                f"Authentication method {auth_method!r} is not implemented in the "
+                f"Core SDK class — it requires protocol-specific cryptography "
+                f"(WebAuthn/FIDO2 or X.509 client certificate validation). "
+                f"Subclass EnterpriseAuthProviderNode and override "
+                f"_perform_authentication() to add this method, or use a "
+                f"specialized auth provider package."
             )
 
         else:
             raise ValueError(f"Unsupported authentication method: {auth_method}")
-
-    async def _authenticate_passwordless(
-        self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Authenticate using passwordless methods (WebAuthn, FIDO2).
-
-        Requires a WebAuthn library (e.g., py_webauthn) for proper
-        assertion validation against registered credentials.
-        """
-        raise NotImplementedError(
-            "WebAuthn/FIDO2 authentication requires a WebAuthn library "
-            "(e.g., py_webauthn). Provide a concrete implementation."
-        )
 
     async def _authenticate_social(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
@@ -584,19 +570,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 return {"authenticated": False, "error": "Invalid JWT format"}
         except Exception as e:
             return {"authenticated": False, "error": f"JWT validation failed: {e}"}
-
-    async def _authenticate_certificate(
-        self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Authenticate using client certificate.
-
-        Requires a cryptography library (e.g., ``cryptography``) for proper
-        certificate parsing, CA chain validation, and revocation checking.
-        """
-        raise NotImplementedError(
-            "Client certificate authentication requires a cryptography library "
-            "for CA validation and revocation checking. Provide a concrete implementation."
-        )
 
     async def _validate_social_token(
         self, provider: str, access_token: str
@@ -758,18 +731,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "success": mfa_result.get("verified", False),
                 "factor": factor,
                 "mfa_result": mfa_result,
-            }
-
-        elif factor == "passwordless":
-            # Handle passwordless factor
-            passwordless_result = await self._authenticate_passwordless(
-                credentials, user_id, risk_context
-            )
-
-            return {
-                "success": passwordless_result.get("authenticated", False),
-                "factor": factor,
-                "passwordless_result": passwordless_result,
             }
 
         else:
@@ -944,12 +905,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     ) -> Dict[str, Any]:
         """Assess risk based on user behavior patterns.
 
-        Requires historical login data and a behavioral analysis engine.
+        Default implementation returns zero risk. Subclasses backed by a
+        user activity store or behavioral analysis engine should override
+        this method to inspect ``risk_context`` against historical patterns
+        (recent IPs, devices, login times) and return a non-zero score.
         """
-        raise NotImplementedError(
-            "Behavioral risk assessment requires historical pattern analysis. "
-            "Provide a concrete implementation backed by a user activity store."
-        )
+        return {"score": 0.0, "factors": []}
 
     async def _ai_risk_assessment(
         self, user_id: str, risk_context: Dict[str, Any], existing_factors: List[str]

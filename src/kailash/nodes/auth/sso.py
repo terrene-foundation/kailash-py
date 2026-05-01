@@ -19,7 +19,6 @@ import json
 import secrets
 import time
 import uuid
-import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -29,22 +28,6 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
-
-
-def _validate_saml_response(saml_response_data: str) -> Dict[str, Any]:
-    """Module-level SAML response validation function for test compatibility.
-
-    Args:
-        saml_response_data: Base64 encoded SAML response
-
-    Returns:
-        Dict containing validation results
-    """
-    # In production, this would use proper SAML libraries like python3-saml
-    raise NotImplementedError(
-        "SAML response validation requires a SAML library (e.g., python3-saml). "
-        "Install the library and provide a concrete implementation."
-    )
 
 
 @register_node()
@@ -71,7 +54,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     ):
         # Set attributes before calling super().__init__()
         self.name = name
-        self.providers = providers or ["saml", "oauth2", "oidc", "ldap"]
+        self.providers = providers or ["oauth2", "oidc"]
         self.saml_settings = saml_settings or {}
         self.oauth_settings = oauth_settings or {}
         self.ldap_settings = ldap_settings or {}
@@ -597,60 +580,26 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     async def _handle_callback(
         self, provider: str, request_data: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
-        """Handle SSO callback from provider."""
-        if provider == "saml":
-            return await self._handle_saml_callback(request_data, **kwargs)
-        elif provider in ["oauth2", "oidc", "azure", "google", "okta"]:
+        """Handle SSO callback from provider.
+
+        SAML and LDAP require protocol-specific cryptography (XML-DSig
+        canonicalization for SAML, LDAP bind/search for directory) that is
+        not implemented in the Core SDK. Subclass and override
+        ``_handle_callback`` to add ``provider="saml"`` or ``provider="ldap"``
+        support backed by ``python3-saml`` / ``ldap3``.
+        """
+        if provider in ["oauth2", "oidc", "azure", "google", "okta"]:
             return await self._handle_oauth_callback(provider, request_data, **kwargs)
-        elif provider == "ldap":
-            return await self._handle_ldap_callback(request_data, **kwargs)
+        elif provider in {"saml", "ldap"}:
+            raise ValueError(
+                f"SSO provider {provider!r} is not implemented in the Core SDK class — "
+                f"it requires protocol-specific cryptography "
+                f"({'XML-DSig validation' if provider == 'saml' else 'LDAP bind/search'}). "
+                f"Subclass SSOAuthenticationNode and override _handle_callback() to add "
+                f"this provider, or use a specialized auth provider package."
+            )
         else:
             raise ValueError(f"Unsupported callback provider: {provider}")
-
-    async def _handle_saml_callback(
-        self, request_data: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
-        """Handle SAML assertion callback."""
-        saml_response = request_data.get("SAMLResponse")
-        if not saml_response:
-            raise ValueError("Missing SAML response")
-
-        # For test compatibility, use the module-level validation function
-        try:
-            validation_result = _validate_saml_response(saml_response)
-
-            if not validation_result.get("authenticated"):
-                raise ValueError(
-                    f"SAML validation failed: {validation_result.get('error', 'Unknown validation error')}"
-                )
-        except Exception as e:
-            # Re-raise with validation context
-            raise ValueError(f"SAML validation failed: {str(e)}")
-
-        # Extract user attributes from validation result
-        user_attributes = validation_result.get("attributes", {})
-
-        # Map attributes to internal format
-        mapped_attributes = self._map_attributes(user_attributes, "saml")
-
-        # Provision user if enabled
-        if self.enable_jit_provisioning:
-            user_result = await self._provision_user(mapped_attributes, "saml")
-        else:
-            user_result = {"user_id": mapped_attributes.get("email")}
-
-        # Create session
-        session_result = await self._create_sso_session(
-            user_result["user_id"], "saml", mapped_attributes  # type: ignore[reportArgumentType]
-        )
-
-        return {
-            "provider": "saml",
-            "user_attributes": mapped_attributes,
-            "user_id": user_result["user_id"],
-            "session_id": session_result["session_id"],
-            "authenticated": True,
-        }
 
     async def _handle_oauth_callback(
         self, provider: str, request_data: Dict[str, Any], **kwargs
@@ -698,44 +647,6 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "session_id": session_result["session_id"],
             "tokens": token_result,
             "access_token": token_result.get("access_token"),  # For test compatibility
-            "authenticated": True,
-        }
-
-    async def _handle_ldap_callback(
-        self, request_data: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
-        """Handle LDAP authentication."""
-        username = request_data.get("username")
-        password = request_data.get("password")
-
-        if not username or not password:
-            raise ValueError("Username and password required for LDAP authentication")
-
-        # Authenticate with LDAP (simulation - in production use actual LDAP library)
-        ldap_result = await self._authenticate_ldap(username, password)
-
-        if not ldap_result["authenticated"]:
-            raise ValueError("LDAP authentication failed")
-
-        # Map LDAP attributes
-        mapped_attributes = self._map_attributes(ldap_result["attributes"], "ldap")
-
-        # Provision user if enabled
-        if self.enable_jit_provisioning:
-            user_result = await self._provision_user(mapped_attributes, "ldap")
-        else:
-            user_result = {"user_id": username}
-
-        # Create session
-        session_result = await self._create_sso_session(
-            user_result["user_id"], "ldap", mapped_attributes
-        )
-
-        return {
-            "provider": "ldap",
-            "user_attributes": mapped_attributes,
-            "user_id": user_result["user_id"],
-            "session_id": session_result["session_id"],
             "authenticated": True,
         }
 
@@ -835,40 +746,6 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 }
             else:
                 raise ValueError(f"User info request failed: {str(e)}")
-
-    async def _authenticate_ldap(self, username: str, password: str) -> Dict[str, Any]:
-        """Authenticate user against LDAP/Active Directory.
-
-        Requires an LDAP library (e.g., python-ldap or ldap3).
-        """
-        raise NotImplementedError(
-            "LDAP authentication requires an LDAP library (e.g., python-ldap, ldap3). "
-            "Install the library and provide a concrete implementation."
-        )
-
-    def _extract_saml_attributes(self, saml_root: ET.Element) -> Dict[str, Any]:
-        """Extract user attributes from SAML assertion."""
-        attributes = {}
-
-        # Find attribute statements
-        for attr_stmt in saml_root.findall(
-            ".//{urn:oasis:names:tc:SAML:2.0:assertion}AttributeStatement"
-        ):
-            for attr in attr_stmt.findall(
-                ".//{urn:oasis:names:tc:SAML:2.0:assertion}Attribute"
-            ):
-                name = attr.get("Name", "")
-                values = []
-                for value in attr.findall(
-                    ".//{urn:oasis:names:tc:SAML:2.0:assertion}AttributeValue"
-                ):
-                    if value.text:
-                        values.append(value.text)
-
-                if values:
-                    attributes[name] = values[0] if len(values) == 1 else values
-
-        return attributes
 
     def _map_attributes(
         self, raw_attributes: Dict[str, Any], provider: str

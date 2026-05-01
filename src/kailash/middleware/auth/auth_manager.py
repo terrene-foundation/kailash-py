@@ -11,7 +11,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import jwt
 from fastapi import Depends
@@ -404,21 +404,3 @@ class MiddlewareAuthManager:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
         return verify_user
-
-
-# Convenience function for creating auth dependencies
-def require_auth(permissions: List[str] = None):  # type: ignore[reportArgumentType]
-    """
-    Create authentication dependency with required permissions.
-
-    Args:
-        permissions: List of required permissions
-
-    Returns:
-        FastAPI dependency
-    """
-    # This would use a global auth manager instance
-    # In practice, this would be configured at app startup
-    raise NotImplementedError(
-        "Use auth_manager.get_current_user_dependency(permissions) instead"
-    )

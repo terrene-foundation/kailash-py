@@ -1824,21 +1824,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
 
-    def _send_sms(self, phone: str, message: str) -> bool:
-        """Send SMS message (for test compatibility).
-
-        Args:
-            phone: Phone number
-            message: SMS message
-
-        Returns:
-            True if successful
-        """
-        raise NotImplementedError(
-            "SMS sending requires an SMS gateway integration (e.g., Twilio, AWS SNS). "
-            "Provide a concrete _send_sms() implementation or configure an SMS provider."
-        )
-
     def _send_email_code(self, email: str, code: str, user_id: str) -> None:
         """Send email verification code.
 
