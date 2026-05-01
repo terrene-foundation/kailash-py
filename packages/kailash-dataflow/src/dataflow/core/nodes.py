@@ -1354,6 +1354,31 @@ class NodeGenerator:
                                 f"Failed to ensure table exists for model {self.model_name}"
                             )
                     except Exception as e:
+                        # Issue #759 (DPI-A): the engine raises
+                        # DDLFailedError from _check_failed_ddl /
+                        # _execute_ddl[_async] when auto_migrate is in
+                        # fail-fast mode. That typed exception is the
+                        # documented circuit-breaker (issue #696) and
+                        # MUST propagate to the caller — swallowing it
+                        # here defeats the express layer's typed-error
+                        # propagation and re-introduces the silent
+                        # retry-storm failure mode.
+                        # Other exceptions continue legacy
+                        # log-and-continue semantics (e.g. "table
+                        # already exists" races, transient adapter
+                        # connect errors that the create operation
+                        # itself can recover from).
+                        from .exceptions import DDLFailedError as _DDLFailedError
+
+                        if isinstance(e, _DDLFailedError):
+                            logger.error(
+                                "nodes.ensure_table_exists_failed_ddl_propagating",
+                                extra={
+                                    "model_name": self.model_name,
+                                    "error": str(e),
+                                },
+                            )
+                            raise
                         logger.error(
                             f"Error ensuring table exists for model {self.model_name}: {e}"
                         )
@@ -1802,6 +1827,15 @@ class NodeGenerator:
                         return fallback_record
 
                     except Exception as e:
+                        # Issue #759 (DPI-A): if the DDL circuit breaker
+                        # raised, propagate without converting to the
+                        # legacy ``{"success": False}`` dict — that
+                        # conversion is exactly what swallowed the
+                        # documented fail-fast surface end-to-end.
+                        from .exceptions import DDLFailedError as _DDLFailedError
+
+                        if isinstance(e, _DDLFailedError):
+                            raise
                         original_error = str(e)
                         logger.debug(
                             f"CREATE {self.model_name} failed with error: {original_error}"

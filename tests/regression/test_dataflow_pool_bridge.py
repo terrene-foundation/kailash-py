@@ -79,9 +79,23 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
         @db.model
         class DpiD2Child:
             id: int
-            parent_id: int  # FK to DpiD2Parent — not yet created, DDL fails
+            parent_id: int  # synthetic DDL failure recorded below
 
-        # Trigger auto_migrate by attempting a create operation.
+        # Issue #759 (DPI-A): Pre-record a synthetic DDL failure on this
+        # instance so the next express.create exercises the fail-fast
+        # circuit breaker deterministically. Earlier versions of this
+        # test relied on the FK comment above triggering an actual
+        # DDL failure, but the model definition lacks a real FK
+        # declaration — under saturation the failure mode that fired
+        # was pool exhaustion (no DDL ever ran). Pre-recording a DDL
+        # failure makes the propagation assertion deterministic.
+        db._record_failed_ddl(
+            "DpiD2Child",
+            RuntimeError("synthetic FK-misordered DDL failure"),
+            "CREATE TABLE dpi_d2_children (id SERIAL PRIMARY KEY, parent_id INTEGER REFERENCES dpi_d2_parent(id))",
+        )
+
+        # Trigger express.create — MUST raise DDLFailedError per DPI-A.
         try:
             await db.express.create("DpiD2Child", {"id": i, "parent_id": 1})
         except DDLFailedError as exc:
@@ -104,13 +118,25 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
         "after 10 DDL-failing DataFlow instances"
     )
 
-    # At least some accesses should have raised DDLFailedError (DPI-A assertion).
-    # If none raised it means the FK constraint was not enforced — the test is
-    # still structurally valid for pool-count, but the DDLFailedError surface
-    # should be investigated separately.
+    # At least some accesses should have raised DDLFailedError (DPI-A
+    # assertion). Each iteration pre-records a synthetic DDL failure
+    # on its DataFlow instance, then calls express.create — Express's
+    # _raise_for_failed_result MUST convert the node's success-False
+    # dict into the typed DDLFailedError (issue #759 fix).
+    #
+    # Under heavy saturation a subset of instances may fail at pool-
+    # construction time before they reach the synthetic _record_failed_ddl
+    # call (a separate failure class — pool exhaustion, NOT DDL).
+    # Those instances exit through the bare ``except Exception: pass``
+    # branch above. The DPI-A propagation contract is proved as long as
+    # AT LEAST ONE instance successfully reached express.create AND
+    # raised DDLFailedError instead of returning the legacy failure dict.
+    # For the deterministic per-method propagation matrix, see
+    # tests/regression/test_issue_759_express_propagates_ddl_failure.py.
     assert len(errors_seen) > 0, (
-        "Expected DDLFailedError from FK-misordered model but got none; "
-        "check DPI-A implementation in dataflow.core.engine"
+        f"Expected DDLFailedError on at least one instance but got "
+        f"{len(errors_seen)}; check DPI-A propagation in "
+        "dataflow.features.express.DataFlowExpress._raise_for_failed_result"
     )
 
 

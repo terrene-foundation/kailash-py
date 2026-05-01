@@ -519,16 +519,38 @@ class DataFlowExpress:
         error_msg = result.get("error") or "operation failed"
         # Try the typed DDL classification first: the engine already
         # recorded the failed DDL via ``_record_failed_ddl`` upstream.
+        # The engine records under TWO key shapes depending on the
+        # call path:
+        #   * single-model path (engine.py:2157, 8263) records under
+        #     model class name (``DpiD2Child``)
+        #   * bulk-DDL path (engine.py:7903, 7992, 8466) records under
+        #     extracted SQL identifier (``dpi_d2_children``) because
+        #     ``_extract_table_from_statement`` operates on raw DDL.
+        # ``_check_failed_ddl`` matches by exact key so we MUST probe
+        # both shapes; without the table-name fallback the bulk-DDL
+        # failures (the common DPI-A path) silently fall through to
+        # the generic RuntimeError and downstream callers expecting
+        # ``DDLFailedError`` (issue #759 acceptance) miss it.
         check = getattr(self._db, "_check_failed_ddl", None)
         if callable(check):
-            try:
-                check(model)  # raises DDLFailedError when applicable
-            except DDLFailedError:
-                raise
-            except Exception:
-                # If the typed check itself fails for any reason, fall
-                # through to the generic raise — never swallow.
-                pass
+            candidates = [model]
+            class_to_table = getattr(self._db, "_class_name_to_table_name", None)
+            if callable(class_to_table):
+                try:
+                    table_candidate = class_to_table(model)
+                except Exception:
+                    table_candidate = None
+                if table_candidate and table_candidate not in candidates:
+                    candidates.append(table_candidate)
+            for candidate in candidates:
+                try:
+                    check(candidate)  # raises DDLFailedError when applicable
+                except DDLFailedError:
+                    raise
+                except Exception:
+                    # If the typed check itself fails for any reason, fall
+                    # through to the generic raise — never swallow.
+                    pass
         raise RuntimeError(
             f"express.{operation} failed for model {model!r}: {error_msg}"
         )
