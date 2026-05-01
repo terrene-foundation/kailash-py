@@ -10,7 +10,6 @@ paths:
 
 # Event-Payload Classification Rules
 
-
 <!-- slot:neutral-body -->
 
 Every `DomainEvent` payload emitted from DataFlow write paths MUST be free of raw classified field values. Classified PK values (e.g. an `Account` keyed by `email` with `@classify("email", PII)`) MUST be hashed before emission; classified field names MUST NOT appear in event payloads that list mutated fields (`fields_changed` and friends).
@@ -23,7 +22,7 @@ This rule is the event-surface sibling of `rules/dataflow-classification.md` (re
 
 ### 1. Event-Emission Paths Route `record_id` Through `format_record_id_for_event`
 
-Every `_emit_write_event` / `DomainEventBus.publish` / equivalent entry point MUST pass `record_id` through `dataflow.classification.event_payload.format_record_id_for_event` (kailash-py) or the equivalent cross-SDK helper (kailash-rs v3.17.1+).
+Every `_emit_write_event` / `DomainEventBus.publish` / equivalent entry point MUST pass `record_id` through `dataflow.classification.event_payload.format_record_id_for_event` (or the equivalent helper in your SDK).
 
 ```python
 # DO — single filter point at the emitter
@@ -44,7 +43,7 @@ def _emit_write_event(self, model_name, operation, record_id=None):
 event = DomainEvent(payload={"record_id": record_id})  # leaks classified PKs
 ```
 
-**Why:** Placing the filter at every caller site (`create`, `update`, `upsert`, `delete`, every future mutation primitive) guarantees one of them drifts. A single filter point at the emitter is the only structural defense against drift. Evidence: kailash-rs BP-048 — every mutation path `create` / `update` / `upsert` / `delete` carried the same leak because each formatted `record_id` independently. Single-point fix closed all four in one commit.
+**Why:** Placing the filter at every caller site (`create`, `update`, `upsert`, `delete`, every future mutation primitive) guarantees one of them drifts. A single filter point at the emitter is the only structural defense against drift. Evidence: every mutation path `create` / `update` / `upsert` / `delete` carried the same leak because each formatted `record_id` independently. Single-point fix closed all four in one commit.
 
 ### 2. Classified String PKs Hash, Integers Pass Through, Unclassified Strings Pass Through
 
@@ -73,10 +72,10 @@ def format_record_id_for_event(policy, model_name, record_id, pk_field="id"):
 
 # DO NOT — hash everything (loses grep-ability for unclassified PKs)
 # DO NOT — hash only when MaskingStrategy is REDACT (classification itself is the signal)
-# DO NOT — use a different hash / different prefix length than the cross-SDK contract
+# DO NOT — use a different hash / different prefix length than the documented contract
 ```
 
-**Why:** The hash prefix and hex-length are intentionally identical across SDKs so a log line emitted by a Rust service and an event handled by a Python subscriber produce the same fingerprint for the same raw PK. Forensic correlation across polyglot deployments requires the prefix contract to be stable.
+**Why:** The hash prefix and hex-length are intentionally pinned so producer and consumer services produce the same fingerprint for the same raw PK. Forensic correlation across services requires the prefix contract to be stable.
 
 ### 3. Classified Field Names MUST NOT Appear In `fields_changed` Or Equivalent
 
@@ -104,7 +103,7 @@ event.payload["classified_fields_changed_count"] = classified_count
 event.payload["fields_changed"] = list(data.keys())  # leaks "email", "ssn", "salary"
 ```
 
-**Scope note — kailash-py today**: `packages/kailash-dataflow/src/dataflow/core/events.py` does NOT emit `fields_changed`. The Python event payload is `{model, operation, record_id}` only. The partition helper is a forward-compatible rule — anyone adding `fields_changed` in a future revision MUST land this helper in the same PR.
+**Scope note**: today's DataFlow event payload is `{model, operation, record_id}` only — `fields_changed` is not yet emitted. The partition helper is a forward-compatible rule — anyone adding `fields_changed` in a future revision MUST land this helper in the same PR.
 
 **Why:** Classified column names are themselves schema-level sensitive information. `observability.md` Rule 8 already mandates that schema-revealing field names stay at DEBUG / hashed in logs; event payloads reach a strictly wider audience. The partition form preserves operational visibility (the subscriber knows an audit-material change happened) without exposing which columns are classified.
 
@@ -143,9 +142,9 @@ def test_helper_hashes():
 
 **Why:** Every call site is one drift away from skipping the filter. Single-point enforcement at the emitter is the only structural defense against drift.
 
-- Use a different hash shape / prefix length than the cross-SDK contract
+- Use a different hash shape / prefix length than the documented contract
 
-**Why:** Cross-SDK forensic correlation relies on stable fingerprints. Diverging shape breaks the "same raw value → same fingerprint across Python + Rust" promise.
+**Why:** Forensic correlation across services relies on stable fingerprints. Diverging shape breaks the "same raw value → same fingerprint" promise.
 
 - Level-gate event payloads (`if debug:` etc.)
 
@@ -160,6 +159,6 @@ def test_helper_hashes():
 
 ## Origin
 
-Issue #491 (2026-04-17) — DataFlowExpress `_emit_write_event` shipped raw `record_id` to subscribers. Cross-SDK from kailash-rs v3.17.1 BP-048 commit `2e9dbf94` (Rust `format_record_id_for_event` helper). Fix: single-point filter at `DataFlowEventMixin._emit_write_event` + helper at `dataflow.classification.event_payload`. Verified by 10/10 Tier 2 integration tests at `packages/kailash-dataflow/tests/integration/security/test_event_payload_classification.py`.
+Origin: 2026-04-17 — DataFlowExpress `_emit_write_event` shipped raw `record_id` to subscribers. Fix: single-point filter at `DataFlowEventMixin._emit_write_event` + helper at `dataflow.classification.event_payload`. Verified by 10/10 Tier 2 integration tests at `tests/integration/security/test_event_payload_classification.py`.
 
 <!-- /slot:neutral-body -->

@@ -19,7 +19,7 @@ Any delegation that uses `isolation: "worktree"` MUST include the absolute workt
 
 ```python
 # DO — explicit path + verification instruction
-worktree = "/Users/me/repos/kailash-py/.claude/worktrees/agent-ml-abc123"
+worktree = "/absolute/path/to/repo/.claude/worktrees/agent-shard-abc123"
 Agent(isolation="worktree", prompt=f"""
 Working directory: {worktree}
 STEP 0 — verify: git -C {worktree} status

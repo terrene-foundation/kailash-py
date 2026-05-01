@@ -148,6 +148,6 @@ async def count(self, model: ModelInfo, filter: dict) -> int:
 - `rules/testing.md` § Tier 2 — the test tier mandated by rule 3 above.
 - `rules/zero-tolerance.md` Rule 2 — a redaction helper that exists but isn't called from the mutation path is the exact "fake classification" failure mode Rule 2 enumerates.
 
-Origin: kailash-rs commit 2e9dbf94 (2026-04-17) + gh-coc-claude-rs#51 item 3e. Pre-fix, `create()` and `upsert()` leaked classified fields in every return dict regardless of caller clearance. Cross-SDK principle — kailash-py DataFlow Express has the same architecture and is expected to carry the same gap (cross-SDK verification ticket filed separately).
+Origin: 2026-04-17 — pre-fix, `create()` and `upsert()` leaked classified fields in every return dict regardless of caller clearance.
 
 <!-- /slot:neutral-body -->

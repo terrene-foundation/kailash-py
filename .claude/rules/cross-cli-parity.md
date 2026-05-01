@@ -1,6 +1,9 @@
 ---
-priority: 0
-scope: baseline
+priority: 10
+scope: path-scoped
+paths:
+  - "**/.claude/rules/**"
+  - "**/.claude/variants/**"
 ---
 
 # Cross-CLI Parity Meta-Rule

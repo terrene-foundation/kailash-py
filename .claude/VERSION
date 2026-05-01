@@ -2,13 +2,13 @@
   "version": "1.0.5",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-04-28",
+  "updated": "2026-05-01",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.9.5",
-    "build_version": "2.9.5",
-    "synced_at": "2026-04-28T00:00:00Z",
+    "version": "2.14.0",
+    "build_version": "2.14.0",
+    "synced_at": "2026-05-01T10:26:50Z",
     "sdk_packages": {
       "kailash": "2.8.6",
       "kailash-dataflow": "2.0.8",

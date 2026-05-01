@@ -28,7 +28,7 @@ config = BaseAgentConfig(
 )
 ```
 
-**Why**: OpenAI's `json_schema` strict mode enforces the schema via constrained sampling (no prompt requirement). Azure's `json_object` mode only tells the model to produce JSON but needs the prompt to specify what shape.
+**Why:** OpenAI's `json_schema` strict mode enforces the schema via constrained sampling (no prompt requirement). Azure's `json_object` mode only tells the model to produce JSON but needs the prompt to specify what shape.
 
 ## Error: "Missing required parameter: response_format.type"
 
@@ -52,7 +52,7 @@ config = BaseAgentConfig(
 )
 ```
 
-**Why**: `response_format` is sent to the LLM API as the structured output instruction. `provider_config` holds operational settings like API version and deployment name. Mixing them sends garbage keys to the API.
+**Why:** `response_format` is sent to the LLM API as the structured output instruction. `provider_config` holds operational settings like API version and deployment name. Mixing them sends garbage keys to the API.
 
 ## Error: DeprecationWarning about provider_config
 
@@ -116,7 +116,7 @@ AZURE_BACKEND=openai    # For Azure OpenAI Service
 AZURE_BACKEND=foundry   # For Azure AI Foundry
 ```
 
-**Why**: Error-based fallback makes every misdetected endpoint pay a round-trip penalty and produces confusing error logs. Explicit backend selection is deterministic and fast.
+**Why:** Error-based fallback makes every misdetected endpoint pay a round-trip penalty and produces confusing error logs. Explicit backend selection is deterministic and fast.
 
 ## Related
 

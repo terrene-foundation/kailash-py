@@ -4,7 +4,7 @@ Authoritative reference for consumers asking "does DataFlow emit PostgreSQL Row-
 
 ## Summary
 
-**No.** DataFlow's migration generator emits only `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`, and `DROP TABLE IF EXISTS`. It never writes `ENABLE ROW LEVEL SECURITY`, `CREATE POLICY`, or `SECURITY DEFINER`. Tenant isolation for `@db.model(multi_tenant=True)` is enforced by the DataFlow QueryInterceptor at the SQL-build layer, not by database-enforced RLS policies. This holds identically across the Python (`kailash-py`) and Rust (`kailash-rs`) DataFlow implementations — the contract is a framework design invariant, not a per-language artifact.
+**No.** DataFlow's migration generator emits only `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`, and `DROP TABLE IF EXISTS`. It never writes `ENABLE ROW LEVEL SECURITY`, `CREATE POLICY`, or `SECURITY DEFINER`. Tenant isolation for `@db.model(multi_tenant=True)` is enforced by the DataFlow QueryInterceptor at the SQL-build layer, not by database-enforced RLS policies. The contract is a framework design invariant, not a per-language artifact.
 
 Downstream consumers are responsible for (a) deciding whether to layer RLS on top and (b) writing the corresponding `CREATE POLICY` migrations by hand.
 
@@ -43,7 +43,7 @@ Run before any production deploy of a DataFlow-scaffolded schema:
 ## `multi_tenant=true` is not RLS
 
 ```python
-# Python (kailash-py) — DO — read this as "runtime predicate injection"
+# DO — read this as "runtime predicate injection"
 @db.model(multi_tenant=True)
 class Document:
     ...
@@ -54,7 +54,7 @@ class Document:
 ```
 
 ```rust
-// Rust (kailash-rs) — DO — read this as "runtime predicate injection"
+// Compiled-language equivalent — DO — read this as "runtime predicate injection"
 #[db::model(multi_tenant = true)]
 struct Document { /* ... */ }
 // At query time the DataFlow QueryInterceptor rewrites:
@@ -80,4 +80,4 @@ struct Document { /* ... */ }
 
 ## Origin
 
-Cross-SDK consumer finding surfaced against kailash-rs (`terrene-foundation/kailash-coc-claude-rs#58`); sister finding against kailash-py (`terrene-foundation/kailash-py#607`). The posture applies identically to both SDKs because DataFlow's RLS-emission decision is a framework contract, not a language artifact.
+Posture surfaced via consumer feedback in 2026-04. The posture applies identically across DataFlow implementations because RLS-emission is a framework contract, not a language artifact.

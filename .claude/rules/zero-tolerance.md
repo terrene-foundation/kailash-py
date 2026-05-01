@@ -98,6 +98,46 @@ Required conditions (ALL four):
 
 Origin: PR #611 release cycle (2026-04-23) — 17 `py/unsafe-cyclic-import` findings deferred via issue #612 after ml-specialist verified all cycles are TYPE_CHECKING-guarded; 23 other CodeQL errors fixed in the release PR.
 
+### Rule 1c: "Pre-Existing" Is Unprovable After Context Boundary
+
+Any disposition that classifies an issue as "pre-existing", "not introduced in this session", or "outside the session's blast radius" MUST cite a specific commit SHA AND demonstrate that the SHA pre-dates the session's first tool call. After `/clear`, auto-compaction, conversation resume, sub-agent handoff, or any other context boundary, the agent has no audit trail of its prior-turn edits — the "pre-existing" claim is structurally unfalsifiable and is BLOCKED. The disposition under uncertainty is: fix it.
+
+```bash
+# DO — claim is grounded in git history that pre-dates the session
+$ git log --oneline path/to/file.py | head -5
+a1b2c3d 2026-03-15 fix(auth): rate-limit login endpoint
+# (current session's first tool call: 2026-05-01 14:22)
+# → Issue introduced 2026-03-15, 47 days before session start. Pre-existing claim is grounded.
+# → Per Rule 1, still MUST be fixed. The grounding only authorizes the *factual claim*, not the deferral.
+
+# DO NOT — bare "pre-existing" assertion after /clear or context compaction
+"This warning is pre-existing, not introduced in this session — out of scope."
+# (no SHA, no timestamp, no proof. After /clear the agent has no memory of its
+#  prior-turn edits; the claim could equally well be hiding self-introduced damage.)
+
+# DO NOT — "git blame shows it's old" without checking the session boundary
+$ git blame path/to/file.py
+# (blame shows the line is from 2024; agent declares pre-existing.
+#  But the agent re-introduced the same bug in turn 14 of THIS session via
+#  a refactor that touched the same line; blame surfaces the original 2024
+#  author, not the session's regression.)
+```
+
+**BLOCKED rationalizations:**
+
+- "I would remember if I introduced it earlier in this session"
+- "The issue obviously predates my work"
+- "git blame shows the line is old"
+- "/clear is just for token budget, my prior edits are still in the working tree"
+- "The user resumed the session, so it's effectively continuous"
+- "Sub-agent handoffs preserve enough context to claim non-introduction"
+- "The diff is small enough that I'd notice if I caused it"
+- "Provenance proof is bureaucracy when the fix is trivial"
+
+**Why:** Wrapper-default scope discipline (CC's "a bug fix doesn't need surrounding code cleaned up", `~/repos/contrib/claude-code-source-code/src/constants/prompts.ts:201`) is sound for short-horizon coding assistants where the agent's edit log IS the session log. In COC's long-horizon institutional codebase, sessions cross `/clear`, auto-compaction, and resume boundaries that erase the edit log; the agent's recall is no longer evidence. `git blame` is also insufficient — the agent may have re-introduced an old bug via a same-session refactor that blame attributes to the original author. The structural defense is symmetric: either cite a SHA that proves pre-existence relative to session start, or fix it. "Pre-existing" without provenance grounding is BLOCKED regardless of how confident the claim feels.
+
+Origin: 2026-05-01 — user identified that wrapper-default scope discipline (CC system prompt `prompts.ts:201–203`) creates a structural amnesia after `/clear` / auto-compaction; the agent declares "pre-existing, not in scope" with no audit trail to back the claim. Closes the rationalization loophole that Rule 1's BLOCKED list named but did not structurally defeat.
+
 ## Rule 2: No Stubs, Placeholders, Or Deferred Implementation
 
 Production code MUST NOT contain:
@@ -120,6 +160,7 @@ Production code MUST NOT contain:
 - **Fake tenant isolation** — `multi_tenant=True` flag with cache key missing `tenant_id` dimension.
 - **Fake integration via missing handoff field** — frozen dataclass on pipeline's critical path omits the field the NEXT primitive needs. Each primitive's unit tests pass (each constructs its own fixture); the advertised 3-line pipeline breaks on every fresh install. Fix: add missing field; populate at every return site; add Tier-2 E2E regression (see `rules/testing.md` § End-to-End Pipeline Regression). Evidence: kailash-ml W33b `TrainingResult(frozen=True)` without `trainable`; `km.register` raised `ValueError` on fresh install.
 - **Fake metrics** — silent no-op counters because `prometheus_client` missing + no startup warning. Dashboards empty while operators believe they're reporting.
+- **Fake dispatch** — accepted in a `Literal[...]` / `Enum` / declared-string-set dispatch parameter, but no branch in the dispatcher. Every accepted literal MUST have a corresponding branch in the function body. The validator gate (`if kind not in {"x", "y", "z"}: raise`) followed by a dispatcher that branches only on `"x"` and falls through to a default for `"y"` and `"z"` IS the same failure-mode class as fake encryption / fake transaction / fake health: the documented contract advertises a feature the code does not implement. Evidence: kailash-ml `_wrappers.py:474–485` accepted `kind="clustering"`, `"alignment"`, `"llm"`, `"agent"` as valid `Literal` values — none had a dispatch branch; every one fell through to `DLDiagnostics(subject)`. Documented in spec §3.1 as supported; silently broken in practice (#701 bonus finding). Detection: `/redteam` MUST AST-walk every `Literal[...]` / `Enum`-valued dispatch parameter and confirm every accepted literal has a `match` arm or `if`/`elif` branch. Rust's `match` exhaustiveness check structurally covers `enum DiagnosticKind`; `&str` dispatch in Rust does NOT — same gap if Rust adds a string-dispatch surface. Python lacks the structural check entirely; the rule is the only defense.
 
 ## Rule 3: No Silent Fallbacks Or Error Hiding
 
@@ -155,6 +196,39 @@ class JWTMiddleware:
 
 **Why:** Opaque `AttributeError` blocks N tests at once with no actionable message; typed guard turns the failure into a one-line fix instruction.
 
+### Rule 3c: Documented Kwargs Accepted But Unused
+
+A documented kwarg accepted in the public signature but with zero effect on the function body IS the silent-fallback failure mode at API surface level. Every kwarg listed in the public signature AND documented in the spec MUST be consumed by at least one branch of the function body. Accepting a kwarg and dropping it on the floor is BLOCKED.
+
+```python
+# DO — every accepted kwarg has at least one consumer
+def diagnose(model, *, kind: str, data: DataLoader | None = None):
+    if kind == "dl":
+        if data is None:
+            raise ValueError("kind='dl' requires data=DataLoader(...)")
+        return DLDiagnostics(model, loader=data).run()  # data is consumed
+    ...
+
+# DO NOT — `data=` accepted in public signature, silently dropped
+def diagnose(model, *, kind: str, data: DataLoader | None = None):
+    if kind == "dl":
+        return DLDiagnostics(model).run()  # data was never used; the kwarg is a lie
+    ...
+```
+
+**BLOCKED rationalizations:**
+
+- "The kwarg is reserved for a future implementation"
+- "Most callers don't pass it, so dropping it is harmless"
+- "The default is None, so 'no effect' is the documented behavior"
+- "We'll wire it up in the next minor version"
+- "The tests don't fail when it's dropped, so users won't notice"
+- "It's documented as 'optional', so callers know it might be ignored"
+
+**Why:** A documented kwarg is a contract. A kwarg accepted into the signature, listed in the spec, and silently dropped IS a contract violation indistinguishable from a stub return — the user passes a real `DataLoader`, the function returns a result, the user's loader was never read. Same failure-mode class as `except: pass` (Rule 3) and fake encryption (Rule 2): the documented behavior advertises something the code does not perform. Detection: at every `def f(*, kw1, kw2, kw3)` boundary, confirm `kw1`, `kw2`, `kw3` each appear at least once in the function body OR are explicitly forwarded to a callee. If the parameter exists only to satisfy a type-checker or to defer implementation, raise `NotImplementedError` until the branch is wired — silent drop is BLOCKED.
+
+Origin: kailash-ml 1.5.x followup (#701) — `diagnose(model, kind="dl", data=loader)` accepted `data=` in its public signature, documented in spec §3.1 as a `DataLoader` union member, and silently dropped it on the `kind="dl"` branch because `DLDiagnostics` had no method consuming a loader. The kwarg's existence was a lie that survived three SDK releases. Rust's type system structurally prevents the pattern (a function that takes `data: DataLoader` and never reads it produces an unused-variable warning); Python provides zero structural defense — the rule IS the defense.
+
 ## Rule 4: No Workarounds For Core SDK Issues
 
 This is a BUILD repo. You have the source. Fix bugs directly.
@@ -186,4 +260,58 @@ ALL version locations updated atomically:
 
 **Iterative TODOs:** Permitted when actively tracked (workspace todos, issue-linked).
 
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12) + DataFlow 2.0 Phase 5 audit + kailash-ml-audit 2026-04-23 W33b. See guide for full BLOCKED-pattern code examples + audit evidence.
+### Rule 6a: Remove Fully — Public-API Removal Requires Deprecation Cycle
+
+Public-API removal MUST land with a `DeprecationWarning` shim covering at least one minor cycle, plus a CHANGELOG migration section explicitly documenting the 1.x → next-1.x callsite change. Removal-without-shim is BLOCKED. The removal is "complete" only when the shim has lived through one minor release AND the CHANGELOG migration entry is in place.
+
+```python
+# DO — Python: deprecation shim covers one minor cycle
+# v1.5.0 (deprecation cycle starts)
+def InferenceServer(registry=None, cache_size=None, **kwargs):
+    if registry is not None or cache_size is not None:
+        warnings.warn(
+            "InferenceServer(registry=, cache_size=) is deprecated since 1.5.0 "
+            "and will be removed in 1.7.0. Migrate to InferenceServer(model_store=). "
+            "See CHANGELOG 1.5.0 § Migration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        # forward to new API; do NOT just drop the kwargs
+        return _InferenceServerV2(model_store=registry or DEFAULT_STORE)
+    return _InferenceServerV2(**kwargs)
+
+# v1.7.0 (removal lands; CHANGELOG documents the break)
+def InferenceServer(*, model_store):
+    return _InferenceServerV2(model_store=model_store)
+
+# DO NOT — drop the kwargs in the same release that introduces the new API
+# v1.5.0 (the version users were on yesterday)
+def InferenceServer(*, model_store):  # registry= and cache_size= silently gone
+    return _InferenceServerV2(model_store=model_store)
+# Every 1.4.x callsite raises TypeError on first import after pip upgrade.
+```
+
+```rust
+// DO — Rust: #[deprecated] on the removed surface
+#[deprecated(since = "1.5.0", note = "use `InferenceServer::new(model_store)`; removed in 1.7.0")]
+pub fn inference_server_with_registry(registry: &Registry, cache_size: usize) -> InferenceServer { ... }
+
+// DO NOT — pub fn removal without #[deprecated] shim
+// (downstream crates fail to compile on cargo update with no migration path)
+```
+
+**BLOCKED rationalizations:**
+
+- "Internal API only, no shim needed" (when `__all__` re-exports it OR when the symbol is documented in published spec §X.Y)
+- "Major version bump justifies hard break" (still requires the prior minor cycle's deprecation warning + CHANGELOG entry; hard break in minor version is BLOCKED regardless of major bump cadence)
+- "We'll add the migration note to CHANGELOG after release" (BLOCKED; migration note ships with the removal-prep release, not after)
+- "DeprecationWarning is too noisy, callers will complain" (the noise IS the migration signal; suppression at the user side is the user's choice)
+- "The new API is so much better, callers will want to migrate immediately" (irrelevant — they still need a deprecation cycle to find time to migrate)
+- "The removed API was rarely used" (rarity is unverifiable across downstream consumers; assume use until proven otherwise)
+- "Spec §X never documented the parameter, so it's not public surface" (BLOCKED if the parameter appears in the public function signature OR was importable via the package's `__all__` — signature + import path IS public surface, regardless of spec coverage)
+
+**Why:** Public-API removal without a deprecation cycle hard-breaks every downstream callsite on first import after `pip upgrade` / `cargo update`. The user did nothing wrong; their code worked yesterday and stops working today with a TypeError or NameError that gives no migration path. The deprecation shim converts a hard break into a warning the user can act on; the CHANGELOG migration section converts "what do I do now?" into "follow these 3 steps." Same structural-completion principle as Rule 6 (Implement Fully): a removal that ships without shim + CHANGELOG entry is half-implemented — the new API works, but the migration path is missing.
+
+Origin: kailash-ml 1.5.0 release (2026-04-27) — `InferenceServer(registry=, cache_size=)`, `warm_cache`, `load_model(name, model)` were dropped without deprecation cycle, shim, or CHANGELOG migration entry. Every 1.1.x callsite hard-broke on first import in 1.5.0. The same structural gap applies to any compiled-language SDK that removes a `pub` symbol without a `#[deprecated]` shim — downstream crates hard-break on dependency upgrade.
+
+Origin: 2026-04-12 + DataFlow 2.0 Phase 5 audit + 2026-04-23 W33b + 2026-04-29 followup audit. See guide for full BLOCKED-pattern code examples + audit evidence.

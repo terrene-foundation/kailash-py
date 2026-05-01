@@ -12,7 +12,7 @@ Copy-pasteable starting point for authoring a numbered DataFlow migration that c
 > Priority: `HIGH`
 > Related Skills: [`dataflow-migrations-quick`](dataflow-migrations-quick.md), [`dataflow-enterprise-migrations`](dataflow-enterprise-migrations.md)
 > Related Subagents: `dataflow-specialist` (destructive / high-risk migrations), `testing-specialist` (Tier 2 regression tests)
-> Template: `scripts/migrate.py` (kailash-py variant) — Rust equivalents live in the kailash-rs variant.
+> Template: `scripts/migrate.py` (Python starter; the language variant for your SDK supplies the equivalent).
 
 ## When to Use
 
@@ -48,7 +48,7 @@ MUST NOT:
 
 Every migration MUST define both `upgrade(conn, dialect)` and `downgrade(conn, dialect, *, force_downgrade=False)` (Python) or the language-equivalent signature. An `upgrade` without a matching reversible `downgrade` is BLOCKED — see `rules/schema-migration.md` MUST Rule 3.
 
-The Python starter template lives at `scripts/migrate.py` in the kailash-py variant. Copy it to `migrations/NNN_your_change.py` and fill in the three marked sections:
+The Python starter template lives at `scripts/migrate.py`. Copy it to `migrations/NNN_your_change.py` and fill in the three marked sections:
 
 1. `MIGRATION_ID` / `DESCRIPTION` — metadata the loader reads.
 2. `upgrade()` — forward DDL / backfill.

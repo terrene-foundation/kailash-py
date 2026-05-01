@@ -182,4 +182,4 @@ Artifact quota exhaustion. `continue-on-error: true` on every `upload-artifact` 
 - `skills/10-deployment-git/deployment-ci.md` — broader CI setup reference
 - `skills/10-deployment-git/release-runbook.md` — release-pipeline-specific CI guidance
 
-Origin: Extracted from the kailash-rs BUILD-repo `rules/ci-runners.md` during loom 2.8.12 — the rules file grew to 328 lines (exceeding the 200-line soft cap from `rules/rule-authoring.md`). Troubleshooting and service-management content moved here so the rules file stays focused on MUST/MUST NOT enforcement language.
+Origin: Extracted from a BUILD-repo `rules/ci-runners.md` during loom 2.8.12 — the rules file grew to 328 lines (exceeding the 200-line soft cap from `rules/rule-authoring.md`). Troubleshooting and service-management content moved here so the rules file stays focused on MUST/MUST NOT enforcement language.

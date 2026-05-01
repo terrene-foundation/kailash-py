@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/src/**"
   - "**/tests/**"
@@ -96,7 +98,44 @@ gh issue close XXX --comment "N/A — Python execute_raw has no params arg"
 
 Origin: Issue #525 / PR #528 (2026-04-19) — kailash-rs#424 parity check.
 
-### 4. Inspection Checklist
+### 4. Cross-SDK Hash / Fingerprint Helpers MUST Pin Byte Vectors From Sibling SDK
+
+Any helper that claims byte-shape parity with a sibling SDK (cross-SDK fingerprint, hash, mask, audit-chain digest, log-correlation token) MUST pin AT LEAST 3 byte-vector test cases empirically derived from the sibling SDK's actual output AND cover sentinel values (empty input, all-zero, all-one, single-byte). The byte vectors live in the cross-SDK regression test as raw hex strings, NOT abstract assertions like "same length" or "starts with sha256:".
+
+```python
+# DO — pin actual byte vectors from sibling SDK
+@pytest.mark.regression
+def test_fingerprint_secret_matches_kailash_rs_byte_for_byte():
+    # Vectors derived from kailash-rs Blake2bVar(4) digest output at v3.23.0
+    cases = [
+        (b"",                             "00000000"),  # empty-input sentinel
+        (b"hello",                        "8ed5b1d4"),
+        (b"\x00" * 32,                    "0a0e0a8b"),
+        (b"OPENAI_API_KEY=sk-12345",      "f3c2b1d8"),
+    ]
+    for raw, expected in cases:
+        assert fingerprint_secret(raw) == expected, f"divergence on {raw!r}"
+
+# DO NOT — abstract parity claim with no byte pinning
+def test_fingerprint_secret_has_4_hex_chars():
+    out = fingerprint_secret(b"hello")
+    assert len(out) == 4 and all(c in "0123456789abcdef" for c in out)
+    # ↑ proves shape but NOT byte-for-byte equivalence to the sibling SDK
+```
+
+**BLOCKED rationalizations:**
+
+- "Both SDKs use SHA-256; the implementations must agree"
+- "Length + hex-char regex is sufficient"
+- "We'll align the byte shapes when a divergence is reported"
+- "The sibling SDK's vectors will drift; pinning them creates maintenance"
+- "Cross-SDK log correlation is a nice-to-have, not a contract"
+
+**Why:** Cross-SDK forensic correlation depends on identical byte output for identical input across every helper that claims parity. A "same length, same prefix" assertion passes when the underlying algorithm is `Blake2bMac<U4>` (empty-key MAC) on one side and `Blake2bVar(4)` (digest) on the other — the lengths agree, the bytes don't. The empty-input sentinel is the canonical sibling-SDK divergence point: a digest mode emits a stable hash; a MAC mode emits a length-prefixed empty MAC. Pinning ≥3 vectors + sentinels converts "we both call SHA-256" hand-waving into a structural contract that breaks loudly when implementations drift. Evidence: kailash-rs PR #598 first cut shipped `Blake2bMac<U4>` empty-key MAC mode while kailash-py uses `Blake2bVar(4)` digest mode + empty-input sentinel "00000000"; 4 hex chars vs 16 hex chars; empty-input divergence; cross-SDK log correlation silently broken until 2 reviewers caught it. Applies to every future hash helper claiming kailash-py / kailash-rs parity (`fingerprint_secret`, `mask_url`, `audit_chain_hash`, etc.).
+
+Origin: kailash-rs PR #598 (2026-04-25) cross-SDK fingerprint helper — first cut had empty-input + algorithm-mode divergence with kailash-py; caught by reviewers but only because abstract parity assertions were absent. Codified to make the absence loud.
+
+### 5. Inspection Checklist
 
 When closing any issue, verify:
 

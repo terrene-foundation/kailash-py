@@ -1,4 +1,6 @@
 ---
+priority: 10
+scope: path-scoped
 paths:
   - "**/*.py"
   - "pyproject.toml"
@@ -124,6 +126,31 @@ dev = ["hypothesis>=6.0.0"]  # already in kailash-pact + kailash-ml
 **Why:** `hypothesis` registers as a pytest plugin; pytest's assertion rewriter AST-rewrites `hypothesis.internal.conjecture.shrinking.collection` and exhausts memory on GitHub runners, producing `MemoryError` during collection with no root-cause signal. Root venvs MUST NOT install what only sub-package test venvs need.
 
 Origin: PR #430 CI failure (2026-04-12), commit a9fd4e56. See guide for the full post-mortem.
+
+### 5. Python 3.11+ Lock Factory Gotcha (MUST)
+
+`threading.Lock` and `threading.RLock` are factory functions — NOT classes — in Python 3.11+. Using them as `isinstance` predicates raises `TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union` at runtime. Code that passed 3.10 silently blocks every call on 3.11+.
+
+To runtime-check lock types, capture the actual type by calling the factory once at module scope and use that constant:
+
+```python
+# DO — module-scope type constants via one factory call each
+import threading
+_LOCK_TYPES = (type(threading.Lock()), type(threading.RLock()))
+
+def is_lock(obj: object) -> bool:
+    return isinstance(obj, _LOCK_TYPES)
+
+# DO NOT — isinstance against the factory itself (Py3.11+ TypeError)
+if isinstance(lock, threading.Lock):  # TypeError at runtime
+    ...
+```
+
+**BLOCKED rationalizations:** "`isinstance(x, threading.Lock)` worked on 3.10" / "we'll pin to 3.10 for now" / "the CI matrix will catch it" / "the factory is close enough to a type, Python will DWIM".
+
+**Why:** Python 3.11 converted `Lock`/`RLock` to factory functions for CPython internal reasons; the names are callable but not types. `isinstance()` arg 2 MUST be a type — the factory fails the check. Pinning to 3.10 is a rotting workaround (3.10 reaches EOL October 2026); the factory form will stay on 3.11+. The one-line module-scope constant is the structural fix.
+
+Origin: kailash-pact 0.10.0 release cycle (2026-04-23) — `pact/ml/__init__.py:412` used `isinstance(lock, threading.Lock)` which blocked all 5 PACT ML bridge integration tests on Python 3.11+. Fixed at commit `5655dd59`.
 
 ## Rules
 

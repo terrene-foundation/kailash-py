@@ -157,6 +157,6 @@ async def stripe_webhook(payload: dict):
 - `rules/zero-tolerance.md` Rule 2 — a handler that "looks like it verifies" but computes HMAC over re-serialized JSON is a fake-security stub.
 - `rules/agent-reasoning.md` — the workaround is the explicit intent: verification is externalized, not hidden.
 
-Origin: gh-coc-claude-rs#51 items 1A + 1C (2026-04-17). kailash-rs Nexus handlers receive pre-parsed JSON; `axum::extract::Json` consumes the raw body before the handler runs, and the handler signature accepts only `Query + Json` (no `HeaderMap`, no raw body access). The runtime fix is tracked as the extractor-trait architecture rework at `esperie-enterprise/kailash-rs#404` (D1 Option D — `NexusExtract` trait; shards S1–S8; cross-SDK followup `terrene-foundation/kailash-py#497`). Until S1–S8 land, every HMAC webhook consumer MUST externalize verification per this rule; when the extractor trait ships, this rule will be revised to document the DO pattern using `TypedHeader<HmacSignature> + Bytes`.
+Origin: 2026-04-17 — when the underlying framework's Nexus handlers receive pre-parsed JSON (the framework consumes the raw body before the handler runs, and the handler signature accepts no raw-body extractor), HMAC verification cannot run in-handler and MUST be externalized. Until the extractor-trait architecture rework lands, every HMAC webhook consumer MUST externalize verification per this rule.
 
 <!-- /slot:neutral-body -->

@@ -16,7 +16,7 @@ tags:
 
 # Nexus Extractors
 
-Extractor-based handler architecture for Nexus. Replaces the legacy `ValueMap → Value` handler shape with axum-style extractors, typed response shapes, and typed HTTP errors. Cross-SDK: the surface below is the canonical contract for kailash-py's `kailash.nexus.extractors` and kailash-rs's Python binding; Ruby follows the same shape via keyword-arg blocks.
+Extractor-based handler architecture for Nexus. Replaces the legacy `ValueMap → Value` handler shape with axum-style extractors, typed response shapes, and typed HTTP errors. The surface below is the canonical Nexus extractor contract; Ruby consumers see the same shape via keyword-arg blocks.
 
 ## Quick Start (Python)
 
@@ -260,4 +260,4 @@ Migration: switch from `handler()` to `handler_extract()`, replace magic-param s
 - `.claude/skills/03-nexus/handler-status-codes.md` — 500 vs 502/503/504 decision table
 - `.claude/skills/03-nexus/nexus-http-status-convention.md` — reference patterns, examples per status code
 
-Origin: kailash-rs#404 S1-S7 extractor surface (2026-04-18 → 2026-04-19), skill authored in S8. Cross-SDK: kailash-py#497 tracks the Python SDK port of the extractor surface.
+Origin: 2026-04-18 → 2026-04-19 extractor-surface design; skill authored at the end of that arc.

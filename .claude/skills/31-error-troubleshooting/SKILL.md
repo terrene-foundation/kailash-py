@@ -153,7 +153,7 @@ file a todo against the pre-commit configuration. See
 `rules/git.md` "Pre-Commit Hook Workarounds" for the full rule.
 Silent `--no-verify` retries are BLOCKED.
 
-**Frequency:** Recurring across sessions in kailash-py; the stash
+**Frequency:** Recurring across sessions; the stash
 interaction is non-deterministic and depends on which files have
 unstaged changes at commit time.
 

@@ -66,7 +66,7 @@ gh issue create --title "Release v1.1.0" --label release \
 3. **Fix** — Implement following all rules (zero-tolerance, no-stubs, framework-first)
 4. **Validate** — `black`, `ruff`, `pytest`
 5. **Codify** — Update agents/skills/rules if the fix revealed documentation gaps
-6. **COC Sync** — Cascade updated COC artifacts to `~/repos/kailash/kailash-coc-claude-py`
+6. **COC Sync** — Cascade updated COC artifacts to `~/repos/loom/kailash-coc-claude-py`
 7. **Commit & PR** — Create branch, commit, push, create PR
 
 ### For Releases
@@ -85,7 +85,7 @@ BUILD repo (kailash-py)
     │
     ├─ coc-sync agent transforms BUILD artifacts
     │
-    └─► USE repo (~/repos/kailash/kailash-coc-claude-py)
+    └─► USE repo (~/repos/loom/kailash-coc-claude-py)
          └─ Updated agents, skills, rules, commands
 ```
 

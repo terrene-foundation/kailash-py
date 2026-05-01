@@ -124,7 +124,7 @@ Any test using `@pytest.mark.<X>` or `<X>` fixture from a plugin MUST declare th
 
 ## MUST: Serialize Env-Var-Mutating Tests Via Module Lock
 
-Any two tests mutating SAME env var MUST serialize through a module-scope `threading.Lock` held across read-then-mutate; tests take `(monkeypatch, _env_serialized)`. See guide for full fixture pattern + kailash-rs PR #435 cross-language origin.
+Any two tests mutating SAME env var MUST serialize through a module-scope `threading.Lock` held across read-then-mutate; tests take `(monkeypatch, _env_serialized)`. See guide for full fixture pattern.
 
 **BLOCKED rationalizations:** "passes locally, CI scheduling is the bug" / "lock is overkill" / "pytest one-per-worker default" / "`@pytest.mark.serial`" (only with `--dist=loadgroup`) / "monkeypatch auto-restores".
 
@@ -195,6 +195,6 @@ def test_get_raw_success(client):   resp = client.get_raw("/u/42"); assert resp[
 
 **Why:** Intermittent failures erode trust; shared state → order-dependent results that pass individually but fail in CI where order differs.
 
-Origin: PR #466 (warnings sweep), #518 (test-skip triage), BP-046 (paired-variant coverage), kailash-rs #435 (env-var race), kailash-ml W33b (E2E regression), 2026-04-27 W6 (AST counts). See guide for full session evidence.
+Origin: warnings sweep + test-skip triage + paired-variant coverage + env-var race + E2E regression + 2026-04-27 AST-counts review. See guide for full session evidence.
 
 <!-- /slot:neutral-body -->

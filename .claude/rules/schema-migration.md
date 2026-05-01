@@ -14,7 +14,6 @@ paths:
 
 # Schema & Data Migration Rules
 
-
 <!-- slot:neutral-body -->
 
 The schema is the contract between code and data. Every change to that contract MUST go through a numbered, reviewable, reversible migration. Direct DDL and ad-hoc data fixes are how schemas drift from code, and how production silently breaks.
@@ -42,6 +41,36 @@ await conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
 ```
 
 **Why:** DDL outside the migration framework runs once on whichever environment the agent happens to touch and never on the others. The schemas drift, the next deploy fails on the un-migrated environment, and the failure looks like a code bug because the migration was never recorded.
+
+#### 1a. /redteam MUST Grep For Inline DDL Outside Migrations
+
+`/redteam` mechanical sweep MUST scan every package source tree for DDL string literals (`CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, `CREATE UNIQUE INDEX`, `ALTER INDEX`, `CREATE SCHEMA`, `DROP SCHEMA`) appearing OUTSIDE the migration framework's directories (`migrations/`, `src/**/migrations/**`, dialect helper layers in BUILD repos, test fixtures). Any hit is a Rule 1 violation and BLOCKS the redteam round until resolved.
+
+```bash
+# DO — /redteam includes the grep audit explicitly
+grep -RInE 'CREATE\s+(UNIQUE\s+)?(TABLE|INDEX|SCHEMA)|ALTER\s+(TABLE|INDEX)|DROP\s+(TABLE|SCHEMA|INDEX)' \
+    --include='*.py' --include='*.rs' --include='*.rb' \
+    -- packages/ src/ \
+    | grep -vE '/(migrations|tests/fixtures|dialect)/'
+# Exit 0 with no matches = clean. Any match = Rule 1 violation.
+
+# DO NOT — rely on the rule statement alone, without a mechanical sweep
+# (rule says "DDL outside migrations is BLOCKED" but no /redteam grep enforces it,
+# so violations land silently and ship to production)
+```
+
+**BLOCKED rationalizations:**
+
+- "The migration framework auto-detects schema drift, the grep is redundant"
+- "We'd notice if someone added inline DDL in code review"
+- "The pre-commit hook covers it" (only if the hook runs the same grep — if not, BLOCKED)
+- "False positives on `CREATE TABLE` in docstrings make the grep noisy" (filter docstrings via `--include` patterns; do NOT silence the audit)
+- "The dialect helper layer has DDL by design" (whitelisted via the path-exclusion clause; everything else stays in scope)
+- "We'll add the grep next cycle once the false-positive baseline is captured"
+
+**Why:** A rule that says "X is BLOCKED" with no mechanical sweep ships violations indefinitely. The grep is O(seconds) and catches the failure mode the rule was written to prevent. Three-way schema drift (spec ↔ migration ↔ inline DDL in application code) is invisible at code-review level because the reviewer cannot hold all three artifacts in attention at once; the grep surfaces every inline-DDL site in one pass and the migration cross-check follows from there. Evidence: a registry's `_create_registry_tables()` shipped `CREATE TABLE IF NOT EXISTS _kml_model_versions` for ~3 months while migration 0002 owned the same table with a different column-set; the IF NOT EXISTS no-op masked the divergence until a user hit a missing-column query path.
+
+Origin: kailash-ml 1.5.x followup #699 (2026-04-29) — `workspaces/kailash-ml-1.5.x-followup/journal/0004-DISCOVERY-three-way-schema-drift-mandates-migration-0005.md`.
 
 ### 2. Data Fixes Are Migrations, Not One-Off SQL
 
@@ -171,7 +200,7 @@ pub async fn rollback(&self, version: &str, dataflow: &DataFlow) -> Result<(), D
 
 **Why:** Dropped data is unrecoverable and the downgrade surface is strictly wider than the individual DROP primitive — a single `rollback("0042")` call can execute dozens of destructive statements in one transaction before the operator notices. The primitive-layer `force_drop` flag (mandated by `dataflow-identifier-safety.md` MUST Rule 4) does nothing for an orchestrator that replays persisted `down_sql` strings, because the orchestrator is the caller and the flag was already checked against a literal API at upgrade-generation time. Requiring the flag at every layer that can touch destructive DDL is the only structural defense against "I meant to roll back the schema, not destroy the data" incidents. Test suites requiring rollback MUST pass `force_downgrade=True` explicitly — the test's intent is exactly what the flag is for.
 
-Origin: kailash-rs codify cycle (2026-04-19) — destructive migration paths landed without downgrade-surface confirmation flags despite the primitive-layer `force_drop` guard existing in `dataflow-identifier-safety.md` since 2026-04-12.
+Origin: 2026-04-19 codify cycle — destructive migration paths landed without downgrade-surface confirmation flags despite the primitive-layer `force_drop` guard existing in `dataflow-identifier-safety.md` since 2026-04-12.
 
 ## MUST NOT
 

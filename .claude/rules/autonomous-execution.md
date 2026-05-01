@@ -141,11 +141,11 @@ When a code review or self-verification surfaces a latent gap in the SAME BUG CL
 - "Budget allows it but the blast radius is higher if something breaks"
 - "Splitting into two PRs is the conservative approach"
 
-**Why:** Same-bug-class gaps surfaced during review cost the least to fix while the context is loaded — the invariants, call graph, and domain model are all warm in attention. Filing a follow-up issue requires the next session to reload the entire context from scratch, typically 2–5× the marginal cost of continuing. Evidence: kailash-rs 2026-04-20 — PR #435 reviewer flagged 40+ model-aware `bind_value` sites with the same `None::<String>` hardcode. The agent filed #436 instead of fixing; the user pushed back ("why aren't you resolving it"); the fix shipped as #437 in the same session. Filing #436 wasted one user-turn of friction and one session-handoff context-reload that was unnecessary.
+**Why:** Same-bug-class gaps surfaced during review cost the least to fix while the context is loaded — the invariants, call graph, and domain model are all warm in attention. Filing a follow-up issue requires the next session to reload the entire context from scratch, typically 2–5× the marginal cost of continuing. Evidence: 2026-04-20 — a reviewer flagged 40+ sibling sites with the same hardcode pattern as the just-fixed PR. The agent filed a follow-up issue instead of fixing; the user pushed back ("why aren't you resolving it"); the fix shipped same session. Filing the follow-up wasted one user-turn of friction and one session-handoff context-reload that was unnecessary.
 
 **Bounded by the shard budget.** This rule does NOT override MUST Rule 1 (shard threshold). If the surfaced gap exceeds ≤500 LOC load-bearing / ≤5–10 invariants / ≤3–4 call-graph hops, filing the follow-up issue IS the correct disposition — the gap is a new shard, not a continuation of the current one.
 
-Origin: kailash-rs 2026-04-20 — #424 null-bind fix shipped as PR #435 (SQL-cast path); review surfaced the FieldType path gap (same bug class, ~300 LOC, one shard); initial disposition was "file #436"; user corrected; fix shipped as #437 same session.
+Origin: 2026-04-20 — a null-bind fix shipped on one path; review surfaced a sibling path gap (same bug class, ~300 LOC, one shard); initial disposition was "file follow-up issue"; user corrected; fix shipped same session.
 
 ## MUST NOT (Sharding)
 

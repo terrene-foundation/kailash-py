@@ -72,14 +72,14 @@ ALL 11,917 kaizen tests blocked from collection until fixed. Fixed commit `1313a
 
 See `workspaces/kailash-ml-gpu-stack/journal/0008-GAP-full-specs-redteam-2026-04-20-findings.md`.
 
-## Env-Var Race (kailash-rs PR #435, 2026-04-20)
+## Env-Var Race (2026-04-20)
 
-Cross-language origin of the env-var isolation rule. `DATAFLOW_MAX_CONNECTIONS` env-var race between `test_reads_max_connections_from_env` and `test_defaults_to_99_when_env_unset` produced a flaky CI failure (expected=7, actual=99). Root cause: both tests mutated the env var without a serialization lock; xdist worker re-ordered the mutations; sibling test observed the wrong value.
+Origin of the env-var isolation rule. `DATAFLOW_MAX_CONNECTIONS` env-var race between `test_reads_max_connections_from_env` and `test_defaults_to_99_when_env_unset` produced a flaky CI failure (expected=7, actual=99). Root cause: both tests mutated the env var without a serialization lock; xdist worker re-ordered the mutations; sibling test observed the wrong value.
 
-Cross-language principle codified to loom global 2026-04-20:
+Codified 2026-04-20:
 
-- Python variant: `monkeypatch` + `threading.Lock()`
-- Rust variant: `tokio::sync::Mutex` (see rs variant testing.md for async-guard semantics across `.await`)
+- Python: `monkeypatch` + `threading.Lock()`
+- Compiled-language equivalent: an async-guard-aware mutex (see the language variant for `.await`-safe semantics)
 
 ## End-to-End Pipeline Regression — kailash-ml W33b (2026-04-23)
 
@@ -98,7 +98,7 @@ W33b fix:
 
 See `rules/zero-tolerance.md` §2 "Fake integration via missing handoff field" for the stub-pattern framing.
 
-## Delegating Primitives (BP-046 kailash-rs, 2026-04-14)
+## Delegating Primitives (2026-04-14)
 
 `ServiceClient` module exposed paired typed/raw variants (`get`/`get_raw`, `post`/`post_raw`, etc.) delegating to a shared `execute()` core. Tests only exercised the typed variants; `put_raw` and `delete_raw` had zero direct call sites in the test suite — they were reached transitively through delegation. A refactor that touched `put_raw`'s error mapping would have shipped a silent regression.
 
@@ -131,95 +131,4 @@ See `skills/test-skip-discipline/SKILL.md` for full triage protocol.
 
 ## Full Origin Line
 
-Origin: PR #466 (2026-04-14 warnings sweep) + gh #512 / PR #518 (2026-04-19 test-skip triage) + BP-046 (2026-04-14 paired-variant coverage, kailash-rs) + kailash-rs PR #435 (2026-04-20 env-var race) + Session 2026-04-20 PR #580 (Protocol adapter exception) + kailash-ml-audit W33b (2026-04-23 E2E pipeline regression).
-
-## Audit Mode — Concrete Commands
-
-```bash
-# Re-derive coverage from scratch each round (NOT cat .test-results)
-pytest --collect-only -q tests/
-
-# Per new module: empty grep → HIGH
-grep -rln "from new_module\|import new_module" tests/
-
-# Per spec § Security Threats subsection: missing test_<threat> → HIGH
-grep -rln "test_<threat-name>" tests/
-```
-
-## `__all__` AST Enumeration — Full Snippet
-
-```python
-import ast, pathlib
-tree = ast.parse(pathlib.Path("packages/<pkg>/src/<pkg>/__init__.py").read_text())
-for n in ast.walk(tree):
-    if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in n.targets):
-        if isinstance(n.value, ast.List):
-            print(len(n.value.elts))  # canonical count
-
-# DO NOT — grep '^\s*"' counts comments + blank lines as entries
-grep -c '^\s*"' packages/<pkg>/src/<pkg>/__init__.py
-```
-
-Origin: Session 2026-04-27 W6 /redteam Round 3 (kailash-py portfolio-spec-audit) — fixed `kailash_ml/__init__.py:627` docstring from `Symbol count: 41` to `Symbol count: 49 (verifier-derived via ast.parse)` in PR #674.
-
-## Env-Var Test Isolation — Full Fixture Pattern
-
-```python
-import threading
-_ENV_LOCK = threading.Lock()
-
-@pytest.fixture
-def _env_serialized():
-    with _ENV_LOCK:
-        yield
-
-# tests take (monkeypatch, _env_serialized)
-def test_reads_max_connections_from_env(monkeypatch, _env_serialized):
-    monkeypatch.setenv("DATAFLOW_MAX_CONNECTIONS", "7")
-    assert get_max_connections() == 7
-```
-
-## Helper Class + JWT Test Secret — Code Examples
-
-```python
-# DO — helper class with Stub suffix, bypasses pytest collection
-class CLIChannelStub:
-    def __init__(self, ...): ...
-    def send(self, msg): ...
-
-# DO NOT — class TestX: with __init__ → PytestCollectionWarning + class silently dropped
-class TestCLIChannel:
-    def __init__(self, ...): ...
-
-# DO — JWT test secret ≥ 32 bytes
-JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"
-
-# DO NOT — short secret triggers InsecureKeyLengthWarning
-JWT_TEST_SECRET = "test-key"  # 8 bytes
-```
-
-## End-to-End Pipeline Regression — Full kailash-ml W33b Example
-
-```python
-@pytest.mark.regression
-@pytest.mark.asyncio
-async def test_readme_quickstart_executes_end_to_end():
-    import kailash_ml as km
-    result = await km.train(df, target="churned")
-    assert result.trainable is not None  # handoff field MUST survive
-    registered = await km.register(result, name="demo")
-    assert "onnx" in registered.artifact_uris
-```
-
-## State Persistence Verification — Full Read-Back
-
-```python
-# DO — verify persistence with a read-back
-result = api.create_company(name="Acme")
-company = api.get_company(result.id)
-assert company.name == "Acme"
-
-# DO NOT — only check status (DataFlow UpdateNode silently ignores unknown params;
-# API returns success but zero bytes written)
-assert result.status == 200
-```
+Origin: 2026-04-14 warnings sweep + 2026-04-19 test-skip triage + 2026-04-14 paired-variant coverage + 2026-04-20 env-var race + 2026-04-20 Protocol adapter exception + 2026-04-23 E2E pipeline regression.

@@ -20,7 +20,7 @@ paths:
 
 ## Scope
 
-ALL sessions in BUILD repos (`kailash-py`, `kailash-rs`) that merge code to main. Does NOT apply to downstream USE projects (template repos, application repos, external consumers) — those consume BUILD artifacts via PyPI and do not run `/release`.
+ALL sessions in a BUILD repo (the SDK source repo this rule ships to) that merge code to main. Does NOT apply to downstream USE projects (template repos, application repos, external consumers) — those consume BUILD artifacts via PyPI / crates.io / gems and do not run `/release`.
 
 ## ABSOLUTE: "Done" Means Released, Not Merged
 
@@ -160,9 +160,9 @@ done
 - "We'll catch it at /release time"
 - "The PR title says 'security' so the version bump is implicit"
 
-**Why:** Sub-package src ships as that sub-package's wheel — there is no transitive path that delivers a `kailash-mcp` source change to consumers without a `kailash-mcp` version bump and a new PyPI publish. PR-review-time mechanical check converts an O(/release-time hotfix) cost into an O(grep) check; the alternative ("fold into next wave") is the exact rationalization that produces the silent sibling-drift this rule's § 1 was authored to prevent. Cross-SDK applicable: same Cargo.toml + lib.rs version atomicity in kailash-rs, same release-cycle / sibling-drift pattern.
+**Why:** Sub-package src ships as that sub-package's wheel — there is no transitive path that delivers a sub-package source change to consumers without a sub-package version bump and a new package publish. PR-review-time mechanical check converts an O(/release-time hotfix) cost into an O(grep) check; the alternative ("fold into next wave") is the exact rationalization that produces the silent sibling-drift this rule's § 1 was authored to prevent. The same atomicity applies to Cargo.toml + lib.rs version pairing in compiled-language SDKs.
 
-Origin: Session 2026-04-26 Wave 4 (kailash-py) — PR #632 (kailash-mcp/auth/\* security fix) merged without bumping mcp 0.2.9. Caught at /release-time scope enumeration; required fix-PR #634 (separate CI + admin merge) to bump mcp 0.2.9 → 0.2.10.
+Origin: 2026-04-26 — a sub-package security fix merged without bumping its version; caught at /release-time scope enumeration; required a separate fix-PR (extra CI + admin merge) to bump.
 
 ## MUST NOT
 

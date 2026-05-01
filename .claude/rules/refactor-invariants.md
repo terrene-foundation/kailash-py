@@ -1,12 +1,17 @@
 ---
-paths: ["src/**", "packages/**"]
+priority: 10
+scope: path-scoped
+paths: ["**/*.py", "packages/**"]
 ---
 
 # Refactor Invariant Rules
 
+
+<!-- slot:neutral-body -->
+
 Every refactor that claims to shrink a file MUST land a numeric invariant test in the same commit. Without the test, the next session's merge or edit silently re-inlines the extracted code with no signal.
 
-Origin: SPEC-04 regression — `base_agent.py` was refactored from 2,103 to 994 LOC. A planned invariant test (TASK-04-50) was never committed. A subsequent worktree merge silently re-inlined 1,079 LOC of extracted code, growing the file back to 2,103 LOC with zero test failure.
+Origin: Observed regression where a file was refactored from 2,103 to 994 LOC, a planned invariant test was never committed, and a subsequent worktree merge silently re-inlined 1,079 LOC of extracted code — growing the file back to 2,103 LOC with zero test failure.
 
 ## MUST Rules
 
@@ -18,8 +23,8 @@ When a refactor reduces a file's line count, a test MUST be added in the same co
 # DO — invariant test lands with the refactor
 @pytest.mark.invariant
 def test_base_agent_loc_invariant():
-    """Guard: base_agent.py must stay under 1100 LOC after SPEC-04 extraction."""
-    path = Path("packages/kailash-kaizen/src/kaizen/core/base_agent.py")
+    """Guard: base_agent.py must stay under 1100 LOC after extraction."""
+    path = Path("src/myapp/agents/base_agent.py")
     line_count = len(path.read_text().splitlines())
     assert line_count <= 1100, (
         f"base_agent.py has {line_count} lines (limit: 1100). "
@@ -28,7 +33,7 @@ def test_base_agent_loc_invariant():
     )
 
 # DO NOT — plan the test, commit the refactor, never commit the test
-# TASK-04-50: "Add LOC invariant test for base_agent.py" — status: planned
+# TODO: "Add LOC invariant test for base_agent.py" — status: planned
 ```
 
 **Why:** The refactor commit is the only moment where the threshold is known and the intent is clear. Deferring the test means the guard never exists, and the next edit that grows the file has no signal.
@@ -51,7 +56,7 @@ LOC invariant tests MUST be in the default `pytest` collection (no special marke
 
 Before merging any branch that touches a file with a LOC invariant, MUST verify the branch is rebased on the current main. Merging a stale branch that predates the extraction can re-inline the extracted code.
 
-**Why:** The SPEC-04 regression was caused by a worktree merge of a branch that forked before the extraction. The merge brought back the pre-extraction version of the file because git saw it as the "newer" change.
+**Why:** The origin regression was caused by a worktree merge of a branch that forked before the extraction. The merge brought back the pre-extraction version of the file because git saw it as the "newer" change.
 
 ## MUST NOT
 
@@ -66,3 +71,5 @@ Before merging any branch that touches a file with a LOC invariant, MUST verify 
 - Merge branches that predate a file extraction without rebasing
 
 **Why:** Git's 3-way merge sees the pre-extraction file as the "newer" version and silently re-inlines the extracted code.
+
+<!-- /slot:neutral-body -->

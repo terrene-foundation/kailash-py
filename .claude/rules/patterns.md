@@ -207,4 +207,4 @@ def __del__(self):
 
 **Why:** Every one of these has been argued before and reintroduced the deadlock. The deadlock is non-deterministic — it fires only when GC happens to finalize the resource while the logging root lock is held, which happens most often under test load. "It works in dev" is exactly the path to a production incident.
 
-Origin: kailash-py commit `4f5dbe7f` (2026-04-16) and prior "DataFlow unit suite hangs" reports across multiple sessions. `DataFlow.__del__` called `self.close()` → `async_safe_run()` → `asyncio.new_event_loop()` → selector init → `logger.debug()` → deadlock on root logging lock held by GC finalizer.
+Origin: 2026-04-16 plus prior "DataFlow unit suite hangs" reports across multiple sessions. `DataFlow.__del__` called `self.close()` → `async_safe_run()` → `asyncio.new_event_loop()` → selector init → `logger.debug()` → deadlock on root logging lock held by GC finalizer.

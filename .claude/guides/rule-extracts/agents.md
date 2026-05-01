@@ -41,7 +41,7 @@ Mechanical sweeps (run BEFORE LLM judgment):
 Agent(subagent_type="reviewer", prompt="Review the diff between main and feat/X.")
 ```
 
-Origin: kailash-py session 2026-04-19 ML GPU-first Phase 1 codify cycle. See `skills/30-claude-code-patterns/worktree-orchestration.md` § "Reviewer Prompts — Mechanical AST/Grep Sweep" for full evidence.
+Origin: 2026-04-19 codify cycle. See `skills/30-claude-code-patterns/worktree-orchestration.md` § "Reviewer Prompts — Mechanical AST/Grep Sweep" for full evidence.
 
 ## Worktree Isolation — Extended Post-Mortems
 
@@ -140,36 +140,3 @@ See `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 5 for the
 - **Custom API when Nexus exists** — misses Nexus's session management, rate limiting, multi-channel deployment
 - **Custom agents when Kaizen exists** — bypasses Kaizen's signature validation, tool safety, structured reasoning
 - **Custom governance when PACT exists** — lacks PACT's D/T/R accountability grammar and verification gradient
-
-## Quality Gates — Full Gate Table
-
-| Gate                | After Phase  | Enforcement | Review                                                                                                          |
-| ------------------- | ------------ | ----------- | --------------------------------------------------------------------------------------------------------------- |
-| Analysis complete   | `/analyze`   | RECOMMENDED | **reviewer**: Are findings complete? Gaps?                                                                      |
-| Plan approved       | `/todos`     | RECOMMENDED | **reviewer**: Does plan cover requirements?                                                                     |
-| Implementation done | `/implement` | **MUST**    | **reviewer** + **security-reviewer**: Parallel background agents.                                               |
-| Validation passed   | `/redteam`   | RECOMMENDED | **reviewer**: Are red team findings addressed?                                                                  |
-| Knowledge captured  | `/codify`    | RECOMMENDED | **gold-standards-validator**: Naming, licensing compliance.                                                     |
-| Before release      | `/release`   | **MUST**    | **reviewer** + **security-reviewer** + **gold-standards-validator**: Blocking.                                  |
-| After release       | post-merge   | RECOMMENDED | **reviewer** against MERGED main. Catches drift the pre-release review missed. If CRIT/HIGH, ship as `x.y.z+1`. |
-
-## Recovery Protocol — Full 4-Step
-
-When an `isolation: "worktree"` agent reports completion but the branch has zero commits AND the worktree has been auto-cleaned:
-
-```bash
-git worktree list | grep <expected-branch>                  # empty if cleaned
-git log <expected-branch> --oneline | head -5               # zero agent commits confirms truncation
-git status --short                                          # "??" entries surface the orphans
-find . -path .claude/worktrees -prune -o -name "<expected-file>" -print
-# → git checkout -b recovery/<original-branch-name>
-# → git add <orphaned files> && git -c core.hooksPath=/dev/null commit -m "feat(...): recovered from failed parallel worktree agent"
-# → fill missing deliverables (tests, specs, pyproject bumps, CHANGELOG)
-# → gh pr create with recovery/ prefix + body explicitly noting the recovery
-```
-
-Origin: Session 2026-04-20 Session 3b (issue #567, PR #574 recovered 1129 LOC of `alignment.py`).
-
-## Audit/Closure-Parity Verification — Wave 6 Evidence
-
-Session 2026-04-27 W6 /redteam Round 3 (kailash-py portfolio-spec-audit): Round-2 analyst (Read/Grep/Glob) FORWARDED 16 of 22 W5→W6 closure-parity rows because it could not run `gh pr view`, `gh pr diff`, `pytest --collect-only`, or `ast.parse()`. Round-3 had to re-launch with Bash-equipped pact-specialist to convert FORWARDED→VERIFIED. Tool-inventory mismatch cost one full audit round. Round-2 produced 6 ANALYST-VERIFIED + 16 FORWARDED; pact-specialist Round-3 with Bash converted all 16 FORWARDED to VERIFIED.

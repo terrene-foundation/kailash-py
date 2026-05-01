@@ -35,13 +35,8 @@ process.stdin.on("end", () => {
 
 const BLOCKED_IMPORTS = [
   // ── Nexus: API endpoints, web services, HTTP servers ──
-  // Patterns include both imports AND framework-specific usage signatures, so
-  // an Edit that adds a new @app.get(...) route to an existing FastAPI file
-  // triggers the hook even when the import line is outside the diff. The
-  // import-only check missed this case (red team #445 finding 13).
   {
     patterns: [
-      // Imports (catch new files / file rewrites)
       /\bfrom\s+fastapi\s+import\b/,
       /\bimport\s+fastapi\b/,
       /\bfrom\s+flask\s+import\b/,
@@ -52,11 +47,6 @@ const BLOCKED_IMPORTS = [
       /\bimport\s+aiohttp\b/,
       /\bfrom\s+sanic\s+import\b/,
       /\bimport\s+sanic\b/,
-      // FastAPI usage signatures (catch edits that add new endpoints/routes)
-      /@app\.(get|post|put|delete|patch|head|options|websocket|middleware)\(/,
-      /@router\.(get|post|put|delete|patch|head|options|websocket)\(/,
-      /\bFastAPI\(/,
-      /\bAPIRouter\(/,
     ],
     framework: "Nexus",
     specialist: "nexus-specialist",
@@ -226,33 +216,16 @@ function isExcluded(filePath) {
   )
     return true;
 
-  // BUILD repo — only the adapter/backend/transport/store layer and the
-  // Nexus engine-foundation layer use raw imports.
-  // The servers/ and api/ directories are the engine layer that Nexus wraps
-  // via HTTPTransport._gateway → create_gateway(). They cannot import from
-  // nexus without creating a circular dependency (kailash → nexus → kailash).
-  // See #445 architectural analysis.
+  // BUILD repo — only the adapter/backend/transport/store layer uses raw imports.
+  // Engines, features, API, servers MUST use the SDK's own primitives.
   if (
     /[\\/]adapters[\\/]/.test(filePath) ||
     /[\\/]backends[\\/]/.test(filePath) ||
     /[\\/]transports[\\/]/.test(filePath) ||
     /[\\/]providers[\\/]/.test(filePath) ||
     /[\\/]drivers[\\/]/.test(filePath) ||
-    // Nexus engine-foundation: server hierarchy + API gateway layer
-    /[\\/]src[\\/]kailash[\\/]servers[\\/]/.test(filePath) ||
-    /[\\/]src[\\/]kailash[\\/]api[\\/]/.test(filePath) ||
-    // Gateway + middleware engine layer: create FastAPI apps directly
-    // using APIRouter, Depends, BackgroundTasks, CORSMiddleware.
-    // Cannot import from nexus — circular: kailash → nexus → kailash.
-    // See #445 Track 3 architectural analysis.
-    /[\\/]src[\\/]kailash[\\/]gateway[\\/]/.test(filePath) ||
-    /[\\/]src[\\/]kailash[\\/]middleware[\\/]communication[\\/]/.test(
-      filePath,
-    ) ||
-    /[\\/]src[\\/]kailash[\\/]channels[\\/]/.test(filePath) ||
-    /[\\/]middleware[\\/]auth[\\/]/.test(filePath) ||
-    /[\\/]middleware[\\/]gateway[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]database[\\/]/.test(filePath) ||
+    /[\\/]middleware[\\/]gateway[\\/]event_store/.test(filePath) ||
     /[\\/]trust[\\/].*store/.test(filePath) ||
     /[\\/]trust[\\/]constraints[\\/]/.test(filePath) ||
     /[\\/]trust[\\/]enforce[\\/]/.test(filePath) ||

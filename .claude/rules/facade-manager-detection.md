@@ -1,4 +1,16 @@
+---
+priority: 10
+scope: path-scoped
+paths:
+  - "packages/**"
+  - "src/**"
+  - "**/tests/**"
+---
+
 # Facade Manager Detection Rules
+
+
+<!-- slot:neutral-body -->
 
 Closely related to `rules/orphan-detection.md`, this rule targets the specific code shape that becomes orphaned most often: classes named `*Manager`, `*Executor`, `*Store`, `*Registry`, `*Engine`, or `*Service` that are exposed via a property accessor on the framework's top-level class.
 
@@ -93,3 +105,5 @@ class TrustAwareQueryExecutor:
 - `rules/orphan-detection.md` — broader rule covering all facade-style attributes; this rule is the specific manager-shape pattern.
 - `rules/testing.md` § "Tier 2 (Integration): Real infrastructure recommended" — Tier 2 contract.
 - `rules/zero-tolerance.md` Rule 2 — config flags with no consumer are stubs; manager classes with no consumer are the same failure mode at a different scale.
+
+<!-- /slot:neutral-body -->

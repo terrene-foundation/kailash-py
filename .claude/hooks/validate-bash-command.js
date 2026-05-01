@@ -57,6 +57,27 @@ function validateBashCommand(data) {
   const command = data.tool_input?.command || "";
   const cwd = data.cwd || process.cwd();
 
+  // ADVISORY (loom #19 P3): branch-scope warn on `git commit` invocations.
+  // Delegates to .claude/hooks/pre-commit-branch-scope.js which always
+  // exits 0 and writes any out-of-scope advisory to stderr. Warn-only.
+  if (/^\s*git\s+commit\b/.test(command)) {
+    try {
+      const { spawnSync } = require("child_process");
+      const scopeScript = path.join(__dirname, "pre-commit-branch-scope.js");
+      const r = spawnSync("node", [scopeScript], {
+        cwd,
+        encoding: "utf8",
+        timeout: 4500,
+      });
+      const output = (r.stderr || "").trim();
+      if (output) {
+        return { continue: true, exitCode: 0, message: output };
+      }
+    } catch {
+      // Advisory failure must never block the commit.
+    }
+  }
+
   // BLOCK: Dangerous commands (with evasion-resistant patterns)
   const dangerousPatterns = [
     {

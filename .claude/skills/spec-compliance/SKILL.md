@@ -33,12 +33,12 @@ For each spec section, write down a literal acceptance assertion table, then ver
 
 Read the spec text verbatim. For each promised artifact, write the literal assertion:
 
-| Spec promise                                                            | Acceptance assertion                                                                                                                        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| "`StreamingAgent.run_stream()` yields `TextDelta` tokens incrementally" | grep `def run_stream` in src; AST: must yield ≥2 distinct values across the loop, NOT a single yield from a single `inner.run_async()` call |
-| "`BaseAgentConfig` has frozen field `posture: Posture`"                 | grep `posture:` in `BaseAgentConfig` dataclass body                                                                                         |
-| "`@deprecated` decorator applied to 7 extension points"                 | grep `@deprecated` in `base_agent.py` — must hit ≥7 distinct methods                                                                        |
-| "MOVE `handler.py` from `app/legacy/` to `app/v2/`"                     | source must be deleted OR <50 LOC OR import-and-warn shim                                                                                   |
+| Spec promise                                                                 | Acceptance assertion                                                                                                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| "`StreamingAgent.run_stream()` yields `TextDelta` tokens incrementally"      | grep `def run_stream` in src; AST: must yield ≥2 distinct values across the loop, NOT a single yield from a single `inner.run_async()` call |
+| "`BaseAgentConfig` has frozen field `posture: Posture`"                      | grep `posture:` in `BaseAgentConfig` dataclass body                                                                                         |
+| "`@deprecated` decorator applied to 7 extension points"                      | grep `@deprecated` in `base_agent.py` — must hit ≥7 distinct methods                                                                        |
+| "MOVE `client.py` from `src/kailash/mcp_server/` to `packages/kailash-mcp/`" | source must be deleted OR <50 LOC OR import-and-warn shim                                                                                   |
 
 ### Step 2: Run The 9 Verification Checks
 
@@ -102,11 +102,11 @@ For every "MOVE A → B" task, the source path A MUST satisfy ONE of:
 - (c) imports from B AND emits `DeprecationWarning`
 
 ```bash
-wc -l app/legacy/handler.py app/v2/handler.py
+wc -l src/kailash/mcp_server/client.py packages/kailash-mcp/src/kailash_mcp/client.py
 # Both 1088 lines → CRITICAL: copied not moved (drift risk)
 
 # If source is a thin shim, verify it imports from new path AND warns:
-grep -E "from app.v2.handler import|warnings.warn.*Deprecat" app/legacy/handler.py
+grep -E "from kailash_mcp.client import|warnings.warn.*Deprecat" src/kailash/mcp_server/client.py
 ```
 
 #### 5. New Test Coverage Verification
@@ -189,30 +189,6 @@ Save to `workspaces/<project>/.spec-coverage-v2.md` (the `-v2` suffix prevents c
 2. Every assertion shows a real verification method (`grep …`, `ast.parse(…)`, `wc -l …`, `pytest --collect-only …`).
 3. No row says "exists: yes" — that is a banned phrase. Rows must show the literal command and its actual output count.
 4. Every CRITICAL/HIGH row has been fixed and re-verified, not deferred.
-
-## Spec Coverage Audit Cadence
-
-A single R0 grep pass is insufficient. Experience has proven this:
-R0 may find and fix a vulnerability at 2 call sites, but a follow-up
-R1 grep audit can find the same unprotected pattern at 5 additional
-sites that R0 missed because they used a slightly different variable
-name (e.g., `parsed.password` vs `result.password`).
-
-**Protocol after the first round of fixes:**
-
-1. Run the original grep pattern against the full codebase, not
-   just the files you touched in R0.
-2. Expand the grep to cover variant spellings (e.g., `parsed.password`,
-   `result.password`, `url_parts.password`, `unquote(.*password`).
-3. For each new match, verify the fix is present. Zero-match on
-   the expanded grep = confidence the pattern is fully addressed.
-4. Document the grep commands in the spec-coverage table so the
-   next round can re-run them.
-
-This "grep-for-pattern after R0" step catches drift between call
-sites that look different but share the same vulnerability. Without
-it, the audit converges on the sites it found first and misses the
-sites that use different variable names for the same concept.
 
 ## Anti-Patterns
 

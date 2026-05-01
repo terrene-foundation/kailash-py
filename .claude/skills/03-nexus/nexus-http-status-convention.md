@@ -176,4 +176,4 @@ A repo-wide byte-diff test on this body shape is the cheap structural defense ag
 - `rules/security.md` § No Secrets in Logs — applies to error messages: never echo credentials, tokens, or internal paths.
 - `rules/communication.md` — the `error` message should be human-readable for frontend display, not developer-only shorthand.
 
-Origin: gh-coc-claude-rs#51 item 3a (2026-04-17) authored the original `{error, status}` body shape as a speculative convention. Superseded at loom 2.8.18 by the actual SDK contract from kailash-rs#404 S8 (loom 2.8.17 rule), verified by red-team grep against 8 production references in `crates/kailash-nexus/src/` — every shipping `NexusError.into_response()` call uses `{"error": "...", "code": "..."}`. Skill rewritten to match SDK truth + cross-link to the contract rule.
+Origin: 2026-04-17 — original `{error, status}` body shape was a speculative convention. Superseded by the actual SDK contract verified by red-team grep against 8 production references — every shipping `NexusError.into_response()` call uses `{"error": "...", "code": "..."}`. Skill rewritten to match SDK truth + cross-link to the contract rule.

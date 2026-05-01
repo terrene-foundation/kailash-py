@@ -233,4 +233,4 @@ Each match MUST be resolved to one of:
 - `rules/observability.md` § 6 — LLM 5xx MUST emit WARN. Paired with this skill: the WARN is the backup signal when a test-skip regression does ship. Without both, the 5xx is silent end-to-end.
 - `specs/llm-deployments.md` § 11 — canonical credential-gated Tier 2 test pattern (`#[ignore]` + env-gated CI job) that this skill treats as the acceptable reference.
 
-Origin: `workspaces/use-feedback-triage/journal/0003-GAP-test-skip-masks-ai-failures.md` (2026-04-18). Surfaced by `terrene-foundation/kailash-coc-claude-rs#52` — STP chatbot returned 503 on every run; `test.skip(chatStatus >= 500)` masked it until a human filed the issue.
+Origin: 2026-04-18 USE-feedback triage — a chatbot returned 503 on every run; `test.skip(chatStatus >= 500)` masked it until a human filed the issue.

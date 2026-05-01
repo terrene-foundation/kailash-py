@@ -81,7 +81,7 @@ The lower-layer test file (where the happy paths live) MUST also have a comment 
 // DO — bidirectional cross-reference in the Rust test file
 // NOTE: These wiremock tests are the ONLY happy-path coverage for
 // ServiceClient. The Python binding tests at
-// `bindings/kailash-python/tests/test_service_client.py` cannot
+// the Python binding's `tests/test_service_client.py` cannot
 // reach happy paths because HttpClient::validate_url() blocks
 // loopback before the allowlist is checked. If you change the
 // SSRF guard, both files need to be reviewed together.
@@ -149,4 +149,4 @@ Before declaring a test "impossible at this layer" the author MUST attempt to wr
 - `skills/spec-compliance/SKILL.md` — Spec-compliance verification protocol; auditors checking new modules for tests should consult impossibility-surface declarations before filing gaps.
 - Layered system coverage (when one layer wraps another) is a recurring pattern across Kailash framework boundaries (Python bindings → Rust core, Nexus → DataFlow, Trust plane → application code). The same docstring pattern applies wherever a higher layer cannot reach a lower-layer-protected path.
 
-Origin: BP-047 (kailash-rs ServiceClient Python binding, 2026-04-14, commit d3a14a73). The Python test file at `bindings/kailash-python/tests/test_service_client.py` cannot exercise happy-path roundtrips because `HttpClient::validate_url()` in `crates/kailash-nexus/src/http_client.rs:264` blocks loopback before the allowlist runs. The 38 Python tests cover error paths, eager validation, and rejection behavior; happy-path coverage stays in the Rust wiremock suite. Without the docstring at the top of the Python test file, every code review re-discovered the gap.
+Origin: 2026-04-14 — a binding's Python test file could not exercise happy-path roundtrips because the underlying core's `HttpClient::validate_url()` blocked loopback before the allowlist ran. The 38 Python binding tests cover error paths, eager validation, and rejection behavior; happy-path coverage stays in the core wiremock suite. Without the docstring at the top of the Python test file, every code review re-discovered the gap.

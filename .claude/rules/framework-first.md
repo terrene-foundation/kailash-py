@@ -172,6 +172,6 @@ app.startup().await?;   // renamed to _startup in the next major; integration br
 
 **Why:** Framework-integration code runs in every production instance; a single `AttributeError` on a renamed dispatch method crashes every service at lifespan boot with zero type-checker signal. The registered-handlers list is the data the framework's OWN internal dispatcher iterates — it cannot be removed without breaking the framework's own hooks, so it is strictly more stable than any dispatch method name. "Pin the framework version" is an anti-pattern: it creates a treadmill where every dependency upgrade re-triggers the same failure mode. Drive the data; don't call the dispatch.
 
-Origin: kailash-py issue #531 / PR #533 (2026-04-19) — kailash-nexus 2.1.0 called `app.router.startup()` / `.shutdown()` as if stable across FastAPI versions; some production FastAPI builds exposed only `_startup`; every 2.1.0 service crashed at uvicorn lifespan. Fix (2.1.1): iterate the `on_startup` / `on_shutdown` lists directly.
+Origin: 2026-04-19 — Nexus called `app.router.startup()` / `.shutdown()` as if stable across FastAPI versions; some production FastAPI builds exposed only `_startup`; every service crashed at uvicorn lifespan. Fix: iterate the `on_startup` / `on_shutdown` lists directly.
 
 <!-- /slot:neutral-body -->

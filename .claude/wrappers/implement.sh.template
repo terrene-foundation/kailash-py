@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# coc-implement: Codex wrapper for the /implement COC command
+# Generated from .claude/wrappers/implement.sh.template per v6 §4.3
+
+PROJECT_ROOT="${PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
+set -euo pipefail
+
+SCHEMA_PATH="${PROJECT_ROOT}/.claude/wrappers/schemas/implement.schema.json"
+INSTRUCTIONS_PATH="${PROJECT_ROOT}/.codex/developer-instructions/implement.md"
+
+if [[ ! -f "$SCHEMA_PATH" ]]; then
+  echo "ERROR: schema file $SCHEMA_PATH not found" >&2
+  exit 3
+fi
+
+if [[ -t 0 && $# -eq 0 ]]; then
+  echo "Usage: $0 <args>   OR   pipe prompt to stdin" >&2
+  exit 2
+fi
+
+if [[ -p /dev/stdin || ! -t 0 ]]; then
+  PROMPT="$(cat)"
+else
+  PROMPT="$*"
+fi
+
+exec codex exec \
+  --json \
+  --output-schema="$SCHEMA_PATH" \
+  -c project_doc_max_bytes=65536 \
+  -c developer_instructions_file="$INSTRUCTIONS_PATH" \
+  -- "$PROMPT"

@@ -14,7 +14,7 @@ paths:
 
 Every response a Nexus handler emits carries an HTTP status code that operators read as a triage signal at 03:00. The status taxonomy below is a contract: a handler returning the wrong code sends the operator to the wrong on-call page. This rule freezes the mapping from `NexusError` variants and handler-side errors to HTTP status codes, plus the JSON error body shape that rides on every 4xx/5xx response.
 
-The source of truth is the SDK `NexusError` / `NexusApiError` type: its `status_code()` method defines the variant → HTTP mapping and its `into_response()` method defines the JSON body shape. Documents, skills, downstream templates, and new handler code MUST match the SDK shape bit-for-bit. Cross-SDK parity: kailash-py and kailash-rs each have their own `NexusError` type; per EATP D6 the status mapping MUST match semantically across SDKs.
+The source of truth is the SDK `NexusError` / `NexusApiError` type: its `status_code()` method defines the variant → HTTP mapping and its `into_response()` method defines the JSON body shape. Documents, skills, downstream templates, and new handler code MUST match the SDK shape bit-for-bit.
 
 ## MUST Rules
 
@@ -175,6 +175,6 @@ def legacy_auth(inputs: dict) -> dict:
 - `skills/03-nexus/handler-status-codes.md` — 500 vs 502/503/504 decision table.
 - `rules/nexus-webhook-hmac.md` — HMAC verification patterns for webhook handlers.
 
-Origin: kailash-rs#404 S8 (2026-04-19). Cross-SDK: kailash-py has its own `NexusError` type; status mapping MUST match semantically per EATP D6.
+Origin: 2026-04-19 — Nexus extractor architecture rework codified the status taxonomy as a frozen contract.
 
 <!-- /slot:neutral-body -->

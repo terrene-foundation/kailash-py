@@ -67,12 +67,4 @@ These rules apply when working with EATP trust code.
 
 - `None` role = all-access (backward-compatible, no RBAC enforcement)
 
-### Cross-SDK Alignment
-
-- Both Python and Rust SDKs implement the spec independently (D6)
-- Convention names may differ (Python snake_case vs Rust snake_case) but semantics MUST match
-- New spec-level concepts require Rust team coordination before implementation
-
-**Why:** Semantic divergence between SDKs means trust records produced by one cannot be verified by the other, breaking cross-language interoperability.
-
 <!-- /slot:neutral-body -->
