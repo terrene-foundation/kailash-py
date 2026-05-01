@@ -91,7 +91,9 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
             # also acceptable here; what matters is pool count stays bounded.
             pass
         finally:
-            await db.close()
+            # close() is sync (returns None); close_async() is the awaitable
+            # cleanup (rules/patterns.md § Async Resource Cleanup).
+            await db.close_async()
 
     # 10 concurrent accesses — all should fail with DDLFailedError, not hang.
     await asyncio.gather(*[_attempt_access(i) for i in range(10)])
@@ -143,7 +145,9 @@ async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
             # Warn mode may still raise other errors (missing table, etc.)
             pass
         finally:
-            await db.close()
+            # close() is sync (returns None); close_async() is the awaitable
+            # cleanup (rules/patterns.md § Async Resource Cleanup).
+            await db.close_async()
 
     await asyncio.gather(*[_attempt_access_warn(i) for i in range(10)])
 
