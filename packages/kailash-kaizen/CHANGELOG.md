@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] — 2026-05-02 — LlmDeployment escape-hatch presets + `preset_name` retrofit
+
+Minor bump. Two cross-SDK parity issues close together:
+
+- **(Added)** `LlmDeployment.openai_compatible(base_url, api_key)` (#761) and `LlmDeployment.anthropic_compatible(base_url, api_key)` (#762) escape-hatch presets — wrap an arbitrary HTTPS endpoint with the canonical OpenAI Chat / Anthropic Messages wire protocol. Cross-SDK parity with kailash-rs PR #722 / PR #724.
+- **(Added)** `LlmDeployment.preset_name: Optional[str]` field, set by every preset factory (24 existing + 2 new) to the canonical literal. Cross-SDK parity with kailash-rs `LlmDeployment::preset_name()`.
+
+### Added
+
+- **`LlmDeployment.openai_compatible(base_url, api_key)` + `LlmDeployment.anthropic_compatible(base_url, api_key)` escape-hatch presets (closes #761, #762; cross-SDK parity with kailash-rs PR #722 / PR #724).** Wraps an arbitrary HTTPS endpoint with the canonical OpenAI Chat / Anthropic Messages wire protocol — useful for vLLM, llama.cpp servers, LM Studio remotes, LiteLLM proxies, OpenRouter Anthropic mode, internal gateways, and third-party OpenAI/Anthropic-compatible providers. SSRF guard runs on `Endpoint.base_url` automatically via the field validator (`deployment.py:129`, `mode="before"`); loopback (literal-IP) / RFC1918 private / link-local / cloud-metadata / non-HTTP(S) URLs raise `InvalidEndpoint` at construction. Anthropic variant defaults `anthropic-version: 2023-06-01` on `Endpoint.required_headers` (overridable). Both factories are reachable via the registry (`get_preset("openai_compatible")`, `get_preset("anthropic_compatible")`) AND the classmethod surface.
+- **`LlmDeployment.preset_name: Optional[str]` field — canonical preset literal exposed on every constructed deployment.** Set by every preset factory (all 24 existing presets retrofitted in the same PR per `rules/zero-tolerance.md` Rule 6 Implement Fully) to the literal registered in `_PRESETS`. The literal — NOT the host or any caller-supplied URL fragment — prevents log-aggregator label cardinality blow-up and credential enumeration via observability per `rules/observability.md` § 8 (schema-revealing field names). Manual constructions leave it `None`; that's structural — `preset_name` is a public-API contract for preset-built deployments only. Cross-SDK parity with kailash-rs `LlmDeployment::preset_name()`. Python idiom is field access (`dep.preset_name`) rather than the Rust method-style (`dep.preset_name()`); the field IS the contract surface, and is consumed by the upcoming `supports()` capability matrix (#763) without per-call introspection.
+- **`azure_openai_preset` added to `kaizen.llm.presets.__all__`.** Pre-existing orphan-detection §6 violation surfaced by this change (`__all__`-completeness audit) — the preset was eagerly defined and registered at module load, but absent from `__all__`, so `from kaizen.llm.presets import *` silently dropped it from the public re-export. Same-bug-class fix-immediately per `rules/autonomous-execution.md` MUST Rule 4.
+
+### Tested
+
+- `tests/unit/llm/test_preset_name_and_compatible.py` — 22 tests covering both new compatible presets (shape, classmethod parity, empty-arg rejection, parametrized SSRF guard rejection over loopback / private / link-local / cloud-metadata / non-HTTP(S)), every retrofitted preset's `preset_name` literal, registry membership, and a structural `len(list_presets()) == 26` lock so future regressions surface loudly.
+
 ## [2.14.0] — 2026-04-30 — Canonical `kaizen.core` re-exports + MLAwareAgent + env-model resolution
 
 Minor bump. Three load-bearing changes land together:
