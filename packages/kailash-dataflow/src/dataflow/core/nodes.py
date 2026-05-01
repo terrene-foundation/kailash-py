@@ -50,6 +50,33 @@ from .async_utils import async_safe_run  # Phase 6: Async-safe execution
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
+def _normalize_field_specs(fields: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Normalize a model-fields dict into the canonical {"type": <type>, ...} shape.
+
+    The canonical ``@db.model`` path produces dict-form values
+    (``{"type": <type>, "required": True}``) — see engine.py
+    ``_register_model_fields``. The public ``NodeGenerator`` API also accepts
+    bare-type form (``{"name": str, "active": bool}``) for direct callers.
+    Without this helper, downstream lookups
+    ``self.model_fields.get(name, {}).get("type")`` raise
+    ``AttributeError: type object 'str' has no attribute 'get'`` on the
+    bare-type branch (issue #774).
+
+    Single point of normalization at the constructor boundary makes the
+    contract explicit: ``self.model_fields`` is dict-form everywhere
+    downstream regardless of caller-supplied shape.
+    """
+    if not fields:
+        return {}
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for name, spec in fields.items():
+        if isinstance(spec, dict):
+            normalized[name] = spec
+        else:
+            normalized[name] = {"type": spec, "required": True}
+    return normalized
+
+
 # ErrorEnhancer imported locally to avoid circular dependencies
 # Import deferred to runtime to break circular dependency chain:
 # nodes.py -> platform.errors -> platform.__init__ -> studio -> dataflow -> engine -> nodes.py
@@ -82,12 +109,19 @@ def _coerce_record_id(model_fields: Dict[str, Any], id_value: Any) -> Any:
     by normalizing the type annotation before comparison. Fixes #439:
     express_sync.update/read/delete reject integer record IDs on PostgreSQL
     when callers pass string IDs for integer primary key columns.
+
+    Issue #774: defense-in-depth — accept both canonical dict-form and
+    bare-type model_fields shapes; normalize on entry.
     """
     if id_value is None:
         return None
 
     id_field_info = model_fields.get("id", {})
-    id_type = id_field_info.get("type")
+    if not isinstance(id_field_info, dict):
+        # bare-type form: id_field_info IS the type
+        id_type = id_field_info
+    else:
+        id_type = id_field_info.get("type")
 
     if id_type is None:
         # No type info — try int conversion for backward compatibility
@@ -162,9 +196,14 @@ def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict
         if not isinstance(field_value, str):
             continue
 
-        # Check if this field is defined as datetime in the model
+        # Check if this field is defined as datetime in the model.
+        # Issue #774: accept both dict-form ({"type": <type>}) and bare-type
+        # ({"name": <type>}) shapes for defense-in-depth.
         field_info = model_fields.get(field_name, {})
-        field_type = field_info.get("type")
+        if not isinstance(field_info, dict):
+            field_type = field_info
+        else:
+            field_type = field_info.get("type")
 
         # Handle Optional[datetime] types
         if hasattr(field_type, "__origin__"):
@@ -495,7 +534,12 @@ class NodeGenerator:
                 self.model_name = model_name
                 self.operation = operation
                 self.dataflow_instance = dataflow_instance
-                self.model_fields = fields
+                # Issue #774: normalize bare-type field specs to canonical
+                # {"type": <type>, "required": True} dict-form. Without this,
+                # downstream lookups (.get(name, {}).get("type"), field_info["type"])
+                # crash with AttributeError on bare-type values like {"name": str}.
+                # Single point of normalization keeps the contract explicit.
+                self.model_fields = _normalize_field_specs(fields)
                 # TDD context inheritance
                 self._tdd_mode = tdd_mode
                 self._test_context = test_context
