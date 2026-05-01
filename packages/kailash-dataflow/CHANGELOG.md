@@ -1,5 +1,21 @@
 # DataFlow Changelog
 
+## [2.7.5] — 2026-05-01 — `bulk_create` AttributeError on bare-type field specs (#774)
+
+Patch release closing issue #774. `NodeGenerator.generate_*_nodes` accepted both dict-form (`{"name": {"type": str}}`) and bare-type (`{"name": str}`) field specs by signature, but only dict-form by behavior. Direct callers passing bare-type form crashed at `dataflow/core/nodes.py:837` with `AttributeError: type object 'str' has no attribute 'get'` because the downstream `self.model_fields.get(name, {}).get("type")` chain assumed dict-form. The canonical `@db.model` path (`engine.py:1858`) already produced dict-form, so the bug only surfaced when external code constructed bulk nodes through the public `NodeGenerator` API directly.
+
+### Fixed
+
+- **#774 — Field-spec normalization at the node constructor boundary.** New `_normalize_field_specs()` helper at `dataflow/core/nodes.py` makes the contract explicit: `self.model_fields` is canonical dict-form everywhere downstream regardless of caller-supplied shape. Defense-in-depth `isinstance` guards added to `_coerce_record_id` and `convert_datetime_fields` for any external caller bypassing the constructor.
+
+### Tests
+
+- `tests/regression/test_issue_774_bulk_create_field_spec_normalization.py` — covers Tier 1 (replays the originally-failing unit test against bare-type form), structural-invariant (pins the normalizer contract for both dict-form and bare-type shapes), and Tier 2 (round-trip via `@db.model` against real PostgreSQL).
+
+### Cross-SDK
+
+- N/A — kailash-rs uses strongly-typed `Vec<FieldDef>` with `FieldType` enum (`crates/kailash-dataflow/src/model.rs:587`, `:842`); the bug class is structurally unreachable. No upstream issue to file.
+
 ## [2.7.4] — 2026-05-01 — Declare `psycopg2-binary` as baseline dependency (#753)
 
 Patch release closing issue #753. The synchronous DDL / migration path (`SyncDDLExecutor._get_postgresql_connection`, `MigrationConnectionManager._connect_with_retry`, `dataflow.core.pool_utils._is_postgresql_url`) imports `psycopg2` to bootstrap registry tables and run `auto_migrate=True` against PostgreSQL. The package declared `asyncpg` (covering runtime DML) but did NOT declare `psycopg2` / `psycopg2-binary` as a baseline dep nor as an optional extra. Every fresh install pointed at a PostgreSQL `DATABASE_URL` failed at the first `auto_migrate` trigger with `ModuleNotFoundError: No module named 'psycopg2'`, then crashed downstream DML with `relation "<table>" does not exist` because the registry/schema bootstrap silently failed earlier in the stack trace.
