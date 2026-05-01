@@ -124,9 +124,9 @@ class CacheInvalidator:
 
         is_async = False
         if delete_method is not None:
-            is_async = asyncio.iscoroutinefunction(delete_method)
+            is_async = inspect.iscoroutinefunction(delete_method)
         if not is_async and clear_pattern_method is not None:
-            is_async = asyncio.iscoroutinefunction(clear_pattern_method)
+            is_async = inspect.iscoroutinefunction(clear_pattern_method)
 
         if is_async:
             logger.debug(
