@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **7 capability matrix rows for Python-only OpenAI-compatible aggregators + local-server presets (closes #790).** `together`, `fireworks`, `openrouter`, `deepseek`, `lm_studio`, `llama_cpp`, `docker_model_runner` previously fell through to `ALL_FALSE_CAPABILITIES` because they had no row in `kaizen.llm.capabilities._PRESET_CAPABILITIES`. Calls to `LlmDeployment.together(...).supports()` reported the deployment as uncapable for tools / vision even though Together AI hosts tool-calling and vision-capable models. New rows assert the deployment-surface capability following the existing convention (vision=True means "can serve vision-capable models, per-model gating is caller's responsibility" — same as `ollama` / `groq` / `mistral`). `deepseek` is the conservative outlier (vision=False) because `api.deepseek.com/v1` exposes only deepseek-chat / deepseek-coder at the deployment surface; the DeepSeek-VL family is distributed as separate weights, not served by this preset's endpoint. Per-preset shape tests added to `tests/unit/llm/test_supports_capability_matrix.py`; the `_NON_EMPTY_PRESETS` parametrized sweep extended to cover all 7. The `<provider>_default` convenience presets (#787) carry the PARENT preset literal so capability lookup routes through the parent row automatically — no separate `_default` rows needed.
 - **Cross-SDK reconciliation note (#790).** kailash-rs `CapabilityMatrix::for_preset` at `crates/kailash-kaizen/src/llm/deployment/capabilities.rs:120-250` does NOT yet have rows for these 7 presets; it currently falls through to `Self::all_false()`. Per `rules/upstream-issue-hygiene.md`, no auto-cross-file — the kailash-rs side should land equivalent rows in a coordinated cross-SDK release. Until then, Python `supports()` reports the canonical capability matrix; Rust returns all-False for the same preset name.
 
+### Changed
+
+- **`cohere_preset` default endpoint advanced from `https://api.cohere.com/v1` (legacy Generate API) to `https://api.cohere.ai/v2` (modern Chat API) for cross-SDK parity with kailash-rs (closes #794).** kailash-rs `LlmDeployment::cohere()` at `crates/kailash-kaizen/src/llm/deployment/presets.rs:386-396` constructs `Endpoint::new("https://api.cohere.ai/v2")`; Python `cohere_preset` previously diverged at `api.cohere.com/v1`, breaking byte-equivalent cross-SDK code-portability per `rules/cross-sdk-inspection.md` § 3 (EATP D6). The on-wire request envelope at `/v2` is OpenAI-Chat-compatible — Rust delegates v2 through `OpenAiAdapter` (see `presets.rs:378-380`) and Python preserves the same `WireProtocol.CohereGenerate` tag for adapter routing continuity. The new `LlmDeployment.cohere_from_env()` constructor from #791 inherits the new default automatically. Both Cohere endpoints currently coexist (v1 has no announced sunset date), but Cohere's published API reference now directs new integrations at v2.
+
+#### Migration
+
+Callers who explicitly relied on the legacy v1 Generate API request envelope (different shape from the v2 Chat envelope) MUST opt in via explicit overrides:
+
+```python
+from kaizen.llm.presets import cohere_preset
+
+# Default behavior in 2.18.0+: v2 Chat API on api.cohere.ai
+dep = cohere_preset(api_key="...", model="command-r-plus")
+# → endpoint: https://api.cohere.ai/v2
+
+# Pre-2.18.0 legacy v1 Generate API on api.cohere.com (callers who built
+# request bodies in v1 Generate format MUST migrate via this opt-in):
+dep = cohere_preset(
+    api_key="...",
+    model="command-r-plus",
+    base_url="https://api.cohere.com",
+    path_prefix="/v1",
+)
+```
+
+Callers who did not pass explicit `base_url` / `path_prefix` overrides AND whose request handling treats Cohere as OpenAI-compatible (the canonical kaizen pattern) require no migration — the v2 Chat API is OpenAI-compatible by design.
+
 ## [2.17.1] — 2026-05-02 — CodeQL hygiene cleanup (#789 FIX track)
 
 Patch bump. Closes 4 of 13 open CodeQL findings on the kaizen surface
