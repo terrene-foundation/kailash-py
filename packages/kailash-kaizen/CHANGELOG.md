@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`kaizen.llm.testing.mock_preset()` test-only deployment factory (closes #788; cross-SDK parity with kailash-rs `LlmDeployment::mock()` at `crates/kailash-kaizen/src/llm/deployment/presets.rs:1183`).** New module `kaizen.llm.testing` exposes `mock_preset(model: str = "mock-model") -> LlmDeployment` for test code that needs a structurally-valid `LlmDeployment` without binding to a real provider. The deployment carries `preset_name="mock"`, `WireProtocol.OpenAiChat`, `StaticNone` auth, and an endpoint at `https://example.com/v1` (RFC-2606 reserved test host that resolves under the SSRF guard). Cross-SDK parity: Rust gates `mock()` behind `#[cfg(any(test, feature = "test-utils"))]` so the symbol does not exist in production builds; Python lacks cargo features, so the structural defense is **physical module separation** — `LlmDeployment.mock` does NOT exist on the production class, `kaizen.llm.presets.mock_preset` does NOT exist, and `"mock"` is NOT a registered preset. Test code MUST `from kaizen.llm.testing import mock_preset` explicitly. The module path is the deliberate red flag — production code that imports from a module named `testing` is structurally identifiable by `grep -rn 'kaizen.llm.testing' src/`. `mock_preset(...).supports()` returns the fail-closed all-False matrix, matching Rust's `CapabilityMatrix::for_preset("mock")` fall-through behavior (no explicit `"mock"` row in either SDK).
+
 ## [2.17.1] — 2026-05-02 — CodeQL hygiene cleanup (#789 FIX track)
 
 Patch bump. Closes 4 of 13 open CodeQL findings on the kaizen surface
