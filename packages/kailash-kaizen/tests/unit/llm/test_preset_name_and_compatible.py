@@ -231,12 +231,22 @@ def test_compatible_presets_appear_in_registry() -> None:
 def test_total_preset_count_after_retrofit() -> None:
     """Lock the registry size so future regressions surface loudly.
 
-    24 existing presets (S1 + 15 S3 + 4 S4b + 1 S4a + 2 S5 + 1 S6 + the
-    `azure_entra` factory which is registered via S6) + 2 new compatible
-    presets = 26.
+    Composition (cumulative across releases):
+
+    * S1 + 15 S3 (direct providers) + 4 S4b (bedrock non-claude) + 1 S4a
+      (bedrock claude) + 2 S5 (vertex) + 1 S6 (azure openai) +
+      `azure_entra` factory registered via S6 = 24 (pre-2.15.0 baseline).
+    * + 2 compatible presets (`openai_compatible`, `anthropic_compatible`,
+      #761 / #762) shipped in 2.15.0 → 26.
+    * + 4 default-URL convenience presets (`ollama_default`,
+      `lm_studio_default`, `llama_cpp_default`,
+      `docker_model_runner_default`, #787) shipped in 2.16.2 → 30.
+    * + 12 `<provider>_from_env` convenience presets (#791) for OpenAI,
+      Anthropic, Google, Cohere, Mistral, Perplexity, HuggingFace, Groq,
+      Together, Fireworks, OpenRouter, DeepSeek → 42.
 
     NB: `azure_entra` is registered as a preset name even though it is
     really an auth-strategy factory; this is pre-existing in the kaizen
-    LLM surface. If a future cleanup removes it, update this count to 25.
+    LLM surface. If a future cleanup removes it, decrement this count.
     """
-    assert len(list_presets()) == 26
+    assert len(list_presets()) == 42
