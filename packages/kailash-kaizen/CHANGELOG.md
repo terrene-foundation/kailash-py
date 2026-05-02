@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.1] — 2026-05-02 — CodeQL hygiene cleanup (#789 FIX track)
+
+Patch bump. Closes 4 of 13 open CodeQL findings on the kaizen surface
+per the #789 Rule 1b deferral track. The remaining 9 findings are tracked
+as DEFER with per-finding runtime-safety proofs in #789's triage comment;
+all 9 fall into 4 categorical CodeQL false-positive classes (fingerprint
+redaction not recognised, runtime-deferred local imports, `Protocol` stub
+bodies, `__del__` interpreter-shutdown defense).
+
+### Fixed
+
+- **`packages/kailash-kaizen/src/kaizen/orchestration/runtime.py`** — removed unused `Union` import (closes CodeQL alert #10874, `py/unused-import`).
+- **`packages/kailash-kaizen/src/kaizen/signatures/core.py`** — removed unused `TYPE_CHECKING` import; the file's line-41 comment explicitly opts out of TYPE_CHECKING back-edges, so the import was deliberate non-use (closes CodeQL alert #10865, `py/unused-import`).
+- **`packages/kailash-kaizen/src/kaizen/strategies/async_single_shot.py`** — refactored two `runtime = AsyncLocalRuntime() / try / finally: runtime.close()` blocks to `async with AsyncLocalRuntime() as runtime:` form (closes CodeQL alerts #10923 + #10924, `py/should-use-with`). `AsyncLocalRuntime` exposes `__aenter__` / `__aexit__` (`src/kailash/runtime/async_local.py:1580,1590`) so the refactor is drop-in. The new form propagates exceptions cleanly through `__aexit__` on every code path including the inner-loop `break` and outer-`except` propagation; the prior form relied on an explicit synchronous `close()` in `finally` that did not await async cleanup.
+- **`packages/kailash-kaizen/tests/unit/strategies/test_async_single_shot_tool_calls.py`** — extended 7 `mock_runtime_instance` setups with `__aenter__` / `__aexit__` `AsyncMock` hooks per `orphan-detection.md` Rule 4 (refactor sweeps tests in same commit). 14/14 tool-call tests pass; 456/456 broader strategies + orchestration + signatures sweep clean.
+
+### Known follow-ups (filed separately, not blocking this release)
+
+- **9 remaining CodeQL findings** tracked as DEFER per `zero-tolerance.md` Rule 1b on issue #789 with per-finding runtime-safety proofs. Each finding falls into a categorical CodeQL static-analyzer limitation (not project-specific debt). Rule 1b conditions met: runtime-safety proof ✓, tracking issue (#789) ✓, release-PR link (this CHANGELOG entry) ✓, release-specialist signoff to be confirmed at the release PR review.
+
 ## [2.17.0] — 2026-05-02 — `<provider>_from_env` cross-SDK convenience constructors (#791)
 
 Minor bump. Closes the deferred cross-SDK API-shape parity gap surfaced

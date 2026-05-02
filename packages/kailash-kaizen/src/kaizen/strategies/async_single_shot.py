@@ -140,10 +140,11 @@ class AsyncSingleShotStrategy:
 
         # Execute asynchronously
         try:
-            # Use AsyncLocalRuntime for true async execution (no thread pool)
-            runtime = AsyncLocalRuntime()
-
-            try:
+            # Use AsyncLocalRuntime for true async execution (no thread pool).
+            # `async with` invokes __aenter__/__aexit__ so the runtime is closed
+            # cleanly on every exit path, including the inner break out of the
+            # tool-call loop and exception propagation up to the outer `except`.
+            async with AsyncLocalRuntime() as runtime:
                 # Transform inputs to messages
                 messages = self._create_messages_from_inputs(agent, preprocessed_inputs)
                 workflow_params = {"agent_exec": {"messages": messages}}
@@ -262,19 +263,13 @@ class AsyncSingleShotStrategy:
                     if workflow is None:
                         break
                     workflow_params = {"agent_exec": {"messages": updated_messages}}
-                    runtime_next = AsyncLocalRuntime()
-                    try:
+                    async with AsyncLocalRuntime() as runtime_next:
                         results, run_id = await runtime_next.execute_workflow_async(
                             workflow.build(), inputs=workflow_params
                         )
-                    finally:
-                        runtime_next.close()
 
                     # Update messages for potential next round
                     messages = updated_messages
-
-            finally:
-                runtime.close()
 
             # Parse result
             parsed_result = self.parse_result(results)
