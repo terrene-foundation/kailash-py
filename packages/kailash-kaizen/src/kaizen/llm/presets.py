@@ -343,14 +343,32 @@ def cohere_preset(
     api_key: str,
     model: str,
     *,
-    base_url: str = "https://api.cohere.com",
-    path_prefix: str = "/v1",
+    base_url: str = "https://api.cohere.ai",
+    path_prefix: str = "/v2",
 ) -> LlmDeployment:
-    """Cohere Generate API.
+    """Cohere v2 Chat API.
 
     Wire:     `CohereGenerate`
-    Endpoint: `https://api.cohere.com/v1`
+    Endpoint: `https://api.cohere.ai/v2` (cross-SDK parity with kailash-rs
+              ``LlmDeployment::cohere()`` at
+              ``crates/kailash-kaizen/src/llm/deployment/presets.rs:386-396``).
     Auth:     `Authorization: Bearer <key>`
+
+    Default endpoint advanced from the legacy ``https://api.cohere.com/v1``
+    Generate API to the modern ``https://api.cohere.ai/v2`` Chat API in
+    kaizen 2.18.0 (#794) for byte-equivalent cross-SDK parity per
+    ``rules/cross-sdk-inspection.md`` § 3 (EATP D6: matching semantics).
+    The on-wire request envelope at ``/v2`` is OpenAI-Chat-compatible;
+    Rust delegates v2 through ``OpenAiAdapter`` (see ``presets.rs:378-380``)
+    and Python preserves the same ``WireProtocol.CohereGenerate`` tag for
+    adapter routing continuity.
+
+    Migration: callers who require the legacy v1 Generate API (different
+    on-wire request shape) MUST opt in explicitly via
+    ``cohere_preset(api_key, model, base_url="https://api.cohere.com",
+    path_prefix="/v1")``. Both Cohere endpoints currently coexist (v1 has
+    no announced sunset date), but Cohere's published API reference now
+    directs new integrations at v2.
     """
     _validate_required_str(api_key, name="cohere_preset.api_key")
     _validate_required_str(

@@ -57,7 +57,9 @@ def test_bedrock_cohere_preset_distinct_from_cohere_direct() -> None:
     assert bedrock.wire == WireProtocol.BedrockInvoke
     assert direct.wire == WireProtocol.CohereGenerate
     assert "bedrock-runtime" in str(bedrock.endpoint.base_url)
-    assert "api.cohere.com" in str(direct.endpoint.base_url)
+    # Cross-SDK parity (#794): cohere_preset advanced from api.cohere.com/v1
+    # to api.cohere.ai/v2 to match kailash-rs LlmDeployment::cohere().
+    assert "api.cohere.ai" in str(direct.endpoint.base_url)
 
 
 def test_bedrock_cohere_preset_rejects_empty_api_key() -> None:

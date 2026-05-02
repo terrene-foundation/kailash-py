@@ -246,13 +246,13 @@ def test_cohere_from_env_preset_shape(
     assert dep.wire == WireProtocol.CohereGenerate
     assert dep.preset_name == "cohere"
     assert dep.default_model == "command-r-plus"
-    # NOTE: the Python parent factory (`cohere_preset`) currently uses
-    # `https://api.cohere.com/v1` while Rust `presets.rs:387` uses
-    # `https://api.cohere.ai/v2`. This divergence pre-dates #791 and
-    # is a SEPARATE cross-SDK parity issue (#791 inherits whichever URL
-    # the parent factory exposes). Once the parent URL is reconciled the
-    # `_from_env` wrapper picks up the change automatically.
-    assert dep.endpoint.path_prefix == "/v1"
+    # Cross-SDK parity reconciled in #794 — parent `cohere_preset` advanced
+    # default endpoint from legacy `https://api.cohere.com/v1` to modern
+    # `https://api.cohere.ai/v2` to match kailash-rs `presets.rs:386-396`.
+    # The `_from_env` wrapper inherits whichever URL the parent factory
+    # exposes, so the path prefix is now `/v2`.
+    assert dep.endpoint.path_prefix == "/v2"
+    assert str(dep.endpoint.base_url).startswith("https://api.cohere.ai")
 
 
 def test_mistral_from_env_preset_shape(

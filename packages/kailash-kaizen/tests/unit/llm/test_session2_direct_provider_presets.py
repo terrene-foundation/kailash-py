@@ -164,11 +164,30 @@ def test_google_preset_free_function_matches_classmethod() -> None:
 def test_cohere_preset_shape() -> None:
     d = LlmDeployment.cohere("k", model="command-r-plus")
     assert d.wire == WireProtocol.CohereGenerate
-    assert str(d.endpoint.base_url).startswith("https://api.cohere.com")
-    assert d.endpoint.path_prefix == "/v1"
+    # Cross-SDK parity (#794): default endpoint moved from legacy v1 to v2
+    # to match kailash-rs `LlmDeployment::cohere()` byte-for-byte.
+    assert str(d.endpoint.base_url).startswith("https://api.cohere.ai")
+    assert d.endpoint.path_prefix == "/v2"
     assert d.default_model == "command-r-plus"
     assert isinstance(d.auth, ApiKeyBearer)
     assert d.auth.kind == ApiKeyHeaderKind.Authorization_Bearer
+
+
+def test_cohere_preset_legacy_v1_opt_in_still_works() -> None:
+    """Migration path (#794): callers requiring legacy v1 Generate API
+    pass explicit base_url + path_prefix overrides. Same `CohereGenerate`
+    wire tag; the endpoint is the only knob that changes the on-wire
+    request envelope (v1 Generate vs v2 Chat).
+    """
+    d = LlmDeployment.cohere(
+        "k",
+        model="command-r-plus",
+        base_url="https://api.cohere.com",
+        path_prefix="/v1",
+    )
+    assert d.wire == WireProtocol.CohereGenerate
+    assert str(d.endpoint.base_url).startswith("https://api.cohere.com")
+    assert d.endpoint.path_prefix == "/v1"
 
 
 def test_cohere_preset_rejects_empty_key() -> None:
