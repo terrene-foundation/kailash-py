@@ -135,6 +135,35 @@ def test_fingerprint_secret_has_4_hex_chars():
 
 Origin: kailash-rs PR #598 (2026-04-25) cross-SDK fingerprint helper — first cut had empty-input + algorithm-mode divergence with kailash-py; caught by reviewers but only because abstract parity assertions were absent. Codified to make the absence loud.
 
+### Rule 4a: Sibling-Canonical Fixtures MUST Be Vendored, Not Re-Authored
+
+When the sibling SDK is the canonical author of a cross-SDK fixture file (test vectors, byte-pin canonicals, conformance JSON), the local SDK's test directory MUST vendor the canonical file (commit the same bytes) — NOT maintain a parallel hand-authored copy. Local consumers (Rust loaders, Python binding tests, pin-gen reproducibility scripts) MUST be updated to read the canonical shape in the same PR. Orphaned consumers reading the old shape are a Rule 4 (orphan-detection) violation.
+
+```
+# DO — vendor the canonical file from the sibling repo
+$ cp ../kailash-py/tests/fixtures/trace-event-canonical.json \
+     bindings/kailash-rs/test-vectors/trace-event-canonical.json
+$ git add bindings/kailash-rs/test-vectors/trace-event-canonical.json
+# Update Rust loader + Python binding test + pin-gen script to read canonical shape — same PR.
+
+# DO NOT — maintain a parallel hand-authored copy
+# rs-side fixture: { "id": "v1", "input": "..." }   ← drifted shape
+# py-side fixture: { "name": "v1", "input_repr": "..." }   ← canonical shape
+# fingerprints happen to match for V4-V5 but not V1-V3; cross-SDK contract silently broken.
+```
+
+**BLOCKED rationalizations:**
+
+- "Re-authoring is faster than vendoring; the JSON is short"
+- "We'll vendor when the sibling SDK formalizes the canonical"
+- "Field-name divergence is cosmetic, fingerprints still match"
+- "Vendoring creates a sync burden every time the sibling updates the fixture"
+- "Our loader can normalize either shape; vendoring isn't strictly required"
+
+**Why:** Parallel copies drift in shape (`id`/`input` vs `name`/`input_repr`) AND content (different cosmetic input data); vendoring guarantees byte-for-byte file-level parity. The cross-SDK fingerprint contract (Rule 4 above pins ≥3 byte-vectors) is met when the local implementation produces byte-identical output for every vector in the vendored fixture. Orphaned consumers reading the old shape fail at first CI run with KeyError / `cannot find field` / "missing field `id`" — the structural defense against silent drift is `same file, same bytes`. The "sync burden" argument inverts the actual cost: parallel copies create N × M sync work on every fixture edit; vendoring creates 1 sync work per edit (a file copy from sibling repo).
+
+Origin: kailash-rs PR #761 (merged 8286775f, 2026-05-02) — vendored `test-vectors/trace-event-canonical.json` from `terrene-foundation/kailash-py:main`. Pre-vendor: rs-side fixture had `id`/`input` shape with V1-V3 inputs cosmetically different from py-side; V4-V5 fingerprints already matched (Unicode coverage tests aligned, V1-V3 weren't). Post-vendor: all 5 V1-V5 fingerprints reproduce byte-for-byte through both Rust `compute_trace_event_fingerprint` AND Python binding `serialize_canonical_json`. Same-shard sibling consumer fix per `autonomous-execution.md` Rule 4 (Python binding test orphaned at first push, CI surfaced it, fix-immediately landed in same PR commit `10274a5d`). Codified GLOBAL via /sync rs Gate 1 (2026-05-02 second cycle).
+
 ### 5. Inspection Checklist
 
 When closing any issue, verify:

@@ -11,7 +11,6 @@ paths:
 
 # CC Artifact Quality Rules
 
-
 <!-- slot:neutral-body -->
 
 CC-specific residue. Runtime-neutral artifact quality (DO/DO NOT examples, Why: rationale, Loud/Linguistic/Layered test, dangling cross-references) lives in `rules/rule-authoring.md`; cross-CLI artifact rules live in `rules/variant-authoring.md`. See those for the general principles.
@@ -73,6 +72,34 @@ const timeout = setTimeout(() => {
 ```
 
 **Why:** A hanging hook blocks the entire Claude Code session indefinitely.
+
+### 8. Workspace-Walking Hooks Filter Leading-Underscore Meta-Dirs
+
+Hooks that enumerate `workspaces/<name>/` MUST filter directories whose name starts with underscore (`_archive`, `_template`, `_draft`, etc.) alongside the existing `instructions` skip. Pattern: `entries.filter(e => e.isDirectory() && e.name !== "instructions" && !e.name.startsWith("_"))`. Same filter applies in any `for ... of entries` loop that walks the workspaces directory.
+
+```javascript
+// DO — filter both `instructions` and leading-underscore meta-dirs
+const projects = entries.filter(
+  (e) =>
+    e.isDirectory() && e.name !== "instructions" && !e.name.startsWith("_"),
+);
+
+// DO NOT — filter only `instructions` (leaves `_archive`, `_template` to surface as active)
+const projects = entries.filter(
+  (e) => e.isDirectory() && e.name !== "instructions",
+);
+```
+
+**BLOCKED rationalizations:**
+
+- "`_archive` is rarely the most-recent dir, the bug is theoretical"
+- "We'll add the filter when someone hits the failure mode"
+- "The hook only runs at SessionStart, low blast radius"
+- "Operators can rename `_archive` to something else"
+
+**Why:** Archival operations (`git mv workspaces/X workspaces/_archive/X`) bump `_archive/`'s mtime to most-recently-modified; without the filter, `detectActiveWorkspace` surfaces `_archive` as the active workspace, and `SessionEnd` routes journal stubs into `workspaces/_archive/journal/.pending/` — invisible drift the next session must triage. The same failure mode applies to `findAllSessionNotes` (SessionStart drift dashboards). Leading-underscore is the convention for workspace meta-dirs (`_archive`, `_template`, future `_draft`); filtering by prefix makes the contract durable as new meta-dir conventions emerge.
+
+Origin: kailash-rs PR #759 (2026-05-02) — `git mv` of 4 workspaces into `_archive/` caused 3 SessionEnd stubs to land in `workspaces/_archive/journal/.pending/`. Fix landed at `.claude/hooks/lib/workspace-utils.js::detectActiveWorkspace` + `findAllSessionNotes`. Codified GLOBAL via /sync rs Gate 1 (2026-05-02 second cycle).
 
 ## MUST NOT
 
