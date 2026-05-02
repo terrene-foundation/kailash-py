@@ -245,6 +245,21 @@ _NON_EMPTY_PRESETS = (
     "ollama_default",
     "cohere",
     "mistral",
+    # Python-only OpenAI-compatible aggregators + local servers (#790).
+    # No row in kailash-rs ``CapabilityMatrix::for_preset`` yet —
+    # cross-SDK reconciliation flagged in the PR body per
+    # ``rules/upstream-issue-hygiene.md`` (no auto-cross-file). Until
+    # then, these rows assert the Python-side contract independently.
+    "together",
+    "fireworks",
+    "openrouter",
+    # ``deepseek`` is non-empty (tools=True) even though vision / batch /
+    # caching / audio bits are False — the all-False set would route it
+    # to ``_ALL_FALSE_PRESETS`` instead.
+    "deepseek",
+    "lm_studio",
+    "llama_cpp",
+    "docker_model_runner",
 )
 # Documented presets that ARE intentionally all-False per kailash-rs.
 # Distinct from "unknown preset" — the entry IS in the table; verifying
@@ -275,3 +290,142 @@ def test_documented_all_false_presets_match_kailash_rs(preset_name: str) -> None
     """
     caps = for_preset(preset_name)
     assert caps == dict(ALL_FALSE_CAPABILITIES)
+
+
+# ---------------------------------------------------------------------------
+# Python-only preset rows (#790) — per-preset shape pinning
+# ---------------------------------------------------------------------------
+#
+# These 7 presets ship in kaizen Python without an equivalent row in
+# kailash-rs ``CapabilityMatrix::for_preset``. The per-preset shape tests
+# pin the Python contract independently — adding a row to kailash-rs in a
+# future cross-SDK release MUST mirror these matrices byte-for-byte.
+
+
+def test_together_preset_capabilities() -> None:
+    """Together AI: OpenAI-compatible aggregator hosting tools-capable
+    + vision-capable models (Llama-Vision, Qwen-VL). No batch / caching /
+    audio surface adjacent to the chat endpoint.
+    """
+    dep = LlmDeployment.together("tg-test", model="meta-llama/Llama-3-8b")
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_fireworks_preset_capabilities() -> None:
+    """Fireworks AI: OpenAI-compatible aggregator with tools + vision
+    (FireLLaVA / Llama-Vision / Qwen2-VL). No batch / caching / audio.
+    """
+    dep = LlmDeployment.fireworks(
+        "fw-test", model="accounts/fireworks/models/llama-v3p1-8b-instruct"
+    )
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_openrouter_preset_capabilities() -> None:
+    """OpenRouter: routing aggregator that passes through tools and
+    vision when the routed model supports them. Per-model gating is the
+    caller's responsibility (same convention as ``ollama`` / ``groq``).
+    """
+    dep = LlmDeployment.openrouter("or-test", model="anthropic/claude-sonnet-4")
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_deepseek_preset_capabilities() -> None:
+    """DeepSeek API at api.deepseek.com/v1 hosts deepseek-chat /
+    deepseek-coder — text-only at the deployment surface. The
+    DeepSeek-VL family is distributed as separate model weights, NOT
+    served by this preset's endpoint. Vision=False is the conservative
+    surface contract.
+    """
+    dep = LlmDeployment.deepseek("ds-test", model="deepseek-chat")
+    assert dep.supports() == {
+        "tools": True,
+        "vision": False,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_lm_studio_preset_capabilities() -> None:
+    """LM Studio local server: OpenAI-compatible, hosts arbitrary GGUF
+    models including LLaVA. Tools + vision parity with ``ollama``.
+    """
+    dep = LlmDeployment.lm_studio("http://localhost:1234", model="local-model")
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_llama_cpp_preset_capabilities() -> None:
+    """llama.cpp server: OpenAI-compatible, hosts arbitrary GGUF models
+    including LLaVA / Qwen-VL. Tools + vision parity with ``ollama``.
+    """
+    dep = LlmDeployment.llama_cpp("http://localhost:8080", model="local-model")
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_docker_model_runner_preset_capabilities() -> None:
+    """Docker Model Runner: local llama.cpp engine via Docker. Tools +
+    vision parity with the underlying llama.cpp surface.
+    """
+    dep = LlmDeployment.docker_model_runner(
+        "http://localhost:12434", model="local-model"
+    )
+    assert dep.supports() == {
+        "tools": True,
+        "vision": True,
+        "batch": False,
+        "caching": False,
+        "audio": False,
+    }
+
+
+def test_python_only_default_url_presets_inherit_parent_capability_row() -> None:
+    """The ``<provider>_default`` convenience presets (#787) carry the
+    PARENT preset literal on the deployment, so capability lookup
+    routes through the parent row automatically. Verifies the
+    cross-shard invariant from #787 still holds for the 3 local-server
+    defaults — same guarantee as ``ollama_default`` (already covered).
+    """
+    parent_to_default_classmethod = {
+        "lm_studio": LlmDeployment.lm_studio_default,
+        "llama_cpp": LlmDeployment.llama_cpp_default,
+        "docker_model_runner": LlmDeployment.docker_model_runner_default,
+    }
+    for parent_name, default_cm in parent_to_default_classmethod.items():
+        dep = default_cm(model="local-model")
+        assert dep.preset_name == parent_name, (
+            f"`<{parent_name}>_default` MUST set preset_name={parent_name!r} "
+            f"(got {dep.preset_name!r}) so capability lookup routes to "
+            f"the parent row"
+        )
+        assert dep.supports() == for_preset(parent_name)

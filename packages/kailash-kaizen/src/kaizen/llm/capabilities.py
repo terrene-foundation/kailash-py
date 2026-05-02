@@ -154,6 +154,50 @@ _PRESET_CAPABILITIES: Final[Mapping[str, Mapping[str, bool]]] = {
     "mistral": _caps(tools=True, vision=True, batch=False, caching=False, audio=False),
     "perplexity": _caps(),  # all-false per kailash-rs row
     "huggingface": _caps(),  # all-false per kailash-rs row
+    # --- Python-only OpenAI-compatible aggregators + local servers (#790) ---
+    # These 7 presets ship in kaizen Python but have no row in kailash-rs
+    # ``CapabilityMatrix::for_preset`` yet; until kailash-rs lands the same
+    # rows, ``LlmDeployment.together().supports()`` returns the correct
+    # capability matrix in Python while Rust falls through to all-False.
+    # Cross-SDK reconciliation tracked in PR body per
+    # ``rules/upstream-issue-hygiene.md`` (no auto-cross-file).
+    #
+    # Convention: vision=True means the deployment surface CAN serve
+    # vision-capable models (per-model gating is the caller's
+    # responsibility, see file docstring above) — same precedent as
+    # ``ollama`` / ``groq`` / ``mistral`` rows. ``batch`` / ``caching`` /
+    # ``audio`` are False because none of these aggregators expose those
+    # surfaces adjacent to the OpenAI-compatible completion endpoint.
+    "together": _caps(tools=True, vision=True, batch=False, caching=False, audio=False),
+    "fireworks": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
+    "openrouter": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
+    # ``deepseek`` API at ``api.deepseek.com/v1`` exposes only
+    # deepseek-chat and deepseek-coder (text-only); the DeepSeek-VL
+    # family is distributed as separate model weights, NOT served by
+    # this preset's endpoint. Row is conservative — vision=False matches
+    # the deployment surface, not the broader DeepSeek model lineup.
+    "deepseek": _caps(
+        tools=True, vision=False, batch=False, caching=False, audio=False
+    ),
+    # Local servers (lm_studio / llama_cpp / docker_model_runner) all
+    # serve arbitrary GGUF models including LLaVA / Qwen-VL /
+    # Llama-Vision — vision=True follows the ``ollama`` precedent. The
+    # ``<provider>_default`` convenience presets (#787) carry the PARENT
+    # preset literal on the returned deployment, so capability lookup
+    # routes through these rows automatically.
+    "lm_studio": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
+    "llama_cpp": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
+    "docker_model_runner": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
 }
 
 
