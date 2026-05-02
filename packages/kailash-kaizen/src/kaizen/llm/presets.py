@@ -1890,4 +1890,9 @@ __all__ = [
     # S7 -- Compatible-endpoint presets (#761, #762)
     "openai_compatible_preset",
     "anthropic_compatible_preset",
+    # S7b -- Default-URL convenience presets (#787, cross-SDK parity)
+    "ollama_default_preset",
+    "lm_studio_default_preset",
+    "llama_cpp_default_preset",
+    "docker_model_runner_default_preset",
 ]
