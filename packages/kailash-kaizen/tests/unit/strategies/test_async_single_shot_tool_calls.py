@@ -177,6 +177,14 @@ class TestToolCallExecutionLoop:
                 ]
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "What is the answer?"})
@@ -212,6 +220,14 @@ class TestToolCallExecutionLoop:
                 ]
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})
@@ -239,6 +255,14 @@ class TestToolCallExecutionLoop:
                 return_value=(result_with_tools, "run-1")
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})
@@ -267,6 +291,14 @@ class TestToolCallExecutionLoop:
                 return_value=(never_ending_result, "run-n")
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})
@@ -302,6 +334,14 @@ class TestToolCallExecutionLoop:
                 ]
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})
@@ -357,6 +397,14 @@ class TestToolCallExecutionLoop:
                 ]
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})
@@ -381,6 +429,14 @@ class TestToolCallExecutionLoop:
                 return_value=(clean_result, "run-1")
             )
             mock_runtime_instance.close = MagicMock()
+            # `async with AsyncLocalRuntime() as runtime:` (per #789 / 2.17.0
+            # CodeQL py/should-use-with cleanup) requires the mock to expose
+            # async context-manager hooks. __aenter__ returns the same mock so
+            # `runtime` binds to it; __aexit__ returns None for clean exit.
+            mock_runtime_instance.__aenter__ = AsyncMock(
+                return_value=mock_runtime_instance
+            )
+            mock_runtime_instance.__aexit__ = AsyncMock(return_value=None)
             MockRuntime.return_value = mock_runtime_instance
 
             result = await strategy.execute(agent, {"question": "test"})

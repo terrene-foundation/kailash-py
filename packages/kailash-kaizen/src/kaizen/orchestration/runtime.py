@@ -93,7 +93,6 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
-    Union,
     runtime_checkable,
 )
 
