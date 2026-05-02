@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] — 2026-05-02 — `ollama_default` preset alias parity
+
+Patch bump. Closes the deferred cross-SDK parity gap reviewer flagged during
+the 2.16.0 pre-release pass: the `"ollama_default"` preset literal kailash-rs
+`CapabilityMatrix::for_preset` accepts as an alias for `"ollama"` was missing
+from `kaizen.llm.capabilities._PRESET_CAPABILITIES`, so a Python caller
+porting the alias from Rust hit the fail-closed all-False default while the
+Rust caller saw the wired row.
+
+### Fixed
+
+- **`for_preset("ollama_default")` now returns the canonical Ollama capability row (cross-SDK parity with kailash-rs `CapabilityMatrix::for_preset` line 212 — `str_eq(preset_name, "ollama") || str_eq(preset_name, "ollama_default")`).** Row is byte-identical to `"ollama"` (`tools=True, vision=True, batch=False, caching=False, audio=False`) per `rules/cross-sdk-inspection.md` § 3a. Test surface: `_NON_EMPTY_PRESETS` parametrized sweep in `tests/unit/llm/test_supports_capability_matrix.py` extended to `"ollama_default"` so a future row drift in either SDK fails loudly.
+
 ## [2.16.0] — 2026-05-02 — LlmDeployment.supports() + register_bedrock_region
 
 Cross-SDK parity with kailash-rs PR #725 (`CapabilityMatrix::for_preset`)
