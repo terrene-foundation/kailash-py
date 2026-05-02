@@ -242,6 +242,7 @@ _NON_EMPTY_PRESETS = (
     "bedrock_cohere",
     "groq",
     "ollama",
+    "ollama_default",
     "cohere",
     "mistral",
 )

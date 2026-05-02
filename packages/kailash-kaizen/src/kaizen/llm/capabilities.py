@@ -140,6 +140,15 @@ _PRESET_CAPABILITIES: Final[Mapping[str, Mapping[str, bool]]] = {
     # --- Local / open-weight servers -------------------------------------
     "groq": _caps(tools=True, vision=True, batch=False, caching=False, audio=False),
     "ollama": _caps(tools=True, vision=True, batch=False, caching=False, audio=False),
+    # ``ollama_default`` is the alias kailash-rs ``CapabilityMatrix::for_preset``
+    # accepts alongside ``"ollama"`` (see kailash-rs
+    # ``crates/kailash-kaizen/src/llm/deployment/capabilities.rs:212`` —
+    # ``str_eq(preset_name, "ollama") || str_eq(preset_name, "ollama_default")``).
+    # Cross-SDK parity row per ``rules/cross-sdk-inspection.md`` § 3a; row is
+    # byte-identical to ``"ollama"`` above.
+    "ollama_default": _caps(
+        tools=True, vision=True, batch=False, caching=False, audio=False
+    ),
     # --- Direct providers ------------------------------------------------
     "cohere": _caps(tools=True, vision=False, batch=False, caching=False, audio=False),
     "mistral": _caps(tools=True, vision=True, batch=False, caching=False, audio=False),
