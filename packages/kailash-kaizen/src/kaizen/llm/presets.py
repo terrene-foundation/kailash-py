@@ -31,6 +31,7 @@ Security invariants enforced here:
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any, Callable, Dict, Optional
 
@@ -40,7 +41,7 @@ from kaizen.llm.auth.aws import AwsBearerToken
 from kaizen.llm.auth.bearer import ApiKey, ApiKeyBearer, ApiKeyHeaderKind, StaticNone
 from kaizen.llm.auth.gcp import GcpOauth
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
-from kaizen.llm.errors import ModelRequired
+from kaizen.llm.errors import MissingCredential, ModelRequired
 from kaizen.llm.grammar.bedrock import (
     BedrockClaudeGrammar,
     BedrockCohereGrammar,
@@ -1853,6 +1854,210 @@ def _attach_bedrock_region_classmethod() -> None:
 _attach_bedrock_region_classmethod()
 
 
+# ---------------------------------------------------------------------------
+# `<provider>_from_env` convenience presets (#791 — cross-SDK parity with the
+# 12 zero-arg `pub fn <provider>() -> Self` classmethods on kailash-rs
+# `LlmDeployment` at `crates/kailash-kaizen/src/llm/deployment/presets.rs`
+# lines 153, 249, 346, 386, 408, 430, 458, 928, 964, 1000, 1036, 1072.
+# ---------------------------------------------------------------------------
+#
+# Cross-SDK contract per `rules/cross-sdk-inspection.md` § 3 (EATP D6):
+# semantics MUST match; idioms MAY differ.
+#
+# Rust exposes a *zero-arg* `pub fn openai() -> Self` that constructs an
+# auth-less deployment with the canonical hosted URL; callers chain
+# `.with_api_key(...)` to populate credentials before use. The Python idiom
+# (`rules/env-models.md`) mandates eager validation: an `LlmDeployment`
+# without a real api_key + model raises at construction. Reconciling the two
+# without compromising either:
+#
+# Each `<provider>_from_env_preset()` factory:
+#   1. Reads `<PROVIDER>_API_KEY` from the environment (raises
+#      `MissingCredential("<PROVIDER>_API_KEY")` if absent / empty).
+#   2. Reads `<PROVIDER>_PROD_MODEL` (canonical), falling back to
+#      `<PROVIDER>_MODEL` (legacy compatibility with `from_env.py`'s
+#      precedence chain), raising `MissingCredential` if neither is set.
+#   3. Delegates to the existing parent `<provider>_preset(api_key, model)`
+#      factory — same wire / endpoint / auth shape as the long-form, with
+#      eager validation preserved through the parent's own checks.
+#
+# A user porting Rust code that calls `LlmDeployment::openai()` zero-arg
+# transcribes it to Python as `LlmDeployment.openai_from_env()`, with a
+# clear contract: API key + model come from environment variables exactly
+# as `rules/env-models.md` mandates, and missing env vars raise a typed
+# `MissingCredential` error rather than failing later at the provider 401.
+#
+# Registry name pattern: `<provider>_from_env` (parent + suffix), parallel
+# to the `<provider>_default` pattern from #787. Capability-matrix lookup
+# routes through the parent row automatically because the deployment's
+# `preset_name` is the PARENT literal (`"openai"`, not `"openai_from_env"`).
+
+# Canonical model-env precedence: PROD first (per parent factory docstrings),
+# legacy short-form fallback (per `from_env.py::_call_preset_from_env`).
+_FROM_ENV_PROVIDERS: list[tuple[str, str, tuple[str, ...]]] = [
+    # (preset_name, api_key_env, (model_env_candidates_in_precedence_order))
+    ("openai", "OPENAI_API_KEY", ("OPENAI_PROD_MODEL", "OPENAI_MODEL")),
+    ("anthropic", "ANTHROPIC_API_KEY", ("ANTHROPIC_PROD_MODEL", "ANTHROPIC_MODEL")),
+    # GOOGLE / GEMINI key-and-model env vars are interchangeable per
+    # `rules/env-models.md`; precedence prefers the canonical GOOGLE_* name.
+    (
+        "google",
+        "GOOGLE_API_KEY",
+        ("GOOGLE_PROD_MODEL", "GOOGLE_MODEL", "GEMINI_PROD_MODEL", "GEMINI_MODEL"),
+    ),
+    ("cohere", "COHERE_API_KEY", ("COHERE_PROD_MODEL", "COHERE_MODEL")),
+    ("mistral", "MISTRAL_API_KEY", ("MISTRAL_PROD_MODEL", "MISTRAL_MODEL")),
+    ("perplexity", "PERPLEXITY_API_KEY", ("PERPLEXITY_PROD_MODEL", "PERPLEXITY_MODEL")),
+    (
+        "huggingface",
+        "HUGGINGFACE_API_KEY",
+        ("HUGGINGFACE_PROD_MODEL", "HUGGINGFACE_MODEL"),
+    ),
+    ("groq", "GROQ_API_KEY", ("GROQ_PROD_MODEL", "GROQ_MODEL")),
+    ("together", "TOGETHER_API_KEY", ("TOGETHER_PROD_MODEL", "TOGETHER_MODEL")),
+    ("fireworks", "FIREWORKS_API_KEY", ("FIREWORKS_PROD_MODEL", "FIREWORKS_MODEL")),
+    ("openrouter", "OPENROUTER_API_KEY", ("OPENROUTER_PROD_MODEL", "OPENROUTER_MODEL")),
+    ("deepseek", "DEEPSEEK_API_KEY", ("DEEPSEEK_PROD_MODEL", "DEEPSEEK_MODEL")),
+]
+
+
+def _read_first_env(*candidates: str) -> Optional[str]:
+    """Return the first non-empty env var in precedence order, or None."""
+    for var in candidates:
+        val = os.environ.get(var, "").strip()
+        if val:
+            return val
+    return None
+
+
+def _resolve_from_env_credentials(
+    *,
+    preset: str,
+    api_key_var: str,
+    model_vars: tuple[str, ...],
+) -> tuple[str, str]:
+    """Read api_key + model from env or raise typed `MissingCredential`.
+
+    `MissingCredential.source_hint` is a constant chosen by the loader (not
+    user input), so the env var name is safe to embed verbatim and gives
+    operators an actionable error message. Order of checks is api_key first
+    so the operator fixes the most common omission (no key set) before
+    diagnosing model selection.
+    """
+    api_key = _read_first_env(api_key_var)
+    if api_key is None:
+        raise MissingCredential(api_key_var)
+    model = _read_first_env(*model_vars)
+    if model is None:
+        # Compose source_hint from the candidate list so the message is
+        # actionable: "checked envelope: OPENAI_PROD_MODEL or OPENAI_MODEL".
+        joined = " or ".join(model_vars)
+        raise MissingCredential(joined)
+    return api_key, model
+
+
+def _from_env_factory_for(preset: str) -> Callable[[], LlmDeployment]:
+    """Build the parameter-less factory for one provider's `_from_env` form.
+
+    Closure captures `preset` so the factory ID is stable in stack traces
+    and matches the registry name byte-for-byte.
+    """
+    # Resolve the entry once (linear scan acceptable: 12 entries).
+    spec = next((s for s in _FROM_ENV_PROVIDERS if s[0] == preset), None)
+    if spec is None:
+        raise ValueError(f"_from_env_factory_for: unknown preset {preset!r}")
+    _name, api_key_var, model_vars = spec
+    parent_factory = get_preset(preset)
+
+    def _factory() -> LlmDeployment:
+        api_key, model = _resolve_from_env_credentials(
+            preset=preset, api_key_var=api_key_var, model_vars=model_vars
+        )
+        return parent_factory(api_key, model=model)
+
+    _factory.__name__ = f"{preset}_from_env_preset"
+    _factory.__qualname__ = f"{preset}_from_env_preset"
+    _factory.__doc__ = (
+        f"Construct `{preset}_preset` from environment variables.\n\n"
+        f"Reads {api_key_var} and the first non-empty value of "
+        f"{', '.join(model_vars)} from `os.environ`. Raises typed "
+        f"`MissingCredential` if either is unset / empty.\n\n"
+        f"Cross-SDK parity with kailash-rs `LlmDeployment::{preset}()` "
+        f"(zero-arg auth-less constructor at "
+        f"`crates/kailash-kaizen/src/llm/deployment/presets.rs`). Per EATP "
+        f"D6, the Python idiom-difference is the explicit `_from_env` "
+        f"naming + eager validation; semantics match (same endpoint, wire "
+        f"protocol, and auth strategy as the long-form `{preset}_preset`)."
+    )
+    return _factory
+
+
+# Module-level binding for each `<provider>_from_env_preset` so callers can
+# import the symbol directly:
+#
+#     from kaizen.llm.presets import openai_from_env_preset
+#     dep = openai_from_env_preset()
+#
+# (Mirrors `<provider>_preset` and `<provider>_default_preset` precedent.)
+openai_from_env_preset = _from_env_factory_for("openai")
+anthropic_from_env_preset = _from_env_factory_for("anthropic")
+google_from_env_preset = _from_env_factory_for("google")
+cohere_from_env_preset = _from_env_factory_for("cohere")
+mistral_from_env_preset = _from_env_factory_for("mistral")
+perplexity_from_env_preset = _from_env_factory_for("perplexity")
+huggingface_from_env_preset = _from_env_factory_for("huggingface")
+groq_from_env_preset = _from_env_factory_for("groq")
+together_from_env_preset = _from_env_factory_for("together")
+fireworks_from_env_preset = _from_env_factory_for("fireworks")
+openrouter_from_env_preset = _from_env_factory_for("openrouter")
+deepseek_from_env_preset = _from_env_factory_for("deepseek")
+
+
+def _register_and_attach_from_env_presets() -> None:
+    """Register all 12 `_from_env` factories AND attach as `LlmDeployment.<name>_from_env`.
+
+    Registry name is `<parent>_from_env` (parallel to `<parent>_default`).
+    The deployment's `preset_name` is the PARENT literal (`"openai"`, not
+    `"openai_from_env"`) because the parent factory sets it; capability-
+    matrix lookup therefore routes through the parent row.
+
+    Both surfaces (registry round-trip + classmethod) MUST be installed
+    atomically per the precedent in `_register_and_attach_session_2_presets`
+    so a preset that is registered but not attached (or vice versa) is
+    structurally impossible.
+    """
+    factory_table = [
+        ("openai_from_env", openai_from_env_preset),
+        ("anthropic_from_env", anthropic_from_env_preset),
+        ("google_from_env", google_from_env_preset),
+        ("cohere_from_env", cohere_from_env_preset),
+        ("mistral_from_env", mistral_from_env_preset),
+        ("perplexity_from_env", perplexity_from_env_preset),
+        ("huggingface_from_env", huggingface_from_env_preset),
+        ("groq_from_env", groq_from_env_preset),
+        ("together_from_env", together_from_env_preset),
+        ("fireworks_from_env", fireworks_from_env_preset),
+        ("openrouter_from_env", openrouter_from_env_preset),
+        ("deepseek_from_env", deepseek_from_env_preset),
+    ]
+
+    for name, factory in factory_table:
+        register_preset(name, factory)
+
+        # Bind factory via a default-arg closure so each classmethod
+        # captures its own factory reference (standard Python closure
+        # pitfall workaround — same shape as `_register_and_attach_session_2_presets`).
+        def _from_env_cm(cls, _factory=factory) -> LlmDeployment:
+            return _factory()
+
+        _from_env_cm.__name__ = name
+        _from_env_cm.__qualname__ = f"LlmDeployment.{name}"
+        setattr(LlmDeployment, name, classmethod(_from_env_cm))
+
+
+_register_and_attach_from_env_presets()
+
+
 __all__ = [
     # S1
     "openai_preset",
@@ -1895,4 +2100,19 @@ __all__ = [
     "lm_studio_default_preset",
     "llama_cpp_default_preset",
     "docker_model_runner_default_preset",
+    # S7c -- _from_env convenience presets (#791, cross-SDK parity with the
+    # 12 zero-arg `pub fn <provider>() -> Self` constructors on kailash-rs
+    # `LlmDeployment`).
+    "openai_from_env_preset",
+    "anthropic_from_env_preset",
+    "google_from_env_preset",
+    "cohere_from_env_preset",
+    "mistral_from_env_preset",
+    "perplexity_from_env_preset",
+    "huggingface_from_env_preset",
+    "groq_from_env_preset",
+    "together_from_env_preset",
+    "fireworks_from_env_preset",
+    "openrouter_from_env_preset",
+    "deepseek_from_env_preset",
 ]

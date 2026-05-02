@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] — 2026-05-02 — `<provider>_from_env` cross-SDK convenience constructors (#791)
+
+Minor bump. Closes the deferred cross-SDK API-shape parity gap surfaced
+by the post-2.16.2 audit: kailash-rs exposes 12 zero-arg
+`pub fn <provider>() -> Self` classmethods on `LlmDeployment` (constructing
+auth-less deployments with the canonical hosted URL; callers chain
+`.with_api_key(...)` to populate credentials before use). Python's parent
+`<provider>_preset(api_key, model)` factories require both inputs at
+construction per `rules/env-models.md`, so a Rust user porting
+`LlmDeployment::openai()` directly hit `TypeError`. This release adds an
+explicit `_from_env` constructor variant per provider — eager-validates
+against the environment, raises typed `MissingCredential` on missing keys
+or models, and routes capability lookups through the parent preset row.
+
+### Added
+
+- **12 `<provider>_from_env` convenience constructors on `LlmDeployment` (closes #791; cross-SDK parity with the 12 zero-arg `pub fn <provider>() -> Self` classmethods on kailash-rs `LlmDeployment` at `crates/kailash-kaizen/src/llm/deployment/presets.rs:153,249,346,386,408,430,458,928,964,1000,1036,1072`).** Each `LlmDeployment.<provider>_from_env()` (and module-level `<provider>_from_env_preset()`) reads `<PROVIDER>_API_KEY` plus `<PROVIDER>_PROD_MODEL` (with legacy fallback to `<PROVIDER>_MODEL`) from the environment and delegates to the existing parent factory. Eager-validates per `rules/env-models.md` — missing env vars raise typed `MissingCredential` with the env var name as `source_hint`. Providers covered: `openai`, `anthropic`, `google`, `cohere`, `mistral`, `perplexity`, `huggingface`, `groq`, `together`, `fireworks`, `openrouter`, `deepseek`. Each returned deployment carries the PARENT `preset_name` literal (e.g. `"openai"`, not `"openai_from_env"`) so `LlmDeployment.supports()` and `for_preset(...)` capability lookups route through the parent row automatically — consistent with the `<provider>_default` precedent (#787).
+- **Registry round-trip via `get_preset("<provider>_from_env")()`.** Each `<provider>_from_env` name is registered alongside its classmethod attachment so both surfaces produce structurally identical deployments. Cross-SDK parity sweep enumerates all 12 names against a frozen set in `tests/unit/llm/test_from_env_presets.py::test_from_env_preset_names_complete`; adding a new Rust zero-arg classmethod without wiring its Python `_from_env` peer fails the sweep loudly.
+
+### Implementation notes — design rationale (#791)
+
+Three candidate designs were on the issue body; **Option 3 (`_from_env` variant)** was selected because it is the only design that satisfies `rules/env-models.md` ("ALL API keys MUST come from `.env`") while preserving the eager-validation convention every existing `_preset` factory already enforces. Option 1 (auth-less constructor + `.with_api_key(...)` builder) introduces an `LlmDeployment` whose state is structurally unauthenticated until a builder call — a divergent shape from every other Python preset factory. Option 2 (`<provider>(api_key=os.environ.get(...))`) silently couples the default to an env var; the call site cannot tell whether env was consulted, which is the implicit-magic failure pattern the Python idiom rejects. Option 3 is a separate explicit method per provider; the suffix announces env-driven construction at every call site. Per EATP D6 (`rules/cross-sdk-inspection.md` § 3): semantics match Rust (same endpoint, wire protocol, eventual auth strategy); the idiom-difference is the explicit `_from_env` naming + eager validation at construction time.
+
+A user porting Rust `LlmDeployment::openai()` (zero-arg, auth-less, configured later via `.with_api_key(env::var("OPENAI_API_KEY")?)`) transcribes the contract to Python as a single `LlmDeployment.openai_from_env()` call; the resulting deployment is byte-equivalent to the long-form `openai_preset(api_key, model)` shape with credentials sourced from `OPENAI_API_KEY` + `OPENAI_PROD_MODEL`.
+
+### Tested
+
+- `tests/unit/llm/test_from_env_presets.py` — 36 tests covering: cross-SDK registry parity sweep across all 12 names; per-provider deployment shape (wire / auth / preset_name / endpoint URL byte-pinned to the Rust source-of-truth literal); typed `MissingCredential` raise on missing api_key (parametrized × 12) and on missing model (parametrized × 4 representative providers); `<PROVIDER>_PROD_MODEL` precedence over `<PROVIDER>_MODEL`; legacy `<PROVIDER>_MODEL` fallback when PROD is unset; `GEMINI_PROD_MODEL` legacy fallback for `google_from_env`; classmethod ↔ module-function agreement; registry round-trip via `get_preset`; capability-matrix routing through the parent row. All env-mutating tests serialize through a module-scope `threading.Lock` per `rules/testing.md` § "Serialize Env-Var-Mutating Tests Via Module Lock".
+
+### Known follow-ups (filed separately, not blocking this release)
+
+- **Cohere endpoint URL divergence between Python (`api.cohere.com/v1` + `CohereGenerate` wire) and Rust (`api.cohere.ai/v2`).** Surfaced during the #791 cross-SDK source-of-truth audit; pre-dates #791. The `_from_env` wrapper inherits whichever URL the parent `cohere_preset` exposes, so reconciling the parent URL automatically lifts both surfaces. Tracked separately so the URL+wire decision (v1 Generate vs v2 Chat — different on-wire contracts) gets its own design pass.
+- **#788 (`LlmDeployment.mock()` test-utils gating), #789 (CodeQL Rule 1b deferral track), #790 (capability rows for 7 Python-only presets).** Sibling cross-SDK parity / hygiene workstreams from the post-2.16.2 audit.
+
 ## [2.16.2] — 2026-05-02 — Default-URL convenience presets (cross-SDK parity)
 
 Patch bump. Closes the cross-SDK API-shape parity gap surfaced by the
