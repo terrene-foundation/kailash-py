@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.2] — 2026-05-02 — Default-URL convenience presets (cross-SDK parity)
+
+Patch bump. Closes the cross-SDK API-shape parity gap surfaced by the
+`/redteam` audit immediately following 2.16.1: kailash-rs exposes four
+zero-arg classmethods on `LlmDeployment` for canonical localhost defaults
+(`ollama_default()`, `lm_studio_default()`, `llama_cpp_default()`, zero-arg
+`docker_model_runner()`); Python required callers to thread the localhost
+URL by hand. Same bug class as 2.16.1's preset-alias fix per
+`rules/cross-sdk-inspection.md` § 3a — fix-immediately disposition under
+`rules/autonomous-execution.md` Rule 4.
+
+### Added
+
+- **`LlmDeployment.ollama_default(model)` + `ollama_default_preset(model)` (cross-SDK parity with kailash-rs `LlmDeployment::ollama_default()` at `crates/kailash-kaizen/src/llm/deployment/presets.rs:509`).** Convenience constructor equivalent to `ollama_preset("http://localhost:11434/v1", model)`. Deployment carries `preset_name="ollama"` (parent literal — mirrors Rust's `Self::ollama(...)` delegation), so capability-matrix lookup routes through the parent row automatically. The `_default` variant is a constructor convenience, not a distinct preset identity.
+- **`LlmDeployment.lm_studio_default(model)` + `lm_studio_default_preset(model)` (cross-SDK parity with `LlmDeployment::lm_studio_default()` at `presets.rs:1138`).** Equivalent to `lm_studio_preset("http://localhost:1234", model)`. Deployment carries `preset_name="lm_studio"`.
+- **`LlmDeployment.llama_cpp_default(model)` + `llama_cpp_default_preset(model)` (cross-SDK parity with `LlmDeployment::llama_cpp_default()` at `presets.rs:1170`).** Equivalent to `llama_cpp_preset("http://localhost:8080", model)`. Deployment carries `preset_name="llama_cpp"`.
+- **`LlmDeployment.docker_model_runner_default(model)` + `docker_model_runner_default_preset(model)` (cross-SDK parity with the zero-arg form of `LlmDeployment::docker_model_runner()` at `presets.rs:527`).** Constructs `http://localhost:12434/engines/llama.cpp/v1` (Rust's engine-specific default). Deployment carries `preset_name="docker_model_runner"`. Note: the convenience variant uses `path_prefix="/engines/llama.cpp/v1"` to match Rust exactly; the long-form `docker_model_runner_preset` retains its existing default `path_prefix="/engines/v1"` (both are valid Docker Model Runner endpoints).
+
+### Implementation notes
+
+- Python idiom-difference vs Rust per EATP D6: `model` is REQUIRED on every Python `_default_preset(model)` factory per `rules/env-models.md` (which mandates explicit model selection at construction time and never silent defaults). Rust accepts truly zero-arg signatures because Rust's preset surface does not carry the same env-driven model-selection convention. Semantics match — both SDKs route requests to a local server with the canonical default URL — only the construction arity differs.
+- All four registry names (`ollama_default`, `lm_studio_default`, `llama_cpp_default`, `docker_model_runner_default`) added to `_PRESETS` so `get_preset(name)(model=...)` round-trips identically with the classmethod surface.
+
+### Tested
+
+- `tests/unit/llm/test_default_url_presets.py` — 28 tests covering: cross-SDK parity registry naming, per-preset deployment shape (wire / auth / preset_name / endpoint URL), byte-equivalence with the long-form factory, classmethod ↔ free-function agreement, empty-model rejection (per `rules/env-models.md`), registry round-trip via `get_preset`, and capability-matrix routing through the parent row (`<provider>_default(model).supports() == <provider>_preset(default_url, model).supports()`).
+
+### Known follow-ups (filed separately)
+
+- **`LlmDeployment.mock()` constructor** — kailash-rs gates this behind `cfg(any(test, feature = "test-utils"))` to prevent "mock shipped to prod" at compile time (`presets.rs:1181`). Python parity requires designing an equivalent gate (test-only module, import-side opt-in, or env-var) and cross-SDK alignment per `rules/cross-sdk-inspection.md` § 2; exceeds shard budget.
+- **17 open CodeQL findings on the kaizen surface** — including `#10866 py/clear-text-logging-sensitive-data` on `presets.py:101`, which is a verified false positive: `_fingerprint(name)` calls `fingerprint_secret(raw)` (BLAKE2b non-reversible per #617). Tracking via Rule 1b deferral with per-finding runtime-safety proof.
+- **Capability matrix rows for 7 Python-only presets** (`together`, `fireworks`, `openrouter`, `deepseek`, `lm_studio`, `llama_cpp`, `docker_model_runner`) — currently fail-closed via the all-False default; provider-specific research + cross-SDK alignment with kailash-rs `CapabilityMatrix::for_preset` required.
+
 ## [2.16.1] — 2026-05-02 — `ollama_default` preset alias parity
 
 Patch bump. Closes the deferred cross-SDK parity gap reviewer flagged during

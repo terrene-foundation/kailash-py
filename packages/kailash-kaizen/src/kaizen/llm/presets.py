@@ -724,6 +724,89 @@ def llama_cpp_preset(
 
 
 # ---------------------------------------------------------------------------
+# Default-URL convenience presets (#787 — cross-SDK parity with kailash-rs
+# `LlmDeployment::ollama_default()` / `lm_studio_default()` /
+# `llama_cpp_default()` / `docker_model_runner()` zero-arg classmethods at
+# `crates/kailash-kaizen/src/llm/deployment/presets.rs:509,1138,1170,527`).
+# ---------------------------------------------------------------------------
+#
+# Cross-SDK contract: each `<provider>_default_preset(model)` factory is
+# byte-equivalent to calling the parent factory with the canonical localhost
+# default URL kailash-rs publishes. The returned `LlmDeployment` carries the
+# PARENT preset literal (`"ollama"`, `"lm_studio"`, etc.) per Rust semantics
+# (`ollama_default()` calls `Self::ollama(...)` which sets the internal name
+# to `"ollama"`); the `_default` variant is purely a constructor convenience,
+# not a distinct preset identity. Capability-matrix lookup therefore routes
+# through the parent row automatically.
+#
+# Python idiom-difference vs Rust per EATP D6 (`rules/cross-sdk-inspection.md`
+# § 3): `model` is REQUIRED (Python's `rules/env-models.md` mandates explicit
+# model selection at construction; Rust accepts a truly zero-arg signature).
+# Semantics match — both SDKs route requests to a local server with the
+# canonical default URL — only the construction arity differs.
+
+
+def ollama_default_preset(model: str) -> LlmDeployment:
+    """Convenience: ollama_preset with the canonical localhost default URL.
+
+    Cross-SDK parity with kailash-rs ``LlmDeployment::ollama_default()``
+    (``crates/kailash-kaizen/src/llm/deployment/presets.rs:509``). Equivalent
+    to ``ollama_preset("http://localhost:11434/v1", model)``. The deployment
+    carries ``preset_name="ollama"`` (mirrors Rust's ``Self::ollama(...)``
+    delegation), so capability-matrix lookups behave identically to the
+    long-form constructor.
+
+    `model` is REQUIRED per `rules/env-models.md` — Python presets enforce
+    explicit model selection at construction time. The Rust SDK accepts a
+    truly zero-arg signature; the Python idiom-difference is acceptable per
+    EATP D6 (semantics match).
+    """
+    return ollama_preset("http://localhost:11434/v1", model)
+
+
+def lm_studio_default_preset(model: str) -> LlmDeployment:
+    """Convenience: lm_studio_preset with the canonical localhost default URL.
+
+    Cross-SDK parity with kailash-rs ``LlmDeployment::lm_studio_default()``
+    (``crates/kailash-kaizen/src/llm/deployment/presets.rs:1138``). Equivalent
+    to ``lm_studio_preset("http://localhost:1234", model)``. The deployment
+    carries ``preset_name="lm_studio"``.
+    """
+    return lm_studio_preset("http://localhost:1234", model)
+
+
+def llama_cpp_default_preset(model: str) -> LlmDeployment:
+    """Convenience: llama_cpp_preset with the canonical localhost default URL.
+
+    Cross-SDK parity with kailash-rs ``LlmDeployment::llama_cpp_default()``
+    (``crates/kailash-kaizen/src/llm/deployment/presets.rs:1170``). Equivalent
+    to ``llama_cpp_preset("http://localhost:8080", model)``. The deployment
+    carries ``preset_name="llama_cpp"``.
+    """
+    return llama_cpp_preset("http://localhost:8080", model)
+
+
+def docker_model_runner_default_preset(model: str) -> LlmDeployment:
+    """Convenience: docker_model_runner_preset with the canonical default URL.
+
+    Cross-SDK parity with kailash-rs zero-arg ``LlmDeployment::
+    docker_model_runner()`` (``crates/kailash-kaizen/src/llm/deployment/
+    presets.rs:527``), which constructs ``http://localhost:12434/engines/
+    llama.cpp/v1``. The deployment carries ``preset_name="docker_model_runner"``.
+
+    Note: the `path_prefix` differs from `docker_model_runner_preset`'s default
+    (``/engines/v1``) to match Rust's engine-specific path; both URLs are valid
+    Docker Model Runner endpoints, but Rust's zero-arg shortcut targets the
+    llama.cpp engine specifically.
+    """
+    return docker_model_runner_preset(
+        "http://localhost:12434",
+        model,
+        path_prefix="/engines/llama.cpp/v1",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Registration + classmethod attachment (Session 2)
 # ---------------------------------------------------------------------------
 
@@ -766,6 +849,17 @@ def _register_and_attach_session_2_presets() -> None:
         ("llama_cpp", llama_cpp_preset),
     ]
 
+    # Default-URL convenience presets (#787) — model-only signature; each
+    # delegates to the parent factory with the canonical localhost URL.
+    # Registry name is `<parent>_default`; deployment's `preset_name` is the
+    # PARENT literal so capability-matrix lookup routes through the parent row.
+    model_only_table = [
+        ("ollama_default", ollama_default_preset),
+        ("lm_studio_default", lm_studio_default_preset),
+        ("llama_cpp_default", llama_cpp_default_preset),
+        ("docker_model_runner_default", docker_model_runner_default_preset),
+    ]
+
     for name, factory in byok_table:
         register_preset(name, factory)
 
@@ -792,6 +886,18 @@ def _register_and_attach_session_2_presets() -> None:
         _url_cm.__name__ = name
         _url_cm.__qualname__ = f"LlmDeployment.{name}"
         setattr(LlmDeployment, name, classmethod(_url_cm))
+
+    for name, factory in model_only_table:
+        register_preset(name, factory)
+
+        def _model_only_cm(
+            cls, model: str, _factory=factory, **kwargs: Any
+        ) -> LlmDeployment:
+            return _factory(model=model, **kwargs)
+
+        _model_only_cm.__name__ = name
+        _model_only_cm.__qualname__ = f"LlmDeployment.{name}"
+        setattr(LlmDeployment, name, classmethod(_model_only_cm))
 
 
 _register_and_attach_session_2_presets()
