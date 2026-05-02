@@ -1,91 +1,106 @@
 source_repo: kailash-py
 codify_date: "2026-05-01"
 codify_session: |
-  Session 2026-05-01 — paired patch cut (#767 SSE durability + #768 parameterized
-  generics + #750 list-cache invalidation) shipped end-to-end through
-  admin-merge → tag → publish-pypi → clean-venv install verification.
+  Session 2026-05-01 (later) — kailash-dataflow 2.7.5 release closing #774
+  (`bulk_create` AttributeError on bare-type field specs) shipped end-to-end
+  through admin-merge → tag → publish-pypi → clean-venv install verification.
 
-  Two narrow tooling-quirk learnings surfaced during the cycle:
+  One narrow tooling-quirk learning surfaced during release verification:
 
-  1. **Pre-commit `python-use-type-annotations` hook regex matches `# type`
-     not `# type:`.** Hit while writing the #768 fix in
-     `dataflow/core/type_processor.py` — comment said
-     `# types.UnionType for PEP 604` and the hook flagged it as a legacy
-     `# type:` annotation comment. Cost one commit-retry cycle to diagnose.
-     The regex source is
-     `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep` =>
-     `'# type(?!: *ignore([^a-zA-Z0-9]|$))'`. Any comment starting with
-     `# type` (no colon) followed by anything but `: ignore` triggers.
+  1. **`uv pip install --refresh` can still report unresolvable when PyPI
+     metadata is current.** Hit during the dataflow 2.7.5 release verify —
+     `pypi.org/pypi/kailash-dataflow/2.7.5/json` returned `200 OK` with
+     `info.version=2.7.5`, but `uv pip install --refresh "kailash-dataflow==2.7.5"`
+     reported `No solution found ... no version of kailash-dataflow==2.7.5`.
+     `--refresh` invalidates uv's HTTP response cache, but evidently leaves
+     a deeper index-state cache that pins the previous "latest" version.
+     Resolution: `python -m ensurepip --upgrade && python -m pip install
+     --no-cache-dir <pkg>` — pip's index TTL is shorter than uv's; one-shot
+     install succeeded immediately after `uv pip install --refresh` failed.
+     `build-repo-release-discipline.md` Rule 2's existing § "uv index-cache
+     override" paragraph names `--refresh` as the unblocker but does not
+     name the second-tier fallback when `--refresh` alone is insufficient.
 
-  2. **PyPI simple-index lag requires `uv pip install --refresh`.** Hit
-     during the #770 / #771 release verification — `pypi.org/.../json`
-     returned the new version metadata immediately after publish-pypi.yml
-     succeeded, but `uv pip install "kailash-dataflow==2.7.3"` reported
-     `No solution found, no version of kailash-dataflow==2.7.3`. Cause:
-     `uv`'s local index cache. Adding `--refresh` resolved it instantly.
-     `build-repo-release-discipline.md` Rule 2 already mandated retry
-     with 60s pause but did not name `--refresh` as the unblocker.
+  Not a new structural pattern — extends the existing § "uv index-cache
+  override" paragraph with a one-sentence fallback recipe.
 
-  Neither is a new structural pattern — both extend existing rules with
-  one-paragraph clarifications.
+  No agent/skill changes; no rule additions beyond the one paragraph
+  extension. The #774 fix itself follows existing patterns:
+    - `rules/cross-sdk-inspection.md` Rule 3a — structurally-unreachable
+      bug class in sibling SDK (Rust `Vec<FieldDef>` enum); no upstream
+      issue filed
+    - `rules/security.md` § Multi-Site Kwarg Plumbing — every
+      `self.model_fields.get(...).get("type")` lookup site updated in
+      same PR
+    - `rules/testing.md` § "End-to-End Pipeline Regression" + § "3-Tier
+      Testing" — Tier 1 unit + structural-invariant + Tier 2 real-Postgres
+      regression in same file
 
-status: pending_review
+status: distributed
+reviewed_date: "2026-05-02"
+distributed_date: "2026-05-02T13:15:00Z"
+distributed_by: |
+  loom /sync py Gate 2 — both py USE templates synced to loom 2.14.3 (commit 02e69bf):
+    - kailash-coc-claude-py 3.6.7 → 3.6.8 (commit 3bd3b6d, push origin/main verified)
+    - kailash-coc-py 1.1.6 → 1.1.7 (commit 7989f3c, push origin/main verified)
+  The `uv-pip-refresh-fallback` entry was lifted into loom 2.14.3 (commit 02e69bf,
+  release commit on main) as a single-sentence extension to the existing
+  `uv index-cache override` paragraph in build-repo-release-discipline.md MUST
+  Rule 2. Both py USE templates received the updated rule via direct global copy
+  (no py-variant overlay applies for build-repo-release-discipline.md) plus the
+  2.14.2 catch-up — autonomous-execution.md Rule 4 Origin += rustdoc cross-class
+  evidence — and SDK pin refresh (kailash 2.13.2 → 2.13.3, kailash-kaizen 2.14.0
+  → 2.16.1, kailash-dataflow 2.7.5 already pinned). Multi-CLI baselines re-emitted
+  via emit.mjs --all --lang py: codex AGENTS.md = 56,881 B [WARN, 7.42% headroom],
+  gemini GEMINI.md = 56,890 B [WARN, 7.41% headroom] — unchanged from 1.1.6 since
+  the abridger strips Origin paragraphs (the 2.14.2 Origin += content is invisible
+  at the abridged-baseline layer; build-repo-release-discipline.md is not on the
+  per-rule budget table). Cap-headroom telemetry preserved. CLAUDE.md preserved
+  on both templates (template-owned). Proposal closed.
 
 changes:
-  - id: pre-commit-comment-matcher-quirk
-    type: rule_addition
-    location: rules/git.md § Discipline
-    classification_suggestion: global
-    rationale: |
-      Pre-commit hooks are language-agnostic and CLI-agnostic. The
-      `python-use-type-annotations` hook ships with `pre-commit-hooks`,
-      which every BUILD repo uses. Same regex would trigger on `kailash-rs`
-      Python tooling if any. No language or CLI variance.
-    diff_summary: |
-      Adds a new Discipline bullet between "Pre-commit hook workarounds"
-      and "Commit-message claim accuracy":
-
-        - **Pre-commit comment-syntax matchers**: the
-          `python-use-type-annotations` hook regex matches `# type` (NOT
-          `# type:`) per `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep`.
-          Comments referencing the `types` module — `# types.UnionType for
-          PEP 604` — trigger a false positive. Reword to avoid `# type` as
-          a literal substring (e.g. "PEP 604 produces `types.UnionType`"
-          → "PEP 604 produces a union type"). Same class for any future
-          `pygrep` hook that matches comment fragments without the
-          trailing punctuation.
-
-  - id: uv-index-cache-refresh
+  - id: uv-pip-refresh-fallback
     type: rule_clarification
-    location: rules/build-repo-release-discipline.md § MUST Rule 2
+    location: rules/build-repo-release-discipline.md § MUST Rule 2 (existing § "uv index-cache override")
     classification_suggestion: global
+    classification: global
+    placed_at: .claude/rules/build-repo-release-discipline.md (loom global tier — appended to existing § "uv index-cache override" paragraph)
+    distributed_to:
+      - kailash-coc-claude-py@3bd3b6d (template version 3.6.8)
+      - kailash-coc-py@7989f3c (template version 1.1.7)
+      # 2.14.4 catch-up (rs-origin payload, distributed to py templates 2026-05-02T22:00Z)
+      - kailash-coc-claude-py@b729715 (template version 3.6.9) — 2.14.4 catch-up
+        (cc-artifacts Hooks Rule 8 + workspace-utils underscore-skip; rules
+        originated from kailash-rs /codify second cycle, GLOBAL classification,
+        py templates inherit on next /sync py cycle per multi-axis fan-out)
+      - kailash-coc-py@fa5d114 (template version 1.1.8) — 2.14.4 catch-up
+        (same payload; SDK pin refresh kailash-kaizen 2.16.1 → 2.18.0;
+        multi-CLI baselines unchanged at codex 7.42% / gemini 7.41% headroom
+        because cc-artifacts.md is CC-only via cli_emit_exclusions)
     rationale: |
-      `uv` is the mandated package manager per `python-environment.md`
-      Rule 1; the cache-override is `uv`-specific (`pip` has shorter index
-      TTL and does not need the flag). Same surface for kailash-rs if it
-      ever moves to a `uv`-equivalent index cache. No language variance.
+      Same surface as the existing `--refresh` clarification (which was
+      classified GLOBAL on the prior cycle). `uv` is mandated by
+      `python-environment.md` Rule 1; the second-tier fallback to
+      `python -m pip install` is uv-vs-pip cache discipline, not a
+      language- or CLI-specific concern.
     diff_summary: |
-      Adds a paragraph after the existing "PyPI cache lag" note:
+      Append one sentence to the existing § "uv index-cache override"
+      paragraph in build-repo-release-discipline.md MUST Rule 2:
 
-        **`uv` index-cache override**: when `pypi.org/pypi/<pkg>/<ver>/json`
-        returns the new metadata BUT `uv pip install "<pkg>==<ver>"` reports
-        `No solution found ... no version of <pkg>==<ver>`, the gap is
-        `uv`'s local index cache, not PyPI. Pass `--refresh` to force a
-        re-fetch: `uv pip install --refresh "<pkg>==<ver>"`. The pip-direct
-        path (`/tmp/verify/bin/pip install ...`) does not need this flag
-        because pip's index TTL is shorter, but the
-        build-repo-release-discipline standard is `uv` per
-        `python-environment.md` Rule 1, so `--refresh` is the documented
-        unblocker for the install-verification step.
+        If `uv pip install --refresh` STILL reports unresolvable when
+        `pypi.org/pypi/<pkg>/<ver>/json` returns the new metadata, fall
+        back to `python -m ensurepip --upgrade && python -m pip install
+        --no-cache-dir "<pkg>==<ver>"`. pip's index TTL is shorter than
+        uv's deeper index-state cache; one-shot install succeeds where
+        `uv pip install --refresh` does not. Evidence: kailash-dataflow
+        2.7.5 release verify (2026-05-01).
 
 origin_session_artifacts:
-  prs_merged: [769, 770, 771]
+  prs_merged: [775, 776, 777]
   pypi_published:
-    - kailash 2.13.2
-    - kailash-dataflow 2.7.3
-  rule_edits_landed_locally:
-    - .claude/rules/git.md
-    - .claude/rules/build-repo-release-discipline.md
+    - kailash-dataflow 2.7.5
+  rule_edits_landed_locally: []
   session_notes: .session-notes
   related_journal:
-    - "(none — narrow tooling quirks; not journal-worthy individually)"
+    - workspaces/.../journal/0001-DECISION-issue-774-bulk-create-field-spec-normalization.md
+    - workspaces/.../journal/0002-DISCOVERY-uv-pip-refresh-still-cache-lagged.md

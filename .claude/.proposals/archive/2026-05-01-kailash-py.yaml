@@ -1,0 +1,109 @@
+source_repo: kailash-py
+codify_date: "2026-05-01"
+codify_session: |
+  Session 2026-05-01 — paired patch cut (#767 SSE durability + #768 parameterized
+  generics + #750 list-cache invalidation) shipped end-to-end through
+  admin-merge → tag → publish-pypi → clean-venv install verification.
+
+  Two narrow tooling-quirk learnings surfaced during the cycle:
+
+  1. **Pre-commit `python-use-type-annotations` hook regex matches `# type`
+     not `# type:`.** Hit while writing the #768 fix in
+     `dataflow/core/type_processor.py` — comment said
+     `# types.UnionType for PEP 604` and the hook flagged it as a legacy
+     `# type:` annotation comment. Cost one commit-retry cycle to diagnose.
+     The regex source is
+     `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep` =>
+     `'# type(?!: *ignore([^a-zA-Z0-9]|$))'`. Any comment starting with
+     `# type` (no colon) followed by anything but `: ignore` triggers.
+
+  2. **PyPI simple-index lag requires `uv pip install --refresh`.** Hit
+     during the #770 / #771 release verification — `pypi.org/.../json`
+     returned the new version metadata immediately after publish-pypi.yml
+     succeeded, but `uv pip install "kailash-dataflow==2.7.3"` reported
+     `No solution found, no version of kailash-dataflow==2.7.3`. Cause:
+     `uv`'s local index cache. Adding `--refresh` resolved it instantly.
+     `build-repo-release-discipline.md` Rule 2 already mandated retry
+     with 60s pause but did not name `--refresh` as the unblocker.
+
+  Neither is a new structural pattern — both extend existing rules with
+  one-paragraph clarifications.
+
+status: distributed
+reviewed_date: "2026-05-02"
+reviewed_by: loom /sync py Gate 1
+distributed_date: "2026-05-02"
+distributed_to:
+  - kailash-coc-claude-py 3.6.7 (commit 33f4ce1)
+  - kailash-coc-py 1.1.6 (commit 40988bc)
+classification_summary: |
+  Both changes classified GLOBAL per proposal suggestions and applied
+  to loom canonical rules:
+    - rules/git.md § Discipline: +1 bullet (pre-commit comment-matcher)
+    - rules/build-repo-release-discipline.md MUST Rule 2: +1 paragraph
+      (uv index-cache --refresh)
+  Cap-headroom: git.md is on the per-rule budget table (4400 B abridged,
+  +30% block at 5720 B). +407 B raw → ~250 B abridged delta; rs-axis has
+  ~4,761 B free since 2.13.0 — no block. build-repo-release-discipline.md
+  not on budget table — zero cap impact.
+
+changes:
+  - id: pre-commit-comment-matcher-quirk
+    type: rule_addition
+    location: rules/git.md § Discipline
+    classification_suggestion: global
+    classification: global
+    rationale: |
+      Pre-commit hooks are language-agnostic and CLI-agnostic. The
+      `python-use-type-annotations` hook ships with `pre-commit-hooks`,
+      which every BUILD repo uses. Same regex would trigger on `kailash-rs`
+      Python tooling if any. No language or CLI variance.
+    diff_summary: |
+      Adds a new Discipline bullet between "Pre-commit hook workarounds"
+      and "Commit-message claim accuracy":
+
+        - **Pre-commit comment-syntax matchers**: the
+          `python-use-type-annotations` hook regex matches `# type` (NOT
+          `# type:`) per `pre-commit-hooks/.pre-commit-hooks.yaml::pygrep`.
+          Comments referencing the `types` module — `# types.UnionType for
+          PEP 604` — trigger a false positive. Reword to avoid `# type` as
+          a literal substring (e.g. "PEP 604 produces `types.UnionType`"
+          → "PEP 604 produces a union type"). Same class for any future
+          `pygrep` hook that matches comment fragments without the
+          trailing punctuation.
+
+  - id: uv-index-cache-refresh
+    type: rule_clarification
+    location: rules/build-repo-release-discipline.md § MUST Rule 2
+    classification_suggestion: global
+    classification: global
+    rationale: |
+      `uv` is the mandated package manager per `python-environment.md`
+      Rule 1; the cache-override is `uv`-specific (`pip` has shorter index
+      TTL and does not need the flag). Same surface for kailash-rs if it
+      ever moves to a `uv`-equivalent index cache. No language variance.
+    diff_summary: |
+      Adds a paragraph after the existing "PyPI cache lag" note:
+
+        **`uv` index-cache override**: when `pypi.org/pypi/<pkg>/<ver>/json`
+        returns the new metadata BUT `uv pip install "<pkg>==<ver>"` reports
+        `No solution found ... no version of <pkg>==<ver>`, the gap is
+        `uv`'s local index cache, not PyPI. Pass `--refresh` to force a
+        re-fetch: `uv pip install --refresh "<pkg>==<ver>"`. The pip-direct
+        path (`/tmp/verify/bin/pip install ...`) does not need this flag
+        because pip's index TTL is shorter, but the
+        build-repo-release-discipline standard is `uv` per
+        `python-environment.md` Rule 1, so `--refresh` is the documented
+        unblocker for the install-verification step.
+
+origin_session_artifacts:
+  prs_merged: [769, 770, 771]
+  pypi_published:
+    - kailash 2.13.2
+    - kailash-dataflow 2.7.3
+  rule_edits_landed_locally:
+    - .claude/rules/git.md
+    - .claude/rules/build-repo-release-discipline.md
+  session_notes: .session-notes
+  related_journal:
+    - "(none — narrow tooling quirks; not journal-worthy individually)"
