@@ -7,7 +7,7 @@ Provides the 10 core event types required for Enterprise-App integration:
 - started, thinking, message, tool_use, tool_result
 - subagent_spawn, cost_update, progress, completed, error
 
-See: ADR-013 Specialist System, TODO-203 Task/Skill Tools, TODO-204 Enterprise-App Streaming
+See: ADR-013 Specialist System
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ class CostUpdateEvent(ExecutionEvent):
 
 
 # ============================================================================
-# Enterprise-App Core Event Types (TODO-204)
+# Enterprise-App Core Event Types
 # ============================================================================
 
 
@@ -586,7 +586,7 @@ __all__ = [
     # Core enum and base
     "EventType",
     "ExecutionEvent",
-    # Enterprise-App Core Events (TODO-204)
+    # Enterprise-App Core Events
     "StartedEvent",
     "ThinkingEvent",
     "MessageEvent",
@@ -595,10 +595,10 @@ __all__ = [
     "ProgressEvent",
     "CompletedEvent",
     "ErrorEvent",
-    # Subagent events (TODO-203)
+    # Subagent events
     "SubagentSpawnEvent",
     "SubagentCompleteEvent",
-    # Skill events (TODO-203)
+    # Skill events
     "SkillInvokeEvent",
     "SkillCompleteEvent",
     # Cost tracking

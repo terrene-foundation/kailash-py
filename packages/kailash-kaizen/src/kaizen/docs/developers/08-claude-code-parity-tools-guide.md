@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Claude Code Parity Tools (TODO-207) implement full tool parity with Claude Code's autonomous capabilities. These tools enable bidirectional user communication, plan management, notebook editing, and process control - all essential for autonomous agent workflows.
+The Claude Code Parity Tools implement full tool parity with Claude Code's autonomous capabilities. These tools enable bidirectional user communication, plan management, notebook editing, and process control - all essential for autonomous agent workflows.
 
 ## Architecture
 
@@ -249,9 +249,9 @@ registry.register_defaults(categories=[
     "bash",        # 1 tool
     "search",      # 2 tools
     "agent",       # 2 tools
-    "interaction", # 3 tools (TODO-207)
-    "planning",    # 2 tools (TODO-207)
-    "process"      # 2 tools (TODO-207)
+    "interaction", # 3 tools
+    "planning",    # 2 tools
+    "process"      # 2 tools
 ])
 
 print(f"Total tools: {len(registry)}")  # 19
@@ -348,13 +348,13 @@ All tools have comprehensive test coverage:
 | test_interaction_tool.py | 42 |
 | test_planning_tool.py | 40 |
 | test_process_tool.py | 56 |
-| **Total TODO-207** | **214** |
+| **Total parity tool tests** | **214** |
 | **Full native tools** | **451** |
 
 Run tests:
 
 ```bash
-# TODO-207 tools only
+# Claude Code parity tools only
 pytest tests/unit/tools/native/test_todo_tool.py \
        tests/unit/tools/native/test_notebook_tool.py \
        tests/unit/tools/native/test_interaction_tool.py \

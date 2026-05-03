@@ -6,7 +6,7 @@ logic for signature-based programming, and execution event types for
 autonomous agent runtime.
 """
 
-from .events import (  # Core enum and base; Enterprise-App Core Events (TODO-204); Subagent events (TODO-203); Skill events (TODO-203); Cost tracking
+from .events import (  # Core enum and base; Enterprise-App Core Events; Subagent events; Skill events; Cost tracking
     CompletedEvent,
     CostUpdateEvent,
     ErrorEvent,
@@ -37,14 +37,14 @@ __all__ = [
     "PatternExecutor",
     "ChainOfThoughtExecutor",
     "ReActExecutor",
-    # Streaming execution (TODO-204)
+    # Streaming execution
     "StreamingExecutor",
     "ExecutionMetrics",
     "format_sse",
     # Execution events - Core enum and base
     "EventType",
     "ExecutionEvent",
-    # Execution events - Enterprise-App Core Events (TODO-204)
+    # Execution events - Enterprise-App Core Events
     "StartedEvent",
     "ThinkingEvent",
     "MessageEvent",
@@ -53,15 +53,15 @@ __all__ = [
     "ProgressEvent",
     "CompletedEvent",
     "ErrorEvent",
-    # Execution events - Subagent (TODO-203)
+    # Execution events - Subagent
     "SubagentSpawnEvent",
     "SubagentCompleteEvent",
-    # Execution events - Skill (TODO-203)
+    # Execution events - Skill
     "SkillInvokeEvent",
     "SkillCompleteEvent",
     # Execution events - Cost
     "CostUpdateEvent",
-    # Result types (TODO-203)
+    # Result types
     "SubagentResult",
     "SkillResult",
 ]

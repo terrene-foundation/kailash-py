@@ -10,8 +10,6 @@ Features:
 - Configurable cache size
 - Cache invalidation support
 - 90% faster redeployment with caching
-
-Part of TODO-149 Phase 4: Performance & Testing
 """
 
 import hashlib

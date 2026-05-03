@@ -10,8 +10,6 @@ Features:
 - Session sync performance
 - Statistical analysis (mean, median, min, max)
 - Performance summary reports
-
-Part of TODO-149 Phase 4: Performance & Testing
 """
 
 import time

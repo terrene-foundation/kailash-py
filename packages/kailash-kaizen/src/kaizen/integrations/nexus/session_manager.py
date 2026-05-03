@@ -3,8 +3,6 @@ Session management for Nexus multi-channel deployments.
 
 Provides cross-channel session consistency, state synchronization, and
 memory pool integration for Kaizen agents deployed via Nexus.
-
-Phase 3 of TODO-149: Unified Session Management
 """
 
 from dataclasses import dataclass, field

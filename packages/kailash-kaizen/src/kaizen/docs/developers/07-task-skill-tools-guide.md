@@ -1,4 +1,4 @@
-# Task/Skill Tools Guide (TODO-203)
+# Task/Skill Tools Guide
 
 This guide covers the Task and Skill tools that enable multi-agent coordination and knowledge injection for autonomous agent execution.
 
