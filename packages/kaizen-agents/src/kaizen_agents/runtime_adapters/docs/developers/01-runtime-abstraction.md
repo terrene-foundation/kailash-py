@@ -1,6 +1,6 @@
 # Runtime Abstraction Layer Developer Guide
 
-The Runtime Abstraction Layer (TODO-191) provides a unified interface for executing autonomous agent tasks across different backends.
+The Runtime Abstraction Layer provides a unified interface for executing autonomous agent tasks across different backends.
 
 ## Core Interfaces
 

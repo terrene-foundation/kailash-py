@@ -63,7 +63,7 @@ Performance Targets:
 - Reliability: 99.9% success rate (with retry)
 
 Author: Kaizen Framework Team
-Created: 2025-11-05 (Phase 4, Orchestration Runtime - TODO-178)
+Created: 2025-11-05 (Phase 4, Orchestration Runtime)
 Reference: Based on kaizen-specialist analysis and existing coordination patterns
 """
 
@@ -340,7 +340,7 @@ class OrchestrationRuntime:
         # Total tasks executed counter
         self._total_tasks_executed: int = 0
 
-        # AsyncLocalRuntime for level-based parallelism (Task 1: TODO-178)
+        # AsyncLocalRuntime for level-based parallelism
         self._async_runtime: AsyncLocalRuntime | None = None
 
         # Retry policy - use retry_policy if set, otherwise default_retry_policy
@@ -844,8 +844,7 @@ class OrchestrationRuntime:
         """
         Execute multiple tasks across agents with level-based parallelism via AsyncLocalRuntime.
 
-        Task 1: AsyncLocalRuntime Integration (TODO-178)
-        Replaces worker queue pattern with workflow-based execution for true concurrency.
+        AsyncLocalRuntime Integration replaces worker queue pattern with workflow-based execution for true concurrency.
 
         Pattern: Route tasks to agents → Build workflow → Execute via AsyncLocalRuntime
         Result: 10-100 agents executing concurrently (level-based parallelism)
@@ -1204,7 +1203,7 @@ class OrchestrationRuntime:
         """Start orchestration runtime."""
         self._running = True
 
-        # Initialize AsyncLocalRuntime for level-based parallelism (Task 1: TODO-178)
+        # Initialize AsyncLocalRuntime for level-based parallelism
         # Must be created in async context to use AsyncLocalRuntime
         self._async_runtime = AsyncLocalRuntime(
             max_concurrent_nodes=self.config.max_concurrent_agents
@@ -1571,9 +1570,7 @@ class OrchestrationRuntime:
         """
         Build Kailash workflow from list of agents for level-based parallelism.
 
-        Task 1: AsyncLocalRuntime Integration (TODO-178)
-
-        Pattern: Creates workflow where each agent becomes an LLMAgentNode.
+        AsyncLocalRuntime Integration creates workflow where each agent becomes an LLMAgentNode.
         AsyncLocalRuntime enables true concurrent execution (10-100 agents).
 
         Args:

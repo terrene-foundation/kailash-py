@@ -1,6 +1,6 @@
 # Unified Agent API Developer Guide
 
-The Unified Agent API (TODO-195) provides a developer-friendly interface for creating and configuring autonomous agents with progressive configuration options.
+The Unified Agent API provides a developer-friendly interface for creating and configuring autonomous agents with progressive configuration options.
 
 ## Overview
 

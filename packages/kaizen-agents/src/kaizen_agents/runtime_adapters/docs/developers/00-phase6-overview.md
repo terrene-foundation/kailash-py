@@ -8,13 +8,13 @@ Phase 6 delivers the core autonomous execution capabilities that enable Kaizen a
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Unified Agent API (TODO-195)                 │
+│                    Unified Agent API                            │
 │     AgentCapabilities, CapabilityPresets, Agent class           │
 └─────────────────────────────────────────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│               Runtime Abstraction Layer (TODO-191)              │
+│               Runtime Abstraction Layer                         │
 │   RuntimeAdapter, RuntimeCapabilities, RuntimeSelector          │
 └─────────────────────────────────────────────────────────────────┘
                                │
@@ -22,15 +22,15 @@ Phase 6 delivers the core autonomous execution capabilities that enable Kaizen a
         ▼                      ▼                      ▼
 ┌───────────────┐    ┌───────────────┐    ┌───────────────────────┐
 │LocalKaizen    │    │ External      │    │ Multi-LLM Routing     │
-│Adapter        │    │ Adapters      │    │ (TODO-194)            │
-│(TODO-192)     │    │ (TODO-196)    │    │ LLMRouter, TaskAnalyzer│
+│Adapter        │    │ Adapters      │    │                       │
+│               │    │               │    │ LLMRouter, TaskAnalyzer│
 │TAOD Loop      │    │ Claude/OpenAI │    └───────────────────────┘
 └───────────────┘    │ /Gemini       │
         │            └───────────────┘
         ▼
 ┌───────────────┐    ┌───────────────┐
 │Native Tools   │    │Memory Provider│
-│(TODO-190)     │    │(TODO-193)     │
+│               │    │               │
 │BaseTool,      │    │Hierarchical   │
 │Registry       │    │Memory         │
 └───────────────┘    └───────────────┘
@@ -38,15 +38,15 @@ Phase 6 delivers the core autonomous execution capabilities that enable Kaizen a
 
 ## Component Summary
 
-| Component | TODO | Tests | Primary Purpose |
-|-----------|------|-------|-----------------|
-| Native Tool System | TODO-190 | - | File, Bash, Search tools |
-| Runtime Abstraction | TODO-191 | 371 | Adapter interface, selector |
-| LocalKaizenAdapter | TODO-192 | 371 | TAOD autonomous loop |
-| Memory Provider | TODO-193 | 112 | Hot/Warm/Cold memory |
-| Multi-LLM Routing | TODO-194 | 145 | Task-based LLM selection |
-| Unified Agent API | TODO-195 | 217 | Developer-facing API |
-| External Adapters | TODO-196 | 77 | Claude/OpenAI/Gemini |
+| Component | Tests | Primary Purpose |
+|-----------|-------|-----------------|
+| Native Tool System | - | File, Bash, Search tools |
+| Runtime Abstraction | 371 | Adapter interface, selector |
+| LocalKaizenAdapter | 371 | TAOD autonomous loop |
+| Memory Provider | 112 | Hot/Warm/Cold memory |
+| Multi-LLM Routing | 145 | Task-based LLM selection |
+| Unified Agent API | 217 | Developer-facing API |
+| External Adapters | 77 | Claude/OpenAI/Gemini |
 
 **Total Tests**: 922+
 
@@ -261,14 +261,14 @@ pytest tests/agent/test_unified_api.py -v  # 217 tests
 
 ## Phase 6 Completion Evidence
 
-| TODO | Component | Tests | Status |
-|------|-----------|-------|--------|
-| TODO-190 | Native Tool System | - | COMPLETE |
-| TODO-191 | Runtime Abstraction | 371 | COMPLETE |
-| TODO-192 | LocalKaizenAdapter | 371 | COMPLETE |
-| TODO-193 | Memory Provider | 112 | COMPLETE |
-| TODO-194 | Multi-LLM Routing | 145 | COMPLETE |
-| TODO-195 | Unified Agent API | 217 | COMPLETE |
-| TODO-196 | External Adapters | 77 | COMPLETE |
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Native Tool System | - | COMPLETE |
+| Runtime Abstraction | 371 | COMPLETE |
+| LocalKaizenAdapter | 371 | COMPLETE |
+| Memory Provider | 112 | COMPLETE |
+| Multi-LLM Routing | 145 | COMPLETE |
+| Unified Agent API | 217 | COMPLETE |
+| External Adapters | 77 | COMPLETE |
 
 **Total**: 922+ tests passing, 100% completion

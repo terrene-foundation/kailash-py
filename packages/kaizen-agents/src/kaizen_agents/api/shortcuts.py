@@ -146,7 +146,7 @@ def _create_local_runtime(**kwargs) -> "RuntimeAdapterType":
 
 def _create_claude_code_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create a ClaudeCodeAdapter for Claude Code execution."""
-    # Note: ClaudeCodeAdapter may not exist yet - TODO-196
+    # ClaudeCodeAdapter is an optional adapter; import lazily and surface a typed error if missing
     try:
         from kaizen_agents.runtime_adapters.claude_code import ClaudeCodeAdapter
 
@@ -160,7 +160,7 @@ def _create_claude_code_runtime(**kwargs) -> "RuntimeAdapterType":
 
 def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create an OpenAI Codex adapter for Codex execution."""
-    # Note: CodexAdapter may not exist yet - TODO-196
+    # OpenAICodexAdapter is an optional adapter; import lazily and surface a typed error if missing
     try:
         from kaizen_agents.runtime_adapters.openai_codex import OpenAICodexAdapter
 
@@ -174,7 +174,7 @@ def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
 
 def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create a Gemini CLI adapter for Gemini execution."""
-    # Note: GeminiCLIAdapter may not exist yet - TODO-196
+    # GeminiCLIAdapter is an optional adapter; import lazily and surface a typed error if missing
     try:
         from kaizen_agents.runtime_adapters.gemini_cli import GeminiCLIAdapter
 
