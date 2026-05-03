@@ -244,7 +244,7 @@ class TestMFASetupFunctionality:
 
             # Setup TOTP for user
             result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -300,7 +300,7 @@ class TestMFASetupFunctionality:
 
                 # Setup SMS for user
                 result = mfa_node.execute(
-                    operation="setup",
+                    action="setup",
                     user_id="user123",
                     method="sms",
                     user_phone="+1234567890",
@@ -336,7 +336,7 @@ class TestMFASetupFunctionality:
 
                 # Setup email for user
                 result = mfa_node.execute(
-                    operation="setup",
+                    action="setup",
                     user_id="user123",
                     method="email",
                     user_email="user@example.com",
@@ -364,7 +364,7 @@ class TestMFASetupFunctionality:
 
             # Generate backup codes through setup
             result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -401,7 +401,7 @@ class TestMFAVerificationFunctionality:
 
             # Setup MFA first
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -414,7 +414,7 @@ class TestMFAVerificationFunctionality:
 
             # Verify the code
             verify_result = mfa_node.execute(
-                operation="verify", user_id="user123", method="totp", code=valid_code
+                action="verify", user_id="user123", method="totp", code=valid_code
             )
 
             # Verify successful verification - be flexible about result structure
@@ -439,7 +439,7 @@ class TestMFAVerificationFunctionality:
 
             # Setup MFA first
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -447,7 +447,7 @@ class TestMFAVerificationFunctionality:
 
             # Test with invalid code
             verify_result = mfa_node.execute(
-                operation="verify",
+                action="verify",
                 user_id="user123",
                 method="totp",
                 code="000000",  # Invalid code
@@ -494,7 +494,7 @@ class TestMFAVerificationFunctionality:
 
                 # Setup SMS first
                 setup_result = mfa_node.execute(
-                    operation="setup",
+                    action="setup",
                     user_id="user123",
                     method="sms",
                     user_phone="+1234567890",
@@ -502,7 +502,7 @@ class TestMFAVerificationFunctionality:
 
                 # Request verification code
                 challenge_result = mfa_node.execute(
-                    operation="challenge", user_id="user123", method="sms"
+                    action="challenge", user_id="user123", method="sms"
                 )
 
                 assert challenge_result["success"] is True
@@ -521,7 +521,7 @@ class TestMFAVerificationFunctionality:
 
                         # Verify with the code
                         verify_result = mfa_node.execute(
-                            operation="verify",
+                            action="verify",
                             user_id="user123",
                             method="sms",
                             code=sms_code,
@@ -545,7 +545,7 @@ class TestMFAVerificationFunctionality:
 
             # Setup MFA first to get backup codes
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -558,7 +558,7 @@ class TestMFAVerificationFunctionality:
 
             # Verify with backup code
             verify_result = mfa_node.execute(
-                operation="verify",
+                action="verify",
                 user_id="user123",
                 method="backup_code",
                 code=backup_code,
@@ -572,7 +572,7 @@ class TestMFAVerificationFunctionality:
 
             # Try to use the same backup code again (should fail)
             verify_result2 = mfa_node.execute(
-                operation="verify",
+                action="verify",
                 user_id="user123",
                 method="backup_code",
                 code=backup_code,
@@ -598,7 +598,7 @@ class TestMFARateLimitingAndSecurity:
 
             # Setup MFA first
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -608,7 +608,7 @@ class TestMFARateLimitingAndSecurity:
             failed_attempts = 0
             for i in range(5):
                 verify_result = mfa_node.execute(
-                    operation="verify",
+                    action="verify",
                     user_id="user123",
                     method="totp",
                     code="000000",  # Invalid code
@@ -636,7 +636,7 @@ class TestMFARateLimitingAndSecurity:
 
             # Setup and verify MFA
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -648,7 +648,7 @@ class TestMFARateLimitingAndSecurity:
             valid_code = TOTPGenerator.generate_totp(secret)
 
             verify_result = mfa_node.execute(
-                operation="verify", user_id="user123", method="totp", code=valid_code
+                action="verify", user_id="user123", method="totp", code=valid_code
             )
 
             assert verify_result["success"] is True
@@ -659,7 +659,7 @@ class TestMFARateLimitingAndSecurity:
 
             # Try to use expired session
             session_check = mfa_node.execute(
-                operation="verify_session", user_id="user123", session_id=session_id
+                action="verify_session", user_id="user123", session_id=session_id
             )
 
             # Session should be expired
@@ -687,7 +687,7 @@ class TestMFARateLimitingAndSecurity:
 
             # Setup MFA
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -700,7 +700,7 @@ class TestMFARateLimitingAndSecurity:
             valid_code = TOTPGenerator.generate_totp(secret)
 
             verify_result = mfa_node.execute(
-                operation="verify",
+                action="verify",
                 user_id="user123",
                 method="totp",
                 code=valid_code,
@@ -714,7 +714,7 @@ class TestMFARateLimitingAndSecurity:
 
                 # Try to use trust token for future authentication
                 trust_verify = mfa_node.execute(
-                    operation="verify_trust",
+                    action="verify_trust",
                     user_id="user123",
                     trust_token=trust_token,
                     device_info=device_info,
@@ -739,7 +739,7 @@ class TestMFARecoveryAndManagement:
 
             # Setup MFA first
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -749,7 +749,7 @@ class TestMFARecoveryAndManagement:
 
             # Disable MFA
             disable_result = mfa_node.execute(
-                operation="disable", user_id="user123", admin_override=True
+                action="disable", user_id="user123", admin_override=True
             )
 
             # Verify disable result
@@ -769,7 +769,7 @@ class TestMFARecoveryAndManagement:
 
             # Setup MFA first
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -779,7 +779,7 @@ class TestMFARecoveryAndManagement:
 
             # Reset MFA
             reset_result = mfa_node.execute(
-                operation="reset",
+                action="reset",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -805,7 +805,7 @@ class TestMFARecoveryAndManagement:
             mfa_node = MultiFactorAuthNode()
 
             # Check status before setup
-            status_before = mfa_node.execute(operation="status", user_id="user123")
+            status_before = mfa_node.execute(action="status", user_id="user123")
 
             assert status_before["success"] is True
             assert status_before["user_id"] == "user123"
@@ -813,14 +813,14 @@ class TestMFARecoveryAndManagement:
 
             # Setup MFA
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
             )
 
             # Check status after setup
-            status_after = mfa_node.execute(operation="status", user_id="user123")
+            status_after = mfa_node.execute(action="status", user_id="user123")
 
             assert status_after["success"] is True
             assert (
@@ -844,7 +844,7 @@ class TestMFAIntegrationAndEdgeCases:
 
             # Setup TOTP
             totp_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -854,14 +854,14 @@ class TestMFAIntegrationAndEdgeCases:
             with patch("kailash.nodes.auth.mfa._send_sms") as mock_sms:
                 mock_sms.return_value = True
                 sms_result = mfa_node.execute(
-                    operation="setup",
+                    action="setup",
                     user_id="user123",
                     method="sms",
                     user_phone="+1234567890",
                 )
 
             # Check status
-            status_result = mfa_node.execute(operation="status", user_id="user123")
+            status_result = mfa_node.execute(action="status", user_id="user123")
 
             # Should have multiple methods enabled
             enabled_methods = status_result["enabled_methods"]
@@ -878,7 +878,7 @@ class TestMFAIntegrationAndEdgeCases:
             mfa_node = MultiFactorAuthNode()
 
             # Try invalid action
-            result = mfa_node.execute(operation="invalid_action", user_id="user123")
+            result = mfa_node.execute(action="invalid_action", user_id="user123")
 
             # Should handle gracefully
             # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
@@ -896,7 +896,7 @@ class TestMFAIntegrationAndEdgeCases:
 
             # Try with empty user ID
             result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="",
                 method="totp",
                 user_email="user@example.com",
@@ -920,7 +920,7 @@ class TestMFAIntegrationAndEdgeCases:
 
             # Setup MFA
             setup_result = mfa_node.execute(
-                operation="setup",
+                action="setup",
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
@@ -932,7 +932,7 @@ class TestMFAIntegrationAndEdgeCases:
 
             def verify_attempt():
                 result = mfa_node.execute(
-                    operation="verify",
+                    action="verify",
                     user_id="user123",
                     method="totp",
                     code="000000",  # Invalid code
