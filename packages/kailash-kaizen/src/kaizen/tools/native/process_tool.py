@@ -3,8 +3,6 @@
 Implements KillShell and TaskOutput tools that allow agents to manage
 background processes, matching Claude Code's process management functionality.
 
-See: TODO-207 ClaudeCodeAgent Full Tool Parity
-
 Example:
     >>> from kaizen.tools.native import KillShellTool, TaskOutputTool
     >>> from kaizen.tools.native import KaizenToolRegistry

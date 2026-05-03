@@ -4,7 +4,7 @@ Implements the Task tool that spawns specialized subagents dynamically,
 similar to Claude Code's Task tool. Enables multi-agent coordination
 and autonomous execution patterns.
 
-See: TODO-203 Task/Skill Tools, ADR-013 Specialist System
+See: ADR-013 Specialist System
 
 Example:
     >>> from kaizen.tools.native import TaskTool, KaizenToolRegistry

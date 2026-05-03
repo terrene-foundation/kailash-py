@@ -68,11 +68,11 @@ from kaizen.tools.native.registry import KaizenToolRegistry
 # Search tools
 from kaizen.tools.native.search_tools import WebFetchTool, WebSearchTool
 
-# Agent tools (TODO-203)
+# Agent tools
 from kaizen.tools.native.skill_tool import SkillTool
 from kaizen.tools.native.task_tool import TaskTool
 
-# Interaction tools (TODO-207)
+# Interaction tools
 from kaizen.tools.native.todo_tool import TodoItem, TodoList, TodoStatus, TodoWriteTool
 
 __all__ = [
@@ -93,10 +93,10 @@ __all__ = [
     # Search tools
     "WebSearchTool",
     "WebFetchTool",
-    # Agent tools (TODO-203)
+    # Agent tools
     "TaskTool",
     "SkillTool",
-    # Interaction tools (TODO-207)
+    # Interaction tools
     "TodoWriteTool",
     "TodoItem",
     "TodoList",
@@ -108,14 +108,14 @@ __all__ = [
     "Question",
     "QuestionAnswer",
     "QuestionOption",
-    # Planning tools (TODO-207)
+    # Planning tools
     "EnterPlanModeTool",
     "ExitPlanModeTool",
     "PlanMode",
     "PlanState",
     "AllowedPrompt",
     "PlanModeManager",
-    # Process management tools (TODO-207)
+    # Process management tools
     "KillShellTool",
     "TaskOutputTool",
     "ProcessManager",

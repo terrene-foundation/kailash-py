@@ -3,8 +3,6 @@
 Implements EnterPlanMode and ExitPlanMode tools that allow agents to
 manage planning workflows, matching Claude Code's planning functionality.
 
-See: TODO-207 ClaudeCodeAgent Full Tool Parity
-
 Example:
     >>> from kaizen.tools.native import EnterPlanModeTool, ExitPlanModeTool
     >>> from kaizen.tools.native import KaizenToolRegistry

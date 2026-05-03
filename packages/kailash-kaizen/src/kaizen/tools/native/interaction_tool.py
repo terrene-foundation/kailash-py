@@ -4,8 +4,6 @@ Implements the AskUserQuestion tool that allows agents to ask users questions
 during execution, matching Claude Code's AskUserQuestion functionality.
 Supports multiple choice, multi-select, and free-form questions.
 
-See: TODO-207 ClaudeCodeAgent Full Tool Parity
-
 Example:
     >>> from kaizen.tools.native import AskUserQuestionTool, KaizenToolRegistry
     >>>

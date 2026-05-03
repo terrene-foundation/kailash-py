@@ -4,8 +4,6 @@ Implements the NotebookEdit tool that allows editing Jupyter notebook cells,
 matching Claude Code's NotebookEdit functionality. Supports replace, insert,
 and delete operations on notebook cells.
 
-See: TODO-207 ClaudeCodeAgent Full Tool Parity
-
 Example:
     >>> from kaizen.tools.native import NotebookEditTool, KaizenToolRegistry
     >>>

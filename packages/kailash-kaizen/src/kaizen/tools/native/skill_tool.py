@@ -4,7 +4,7 @@ Implements the Skill tool that invokes registered skills dynamically,
 loading skill content on demand (progressive disclosure) and injecting
 it into the execution context.
 
-See: TODO-203 Task/Skill Tools, ADR-013 Specialist System
+See: ADR-013 Specialist System
 
 Example:
     >>> from kaizen.tools.native import SkillTool, KaizenToolRegistry
