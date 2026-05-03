@@ -5,6 +5,18 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] — 2026-05-03 — issue #781 hygiene release (T3)
+
+Patch release cutting PyPI for T3 (kaizen-agents TODO-NNN comment-strip) of the issue #781 cleanup workstream.
+
+### Changed (T3 of #781 — comment-only, packages/kaizen-agents/src/)
+
+- Stripped 69 `TODO-NNN` markers across 17 files. Heavy concentration in `agents/autonomous/base.py` (28 hits — state persistence + interrupt handling banners), `runtime_adapters/docs/` (23 hits across architecture-diagram cells + table column headers in 5 files), `patterns/` (15 hits across 11 files), `api/shortcuts.py` (3 hits — verified `ClaudeCodeAdapter` / `OpenAICodexAdapter` / `GeminiCLIAdapter` exist at `runtime_adapters/{claude_code,openai_codex,gemini_cli}.py`; rewrote stale "may not exist yet" notes). Disposition: 27 Class 1a banner / group label / inline-shipped, 33 Class 1b docstring / doc-body provenance, 9 Class 3 mid-comment cross-reference, 0 Class 2.
+
+### Notes
+
+- Comment-only diff: zero changes to imports, signatures, control flow, or types. Three commits (`b9605dde`, `35eebba1`, `37bab09f`) bypassed pre-commit hooks per the documented `git -c core.hooksPath=/dev/null` exception in `rules/git.md` § Pre-Commit Hook Workarounds — Black + Ruff auto-formatters proposed `Optional[X] → X | None` and `Dict → dict` rewrites that exceed T3's comment-only mandate; the type-modernization sweep is flagged as a follow-up workstream (out of T3 scope).
+
 ## [0.9.4] - 2026-04-21 — ToolRegistry pre-hydrate eliminates discovery tax (#579)
 
 ### Added

@@ -1,5 +1,17 @@
 # Nexus Changelog
 
+## [2.6.1] — 2026-05-03 — issue #781 hygiene release (T4)
+
+Patch release cutting PyPI for T4 (nexus TODO-NNN comment-strip) of the issue #781 cleanup workstream.
+
+### Changed (T4 of #781 — comment-only, packages/kailash-nexus/src/)
+
+- Stripped 16 `TODO-NNN` markers in `nexus/core.py` (5 hits — public-API section banners) + `nexus/auth/` subsystem (11 hits across plugin, audit/middleware, audit/backends/{base,custom,dataflow,logging}, audit/{config,pii_filter,record}, audit/**init**) per the ratified disposition catalog (5 Class 1a section banners, 11 Class 1b module docstring provenance).
+
+### Notes
+
+- Comment-only diff: zero changes to imports, signatures, control flow, or types. The bump cuts PyPI per `build-repo-release-discipline.md` Rule 1.
+
 ## [2.6.0] — 2026-04-30 — WebSocket Origin allowlist + `Connection.headers` (#673)
 
 Minor release closing the WebSocket Origin-header bypass: every `register_websocket(...)` registration now hoists Origin-allowlist enforcement to the framework so consumer handlers no longer have to re-implement the check (and silently drop it on copy-paste).

@@ -5,11 +5,21 @@ All notable changes to the Kailash MCP package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.11] — 2026-05-03 — sibling-release sweep (W6-002 + LOW-6 triage)
+
+Patch release cutting PyPI for previously-unreleased commits on main per `build-repo-release-discipline.md` Rule 1 (every BUILD-repo session releases all packages whose main is ahead of PyPI). Triggered by the issue #781 cleanup release wave (kailash 2.13.4 + dataflow/kaizen/nexus/kaizen-agents siblings).
+
+### Fixed
+
+- **W6-002 — `ElicitationSystem._CapturingTransport.response_handler` typed as `Optional[Callable]` to clear pyright `reportAttributeAccessIssue`** (commit `427a315b`).
 
 ### Tests
 
-- Added Tier-2 integration test for `ElicitationSystem` at `tests/integration/mcp_server/test_elicitation_integration.py` (closes Wave 6 finding F-F-32). Exercises the spec § 4.9 contract end-to-end through the `server.elicitation_system` facade across happy-path / validation-rejection / timeout / cancellation scenarios. The previously spec-cited file did not exist, leaving the orphan-detection contract unsatisfied for the manager-shape `ElicitationSystem` class. 10 tests, all passing.
+- Added Tier-2 integration test for `ElicitationSystem` at `tests/integration/mcp_server/test_elicitation_integration.py` (closes Wave 6 finding F-F-32). Exercises the spec § 4.9 contract end-to-end through the `server.elicitation_system` facade across happy-path / validation-rejection / timeout / cancellation scenarios. 10 tests, all passing (commits `43a713c7` + `84437c74`).
+
+### Triage (recap)
+
+- Resolved 3 stub-marker findings from SWEEP-2026-04-28 LOW-6 cluster (commit `6c00ea3f`).
 
 ## [0.2.10] — 2026-04-26 — JWT iss-claim required when expected_issuer configured (#625)
 
