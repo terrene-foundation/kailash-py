@@ -1,6 +1,6 @@
 # Multi-LLM Routing Developer Guide
 
-The Multi-LLM Routing system (TODO-194) provides intelligent model selection based on task requirements, optimizing for cost, performance, and capability.
+The Multi-LLM Routing system provides intelligent model selection based on task requirements, optimizing for cost, performance, and capability.
 
 ## Architecture
 

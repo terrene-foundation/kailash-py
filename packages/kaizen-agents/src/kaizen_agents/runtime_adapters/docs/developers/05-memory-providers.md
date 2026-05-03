@@ -1,6 +1,6 @@
 # Memory Provider Interface Developer Guide
 
-The Memory Provider Interface (TODO-193) provides a standardized way to manage agent memory across different storage backends and access patterns.
+The Memory Provider Interface provides a standardized way to manage agent memory across different storage backends and access patterns.
 
 ## Architecture
 
