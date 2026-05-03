@@ -148,7 +148,7 @@ class FilesystemStorage:
 
     async def save(self, state: AgentState) -> str:
         """
-        Save checkpoint as JSONL file with atomic write (TODO-168 Day 3).
+        Save checkpoint as JSONL file with atomic write.
 
         Uses temp file + rename for atomicity.
         Supports gzip compression and AES-256-GCM encryption.
@@ -231,7 +231,7 @@ class FilesystemStorage:
 
     async def load(self, checkpoint_id: str) -> AgentState:
         """
-        Load checkpoint from JSONL file (TODO-168 Day 3).
+        Load checkpoint from JSONL file.
 
         Auto-detects encryption and compression by checking file extensions.
 
@@ -311,7 +311,7 @@ class FilesystemStorage:
         self, agent_id: str | None = None
     ) -> list[CheckpointMetadata]:
         """
-        List all checkpoints in directory (TODO-168 Day 3).
+        List all checkpoints in directory.
 
         Auto-detects compressed and uncompressed checkpoints.
 
@@ -377,7 +377,7 @@ class FilesystemStorage:
 
     async def delete(self, checkpoint_id: str) -> None:
         """
-        Delete checkpoint file (TODO-168 Day 3).
+        Delete checkpoint file.
 
         Auto-detects compressed and uncompressed checkpoints.
 
@@ -409,7 +409,7 @@ class FilesystemStorage:
 
     async def exists(self, checkpoint_id: str) -> bool:
         """
-        Check if checkpoint exists (TODO-168 Day 3).
+        Check if checkpoint exists.
 
         Auto-detects compressed and uncompressed checkpoints.
 

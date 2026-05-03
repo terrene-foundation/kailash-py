@@ -11,7 +11,6 @@ Use Cases:
 
 References:
 - ADR-006: Agent Base Architecture design (Strategy Pattern section)
-- TODO-157: Task 1.5, Phase 2 Tasks 2.7-2.11
 - Existing patterns: SimpleQA, ChainOfThought agents
 
 Author: Kaizen Framework Team

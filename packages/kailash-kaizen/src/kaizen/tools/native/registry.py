@@ -147,7 +147,7 @@ class KaizenToolRegistry:
         from kaizen.tools.native.skill_tool import SkillTool
         from kaizen.tools.native.task_tool import TaskTool
 
-        # TODO-207: Claude Code parity tools
+        # Claude Code parity tools
         from kaizen.tools.native.todo_tool import TodoWriteTool
 
         if categories is None:
@@ -170,7 +170,7 @@ class KaizenToolRegistry:
             "bash": [BashTool()],
             "search": [WebSearchTool(), WebFetchTool()],
             "agent": [TaskTool(), SkillTool()],
-            # TODO-207: Claude Code parity categories
+            # Claude Code parity categories
             "interaction": [
                 TodoWriteTool(),
                 NotebookEditTool(),

@@ -1,8 +1,6 @@
 """Session state models for Enterprise-App integration.
 
 Defines the state models for tracking agent execution sessions.
-
-See: TODO-204 Enterprise-App Streaming Integration
 """
 
 from __future__ import annotations

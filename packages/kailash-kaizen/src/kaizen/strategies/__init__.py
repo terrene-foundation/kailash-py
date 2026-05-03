@@ -23,8 +23,6 @@ New Execution Strategies (Phase 3 Group 2):
 
 References:
 - ADR-006: Agent Base Architecture design (Strategy Pattern section)
-- TODO-157: Phase 2 (Strategy Pattern implementation)
-- TODO-157: Phase 3 (Convergence Strategy refactoring)
 
 Author: Kaizen Framework Team
 Created: 2025-10-01

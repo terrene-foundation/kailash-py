@@ -3,8 +3,6 @@
 Provides the core execution bridge between Kaizen agents and Enterprise-App,
 wrapping agent execution with typed event emission for progress tracking,
 cost attribution, and UI integration.
-
-See: TODO-204 Enterprise-App Streaming Integration
 """
 
 from __future__ import annotations

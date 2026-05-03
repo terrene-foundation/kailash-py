@@ -12,7 +12,6 @@ Key Responsibilities:
 
 References:
 - ADR-006: Agent Base Architecture design
-- TODO-157: Task 1.3, 1.16a, 1.16b, 1.16c
 - Core SDK: WorkflowBuilder, LLMAgentNode
 
 Author: Kaizen Framework Team

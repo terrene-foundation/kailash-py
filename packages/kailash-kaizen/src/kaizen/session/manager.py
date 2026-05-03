@@ -4,8 +4,6 @@ Provides session management for Enterprise-App integration:
 - Start/end sessions with state tracking
 - Pause/resume capability
 - Persistence to filesystem or DataFlow
-
-See: TODO-204 Enterprise-App Streaming Integration
 """
 
 from __future__ import annotations

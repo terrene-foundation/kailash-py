@@ -33,7 +33,7 @@ class HookEvent(Enum):
     PRE_CHECKPOINT_SAVE = "pre_checkpoint_save"
     POST_CHECKPOINT_SAVE = "post_checkpoint_save"
 
-    # Interrupt handling integration (TODO-169 Day 4)
+    # Interrupt handling integration
     PRE_INTERRUPT = "pre_interrupt"
     POST_INTERRUPT = "post_interrupt"
 

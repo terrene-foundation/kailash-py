@@ -1,8 +1,6 @@
 """Subagent execution result types.
 
 Defines the result structure returned by TaskTool when spawning subagents.
-
-See: TODO-203 Task/Skill Tools
 """
 
 from __future__ import annotations

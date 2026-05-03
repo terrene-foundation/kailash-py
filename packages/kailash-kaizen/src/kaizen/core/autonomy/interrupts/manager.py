@@ -30,12 +30,8 @@ class InterruptManager:
         self._shutdown_callbacks: list[Callable[[], Awaitable[None]]] = []
         self._signal_handlers_installed = False
         self._original_handlers: dict[int, Any] = {}
-        self._child_managers: list[
-            "InterruptManager"
-        ] = []  # For propagation (TODO-169 Day 3)
-        self.hook_manager: Any = (
-            None  # Optional HookManager for lifecycle events (TODO-169 Day 4)
-        )
+        self._child_managers: list["InterruptManager"] = []  # For propagation
+        self.hook_manager: Any = None  # Optional HookManager for lifecycle events
 
     def install_signal_handlers(self) -> None:
         """
@@ -294,7 +290,7 @@ class InterruptManager:
 
     def add_child_manager(self, child_manager: "InterruptManager") -> None:
         """
-        Add child interrupt manager for propagation (TODO-169 Day 3).
+        Add child interrupt manager for propagation.
 
         When parent is interrupted, interrupt will propagate to all children.
 
@@ -316,7 +312,7 @@ class InterruptManager:
 
     def remove_child_manager(self, child_manager: "InterruptManager") -> None:
         """
-        Remove child interrupt manager from tracking (TODO-169 Day 3).
+        Remove child interrupt manager from tracking.
 
         Args:
             child_manager: Child InterruptManager to remove
@@ -332,7 +328,7 @@ class InterruptManager:
 
     def propagate_to_children(self) -> None:
         """
-        Propagate interrupt to all child managers (TODO-169 Day 3).
+        Propagate interrupt to all child managers.
 
         Interrupts all tracked child managers with same mode and updated message.
         Safe to call even if no children tracked.
@@ -393,7 +389,7 @@ class InterruptManager:
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
-        Request interrupt with PRE_INTERRUPT hook support (TODO-169 Day 4).
+        Request interrupt with PRE_INTERRUPT hook support.
 
         Triggers PRE_INTERRUPT hooks before setting interrupt. Hooks can block
         the interrupt by returning success=False.
@@ -457,7 +453,7 @@ class InterruptManager:
         self, state_manager: Any = None, agent_state: Any = None
     ) -> InterruptStatus:
         """
-        Execute shutdown with POST_INTERRUPT hook support (TODO-169 Day 4).
+        Execute shutdown with POST_INTERRUPT hook support.
 
         Triggers POST_INTERRUPT hooks after shutdown completion.
 

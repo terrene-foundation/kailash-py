@@ -4,8 +4,6 @@ Implements the TodoWrite tool that manages structured task lists during executio
 matching Claude Code's TodoWrite functionality. Enables agents to track progress,
 organize complex tasks, and demonstrate thoroughness.
 
-See: TODO-207 ClaudeCodeAgent Full Tool Parity
-
 Example:
     >>> from kaizen.tools.native import TodoWriteTool, KaizenToolRegistry
     >>>

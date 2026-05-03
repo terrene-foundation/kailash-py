@@ -1,7 +1,7 @@
 """
 ResearchAdapter - Wrap research implementations as Kaizen signatures
 
-Adapts research code to Kaizen's signature-based programming system (TODO-142):
+Adapts research code to Kaizen's signature-based programming system:
 - Creates signature classes from research implementations
 - Maps parameters between research code and signatures
 - Integrates with Core SDK workflow execution

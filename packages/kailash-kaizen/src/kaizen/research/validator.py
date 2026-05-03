@@ -4,7 +4,7 @@ ResearchValidator - Validate research implementation reproducibility
 Validates that research implementations:
 - Reproduce claimed results (>95% accuracy target)
 - Match benchmarks from paper
-- Meet quality standards (using TODO-145 QualityMetrics)
+- Meet quality standards (using QualityMetrics)
 - Identify validation issues
 
 Performance Target: <5 minutes per validation
@@ -87,7 +87,7 @@ class ResearchValidator:
                     paper.metrics, reproduced_metrics
                 )
 
-                # Calculate quality score (using TODO-145 principles)
+                # Calculate quality score
                 quality_score = self._calculate_quality_score(
                     paper, reproduced_metrics, temp_dir
                 )
@@ -271,7 +271,7 @@ class ResearchValidator:
         self, paper: ResearchPaper, reproduced_metrics: Dict[str, float], code_dir: str
     ) -> Dict[str, float]:
         """
-        Calculate quality score using TODO-145 principles.
+        Calculate quality score.
 
         Quality dimensions:
         1. Accuracy - How well results match claims

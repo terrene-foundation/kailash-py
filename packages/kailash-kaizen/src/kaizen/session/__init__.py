@@ -1,8 +1,6 @@
 """Session management for Enterprise-App integration.
 
 Provides session state tracking and persistence for agent execution.
-
-See: TODO-204 Enterprise-App Streaming Integration
 """
 
 from .manager import (

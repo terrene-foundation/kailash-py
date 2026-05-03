@@ -11,7 +11,6 @@ Strategy Pattern:
 
 References:
 - ADR-006: Agent Base Architecture design (Strategy Pattern section)
-- TODO-157: Task 1.4 (ExecutionStrategy protocol definition)
 
 Author: Kaizen Framework Team
 Created: 2025-10-01
