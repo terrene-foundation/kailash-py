@@ -36,7 +36,7 @@ Usage:
     result = pipeline.run(task="Comprehensive review", input="document")
 
 Author: Kaizen Framework Team
-Created: 2025-10-27 (Phase 3, Day 2, TODO-174)
+Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 

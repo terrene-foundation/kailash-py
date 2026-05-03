@@ -40,7 +40,7 @@ Performance Targets:
 - Availability: 99.9% uptime with distributed deployment
 
 Author: Kaizen Framework Team
-Created: 2025-11-06 (TODO-179: Agent Registry)
+Created: 2025-11-06
 Reference: Based on OrchestrationRuntime and AgentPoolManagerNode patterns
 """
 

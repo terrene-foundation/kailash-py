@@ -201,7 +201,7 @@ class Pipeline(ABC):
         return agent
 
     # ========================================================================
-    # Factory Methods for Pipeline Patterns (Phase 3, TODO-174)
+    # Factory Methods for Pipeline Patterns
     # ========================================================================
 
     @staticmethod
@@ -435,7 +435,7 @@ class Pipeline(ABC):
         )
 
     # ========================================================================
-    # Factory Methods for Existing Patterns (TODO-174 Phase 3 Day 3)
+    # Factory Methods for Existing Patterns
     # ========================================================================
 
     @staticmethod

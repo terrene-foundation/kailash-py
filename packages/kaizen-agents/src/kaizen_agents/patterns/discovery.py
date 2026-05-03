@@ -1,8 +1,6 @@
 """Agent discovery extensions for Enterprise-App integration.
 
 Provides user-filtered agent discovery and skill metadata for UI integration.
-
-See: TODO-204 Enterprise-App Streaming Integration
 """
 
 from __future__ import annotations
