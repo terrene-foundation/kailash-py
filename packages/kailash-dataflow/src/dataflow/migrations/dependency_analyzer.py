@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Core Dependency Analysis Engine - TODO-137 Phase 1
+Core Dependency Analysis Engine
 
 Provides comprehensive dependency analysis for PostgreSQL column removal scenarios,
 detecting all database objects that depend on a specific column to prevent data loss

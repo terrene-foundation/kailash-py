@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FK-Aware E2E Workflow Patterns - TODO-138 Phase 3
+FK-Aware E2E Workflow Patterns
 
 Complete end-to-end workflow patterns demonstrating the 5 key FK-aware scenarios
 with full Kailash Core SDK compliance and seamless DataFlow integration.

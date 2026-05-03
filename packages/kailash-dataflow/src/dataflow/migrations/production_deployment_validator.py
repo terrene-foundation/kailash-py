@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Production Deployment Validator - TODO-141 Phase 3
+Production Deployment Validator
 
 Final phase of the Safe Staging Environment system that promotes validated migrations
 from staging to production with comprehensive safety checks, approval workflows,

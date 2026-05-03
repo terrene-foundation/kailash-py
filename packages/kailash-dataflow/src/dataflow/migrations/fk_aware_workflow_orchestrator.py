@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FK-Aware Workflow Orchestrator - TODO-138 Phase 3
+FK-Aware Workflow Orchestrator
 
 Complete E2E workflow integration for Foreign Key Aware Operations with
 seamless DataFlow integration and Kailash Core SDK pattern compliance.

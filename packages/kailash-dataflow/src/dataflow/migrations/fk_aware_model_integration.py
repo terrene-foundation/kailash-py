@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FK-Aware Model Integration - TODO-138 Phase 3
+FK-Aware Model Integration
 
 Seamless @db.model integration with FK awareness that enables transparent
 FK handling when DataFlow models change, providing zero-config FK operations.

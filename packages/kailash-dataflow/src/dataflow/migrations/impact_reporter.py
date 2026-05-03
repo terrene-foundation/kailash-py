@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Impact Assessment Reporting System - TODO-137 Phase 3
+Impact Assessment Reporting System
 
 Provides user-friendly impact reporting and visualization for column removal operations,
 with clear risk communication, actionable recommendations, and multiple output formats.

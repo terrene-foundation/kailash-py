@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validation Checkpoints System - TODO-141 Phase 2
+Validation Checkpoints System
 
 Comprehensive validation checkpoint system for migration validation pipeline.
 Provides individual validation checkpoints that can be executed independently or in sequence.

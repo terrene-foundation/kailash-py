@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Migration Validation Pipeline - TODO-141 Phase 2
+Migration Validation Pipeline
 
 Comprehensive migration validation system that runs migrations in staging before production deployment.
 Integrates with existing Phase 1 StagingEnvironmentManager and provides complete validation workflows.

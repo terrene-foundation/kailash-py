@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FK-Safe Migration Executor - TODO-138 Phase 2
+FK-Safe Migration Executor
 
 Implements safe migration execution with complete referential integrity preservation
 and multi-table transaction coordination.

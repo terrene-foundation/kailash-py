@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rename Deployment Coordinator - TODO-139 Phase 3
+Rename Deployment Coordinator
 
 Application deployment coordination system for zero-downtime table renames
 with health check integration, restart management, and rollback coordination.

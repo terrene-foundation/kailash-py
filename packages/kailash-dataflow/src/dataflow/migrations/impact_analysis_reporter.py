@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Impact Analysis Reporter for Risk Assessment Engine - TODO-140 Phase 3
+Impact Analysis Reporter for Risk Assessment Engine
 
 Provides comprehensive impact analysis reporting for migration risk assessments,
 with executive summaries, technical implementation guides, compliance documentation,

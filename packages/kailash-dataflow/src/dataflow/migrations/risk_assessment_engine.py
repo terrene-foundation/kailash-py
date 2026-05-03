@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Risk Assessment Engine for Migration Operations - TODO-140 Phase 1
+Risk Assessment Engine for Migration Operations
 
 Provides comprehensive risk scoring and assessment for database migration operations
 with multi-dimensional analysis covering data loss, system availability, performance,

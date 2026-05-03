@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rollback Executor for Production Deployment Validator - TODO-141 Phase 3
+Rollback Executor for Production Deployment Validator
 
 Automated rollback execution system with comprehensive recovery procedures,
 validation, and safety checks for production deployments.

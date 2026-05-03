@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integrated Risk Assessment System - TODO-140 Complete Implementation
+Integrated Risk Assessment System
 
 Brings together all three phases of the Risk Assessment Engine:
 - Phase 1: RiskAssessmentEngine (Comprehensive risk scoring 0-100)

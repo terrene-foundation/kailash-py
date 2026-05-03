@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Table Rename Analyzer Engine - TODO-139 Phase 1
+Table Rename Analyzer Engine
 
 Provides comprehensive table rename analysis for PostgreSQL schema operations,
 detecting all database objects that reference a table to coordinate safe renames.
