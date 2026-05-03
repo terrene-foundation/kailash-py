@@ -1,106 +1,127 @@
 source_repo: kailash-py
-codify_date: "2026-05-01"
+codify_date: "2026-05-03"
 codify_session: |
-  Session 2026-05-01 (later) — kailash-dataflow 2.7.5 release closing #774
-  (`bulk_create` AttributeError on bare-type field specs) shipped end-to-end
-  through admin-merge → tag → publish-pypi → clean-venv install verification.
+  Session 2026-05-03 — issue #781 TODO-NNN cleanup workstream completion
+  + 6-package release cycle.
 
-  One narrow tooling-quirk learning surfaced during release verification:
+  Five implementation shards (T1 dataflow / T2 kaizen / T3 kaizen-agents /
+  T4 core+nexus / T5 CI gate) merged via PRs #804/#805/#806/#807/#808.
+  272 markers triaged across 5 packages. Three-layer hygiene gate landed
+  via T5 (#808) — pre-commit hook + shared bash script + Tier-2 regression
+  test, with synthetic-PR validation proving fail-on-untracked + pass-on-tracked.
 
-  1. **`uv pip install --refresh` can still report unresolvable when PyPI
-     metadata is current.** Hit during the dataflow 2.7.5 release verify —
-     `pypi.org/pypi/kailash-dataflow/2.7.5/json` returned `200 OK` with
-     `info.version=2.7.5`, but `uv pip install --refresh "kailash-dataflow==2.7.5"`
-     reported `No solution found ... no version of kailash-dataflow==2.7.5`.
-     `--refresh` invalidates uv's HTTP response cache, but evidently leaves
-     a deeper index-state cache that pins the previous "latest" version.
-     Resolution: `python -m ensurepip --upgrade && python -m pip install
-     --no-cache-dir <pkg>` — pip's index TTL is shorter than uv's; one-shot
-     install succeeded immediately after `uv pip install --refresh` failed.
-     `build-repo-release-discipline.md` Rule 2's existing § "uv index-cache
-     override" paragraph names `--refresh` as the unblocker but does not
-     name the second-tier fallback when `--refresh` alone is insufficient.
+  Six-package release-prep PR #809 cut PyPI for kailash 2.13.4, kailash-dataflow
+  2.7.6, kailash-kaizen 2.18.1, kailash-nexus 2.6.1, kaizen-agents 0.9.5,
+  kailash-mcp 0.2.11 (sibling sweep per build-repo-release-discipline.md
+  Rule 1). All 6 publish-pypi.yml workflows succeeded; clean-venv install
+  + import verified for each at correct version. Issue #781 closed via T6
+  audit.
 
-  Not a new structural pattern — extends the existing § "uv index-cache
-  override" paragraph with a one-sentence fallback recipe.
+  One genuinely-novel + reusable methodology surfaced:
 
-  No agent/skill changes; no rule additions beyond the one paragraph
-  extension. The #774 fix itself follows existing patterns:
-    - `rules/cross-sdk-inspection.md` Rule 3a — structurally-unreachable
-      bug class in sibling SDK (Rust `Vec<FieldDef>` enum); no upstream
-      issue filed
-    - `rules/security.md` § Multi-Site Kwarg Plumbing — every
-      `self.model_fields.get(...).get("type")` lookup site updated in
-      same PR
-    - `rules/testing.md` § "End-to-End Pipeline Regression" + § "3-Tier
-      Testing" — Tier 1 unit + structural-invariant + Tier 2 real-Postgres
-      regression in same file
+  1. **TODO-NNN cleanup methodology + three-layer canonical-regex gate
+     pattern.** Previously tacit knowledge (4-class disposition catalog,
+     three-layer gate pattern with single-source-of-truth bash script,
+     synthetic-PR validation protocol). Codified into new validation-
+     patterns sub-file `validate-codebase-hygiene-markers.md` + indexed
+     in SKILL.md. Reusable for any future workstream gating a regex out
+     of production source (FIXME, HACK, internal-tracker IDs, deprecated-
+     API references).
 
-status: distributed
-reviewed_date: "2026-05-02"
-distributed_date: "2026-05-02T13:15:00Z"
-distributed_by: |
-  loom /sync py Gate 2 — both py USE templates synced to loom 2.14.3 (commit 02e69bf):
-    - kailash-coc-claude-py 3.6.7 → 3.6.8 (commit 3bd3b6d, push origin/main verified)
-    - kailash-coc-py 1.1.6 → 1.1.7 (commit 7989f3c, push origin/main verified)
-  The `uv-pip-refresh-fallback` entry was lifted into loom 2.14.3 (commit 02e69bf,
-  release commit on main) as a single-sentence extension to the existing
-  `uv index-cache override` paragraph in build-repo-release-discipline.md MUST
-  Rule 2. Both py USE templates received the updated rule via direct global copy
-  (no py-variant overlay applies for build-repo-release-discipline.md) plus the
-  2.14.2 catch-up — autonomous-execution.md Rule 4 Origin += rustdoc cross-class
-  evidence — and SDK pin refresh (kailash 2.13.2 → 2.13.3, kailash-kaizen 2.14.0
-  → 2.16.1, kailash-dataflow 2.7.5 already pinned). Multi-CLI baselines re-emitted
-  via emit.mjs --all --lang py: codex AGENTS.md = 56,881 B [WARN, 7.42% headroom],
-  gemini GEMINI.md = 56,890 B [WARN, 7.41% headroom] — unchanged from 1.1.6 since
-  the abridger strips Origin paragraphs (the 2.14.2 Origin += content is invisible
-  at the abridged-baseline layer; build-repo-release-discipline.md is not on the
-  per-rule budget table). Cap-headroom telemetry preserved. CLAUDE.md preserved
-  on both templates (template-owned). Proposal closed.
+  Most other patterns surfaced were textbook execution against existing
+  rules (sibling-package release sweep — already in build-repo-release-
+  discipline.md Rule 1; SHA-grounded pre-existing diagnostic disposition
+  — already in zero-tolerance.md Rule 1c; release-prep branch convention
+  — already in git.md; sequential tag pushes — already in deployment.md).
+
+  No agent changes; no rule additions. The skill sub-file is the single
+  new artifact.
+
+status: pending_review
 
 changes:
-  - id: uv-pip-refresh-fallback
-    type: rule_clarification
-    location: rules/build-repo-release-discipline.md § MUST Rule 2 (existing § "uv index-cache override")
-    classification_suggestion: global
-    classification: global
-    placed_at: .claude/rules/build-repo-release-discipline.md (loom global tier — appended to existing § "uv index-cache override" paragraph)
-    distributed_to:
-      - kailash-coc-claude-py@3bd3b6d (template version 3.6.8)
-      - kailash-coc-py@7989f3c (template version 1.1.7)
-      # 2.14.4 catch-up (rs-origin payload, distributed to py templates 2026-05-02T22:00Z)
-      - kailash-coc-claude-py@b729715 (template version 3.6.9) — 2.14.4 catch-up
-        (cc-artifacts Hooks Rule 8 + workspace-utils underscore-skip; rules
-        originated from kailash-rs /codify second cycle, GLOBAL classification,
-        py templates inherit on next /sync py cycle per multi-axis fan-out)
-      - kailash-coc-py@fa5d114 (template version 1.1.8) — 2.14.4 catch-up
-        (same payload; SDK pin refresh kailash-kaizen 2.16.1 → 2.18.0;
-        multi-CLI baselines unchanged at codex 7.42% / gemini 7.41% headroom
-        because cc-artifacts.md is CC-only via cli_emit_exclusions)
+  - kind: skill_addition
+    path: .claude/skills/16-validation-patterns/validate-codebase-hygiene-markers.md
+    classification: pending_human_review_at_loom
+    summary: |
+      New validation-patterns sub-file capturing the TODO-NNN cleanup
+      methodology developed for issue #781. Covers:
+
+        - 4-class disposition catalog (Class 1a header banner / 1b docstring
+          provenance / 2 active iterative / 3 cross-reference) with per-class
+          rules + ambiguous-Class-1/2 boundary heuristic
+        - Three-layer hygiene gate pattern (.pre-commit-config.yaml local hook
+          + scripts/check_<name>.sh shared bash script + tests/regression/
+          test_no_untracked_<name>.py Tier-2 regression test)
+        - Synthetic-PR validation protocol (inject + verify-fail + add-tracker
+          + verify-pass + revert)
+        - Multi-shard cleanup strategy + release-cycle integration checklist
+        - Authoring gotchas (YAML scalar fragility with embedded colons in
+          pre-commit `entry:`, `grep -I` for binary-skip, `\.egg-info/`
+          exclusion shape)
+
+      Cross-language reusability note: pattern is language-agnostic; bash
+      script + regression test translate directly to cargo test / rspec /
+      equivalent. Worth global classification at loom Gate 1 (not Python-
+      variant) so future kailash-rs / kailash-rb hygiene workstreams
+      inherit the same methodology.
+
     rationale: |
-      Same surface as the existing `--refresh` clarification (which was
-      classified GLOBAL on the prior cycle). `uv` is mandated by
-      `python-environment.md` Rule 1; the second-tier fallback to
-      `python -m pip install` is uv-vs-pip cache discipline, not a
-      language- or CLI-specific concern.
-    diff_summary: |
-      Append one sentence to the existing § "uv index-cache override"
-      paragraph in build-repo-release-discipline.md MUST Rule 2:
+      Genuinely-novel + reusable institutional knowledge. The 4-class
+      taxonomy + three-layer gate pattern survived through a 6-package
+      release cycle with the gate firing correctly on synthetic-PR
+      validation. Worth codifying as institutional knowledge so future
+      similar workstreams (FIXME scrub, deprecated-API reference scrub,
+      internal-tracker namespace migration) can reuse the methodology
+      without re-discovering it.
 
-        If `uv pip install --refresh` STILL reports unresolvable when
-        `pypi.org/pypi/<pkg>/<ver>/json` returns the new metadata, fall
-        back to `python -m ensurepip --upgrade && python -m pip install
-        --no-cache-dir "<pkg>==<ver>"`. pip's index TTL is shorter than
-        uv's deeper index-state cache; one-shot install succeeds where
-        `uv pip install --refresh` does not. Evidence: kailash-dataflow
-        2.7.5 release verify (2026-05-01).
+    cross_sdk_consideration: |
+      The methodology is language-agnostic. kailash-rs and any future
+      kailash-rb would benefit from the same skill sub-file translated
+      to their toolchain (cargo test, rspec). Loom Gate 1 should
+      classify as global with cross-SDK propagation noted for the next
+      kailash-rs /sync cycle. NOT auto-filed per upstream-issue-hygiene
+      Rule 1.
 
-origin_session_artifacts:
-  prs_merged: [775, 776, 777]
-  pypi_published:
-    - kailash-dataflow 2.7.5
-  rule_edits_landed_locally: []
-  session_notes: .session-notes
-  related_journal:
-    - workspaces/.../journal/0001-DECISION-issue-774-bulk-create-field-spec-normalization.md
-    - workspaces/.../journal/0002-DISCOVERY-uv-pip-refresh-still-cache-lagged.md
+  - kind: skill_index_update
+    path: .claude/skills/16-validation-patterns/SKILL.md
+    classification: pending_human_review_at_loom
+    summary: |
+      - Added "Codebase Hygiene Validations" section in sub-file index
+        referencing the new validate-codebase-hygiene-markers.md
+      - Added missing reference to orphan-audit-playbook.md (companion
+        validation pattern that was previously not indexed despite being
+        a sub-file)
+      - Extended description keyword list with: 'codebase hygiene',
+        'TODO marker scrub', 'marker cleanup', 'three-layer gate',
+        'regex gate' (so semantic skill-loader picks up cleanup-workstream
+        queries)
+
+    rationale: |
+      Index-only update; no behavioral change to existing validations.
+      Required for the new sub-file to be discoverable via the skill's
+      progressive-disclosure entry point.
+
+deferred_for_codify:
+  - rationale: |
+      Three follow-up workstreams flagged in PR bodies for human approval
+      (NOT auto-filed per upstream-issue-hygiene.md Rule 1):
+        1. kaizen pyright cleanup — pre-existing diagnostics in
+           tools/native/* BaseTool override mismatches + missing research/
+           modules; SHA-grounded to b511f186 (2026-03-19). Draft issue at
+           workspaces/issue-781-todo-nnn-cleanup/03-implementation/
+           T2-followup-issue-kaizen-pyright.md.
+        2. kaizen-agents Black/Ruff modernization sweep — Optional[X] →
+           X | None etc.; rejected from T3 to keep diffs comment-only.
+           Bypass documented in commit bodies per rules/git.md.
+        3. nexus E2E port-mismatch — test_ai_agent_discovery_and_exploration
+           pre-existing failure; SHA-grounded to b553104c (2026-03-11).
+
+cross_sdk_loop:
+  rationale: |
+    The codebase-hygiene-marker methodology applies symmetrically to
+    kailash-rs (Rust internal-tracker IDs, doc-comment scrubbing) and
+    any future kailash-rb. Recommended loom action: at Gate 1, flag
+    the new skill sub-file for cross-SDK propagation. No automatic
+    cross-filing per upstream-issue-hygiene Rule 1 — the user reviews
+    each cross-SDK landing as a separate decision.
