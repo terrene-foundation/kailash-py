@@ -89,19 +89,34 @@ class TestIssue254AzureJsonPrompt:
         assert system_prompt.count("Respond with a JSON object") <= 1
 
     def test_openai_strict_mode_no_unnecessary_json_instruction(self):
-        """OpenAI with strict json_schema should still get instruction (harmless)."""
+        """OpenAI with strict json_schema should still get instruction (harmless).
+
+        Under the new ``structured_output_mode="explicit"`` default (config.py:58),
+        users must opt-in to structured outputs by setting ``response_format``
+        explicitly; auto-generation is deprecated (workflow_generator.py:247-256).
+        This test opts in via ``create_structured_output_config`` to exercise the
+        strict json_schema path the regression covers.
+        """
+        from kaizen.core.structured_output import create_structured_output_config
+
+        signature = TranslateSig()
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o",
+            response_format=create_structured_output_config(
+                signature=signature,
+                strict=True,
+                name="TranslateSig",
+            ),
         )
 
-        generator = WorkflowGenerator(config=config, signature=TranslateSig())
+        generator = WorkflowGenerator(config=config, signature=signature)
         workflow = generator.generate_signature_workflow()
 
         node_id = list(workflow.nodes.keys())[0]
         node_config = workflow.nodes[node_id]["config"]
 
-        # OpenAI auto-generates json_schema (strict=True), which also triggers
-        # the json instruction — this is harmless and ensures compatibility
+        # Strict json_schema is configured; the workflow_generator also appends
+        # the json instruction to the system prompt (harmless — OpenAI accepts both).
         response_format = node_config.get("response_format", {})
         assert response_format.get("type") in ("json_schema", "json_object")
