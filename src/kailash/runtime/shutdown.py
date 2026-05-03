@@ -34,7 +34,7 @@ Examples:
 
 Version:
     Added in: v0.12.0
-    Part of: Production readiness (TODO-015)
+    Part of: Production readiness
 """
 
 from __future__ import annotations
