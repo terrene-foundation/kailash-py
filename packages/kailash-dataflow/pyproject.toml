@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "2.7.6"
+version = "2.7.7"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -83,6 +83,11 @@ dev = [
     "isort>=5.12.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
+    # Pinned EXACT for the engine.py pyright regression gate
+    # (tests/regression/test_engine_pyright_invariant.py). Bumping requires
+    # re-baselining the gate's PINNED_PYRIGHT_VERSION + thresholds in the
+    # SAME PR per zero-tolerance.md Rule 1b.
+    "pyright==1.1.371",
 ]
 
 # CLI entry point removed — all commands were stubs printing "coming soon".
