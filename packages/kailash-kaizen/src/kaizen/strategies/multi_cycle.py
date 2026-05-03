@@ -11,7 +11,6 @@ Use Cases:
 
 References:
 - ADR-006: Agent Base Architecture design (Strategy Pattern section)
-- TODO-157: Task 1.6, Phase 2 Tasks 2.12-2.15
 - Existing pattern: KaizenReActAgent (599 lines → 30-35 lines)
 
 Author: Kaizen Framework Team
