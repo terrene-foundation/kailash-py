@@ -1,4 +1,4 @@
-"""Audit logging backends (TODO-310F)."""
+"""Audit logging backends."""
 
 from nexus.auth.audit.backends.base import AuditBackend
 from nexus.auth.audit.backends.custom import CustomBackend

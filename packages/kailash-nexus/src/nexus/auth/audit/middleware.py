@@ -1,4 +1,4 @@
-"""Audit logging middleware (TODO-310F).
+"""Audit logging middleware.
 
 FastAPI middleware that records every API request with structured
 metadata for compliance and debugging.
@@ -10,6 +10,8 @@ import time
 from typing import Any, Callable, Optional
 
 from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from nexus.auth.audit.backends.base import AuditBackend
 from nexus.auth.audit.backends.custom import CustomBackend
 from nexus.auth.audit.backends.dataflow import DataFlowBackend
@@ -17,7 +19,6 @@ from nexus.auth.audit.backends.logging import LoggingBackend
 from nexus.auth.audit.config import AuditConfig
 from nexus.auth.audit.pii_filter import PIIFilter
 from nexus.auth.audit.record import AuditRecord
-from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""PII filtering utility (TODO-310F).
+"""PII filtering utility.
 
 Provides methods to redact sensitive information from headers,
 bodies, and other data structures before logging.

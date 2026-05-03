@@ -1,4 +1,4 @@
-"""Audit logging configuration (TODO-310F).
+"""Audit logging configuration.
 
 Defines AuditConfig dataclass for configuring audit logging behavior,
 backends, exclusions, and PII filtering.

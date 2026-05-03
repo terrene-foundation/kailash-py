@@ -1,4 +1,4 @@
-"""Audit record dataclass (TODO-310F).
+"""Audit record dataclass.
 
 Defines AuditRecord for structured audit logging of API requests.
 """

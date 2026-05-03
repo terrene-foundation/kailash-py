@@ -1,4 +1,4 @@
-"""Structured JSON logging backend (TODO-310F).
+"""Structured JSON logging backend.
 
 Default audit backend that writes records as JSON to Python's logging system.
 """

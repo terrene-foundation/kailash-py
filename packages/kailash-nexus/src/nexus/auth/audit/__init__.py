@@ -1,4 +1,4 @@
-"""Nexus audit logging package (TODO-310F).
+"""Nexus audit logging package.
 
 Provides comprehensive audit logging for API requests with
 multiple backends and PII filtering.
