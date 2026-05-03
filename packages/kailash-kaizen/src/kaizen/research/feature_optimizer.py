@@ -17,11 +17,11 @@ class FeatureOptimizer:
     """
     Optimize experimental feature performance.
 
-    Integrates with TODO-145 auto-optimization engine to optimize
+    Integrates with the auto-optimization engine to optimize
     features, benchmark performance, and compare multiple features.
 
     Attributes:
-        optimization_engine: Auto-optimization engine (from TODO-145)
+        optimization_engine: Auto-optimization engine
 
     Example:
         >>> optimizer = FeatureOptimizer(optimization_engine=engine)
@@ -34,7 +34,7 @@ class FeatureOptimizer:
         Initialize FeatureOptimizer with optimization engine.
 
         Args:
-            optimization_engine: Auto-optimization engine from TODO-145
+            optimization_engine: Auto-optimization engine
                                 Can be None to use default benchmarking
         """
         self.optimization_engine = optimization_engine

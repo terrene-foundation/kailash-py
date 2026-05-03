@@ -1,5 +1,5 @@
 """
-Research Integration Framework - TODO-155 Phase 1
+Research Integration Framework
 
 Automated research paper integration with <7 day target (vs 90 day baseline).
 
@@ -17,9 +17,9 @@ Performance Targets:
 - Total integration time: <7 days (vs 90 day baseline)
 
 Integration Points:
-- TODO-142 Signatures: ResearchAdapter wraps research as signatures
-- TODO-145 Optimization: ResearchValidator uses QualityMetrics
-- TODO-151 Monitoring: Integration with MetricsCollector
+- Signatures: ResearchAdapter wraps research as signatures
+- Optimization: ResearchValidator uses QualityMetrics
+- Monitoring: Integration with MetricsCollector
 """
 
 from .adapter import ResearchAdapter, SignatureAdapter
