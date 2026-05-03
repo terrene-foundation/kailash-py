@@ -2,8 +2,6 @@
 
 Provides async-safe context managers for switching between tenants,
 with automatic data isolation and connection management.
-
-TODO-155: Context Switching Capabilities
 """
 
 import logging

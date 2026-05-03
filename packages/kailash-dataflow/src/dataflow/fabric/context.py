@@ -13,8 +13,6 @@ pipeline execution, guaranteeing snapshot consistency (layer-redteam F4).
 
 ``FabricContext.for_testing()`` creates a fully isolated context with
 pre-loaded data for unit tests.
-
-See TODO-10 in workspaces/data-fabric-engine/todos/active/02-products-and-pipeline.md.
 """
 
 from __future__ import annotations

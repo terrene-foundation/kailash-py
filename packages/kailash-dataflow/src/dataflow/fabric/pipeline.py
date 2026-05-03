@@ -36,7 +36,6 @@ Tenant isolation:
   includes the tenant prefix when ``tenant_id`` is non-None.
 
 Design references:
-- TODO-11 in ``workspaces/data-fabric-engine/todos/active/02-products-and-pipeline.md``
 - doc runtime-redteam RT-6 (10MB result size limit)
 - doc layer-redteam F5 (DB connection budget = 20% of pool)
 - ``workspaces/issue-354/02-plans/01-fix-plan.md`` Phases 4, 4a, 4b

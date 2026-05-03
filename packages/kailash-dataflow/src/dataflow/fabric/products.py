@@ -12,8 +12,7 @@ The ``register_product`` function validates configuration and stores a
 ``ProductInvokeNode`` is a thin wrapper enabling products to participate
 in WorkflowBuilder graphs (reading from cache, not re-executing).
 
-See TODO-09 and the layer-redteam convergence report (F2) for design
-rationale.
+See the layer-redteam convergence report (F2) for design rationale.
 """
 
 from __future__ import annotations
