@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Risk Assessment Engine for Migration Operations - TODO-140 Phase 1
+Risk Assessment Engine for Migration Operations
 
 Provides comprehensive risk scoring and assessment for database migration operations
 with multi-dimensional analysis covering data loss, system availability, performance,
@@ -9,7 +9,7 @@ and rollback complexity risks.
 CORE FEATURES:
 - Multi-dimensional risk scoring (0-100 scale)
 - Risk level classification (LOW/MEDIUM/HIGH/CRITICAL)
-- Integration with DependencyAnalyzer (TODO-137) and ForeignKeyAnalyzer (TODO-138)
+- Integration with DependencyAnalyzer and ForeignKeyAnalyzer
 - Performance-optimized (<100ms per assessment)
 - Configurable risk weights and thresholds
 
@@ -182,8 +182,8 @@ class RiskAssessmentEngine:
 
         Args:
             operation: Migration operation to assess
-            dependency_report: Dependency analysis from TODO-137
-            fk_impact_report: FK impact analysis from TODO-138
+            dependency_report: Dependency analysis output
+            fk_impact_report: FK impact analysis output
 
         Returns:
             ComprehensiveRiskAssessment with overall and category-specific scores

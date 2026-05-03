@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Complete Rename Orchestrator - TODO-139 Phase 3
+Complete Rename Orchestrator
 
 End-to-end orchestration system that integrates Phase 1+2+3 table rename
 workflows with complete staging validation, production deployment safety,
@@ -12,7 +12,7 @@ CRITICAL REQUIREMENTS:
 - Production deployment safety with comprehensive validation checkpoints
 - Zero-downtime application coordination throughout entire process
 - Complete rollback mechanisms across all phases
-- Integration with TODO-140 (Risk Assessment) and TODO-141 (Staging Environment)
+- Integration with Risk Assessment and Staging Environment subsystems
 
 Core orchestration capabilities:
 - End-to-End Workflow Integration (CRITICAL - Phase 1+2+3 working together)

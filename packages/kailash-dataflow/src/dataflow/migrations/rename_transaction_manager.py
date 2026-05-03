@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rename Transaction Manager - TODO-139 Phase 2 Component
+Rename Transaction Manager
 
 Transaction coordination and rollback management for complex rename operations.
 Provides atomic operation execution with comprehensive rollback capabilities.

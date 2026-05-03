@@ -13,7 +13,6 @@ import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 
 
@@ -58,20 +57,24 @@ class TestModelRegistryRuntimeInjection:
             registry.close()
             runtime.close()
 
-    def test_constructor_creates_runtime_when_none_provided(self):
-        """When no runtime provided, constructor must create its own (backward compat)."""
+    def test_constructor_defers_to_parent_runtime_when_none_provided(self):
+        """When no runtime provided, registry defers to parent DataFlow.runtime via lazy property (post-S5)."""
         from dataflow.core.model_registry import ModelRegistry
 
         mock_df = self._make_mock_dataflow()
         registry = ModelRegistry(mock_df)
         try:
+            # Lazy property: registry.runtime reads from mock_df.runtime on each access.
             assert registry.runtime is not None
-            assert registry._owns_runtime is True
+            assert registry.runtime is mock_df.runtime
+            # Post-S5: no explicit runtime → registry does NOT own one; parent owns the lifecycle.
+            assert registry._owns_runtime is False
+            assert registry._explicit_runtime is None
         finally:
             registry.close()
 
     def test_close_releases_runtime(self):
-        """close() must call runtime.release() and set runtime to None."""
+        """close() must call runtime.release() and clear the explicit override (post-S5)."""
         from dataflow.core.model_registry import ModelRegistry
 
         mock_df = self._make_mock_dataflow()
@@ -85,7 +88,9 @@ class TestModelRegistryRuntimeInjection:
 
         # After close: ref_count should be back to 1 (only creator reference)
         assert runtime.ref_count == 1
-        assert registry.runtime is None
+        # Post-S5: close() clears the explicit override; registry.runtime now lazily
+        # resolves to the parent (mock_df.runtime), not None.
+        assert registry._explicit_runtime is None
 
         runtime.close()
 
@@ -99,7 +104,9 @@ class TestModelRegistryRuntimeInjection:
 
         registry.close()
         registry.close()  # Second call should be a no-op
-        assert registry.runtime is None
+        # Post-S5: close() clears the explicit override; runtime property still
+        # resolves via parent. Idempotency is observed at the override surface.
+        assert registry._explicit_runtime is None
 
         runtime.close()
 
@@ -115,7 +122,9 @@ class TestModelRegistryRuntimeInjection:
             warnings.simplefilter("always")
             registry.__del__()
 
-            resource_warnings = [x for x in w if issubclass(x.category, ResourceWarning)]
+            resource_warnings = [
+                x for x in w if issubclass(x.category, ResourceWarning)
+            ]
             assert len(resource_warnings) == 1
             assert "Unclosed" in str(resource_warnings[0].message)
             assert "ModelRegistry" in str(resource_warnings[0].message)
@@ -136,7 +145,9 @@ class TestModelRegistryRuntimeInjection:
             warnings.simplefilter("always")
             registry.__del__()
 
-            resource_warnings = [x for x in w if issubclass(x.category, ResourceWarning)]
+            resource_warnings = [
+                x for x in w if issubclass(x.category, ResourceWarning)
+            ]
             assert len(resource_warnings) == 0
 
         runtime.close()
@@ -173,9 +184,21 @@ class TestModelRegistryNoLocalRuntimeLocals:
         lines = source.split("\n")
         violation_lines = []
         in_init = False
+        in_docstring = False
 
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
+
+            # Track triple-quoted docstring blocks. A line containing an
+            # odd number of `"""` toggles the in_docstring state. This is a
+            # heuristic but sufficient for ModelRegistry's source — it has
+            # no embedded triple-quotes inside docstrings.
+            triple_quote_count = stripped.count('"""')
+            if triple_quote_count % 2 == 1:
+                in_docstring = not in_docstring
+                continue
+            if in_docstring:
+                continue
 
             # Track if we're inside __init__
             if "def __init__" in stripped:

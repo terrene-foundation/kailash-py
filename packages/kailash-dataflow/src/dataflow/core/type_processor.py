@@ -2,8 +2,6 @@
 
 Ensures all DataFlow operations respect model type annotations without
 forced type conversions. Validates field values against declared types.
-
-Related: TODO-153 - Type-Aware Model Processing
 """
 
 import logging

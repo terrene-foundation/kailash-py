@@ -114,7 +114,7 @@ class FabricRuntime:
         # Consumer adapter registry
         self._consumer_registry = ConsumerRegistry()
 
-        # Validate parameter combinations (TODO-38)
+        # Validate parameter combinations
         self._validate_params()
 
         # Subsystems (initialized during start)
@@ -138,7 +138,7 @@ class FabricRuntime:
         self._metrics: Optional[Any] = None
 
     def _validate_params(self) -> None:
-        """Validate parameter combinations at startup (TODO-38)."""
+        """Validate parameter combinations at startup."""
         # multi_tenant=True without tenant_extractor → error
         for name, product in self._products.items():
             if product.multi_tenant and self._tenant_extractor is None:
@@ -299,7 +299,7 @@ class FabricRuntime:
             tenant_extractor=self._tenant_extractor,
         )
 
-        # 9. Subscribe to DataFlow event bus for model writes (TODO-18)
+        # 9. Subscribe to DataFlow event bus for model writes
         self._subscribe_to_events()
 
         # 10. Phase 5.8: Register fabric endpoints with Nexus when one was
@@ -919,7 +919,7 @@ class FabricRuntime:
             )
 
     def _subscribe_to_events(self) -> None:
-        """Subscribe to DataFlow event bus for write notifications (TODO-18).
+        """Subscribe to DataFlow event bus for write notifications.
 
         When a model write fires, identify all products with that model in
         depends_on and enqueue debounced pipeline refresh.
@@ -1038,7 +1038,7 @@ class FabricRuntime:
     # ------------------------------------------------------------------
 
     def status(self) -> Dict[str, Any]:
-        """Programmatic fabric status (TODO-25)."""
+        """Programmatic fabric status."""
         return {
             "started": self._started,
             "leader": self._leader.is_leader if self._leader else False,

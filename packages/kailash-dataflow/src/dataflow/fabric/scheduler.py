@@ -22,8 +22,6 @@ Usage::
     await scheduler.start()
     # ... later ...
     await scheduler.stop()
-
-Design reference: TODO-28 in M5-M6 milestones.
 """
 
 from __future__ import annotations

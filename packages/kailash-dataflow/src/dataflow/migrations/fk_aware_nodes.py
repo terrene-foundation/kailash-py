@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FK-Aware DataFlow Integration Nodes - TODO-138 Phase 3
+FK-Aware DataFlow Integration Nodes
 
 Kailash Core SDK compatible nodes for FK-aware operations that enable
 seamless integration between DataFlow and Core SDK workflows.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deployment Strategies for Production Deployment Validator - TODO-141 Phase 3
+Deployment Strategies for Production Deployment Validator
 
 Zero-downtime deployment strategies and execution patterns for different risk levels.
 Provides concrete deployment implementations for various migration scenarios.

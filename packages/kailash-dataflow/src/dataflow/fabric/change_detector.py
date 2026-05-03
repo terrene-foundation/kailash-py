@@ -13,7 +13,6 @@ affect siblings (doc runtime-redteam RT-1). Crashed tasks auto-restart
 with a 5-second delay.
 
 Design references:
-- TODO-12 in ``workspaces/data-fabric-engine/todos/active/02-products-and-pipeline.md``
 - doc runtime-redteam RT-1 (supervised tasks, NOT TaskGroup)
 """
 

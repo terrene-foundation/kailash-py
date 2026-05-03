@@ -28,8 +28,6 @@ Usage::
     manager = OAuth2TokenManager(config)
     token = await manager.get_access_token()
     # Use token in Authorization header
-
-Design reference: TODO-36 in M5-M6 milestones.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Staging Environment Utilities - TODO-141 Phase 1
+Staging Environment Utilities
 
 Provides utility functions and helpers for staging environment management,
 configuration validation, and data sampling calculations.

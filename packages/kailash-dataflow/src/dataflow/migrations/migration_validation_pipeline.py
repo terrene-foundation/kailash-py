@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Migration Validation Pipeline - TODO-141 Phase 2
+Migration Validation Pipeline
 
 Comprehensive migration validation system that runs migrations in staging before production deployment.
 Integrates with existing Phase 1 StagingEnvironmentManager and provides complete validation workflows.
@@ -26,9 +26,9 @@ VALIDATION PIPELINE:
 
 INTEGRATION POINTS:
 - Phase 1 StagingEnvironmentManager for environment lifecycle
-- TODO-137 DependencyAnalyzer for staging dependency validation
-- TODO-138 ForeignKeyAnalyzer for FK validation in staging
-- TODO-140 RiskAssessmentEngine for risk score updates
+- DependencyAnalyzer for staging dependency validation
+- ForeignKeyAnalyzer for FK validation in staging
+- RiskAssessmentEngine for risk score updates
 """
 
 import asyncio

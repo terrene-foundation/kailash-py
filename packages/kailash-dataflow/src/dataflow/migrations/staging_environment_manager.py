@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Staging Environment Manager - TODO-141 Phase 1
+Staging Environment Manager
 
 Manages staging database environments for safe migration validation before production deployment.
 Provides production schema replication, data sampling, and environment isolation.
@@ -9,7 +9,7 @@ CORE FEATURES:
 - Production schema replication with configurable data sampling
 - Environment isolation and resource management
 - Automated cleanup and rollback capabilities
-- Integration with existing migration components (TODO-137,138,140,142)
+- Integration with existing migration components
 
 STAGING ENVIRONMENT LIFECYCLE:
 1. Create staging database with production-like schema

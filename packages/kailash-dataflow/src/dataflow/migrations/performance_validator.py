@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance Validator - TODO-141 Phase 2
+Performance Validator
 
 Performance validation utilities for migration validation pipeline.
 Provides baseline establishment, benchmark execution, and performance comparison.

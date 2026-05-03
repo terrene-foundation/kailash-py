@@ -19,8 +19,6 @@ Usage::
 
     source.trigger_change()
     assert await source.detect_change() is True
-
-Design reference: TODO-27 in M5-M6 milestones.
 """
 
 from __future__ import annotations

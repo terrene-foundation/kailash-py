@@ -3,8 +3,6 @@
 Provides convenient API for creating workflows that use DataFlow-generated nodes.
 This enables seamless workflow composition with DataFlow models while preserving
 backward compatibility with existing WorkflowBuilder patterns.
-
-TODO-154: Workflow Binding Integration
 """
 
 import logging

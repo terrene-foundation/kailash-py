@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Foreign Key Analysis Engine - TODO-138 Phase 1
+Foreign Key Analysis Engine
 
 Provides comprehensive foreign key aware operations and referential integrity
 analysis for PostgreSQL migration scenarios.

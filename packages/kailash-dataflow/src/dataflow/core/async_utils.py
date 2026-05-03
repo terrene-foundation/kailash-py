@@ -16,7 +16,7 @@ Example:
     from dataflow.core.async_utils import async_safe_run
     result = async_safe_run(some_async_function())
 
-See: Phase 6 - Async-Safe Auto-Migrate (TODO-159)
+See: Phase 6 - Async-Safe Auto-Migrate
 """
 
 import asyncio

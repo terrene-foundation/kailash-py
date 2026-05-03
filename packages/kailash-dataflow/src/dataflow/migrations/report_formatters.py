@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Multi-Format Report Formatters for Impact Analysis Reporter - TODO-140 Phase 3
+Multi-Format Report Formatters for Impact Analysis Reporter
 
 Provides comprehensive formatting capabilities for impact analysis reports across
 multiple output formats: Console (rich terminal), JSON (API integration),
