@@ -1,5 +1,18 @@
 # DataFlow Changelog
 
+## [2.7.6] — 2026-05-03 — issue #781 hygiene release (T1)
+
+Patch release cutting PyPI for T1 (dataflow TODO-NNN comment-strip) of the issue #781 cleanup workstream.
+
+### Changed (T1 of #781 — comment-only, packages/kailash-dataflow/src/)
+
+- Stripped 89 `TODO-NNN` markers across 48 files in `dataflow/migrations/`, `dataflow/core/`, `dataflow/fabric/`, `dataflow/features/` per the ratified disposition catalog (24 Class 1a header banner / inline-shipped, 45 Class 1b module docstring provenance, 20 Class 3 mid-comment cross-reference). The disposition convention is documented at `workspaces/issue-781-todo-nnn-cleanup/02-plans/01-cleanup-architecture.md`.
+- Aligned `tests/unit/core/test_model_registry_runtime_injection.py` with post-S5 lazy-property semantics (test-file change, no production behavior).
+
+### Notes
+
+- Comment-only diff: zero changes to imports, signatures, control flow, or types. The bump cuts PyPI per `build-repo-release-discipline.md` Rule 1 so downstream consumers pick up the cleaned tree.
+
 ## [2.7.5] — 2026-05-01 — `bulk_create` AttributeError on bare-type field specs (#774)
 
 Patch release closing issue #774. `NodeGenerator.generate_*_nodes` accepted both dict-form (`{"name": {"type": str}}`) and bare-type (`{"name": str}`) field specs by signature, but only dict-form by behavior. Direct callers passing bare-type form crashed at `dataflow/core/nodes.py:837` with `AttributeError: type object 'str' has no attribute 'get'` because the downstream `self.model_fields.get(name, {}).get("type")` chain assumed dict-form. The canonical `@db.model` path (`engine.py:1858`) already produced dict-form, so the bug only surfaced when external code constructed bulk nodes through the public `NodeGenerator` API directly.

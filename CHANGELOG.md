@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.4] — 2026-05-03 — issue #781 hygiene release (T4 + T5)
+
+Patch release cutting PyPI for T4 (core/runtime + nexus TODO-NNN comment-strip) and T5 (CI gate + regression test) of the issue #781 cleanup workstream.
+
+### Changed (T4 of #781 — comment-only, src/kailash/)
+
+- Stripped 18 `TODO-NNN` markers in `src/kailash/runtime/local.py` + `runtime/{pause,shutdown}.py` + `trust/plane/key_managers/manager.py` per the ratified disposition catalog. Class 1a banner with `v0.12.0` paired tracker → `(SHIPPED-v0.12.0)`; all other inline-shipped markers drop the parenthetical entirely.
+
+### Added (T5 of #781 — CI gate)
+
+- `.pre-commit-config.yaml::no-untracked-todo-nnn` hook + `scripts/check_no_untracked_todo_nnn.sh` shared script + `tests/regression/test_no_untracked_todo_nnn.py` regression test. Three-layer gate prevents future PRs from reintroducing untracked `TODO-NNN` markers in `src/` + `packages/*/src/`. Synthetic-PR validation (recorded in PR #808): inserting `# TODO-999: synthetic` fails both hook + test; appending `(tracked: gh#999)` passes both. Closes #781.
+
 ## [2.13.3] — 2026-05-02 — auth Rule 2 cleanup release (#779)
 
 Patch release cutting PyPI for the auth-stub Rule 2 cleanup that landed in

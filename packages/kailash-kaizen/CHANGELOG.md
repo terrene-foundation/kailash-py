@@ -40,6 +40,22 @@ dep = cohere_preset(
 
 Callers who did not pass explicit `base_url` / `path_prefix` overrides AND whose request handling treats Cohere as OpenAI-compatible (the canonical kaizen pattern) require no migration — the v2 Chat API is OpenAI-compatible by design.
 
+## [2.18.1] — 2026-05-03 — issue #781 hygiene release (T2) + #801 test fix
+
+Patch release cutting PyPI for T2 (kaizen TODO-NNN comment-strip) of the issue #781 cleanup workstream, plus the test-only #801 fix already on main.
+
+### Changed (T2 of #781 — comment-only, packages/kailash-kaizen/src/)
+
+- Stripped 80 `TODO-NNN` markers across 31 files in `research/`, `tools/native/`, `core/`, `core/autonomy/`, `mixins/`, `strategies/`, `execution/`, `session/`, `integrations/`, `docs/` per the ratified disposition catalog (19 Class 1a banner / inline-shipped, 54 Class 1b module docstring provenance, 7 Class 3 mid-comment cross-reference). ADR-013 references in `tools/native/skill_tool.py` + `tools/native/task_tool.py` docstrings preserved per the catalog rule (strip TODO-NNN, keep ADR ref).
+
+### Fixed (recap)
+
+- `tests/unit/llm/openai/test_openai_strict_mode.py` — opt explicitly into `response_format` per #801 (already on main).
+
+### Notes
+
+- Comment-only diff for T2 (zero logic changes). The bump cuts PyPI per `build-repo-release-discipline.md` Rule 1.
+
 ## [2.17.1] — 2026-05-02 — CodeQL hygiene cleanup (#789 FIX track)
 
 Patch bump. Closes 4 of 13 open CodeQL findings on the kaizen surface
