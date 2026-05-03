@@ -288,7 +288,7 @@ class BulkOperations:
         for record in data:
             convert_datetime_fields(record, model_fields, logger)
 
-        # Type-aware field validation (TODO-153)
+        # Type-aware field validation
         try:
             from ..core.type_processor import TypeAwareFieldProcessor
 
@@ -505,7 +505,7 @@ class BulkOperations:
                     update_values, model_fields, logger
                 )
 
-                # Type-aware field validation (TODO-153)
+                # Type-aware field validation
                 try:
                     from ..core.type_processor import TypeAwareFieldProcessor
 
@@ -648,7 +648,7 @@ class BulkOperations:
             for record in data:
                 convert_datetime_fields(record, model_fields, logger)
 
-            # Type-aware field validation (TODO-153)
+            # Type-aware field validation
             try:
                 from ..core.type_processor import TypeAwareFieldProcessor
 
@@ -1035,7 +1035,7 @@ class BulkOperations:
         for record in data:
             convert_datetime_fields(record, model_fields, logger)
 
-        # Type-aware field validation (TODO-153)
+        # Type-aware field validation
         try:
             from ..core.type_processor import TypeAwareFieldProcessor
 

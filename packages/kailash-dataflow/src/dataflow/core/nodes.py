@@ -1602,7 +1602,7 @@ class NodeGenerator:
                             complete_params, model_fields, logger
                         )
 
-                        # Type-aware field validation (TODO-153)
+                        # Type-aware field validation
                         # Validates field types without forced conversions
                         try:
                             from dataflow.core.type_processor import (
@@ -2313,7 +2313,7 @@ class NodeGenerator:
                             updates, self.model_fields, logger
                         )
 
-                        # Type-aware field validation (TODO-153)
+                        # Type-aware field validation
                         try:
                             from dataflow.core.type_processor import (
                                 TypeAwareFieldProcessor,
@@ -3147,7 +3147,7 @@ class NodeGenerator:
                         update_data, self.model_fields, logger
                     )
 
-                    # Type-aware field validation (TODO-153)
+                    # Type-aware field validation
                     try:
                         from dataflow.core.type_processor import TypeAwareFieldProcessor
 

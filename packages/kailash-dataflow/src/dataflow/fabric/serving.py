@@ -39,7 +39,7 @@ _HEADER_WRITE_TARGET = "X-Fabric-Write-Target"
 _HEADER_PRODUCTS_REFRESHING = "X-Fabric-Products-Refreshing"
 _HEADER_CONSUMER = "X-Fabric-Consumer"
 
-# Filter operator allowlist (TODO-35)
+# Filter operator allowlist
 ALLOWED_OPERATORS = {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin"}
 
 # Parameter validation constraints (security: HIGH from red team)

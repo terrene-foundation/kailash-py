@@ -272,7 +272,6 @@ class ProductInvokeNode:
 
 # ---------------------------------------------------------------------------
 # Product DAG — topological ordering for pre-warming and cascade refresh
-# (TODO-34)
 # ---------------------------------------------------------------------------
 
 

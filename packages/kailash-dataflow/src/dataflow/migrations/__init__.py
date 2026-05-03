@@ -18,10 +18,7 @@ from .auto_migration_system import (
     TableDefinition,
 )
 from .drop_confirmation import DropRefusedError, require_force_drop
-from .drop_confirmation_downgrade import (
-    DowngradeRefusedError,
-    require_force_downgrade,
-)
+from .drop_confirmation_downgrade import DowngradeRefusedError, require_force_downgrade
 from .fk_migration_operations import (
     CompositeFKOperation,
     FKChainUpdateOperation,
@@ -80,7 +77,7 @@ __all__ = [
     "ColumnType",
     "IndexType",
     "ConstraintType",
-    # FK-Safe Migration System - Phase 2 TODO-138
+    # FK-Safe Migration System
     "ForeignKeyAnalyzer",
     "FKSafeMigrationPlan",
     "FKImpactReport",
