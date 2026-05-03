@@ -1610,7 +1610,7 @@ Check the documentation or explore available resources.
         return decorator
 
     # =========================================================================
-    # Public Middleware API (WS01 - TODO-300A)
+    # Public Middleware API
     # =========================================================================
 
     def add_middleware(
@@ -1785,7 +1785,7 @@ Check the documentation or explore available resources.
         return func
 
     # =========================================================================
-    # Public Router API (WS01 - TODO-300B)
+    # Public Router API
     # =========================================================================
 
     def include_router(
@@ -2038,7 +2038,7 @@ Check the documentation or explore available resources.
         return self._routers.copy()
 
     # =========================================================================
-    # Public Plugin API (WS01 - TODO-300C)
+    # Public Plugin API
     # =========================================================================
 
     def add_plugin(
@@ -2348,7 +2348,7 @@ Check the documentation or explore available resources.
         return self._plugins.copy()
 
     # =========================================================================
-    # CORS Configuration API (WS01 - TODO-300E)
+    # CORS Configuration API
     # =========================================================================
 
     def _get_cors_defaults(self) -> Dict[str, Any]:
@@ -2558,7 +2558,7 @@ Check the documentation or explore available resources.
         return origin in origins
 
     # =========================================================================
-    # Preset System API (WS01 - TODO-300D)
+    # Preset System API
     # =========================================================================
 
     @property
