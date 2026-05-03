@@ -23,7 +23,7 @@ REPORT TYPES:
 INTEGRATION POINTS:
 - Uses Phase 1 RiskAssessmentEngine results for risk data
 - Uses Phase 2 MitigationStrategyEngine results for strategy reporting
-- Extends TODO-137 ImpactReporter patterns for consistency
+- Extends ImpactReporter patterns for consistency
 - Supports multi-channel output formats
 """
 

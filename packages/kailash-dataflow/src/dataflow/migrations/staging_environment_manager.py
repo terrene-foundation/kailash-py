@@ -9,7 +9,7 @@ CORE FEATURES:
 - Production schema replication with configurable data sampling
 - Environment isolation and resource management
 - Automated cleanup and rollback capabilities
-- Integration with existing migration components (TODO-137,138,140,142)
+- Integration with existing migration components
 
 STAGING ENVIRONMENT LIFECYCLE:
 1. Create staging database with production-like schema

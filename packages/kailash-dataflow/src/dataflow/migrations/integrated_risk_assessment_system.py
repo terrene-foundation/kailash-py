@@ -29,9 +29,9 @@ PERFORMANCE TARGETS:
 - Memory usage: <100MB for complex assessments
 
 INTEGRATION POINTS:
-- Uses TODO-137 DependencyAnalyzer for dependency analysis
-- Uses TODO-138 ForeignKeyAnalyzer for FK impact assessment
-- Extends TODO-137 ImpactReporter patterns for consistency
+- Uses DependencyAnalyzer for dependency analysis
+- Uses ForeignKeyAnalyzer for FK impact assessment
+- Extends ImpactReporter patterns for consistency
 - Supports DataFlow database operations with full PostgreSQL + SQLite parity
 """
 
@@ -210,8 +210,8 @@ class IntegratedRiskAssessmentSystem:
 
         Args:
             configuration: System configuration settings
-            dependency_analyzer: DependencyAnalyzer instance from TODO-137
-            fk_analyzer: ForeignKeyAnalyzer instance from TODO-138
+            dependency_analyzer: DependencyAnalyzer instance
+            fk_analyzer: ForeignKeyAnalyzer instance
         """
         self.config = configuration or SystemConfiguration()
         self.dependency_analyzer = dependency_analyzer
@@ -282,8 +282,8 @@ class IntegratedRiskAssessmentSystem:
 
         Args:
             operation: Migration operation to assess
-            dependency_report: Dependency analysis from TODO-137
-            fk_impact_report: FK impact analysis from TODO-138
+            dependency_report: Dependency analysis output
+            fk_impact_report: FK impact analysis output
             business_context: Additional business context for assessment
             requested_phases: Specific phases to execute (default: all)
             output_formats: Report formats to generate (default: system config)

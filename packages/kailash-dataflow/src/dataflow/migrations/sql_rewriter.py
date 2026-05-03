@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SQL Rewriter - TODO-139 Phase 2 Component
+SQL Rewriter
 
 SQL parsing and rewriting system for views and triggers during table renames.
 Handles complex SQL patterns and ensures accurate table reference updates.

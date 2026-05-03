@@ -24,10 +24,10 @@ DEPLOYMENT SAFETY GATES:
 INTEGRATION POINTS:
 - Phase 1: StagingEnvironmentManager for staging environment lifecycle
 - Phase 2: MigrationValidationPipeline for migration validation results
-- TODO-137: DependencyAnalyzer for production deployment dependency analysis
-- TODO-138: ForeignKeyAnalyzer for FK safety validation in production
-- TODO-140: RiskAssessmentEngine for deployment risk scoring
-- TODO-142: MigrationLockManager for production deployment coordination
+- DependencyAnalyzer for production deployment dependency analysis
+- ForeignKeyAnalyzer for FK safety validation in production
+- RiskAssessmentEngine for deployment risk scoring
+- MigrationLockManager for production deployment coordination
 """
 
 import asyncio
