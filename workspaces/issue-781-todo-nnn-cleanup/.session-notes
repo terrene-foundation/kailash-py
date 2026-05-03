@@ -1,0 +1,54 @@
+# Session Notes — workspace seed (2026-05-03)
+
+Workspace opened for the multi-shard cleanup of issue #781 — 244 `TODO-NNN`
+tracker tags across 118 production-source files violating zero-tolerance Rule 2.
+
+## Where we are
+
+Empty workspace. No analysis, no plan, no shards yet. `briefs/01-issue-781.md`
+holds the issue body verbatim as the entry brief.
+
+## Read first
+
+1. `briefs/01-issue-781.md` — issue body, 244-hit grep recipe, three-class taxonomy, 5-row acceptance list
+2. `../../SWEEP-2026-05-03.md` § "Issue #781" — sweep-finding context + sizing rationale
+3. `rules/zero-tolerance.md` Rule 2 + Rule 6 — the canonical contract being violated; iterative-TODO exception
+
+## In-flight state
+
+Nothing in flight. Workspace was opened in the post-2.18.0-cycle sweep close-out;
+implementation has not started.
+
+## Traps
+
+- The `TODO-NNN` regex in the issue intentionally excludes `TODO` without
+  the numeric suffix — this is the tracker-tag dialect the SDK has accumulated,
+  not the bare `TODO` form. Keep the cleanup scoped to the tagged form OR
+  expand scope explicitly in Phase 1 with user approval.
+- Three classes per issue body — completed-work breadcrumbs, active iterative
+  TODOs, obsolete trackers. The first class is REWRITTEN (to `(V<release>-NNN)`),
+  the second LINKED (to a tracker), the third DELETED. Don't rewrite-all
+  blindly; mid-class confusion is the failure mode.
+- 244 hits / 118 files / 98 distinct tracker IDs — sized at 3–5 sessions per
+  the sweep finding. Shard candidates: per-package (kailash-runtime, kailash-dataflow,
+  kaizen-agents, kaizen-core, kailash-ml, kailash-pact, …) OR per-tracker-ID
+  cluster (TODO-001..050, TODO-051..100, …). /todos picks one.
+- Acceptance criterion 6 (CI grep gate) is a closing shard, not a per-file
+  shard. Land it last so the cleanup-then-gate ratchet actually holds.
+
+## Open questions for the human
+
+- Sharding strategy: per-package OR per-tracker-ID range? (recommend per-package
+  to keep blast radius bounded to one importable surface per shard)
+- Class-1 (completed-work breadcrumb) rewrite target: `(V<release>-NNN)` per the
+  issue body suggestion, OR a different non-keyword convention?
+- CI gate placement: pre-commit hook (per-file local), GH Actions workflow
+  (PR-gate), or both?
+
+## Next session entry point
+
+`/analyze` — load phase 01 against this workspace. The brief is in `briefs/`,
+the spec contract is `rules/zero-tolerance.md`. Per `rules/agents.md` MUST
+"Parallel Brief-Claim Verification" — issue body asserts ≥3 distinct claims
+(244 hits / 118 files / 98 IDs / 3-class taxonomy + 5-bullet acceptance);
+spawn parallel deep-dive verification before producing the architecture plan.
