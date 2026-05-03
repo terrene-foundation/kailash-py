@@ -767,7 +767,7 @@ class LocalRuntime(
         # call ``close()`` at its own shutdown. See issue #478.
         self._externally_managed = False
 
-        # === Coordinated Shutdown (v0.12.0, TODO-015) ===
+        # === Coordinated Shutdown (SHIPPED-v0.12.0) ===
         self._shutdown_coordinator: Optional["ShutdownCoordinator"] = None  # noqa: F821
 
         # Enterprise execution context
@@ -780,7 +780,7 @@ class LocalRuntime(
             "user_context": user_context,
         }
 
-        # === Signal/Query System (TODO-010) ===
+        # === Signal/Query System ===
         # Maps run_id -> {"signal_channel": SignalChannel, "query_registry": QueryRegistry}
         self._workflow_signals: Dict[str, Dict[str, Any]] = {}
 
@@ -1020,7 +1020,7 @@ class LocalRuntime(
             search_attributes=search_attributes,
         )
 
-    # === Signal/Query Public API (TODO-010) ===
+    # === Signal/Query Public API ===
 
     def signal(self, workflow_id: str, signal_name: str, data: Any = None) -> None:
         """Send a signal to a running workflow.
@@ -1778,7 +1778,7 @@ class LocalRuntime(
 
         run_id = None
         _deferred_storage = None  # P0D-007: Initialize before try block
-        _signal_key = None  # TODO-010: Signal cleanup key
+        _signal_key = None  # Signal cleanup key
 
         try:
             # Resource Limit Enforcement: Check limits before execution (P0A-003: opt-in only)
@@ -1835,7 +1835,7 @@ class LocalRuntime(
             # Store workflow context for inspection/cleanup
             self._current_workflow_context = workflow_context
 
-            # === Signal/Query System (TODO-010) ===
+            # === Signal/Query System ===
             # Create SignalChannel and QueryRegistry for this workflow execution.
             # Injected into workflow_context so nodes access them via
             # self.get_workflow_context("signal_channel").
@@ -1851,7 +1851,7 @@ class LocalRuntime(
 
             _progress_token = _current_progress_registry.set(self._progress_registry)
 
-            # === Checkpoint/Restore (TODO-005/006) ===
+            # === Checkpoint/Restore ===
             # Create or reuse an ExecutionTracker for this workflow execution.
             # The tracker records per-node completion and outputs so that
             # checkpoints can capture workflow state and resume can skip
@@ -1918,7 +1918,7 @@ class LocalRuntime(
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
 
-            # === Signal/Query System (TODO-010) ===
+            # === Signal/Query System ===
             # Register signal channel and query registry for external access.
             # Use run_id as the key (falls back to workflow_id if run_id is None).
             _signal_key = (
@@ -2096,7 +2096,7 @@ class LocalRuntime(
                             f"Error during final cleanup of node {node_id}: {cleanup_error}"
                         )
 
-            # === Signal/Query System Cleanup (TODO-010) ===
+            # === Signal/Query System Cleanup ===
             self._workflow_signals.pop(_signal_key, None)
 
             # === Progress Reporting Cleanup ===
@@ -2329,7 +2329,7 @@ class LocalRuntime(
                     cancelled_at_node=node_id,
                 )
 
-            # === Checkpoint/Restore (TODO-005/006) ===
+            # === Checkpoint/Restore ===
             # If the tracker already has this node, skip execution and replay
             # the cached output.  This is the core resume-from-checkpoint logic.
             if execution_tracker is not None and execution_tracker.is_completed(
@@ -2500,7 +2500,7 @@ class LocalRuntime(
                 results[node_id] = outputs
                 completed_nodes.append(node_id)
 
-                # === Checkpoint/Restore (TODO-005/006) ===
+                # === Checkpoint/Restore ===
                 # Record completion so that checkpoint captures include this node.
                 if execution_tracker is not None:
                     execution_tracker.record_completion(node_id, outputs)
@@ -2580,7 +2580,7 @@ class LocalRuntime(
                     }
                 )
 
-                # OpenTelemetry tracing (TODO-014): end node span on success
+                # OpenTelemetry tracing: end node span on success
                 _tracer.set_attribute(
                     _node_span, "node.duration_s", performance_metrics.duration
                 )
@@ -2596,7 +2596,7 @@ class LocalRuntime(
                         )
 
             except Exception as e:
-                # OpenTelemetry tracing (TODO-014): end node span on error
+                # OpenTelemetry tracing: end node span on error
                 _tracer.end_span(_node_span, status="error", error=e)
 
                 failed_nodes.append(node_id)
@@ -2721,7 +2721,7 @@ class LocalRuntime(
         if workflow_context is not None:
             workflow_context["_audit_trail"] = _audit_events
 
-        # OpenTelemetry tracing (TODO-014): end workflow span
+        # OpenTelemetry tracing: end workflow span
         if failed_nodes:
             _tracer.set_attribute(
                 _wf_span, "workflow.failed_nodes", ",".join(failed_nodes)
@@ -2950,7 +2950,7 @@ class LocalRuntime(
             # Apply the filtered parameters
             inputs.update(filtered_params)
 
-        # Connection parameter validation (TODO-121) with enhanced error messages and metrics
+        # Connection parameter validation with enhanced error messages and metrics
         if self.connection_validation != "off":
             metrics_collector = get_metrics_collector()
             node_type = type(node_instance).__name__
@@ -5119,7 +5119,7 @@ class LocalRuntime(
         return debug_info
 
     # =============================================================================
-    # Enhanced Persistent Mode Methods (TODO-135 Implementation)
+    # Enhanced Persistent Mode Methods
     # =============================================================================
 
     async def start_persistent_mode(self) -> None:

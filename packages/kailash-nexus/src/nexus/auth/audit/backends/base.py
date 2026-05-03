@@ -1,4 +1,4 @@
-"""Abstract audit backend interface (TODO-310F)."""
+"""Abstract audit backend interface."""
 
 from abc import ABC, abstractmethod
 from datetime import datetime

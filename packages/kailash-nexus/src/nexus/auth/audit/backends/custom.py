@@ -1,4 +1,4 @@
-"""Custom backend wrapper for user-provided callable (TODO-310F)."""
+"""Custom backend wrapper for user-provided callable."""
 
 import inspect
 from typing import Awaitable, Callable, Union

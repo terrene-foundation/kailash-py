@@ -1,4 +1,4 @@
-"""NexusAuthPlugin - Unified auth plugin for Nexus (TODO-310G).
+"""NexusAuthPlugin - Unified auth plugin for Nexus.
 
 SPEC-06 Migration: Core configs imported from kailash.trust.auth and
 kailash.trust.rate_limit. Plugin orchestration remains Nexus-specific.
@@ -10,12 +10,11 @@ FastAPI inspects parameter annotations at runtime to recognize special types.
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from nexus.auth.audit.config import AuditConfig
-from nexus.plugins import NexusPlugin
-
 from kailash.trust.auth.context import TenantConfig
 from kailash.trust.auth.jwt import JWTConfig
 from kailash.trust.rate_limit.config import RateLimitConfig
+from nexus.auth.audit.config import AuditConfig
+from nexus.plugins import NexusPlugin
 
 logger = logging.getLogger(__name__)
 

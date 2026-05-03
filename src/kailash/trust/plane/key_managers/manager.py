@@ -1,7 +1,7 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Pluggable key management for TrustPlane (TODO-23).
+"""Pluggable key management for TrustPlane.
 
 Defines a protocol-based interface for HSM/KMS key management backends
 and provides a local file-based implementation using Ed25519.

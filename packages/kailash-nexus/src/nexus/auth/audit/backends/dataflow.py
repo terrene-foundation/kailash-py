@@ -1,4 +1,4 @@
-"""DataFlow database backend for audit records (TODO-310F).
+"""DataFlow database backend for audit records.
 
 Stores audit records in a database table via DataFlow.
 Supports querying for compliance and debugging.
