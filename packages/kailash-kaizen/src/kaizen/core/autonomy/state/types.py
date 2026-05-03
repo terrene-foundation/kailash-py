@@ -34,7 +34,7 @@ class AgentState:
     pending_actions: list[dict[str, Any]] = field(default_factory=list)
     completed_actions: list[dict[str, Any]] = field(default_factory=list)
 
-    # Permission state (from TODO-160)
+    # Permission state
     budget_spent_usd: float = 0.0
     approval_history: list[dict[str, Any]] = field(default_factory=list)
 

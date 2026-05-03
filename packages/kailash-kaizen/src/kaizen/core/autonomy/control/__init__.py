@@ -35,7 +35,6 @@ Example:
 
 See Also:
     - docs/architecture/adr/011-control-protocol-architecture.md
-    - todos/active/TODO-159-control-protocol-implementation.md
 """
 
 from kaizen.core.autonomy.control.protocol import ControlProtocol

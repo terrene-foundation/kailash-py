@@ -84,7 +84,7 @@ class StateManager:
         force: bool = False,
     ) -> str:
         """
-        Save agent state as checkpoint (TODO-168 Day 4).
+        Save agent state as checkpoint.
 
         Triggers PRE_CHECKPOINT_SAVE and POST_CHECKPOINT_SAVE hooks if enabled.
 
