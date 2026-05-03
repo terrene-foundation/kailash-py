@@ -1,6 +1,6 @@
 ---
 name: validation-patterns
-description: "Validation patterns and compliance checking for Kailash SDK including parameter validation, DataFlow pattern validation, connection validation, absolute import validation, workflow structure validation, and security validation. Use when asking about 'validation', 'validate', 'check compliance', 'verify', 'lint', 'code review', 'parameter validation', 'connection validation', 'import validation', 'security validation', or 'workflow validation'."
+description: "Validation patterns and compliance checking for Kailash SDK including parameter validation, DataFlow pattern validation, connection validation, absolute import validation, workflow structure validation, security validation, and codebase hygiene marker scrubbing. Use when asking about 'validation', 'validate', 'check compliance', 'verify', 'lint', 'code review', 'parameter validation', 'connection validation', 'import validation', 'security validation', 'workflow validation', 'codebase hygiene', 'TODO marker scrub', 'marker cleanup', 'three-layer gate', or 'regex gate'."
 ---
 
 # Kailash Validation Patterns
@@ -27,6 +27,17 @@ Validation patterns and compliance checking for Kailash SDK development.
   - Absolute vs relative, module path correctness, circular/missing import detection
 - **[validate-security](validate-security.md)** - Security checks
   - Secret exposure, SQL/code injection, file path traversal, API key handling
+
+### Codebase Hygiene Validations
+
+- **[validate-codebase-hygiene-markers](validate-codebase-hygiene-markers.md)** - Internal-tracker marker scrubbing + three-layer regex gate
+  - 4-class disposition catalog (Class 1a banner / 1b docstring provenance / 2 active iterative / 3 cross-reference)
+  - Three-layer hygiene gate (pre-commit hook + shared script + Tier-2 regression test)
+  - Synthetic-PR validation protocol + multi-shard cleanup strategy + release-cycle integration
+  - Authoring gotchas: YAML scalar fragility with embedded colons, `grep -I` for binary skip, `\.egg-info/` exclusion shape
+  - Origin: issue #781 (TODO-NNN cleanup, May 2026)
+- **[orphan-audit-playbook](orphan-audit-playbook.md)** - Orphan detection for facade/manager classes
+  - Phase 5.11 evidence (2,407 LOC trust orphan); 5-step `/redteam` audit; sub-package collection-gate patterns; same-shard sweep §4a
 
 ## Quick Reference
 
