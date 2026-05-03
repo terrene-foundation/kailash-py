@@ -23,7 +23,6 @@ References:
 - docs/research/CLAUDE_CODE_AUTONOMOUS_ARCHITECTURE.md
 - docs/research/CODEX_AUTONOMOUS_ARCHITECTURE.md
 - ADR-013: Objective Convergence Detection
-- TODO-163: Autonomous Patterns Implementation
 
 Author: Kaizen Framework Team
 Created: 2025-10-22
@@ -83,11 +82,11 @@ class AutonomousConfig:
     planning_enabled: bool = True
     checkpoint_frequency: int = 5
 
-    # State persistence parameters (TODO-168 Day 2)
+    # State persistence parameters
     resume_from_checkpoint: bool = False  # Resume from latest checkpoint
     checkpoint_interval_seconds: float = 60.0  # Checkpoint every 60 seconds
 
-    # Interrupt parameters (TODO-169 Day 2)
+    # Interrupt parameters
     enable_interrupts: bool = True  # Enable interrupt handling
     graceful_shutdown_timeout: float = 5.0  # Max time for graceful shutdown (seconds)
     checkpoint_on_interrupt: bool = True  # Save checkpoint on interrupt
@@ -187,8 +186,8 @@ class BaseAutonomousAgent(BaseAgent):
             signature: Optional signature (uses _default_signature() if None)
             strategy: Optional MultiCycleStrategy (creates default if None)
             checkpoint_dir: Optional directory for checkpoint persistence
-            state_manager: Optional StateManager for checkpoint operations (TODO-168)
-            interrupt_manager: Optional InterruptManager for interrupt handling (TODO-169)
+            state_manager: Optional StateManager for checkpoint operations
+            interrupt_manager: Optional InterruptManager for interrupt handling
             **kwargs: Additional arguments passed to BaseAgent.__init__ (including mcp_servers)
 
         Example:
@@ -223,7 +222,7 @@ class BaseAutonomousAgent(BaseAgent):
         self.current_plan: List[Dict[str, Any]] = []
         self.cycle_count: int = 0
 
-        # State persistence (TODO-168)
+        # State persistence
         self.state_manager = (
             state_manager
             or StateManager(
@@ -233,7 +232,7 @@ class BaseAutonomousAgent(BaseAgent):
         )
         self.current_step: int = 0
 
-        # Interrupt management (TODO-169)
+        # Interrupt management
         self.interrupt_manager = interrupt_manager or InterruptManager()
 
         # Install signal handlers if interrupts enabled
@@ -242,7 +241,7 @@ class BaseAutonomousAgent(BaseAgent):
             # Register shutdown callback
             self.interrupt_manager.register_shutdown_callback(self._on_shutdown)
 
-        # Auto-initialize memory if enabled but not provided (TODO-170 Memory Integration)
+        # Auto-initialize memory if enabled but not provided
         if config.memory_enabled and self.memory is None:
             from kaizen.memory import BufferMemory
 
@@ -251,7 +250,7 @@ class BaseAutonomousAgent(BaseAgent):
             )
             self.memory = BufferMemory()  # Creates in-memory conversation buffer
 
-        # State tracking for checkpoints (TODO-204 Phase 3)
+        # State tracking for checkpoints
         self._approval_history: List[Dict[str, Any]] = []
         self._tool_usage_counts: Dict[str, int] = {}
         self._workflow_state: Dict[str, Any] = {}
@@ -326,13 +325,13 @@ class BaseAutonomousAgent(BaseAgent):
 
         This implements the Claude Code autonomous loop:
         0. Load memory context (if enabled and session_id provided)
-        1. Resume from checkpoint (if enabled) (TODO-168 Day 2)
+        1. Resume from checkpoint (if enabled)
         2. Execute cycle (LLM reasoning + tool calls)
         3. Check convergence via tool_calls field
         4. Continue if tool_calls exist, exit if empty
         5. Enforce max_cycles limit
-        6. Save checkpoints at frequency/interval (TODO-168 Day 2)
-        7. Check for interrupts before each cycle (TODO-169 Day 1)
+        6. Save checkpoints at frequency/interval
+        7. Check for interrupts before each cycle
         8. Save memory turn (if enabled and session_id provided)
 
         Args:
@@ -388,7 +387,7 @@ class BaseAutonomousAgent(BaseAgent):
             self.current_plan = await self._create_plan(task)
             logger.info(f"Plan created with {len(self.current_plan)} steps")
 
-        # TODO-168 Day 2: Resume from checkpoint if enabled
+        # Resume from checkpoint if enabled
         if self.autonomous_config.resume_from_checkpoint:
             agent_id = (
                 self.config.name if hasattr(self.config, "name") else "autonomous_agent"
@@ -410,7 +409,7 @@ class BaseAutonomousAgent(BaseAgent):
 
         # Autonomous loop: while(tool_calls_exist)
         for cycle_num in range(self.autonomous_config.max_cycles):
-            # TODO-169 Day 1: Check for interrupt BEFORE cycle
+            # Check for interrupt BEFORE cycle
             if self.interrupt_manager.is_interrupted():
                 reason = self.interrupt_manager._interrupt_reason
 
@@ -456,10 +455,10 @@ class BaseAutonomousAgent(BaseAgent):
                 # Execute cycle using strategy
                 cycle_result = self.strategy.execute(self, inputs)
 
-                # TODO-168 Day 2: Increment step counter
+                # Increment step counter
                 self.current_step += 1
 
-                # TODO-168 Day 2: Save checkpoint if needed (frequency OR interval)
+                # Save checkpoint if needed (frequency OR interval)
                 import time
 
                 if self.state_manager.should_checkpoint(
@@ -500,7 +499,7 @@ class BaseAutonomousAgent(BaseAgent):
         final_result["cycles_used"] = self.cycle_count
         final_result["total_cycles"] = self.autonomous_config.max_cycles
 
-        # TODO-169 Day 1: Save final checkpoint (normal completion)
+        # Save final checkpoint (normal completion)
         await self._save_final_checkpoint(interrupted=False, reason=None)
 
         # Save memory turn (if enabled and session_id provided)
@@ -775,12 +774,12 @@ class BaseAutonomousAgent(BaseAgent):
         return None
 
     # ═══════════════════════════════════════════════════════════════
-    # State Persistence (TODO-168)
+    # State Persistence
     # ═══════════════════════════════════════════════════════════════
 
     def _capture_state(self) -> AgentState:
         """
-        Capture current agent state for checkpoint (TODO-168).
+        Capture current agent state for checkpoint.
 
         Returns:
             AgentState containing complete agent state snapshot
@@ -807,7 +806,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     def _restore_state(self, state: AgentState) -> None:
         """
-        Restore agent from checkpoint state (TODO-168, TODO-204).
+        Restore agent from checkpoint state.
 
         Restores all agent state from a checkpoint, including:
         - Step number and execution progress
@@ -832,7 +831,7 @@ class BaseAutonomousAgent(BaseAgent):
         self._restore_pending_actions(state.pending_actions)
         self._restore_completed_actions(state.completed_actions)
 
-        # Restore state tracking fields (TODO-204 Phase 3)
+        # Restore state tracking fields
         self._approval_history = (
             state.approval_history.copy() if state.approval_history else []
         )
@@ -966,7 +965,7 @@ class BaseAutonomousAgent(BaseAgent):
         return self._workflow_state.copy()
 
     # ═══════════════════════════════════════════════════════════════
-    # State Recording Methods (TODO-204 Phase 3)
+    # State Recording Methods
     # ═══════════════════════════════════════════════════════════════
 
     def record_approval(
@@ -1135,12 +1134,12 @@ class BaseAutonomousAgent(BaseAgent):
                 self.current_plan.append(action)
 
     # ═══════════════════════════════════════════════════════════════
-    # Interrupt Management (TODO-169)
+    # Interrupt Management
     # ═══════════════════════════════════════════════════════════════
 
     async def _on_shutdown(self) -> None:
         """
-        Shutdown callback for graceful cleanup (TODO-169).
+        Shutdown callback for graceful cleanup.
 
         Called by InterruptManager before shutdown to release resources
         and close connections. Registered in __init__.
@@ -1175,7 +1174,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     async def _handle_interrupt(self) -> InterruptStatus:
         """
-        Handle interrupt with graceful or immediate mode (TODO-169 Day 2).
+        Handle interrupt with graceful or immediate mode.
 
         Executes shutdown sequence based on interrupt mode:
         - GRACEFUL: Execute shutdown callbacks, save checkpoint, allow current step to finish
@@ -1263,7 +1262,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     def register_child_agent(self, child_agent: "BaseAutonomousAgent") -> None:
         """
-        Register child agent for interrupt propagation (TODO-169 Day 3).
+        Register child agent for interrupt propagation.
 
         When this agent is interrupted, the interrupt will propagate to all
         registered child agents. This is useful for multi-agent scenarios where
@@ -1295,7 +1294,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     def unregister_child_agent(self, child_agent: "BaseAutonomousAgent") -> None:
         """
-        Unregister child agent from interrupt propagation (TODO-169 Day 3).
+        Unregister child agent from interrupt propagation.
 
         Args:
             child_agent: Child BaseAutonomousAgent to remove
@@ -1311,7 +1310,7 @@ class BaseAutonomousAgent(BaseAgent):
         self, interrupted: bool = False, reason: Optional[InterruptReason] = None
     ) -> str:
         """
-        Save final checkpoint with interrupt metadata (TODO-169).
+        Save final checkpoint with interrupt metadata.
 
         Args:
             interrupted: Whether execution was interrupted
