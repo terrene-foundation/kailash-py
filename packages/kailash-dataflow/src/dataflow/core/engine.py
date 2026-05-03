@@ -28,6 +28,7 @@ from typing import (
 
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
+    from .tenant_context import TenantContextSwitch
 
 # NamedTuple for failed-DDL state (issue #696). Module-level so it is
 # importable for tests / introspection without going through DataFlow.
@@ -259,7 +260,11 @@ class DataFlow(DataFlowEventMixin):
             if pool_size is not None:
                 self.config.pool_size = pool_size
             if pool_max_overflow is not None:
-                self.config.max_overflow = pool_max_overflow
+                # max_overflow is set on DataFlowConfig at runtime as a compatibility
+                # shim; the static field is on the nested DatabaseConfig
+                # (config.database). setattr() is the explicit dynamic-set form,
+                # which pyright accepts without an attribute-known declaration.
+                setattr(self.config, "max_overflow", pool_max_overflow)
             if pool_recycle is not None:
                 self.config.pool_recycle = pool_recycle
             if echo is not None:
@@ -290,6 +295,7 @@ class DataFlow(DataFlowEventMixin):
             # Validate database_url if provided
             if database_url and not self._is_valid_database_url(database_url):
                 # Enhanced error with catalog-based solutions (DF-401)
+                assert ErrorEnhancer is not None, "ErrorEnhancer module not loaded"
                 raise ErrorEnhancer.enhance_invalid_database_url(  # noqa: F823
                     database_url=database_url,
                     error_message="URL format validation failed",
@@ -1919,15 +1925,20 @@ class DataFlow(DataFlowEventMixin):
         self._generate_crud_nodes(model_name, fields)
         self._generate_bulk_nodes(model_name, fields)
 
-        # Add DataFlow attributes
-        cls._dataflow = self
-        cls._dataflow_meta = {
-            "engine": self,
-            "model_name": model_name,
-            "fields": fields,
-            "registered_at": datetime.now(),
-        }
-        cls._dataflow_config = getattr(cls, "__dataflow__", {})
+        # Add DataFlow attributes via setattr (cls is a user-defined model class;
+        # pyright cannot statically know it accepts these dynamic attrs).
+        setattr(cls, "_dataflow", self)
+        setattr(
+            cls,
+            "_dataflow_meta",
+            {
+                "engine": self,
+                "model_name": model_name,
+                "fields": fields,
+                "registered_at": datetime.now(),
+            },
+        )
+        setattr(cls, "_dataflow_config", getattr(cls, "__dataflow__", {}))
 
         # TSG-103: Parse __validation__ dict into __field_validators__
         validation_dict = getattr(cls, "__validation__", None)
@@ -2221,6 +2232,9 @@ class DataFlow(DataFlowEventMixin):
 
         try:
             # Execute migration directly in async context - no event loop issues!
+            assert (
+                self._migration_system is not None
+            ), "migration system must be initialized"
             success, migrations = await self._migration_system.auto_migrate(
                 target_schema=target_schema,
                 dry_run=False,
@@ -2303,6 +2317,9 @@ class DataFlow(DataFlowEventMixin):
         connection_id = "default"  # Default connection identifier
 
         try:
+            assert (
+                self._schema_state_manager is not None
+            ), "schema state manager must be initialized"
             operations, safety = self._schema_state_manager.detect_and_plan_migrations(
                 model_schema, connection_id
             )
@@ -2349,6 +2366,9 @@ class DataFlow(DataFlowEventMixin):
 
         try:
             # Execute migration directly in async context - no event loop issues!
+            assert (
+                self._migration_system is not None
+            ), "migration system must be initialized"
             success, migrations = await self._migration_system.auto_migrate(
                 target_schema=target_schema,
                 dry_run=False,
@@ -2434,6 +2454,9 @@ class DataFlow(DataFlowEventMixin):
             target_schema = self._convert_dict_schema_to_table_definitions(dict_schema)
 
         # Call the migration system
+        assert (
+            self._migration_system is not None
+        ), "migration system must be initialized"
         return await self._migration_system.auto_migrate(
             target_schema=target_schema,
             dry_run=dry_run,
@@ -2682,6 +2705,7 @@ class DataFlow(DataFlowEventMixin):
             tenant_extractor=tenant_extractor,
             nexus=nexus,
         )
+        assert self._fabric is not None, "fabric must be initialized above"
         await self._fabric.start(prewarm=prewarm)
         return self._fabric
 
@@ -3165,7 +3189,10 @@ class DataFlow(DataFlowEventMixin):
         cleanup_errors = []
 
         try:
-            cleaned = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+            # _cleanup_closed_loop_pools is a class-scoped subclass method;
+            # pyright sees only the type[Node] base. getattr() makes it explicit.
+            _cleanup = getattr(AsyncSQLDatabaseNode, "_cleanup_closed_loop_pools")
+            cleaned = await _cleanup()
             stale_pools_found = cleaned
             stale_pools_cleaned = cleaned
 
@@ -3209,13 +3236,17 @@ class DataFlow(DataFlowEventMixin):
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
         start_time = time.time()
-        total_pools = len(AsyncSQLDatabaseNode._shared_pools)
+        # AsyncSQLDatabaseNode._shared_pools / .clear_shared_pools are class-scoped
+        # subclass attrs that pyright does not see through type[Node] inference.
+        # getattr() makes the dynamic attribute access explicit.
+        total_pools = len(getattr(AsyncSQLDatabaseNode, "_shared_pools"))
         pools_cleaned = 0
         cleanup_failures = 0
         cleanup_errors = []
 
         try:
-            result = await AsyncSQLDatabaseNode.clear_shared_pools(graceful=not force)
+            _clear_pools = getattr(AsyncSQLDatabaseNode, "clear_shared_pools")
+            result = await _clear_pools(graceful=not force)
             pools_cleaned = result["pools_cleared"]
             cleanup_failures = result["clear_failures"]
             cleanup_errors = result["clear_errors"]
@@ -3256,7 +3287,8 @@ class DataFlow(DataFlowEventMixin):
         """
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-        shared_pools = AsyncSQLDatabaseNode._shared_pools
+        # Subclass-scoped attr; pyright sees only type[Node] base.
+        shared_pools = getattr(AsyncSQLDatabaseNode, "_shared_pools")
 
         # Extract unique event loop IDs
         event_loop_ids = set()
@@ -3425,51 +3457,15 @@ class DataFlow(DataFlowEventMixin):
             pass
 
     def get_connection_pool(self):
-        """Get the connection pool for testing.
+        """Return a `MockConnectionPool` reflecting the current connection-manager state.
 
-        Warning:
-            This method returns a MockConnectionPool for backward compatibility.
-            In v0.7.0+, MockConnectionPool has been moved to tests.fixtures.mock_helpers.
-            Consider using real connection pooling in production code.
+        Used by integration tests that inspect pool metrics / health without
+        exercising real connection management. The returned object is a
+        protocol-satisfying deterministic adapter (see
+        `dataflow.testing.mock_helpers.MockConnectionPool`), not a
+        `unittest.mock`-style mock.
         """
-        # Import from test fixtures
-        try:
-            from tests.fixtures.mock_helpers import (
-                MockConnectionPool,  # type: ignore[assignment]
-            )
-        except ImportError:
-            # Fallback for cases where tests module is not available
-            import warnings
-
-            warnings.warn(
-                "MockConnectionPool could not be imported from tests.fixtures.mock_helpers. "
-                "Using inline fallback. This is deprecated and will be removed in v0.8.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-            # Inline fallback implementation
-            class MockConnectionPool:
-                def __init__(self, connection_manager):
-                    self.connection_manager = connection_manager
-                    self.max_connections = connection_manager._connection_stats.get(
-                        "pool_size", 10
-                    )
-
-                async def get_metrics(self):
-                    return {
-                        "connections_created": 1,
-                        "connections_reused": 5,
-                        "active_connections": 1,
-                        "total_connections": self.max_connections,
-                    }
-
-                async def get_health_status(self):
-                    return {
-                        "status": "healthy",
-                        "total_connections": self.max_connections,
-                        "active_connections": 1,
-                    }
+        from dataflow.testing.mock_helpers import MockConnectionPool
 
         return MockConnectionPool(self._connection_manager)
 
@@ -3771,8 +3767,9 @@ class DataFlow(DataFlowEventMixin):
         proxy = _Proxy()
         for k, v in data.items():
             setattr(proxy, k, v)
-        # Set the class-level validators so validate_model sees them
-        _Proxy.__field_validators__ = validators
+        # Set the class-level validators so validate_model sees them.
+        # _Proxy is a runtime-created class; setattr() makes the dynamic-set explicit.
+        setattr(_Proxy, "__field_validators__", validators)
 
         return _validate_instance(proxy)
 
@@ -4451,9 +4448,8 @@ class DataFlow(DataFlowEventMixin):
         """
         if use_real_inspection:
             logger.debug("Starting REAL database schema discovery...")
+            discovered_schema: Optional[Dict[str, Any]] = None
             try:
-                import asyncio
-
                 # Check if we're already in an event loop
                 try:
                     loop = asyncio.get_running_loop()
@@ -4468,16 +4464,30 @@ class DataFlow(DataFlowEventMixin):
                             "This prevents deadlocks with session-scoped pytest event loops. "
                             "See: DATAFLOW-SESSION-LOOP-DEADLOCK-001"
                         )
+                    # Loop reported as not running — safe to use asyncio.run()
+                    discovered_schema = asyncio.run(
+                        self._inspect_database_schema_real()
+                    )
                 except RuntimeError as e:
                     if "discover_schema() cannot be called" in str(e):
                         # Re-raise our own error
                         raise
-                    # No event loop running, safe to use asyncio.run()
+                    # asyncio.get_running_loop() raised → no event loop running
                     logger.debug("No existing event loop, using asyncio.run()")
                     discovered_schema = asyncio.run(
                         self._inspect_database_schema_real()
                     )
 
+                if discovered_schema is None:
+                    # Typed-guard: every reachable inner-branch path assigns
+                    # discovered_schema or raises. If we ever reach here without
+                    # an assignment, it is an invariant violation, not a missing
+                    # case to silently fall through.
+                    raise RuntimeError(
+                        "discover_schema() exited the loop-detection branch "
+                        "without assigning a result — invariant violation in "
+                        "the asyncio.run path. Investigate."
+                    )
                 return discovered_schema
 
             except NotImplementedError:
@@ -4486,6 +4496,9 @@ class DataFlow(DataFlowEventMixin):
             except RuntimeError as e:
                 if "discover_schema() cannot be called" in str(e):
                     # Re-raise our async context error
+                    raise
+                if "exited the loop-detection branch" in str(e):
+                    # Re-raise our typed-guard violation
                     raise
                 # Other RuntimeErrors fall through to error handling
                 logger.error(
@@ -5001,14 +5014,21 @@ class DataFlow(DataFlowEventMixin):
                 self._generate_crud_nodes(model_name, fields)
                 self._generate_bulk_nodes(model_name, fields)
 
-                # Add DataFlow attributes to dynamic class
-                DynamicModel._dataflow = self
-                DynamicModel._dataflow_meta = {
-                    "engine": self,
-                    "model_name": model_name,
-                    "fields": fields,
-                    "registered_at": datetime.now(),
-                }
+                # Add DataFlow attributes to dynamic class via setattr.
+                # Reason: DynamicModel is constructed at runtime via type(); pyright
+                # cannot statically know it accepts these attributes. setattr() makes
+                # the dynamic-set explicit and bypasses the type-narrowing complaint.
+                setattr(DynamicModel, "_dataflow", self)
+                setattr(
+                    DynamicModel,
+                    "_dataflow_meta",
+                    {
+                        "engine": self,
+                        "model_name": model_name,
+                        "fields": fields,
+                        "registered_at": datetime.now(),
+                    },
+                )
 
                 # Persist in model registry if enabled
                 if self._enable_model_persistence and hasattr(self, "_model_registry"):
@@ -5177,15 +5197,21 @@ class DataFlow(DataFlowEventMixin):
                 self._generate_crud_nodes(model_name, internal_fields)
                 self._generate_bulk_nodes(model_name, internal_fields)
 
-                # Add DataFlow attributes to reconstructed class
-                ReconstructedModel._dataflow = self
-                ReconstructedModel._dataflow_meta = {
-                    "engine": self,
-                    "model_name": model_name,
-                    "fields": internal_fields,
-                    "registered_at": datetime.now(),
-                    "reconstructed": True,
-                }
+                # Add DataFlow attributes to reconstructed class via setattr.
+                # Reason: ReconstructedModel is constructed at runtime via type();
+                # pyright cannot statically know it accepts these attributes.
+                setattr(ReconstructedModel, "_dataflow", self)
+                setattr(
+                    ReconstructedModel,
+                    "_dataflow_meta",
+                    {
+                        "engine": self,
+                        "model_name": model_name,
+                        "fields": internal_fields,
+                        "registered_at": datetime.now(),
+                        "reconstructed": True,
+                    },
+                )
 
                 # Collect generated node names
                 generated_nodes[model_name] = self.get_generated_nodes(model_name)
@@ -6070,7 +6096,7 @@ class DataFlow(DataFlowEventMixin):
         target_schema = self._convert_dict_schema_to_table_definitions(dict_schema)
 
         # Execute auto-migration with SQLite-specific handling
-        import asyncio
+        # (asyncio imported at module scope, L7)
 
         async def run_sqlite_migration():
             try:
@@ -6083,6 +6109,9 @@ class DataFlow(DataFlowEventMixin):
                     "DATAFLOW_AUTO_MIGRATE", "false"
                 ).lower() in ("true", "1", "yes")
 
+                assert (
+                    self._migration_system is not None
+                ), "migration system must be initialized"
                 success, migrations = await self._migration_system.auto_migrate(
                     target_schema=target_schema,
                     dry_run=not auto_migrate_enabled,
@@ -6180,6 +6209,9 @@ class DataFlow(DataFlowEventMixin):
 
         try:
             # Use schema state manager for migration planning (transactions handled by WorkflowBuilder)
+            assert (
+                self._schema_state_manager is not None
+            ), "schema state manager must be initialized"
             schema_manager = self._schema_state_manager
             # Detect changes and plan migrations with PostgreSQL optimization
             operations, safety_assessment = schema_manager.detect_and_plan_migrations(
@@ -6349,10 +6381,15 @@ class DataFlow(DataFlowEventMixin):
             import asyncio
 
             async def run_postgresql_migration():
-                # Pass existing_schema_mode context to the migration system
+                # Pass existing_schema_mode context to the migration system.
+                assert (
+                    self._migration_system is not None
+                ), "migration system must be initialized"
                 if hasattr(self._migration_system, "_existing_schema_mode"):
-                    self._migration_system._existing_schema_mode = (
-                        self._existing_schema_mode
+                    setattr(
+                        self._migration_system,
+                        "_existing_schema_mode",
+                        self._existing_schema_mode,
                     )
 
                 success, migrations = await self._migration_system.auto_migrate(
@@ -6708,9 +6745,16 @@ class DataFlow(DataFlowEventMixin):
                         cursor.execute(sql)
                         cursor.close()
                     else:
-                        # PostgreSQL with context manager
-                        with connection.cursor() as cursor:
+                        # PostgreSQL: use explicit try/finally on the sync psycopg2
+                        # cursor. Avoids `with connection.cursor()`-style code where
+                        # pyright cannot narrow the cursor (the ambient return shape
+                        # of _get_async_sql_connection is too wide), and matches
+                        # the SQLite branch above for symmetric resource management.
+                        cursor = connection.cursor()
+                        try:
                             cursor.execute(sql)
+                        finally:
+                            cursor.close()
 
                 connection.commit()
                 logger.debug(
@@ -6872,7 +6916,7 @@ class DataFlow(DataFlowEventMixin):
         """Notify user of migration errors."""
         logger.error("engine.migration_error", extra={"error_message": error_message})
 
-    def create_tables(self, database_type: str = None):
+    def create_tables(self, database_type: Optional[str] = None):
         """Create database tables for all registered models (sync version).
 
         This method generates and executes CREATE TABLE statements for all
@@ -6938,7 +6982,7 @@ class DataFlow(DataFlowEventMixin):
             f"Successfully created database schema for {len(self._models)} models"
         )
 
-    async def create_tables_async(self, database_type: str = None):
+    async def create_tables_async(self, database_type: Optional[str] = None):
         """Create database tables for all registered models (async version).
 
         This method generates and executes CREATE TABLE statements for all
@@ -6994,7 +7038,7 @@ class DataFlow(DataFlowEventMixin):
             f"Successfully created database schema for {len(self._models)} models (async)"
         )
 
-    def _ensure_migration_tables(self, database_type: str = None):
+    def _ensure_migration_tables(self, database_type: Optional[str] = None):
         """Ensure both migration tracking tables exist (sync version).
 
         IMPORTANT: This is the sync version. If you are calling from an async context,
@@ -7135,7 +7179,7 @@ class DataFlow(DataFlowEventMixin):
             )
             # Don't fail the whole operation if table creation fails
 
-    async def _ensure_migration_tables_async(self, database_type: str = None):
+    async def _ensure_migration_tables_async(self, database_type: Optional[str] = None):
         """Ensure both migration tracking tables exist (async version).
 
         This method properly creates migration tables using async execution,
@@ -7780,7 +7824,7 @@ class DataFlow(DataFlowEventMixin):
             - ROOT_CAUSE_ANALYSIS.md in reports/issues/database-url-inheritance/
             - AsyncSQLDatabaseNode connection pooling (src/kailash/nodes/data/async_sql.py)
         """
-        import asyncio
+        # asyncio imported at module scope (L7)
 
         # Get current event loop ID for tracking
         try:
@@ -7833,7 +7877,7 @@ class DataFlow(DataFlowEventMixin):
 
         return node
 
-    def _execute_ddl(self, schema_sql: Dict[str, List[str]] = None):
+    def _execute_ddl(self, schema_sql: Optional[Dict[str, List[str]]] = None):
         """Execute DDL statements to create tables (sync version).
 
         IMPORTANT: This is the sync version. If you are calling from an async context,
@@ -7914,7 +7958,9 @@ class DataFlow(DataFlowEventMixin):
             # Index / FK / type / schema setup failures continue under legacy
             # semantics — same disposition as the prior AsyncSQLDatabaseNode path.
 
-    async def _execute_ddl_async(self, schema_sql: Dict[str, List[str]] = None):
+    async def _execute_ddl_async(
+        self, schema_sql: Optional[Dict[str, List[str]]] = None
+    ):
         """Execute DDL statements to create tables (async version).
 
         Issue #714 fix: routes the entire DDL batch through ONE sync connection
@@ -8369,7 +8415,7 @@ class DataFlow(DataFlowEventMixin):
             for model_name in model_names:
                 self._create_table_sync(model_name)
 
-    def create_tables_sync(self, database_type: str = None):
+    def create_tables_sync(self, database_type: Optional[str] = None):
         """Create database tables for all registered models using synchronous DDL.
 
         This method uses SyncDDLExecutor which works in ANY context:
@@ -9529,7 +9575,7 @@ class DataFlow(DataFlowEventMixin):
                         f"Auto-detected reverse relationship: {table_name}.{rel_name} -> {other_table}"
                     )
 
-    def get_relationships(self, model_name: str = None) -> Dict[str, Any]:
+    def get_relationships(self, model_name: Optional[str] = None) -> Dict[str, Any]:
         """Get relationship definitions for a model or all models."""
         if not hasattr(self, "_relationships"):
             return {}
@@ -9630,6 +9676,7 @@ class DataFlow(DataFlowEventMixin):
         try:
             # Get database connection
             conn = await self._get_async_database_connection()
+            assert conn is not None, "could not acquire async database connection"
 
             # Clean up any tables that look like test tables
             test_table_patterns = [
@@ -9715,8 +9762,11 @@ class DataFlow(DataFlowEventMixin):
             try:
                 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-                # Snapshot to prevent RuntimeError on concurrent dict mutation
-                pools_snapshot = list(AsyncSQLDatabaseNode._shared_pools.items())
+                # Snapshot to prevent RuntimeError on concurrent dict mutation.
+                # Subclass-scoped attr; pyright sees only type[Node] base.
+                pools_snapshot = list(
+                    getattr(AsyncSQLDatabaseNode, "_shared_pools").items()
+                )
                 for _key, (adapter, _ref) in pools_snapshot:
                     # Scope: only read pools matching this DataFlow's database
                     if db_url and db_url not in _key:
@@ -9820,7 +9870,7 @@ class DataFlow(DataFlowEventMixin):
         - Persistent :memory: connections
         - Shared runtime (actual cleanup at ref_count=0)
         """
-        import asyncio
+        # asyncio imported at module scope (L7)
 
         if self._closed:
             return
@@ -10284,7 +10334,7 @@ class DataFlow(DataFlowEventMixin):
 
     # ---- Workflow Binding Integration ----
 
-    def create_workflow(self, workflow_id: str = None) -> "WorkflowBuilder":
+    def create_workflow(self, workflow_id: Optional[str] = None) -> "WorkflowBuilder":
         """Create a workflow bound to this DataFlow instance.
 
         Creates a WorkflowBuilder that can be used with add_node() and
@@ -10377,7 +10427,7 @@ class DataFlow(DataFlowEventMixin):
         self._ensure_connected()
         return self._workflow_binder.execute(workflow, inputs, runtime)
 
-    def get_available_nodes(self, model_name: str = None) -> Dict[str, list]:
+    def get_available_nodes(self, model_name: Optional[str] = None) -> Dict[str, list]:
         """Get available DataFlow nodes for workflow composition.
 
         Args:

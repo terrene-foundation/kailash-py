@@ -212,12 +212,12 @@ class ConnectionParser:
 
     @staticmethod
     def build_connection_string(
-        scheme: str,
-        host: str,
-        database: str,
-        username: str = None,
-        password: str = None,
-        port: int = None,
+        scheme: Optional[str],
+        host: Optional[str],
+        database: Optional[str],
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        port: Optional[int] = None,
         **params,
     ) -> str:
         """
