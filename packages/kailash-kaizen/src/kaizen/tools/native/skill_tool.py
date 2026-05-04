@@ -95,8 +95,10 @@ class SkillTool(BaseTool):
 
     async def execute(
         self,
+        *,
         skill_name: str,
         load_additional_files: bool = True,
+        **kwargs: Any,
     ) -> NativeToolResult:
         """Invoke a registered skill.
 

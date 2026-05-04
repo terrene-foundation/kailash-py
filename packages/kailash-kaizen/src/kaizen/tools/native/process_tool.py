@@ -31,7 +31,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
@@ -364,8 +364,9 @@ class KillShellTool(BaseTool):
 
     async def execute(
         self,
+        *,
         shell_id: str,
-        **kwargs,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Kill a background shell.
 
@@ -477,10 +478,11 @@ class TaskOutputTool(BaseTool):
 
     async def execute(
         self,
+        *,
         task_id: str,
         block: bool = True,
         timeout: float = 30000,
-        **kwargs,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Get task output.
 

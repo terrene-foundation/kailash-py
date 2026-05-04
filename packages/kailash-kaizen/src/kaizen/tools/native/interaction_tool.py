@@ -33,7 +33,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union, cast
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
@@ -245,9 +245,10 @@ class AskUserQuestionTool(BaseTool):
 
     async def execute(
         self,
+        *,
         questions: List[Dict[str, Any]],
         metadata: Optional[Dict[str, Any]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> NativeToolResult:
         """Ask user questions and collect answers.
 
@@ -343,17 +344,20 @@ class AskUserQuestionTool(BaseTool):
                     metadata=metadata or {},
                 )
 
-            # Call user callback
+            # Call user callback. Bind to local so pyright can narrow on the
+            # Union[sync, async] callable across the iscoroutinefunction branch
+            # (attribute narrowing across await is not supported).
+            cb = self._user_callback
             try:
                 # Handle both sync and async callbacks
-                if asyncio.iscoroutinefunction(self._user_callback):
-                    answers = await asyncio.wait_for(
-                        self._user_callback(parsed_questions),
+                if asyncio.iscoroutinefunction(cb):
+                    answers_raw = await asyncio.wait_for(
+                        cb(parsed_questions),
                         timeout=self._timeout_seconds,
                     )
                 else:
-                    answers = await asyncio.wait_for(
-                        asyncio.to_thread(self._user_callback, parsed_questions),
+                    answers_raw = await asyncio.wait_for(
+                        asyncio.to_thread(cb, parsed_questions),
                         timeout=self._timeout_seconds,
                     )
             except asyncio.TimeoutError:
@@ -365,8 +369,14 @@ class AskUserQuestionTool(BaseTool):
                 logger.error(f"User callback failed: {e}")
                 return NativeToolResult.from_error(f"User callback failed: {e}")
 
-            # Store answers
-            self._answers = answers if answers else []
+            # Store answers. Cast resolves the Union[List, Awaitable] inferred
+            # signature — both branches above ultimately resolve to a concrete
+            # List[QuestionAnswer] at runtime (asyncio.wait_for awaits both
+            # the coroutine and the to_thread future).
+            answers: List[QuestionAnswer] = (
+                cast("List[QuestionAnswer]", answers_raw) if answers_raw else []
+            )
+            self._answers = answers
             self._pending_questions = []  # Clear pending
 
             # Format answers for output
