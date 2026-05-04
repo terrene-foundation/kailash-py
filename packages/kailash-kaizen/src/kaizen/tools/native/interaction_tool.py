@@ -30,9 +30,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union, cast
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
@@ -248,7 +247,7 @@ class AskUserQuestionTool(BaseTool):
         *,
         questions: List[Dict[str, Any]],
         metadata: Optional[Dict[str, Any]] = None,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Ask user questions and collect answers.
 
