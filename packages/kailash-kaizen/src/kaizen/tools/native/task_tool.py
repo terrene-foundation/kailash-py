@@ -124,7 +124,7 @@ class TaskTool(BaseTool):
         max_turns: Optional[int] = None,
         run_in_background: bool = False,
         resume: Optional[str] = None,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Spawn and execute a subagent.
 

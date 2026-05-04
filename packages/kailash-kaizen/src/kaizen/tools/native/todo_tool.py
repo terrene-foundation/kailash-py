@@ -279,7 +279,7 @@ class TodoWriteTool(BaseTool):
         self,
         *,
         todos: List[Dict[str, Any]],
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Update the todo list with new items.
 

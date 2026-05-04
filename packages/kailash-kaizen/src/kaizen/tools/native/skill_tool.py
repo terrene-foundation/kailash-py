@@ -98,7 +98,7 @@ class SkillTool(BaseTool):
         *,
         skill_name: str,
         load_additional_files: bool = True,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Invoke a registered skill.
 
