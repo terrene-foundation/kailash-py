@@ -1,54 +1,70 @@
-# Session Notes — workspace seed (2026-05-03)
-
-Workspace opened for the multi-shard cleanup of issue #781 — 244 `TODO-NNN`
-tracker tags across 118 production-source files violating zero-tolerance Rule 2.
+# Session Notes — 2026-05-04 (post-cycle hygiene: 3 follow-up issues filed)
 
 ## Where we are
 
-Empty workspace. No analysis, no plan, no shards yet. `briefs/01-issue-781.md`
-holds the issue body verbatim as the entry brief.
+Issue #781 cycle fully closed. The three drafted follow-up issues have now
+been filed against `terrene-foundation/kailash-py` per `rules/upstream-issue-hygiene.md`
+Rule 1 (per-issue user approval gate, "approve all" 2026-05-04):
+
+- **#814** — `fix(kaizen): resolve pre-existing pyright diagnostics in tools/native + research`
+  (29 errors + 8 warnings, MEDIUM; pyright-verified counts; surfaced ×3 finding clusters
+  the original draft missed — `search_tools.py` BaseTool overrides, `research/parser.py`
+  Optional-access, undeclared deps `duckduckgo_search`/`bs4`/`arxiv`/`pypdf`).
+- **#815** — `chore(kaizen-agents): apply Black + Ruff modernization sweep across packages/kaizen-agents/src/`
+  (89 black + 1804 ruff / 1608 fixable, LOW; counts confirmed against current main).
+- **#816** — `fix(nexus): test_ai_agent_discovery_and_exploration WebSocket connect fails on production_nexus._mcp_port`
+  (MEDIUM; SHA-grounded `b553104c` 2026-03-11; 8 sibling tests share fixture).
+
+All three bodies were promoted to file-ready state at `/tmp/issue-T{2,3,4}-*.md`
+before submission — workspace identifiers stripped, claims re-verified by
+mechanical sweep (parallel pyright + black/ruff + git log). Bodies follow the
+5-section shape from `upstream-issue-hygiene.md` Rule 3 with one ratified
+addition (Symptoms section, kept because BUILD-internal-issue scope permits
+extra context that cross-repo issues do not).
+
+## Prior session (2026-05-03)
+
+Loom finished py-axis distribution of the 2026-05-03 codify proposal
+(loom 2.15.1, kailash-coc-claude-py 3.6.12, kailash-coc-py 1.1.11).
+PR #812 archived `latest.yaml` to `archive/2026-05-03-kailash-py.yaml`
+and flipped `latest.yaml` to `status: distributed`. Admin-merged at
+`a28caf0d`. Next /codify cycle can overwrite `latest.yaml` cleanly.
 
 ## Read first
 
-1. `briefs/01-issue-781.md` — issue body, 244-hit grep recipe, three-class taxonomy, 5-row acceptance list
-2. `../../SWEEP-2026-05-03.md` § "Issue #781" — sweep-finding context + sizing rationale
-3. `rules/zero-tolerance.md` Rule 2 + Rule 6 — the canonical contract being violated; iterative-TODO exception
+1. `.claude/.proposals/latest.yaml` — distributed-state proposal; the next
+   `/codify` overwrites this. Reference for what shipped.
+2. `.claude/.proposals/archive/2026-05-03-kailash-py.yaml` — preserved audit
+   trail for the codify→sync→distribute round-trip.
+3. `deploy/deployment-config.md` — current PyPI versions for all packages.
+4. `CLAUDE.md` — repo directives + framework-first contract.
 
 ## In-flight state
 
-Nothing in flight. Workspace was opened in the post-2.18.0-cycle sweep close-out;
-implementation has not started.
+- Loom rs + rb axes still pending separate `/sync rs` / `/sync rb` cycles —
+  not a BUILD-side action; surfaces only if user opens a session at loom/.
+- Untracked workspace artifacts (now FILED-and-traceable) ready for a hygiene
+  commit/PR: `03-implementation/T3-followup-issue-kaizen-agents-formatter.md`,
+  `03-implementation/T4-followup-issue-nexus-e2e-port.md`,
+  `03-implementation/T6-issue-781-close-comment.md`,
+  `04-validate/01-redteam-round-1.md`,
+  `journal/0006-DECISION-three-layer-ci-gate-pattern.md`,
+  plus this `.session-notes` modification. T2/T3/T4 draft files now
+  reference filed issue #s (#814/#815/#816) for grep-able traceability.
+- Three follow-up issues filed (no longer in-flight): #814, #815, #816.
+- Pre-existing cruft on working tree: `uv.lock` ×3 (root + dataflow + kaizen),
+  `.kailash_ml/artifacts/`, `examples/`, `.claude/.proposals/latest.yaml`
+  (loom-distributed; next /codify overwrites). Not this cycle's work.
 
 ## Traps
 
-- The `TODO-NNN` regex in the issue intentionally excludes `TODO` without
-  the numeric suffix — this is the tracker-tag dialect the SDK has accumulated,
-  not the bare `TODO` form. Keep the cleanup scoped to the tagged form OR
-  expand scope explicitly in Phase 1 with user approval.
-- Three classes per issue body — completed-work breadcrumbs, active iterative
-  TODOs, obsolete trackers. The first class is REWRITTEN (to `(V<release>-NNN)`),
-  the second LINKED (to a tracker), the third DELETED. Don't rewrite-all
-  blindly; mid-class confusion is the failure mode.
-- 244 hits / 118 files / 98 distinct tracker IDs — sized at 3–5 sessions per
-  the sweep finding. Shard candidates: per-package (kailash-runtime, kailash-dataflow,
-  kaizen-agents, kaizen-core, kailash-ml, kailash-pact, …) OR per-tracker-ID
-  cluster (TODO-001..050, TODO-051..100, …). /todos picks one.
-- Acceptance criterion 6 (CI grep gate) is a closing shard, not a per-file
-  shard. Land it last so the cleanup-then-gate ratchet actually holds.
-
-## Open questions for the human
-
-- Sharding strategy: per-package OR per-tracker-ID range? (recommend per-package
-  to keep blast radius bounded to one importable surface per shard)
-- Class-1 (completed-work breadcrumb) rewrite target: `(V<release>-NNN)` per the
-  issue body suggestion, OR a different non-keyword convention?
-- CI gate placement: pre-commit hook (per-file local), GH Actions workflow
-  (PR-gate), or both?
-
-## Next session entry point
-
-`/analyze` — load phase 01 against this workspace. The brief is in `briefs/`,
-the spec contract is `rules/zero-tolerance.md`. Per `rules/agents.md` MUST
-"Parallel Brief-Claim Verification" — issue body asserts ≥3 distinct claims
-(244 hits / 118 files / 98 IDs / 3-class taxonomy + 5-bullet acceptance);
-spawn parallel deep-dive verification before producing the architecture plan.
+- Pre-commit `check-yaml` fails on proposals with embedded colons in
+  unquoted scalars (e.g. version-range strings). When archiving via
+  /codify, copy from `git show HEAD:` not the working-tree file if loom
+  has appended distribution metadata mid-edit.
+- BUILD-repo standing rule: never push/merge without per-action approval.
+  User uses "approved" / "continue" to drive the release pipeline.
+- `git reset --keep HEAD~1` (not `--hard`) is correct for backing out a
+  local-only commit; remote main is protected.
+- `pyenv: cannot rehash` lock errors from another account's zombie procs.
+  `uv` bypasses pyenv so most commands still work.
