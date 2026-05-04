@@ -18,6 +18,18 @@ from kaizen.tools.types import DangerLevel, ToolCategory
 
 logger = logging.getLogger(__name__)
 
+# Lazy-import sentinel for beautifulsoup4 (declared in
+# pyproject.toml::[project.optional-dependencies].web-search).
+# Module-scope import sentinel — NOT a silent fallback per
+# `rules/dependencies.md` BLOCKED anti-patterns. _extract_text() raises
+# at call site when this sentinel is None, surfacing a typed
+# `NativeToolResult.from_error` to the caller; users who do NOT pass
+# extract_text=True never trigger the sentinel.
+try:
+    from bs4 import BeautifulSoup as _BeautifulSoup
+except ImportError:
+    _BeautifulSoup = None  # type: ignore[assignment]
+
 
 class WebSearchTool(BaseTool):
     """
@@ -275,7 +287,10 @@ class WebFetchTool(BaseTool):
 
                     # Extract text if requested
                     if extract_text:
-                        content = self._extract_text(content)
+                        try:
+                            content = self._extract_text(content)
+                        except ImportError as exc:
+                            return NativeToolResult.from_error(str(exc))
 
                     return NativeToolResult.from_success(
                         content,
@@ -297,32 +312,33 @@ class WebFetchTool(BaseTool):
             return NativeToolResult.from_error(f"Fetch failed: {str(e)}")
 
     def _extract_text(self, html: str) -> str:
-        """Extract text content from HTML."""
-        try:
-            from bs4 import BeautifulSoup
+        """Extract text content from HTML.
 
-            soup = BeautifulSoup(html, "html.parser")
-
-            # Remove script and style elements
-            for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-                tag.decompose()
-
-            # Get text
-            text = soup.get_text(separator="\n", strip=True)
-
-            # Clean up whitespace
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            return "\n".join(lines)
-
-        except ImportError:
-            logger.warning(
-                "beautifulsoup4 not installed, returning raw HTML. "
-                "Install with: pip install beautifulsoup4"
+        Raises:
+            ImportError: when beautifulsoup4 is not installed. Loud failure
+                per ``rules/dependencies.md`` (no silent fallback to raw
+                HTML — the caller asked for extracted text and MUST be
+                told if extraction did not happen).
+        """
+        if _BeautifulSoup is None:
+            raise ImportError(
+                "extract_text=True requires beautifulsoup4 — install via "
+                "`pip install 'kailash-kaizen[web-search]'` or pass "
+                "extract_text=False to receive raw HTML."
             )
-            return html
-        except Exception as e:
-            logger.warning(f"Text extraction failed: {e}, returning raw content")
-            return html
+
+        soup = _BeautifulSoup(html, "html.parser")
+
+        # Remove script and style elements
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+
+        # Get text
+        text = soup.get_text(separator="\n", strip=True)
+
+        # Clean up whitespace
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return "\n".join(lines)
 
     def get_schema(self) -> Dict[str, Any]:
         return {

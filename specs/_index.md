@@ -42,6 +42,7 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | [kaizen-judges.md](kaizen-judges.md)                     | **LLMDiagnostics + LLMJudge** (cross-SDK JudgeCallable + Diagnostic Protocols, PR#5 of #567): Delegate-routed LLM-as-judge with position-swap bias mitigation, microdollar budget enforcement, `[judges]` extra                                                                             |
 | [kaizen-evaluation.md](kaizen-evaluation.md)             | **Algorithmic NLP metrics** (ROUGE / BLEU / BERTScore, split from `kaizen.judges` per SYNTHESIS PR#5): pure-math reference comparison, no LLM / cost / budget surface, `[evaluation]` extra                                                                                                 |
 | [kaizen-observability.md](kaizen-observability.md)       | **AgentDiagnostics + TraceExporter** (cross-SDK Diagnostic + TraceEvent Protocols, PR#6 of #567): context-managed agent-run diagnostics, single-filter-point sink adapter with N4 canonical fingerprint parity (kailash-rs#468 / v3.17.1+), BaseAgent hot-path wiring, no Langfuse coupling |
+| [kaizen-tools.md](kaizen-tools.md)                       | **BaseTool family contract** (#814): `async def execute(self, **kwargs) -> NativeToolResult` LSP-permissive base + 22-subclass override pattern, `ToolRegistry` dispatcher, `BaseTool.get_schema()` LLM-facing surface, error contract, `[research]` + `[web-search]` optional extras       |
 
 ## Kaizen Agents (Layer 2 Patterns)
 
