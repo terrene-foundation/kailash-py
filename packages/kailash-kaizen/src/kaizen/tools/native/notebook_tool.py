@@ -104,12 +104,13 @@ class NotebookEditTool(BaseTool):
 
     async def execute(
         self,
+        *,
         notebook_path: str,
         new_source: str,
         cell_id: Optional[str] = None,
         cell_type: str = "code",
         edit_mode: str = "replace",
-        **kwargs,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Edit a Jupyter notebook cell.
 
@@ -220,11 +221,19 @@ class NotebookEditTool(BaseTool):
 
             # Perform edit
             if mode == EditMode.REPLACE:
+                # cell_id is guaranteed non-None by validator at L188
+                assert cell_id is not None
                 result = self._replace_cell(notebook, cell_id, new_source, ctype)
             elif mode == EditMode.INSERT:
                 result = self._insert_cell(notebook, cell_id, new_source, ctype)
             elif mode == EditMode.DELETE:
+                # cell_id is guaranteed non-None by validator at L188
+                assert cell_id is not None
                 result = self._delete_cell(notebook, cell_id)
+            else:
+                raise RuntimeError(
+                    f"unreachable: EditMode {mode!r} not handled — validator drift"
+                )
 
             if not result["success"]:
                 return NativeToolResult.from_error(result["error"])

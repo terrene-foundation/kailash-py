@@ -12,7 +12,7 @@ Performance Target: <1 second per adaptation
 import importlib
 import inspect
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from kaizen.signatures import Signature
 
@@ -109,13 +109,13 @@ class ResearchAdapter:
 
             def __init__(self):
                 """Initialize with paper metadata."""
-                # Initialize with inputs/outputs to satisfy Signature requirements
-                inputs = (
-                    {name: f"Input {name}" for name in param_names}
-                    if param_names
-                    else {"input": "Input data"}
-                )
-                outputs = {"result": "Research result"}
+                # Signature.__init__ requires List[str] for `inputs` and
+                # List[str | List[str]] for `outputs` — the parameter names,
+                # not a name->description dict. Passing dicts here silently
+                # corrupts Signature._inputs_list (typed List[str]). See
+                # issue #814.
+                inputs: List[str] = list(param_names) if param_names else ["input"]
+                outputs: List[Union[str, List[str]]] = ["result"]
                 super().__init__(inputs=inputs, outputs=outputs)
 
                 self.paper_id = paper.arxiv_id

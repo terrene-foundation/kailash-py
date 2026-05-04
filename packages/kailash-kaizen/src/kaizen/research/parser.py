@@ -73,7 +73,7 @@ class ResearchParser:
             ValueError: If paper not found or invalid ID
             ImportError: If arxiv library is not installed
         """
-        if not ARXIV_AVAILABLE:
+        if not ARXIV_AVAILABLE or arxiv is None:
             raise ImportError(
                 "arxiv library is required for parsing arXiv papers. "
                 "Install with: pip install arxiv"
@@ -123,7 +123,7 @@ class ResearchParser:
             FileNotFoundError: If PDF file not found
             ImportError: If pypdf library is not installed
         """
-        if not PYPDF_AVAILABLE:
+        if not PYPDF_AVAILABLE or PdfReader is None:
             raise ImportError(
                 "pypdf library is required for parsing PDF files. "
                 "Install with: pip install pypdf"

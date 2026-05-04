@@ -10,7 +10,7 @@ Tools:
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
@@ -63,8 +63,10 @@ class WebSearchTool(BaseTool):
 
     async def execute(
         self,
+        *,
         query: str,
         num_results: int = 5,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """
         Search the web.
@@ -226,8 +228,10 @@ class WebFetchTool(BaseTool):
 
     async def execute(
         self,
+        *,
         url: str,
         extract_text: bool = True,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """
         Fetch content from URL.

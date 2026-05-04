@@ -277,8 +277,9 @@ class TodoWriteTool(BaseTool):
 
     async def execute(
         self,
+        *,
         todos: List[Dict[str, Any]],
-        **kwargs,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Update the todo list with new items.
 

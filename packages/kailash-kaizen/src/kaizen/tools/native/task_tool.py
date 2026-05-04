@@ -116,6 +116,7 @@ class TaskTool(BaseTool):
 
     async def execute(
         self,
+        *,
         subagent_type: str,
         prompt: str,
         description: str = "",
@@ -123,6 +124,7 @@ class TaskTool(BaseTool):
         max_turns: Optional[int] = None,
         run_in_background: bool = False,
         resume: Optional[str] = None,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Spawn and execute a subagent.
 
@@ -280,6 +282,14 @@ class TaskTool(BaseTool):
             SubagentResult with execution output and metrics
         """
         # Get specialist-configured adapter
+        if self._adapter is None:
+            return SubagentResult.from_error(
+                subagent_id=subagent_id,
+                error_message=(
+                    "TaskTool._adapter is None — construct via "
+                    "TaskTool(adapter=...) with a non-None adapter"
+                ),
+            )
         specialist_adapter = self._adapter.for_specialist(subagent_type)
         if specialist_adapter is None:
             return SubagentResult.from_error(

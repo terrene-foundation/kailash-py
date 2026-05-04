@@ -13,7 +13,6 @@ Security Features:
 
 import asyncio
 import re
-import subprocess
 from typing import Any, Dict, List, Optional
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
@@ -124,9 +123,11 @@ class BashTool(BaseTool):
 
     async def execute(
         self,
+        *,
         command: str,
         timeout: int = 120,
         cwd: Optional[str] = None,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """
         Execute bash command.

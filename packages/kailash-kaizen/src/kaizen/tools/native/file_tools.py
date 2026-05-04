@@ -17,9 +17,7 @@ import asyncio
 import glob as glob_module
 import os
 import re
-import subprocess
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import aiofiles
 
@@ -59,9 +57,11 @@ class ReadFileTool(BaseTool):
 
     async def execute(
         self,
+        *,
         path: str,
         offset: int = 0,
         limit: int = 2000,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Read file contents with pagination."""
         # Validate path
@@ -152,7 +152,13 @@ class WriteFileTool(BaseTool):
         super().__init__()
         self.allowed_base = allowed_base
 
-    async def execute(self, path: str, content: str) -> NativeToolResult:
+    async def execute(
+        self,
+        *,
+        path: str,
+        content: str,
+        **_kwargs: Any,
+    ) -> NativeToolResult:
         """Write content to file."""
         # Validate path
         if self.allowed_base:
@@ -224,10 +230,12 @@ class EditFileTool(BaseTool):
 
     async def execute(
         self,
+        *,
         path: str,
         old_string: str,
         new_string: str,
         replace_all: bool = False,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Edit file with string replacement."""
         # Validate path
@@ -325,8 +333,10 @@ class GlobTool(BaseTool):
 
     async def execute(
         self,
+        *,
         pattern: str,
         path: str = ".",
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Find files matching glob pattern."""
         try:
@@ -398,10 +408,12 @@ class GrepTool(BaseTool):
 
     async def execute(
         self,
+        *,
         pattern: str,
         path: str = ".",
         file_glob: str = "*",
         case_insensitive: bool = False,
+        **_kwargs: Any,
     ) -> NativeToolResult:
         """Search for pattern in files."""
         try:
@@ -436,7 +448,7 @@ class GrepTool(BaseTool):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
+            stdout, _stderr = await asyncio.wait_for(
                 process.communicate(),
                 timeout=30.0,
             )
@@ -566,7 +578,12 @@ class ListDirectoryTool(BaseTool):
     danger_level = DangerLevel.SAFE
     category = ToolCategory.SYSTEM
 
-    async def execute(self, path: str) -> NativeToolResult:
+    async def execute(
+        self,
+        *,
+        path: str,
+        **_kwargs: Any,
+    ) -> NativeToolResult:
         """List directory contents."""
         if not os.path.isabs(path):
             return NativeToolResult.from_error(f"Path must be absolute: {path}")
@@ -640,7 +657,12 @@ class FileExistsTool(BaseTool):
     danger_level = DangerLevel.SAFE
     category = ToolCategory.SYSTEM
 
-    async def execute(self, path: str) -> NativeToolResult:
+    async def execute(
+        self,
+        *,
+        path: str,
+        **_kwargs: Any,
+    ) -> NativeToolResult:
         """Check if file/directory exists."""
         try:
             exists = os.path.exists(path)
