@@ -24,50 +24,13 @@ the implementation function's parameters.
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 import types
-from pathlib import Path
 
 import pytest
 
-# Load `adapter.py` and `parser.py` directly from disk via spec-from-file
-# rather than `from kaizen.research.adapter import ...`. The parent package
-# `kaizen.research.__init__` carries vestigial imports of moved modules
-# (`advanced_patterns`, `experimental`, `intelligent_optimizer`) that were
-# relocated to `kaizen-agents` by PR #75 and not yet deleted from the
-# `__init__` re-export list — pre-existing condition handled by Shard 2 of
-# issue #814. Loading the adapter module directly bypasses that broken
-# init and exercises the unit under test.
-_research_dir = Path(__file__).resolve().parents[2] / "src" / "kaizen" / "research"
-
-
-def _load_module(name: str, path: Path) -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-# parser.py first so adapter.py's `from .parser import ResearchPaper`
-# resolves against this loaded copy.
-_parser_mod = _load_module("kaizen.research.parser", _research_dir / "parser.py")
-# adapter.py imports `from .parser import ResearchPaper` — that relative
-# import will look up `kaizen.research.parser` in sys.modules, which we
-# just populated, and skip re-executing the parent `kaizen.research`
-# init. We register a stub package module to satisfy the relative import
-# machinery.
-if "kaizen.research" not in sys.modules:
-    _stub = types.ModuleType("kaizen.research")
-    _stub.__path__ = [str(_research_dir)]  # type: ignore[attr-defined]
-    sys.modules["kaizen.research"] = _stub
-    sys.modules["kaizen.research"].parser = _parser_mod  # type: ignore[attr-defined]
-
-_adapter_mod = _load_module("kaizen.research.adapter", _research_dir / "adapter.py")
-ResearchAdapter = _adapter_mod.ResearchAdapter
-ResearchPaper = _parser_mod.ResearchPaper
+from kaizen.research.adapter import ResearchAdapter
+from kaizen.research.parser import ResearchPaper
 
 
 @pytest.fixture

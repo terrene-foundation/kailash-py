@@ -23,20 +23,6 @@ Integration Points:
 """
 
 from .adapter import ResearchAdapter, SignatureAdapter
-from .advanced_patterns import (
-    AdaptivePattern,
-    AdvancedPatternBuilder,
-    CompositionalPattern,
-    HierarchicalPattern,
-    MetaLearningPattern,
-)
-from .compatibility_checker import CompatibilityChecker
-from .documentation_generator import DocumentationGenerator
-from .experimental import ExperimentalFeature
-from .feature_manager import FeatureManager
-from .feature_optimizer import FeatureOptimizer
-from .integration_workflow import IntegrationWorkflow
-from .intelligent_optimizer import IntelligentOptimizer
 from .parser import ResearchPaper, ResearchParser
 from .registry import RegistryEntry, ResearchRegistry
 from .validator import ResearchValidator, ValidationResult
@@ -50,16 +36,4 @@ __all__ = [
     "SignatureAdapter",
     "ResearchRegistry",
     "RegistryEntry",
-    "ExperimentalFeature",
-    "FeatureManager",
-    "IntegrationWorkflow",
-    "CompatibilityChecker",
-    "FeatureOptimizer",
-    "DocumentationGenerator",
-    "AdvancedPatternBuilder",
-    "CompositionalPattern",
-    "HierarchicalPattern",
-    "AdaptivePattern",
-    "MetaLearningPattern",
-    "IntelligentOptimizer",
 ]

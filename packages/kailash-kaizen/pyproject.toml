@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.18.1"
+version = "2.18.2"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -112,6 +112,20 @@ evaluation = [
     "rouge-score>=0.1.2",
     "sacrebleu>=2.4",
     "bert-score>=0.3.13",
+]
+# Research surface — arxiv paper search + PDF parsing for ResearchParser
+# (#814 — declare lazy-import deps in research/parser.py).
+research = [
+    "arxiv>=2.0",
+    "pypdf>=4.0",
+]
+# Web-search surface — DuckDuckGo search + HTML extraction for
+# WebSearchTool/WebFetchTool (#814 — declare lazy-import deps in
+# tools/native/search_tools.py + convert bs4 silent-degradation to
+# loud failure).
+web-search = [
+    "duckduckgo-search>=6.0",
+    "beautifulsoup4>=4.12",
 ]
 
 [project.urls]
