@@ -227,7 +227,7 @@ Tier 2 / Tier 3 coverage is via the production caller path (`kaizen_local.py`
 - `rules/dependencies.md` — Lazy-import sentinel + optional-extras patterns
 - `rules/zero-tolerance.md` Rule 6a — Public-API removal + deprecation cycle
 
-## §X Change Log
+## Change Log
 
 - 2026-05-04 (#814): created. Documents the BaseTool contract as it ships
   after PR #818 (Cluster A: 17 BaseTool override sites widened to keyword-only
