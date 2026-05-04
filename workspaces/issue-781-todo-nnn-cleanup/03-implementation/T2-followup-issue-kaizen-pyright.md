@@ -1,6 +1,8 @@
-# Draft GH issue — kaizen pyright cleanup (follow-up to T2)
+# GH issue — kaizen pyright cleanup (follow-up to T2)
 
-**DO NOT FILE WITHOUT EXPLICIT USER APPROVAL** (per `rules/upstream-issue-hygiene.md` MUST Rule 1).
+**FILED 2026-05-04 as terrene-foundation/kailash-py#814** (per `rules/upstream-issue-hygiene.md` MUST Rule 1, with explicit user approval). Body promoted to file-ready state at `/tmp/issue-T2-kaizen-pyright.md` before submission — workspace identifiers stripped, counts updated against current pyright run (29 errors + 8 warnings).
+
+This file retained as institutional history of the discovery context (T2 of issue #781 cleanup).
 
 ## Title
 
