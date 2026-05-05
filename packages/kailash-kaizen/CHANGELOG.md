@@ -65,6 +65,22 @@ The `FeatureManager`, `IntegrationWorkflow`, `DocumentationGenerator`, `Compatib
 
 The remaining `kaizen.research` public surface (`ResearchAdapter`, `ResearchParser`, `ResearchValidator`, `ResearchRegistry`, `SignatureAdapter`, `ResearchPaper`, `ValidationResult`, `RegistryEntry`) is unchanged.
 
+- **(BREAKING) Dead MCP integration surface predating `apps/`→`packages/` move — 12 methods + 1 dead branch removed from `kaizen.core.agents.Agent` (CoreAgent) and `kaizen.core.framework.Kaizen` (closes #822 Shard 2).** Twelve documented public methods imported `..mcp.registry::get_global_registry`, `..mcp::AutoDiscovery`, or `..mcp::MCPConnection` — none of which have ever existed in the kaizen source tree at any commit (`git log --oneline --all -- 'packages/kailash-kaizen/src/kaizen/mcp/registry.py'` returns empty; `kaizen/mcp/__init__.py::__all__` has been `["EnterpriseFeatures", "MCPServerConfig"]` since `b553104c` — the original `apps/`→`packages/` move). The methods were wrapped in `try/except ImportError` (or `try/except Exception:`) blocks that ALWAYS fell through, returning `None`, `[]`, or error dicts. Per `rules/zero-tolerance.md` Rule 2 (no fake integration on documented public API) and `rules/dependencies.md` BLOCKED Anti-Patterns (`# type: ignore[import-not-found]` is BLOCKED for hiding a missing module), deletion is the only valid disposition. Deleted from `kaizen.core.agents.Agent`: `expose_as_mcp_server`, `expose_as_mcp_tool`, `get_mcp_tool_registry`, `execute_mcp_tool`, `connect_to_mcp_servers`, `call_mcp_tool`, `_call_mcp_tool` (private), `_discover_servers` (private). Deleted from `kaizen.core.framework.Kaizen`: `mcp_registry` property, `expose_agent_as_mcp_tool`, `list_mcp_tools`, `discover_mcp_tools`. Net deletion: ~600 LOC from `agents.py` (3456 → 2858) + ~200 LOC from `framework.py` (2418 → 2217). LOC invariant tests at `tests/regression/test_issue_822_loc_invariant.py` guard against silent re-introduction.
+
+#### Migration — #822 Shard 2
+
+**Blast radius is scoped to direct CoreAgent imports.** Per `kaizen/__init__.py:15-20`, the canonical user surface `kaizen.Agent` resolves to `kaizen_agents.Agent` (when `kaizen-agents` is installed — the documented ADR-020 path) which never had these methods. Deletion only affects users who explicitly imported `from kaizen.core.agents import Agent`.
+
+These methods have been broken since the original `apps/`→`packages/` move (`b553104c`). The deletion makes the non-functionality explicit instead of hiding it behind broad exception swallows.
+
+Migration targets:
+
+- For external MCP server / tool exposure → use the `kailash-mcp` package directly.
+- For in-process MCP registry → use `kaizen.mcp.catalog_server.MemoryRegistry`
+  (`packages/kailash-kaizen/src/kaizen/mcp/catalog_server/registry.py:43`).
+
+Per `rules/zero-tolerance.md` Rule 6a, public-API removal normally requires a `DeprecationWarning` shim covering one minor cycle. **No shim owed**: the methods raised `ModuleNotFoundError` (or returned error sentinels) on every import attempt since `b553104c`. There is no working public surface to deprecate.
+
 ### Fixed
 
 - **`kaizen.research.adapter.ResearchAdapter.create_signature_adapter` passed `dict` to `Signature(inputs=, outputs=)` which expects `List[str]` (closes #814 Cluster D, shipped in #818).** The adapter was silently corrupting `Signature._inputs_list` since the file was authored — `_inputs_list` was populated with dict iteration order rather than parameter names. Behavioral regression at `tests/regression/test_issue_814_research_adapter_inputs_list.py` exercises both the param-name path and the empty-params fallback.

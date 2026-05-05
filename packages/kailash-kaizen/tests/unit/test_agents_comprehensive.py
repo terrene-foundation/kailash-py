@@ -12,6 +12,7 @@ This test suite focuses on the 349 uncovered lines in agents.py, particularly:
 from unittest.mock import Mock
 
 import pytest
+
 from kaizen.core.agents import Agent, AgentManager
 from kaizen.signatures import Signature
 
@@ -589,75 +590,6 @@ class TestAgentMCPIntegration:
         """Set up test fixtures."""
         self.config = {"model": "gpt-4", "temperature": 0.7}
         self.agent = Agent("test_agent", self.config)
-
-    def test_expose_as_mcp_server(self):
-        """Test exposing agent as MCP server."""
-        # Use the correct parameters based on the actual method signature
-        result = self.agent.expose_as_mcp_server(
-            port=8080, tools=["test_tool"], auth="none"
-        )
-
-        # The method returns an MCPServerConfig object, not dict/None
-        assert result is not None
-        assert hasattr(result, "server_id")  # Check it's a server config object
-
-    def test_expose_as_mcp_tool(self):
-        """Test exposing agent as MCP tool."""
-        # Test the method exists and can be called (implementation may be minimal)
-        result = self.agent.expose_as_mcp_tool(
-            "ai_assistant",
-            "AI assistant tool",
-            {"type": "object", "properties": {"prompt": {"type": "string"}}},
-        )
-
-        # Should configure the agent as an MCP tool
-        assert result is None or isinstance(result, dict)
-
-    def test_connect_to_mcp_servers(self):
-        """Test connecting to MCP servers."""
-        servers = [
-            {"name": "server1", "url": "http://localhost:8080"},
-            {"name": "server2", "url": "http://localhost:8081"},
-        ]
-
-        result = self.agent.connect_to_mcp_servers(servers)
-
-        assert isinstance(result, list)
-        # Should return connection results or statuses
-
-    def test_get_mcp_tool_registry(self):
-        """Test getting MCP tool registry."""
-        registry = self.agent.get_mcp_tool_registry()
-
-        assert isinstance(registry, dict)
-        # Should return the current tool registry
-
-    def test_execute_mcp_tool(self):
-        """Test executing MCP tools."""
-        tool_name = "test_tool"
-        arguments = {"input": "test data"}
-
-        # Test the method exists and handles the call appropriately
-        result = self.agent.execute_mcp_tool(tool_name, arguments)
-
-        # Method should return a dict (even if empty implementation)
-        assert isinstance(result, dict)
-
-    def test_call_mcp_tool(self):
-        """Test calling MCP tools."""
-        server_name = "test_server"
-        tool_name = "search"
-        arguments = {"query": "AI research"}
-
-        # Mock the internal implementation
-        self.agent._call_mcp_tool = Mock(
-            return_value={"results": ["result1", "result2"]}
-        )
-
-        result = self.agent.call_mcp_tool(server_name, tool_name, arguments)
-
-        assert isinstance(result, dict)
-        # Should return tool execution results
 
     def test_cleanup(self):
         """Test agent cleanup functionality."""
