@@ -1,0 +1,162 @@
+source_repo: kailash-py
+codify_date: "2026-05-03"
+codify_session: |
+  Session 2026-05-03 — issue #781 TODO-NNN cleanup workstream completion
+  + 6-package release cycle.
+
+  Five implementation shards (T1 dataflow / T2 kaizen / T3 kaizen-agents /
+  T4 core+nexus / T5 CI gate) merged via PRs #804/#805/#806/#807/#808.
+  272 markers triaged across 5 packages. Three-layer hygiene gate landed
+  via T5 (#808) — pre-commit hook + shared bash script + Tier-2 regression
+  test, with synthetic-PR validation proving fail-on-untracked + pass-on-tracked.
+
+  Six-package release-prep PR #809 cut PyPI for kailash 2.13.4, kailash-dataflow
+  2.7.6, kailash-kaizen 2.18.1, kailash-nexus 2.6.1, kaizen-agents 0.9.5,
+  kailash-mcp 0.2.11 (sibling sweep per build-repo-release-discipline.md
+  Rule 1). All 6 publish-pypi.yml workflows succeeded; clean-venv install
+  + import verified for each at correct version. Issue #781 closed via T6
+  audit.
+
+  One genuinely-novel + reusable methodology surfaced:
+
+  1. **TODO-NNN cleanup methodology + three-layer canonical-regex gate
+     pattern.** Previously tacit knowledge (4-class disposition catalog,
+     three-layer gate pattern with single-source-of-truth bash script,
+     synthetic-PR validation protocol). Codified into new validation-
+     patterns sub-file `validate-codebase-hygiene-markers.md` + indexed
+     in SKILL.md. Reusable for any future workstream gating a regex out
+     of production source (FIXME, HACK, internal-tracker IDs, deprecated-
+     API references).
+
+  Most other patterns surfaced were textbook execution against existing
+  rules (sibling-package release sweep — already in build-repo-release-
+  discipline.md Rule 1; SHA-grounded pre-existing diagnostic disposition
+  — already in zero-tolerance.md Rule 1c; release-prep branch convention
+  — already in git.md; sequential tag pushes — already in deployment.md).
+
+  No agent changes; no rule additions. The skill sub-file is the single
+  new artifact.
+
+status: distributed
+reviewed_date: "2026-05-03"
+distributed_date: "2026-05-03T23:30:00Z"
+reviewed_notes: |
+  Both changes classified GLOBAL at loom Gate 1 (2026-05-03).
+  Methodology is language-agnostic; Python tooling examples (uv, pytest,
+  pre-commit, .egg-info, pyright) are illustrative concrete forms, not
+  prescriptive. Future kailash-rs / kailash-rb sync cycles inherit the
+  same skill sub-file with no variant overlay needed (rs translates
+  uv→cargo, pytest→nextest, .egg-info→target/, pre-commit→bash hook
+  at the same paths).
+distributed_to:
+  loom:
+    version: 2.15.1
+    sha: 6bef70b
+    commit: "release(coc): 2.15.1 — NEW GLOBAL skill skills/16-validation-patterns/validate-codebase-hygiene-markers.md (kailash-py /codify 2026-05-03)"
+  py_axis:
+    kailash-coc-claude-py:
+      version: 3.6.12
+      sha: 47ada5d
+      commit: "sync: 3.6.12 — loom 2.15.1 (commit 6bef70b)"
+    kailash-coc-py:
+      version: 1.1.11
+      sha: bd4f22e
+      commit: "sync: 1.1.11 — loom 2.15.1 (commit 6bef70b)"
+  rs_axis: pending  # /sync rs cycle outstanding
+  rb_axis: pending  # /sync rb cycle outstanding
+distribution_notes: |
+  py axis fully distributed (loom 2.15.1 + 2 templates committed).
+  rs + rb axes pending separate /sync rs / /sync rb invocations —
+  the same skill sub-file + SKILL.md update apply to both axes
+  without variant overlay (methodology is language-agnostic).
+  /sync rs at next session would: (1) cherry-pick loom 2.15.1
+  changes already on main, (2) distribute to kailash-coc-claude-rs +
+  kailash-coc-rs, (3) cargo check verification on each.
+  /sync rb similarly distributes to kailash-coc-claude-rb.
+
+changes:
+  - kind: skill_addition
+    path: .claude/skills/16-validation-patterns/validate-codebase-hygiene-markers.md
+    classification: global
+    summary: |
+      New validation-patterns sub-file capturing the TODO-NNN cleanup
+      methodology developed for issue #781. Covers:
+
+        - 4-class disposition catalog (Class 1a header banner / 1b docstring
+          provenance / 2 active iterative / 3 cross-reference) with per-class
+          rules + ambiguous-Class-1/2 boundary heuristic
+        - Three-layer hygiene gate pattern (.pre-commit-config.yaml local hook
+          + scripts/check_<name>.sh shared bash script + tests/regression/
+          test_no_untracked_<name>.py Tier-2 regression test)
+        - Synthetic-PR validation protocol (inject + verify-fail + add-tracker
+          + verify-pass + revert)
+        - Multi-shard cleanup strategy + release-cycle integration checklist
+        - Authoring gotchas (YAML scalar fragility with embedded colons in
+          pre-commit `entry:`, `grep -I` for binary-skip, `\.egg-info/`
+          exclusion shape)
+
+      Cross-language reusability note: pattern is language-agnostic; bash
+      script + regression test translate directly to cargo test / rspec /
+      equivalent. Worth global classification at loom Gate 1 (not Python-
+      variant) so future kailash-rs / kailash-rb hygiene workstreams
+      inherit the same methodology.
+
+    rationale: |
+      Genuinely-novel + reusable institutional knowledge. The 4-class
+      taxonomy + three-layer gate pattern survived through a 6-package
+      release cycle with the gate firing correctly on synthetic-PR
+      validation. Worth codifying as institutional knowledge so future
+      similar workstreams (FIXME scrub, deprecated-API reference scrub,
+      internal-tracker namespace migration) can reuse the methodology
+      without re-discovering it.
+
+    cross_sdk_consideration: |
+      The methodology is language-agnostic. kailash-rs and any future
+      kailash-rb would benefit from the same skill sub-file translated
+      to their toolchain (cargo test, rspec). Loom Gate 1 should
+      classify as global with cross-SDK propagation noted for the next
+      kailash-rs /sync cycle. NOT auto-filed per upstream-issue-hygiene
+      Rule 1.
+
+  - kind: skill_index_update
+    path: .claude/skills/16-validation-patterns/SKILL.md
+    classification: global
+    summary: |
+      - Added "Codebase Hygiene Validations" section in sub-file index
+        referencing the new validate-codebase-hygiene-markers.md
+      - Added missing reference to orphan-audit-playbook.md (companion
+        validation pattern that was previously not indexed despite being
+        a sub-file)
+      - Extended description keyword list with: 'codebase hygiene',
+        'TODO marker scrub', 'marker cleanup', 'three-layer gate',
+        'regex gate' (so semantic skill-loader picks up cleanup-workstream
+        queries)
+
+    rationale: |
+      Index-only update; no behavioral change to existing validations.
+      Required for the new sub-file to be discoverable via the skill's
+      progressive-disclosure entry point.
+
+deferred_for_codify:
+  - rationale: |
+      Three follow-up workstreams flagged in PR bodies for human approval
+      (NOT auto-filed per upstream-issue-hygiene.md Rule 1):
+        1. kaizen pyright cleanup — pre-existing diagnostics in
+           tools/native/* BaseTool override mismatches + missing research/
+           modules; SHA-grounded to b511f186 (2026-03-19). Draft issue at
+           workspaces/issue-781-todo-nnn-cleanup/03-implementation/
+           T2-followup-issue-kaizen-pyright.md.
+        2. kaizen-agents Black/Ruff modernization sweep — Optional[X] →
+           X | None etc.; rejected from T3 to keep diffs comment-only.
+           Bypass documented in commit bodies per rules/git.md.
+        3. nexus E2E port-mismatch — test_ai_agent_discovery_and_exploration
+           pre-existing failure; SHA-grounded to b553104c (2026-03-11).
+
+cross_sdk_loop:
+  rationale: |
+    The codebase-hygiene-marker methodology applies symmetrically to
+    kailash-rs (Rust internal-tracker IDs, doc-comment scrubbing) and
+    any future kailash-rb. Recommended loom action: at Gate 1, flag
+    the new skill sub-file for cross-SDK propagation. No automatic
+    cross-filing per upstream-issue-hygiene Rule 1 — the user reviews
+    each cross-SDK landing as a separate decision.
