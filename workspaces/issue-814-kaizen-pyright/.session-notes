@@ -1,0 +1,31 @@
+# Session Notes — 2026-05-05
+
+## Where we are
+
+Issue #814 closed end-to-end on 2026-05-04. PR #818 (Shard 1 — type-safety
+sweep) + PR #820 (Shard 2 — orphan cluster wipe + research/web-search extras
++ bs4 loud failure) merged. kailash-kaizen 2.18.2 released to PyPI; clean-venv
+install verified. Two follow-up issues filed (#821, #822). Workspace has no
+outstanding work; next session most likely picks up one of the follow-ups OR
+moves to a fresh issue.
+
+## Read first
+
+1. `deploy/deployment-config.md` — current package versions, last-updated paragraph
+2. `specs/kaizen-tools.md` — new spec from this cycle; cite when touching `tools/native/` or `research/`
+3. `02-plans/01-architecture.md` (this workspace) — Cluster A/B/C/D framing, useful background if working on #821 or #822
+4. github.com/.../issues/821 — kaizen-agents test parity for `research_patterns/*`
+5. github.com/.../issues/822 — kaizen Optional/None typing in `kaizen/__init__.py` + `core/framework.py` + `core/agents.py`
+6. `CLAUDE.md` — entry point if next work isn't either follow-up
+
+## In-flight state
+
+- Working tree carries pre-existing `uv.lock` modifications from a prior session (root + `packages/kailash-kaizen/`). NOT introduced by #814 — defer to a separate cleanup or batch with the next release.
+
+## Traps
+
+- `_BeautifulSoup` / `duckduckgo_search` / `arxiv` / `pypdf` pyright errors in the dev venv are EXPECTED — they only resolve when `[research]` / `[web-search]` extras are installed. Don't "fix" by adding to default deps.
+- #822 cascade: fixing the 4 lying-type sites (`kaizen/__init__.py:127,155` + `core/framework.py:341,344`) surfaces 4 errors + 6 warnings in `framework.py` + further into `core/agents.py`. Treat #822 as multi-shard from the start, not a 4-line fix.
+- Pyright LSP `★ _kwargs is not accessed` hints across `tools/native/` are advisory-only (not in CLI default output). Don't remove the `**_kwargs: Any` sink — it's the LSP override-conformance contract per `specs/kaizen-tools.md`.
+- BUILD-repo discipline: every code merge MUST proceed through `/release` before "done"; deployment record + `deploy/deployment-config.md` table update goes on a `release/v*` branch (auto-skips PR-gate matrix).
+- Pre-commit pygrep `python-use-type-annotations` matches literal `# type` substring (not `# type:`); reword comments referencing the `types` module to avoid false positives.

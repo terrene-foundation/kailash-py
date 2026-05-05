@@ -1,0 +1,93 @@
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/bash_tools.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/bash_tools.py:125:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 4
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:60:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 4
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:155:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:225:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 5
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:326:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:399:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 5
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:569:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 2
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/file_tools.py:643:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 2
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/interaction_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/interaction_tool.py:246:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 4 (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/interaction_tool.py:369:29 - warning: Cannot assign to attribute "_answers" for class "AskUserQuestionTool*"
+    Type "Any | Awaitable[List[QuestionAnswer]] | List[QuestionAnswer]" is incompatible with type "List[QuestionAnswer]"
+      "Awaitable[List[QuestionAnswer]]" is incompatible with "List[QuestionAnswer]" (reportAttributeAccessIssue)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:105:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 7 (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:223:55 - warning: Argument of type "str | None" cannot be assigned to parameter "cell_id" of type "str" in function "_replace_cell"
+    Type "str | None" is incompatible with type "str"
+      "None" is incompatible with "str" (reportArgumentType)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:227:54 - warning: Argument of type "str | None" cannot be assigned to parameter "cell_id" of type "str" in function "_delete_cell"
+    Type "str | None" is incompatible with type "str"
+      "None" is incompatible with "str" (reportArgumentType)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:229:20 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:230:52 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:242:24 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/notebook_tool.py:245:25 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/process_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/process_tool.py:365:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3 (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/process_tool.py:478:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 5 (reportIncompatibleMethodOverride)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py:54:22 - error: Import "duckduckgo_search" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py:64:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py:101:18 - error: Import "duckduckgo_search" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py:227:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py:298:18 - warning: Import "bs4" could not be resolved from source (reportMissingModuleSource)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/skill_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/skill_tool.py:96:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py:117:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 8
+    Parameter "**kwargs" has no corresponding parameter (reportIncompatibleMethodOverride)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py:283:44 - warning: "for_specialist" is not a known attribute of "None" (reportOptionalMemberAccess)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/todo_tool.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/tools/native/todo_tool.py:278:15 - error: Method "execute" overrides class "BaseTool" in an incompatible manner
+    Positional parameter count mismatch; base method has 2, but override has 3 (reportIncompatibleMethodOverride)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/__init__.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/__init__.py:26:6 - error: Import ".advanced_patterns" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/__init__.py:35:6 - error: Import ".experimental" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/__init__.py:39:6 - error: Import ".intelligent_optimizer" could not be resolved (reportMissingImports)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/adapter.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/adapter.py:119:41 - warning: Argument of type "dict[str, str]" cannot be assigned to parameter "inputs" of type "List[str] | None" in function "__init__"
+    Type "dict[str, str]" is incompatible with type "List[str] | None"
+      "dict[str, str]" is incompatible with "List[str]"
+      "dict[str, str]" is incompatible with "None" (reportArgumentType)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/adapter.py:119:57 - warning: Argument of type "dict[str, str]" cannot be assigned to parameter "outputs" of type "List[str | List[str]] | None" in function "__init__"
+    Type "dict[str, str]" is incompatible with type "List[str | List[str]] | None"
+      "dict[str, str]" is incompatible with "List[str | List[str]]"
+      "dict[str, str]" is incompatible with "None" (reportArgumentType)
+/Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/parser.py
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/parser.py:20:12 - error: Import "arxiv" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/parser.py:28:10 - error: Import "pypdf" could not be resolved (reportMissingImports)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/parser.py:83:24 - warning: "Search" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/esperie/repos/loom/kailash-py/packages/kailash-kaizen/src/kaizen/research/parser.py:138:18 - error: Object of type "None" cannot be called (reportOptionalCall)
+29 errors, 8 warnings, 0 informations
+WARNING: there is a new pyright version available (v1.1.371 -> v1.1.409).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`
