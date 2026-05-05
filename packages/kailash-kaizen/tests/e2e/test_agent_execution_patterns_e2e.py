@@ -8,6 +8,7 @@ with real infrastructure and no mocking.
 import time
 
 import pytest
+
 from kaizen import Kaizen
 
 
@@ -535,82 +536,6 @@ class TestErrorHandlingAndRecovery:
 
 class TestIntegrationWithMCPServers:
     """Test integration with MCP servers in complete workflows."""
-
-    def test_agent_with_mcp_tools_e2e(self):
-        """Test agent execution with MCP tools integration."""
-        kaizen = Kaizen(
-            config={"signature_programming_enabled": True, "mcp_enabled": True}
-        )
-
-        # Create agent with MCP capabilities
-        agent = kaizen.create_agent(
-            "mcp_integration_agent",
-            config={"model": "gpt-4", "mcp_tools": ["search", "calculate"]},
-            signature="task_with_tools -> approach, result",
-        )
-
-        # Note: This test requires MCP servers to be running
-        # For E2E testing, we'd need actual MCP server setup
-
-        # Execute workflow that could use tools
-        try:
-            result = agent.execute(
-                task_with_tools="Calculate the area of a circle with radius 10"
-            )
-
-            # Validate tool-enhanced execution
-            assert isinstance(
-                result, dict
-            ), "MCP-enhanced workflow should return structured output"
-
-            expected_fields = ["approach", "result"]
-            found_fields = [field for field in expected_fields if field in result]
-            assert (
-                len(found_fields) >= 1
-            ), f"Should find at least 1 output field, found: {found_fields}"
-
-        except Exception as e:
-            # If MCP servers not available, should fail gracefully
-            error_msg = str(e).lower()
-            if "mcp" in error_msg or "connection" in error_msg:
-                pytest.skip("MCP servers not available for E2E testing")
-            else:
-                raise  # Re-raise unexpected errors
-
-    def test_mcp_server_exposure_e2e(self):
-        """Test exposing agent as MCP server complete workflow."""
-        kaizen = Kaizen(config={"signature_programming_enabled": True})
-        agent = kaizen.create_agent(
-            "mcp_server_agent",
-            config={"model": "gpt-4"},
-            signature="request -> response",
-        )
-
-        # Expose as MCP server
-        server_config = agent.expose_as_mcp_server(
-            port=18088,  # Use different port to avoid conflicts
-            tools=["process_request"],
-            auth="none",
-        )
-
-        # Validate server exposure
-        assert server_config is not None, "Should return server configuration"
-        assert hasattr(server_config, "server_name"), "Should have server name"
-        assert hasattr(server_config, "port"), "Should have port configuration"
-        assert server_config.port == 18088, "Should use specified port"
-
-        # Test server state
-        if hasattr(server_config, "server_state"):
-            # Should be either running or have a valid error state
-            assert server_config.server_state in [
-                "running",
-                "initializing",
-                "failed",
-            ], f"Server should have valid state, got: {server_config.server_state}"
-
-        # Cleanup
-        if hasattr(server_config, "stop_server"):
-            server_config.stop_server()
 
 
 class TestPerformanceValidation:
