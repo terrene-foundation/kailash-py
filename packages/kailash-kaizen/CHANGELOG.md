@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] — 2026-05-06 — LLM-first trait derivation per agent-reasoning.md Rule 1 (#829)
+
+### Changed
+
+- **`Kaizen.create_specialized_agent` trait derivation is now LLM-first
+  (closes #829).** When `config["behavior_traits"]` is not supplied, the
+  framework derives behavioral traits via a `Signature`-driven LLM call
+  (`RoleToTraitsSignature` in `kaizen.core._role_traits_signature`) instead of
+  keyword-matching the role string against five hardcoded buckets. Derivation
+  is cached per `Kaizen` instance keyed by `role.strip().lower()`, and the LLM
+  call uses `temperature=0` so derivation is deterministic per
+  `(instance, normalized_role)` pair. The previous `if any(word in role_lower
+for word in [...])` classifier in `framework.py:513-536` was a direct
+  violation of `rules/agent-reasoning.md` Rule 1 (BLOCKED hardcoded
+  classification of agent input) and has been removed entirely.
+
+### Behavior change — failure mode
+
+- Trait derivation now requires a working LLM provider. When
+  `KAIZEN_DEFAULT_MODEL` is unset OR the underlying LLM call fails (no API
+  key, network error, rate limit), `create_specialized_agent` raises
+  `RuntimeError` with a message naming both escape hatches:
+  - Pass `behavior_traits=[...]` in `config` to skip derivation entirely.
+  - Configure a working LLM provider key in `.env`.
+- Previously, the keyword classifier returned a default trait list silently
+  for any role that did not match the hardcoded buckets. That deterministic
+  fallback was the Rule-1 violation; removing it is the fix.
+- Empty / unparseable LLM output (zero parsed traits) falls back to the
+  default list `["professional", "reliable", "adaptive"]` and emits a WARN
+  log line `kaizen.trait_derivation.empty_output`. This is the
+  empty-output guard, NOT a deterministic fallback.
+
+### Migration
+
+- **No code change required if your call site supplies `behavior_traits`** in
+  the `config` dict — that path is unchanged.
+- **No code change required if you have a working LLM provider** configured
+  in `.env` — derivation works, with a one-time LLM round-trip per novel
+  role per `Kaizen` instance and instant cache hits afterwards.
+- **Action required if your call site relies on the old keyword classifier**
+  AND you do not want LLM derivation: pass an explicit `behavior_traits`
+  list in `config`. The previous keyword-classifier output (e.g.,
+  `["analytical", "thorough", "evidence_based", "methodical"]` for roles
+  containing "research" / "analyze" / "study") is no longer produced; if
+  your code asserted on those exact strings, switch to passing them
+  explicitly.
+
+### Security
+
+- **Prompt-injection sanitization on LLM-derived traits.** Every parsed
+  trait MUST match `^[a-z0-9_ ]{1,32}$` and the list is capped at 5
+  entries. Defends against a malicious `role` string subverting the LLM
+  into emitting traits that would otherwise flow unchecked into the
+  agent's downstream system prompt at `_generate_role_based_prompt`.
+- **Bounded LRU cache.** `self._trait_cache` is an `OrderedDict` capped at
+  256 entries with `popitem(last=False)` eviction. Defends against DoS via
+  unique-role pollution.
+- **Hashed role logging.** WARN-level empty-output log lines emit
+  `role_hash=<sha256[:8]>` and `raw_len=<int>` instead of the raw role
+  string and raw output. `RuntimeError` messages on derivation failure
+  follow the same pattern. Defends against PII leakage to log aggregators
+  (per `rules/observability.md` Rule 8 spirit).
+
+### Spec
+
+- `specs/kaizen-core.md` §7.5 (Trait Derivation) added with the full
+  contract: cache normalization, determinism, default-model resolution,
+  failure modes, sanitization, bounded cache, and out-of-scope clauses.
+
+### Tests
+
+- `tests/regression/test_issue_822_behavior_traits_render.py::test_behavior_traits_default_from_role` rewritten as
+  shape-only Tier-2 integration test (per acceptance criterion #2 of #829).
+- `tests/unit/test_kaizen_multi_agent_coordination.py::TestSpecializedAgentCreation::test_specialized_agent_role_based_behavior_traits` rewritten
+  as shape-only — exact-string keyword-bucket assertions removed.
+- New Tier-2 tests at `tests/integration/test_role_to_traits_llm_derivation.py`
+  (4 tests covering acceptance criteria #2, #3, plus Risk-1 disposition) and
+  `tests/integration/test_role_traits_cache_wiring.py` (2 tests covering
+  cache hit + normalization).
+- New `tests/unit/conftest.py` autouse fixture stubs
+  `Kaizen._generate_role_based_traits` for Tier-1 unit tests so they remain
+  deterministic and offline; the stub returns the same 3-element default
+  list the keyword classifier returned for unmatched roles.
+
 ## [2.19.0] — 2026-05-05 — Dead MCP integration surface deletion (#822) + research/web-search extras (#814 Shard 2)
 
 ### Added
