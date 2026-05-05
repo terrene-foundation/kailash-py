@@ -13,20 +13,28 @@
  */
 
 const TIMEOUT_MS = 10000;
+const { instructAndWait } = require("./lib/instruct-and-wait");
 const timeout = setTimeout(() => {
-  console.error(
-    "[HOOK TIMEOUT] validate-deployment exceeded 10s — CREDENTIAL CHECK SKIPPED",
-  );
-  console.log(
-    JSON.stringify({
-      continue: true,
-      hookSpecificOutput: {
-        hookEventName: "PostToolUse",
-        validation:
-          "WARNING: Deployment credential check timed out. Manual review required.",
-      },
-    }),
-  );
+  // Mitigates red-team validate-deployment-silent-skip:
+  // On timeout, surface halt-and-report so agent knows the credential check
+  // DID NOT complete. Old behavior silently allowed continue.
+  const out = instructAndWait({
+    hookEvent: "PostToolUse",
+    severity: "halt-and-report",
+    what_happened:
+      "validate-deployment hook timed out before completing the credential scan",
+    why: "validate-deployment.js — timeout means scan was interrupted; bypassing credential checks is BLOCKED",
+    agent_must_report: [
+      "State which file was being written when the hook timed out",
+      "Manually scan the file for: AWS keys, Azure secrets, GCP SA JSON, private keys, GitHub/PyPI/Docker PATs, sk-* API keys",
+      "Confirm in the report whether ANY credential pattern is present in the just-written file",
+    ],
+    agent_must_wait:
+      "Do not commit or proceed with deploy work until manual credential scan is reported.",
+    user_summary:
+      "validate-deployment timeout — manual credential scan required",
+  });
+  console.log(JSON.stringify(out.json));
   process.exit(1);
 }, TIMEOUT_MS);
 
@@ -38,6 +46,13 @@ process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
     const result = validateDeployment(data);
+    // Structured output from credential block (already shaped via instruct-and-wait)
+    if (result.output) {
+      console.log(JSON.stringify(result.output));
+      process.exit(result.exitCode);
+      return;
+    }
+    // Legacy advisory path
     console.log(
       JSON.stringify({
         continue: result.continue,
@@ -50,16 +65,19 @@ process.stdin.on("end", () => {
     process.exit(result.exitCode);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
-    console.log(
-      JSON.stringify({
-        continue: true,
-        hookSpecificOutput: {
-          hookEventName: "PostToolUse",
-          validation:
-            "WARNING: Deployment validation hook errored. Manual credential review required.",
-        },
-      }),
-    );
+    const out = instructAndWait({
+      hookEvent: "PostToolUse",
+      severity: "halt-and-report",
+      what_happened: `validate-deployment hook errored: ${error.message}`,
+      why: "validate-deployment.js — hook error means scan did not complete",
+      agent_must_report: [
+        "State the file being processed when the hook errored",
+        "Manually scan that file for credential patterns; report findings",
+      ],
+      agent_must_wait: "Do not commit or proceed until manual scan reported.",
+      user_summary: "validate-deployment hook error — manual scan required",
+    });
+    console.log(JSON.stringify(out.json));
     process.exit(1);
   }
 });
@@ -147,7 +165,24 @@ function validateDeployment(data) {
   for (const { pattern, context, message } of credentialPatterns) {
     if (pattern.test(content)) {
       if (context && !context.test(content)) continue;
-      return { continue: false, exitCode: 2, message };
+      // PostToolUse: file already written. Surface halt-and-report so agent
+      // immediately scrubs the secret before any downstream commit/push.
+      const out = instructAndWait({
+        hookEvent: "PostToolUse",
+        severity: "halt-and-report",
+        what_happened: `Credential pattern detected in ${filePath}: ${message}`,
+        why: "security.md No-Hardcoded-Secrets — credentials in deploy files leak into git history",
+        agent_must_report: [
+          `State the exact line number(s) where the pattern matched`,
+          `Quote the pattern (redact the value if it's a real secret) for the user`,
+          `Propose: remove the literal value, replace with env-var reference, scrub from git index if already staged`,
+          `Confirm whether this credential was authentic or a false-positive (e.g., test fixture)`,
+        ],
+        agent_must_wait:
+          "Do not commit or push. Do not proceed with the next file. Wait for user instruction.",
+        user_summary: message,
+      });
+      return { output: out.json, exitCode: out.exitCode };
     }
   }
 

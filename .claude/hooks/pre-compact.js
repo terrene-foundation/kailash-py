@@ -32,12 +32,24 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    savePreCompactState(data);
-    // PreCompact hooks don't support hookSpecificOutput in schema
+    const result = savePreCompactState(data);
+    // PreCompact schema: no hookSpecificOutput. Surface stderr summary so
+    // user sees what was checkpointed (was DARK pre-fix).
+    if (result && result.checkpointed) {
+      const wfCount = result.workflows || 0;
+      const recCount = result.recentCount || 0;
+      process.stderr.write(
+        `[pre-compact] checkpoint saved (framework=${result.framework}, workflows=${wfCount}, recent=${recCount})\n`,
+      );
+    } else if (result) {
+      process.stderr.write(
+        `[pre-compact] checkpoint FAILED: ${result.error || "unknown"}\n`,
+      );
+    }
     console.log(JSON.stringify({ continue: true }));
     process.exit(0);
   } catch (error) {
-    console.error(`[HOOK ERROR] ${error.message}`);
+    process.stderr.write(`[pre-compact] HOOK ERROR: ${error.message}\n`);
     console.log(JSON.stringify({ continue: true }));
     process.exit(1);
   }
@@ -111,7 +123,13 @@ function savePreCompactState(data) {
     // Clean up old checkpoints (keep last 10 per session)
     cleanupOldCheckpoints(checkpointDir, session_id, 10);
 
-    return { checkpointed: true, path: checkpointFile };
+    return {
+      checkpointed: true,
+      path: checkpointFile,
+      framework: checkpoint.preservedContext.frameworkInUse,
+      workflows: checkpoint.preservedContext.activeWorkflows.length,
+      recentCount: checkpoint.preservedContext.recentlyModified.length,
+    };
   } catch (error) {
     return { checkpointed: false, error: error.message };
   }

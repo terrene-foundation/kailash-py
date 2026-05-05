@@ -1,15 +1,15 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-05-01",
+  "updated": "2026-05-05",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.14.4",
-    "build_version": "2.14.4",
-    "synced_at": "2026-05-02T00:00:00Z",
-    "loom_sha": "e8083e8",
+    "version": "2.17.0",
+    "build_version": "2.17.0",
+    "synced_at": "2026-05-05T14:41:00Z",
+    "loom_sha": "76a3bfc",
     "sdk_packages": {
       "kailash": "2.13.3",
       "kailash-dataflow": "2.7.5",
@@ -20,9 +20,29 @@
       "kailash-ml": "1.7.1",
       "kailash-align": "0.7.0",
       "kaizen-agents": "0.9.4"
-    }
+    },
+    "template_version": "2.17.0",
+    "source_commit": "76a3bfc"
   },
   "changelog": [
+    {
+      "version": "1.0.6",
+      "date": "2026-05-05",
+      "summary": "Sync loom 2.17.0 \u2014 graduated trust-posture system. Per-repo posture ladder (L1_PSEUDO_AGENT through L5_DELEGATED) with automatic downgrade on rule violations and human-gated upgrade via /posture upgrade challenge-nonce paste-back. NEW path-scoped rule rules/trust-posture.md. NEW skill skills/32-trust-posture/ (7 files). NEW hooks detect-violations.js + posture-gate.js + 4 shared libs (instruct-and-wait, state-io, state-resolver, violation-patterns). NEW agent agents/management/posture-auditor.md (read-only weekly audit). NEW command commands/posture.md (show / history / violations / init / upgrade / override). State files (posture.json, violations.jsonl, .initialized) protected by settings.json permissions.deny + three-layer Bash mutation detection per Layer 1 redirects/heredoc/tee/sed -i, Layer 2 cp/mv/dd/rsync/install/truncate/ln, Layer 3 interpreter -c/-e/-m bodies. State files NEVER synced (per-repo, runtime-generated). MODIFIED hooks: validate-bash-command.js +3 patterns + segment-anchored regex + three-layer state-file mutation detection adopted from issue #25; enforce-framework-first.js + validate-workflow.js + validate-deployment.js refactored through instruct-and-wait; session-start.js trust-posture additionalContext; session-end.js + pre-compact.js stderr summary lines. MODIFIED commands/codify.md Step 6b ENFORCED Trust Posture Wiring requirement. MODIFIED commands/redteam.md Step 0 posture-aware audit depth (L4 = Round 1, L3 = Round 1+2, L2 = full red-team). MODIFIED agents/cc-architect.md Audit Dimension 5 mechanical wiring grep sweep. settings.json: NEW permissions.deny block on .claude/learning/* state files; detect-violations.js wired to PreToolUse(Read), PostToolUse(Bash, Edit|Write), Stop, UserPromptSubmit; posture-gate.js wired to SessionStart + PreToolUse(Bash, Edit|Write). Origin: 2026-05-05 design session grounded in CARE Principle 7 (Evolutionary Trust) + EATP graduated postures + Mirror Thesis. Red-team validated: 2 adversarial review agents + 37/37 subprocess tests at loom .claude/test-harness/trust-posture-poc/. Two-phase rollout: Phase 1 (this release) hooks + state + observer-mode detection + emergency triggers live; Phase 2 (after \u22651 month real-session bake) full PreToolUse posture-gate teeth at L2/L3.",
+      "changes": [
+        "RULE: .claude/rules/trust-posture.md NEW. priority:10/scope:path-scoped on .claude/{rules,skills,agents,hooks,commands,learning}/** + settings.json + sync-manifest.yaml. 7 MUST clauses defining posture ladder L1-L5, transition triggers (cumulative 3\u00d7 same-rule = 1 downgrade; 1\u00d7 critical = emergency to L1; regression-within-grace = emergency 1 posture), upgrade requirements (\u22657d, 0 same-class violations, demonstrated correction, human approval).",
+        "SKILL: .claude/skills/32-trust-posture/ NEW (7 files: SKILL.md, codify-integration.md, implement-integration.md, redteam-integration.md, rule-authoring-checklist.md, posture-spec.md, grace-period-mechanics.md).",
+        "COMMAND: .claude/commands/posture.md NEW. show / history / violations / init / upgrade / override.",
+        "AGENT: .claude/agents/management/posture-auditor.md NEW. Read-only weekly audit; cannot self-modify state.",
+        "HOOKS NEW: detect-violations.js (PreToolUse Read stale-record banner + PostToolUse Bash/Edit/Write 5 patterns + Stop self-confession + receipt-token validation + UserPromptSubmit regression signal); posture-gate.js (SessionStart echo + PreToolUse L2/L3 enforcement).",
+        "HOOK LIBS NEW: instruct-and-wait.js + state-io.js + state-resolver.js + violation-patterns.js.",
+        "HOOKS MODIFIED: validate-bash-command.js, enforce-framework-first.js, validate-workflow.js, validate-deployment.js, session-start.js, session-end.js, pre-compact.js.",
+        "COMMANDS MODIFIED: codify.md Step 6b ENFORCED Trust Posture Wiring; redteam.md Step 0 posture-aware audit depth.",
+        "AGENT MODIFIED: cc-architect.md Audit Dimension 5 mechanical wiring grep sweep.",
+        "SETTINGS: NEW permissions.deny on .claude/learning/{posture.json,posture.json.bak,violations.jsonl,violations.jsonl.*,.initialized}; detect-violations.js + posture-gate.js wired across PreToolUse / PostToolUse / SessionStart / Stop / UserPromptSubmit.",
+        "EXCLUDED FROM SYNC: .claude/learning/posture.json, .claude/learning/.initialized, .claude/learning/violations.jsonl \u2014 per-repo runtime state, NEVER synced. Initialize at L5_DELEGATED on first /posture init or first session-start hook run."
+      ]
+    },
     {
       "version": "1.0.5",
       "date": "2026-04-28",

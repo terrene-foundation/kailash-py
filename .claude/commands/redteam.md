@@ -23,6 +23,18 @@ Autonomous execution model (see `rules/autonomous-execution.md`). Red team conve
 
 ## Workflow
 
+### 0. Posture-aware audit depth (MUST consult first)
+
+Read `.claude/learning/posture.json` via `state-io.js::readPosture`. Audit rigor scales with posture per `skills/32-trust-posture/redteam-integration.md`:
+
+- **L5_DELEGATED**: Round 1 OPTIONAL
+- **L4_CONTINUOUS_INSIGHT**: Round 1 MANDATORY (mechanical sweeps)
+- **L3_SHARED_PLANNING**: Round 1 + Round 2 MANDATORY (closure-parity)
+- **L2_SUPERVISED**: full red-team Round 1+2+3 (incl. spec compliance vs every pending_verification rule)
+- **L1_PSEUDO_AGENT**: advisory simulation only (no autonomous /implement to red-team)
+
+Surface the posture in the first report line. Under-auditing (e.g., Round 1 only at L3) is itself a violation logged via `appendViolation` against `redteam/posture-aware-depth`.
+
 ### 1. Spec compliance audit (MUST run first)
 
 **File existence is NOT compliance.** Use the protocol in `skills/spec-compliance/SKILL.md` to verify each spec promise via AST parsing and targeted greps, NOT file existence or self-reports.

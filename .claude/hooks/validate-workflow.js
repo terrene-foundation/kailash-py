@@ -34,11 +34,39 @@ const timeout = setTimeout(() => {
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
+const { instructAndWait: _iaw } = require("./lib/instruct-and-wait");
+
 process.stdin.on("end", () => {
   clearTimeout(timeout);
   try {
     const data = JSON.parse(input);
     const result = validateFile(data);
+    // If the validator decided to block (exitCode 2), route through
+    // instruct-and-wait for canonical halt-and-report shape (PostToolUse can't
+    // truly block; surface clear REPORT/THEN to agent + stderr summary to user).
+    if (result.exitCode === 2 || result.continue === false) {
+      const filePath = data.tool_input?.file_path || "(unknown file)";
+      const msgs = Array.isArray(result.messages)
+        ? result.messages
+        : [result.messages];
+      const blocked = msgs.filter((m) => /^BLOCKED:/.test(String(m)));
+      const out = _iaw({
+        hookEvent: "PostToolUse",
+        severity: "halt-and-report",
+        what_happened: `validate-workflow detected ${blocked.length} blocked pattern(s) in ${filePath}`,
+        why: "validate-workflow.js — stub / hardcoded-model / mock-data / fake-impl detection",
+        agent_must_report: blocked
+          .slice(0, 8)
+          .map((m) => String(m).slice(0, 240)),
+        agent_must_wait:
+          "Do not commit or proceed with related work until each blocked pattern is removed or replaced.",
+        user_summary: `validate-workflow: ${blocked.length} blocked pattern(s) in ${filePath.split("/").pop()}`,
+      });
+      console.log(JSON.stringify(out.json));
+      process.exit(out.exitCode);
+      return;
+    }
+    // Advisory / clean path
     console.log(
       JSON.stringify({
         continue: result.continue,
