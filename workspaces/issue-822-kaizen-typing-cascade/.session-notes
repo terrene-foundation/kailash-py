@@ -1,58 +1,41 @@
-# Session Notes — 2026-05-05
+# Session Notes — 2026-05-06 (workspace closed)
 
 ## Where we are
 
-Issue #822 SHIPPED + CLOSED. `kailash-kaizen 2.19.0` live on PyPI via tag
-`kaizen-v2.19.0` at main `1d8063c1`. Follow-up #829 filed (LLM-first
-`_generate_role_based_traits`).
+Workspace **CLOSED** 2026-05-06. Issue #822 shipped + closed in the prior
+session (kailash-kaizen 2.19.0); the codify cycle (#830–#833) landed cleanly
+into `main` 2026-05-05T16:16:18Z – 16:17:12Z UTC:
 
-**Codify cycle (2026-05-05 evening) complete:**
-- `zero-tolerance.md` Rule 3d added (Dual-Shape Return + Structural Guard
-  = Silent Fallback) — origin: #822 J0003 `signature_programming_enabled`
-- `build-repo-release-discipline.md` Rule 1a added (Test-Only / Docs-Only
-  / Workspace-Only Carve-Out) — origin: #821 PR #824
-- Sibling-sweep run: 0 confirmed Rule 3d violations across `packages/` +
-  `src/` (10 candidate sites classified — see proposal yaml)
-- Proposal yaml at `.claude/.proposals/latest.yaml` is `pending_review`
-  for next loom Gate 1
-- DECISION journal entry at
-  `workspaces/issue-822-kaizen-typing-cascade/journal/0006-DECISION-codified-rule-3d-and-test-only-carveout.md`
-- cc-architect red-team: PASS on both clauses
+- `61c7c83e` Merge #830 — codify rules (Rule 3d + Rule 1a)
+- `23a504b6` Merge #831 — sync(coc) loom 2.17.0 trust-posture L5 rollout
+- `98225e3c` Merge #832 — chore(deps) uv.lock refresh (kaizen 2.19.0 cycle)
+- `cf262c10` Merge #833 — docs(workspaces) issue-814 + issue-821 records
 
-Workspace work is effectively done — only out-of-lane todo 3.3 remains
-(cross-SDK kailash-rs audit, cannot file from kailash-py session).
+This wrapup landed via `docs/workspace-issue-822-closure` PR (workspace-only
+diff, Rule 1a carve-out).
 
-## Read first
+Trust-posture L5 materialized on session-start as expected (hook init succeeded
+this session — `.claude/learning/posture.json` + `.initialized` populated).
 
-1. `workspaces/issue-822-kaizen-typing-cascade/todos/active/3.3-cross-sdk-followup-issue.md` — only active todo; ready-to-paste `gh issue create --repo esperie/kailash-rs` command + body
-2. `deploy/deployments/2026-05-05-kaizen-v2.19.0.md` — full release record (verification command, PyPI cache-lag note, cross-SDK disposition)
-3. `deploy/deployment-config.md` — current package versions (line: `Last updated: 2026-05-05`)
-4. `rules/repo-scope-discipline.md` — why 3.3 cannot be filed from this repo
-5. `CLAUDE.md` — repo entry point if continuing on a different workstream
+## Resolution of last session's open question
 
-## In-flight state
+User chose option **(c)** — close the workspace entirely. Todo 3.3 moved to
+`todos/completed/` with a DEFERRED disposition note. The cross-SDK
+orphan-pattern audit lives in a future kailash-rs session (out-of-lane per
+`rules/repo-scope-discipline.md`).
 
-- Working tree on main has unstaged `.claude/` modifications (trust-posture
-  rollout files: `posture-gate.js`, `detect-violations.js`, `trust-posture.md`,
-  `skills/32-trust-posture/`, `commands/posture.md`) — separate workstream,
-  NOT touched by this session.
-- Two `uv.lock` modifications on disk (root + kaizen) also predate this
-  session.
+## Read first (only relevant if a kailash-rs session opens this workspace's record)
 
-## Traps
+1. `workspaces/issue-822-kaizen-typing-cascade/todos/completed/3.3-cross-sdk-followup-issue.md` — full deferral note + carry-forward signal
+2. `.claude/rules/repo-scope-discipline.md` — boundary that gated this closure
+3. `.claude/rules/upstream-issue-hygiene.md` — issue-body shape for the future cross-SDK filing
 
-- Workspace dirs under `workspaces/` are untracked — `git mv` fails; use plain `mv`.
-- `.env` has all model vars commented out — Tier 2 tests using `kaizen.create_agent()` need `monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")`.
-- `kaizen.configure(...)` global config only reaches `Kaizen.config` via the module-level `kaizen.create_agent(...)`, NOT `Kaizen().create_agent(...)`.
-- Repo-root `.venv` has stale `kailash` install — pytest from root errors. Use `cd packages/kailash-kaizen && uv run pytest …`.
-- `area/kaizen` GitHub label does not exist; only `area/quality` is available.
+## What lives here as institutional record
 
-## Unreleased packages
+- `01-analysis/` + `02-plans/` + `03-user-flows/` — the structural failure-mode mapping for #822 (MCP orphans hidden by `try/except ImportError`)
+- `journal/` — discovery posts including `0002-DISCOVERY-mcp-orphans-predate-pr-75.md`
+- `todos/completed/` — every shipped todo, including 3.3 with deferral context
 
-`node .claude/hooks/lib/release-drift.js` returned no output → no drift; all
-packages AT-PARITY with PyPI post-release.
-
-## Open questions for the human
-
-- File 3.3 against `esperie/kailash-rs` from a kailash-rs session? Body draft + paste-ready command in the todo file.
-- USE template (`kailash-coc-claude-py`) `kailash-kaizen>=2.19.0` pin bump runs from `loom/` via `/sync py` — out of scope here.
+No active todos. No follow-up scheduled in this repo. If a kailash-rs session
+later runs the orphan-import grep audit, cross-link results back into todo 3.3's
+"Carry-forward signal" section for traceability.
