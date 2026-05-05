@@ -24,7 +24,7 @@ ALL sessions in a BUILD repo (the SDK source repo this rule ships to) that merge
 
 ## ABSOLUTE: "Done" Means Released, Not Merged
 
-A session touching BUILD-repo source (new feature, bug fix, refactor, new test, new docs surface) MUST proceed through the full release cycle — admin-merge → `/release` → PyPI publication → installable verification — within the same session. Reporting "done" / "complete" / "shipped" at admin-merge is BLOCKED.
+A session touching BUILD-repo source (new feature, bug fix, refactor) MUST proceed through the full release cycle — admin-merge → `/release` → PyPI publication → installable verification — within the same session. Reporting "done" / "complete" / "shipped" at admin-merge is BLOCKED. Test-only, docs-only, and workspace-only diffs are carved out per Rule 1a — those produce no consumer-visible artifact change and the carve-out lets them merge without `/release`.
 
 **Why:** Downstream consumers (USE templates, application repos, external packages like MLFP coursework, third-party integrations) consume BUILD repos only via PyPI. A PR merged to BUILD-main is invisible to everyone downstream until the release cut. Stopping at merge conflates BUILD-state with consumable-state and leaves every consumer blocked on the next scheduled release — which may be days or weeks away.
 
@@ -56,6 +56,48 @@ done
 ```
 
 **Why:** Sibling packages drift over time — each session addresses its own PR's package and leaves siblings behind. The downstream consumer experiences a compounding gap. Closing siblings opportunistically (every session that releases anything sweeps every stale package) is the only way the gap converges to zero.
+
+### 1a. Carve-Out — Test-Only / Docs-Only / Workspace-Only Diffs
+
+A PR whose diff is **strictly test-only**, **strictly docs-only**, or **strictly workspace-only** MAY merge without `/release` because the diff produces no consumer-visible artifact change — PyPI version remains identical, the wheel content is identical, downstream installs see no change. The carve-out applies if AND ONLY IF every changed file matches one of:
+
+- `tests/**` or `**/tests/**` — Tier 1/2/3 tests under any test directory tree
+- `docs/**` — published documentation
+- `workspaces/**` — agent session records (briefs, plans, journals, todos)
+- `*.md` at repo root limited to README touches that don't reference new API surface
+
+`CHANGELOG.md`, `pyproject.toml`, `**/__init__.py::__version__`, `src/**`, `packages/**/src/**`, `specs/**`, and `.github/workflows/**` are explicitly EXCLUDED from the carve-out — any of these means a release IS required.
+
+```bash
+# DO — verify carve-out before deciding to skip /release
+non_carveout=$(git diff --name-only main...HEAD \
+  | grep -vE '^(tests/|.+/tests/|docs/|workspaces/)' \
+  | grep -v '\.md$' || true)
+if [ -z "$non_carveout" ]; then
+  echo "Carve-out applies — no /release needed."
+else
+  echo "Source/config files changed — /release required:"
+  echo "$non_carveout"
+fi
+
+# DO NOT — assume "feels test-only" and skip release
+gh pr merge 824 --admin --merge && echo "done"   # but PR also touched src/kaizen/foo.py — release was required
+```
+
+**BLOCKED rationalizations:**
+
+- "Mostly test-only with one src/ file touched" — the carve-out requires zero source changes
+- "Test imports a new helper from src/ that I added" — the new helper IS source code; release required
+- "Workspace plus a small spec edit" — `specs/` is consumer-visible; release required
+- "Docs sample updated to reference a new API surface" — release IF the new API ships in this PR
+- "CHANGELOG entry but no source change" — a changelog entry implies a versioned release; cut the release
+- "It's just a fix to a test that was wrong" — still test-only, carve-out applies
+- "I'll batch the test PR with the next code release" — splitting test-only PRs keeps the release scope clean; carve-out is the cleaner path
+- "The PR also bumped uv.lock" — `uv.lock` IS consumer-visible (changes the resolved dependency tree); release required
+
+**Why:** PyPI ships wheels, not git trees — a test-only / docs-only / workspace-only diff produces zero wheel-content change (tests aren't packaged in wheels; `workspaces/` and `docs/` are excluded from `pyproject.toml::include`). Forcing `/release` on a no-op diff burns ~5 minutes of CI per PR for zero consumer benefit; the explicit allowlist + exclusions above is the structural defense against rationalization.
+
+Origin: kailash-kaizen #821 (2026-05-05) — PR #824 (test parity for `kaizen-agents/research_patterns/*`) merged via admin without `/release`; user approved option A because the diff was strictly under `packages/kaizen-agents/tests/unit/`. Carve-out codified to prevent re-deriving the same A/B decision next BUILD-repo session.
 
 ### 2. PyPI Installability Is The Done Gate, Not Merge
 

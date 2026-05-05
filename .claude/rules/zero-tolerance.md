@@ -229,6 +229,45 @@ def diagnose(model, *, kind: str, data: DataLoader | None = None):
 
 Origin: kailash-ml 1.5.x followup (#701) — `diagnose(model, kind="dl", data=loader)` accepted `data=` in its public signature, documented in spec §3.1 as a `DataLoader` union member, and silently dropped it on the `kind="dl"` branch because `DLDiagnostics` had no method consuming a loader. The kwarg's existence was a lie that survived three SDK releases. Rust's type system structurally prevents the pattern (a function that takes `data: DataLoader` and never reads it produces an unused-variable warning); Python provides zero structural defense — the rule IS the defense.
 
+### Rule 3d: Dual-Shape Return + Structural Guard = Silent Fallback
+
+A property or method whose return type is a union of structurally-distinct shapes (e.g., `Union[ConfigWrapper(dict), KaizenConfig(dataclass)]`) MUST NOT be consumed via a structural existence guard (`hasattr(value, "method")`) that resolves True for one branch and False for the other. The guard silently flips False on the branch that lacks the attribute, and the documented behavior never fires for users on that branch. Either dispatch on a discriminator (`isinstance` / type check) OR collapse the API to a single return shape.
+
+```python
+# DO — discriminator-based dispatch handles every shape
+config = self.kaizen.config
+if isinstance(config, KaizenConfig):
+    enabled = config.signature_programming_enabled
+elif isinstance(config, dict):
+    enabled = config.get("signature_programming_enabled", False)
+else:
+    enabled = False
+
+# DO — single-shape collapse (preferred for new APIs)
+class Kaizen:
+    @property
+    def config(self) -> ConfigWrapper:  # always dict-like, no dual-shape
+        return self._config_wrapper
+
+# DO NOT — structural guard silently flips on the typed-config branch
+if hasattr(self.kaizen.config, "get"):  # True for ConfigWrapper(dict), False for KaizenConfig
+    enabled = self.kaizen.config.get("signature_programming_enabled", False)
+# (KaizenConfig users bypass the gate; documented behavior never fires for the typed-config branch)
+```
+
+**BLOCKED rationalizations:**
+
+- "Tests pass with dict-shaped config, the typed-config path is rare"
+- "`hasattr` is the Pythonic duck-typing pattern, not a code smell"
+- "If users pass typed config, that's their choice to opt out of the feature"
+- "The dual-shape API is for backwards compatibility; we'll collapse later"
+- "Adding `isinstance(config, KaizenConfig)` couples the consumer to the type"
+- "The guard is defensive; falling through to False is safer than raising"
+
+**Why:** A dual-shape API consumed via structural guard is the same failure-mode class as fake encryption / fake transaction / fake dispatch (Rule 2): the documented contract advertises a feature the code does not perform on every branch. Tests written against the structurally-richer branch (dict has `.get`) silently mask the gap; users on the typed branch get a no-op. Detection: at every `hasattr(x, "<method>")` callsite where `x` has a union return type, walk back to the declared type — if any branch lacks `<method>`, the guard is silently flipping for that branch's users. Either dispatch on a discriminator (the consumer KNOWS which shape it has) or collapse the API (one shape eliminates the ambiguity).
+
+Origin: kailash-kaizen #822 (2026-05-05) — `Kaizen.config` returns `Union[ConfigWrapper(dict), KaizenConfig(dataclass)]`; consumer at `agents.py:458` guarded with `hasattr(config, "get")` which is False for the dataclass branch. Documented `signature_programming_enabled` gate silently never fired for users who passed `KaizenConfig(signature_programming_enabled=True)`. Fix shipped in kailash-kaizen 2.19.0 via `getattr(config, "signature_programming_enabled", None) is True or (hasattr(config, "get") and config.get(...) is True)`.
+
 ## Rule 4: No Workarounds For Core SDK Issues
 
 This is a BUILD repo. You have the source. Fix bugs directly.

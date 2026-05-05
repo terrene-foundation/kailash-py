@@ -1,162 +1,260 @@
 source_repo: kailash-py
-codify_date: "2026-05-03"
+codify_date: "2026-05-05"
 codify_session: |
-  Session 2026-05-03 — issue #781 TODO-NNN cleanup workstream completion
-  + 6-package release cycle.
+  Session 2026-05-05 — codify cycle following kailash-kaizen 2.19.0 release
+  (issue #822 + #814 Shard 2) and PR #824 (issue #821 test-only diff).
 
-  Five implementation shards (T1 dataflow / T2 kaizen / T3 kaizen-agents /
-  T4 core+nexus / T5 CI gate) merged via PRs #804/#805/#806/#807/#808.
-  272 markers triaged across 5 packages. Three-layer hygiene gate landed
-  via T5 (#808) — pre-commit hook + shared bash script + Tier-2 regression
-  test, with synthetic-PR validation proving fail-on-untracked + pass-on-tracked.
+  Two genuinely-novel + reusable rule patterns surfaced:
 
-  Six-package release-prep PR #809 cut PyPI for kailash 2.13.4, kailash-dataflow
-  2.7.6, kailash-kaizen 2.18.1, kailash-nexus 2.6.1, kaizen-agents 0.9.5,
-  kailash-mcp 0.2.11 (sibling sweep per build-repo-release-discipline.md
-  Rule 1). All 6 publish-pypi.yml workflows succeeded; clean-venv install
-  + import verified for each at correct version. Issue #781 closed via T6
-  audit.
+  1. **Dual-shape return + structural guard = silent fallback**
+     (`zero-tolerance.md` new Rule 3d). A property/method whose return
+     type is `Union[A, B]` where A and B have structurally-distinct
+     attributes MUST NOT be consumed via `hasattr(value, "method")`
+     when the guard resolves True for one branch and False for the
+     other. The guard silently flips False on the missing-attribute
+     branch, and the documented behavior never fires for users on that
+     branch. Origin: kaizen #822 — `Kaizen.config` returns
+     `Union[ConfigWrapper(dict), KaizenConfig(dataclass)]`; consumer at
+     `agents.py:458` guarded with `hasattr(config, "get")`. The dataclass
+     branch flipped False; `signature_programming_enabled=True` users
+     bypassed the gate entirely. Fix shipped in 2.19.0.
 
-  One genuinely-novel + reusable methodology surfaced:
+  2. **Test-only / docs-only / workspace-only release-cycle carve-out**
+     (`build-repo-release-discipline.md` new Rule 1a). A PR whose diff
+     is strictly under `tests/`, `docs/`, or `workspaces/` MAY merge
+     without `/release` because PyPI version + wheel content are
+     unchanged. Allowlist + explicit exclusions (`CHANGELOG.md`,
+     `pyproject.toml`, `__init__.py::__version__`, `src/**`,
+     `packages/**/src/**`, `specs/**`, `.github/workflows/**`,
+     `uv.lock`) prevent rationalization gaps. Origin: kaizen #821 —
+     PR #824 merged via admin without `/release`; user approved option A
+     because the diff was strictly under
+     `packages/kaizen-agents/tests/unit/`. Carve-out documented to
+     prevent re-deriving the same A/B decision next BUILD-repo session.
 
-  1. **TODO-NNN cleanup methodology + three-layer canonical-regex gate
-     pattern.** Previously tacit knowledge (4-class disposition catalog,
-     three-layer gate pattern with single-source-of-truth bash script,
-     synthetic-PR validation protocol). Codified into new validation-
-     patterns sub-file `validate-codebase-hygiene-markers.md` + indexed
-     in SKILL.md. Reusable for any future workstream gating a regex out
-     of production source (FIXME, HACK, internal-tracker IDs, deprecated-
-     API references).
+  Other patterns surfaced in #822 + #814 + #821 work were textbook
+  execution against existing rules (brief under-counts — covered by
+  `rules/agents.md` § Parallel Brief-Claim Verification; MCP orphan
+  detection — covered by `rules/zero-tolerance.md` Rules 1c, 2 +
+  `rules/orphan-detection.md`; LLM-first violation in
+  `_generate_role_based_traits` — covered by `rules/agent-reasoning.md`
+  Rule 1, follow-up filed as #829).
 
-  Most other patterns surfaced were textbook execution against existing
-  rules (sibling-package release sweep — already in build-repo-release-
-  discipline.md Rule 1; SHA-grounded pre-existing diagnostic disposition
-  — already in zero-tolerance.md Rule 1c; release-prep branch convention
-  — already in git.md; sequential tag pushes — already in deployment.md).
-
-  No agent changes; no rule additions. The skill sub-file is the single
-  new artifact.
+  No new agents; no new skills; no new rule files. Two clause additions
+  to existing rule files. Both rule files are grandfathered (predate
+  `rules/trust-posture.md`); per Phase 1 enforcement, no Trust Posture
+  Wiring section required for clause additions to grandfathered rules.
 
 status: distributed
-reviewed_date: "2026-05-03"
-distributed_date: "2026-05-03T23:30:00Z"
-reviewed_notes: |
-  Both changes classified GLOBAL at loom Gate 1 (2026-05-03).
-  Methodology is language-agnostic; Python tooling examples (uv, pytest,
-  pre-commit, .egg-info, pyright) are illustrative concrete forms, not
-  prescriptive. Future kailash-rs / kailash-rb sync cycles inherit the
-  same skill sub-file with no variant overlay needed (rs translates
-  uv→cargo, pytest→nextest, .egg-info→target/, pre-commit→bash hook
-  at the same paths).
-distributed_to:
-  loom:
-    version: 2.15.1
-    sha: 6bef70b
-    commit: "release(coc): 2.15.1 — NEW GLOBAL skill skills/16-validation-patterns/validate-codebase-hygiene-markers.md (kailash-py /codify 2026-05-03)"
-  py_axis:
-    kailash-coc-claude-py:
-      version: 3.6.12
-      sha: 47ada5d
-      commit: "sync: 3.6.12 — loom 2.15.1 (commit 6bef70b)"
-    kailash-coc-py:
-      version: 1.1.11
-      sha: bd4f22e
-      commit: "sync: 1.1.11 — loom 2.15.1 (commit 6bef70b)"
-  rs_axis: pending  # /sync rs cycle outstanding
-  rb_axis: pending  # /sync rb cycle outstanding
-distribution_notes: |
-  py axis fully distributed (loom 2.15.1 + 2 templates committed).
-  rs + rb axes pending separate /sync rs / /sync rb invocations —
-  the same skill sub-file + SKILL.md update apply to both axes
-  without variant overlay (methodology is language-agnostic).
-  /sync rs at next session would: (1) cherry-pick loom 2.15.1
-  changes already on main, (2) distribute to kailash-coc-claude-rs +
-  kailash-coc-rs, (3) cargo check verification on each.
-  /sync rb similarly distributes to kailash-coc-claude-rb.
+created_date: "2026-05-05"
 
 changes:
-  - kind: skill_addition
-    path: .claude/skills/16-validation-patterns/validate-codebase-hygiene-markers.md
-    classification: global
+  - kind: rule_clause_addition
+    path: .claude/rules/zero-tolerance.md
+    classification: pending # loom Gate 1 review
     summary: |
-      New validation-patterns sub-file capturing the TODO-NNN cleanup
-      methodology developed for issue #781. Covers:
+      New Rule 3d under `## Rule 3: No Silent Fallbacks Or Error Hiding`:
+      "Dual-Shape Return + Structural Guard = Silent Fallback".
 
-        - 4-class disposition catalog (Class 1a header banner / 1b docstring
-          provenance / 2 active iterative / 3 cross-reference) with per-class
-          rules + ambiguous-Class-1/2 boundary heuristic
-        - Three-layer hygiene gate pattern (.pre-commit-config.yaml local hook
-          + scripts/check_<name>.sh shared bash script + tests/regression/
-          test_no_untracked_<name>.py Tier-2 regression test)
-        - Synthetic-PR validation protocol (inject + verify-fail + add-tracker
-          + verify-pass + revert)
-        - Multi-shard cleanup strategy + release-cycle integration checklist
-        - Authoring gotchas (YAML scalar fragility with embedded colons in
-          pre-commit `entry:`, `grep -I` for binary-skip, `\.egg-info/`
-          exclusion shape)
+      A property/method whose return type is a union of structurally-
+      distinct shapes (e.g., `Union[ConfigWrapper(dict),
+      KaizenConfig(dataclass)]`) MUST NOT be consumed via a structural
+      existence guard (`hasattr(value, "method")`) that resolves True
+      for one branch and False for the other.
 
-      Cross-language reusability note: pattern is language-agnostic; bash
-      script + regression test translate directly to cargo test / rspec /
-      equivalent. Worth global classification at loom Gate 1 (not Python-
-      variant) so future kailash-rs / kailash-rb hygiene workstreams
-      inherit the same methodology.
+      DO/DO NOT examples cover three patterns:
+      - DO: discriminator-based dispatch (isinstance check)
+      - DO: single-shape collapse (preferred for new APIs)
+      - DO NOT: structural guard silently flips on the typed-config branch
+
+      BLOCKED rationalizations enumerate 6 verbatim excuses
+      ("Tests pass with dict-shaped config", "hasattr is the Pythonic
+      duck-typing pattern", "If users pass typed config, that's their
+      choice to opt out", "The dual-shape API is for backwards
+      compatibility", "Adding isinstance couples the consumer to the
+      type", "The guard is defensive; falling through to False is safer
+      than raising").
+
+      Why: same failure-mode class as fake encryption / fake transaction
+      / fake dispatch (Rule 2). Tests written against the structurally-
+      richer branch silently mask the gap.
+
+      Detection: at every `hasattr(x, "<method>")` callsite where x has
+      a union return type, walk back to the declared type — if any
+      branch lacks <method>, the guard is silently flipping for that
+      branch's users.
+
+      Origin: kailash-kaizen #822 (2026-05-05) `signature_programming_enabled`
+      gate silent no-op against `KaizenConfig` dataclass instances.
 
     rationale: |
-      Genuinely-novel + reusable institutional knowledge. The 4-class
-      taxonomy + three-layer gate pattern survived through a 6-package
-      release cycle with the gate firing correctly on synthetic-PR
-      validation. Worth codifying as institutional knowledge so future
-      similar workstreams (FIXME scrub, deprecated-API reference scrub,
-      internal-tracker namespace migration) can reuse the methodology
-      without re-discovering it.
+      Genuinely-novel pattern not covered by existing Rule 3a (typed
+      delegate guards) or Rule 3c (documented kwargs accepted but
+      unused). The dual-shape variant is the silent-fallback failure
+      mode at API surface union level — distinct from the signature-
+      level failure modes already codified.
 
     cross_sdk_consideration: |
-      The methodology is language-agnostic. kailash-rs and any future
-      kailash-rb would benefit from the same skill sub-file translated
-      to their toolchain (cargo test, rspec). Loom Gate 1 should
-      classify as global with cross-SDK propagation noted for the next
-      kailash-rs /sync cycle. NOT auto-filed per upstream-issue-hygiene
-      Rule 1.
+      Language-agnostic at the rule-prose level. Rust's `match`
+      exhaustiveness + `enum` discrimination prevents the failure mode
+      structurally for enum returns; but `&dyn Trait` returns +
+      `if let Some(x) = ...` guards recreate the same pattern in Rust
+      code. Worth GLOBAL classification at loom Gate 1.
 
-  - kind: skill_index_update
-    path: .claude/skills/16-validation-patterns/SKILL.md
-    classification: global
+  - kind: rule_clause_addition
+    path: .claude/rules/build-repo-release-discipline.md
+    classification: pending # loom Gate 1 review
     summary: |
-      - Added "Codebase Hygiene Validations" section in sub-file index
-        referencing the new validate-codebase-hygiene-markers.md
-      - Added missing reference to orphan-audit-playbook.md (companion
-        validation pattern that was previously not indexed despite being
-        a sub-file)
-      - Extended description keyword list with: 'codebase hygiene',
-        'TODO marker scrub', 'marker cleanup', 'three-layer gate',
-        'regex gate' (so semantic skill-loader picks up cleanup-workstream
-        queries)
+      New Rule 1a under `## MUST Rules`:
+      "Carve-Out — Test-Only / Docs-Only / Workspace-Only Diffs".
+
+      A PR whose diff is **strictly test-only**, **strictly docs-only**,
+      or **strictly workspace-only** MAY merge without `/release`
+      because the diff produces no consumer-visible artifact change —
+      PyPI version remains identical, the wheel content is identical,
+      downstream installs see no change.
+
+      Allowlist (4 entries):
+        - tests/** or **/tests/**
+        - docs/**
+        - workspaces/**
+        - *.md at repo root limited to README touches
+
+      Explicit exclusions (8 entries) — any of these means /release
+      IS required:
+        - CHANGELOG.md
+        - pyproject.toml
+        - **/__init__.py::__version__
+        - src/**
+        - packages/**/src/**
+        - specs/**
+        - .github/workflows/**
+        - uv.lock
+
+      DO/DO NOT bash example uses `git diff --name-only main...HEAD`
+      with grep filters to verify carve-out applicability before
+      merge.
+
+      BLOCKED rationalizations enumerate 8 verbatim excuses
+      ("Mostly test-only with one src/ file", "Test imports a new
+      helper from src/", "Workspace plus a small spec edit", "Docs
+      sample updated to reference a new API surface", "CHANGELOG entry
+      but no source change", "It's just a fix to a test that was
+      wrong", "I'll batch the test PR with the next code release",
+      "The PR also bumped uv.lock").
+
+      Also refined the rule's ABSOLUTE clause (line 27) to remove the
+      now-misleading "(new feature, bug fix, refactor, new test, new
+      docs surface)" phrasing — replaced with "(new feature, bug fix,
+      refactor)" + an explicit pointer to Rule 1a for the carve-out.
+
+      Origin: kailash-kaizen #821 (2026-05-05) PR #824 admin-merge
+      without /release, approved A/B decision documented to prevent
+      re-derivation.
 
     rationale: |
-      Index-only update; no behavioral change to existing validations.
-      Required for the new sub-file to be discoverable via the skill's
-      progressive-disclosure entry point.
+      Issue #821 session-notes explicitly flagged this carve-out as
+      worth `/codify`-ing to prevent the same A/B decision being
+      re-derived per BUILD-repo session. PyPI ships wheels, not git
+      trees; a test-only diff produces zero wheel-content change.
+      Forcing /release on a no-op diff burns ~5 minutes of CI per PR
+      for zero consumer benefit.
+
+    cross_sdk_consideration: |
+      Language-agnostic. `cargo` ships crates, not git trees; same
+      wheel-vs-tree argument applies. The path translation is direct:
+      Python `tests/` ↔ Rust `tests/`; Python `pyproject.toml::include`
+      ↔ Rust `Cargo.toml::[package] exclude = [...]`. Worth GLOBAL
+      classification at loom Gate 1.
 
 deferred_for_codify:
   - rationale: |
-      Three follow-up workstreams flagged in PR bodies for human approval
-      (NOT auto-filed per upstream-issue-hygiene.md Rule 1):
-        1. kaizen pyright cleanup — pre-existing diagnostics in
-           tools/native/* BaseTool override mismatches + missing research/
-           modules; SHA-grounded to b511f186 (2026-03-19). Draft issue at
-           workspaces/issue-781-todo-nnn-cleanup/03-implementation/
-           T2-followup-issue-kaizen-pyright.md.
-        2. kaizen-agents Black/Ruff modernization sweep — Optional[X] →
-           X | None etc.; rejected from T3 to keep diffs comment-only.
-           Bypass documented in commit bodies per rules/git.md.
-        3. nexus E2E port-mismatch — test_ai_agent_discovery_and_exploration
-           pre-existing failure; SHA-grounded to b553104c (2026-03-11).
+      Three follow-up workstreams flagged but NOT codified this cycle:
+
+      1. **Cross-SDK orphan-pattern audit issue against esperie/kailash-rs**
+         (issue-822 todo 3.3). HUMAN-GATED per upstream-issue-hygiene.md
+         Rule 1; structurally out-of-lane for kailash-py session per
+         repo-scope-discipline.md. Requires kailash-rs session OR
+         human-driven cross-repo filing.
+
+      2. **LLM-first rewrite of `_generate_role_based_traits`** —
+         filed as kaizen issue #829 for follow-up. Existing
+         `rules/agent-reasoning.md` Rule 1 already covers the pattern;
+         no rule update needed.
+
+      3. **Sweep for sibling dual-shape silent-fallback sites — RESOLVED**
+         (#822 J0003 For Discussion #2). Mechanical grep across
+         `packages/` and `src/` ran in this codify session
+         (`grep -rn 'hasattr.*"get"' packages/*/src/ src/`).
+         Classified 10 candidate sites; 0 confirmed Rule 3d violations:
+           - `agents.py:56` — the FIXED #822 helper (Rule 3d DO pattern)
+           - `framework.py:1949` (memory_system) — duck-typed adapter
+             with explicit `_data` fallthrough; all branches attempt
+             retrieval; not a silent feature flip
+           - `resolver.py:183` (tenant_store) — adapter raises
+             `TenantNotFoundError` when no shape matches
+           - `inspector.py:1957` + `context_analyzer.py:506,518,523`
+             — documented connection-shape normalization adapter
+             (multi-version `WorkflowBuilder.connections` shape)
+           - `drift_monitor.py:1821` — `row.get(k) if hasattr(row,
+             "get") else row[k]`; else branch raises loudly
+           - `health.py:145,197` — resource health probes; "no probe
+             available" is documented health-check semantics
+           - `mock_registry.py:185,201` — test infrastructure (carved
+             out from production rules)
+           - `build/lib/...` — stale build artifact (not source)
+         No follow-up issue needed. Recurrence rate is 1/N (the
+         signature_programming_enabled gate was the sole instance;
+         shipped fixed in kailash-kaizen 2.19.0). Rule 3d remains a
+         preventive measure; if a second instance surfaces in a future
+         workstream, escalation to a sweep-and-fix shard is correct.
 
 cross_sdk_loop:
   rationale: |
-    The codebase-hygiene-marker methodology applies symmetrically to
-    kailash-rs (Rust internal-tracker IDs, doc-comment scrubbing) and
-    any future kailash-rb. Recommended loom action: at Gate 1, flag
-    the new skill sub-file for cross-SDK propagation. No automatic
-    cross-filing per upstream-issue-hygiene Rule 1 — the user reviews
-    each cross-SDK landing as a separate decision.
+    Both rule additions are language-agnostic and apply symmetrically
+    to kailash-rs (and any future kailash-rb). Recommended loom action:
+    at Gate 1, classify both as GLOBAL with cross-SDK propagation noted
+    for the next kailash-rs /sync cycle. No automatic cross-filing per
+    upstream-issue-hygiene Rule 1 — the user reviews each cross-SDK
+    landing as a separate decision.
+
+  rs_translation_notes: |
+    Rule 3d:
+      - Python `Union[A, B]` ↔ Rust `enum E { A(...), B(...) }` for
+        well-formed enums. Rust's `match` exhaustiveness check
+        structurally prevents the silent-fallback for enum returns.
+      - Python `hasattr(x, "method")` ↔ Rust `if let Some(_) = x.method()`
+        on `Option`-returning methods. Same silent-fallback class.
+      - Python `isinstance(x, KaizenConfig)` ↔ Rust `match x { E::A(_) => ... }`.
+
+    Rule 1a:
+      - Python `tests/` ↔ Rust `tests/` (identical convention)
+      - Python `pyproject.toml::include` ↔ Rust `Cargo.toml::[package] exclude`
+      - Python `uv.lock` ↔ Rust `Cargo.lock` (both consumer-visible —
+        change-the-resolved-tree semantics identical).
+
+trust_posture_wiring_decision: |
+  Both edited rule files (`zero-tolerance.md`, `build-repo-release-discipline.md`)
+  are grandfathered — both predate `rules/trust-posture.md` (which was
+  authored 2026-05-05 in the loom session synced down this morning).
+  Per `rules/trust-posture.md` MUST 7 + Phase 1 rollout policy, clause
+  additions to grandfathered rules do NOT trigger the wiring
+  requirement. Phase 2 enforcement (`/codify` halt-on-missing-wiring)
+  activates after ≥10 real sessions exercise the trust-posture system.
+
+  No wiring sections added to the edited rule files.
+
+distributed_date: "2026-05-05T15:41:20Z"
+distributed_by_loom_commit: 671b79f
+loom_version: 2.18.0
+distribution_targets:
+  - kailash-coc-claude-py @ f16f720
+  - kailash-coc-claude-rs @ b2f8603
+  - kailash-coc-claude-rb @ 6e6b9fe
+gate1_classification:
+  - kind: rule_clause_addition (zero-tolerance.md Rule 3d)
+    classification: GLOBAL
+    rationale: language-agnostic; same failure-mode class as Rule 2/3 fakes
+  - kind: rule_clause_addition (build-repo-release-discipline.md Rule 1a)
+    classification: GLOBAL (path-scoped)
+    rationale: cargo ships crates not git trees; carve-out applies symmetrically across SDKs

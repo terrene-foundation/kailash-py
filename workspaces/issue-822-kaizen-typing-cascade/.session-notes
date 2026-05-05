@@ -1,0 +1,58 @@
+# Session Notes — 2026-05-05
+
+## Where we are
+
+Issue #822 SHIPPED + CLOSED. `kailash-kaizen 2.19.0` live on PyPI via tag
+`kaizen-v2.19.0` at main `1d8063c1`. Follow-up #829 filed (LLM-first
+`_generate_role_based_traits`).
+
+**Codify cycle (2026-05-05 evening) complete:**
+- `zero-tolerance.md` Rule 3d added (Dual-Shape Return + Structural Guard
+  = Silent Fallback) — origin: #822 J0003 `signature_programming_enabled`
+- `build-repo-release-discipline.md` Rule 1a added (Test-Only / Docs-Only
+  / Workspace-Only Carve-Out) — origin: #821 PR #824
+- Sibling-sweep run: 0 confirmed Rule 3d violations across `packages/` +
+  `src/` (10 candidate sites classified — see proposal yaml)
+- Proposal yaml at `.claude/.proposals/latest.yaml` is `pending_review`
+  for next loom Gate 1
+- DECISION journal entry at
+  `workspaces/issue-822-kaizen-typing-cascade/journal/0006-DECISION-codified-rule-3d-and-test-only-carveout.md`
+- cc-architect red-team: PASS on both clauses
+
+Workspace work is effectively done — only out-of-lane todo 3.3 remains
+(cross-SDK kailash-rs audit, cannot file from kailash-py session).
+
+## Read first
+
+1. `workspaces/issue-822-kaizen-typing-cascade/todos/active/3.3-cross-sdk-followup-issue.md` — only active todo; ready-to-paste `gh issue create --repo esperie/kailash-rs` command + body
+2. `deploy/deployments/2026-05-05-kaizen-v2.19.0.md` — full release record (verification command, PyPI cache-lag note, cross-SDK disposition)
+3. `deploy/deployment-config.md` — current package versions (line: `Last updated: 2026-05-05`)
+4. `rules/repo-scope-discipline.md` — why 3.3 cannot be filed from this repo
+5. `CLAUDE.md` — repo entry point if continuing on a different workstream
+
+## In-flight state
+
+- Working tree on main has unstaged `.claude/` modifications (trust-posture
+  rollout files: `posture-gate.js`, `detect-violations.js`, `trust-posture.md`,
+  `skills/32-trust-posture/`, `commands/posture.md`) — separate workstream,
+  NOT touched by this session.
+- Two `uv.lock` modifications on disk (root + kaizen) also predate this
+  session.
+
+## Traps
+
+- Workspace dirs under `workspaces/` are untracked — `git mv` fails; use plain `mv`.
+- `.env` has all model vars commented out — Tier 2 tests using `kaizen.create_agent()` need `monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")`.
+- `kaizen.configure(...)` global config only reaches `Kaizen.config` via the module-level `kaizen.create_agent(...)`, NOT `Kaizen().create_agent(...)`.
+- Repo-root `.venv` has stale `kailash` install — pytest from root errors. Use `cd packages/kailash-kaizen && uv run pytest …`.
+- `area/kaizen` GitHub label does not exist; only `area/quality` is available.
+
+## Unreleased packages
+
+`node .claude/hooks/lib/release-drift.js` returned no output → no drift; all
+packages AT-PARITY with PyPI post-release.
+
+## Open questions for the human
+
+- File 3.3 against `esperie/kailash-rs` from a kailash-rs session? Body draft + paste-ready command in the todo file.
+- USE template (`kailash-coc-claude-py`) `kailash-kaizen>=2.19.0` pin bump runs from `loom/` via `/sync py` — out of scope here.
