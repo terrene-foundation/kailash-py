@@ -10,6 +10,8 @@ __version__ = "2.18.2"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
+from typing import Optional
+
 # UNIFIED AGENT API (ADR-020) - Primary user-facing agent
 # Async Agent from kaizen-agents is canonical; falls back to CoreAgent
 try:
@@ -124,7 +126,11 @@ def auto_discover_config():
     return _global_config_manager.auto_discover_config_files()
 
 
-def create_agent(name: str = None, config: dict = None, **kwargs):
+def create_agent(
+    name: Optional[str] = None,
+    config: Optional[dict] = None,
+    **kwargs,
+):
     """
     Create an agent with resolved global configuration.
 
@@ -152,7 +158,7 @@ def create_agent(name: str = None, config: dict = None, **kwargs):
     return framework.create_agent(agent_id=name, config=config, **kwargs)
 
 
-def get_resolved_config(explicit_config: dict = None) -> dict:
+def get_resolved_config(explicit_config: Optional[dict] = None) -> dict:
     """
     Get the current resolved configuration.
 
