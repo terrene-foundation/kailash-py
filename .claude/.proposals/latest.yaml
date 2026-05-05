@@ -1,260 +1,182 @@
 source_repo: kailash-py
-codify_date: "2026-05-05"
+codify_date: "2026-05-06"
 codify_session: |
-  Session 2026-05-05 — codify cycle following kailash-kaizen 2.19.0 release
-  (issue #822 + #814 Shard 2) and PR #824 (issue #821 test-only diff).
+  Session 2026-05-06 — codify cycle following kailash-kaizen 2.20.0 release
+  (issue #829: LLM-first trait derivation per `rules/agent-reasoning.md`
+  Rule 1).
 
-  Two genuinely-novel + reusable rule patterns surfaced:
+  Two genuinely-novel + reusable patterns surfaced. Both are AMENDMENTS to
+  existing rules — neither warrants a new top-level rule file (and so
+  neither needs Trust Posture Wiring per Step 6b — that gate fires only on
+  NEW rule files).
 
-  1. **Dual-shape return + structural guard = silent fallback**
-     (`zero-tolerance.md` new Rule 3d). A property/method whose return
-     type is `Union[A, B]` where A and B have structurally-distinct
-     attributes MUST NOT be consumed via `hasattr(value, "method")`
-     when the guard resolves True for one branch and False for the
-     other. The guard silently flips False on the missing-attribute
-     branch, and the documented behavior never fires for users on that
-     branch. Origin: kaizen #822 — `Kaizen.config` returns
-     `Union[ConfigWrapper(dict), KaizenConfig(dataclass)]`; consumer at
-     `agents.py:458` guarded with `hasattr(config, "get")`. The dataclass
-     branch flipped False; `signature_programming_enabled=True` users
-     bypassed the gate entirely. Fix shipped in 2.19.0.
+  1. **Same-shard fix-immediately for security-reviewer findings**
+     (`rules/autonomous-execution.md` Rule 4 amendment). Rule 4 today
+     names "code review or self-verification" as the trigger surface.
+     The 2026-05-06 session demonstrated cleanly that the same trigger
+     applies to security-reviewer outputs: 1 HIGH (prompt-injection
+     sanitization) + 2 MEDIUM (PII-leakage role logging, DoS via
+     unbounded cache) findings landed in the same commit as the
+     originating PR — within the shard's remaining capacity (3
+     additional small modifications, all <30 LOC each). Filing
+     follow-up issues would have wasted the warm context. The
+     amendment broadens the rule's listed surfaces from "code
+     review" to "any gate-level review (reviewer, security-reviewer)".
 
-  2. **Test-only / docs-only / workspace-only release-cycle carve-out**
-     (`build-repo-release-discipline.md` new Rule 1a). A PR whose diff
-     is strictly under `tests/`, `docs/`, or `workspaces/` MAY merge
-     without `/release` because PyPI version + wheel content are
-     unchanged. Allowlist + explicit exclusions (`CHANGELOG.md`,
-     `pyproject.toml`, `__init__.py::__version__`, `src/**`,
-     `packages/**/src/**`, `specs/**`, `.github/workflows/**`,
-     `uv.lock`) prevent rationalization gaps. Origin: kaizen #821 —
-     PR #824 merged via admin without `/release`; user approved option A
-     because the diff was strictly under
-     `packages/kaizen-agents/tests/unit/`. Carve-out documented to
-     prevent re-deriving the same A/B decision next BUILD-repo session.
+  2. **Conftest-scope stub replaces N call-site edits in Tier-1 sweeps**
+     (`rules/testing.md` § Tier-1 mocking pattern, advisory). When a
+     previously-deterministic internal method becomes side-effecting
+     (e.g., starts hitting an LLM), the canonical Tier-1 sweep is to
+     drop one autouse fixture in `tests/unit/conftest.py` that stubs
+     the method for the entire Tier-1 suite. The pattern's correctness
+     follows from pytest's conftest-scope rules (autouse fixtures
+     apply to every test under the conftest's directory; sibling
+     directories like `tests/integration/` are unaffected). Today's
+     session collapsed 36 NEEDS-FIX call sites across 8 files to one
+     conftest fixture. The pattern is OPTIONAL (an explicit
+     `behavior_traits=[...]` per call site is also valid) but the
+     conftest pattern wins on every dimension when the only thing that
+     varies is the side-effecting return shape.
 
-  Other patterns surfaced in #822 + #814 + #821 work were textbook
-  execution against existing rules (brief under-counts — covered by
-  `rules/agents.md` § Parallel Brief-Claim Verification; MCP orphan
-  detection — covered by `rules/zero-tolerance.md` Rules 1c, 2 +
-  `rules/orphan-detection.md`; LLM-first violation in
-  `_generate_role_based_traits` — covered by `rules/agent-reasoning.md`
-  Rule 1, follow-up filed as #829).
-
-  No new agents; no new skills; no new rule files. Two clause additions
-  to existing rule files. Both rule files are grandfathered (predate
-  `rules/trust-posture.md`); per Phase 1 enforcement, no Trust Posture
-  Wiring section required for clause additions to grandfathered rules.
-
-status: distributed
-created_date: "2026-05-05"
+  Both originated from the kailash-kaizen 2.20.0 release cycle (PR #836
+  + deploy record #837 + tag `kaizen-v2.20.0` published successfully to
+  PyPI 2026-05-06).
 
 changes:
-  - kind: rule_clause_addition
-    path: .claude/rules/zero-tolerance.md
-    classification: pending # loom Gate 1 review
-    summary: |
-      New Rule 3d under `## Rule 3: No Silent Fallbacks Or Error Hiding`:
-      "Dual-Shape Return + Structural Guard = Silent Fallback".
-
-      A property/method whose return type is a union of structurally-
-      distinct shapes (e.g., `Union[ConfigWrapper(dict),
-      KaizenConfig(dataclass)]`) MUST NOT be consumed via a structural
-      existence guard (`hasattr(value, "method")`) that resolves True
-      for one branch and False for the other.
-
-      DO/DO NOT examples cover three patterns:
-      - DO: discriminator-based dispatch (isinstance check)
-      - DO: single-shape collapse (preferred for new APIs)
-      - DO NOT: structural guard silently flips on the typed-config branch
-
-      BLOCKED rationalizations enumerate 6 verbatim excuses
-      ("Tests pass with dict-shaped config", "hasattr is the Pythonic
-      duck-typing pattern", "If users pass typed config, that's their
-      choice to opt out", "The dual-shape API is for backwards
-      compatibility", "Adding isinstance couples the consumer to the
-      type", "The guard is defensive; falling through to False is safer
-      than raising").
-
-      Why: same failure-mode class as fake encryption / fake transaction
-      / fake dispatch (Rule 2). Tests written against the structurally-
-      richer branch silently mask the gap.
-
-      Detection: at every `hasattr(x, "<method>")` callsite where x has
-      a union return type, walk back to the declared type — if any
-      branch lacks <method>, the guard is silently flipping for that
-      branch's users.
-
-      Origin: kailash-kaizen #822 (2026-05-05) `signature_programming_enabled`
-      gate silent no-op against `KaizenConfig` dataclass instances.
-
+  - rule: autonomous-execution
+    file: .claude/rules/autonomous-execution.md
+    action: AMEND
+    section: "MUST Rule 4 — Fix-Immediately When Review Surfaces A Same-Class Gap"
     rationale: |
-      Genuinely-novel pattern not covered by existing Rule 3a (typed
-      delegate guards) or Rule 3c (documented kwargs accepted but
-      unused). The dual-shape variant is the silent-fallback failure
-      mode at API surface union level — distinct from the signature-
-      level failure modes already codified.
+      Rule 4 today names "code review or self-verification" as the
+      trigger surface. Empirically, same-shard fix-immediately
+      applies cleanly to security-reviewer outputs too. The 2026-05-06
+      session: security-reviewer flagged 1 HIGH + 2 MEDIUM findings
+      against the in-flight PR; all three fit within the shard budget
+      (each <30 LOC); all three landed in the same commit; the
+      originally-rejected PR re-passed security review on the new
+      diff. Filing follow-ups would have wasted the still-warm context
+      AND violated the rule's spirit ("the gap costs the least to fix
+      while the context is loaded").
+    proposed_text: |
+      Add to the Origin paragraph after the existing 2026-04-20 + 2026-05-01
+      evidence:
 
-    cross_sdk_consideration: |
-      Language-agnostic at the rule-prose level. Rust's `match`
-      exhaustiveness + `enum` discrimination prevents the failure mode
-      structurally for enum returns; but `&dyn Trait` returns +
-      `if let Some(x) = ...` guards recreate the same pattern in Rust
-      code. Worth GLOBAL classification at loom Gate 1.
+      "Additional cross-class evidence — kailash-kaizen 2.20.0 release
+      cycle 2026-05-06: security-reviewer flagged 1 HIGH (prompt-injection
+      via output-rendered traits) + 2 MEDIUM (raw-role logging, unbounded
+      cache DoS) findings against PR #836; all three fit within the
+      shard's remaining budget (each <30 LOC, 4 invariants total); all
+      three landed in the same commit `ba476b88`; security-reviewer
+      re-approved on the post-fix diff. Confirms Rule 4 generalizes
+      from code-reviewer surfacings to security-reviewer surfacings —
+      same gate-level review pattern."
 
-  - kind: rule_clause_addition
-    path: .claude/rules/build-repo-release-discipline.md
-    classification: pending # loom Gate 1 review
-    summary: |
-      New Rule 1a under `## MUST Rules`:
-      "Carve-Out — Test-Only / Docs-Only / Workspace-Only Diffs".
+      Also amend the rule's first sentence from "When a code review or
+      self-verification surfaces a latent gap..." to:
 
-      A PR whose diff is **strictly test-only**, **strictly docs-only**,
-      or **strictly workspace-only** MAY merge without `/release`
-      because the diff produces no consumer-visible artifact change —
-      PyPI version remains identical, the wheel content is identical,
-      downstream installs see no change.
+      "When a gate-level review (reviewer, security-reviewer,
+      gold-standards-validator) or self-verification surfaces a latent
+      gap..."
+    classification_hint: GLOBAL
+    classification_reason: |
+      Applies across all SDKs and BUILD repos that run gate-level reviews.
+      Not Python-specific. Not framework-specific.
+    trust_posture_wiring: NOT_REQUIRED
+    trust_posture_reason: |
+      Amendment to existing rule (autonomous-execution.md). Step 6b
+      enforcement is for NEW rule files only.
 
-      Allowlist (4 entries):
-        - tests/** or **/tests/**
-        - docs/**
-        - workspaces/**
-        - *.md at repo root limited to README touches
-
-      Explicit exclusions (8 entries) — any of these means /release
-      IS required:
-        - CHANGELOG.md
-        - pyproject.toml
-        - **/__init__.py::__version__
-        - src/**
-        - packages/**/src/**
-        - specs/**
-        - .github/workflows/**
-        - uv.lock
-
-      DO/DO NOT bash example uses `git diff --name-only main...HEAD`
-      with grep filters to verify carve-out applicability before
-      merge.
-
-      BLOCKED rationalizations enumerate 8 verbatim excuses
-      ("Mostly test-only with one src/ file", "Test imports a new
-      helper from src/", "Workspace plus a small spec edit", "Docs
-      sample updated to reference a new API surface", "CHANGELOG entry
-      but no source change", "It's just a fix to a test that was
-      wrong", "I'll batch the test PR with the next code release",
-      "The PR also bumped uv.lock").
-
-      Also refined the rule's ABSOLUTE clause (line 27) to remove the
-      now-misleading "(new feature, bug fix, refactor, new test, new
-      docs surface)" phrasing — replaced with "(new feature, bug fix,
-      refactor)" + an explicit pointer to Rule 1a for the carve-out.
-
-      Origin: kailash-kaizen #821 (2026-05-05) PR #824 admin-merge
-      without /release, approved A/B decision documented to prevent
-      re-derivation.
-
+  - rule: testing
+    file: .claude/rules/testing.md
+    action: AMEND
+    section: "New subsection: Tier-1 Conftest-Scope Stub Pattern"
     rationale: |
-      Issue #821 session-notes explicitly flagged this carve-out as
-      worth `/codify`-ing to prevent the same A/B decision being
-      re-derived per BUILD-repo session. PyPI ships wheels, not git
-      trees; a test-only diff produces zero wheel-content change.
-      Forcing /release on a no-op diff burns ~5 minutes of CI per PR
-      for zero consumer benefit.
+      Today's session demonstrated that when a previously-deterministic
+      internal method becomes LLM-side-effecting (Issue #829:
+      `Kaizen._generate_role_based_traits` keyword classifier → LLM
+      Signature call), the cheapest Tier-1 sweep is one autouse
+      fixture in `tests/unit/conftest.py`. The mechanical alternative
+      (edit every call site to pass behavior_traits explicitly) was
+      36 edits across 8 files. The pytest scope rules guarantee the
+      stub does NOT leak to Tier-2 (`tests/integration/`) or Tier-3
+      (`tests/e2e/`).
 
-    cross_sdk_consideration: |
-      Language-agnostic. `cargo` ships crates, not git trees; same
-      wheel-vs-tree argument applies. The path translation is direct:
-      Python `tests/` ↔ Rust `tests/`; Python `pyproject.toml::include`
-      ↔ Rust `Cargo.toml::[package] exclude = [...]`. Worth GLOBAL
-      classification at loom Gate 1.
+      The pattern is generalizable: any time a Tier-1 unit test's
+      transitive dependency becomes side-effecting (LLM call, DB
+      query, network fetch) without changing its return-shape
+      contract, an autouse conftest fixture in the SAME directory tree
+      stubs it once for every test below. Side-channel benefits:
+      (a) tests stay offline, (b) tests stay fast, (c) tests don't
+      require API keys in dev environments, (d) future test additions
+      pick up the stub for free.
 
-deferred_for_codify:
-  - rationale: |
-      Three follow-up workstreams flagged but NOT codified this cycle:
+      ADVISORY pattern, not MUST — explicit `behavior_traits=...`
+      args per call site are also valid (just more code).
+    proposed_text: |
+      New subsection inserted between "## 3-Tier Testing" and the
+      next major heading:
 
-      1. **Cross-SDK orphan-pattern audit issue against esperie/kailash-rs**
-         (issue-822 todo 3.3). HUMAN-GATED per upstream-issue-hygiene.md
-         Rule 1; structurally out-of-lane for kailash-py session per
-         repo-scope-discipline.md. Requires kailash-rs session OR
-         human-driven cross-repo filing.
+      ```
+      ## Tier-1 Conftest Stub for Newly-Side-Effecting Internal Methods (Advisory)
 
-      2. **LLM-first rewrite of `_generate_role_based_traits`** —
-         filed as kaizen issue #829 for follow-up. Existing
-         `rules/agent-reasoning.md` Rule 1 already covers the pattern;
-         no rule update needed.
+      When an internal method that was previously deterministic becomes
+      side-effecting (e.g., an LLM call, a DB lookup, a network fetch)
+      WITHOUT changing its return-shape contract, the canonical Tier-1
+      sweep is one autouse fixture in the *deepest applicable* conftest:
 
-      3. **Sweep for sibling dual-shape silent-fallback sites — RESOLVED**
-         (#822 J0003 For Discussion #2). Mechanical grep across
-         `packages/` and `src/` ran in this codify session
-         (`grep -rn 'hasattr.*"get"' packages/*/src/ src/`).
-         Classified 10 candidate sites; 0 confirmed Rule 3d violations:
-           - `agents.py:56` — the FIXED #822 helper (Rule 3d DO pattern)
-           - `framework.py:1949` (memory_system) — duck-typed adapter
-             with explicit `_data` fallthrough; all branches attempt
-             retrieval; not a silent feature flip
-           - `resolver.py:183` (tenant_store) — adapter raises
-             `TenantNotFoundError` when no shape matches
-           - `inspector.py:1957` + `context_analyzer.py:506,518,523`
-             — documented connection-shape normalization adapter
-             (multi-version `WorkflowBuilder.connections` shape)
-           - `drift_monitor.py:1821` — `row.get(k) if hasattr(row,
-             "get") else row[k]`; else branch raises loudly
-           - `health.py:145,197` — resource health probes; "no probe
-             available" is documented health-check semantics
-           - `mock_registry.py:185,201` — test infrastructure (carved
-             out from production rules)
-           - `build/lib/...` — stale build artifact (not source)
-         No follow-up issue needed. Recurrence rate is 1/N (the
-         signature_programming_enabled gate was the sole instance;
-         shipped fixed in kailash-kaizen 2.19.0). Rule 3d remains a
-         preventive measure; if a second instance surfaces in a future
-         workstream, escalation to a sweep-and-fix shard is correct.
+      ```python
+      # tests/unit/conftest.py
+      @pytest.fixture(autouse=True)
+      def _stub_<method_name>(monkeypatch):
+          from <pkg>.<module> import <Class>
+          monkeypatch.setattr(
+              <Class>, "<method_name>", lambda self, *a, **kw: <fixed_return>
+          )
+      ```
 
-cross_sdk_loop:
-  rationale: |
-    Both rule additions are language-agnostic and apply symmetrically
-    to kailash-rs (and any future kailash-rb). Recommended loom action:
-    at Gate 1, classify both as GLOBAL with cross-SDK propagation noted
-    for the next kailash-rs /sync cycle. No automatic cross-filing per
-    upstream-issue-hygiene Rule 1 — the user reviews each cross-SDK
-    landing as a separate decision.
+      Pytest's conftest-scope rules guarantee the stub does NOT leak
+      to Tier-2 / Tier-3 (sibling `tests/integration/` and `tests/e2e/`
+      directories don't inherit `tests/unit/conftest.py`).
 
-  rs_translation_notes: |
-    Rule 3d:
-      - Python `Union[A, B]` ↔ Rust `enum E { A(...), B(...) }` for
-        well-formed enums. Rust's `match` exhaustiveness check
-        structurally prevents the silent-fallback for enum returns.
-      - Python `hasattr(x, "method")` ↔ Rust `if let Some(_) = x.method()`
-        on `Option`-returning methods. Same silent-fallback class.
-      - Python `isinstance(x, KaizenConfig)` ↔ Rust `match x { E::A(_) => ... }`.
+      **When to use:**
+      - Method has many Tier-1 call sites (~10+); editing each costs
+        more than the stub.
+      - Tier-1 tests don't depend on the method's actual content,
+        only its return shape.
+      - The new side-effect is the side-effect (LLM, DB, network);
+        Tier-1 must remain offline + fast per the 3-Tier contract.
 
-    Rule 1a:
-      - Python `tests/` ↔ Rust `tests/` (identical convention)
-      - Python `pyproject.toml::include` ↔ Rust `Cargo.toml::[package] exclude`
-      - Python `uv.lock` ↔ Rust `Cargo.lock` (both consumer-visible —
-        change-the-resolved-tree semantics identical).
+      **When NOT to use:**
+      - The method's actual content is tested in Tier-1 (e.g., a
+        regression test for the keyword classifier itself). Rewrite
+        those tests to shape-only or move them to Tier-2.
+      - Only 1-3 call sites are affected — explicit args are clearer.
 
-trust_posture_wiring_decision: |
-  Both edited rule files (`zero-tolerance.md`, `build-repo-release-discipline.md`)
-  are grandfathered — both predate `rules/trust-posture.md` (which was
-  authored 2026-05-05 in the loom session synced down this morning).
-  Per `rules/trust-posture.md` MUST 7 + Phase 1 rollout policy, clause
-  additions to grandfathered rules do NOT trigger the wiring
-  requirement. Phase 2 enforcement (`/codify` halt-on-missing-wiring)
-  activates after ≥10 real sessions exercise the trust-posture system.
+      **Why:** A monkey-patch fixture keeps Tier-1 deterministic and
+      offline without touching N test files. Future test additions
+      pick up the stub automatically. The pattern collapsed a
+      36-call-site sweep to 1 file in the kailash-kaizen 2.20.0
+      release cycle (2026-05-06, issue #829).
 
-  No wiring sections added to the edited rule files.
+      ```
+    classification_hint: GLOBAL
+    classification_reason: |
+      Applies to any test suite using pytest with 3-Tier separation by
+      directory tree. Not Python-specific in spirit (the conftest-scope
+      idea has analogs in Rust integration-test directories), but the
+      proposed_text uses pytest specifically and would need a
+      Rust-variant overlay if loom decides this earns a sibling rule on
+      the kailash-rs side.
+    trust_posture_wiring: NOT_REQUIRED
+    trust_posture_reason: |
+      Amendment to existing rule (testing.md). Advisory pattern,
+      not MUST.
 
-distributed_date: "2026-05-05T15:41:20Z"
-distributed_by_loom_commit: 671b79f
-loom_version: 2.18.0
-distribution_targets:
-  - kailash-coc-claude-py @ f16f720
-  - kailash-coc-claude-rs @ b2f8603
-  - kailash-coc-claude-rb @ 6e6b9fe
-gate1_classification:
-  - kind: rule_clause_addition (zero-tolerance.md Rule 3d)
-    classification: GLOBAL
-    rationale: language-agnostic; same failure-mode class as Rule 2/3 fakes
-  - kind: rule_clause_addition (build-repo-release-discipline.md Rule 1a)
-    classification: GLOBAL (path-scoped)
-    rationale: cargo ships crates not git trees; carve-out applies symmetrically across SDKs
+# Note: per /codify Step 1 — learning-digest.json hash matches prior
+# codification (e0f13cde2fc1 ≈ sha256:e0f13). Digest itself yields no new
+# actions. The patterns above derive from THIS session's journal entries
+# (workspaces/issue-829-kaizen-llm-first-traits/journal/{0001,0002,0003}.md)
+# which the digest will pick up next cycle.
+
+status: pending_review

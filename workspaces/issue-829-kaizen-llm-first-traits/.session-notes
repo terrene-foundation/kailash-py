@@ -1,0 +1,87 @@
+# Session Notes — 2026-05-06 (issue #829 SHIPPED)
+
+## Where we are
+
+Issue #829 closed end-to-end. Workstream complete from `/analyze` through
+`/release`.
+
+- **PR #836** (`fe6ed609`) — kailash-kaizen 2.19.0 → 2.20.0 — admin-merged
+  after CI green (Python 3.11/3.12/3.13/3.14 × 2 workflows + CodeQL +
+  Spec Drift + PACT + infrastructure all pass).
+- **Tag** `kaizen-v2.20.0` pushed; publish-pypi.yml run `25393777596`
+  succeeded. PyPI now serves kailash-kaizen 2.20.0.
+- **Clean-venv install verified live**: `kaizen.__version__ == "2.20.0"`
+  + `RoleToTraitsSignature` importable + `Kaizen._TRAIT_CACHE_MAX == 256`
+  + keyword classifier residue absent from `inspect.getsource`.
+- **PR #837** (`9a028691`) — deploy record + config update — admin-merged.
+- **Issue #829** auto-closed at PR #836 merge; code-reference comment
+  posted citing PR #836 + commit `fe6ed609` + tag + publish workflow.
+
+## What shipped
+
+- New `kailash_kaizen.core._role_traits_signature.RoleToTraitsSignature`
+  (private, not in `__all__`).
+- `Kaizen._generate_role_based_traits` rewritten as LLM-first via
+  `BaseAgent.run()` against the configured provider.
+- Bounded LRU cache (`OrderedDict`, max 256, `popitem(last=False)`
+  eviction) keyed by `role.strip().lower()`.
+- Output sanitization regex `^[a-z0-9_ ]{1,32}$` (prompt-injection
+  defense — protects downstream `_generate_role_based_prompt`).
+- Hashed `role_hash=<sha256[:8]>` + `raw_len=<int>` in WARN logs and
+  `RuntimeError` messages (PII-leakage defense).
+- Failure mode: `KAIZEN_DEFAULT_MODEL` unset OR LLM call failure →
+  `RuntimeError` naming both escape hatches; previously: silent default
+  list (Rule-1 violation).
+- `tests/unit/conftest.py` autouse fixture stubs derivation for Tier-1
+  (one fixture replaces 36 individual call-site edits).
+- 6 new Tier-2 tests across two new files; 2 in-place rewrites of
+  pre-existing keyword-pinning tests.
+- `specs/kaizen-core.md` §7.5 (Trait Derivation) added.
+
+## Cross-SDK disposition
+
+Cross-SDK kailash-rs orphan-pattern audit DEFERRED to a future kailash-rs
+session per `rules/repo-scope-discipline.md`. Carry-forward signal lives
+in `todos/completed/1.8-cross-sdk-deferred-followup.md` (gitignored —
+reachable only from a local checkout) with grep commands + filing
+disposition decision tree.
+
+## Read first (only relevant if revisiting trait derivation)
+
+1. `journal/0001-DISCOVERY-trait-derivation-call-graph-bounded.md` —
+   why the fix has only one production call site.
+2. `journal/0002-DECISION-sync-surface-locks-implementation-shape.md` —
+   why `BaseAgent.run()` (sync) was the only feasible primitive.
+3. `journal/0003-DISCOVERY-tier1-conftest-stub-replaces-36-call-site-edits.md` —
+   why one autouse fixture beat 36 hand edits.
+4. `02-plans/01-architecture.md` — full plan.
+5. `01-analysis/02-risks-and-edges.md` — 7 risks identified at /analyze;
+   all 7 dispositions visible in shipped code.
+
+## Traps
+
+- The reviewer's "Sweep 3 collection blocker" was an environmental
+  false alarm (kailash editable install not present in the reviewer's
+  shell); local + CI envs had the editable install. Future sessions
+  running collection-gate sweeps should `uv pip install -e .` first.
+- Security-reviewer's initial REJECT (3 findings: prompt-injection,
+  PII logging, DoS via cache pollution) all fixed in same shard per
+  `autonomous-execution.md` Rule 4. The HIGH/MEDIUM dispositions are
+  now part of the spec at §7.5.
+- `BaseAgent.run()` returns `Dict[str, Any]` keyed on Signature output
+  field names; my impl reads `result.get("traits_csv", "")`. If the
+  Signature is renamed in a future refactor, update the parser.
+- The Tier-1 `tests/unit/conftest.py` stub returns
+  `["professional", "reliable", "adaptive"]` — same default list the
+  keyword classifier returned for unmatched roles. If a future Tier-1
+  test asserts trait CONTENTS (not just shape), it will break against
+  this stub; rewrite to shape-only OR move to Tier-2.
+
+## Closing pointers
+
+- `/codify` could lift two patterns from this workstream: (a)
+  conftest-stub-replaces-N-callsite-edits as a sweep optimization
+  pattern; (b) same-shard security-reviewer findings (HIGH+MEDIUM) =
+  fix-immediately per Rule 4 — extend to security-reviewer outputs
+  beyond just code-review surfacing. Both candidate `/codify`
+  upstreams to loom.
