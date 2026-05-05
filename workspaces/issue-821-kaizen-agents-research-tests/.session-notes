@@ -1,0 +1,43 @@
+# Session Notes — 2026-05-05
+
+## Where we are
+
+Issue #821 closed end-to-end. PR #824 (test parity for `kaizen-agents/research_patterns/*`)
+merged via admin to `main` as `7c3c2504`. User approved option A — no PyPI
+release for the test-only diff. Workspace has no outstanding todos; next
+session most likely picks up #822 (kaizen Optional/None typing cascade).
+
+## Read first
+
+1. `journal/0001-DELIVERY-research-patterns-tests.md` — what shipped + findings
+2. `02-plans/01-architecture.md` — source-surface inventory if revisiting `research_patterns/*`
+3. github.com/.../issues/822 — multi-shard cascade; needs full `/analyze`
+4. `rules/build-repo-release-discipline.md` — Rule 1 + the test-only carve-out worth `/codify`-ing
+5. `CLAUDE.md` — entry point if next work isn't #822
+
+## In-flight state
+
+- Pre-existing `uv.lock` modifications at root + `packages/kailash-kaizen/` —
+  carried over from before #814; defer to next release batch.
+- Untracked `workspaces/issue-814-kaizen-pyright/` and
+  `workspaces/issue-821-kaizen-agents-research-tests/` (this session).
+- All sub-package main versions match PyPI (verified mid-session).
+
+## Traps
+
+- `pytest packages/kaizen-agents/tests/unit/` runs with ~1% CPU at minute 3+ —
+  pre-existing slowness in the existing kaizen-agents suite, NOT introduced
+  by #821 (new tests pass standalone in 0.15s). Investigate separately if it bites.
+- `kaizen.signatures.Signature` requires `inputs=` / `outputs=` in `super().__init__`;
+  bare `class _Stub(Signature): pass` raises `ValueError`. See test_experimental.py.
+- BUILD-repo discipline: every code merge MUST proceed through `/release` —
+  EXCEPT test-only / docs-only / workspace-only PRs (carve-out approved
+  this session; not yet codified in the rule text).
+- Cross-SDK note: kailash-rs `crates/kaizen-agents/src/agents/research.rs`
+  is a `ResearchAgent`, NOT analogous to kailash-py's pattern-builders.
+
+## Open questions for the human
+
+- Codify the test-only carve-out into `rules/build-repo-release-discipline.md`
+  Rule 1 via `/codify` upstream to loom? Would prevent re-deriving the same
+  A/B decision next BUILD-repo session.
