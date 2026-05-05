@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] — 2026-05-05 — Dead MCP integration surface deletion (#822) + research/web-search extras (#814 Shard 2)
+
 ### Added
 
 - **`research` and `web-search` optional-dependency extras (closes #814 Shard 2).** `pyproject.toml` now declares two optional-extras groups so users opt in to the lazy-imported runtime deps in `kaizen.research.parser` (arXiv paper search + PDF parsing) and `kaizen.tools.native.search_tools` (DuckDuckGo + HTML extraction). Install via `pip install 'kailash-kaizen[research]'` or `pip install 'kailash-kaizen[web-search]'` per `rules/dependencies.md` "Declared = Imported". Replaces the pre-existing pattern where `arxiv`, `pypdf`, `duckduckgo-search`, and `beautifulsoup4` were lazy-imported in source but undeclared in the manifest.
