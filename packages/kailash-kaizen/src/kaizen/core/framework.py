@@ -10,6 +10,8 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
+    from kaizen.signatures import Signature
+
     from .agents import Agent
 
 
@@ -338,10 +340,10 @@ class Kaizen:
 
     def create_agent(
         self,
-        agent_id: str = None,
+        agent_id: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
         signature: Optional[Any] = None,
-        name: str = None,  # Backward compatibility
+        name: Optional[str] = None,  # Backward compatibility
         **kwargs,
     ) -> "Agent":
         """
@@ -371,6 +373,7 @@ class Kaizen:
         elif agent_id is None:
             # Auto-generate agent ID if none provided
             agent_id = f"agent_{len(self._agents) + 1}"
+        assert agent_id is not None  # narrowed exhaustively by branches above
 
         if agent_id in self._agents:
             raise ValueError(f"Agent '{agent_id}' already exists")
@@ -493,6 +496,11 @@ class Kaizen:
         agent.role = role
         agent.expertise = specialized_config.get("expertise", "general")
         agent.capabilities = specialized_config.get("capabilities", [])
+        # Issue #822: behavior_traits MUST be attached as an attribute so
+        # _generate_role_based_prompt's hasattr(agent, "behavior_traits") guard
+        # at line ~537 is reachable (was structurally always False; trait-rendering
+        # branch was unreachable in the original code).
+        agent.behavior_traits = specialized_config.get("behavior_traits", [])
 
         # Add role-based prompt generation method
         agent._generate_role_based_prompt = (
@@ -821,8 +829,14 @@ class Kaizen:
         if state_management:
             team.set_state({"workflow_stage": "initialized"})
 
-        team.conflict_resolution = conflict_resolution
-        team.performance_optimization = performance_optimization
+        # AgentTeam is deprecated (DeprecationWarning in __init__ directs users to
+        # kaizen.orchestration.runtime.OrchestrationRuntime). Issue #822: do NOT
+        # extend the deprecated class with typed kwargs; use setattr to make the
+        # dynamic-attach explicit — pyright skips static attribute checking on
+        # setattr, which is the structurally-honest signal that these are
+        # dynamically-attached deprecated-API extensions.
+        setattr(team, "conflict_resolution", conflict_resolution)
+        setattr(team, "performance_optimization", performance_optimization)
 
         return team
 
@@ -868,6 +882,13 @@ class Kaizen:
             from kaizen_agents.coordination.patterns import get_global_pattern_registry
 
             pattern_registry = get_global_pattern_registry(self)
+
+        if pattern_registry is None:
+            raise RuntimeError(
+                "pattern_registry is None — initialize_enterprise_features() must be "
+                "called before create_coordination_workflow, or this Kaizen instance "
+                "had its enterprise resources cleaned up"
+            )
 
         # Add enterprise features to config if enabled
         if enterprise_features:
@@ -941,6 +962,13 @@ class Kaizen:
             from kaizen_agents.coordination.patterns import get_global_pattern_registry
 
             pattern_registry = get_global_pattern_registry(self)
+
+        if pattern_registry is None:
+            raise RuntimeError(
+                "pattern_registry is None — initialize_enterprise_features() must be "
+                "called before extract_coordination_results, or this Kaizen instance "
+                "had its enterprise resources cleaned up"
+            )
 
         structured_results = pattern_registry.extract_coordination_results(
             pattern_name=pattern_name, results=raw_results
@@ -1072,6 +1100,8 @@ class Kaizen:
         """
         # LAZY LOADING: Load signature system on first use
         self._ensure_signatures_loaded()
+        assert self._signature_parser is not None  # set by _ensure_signatures_loaded
+        assert self._signature_validator is not None  # set by _ensure_signatures_loaded
 
         # Parse signature text
         parse_result = self._signature_parser.parse(signature_text)
@@ -1183,6 +1213,7 @@ class Kaizen:
 
         # LAZY LOADING: Load Kailash SDK runtime on first use
         self._ensure_kailash_sdk_loaded()
+        assert self._LocalRuntime is not None  # set by _ensure_kailash_sdk_loaded
 
         # Use context manager for proper resource cleanup
         with self._LocalRuntime() as runtime:
@@ -1255,6 +1286,7 @@ class Kaizen:
                 results, run_id = runtime.execute(workflow.build())
         """
         self._ensure_kailash_sdk_loaded()
+        assert self._LocalRuntime is not None  # set by _ensure_kailash_sdk_loaded
         return self._LocalRuntime()
 
     @property

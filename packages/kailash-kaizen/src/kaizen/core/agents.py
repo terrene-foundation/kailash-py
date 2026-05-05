@@ -10,7 +10,8 @@ import json
 import logging
 import os
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from kaizen.errors import EnvModelMissing
 
@@ -31,13 +32,58 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_signature_programming_enabled(kaizen: Any) -> bool:
+    """Read the `signature_programming_enabled` gate uniformly across config shapes.
+
+    `Kaizen.config` is a property that returns one of two shapes:
+      * `KaizenConfig` (@dataclass) when user passed an explicit config object — has
+        a typed attribute, no `.get` method.
+      * `ConfigWrapper(dict)` for default / dict-config callers — has `.get`, no
+        typed attribute.
+
+    Issue #822: prior gate code used `hasattr(... , "get")` which silently returned
+    False against KaizenConfig dataclass instances, flipping the documented
+    signature-programming gate to a no-op for typed-config users. This helper reads
+    both shapes without preference. Typo'd dict keys do NOT enable the gate.
+    """
+    if kaizen is None or not hasattr(kaizen, "config"):
+        return False
+    cfg = kaizen.config
+    # KaizenConfig dataclass branch
+    if getattr(cfg, "signature_programming_enabled", None) is True:
+        return True
+    # ConfigWrapper(dict) branch
+    if hasattr(cfg, "get"):
+        return cfg.get("signature_programming_enabled", False) is True
+    return False
+
+
 class Agent:
     """
     AI agent with signature-based programming capabilities.
 
     Agents encapsulate AI functionality with declarative signatures,
     automatic optimization, and seamless Core SDK integration.
+
+    Dynamic-attach surface (issue #822 — see specs/kaizen-core.md § Agent class):
+    The following attributes are NOT set in ``__init__`` but are dynamically
+    attached by ``Kaizen.create_specialized_agent`` (framework.py:493) and
+    ``Kaizen.create_agent_team`` (framework.py:807). They are part of the
+    documented public surface for those factory methods. Class-body
+    declarations below let static type checkers see the contract without
+    moving the assignment into ``__init__``.
     """
+
+    # Dynamic-attach attributes (issue #822). Set by Kaizen factory methods.
+    role: Optional[str] = None
+    expertise: Optional[str] = None
+    capabilities: Optional[List[str]] = None
+    behavior_traits: Optional[List[str]] = None
+    authority_level: Optional[str] = None
+    # _generate_role_based_prompt is attached as a lambda by create_specialized_agent.
+    # Typed as Optional[Any] because the Callable shape (agent, task) -> str crosses
+    # the framework boundary and pyright cannot resolve the forward-ref cleanly.
+    _generate_role_based_prompt: Optional[Any] = None
 
     def __init__(
         self,
@@ -262,13 +308,7 @@ class Agent:
                 "run_id": run_id,
                 "inputs": inputs,
                 "parameters": parameters,
-                "timestamp": (
-                    logger.handlers[0].formatter.formatTime(
-                        logging.LogRecord("", 0, "", 0, "", (), None)
-                    )
-                    if logger.handlers
-                    else "unknown"
-                ),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -304,7 +344,9 @@ class Agent:
             "agent_id": self.agent_id,
         }
 
-    def _execute_workflow_directly(self, workflow, parameters: Dict[str, Any] = None):
+    def _execute_workflow_directly(
+        self, workflow, parameters: Optional[Dict[str, Any]] = None
+    ):
         """
         Execute a workflow directly through the agent's Kaizen framework.
 
@@ -372,7 +414,9 @@ class Agent:
 
         return self.kaizen.create_workflow()
 
-    def execute(self, workflow=None, **kwargs):
+    def execute(
+        self, workflow=None, **kwargs
+    ) -> Union[Dict[str, Any], Tuple[Dict[str, Any], str]]:
         """
         Execute agent with either workflow or signature-based structured input/output.
 
@@ -448,16 +492,12 @@ class Agent:
             else:
                 raise TypeError(f"Invalid signature type: {type(self.signature)}")
 
-        # No signature - check if signature programming is required
-
-        # Check if signature programming is enabled and requires signature
-        # Only apply this restriction for real Kaizen instances with explicit configuration
-        if (
-            self.kaizen
-            and hasattr(self.kaizen, "config")
-            and hasattr(self.kaizen.config, "get")
-            and self.kaizen.config.get("signature_programming_enabled", False) == True
-        ):
+        # No signature - check if signature programming is required.
+        # Issue #822: gate must read uniformly across BOTH Kaizen.config return shapes —
+        # KaizenConfig (@dataclass, no `.get`) for explicit-config callers, AND
+        # ConfigWrapper(dict) for default/dict-config callers. Prior `hasattr(... , "get")`
+        # guard silently flipped the gate to False against KaizenConfig dataclass instances.
+        if self.kaizen and _is_signature_programming_enabled(self.kaizen):
             # Signature programming mode requires signatures for structured execution
             raise ValueError("Agent must have a signature for structured execution")
 
@@ -2283,6 +2323,12 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
                 execution_rounds.append(round_info)
 
                 # Update state for next round if memory enabled
+                # execute_multi_round runs in signature-mode (asserts at line ~2237);
+                # narrow round_result to Dict for the subscripting below.
+                assert isinstance(round_result, dict), (
+                    "execute_multi_round requires signature-mode (Dict return); "
+                    "got tuple — workflow-mode is not supported in this path"
+                )
                 if memory and state_key in round_result:
                     current_state = round_result[state_key]
 
@@ -3177,6 +3223,9 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
             raise ValueError(
                 f"Agent {self.agent_id} does not have a signature for workflow compilation"
             )
+        # Local-var narrowing (pyright follows local but is conservative on attrs)
+        sig = self.signature
+        assert sig is not None  # narrowed by has_signature check
 
         # LAZY LOADING: Import components only when needed
         WorkflowBuilder = _lazy_import_workflow_builder()
@@ -3186,9 +3235,7 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
 
         # Use signature compiler to create workflow configuration
         compiler = SignatureCompiler()
-        workflow_config = compiler.compile_to_workflow_config(
-            self.signature, self.config
-        )
+        workflow_config = compiler.compile_to_workflow_config(sig, self.config)
 
         # Create WorkflowBuilder workflow
         workflow = WorkflowBuilder()
@@ -3228,15 +3275,16 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
             raise ValueError(
                 f"Agent {self.agent_id} does not have a signature for workflow compilation"
             )
+        # Local-var narrowing (pyright follows local but is conservative on attrs)
+        sig = self.signature
+        assert sig is not None  # narrowed by has_signature check
 
         # Import signature compiler
         from kaizen.signatures.core import SignatureCompiler
 
         # Use signature compiler to create workflow configuration
         compiler = SignatureCompiler()
-        workflow_config = compiler.compile_to_workflow_config(
-            self.signature, self.config
-        )
+        workflow_config = compiler.compile_to_workflow_config(sig, self.config)
 
         logger.info(f"Generated workflow configuration for agent: {self.agent_id}")
         return workflow_config

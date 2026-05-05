@@ -423,10 +423,54 @@ def __init__(
 ### 7.2 Key Methods
 
 ```python
-def create_agent(self, agent_id: str, config: Dict = None, **kwargs) -> Agent
+def create_agent(
+    self,
+    agent_id: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+    signature: Optional[Any] = None,
+    name: Optional[str] = None,  # Backward-compat alias for agent_id
+    **kwargs,
+) -> Agent
 def execute(self, workflow) -> Tuple[Dict, str]          # (results, run_id)
 def create_signature(self, signature_str: str) -> Signature
 ```
+
+`agent_id` auto-generation (when omitted) follows precedence: `name` kwarg →
+`config["name"]` → `f"agent_{N}"`.
+
+### 7.3 `signature_programming_enabled` Gate Semantics
+
+When the gate flag is True (set via either
+`KaizenConfig(signature_programming_enabled=True)` OR
+`kaizen.configure(signature_programming_enabled=True)`), `Agent.execute()` on a
+signature-less agent raises `ValueError("Agent must have a signature for
+structured execution")`.
+
+The gate uses a unified read across both shapes that `Kaizen.config` returns:
+
+- `KaizenConfig` dataclass — read via `getattr(cfg, "signature_programming_enabled", None)`
+- `ConfigWrapper(dict)` — read via `cfg.get("signature_programming_enabled", False)`
+
+Typo'd dict-config keys (e.g. `signature_programming_enabld`) do NOT enable the
+gate — only the canonical key flips it.
+
+### 7.4 Agent Class Dynamic-Attach Surface
+
+`Agent` is a plain Python class (not dataclass / not Pydantic). The following
+attributes are NOT set in `Agent.__init__` but are dynamically attached by
+factory methods on `Kaizen`:
+
+| Attribute                     | Type                       | Set by                                    |
+| ----------------------------- | -------------------------- | ----------------------------------------- |
+| `role`                        | `Optional[str]`            | `Kaizen.create_specialized_agent`         |
+| `expertise`                   | `Optional[str]`            | `Kaizen.create_specialized_agent`         |
+| `capabilities`                | `Optional[List[str]]`      | `Kaizen.create_specialized_agent`         |
+| `behavior_traits`             | `Optional[List[str]]`      | `Kaizen.create_specialized_agent`         |
+| `authority_level`             | `Optional[str]`            | `Kaizen.create_agent_team`                |
+| `_generate_role_based_prompt` | `Optional[Any]` (Callable) | `Kaizen.create_specialized_agent`         |
+
+These appear as class-body Optional annotations on `Agent` so static-type
+checkers see the contract without moving the assignment into `__init__`.
 
 ---
 
