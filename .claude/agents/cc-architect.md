@@ -64,6 +64,24 @@ Expert in Claude Code's architecture, configuration system, and the CO/COC five-
 2. **Completeness** — Are edge cases handled? Cross-references for handoff?
 3. **Effectiveness** — Output format specified? Does it actually get used?
 4. **Token Efficiency** — Redundancies? Path-scoping used? Waste is waste.
+5. **Trust Posture Wiring (rules only, ENFORCED)** — Per `rules/trust-posture.md` MUST 7 + `commands/codify.md` Step 6b: every NEW rule file (post-trust-posture grandfather cutoff) MUST end with `## Trust Posture Wiring` containing all 7 fields. Audit step:
+
+   ```bash
+   # Mechanical sweep — emit FAIL on any new rule lacking the section
+   for f in $(git diff --name-only origin/main -- '.claude/rules/*.md'); do
+     if ! grep -q '^## Trust Posture Wiring' "$f"; then
+       echo "FAIL: $f missing Trust Posture Wiring"
+     fi
+     # Verify all 7 fields present (severity, grace, cumulative, regression-within-grace, receipt, detection, origin)
+     for field in '\*\*Severity:' '\*\*Grace period:' '\*\*Cumulative threshold:' \
+                   '\*\*Regression-within-grace policy:' '\*\*Receipt requirement:' \
+                   '\*\*Detection mechanism:' '\*\*Origin evidence date:'; do
+       grep -q "$field" "$f" || echo "FAIL: $f wiring missing field $field"
+     done
+   done
+   ```
+
+   Missing or incomplete → audit FAIL → /codify halts. Grandfathered rules (those pre-dating `rules/trust-posture.md`) are exempt — recognized by `git log --diff-filter=A` showing creation date before trust-posture commit SHA.
 
 ## Related Agents
 

@@ -17,6 +17,8 @@ const timeout = setTimeout(() => {
   process.exit(1);
 }, TIMEOUT_MS);
 
+const { instructAndWait } = require("./lib/instruct-and-wait");
+
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
@@ -175,16 +177,23 @@ function checkForRawFrameworks(data) {
     for (const pattern of group.patterns) {
       if (pattern.test(content)) {
         const lib = content.match(pattern)?.[0] || "raw import";
-        return {
-          output: {
-            continue: false,
-            reason:
-              `BLOCKED: ${lib} in ${filePath}. ` +
-              `${group.reason} ` +
-              `Guide: ${group.guide}`,
-          },
-          exitCode: 2,
-        };
+        // PostToolUse: file already written. Use halt-and-report — agent must
+        // surface and rewrite using the framework. Per red-team CRIT-1, block
+        // semantics are post-hoc here; we cannot un-do the write.
+        const out = instructAndWait({
+          hookEvent: "PostToolUse",
+          severity: "halt-and-report",
+          what_happened: `Raw library import \`${lib}\` written to ${filePath}`,
+          why: `framework-first.md — Use ${group.framework} (${group.specialist}). Guide: ${group.guide}`,
+          agent_must_report: [
+            `Quote the exact import line that was just written`,
+            `State the equivalent ${group.framework} pattern (consult ${group.specialist} or read the guide)`,
+            `Propose the rewrite as a unified diff in your next response`,
+          ],
+          agent_must_wait: `Do not commit or proceed with related work until the file is rewritten using ${group.framework}.`,
+          user_summary: `Raw ${group.framework} import in ${filePath.split("/").pop()} — agent must rewrite`,
+        });
+        return { output: out.json, exitCode: out.exitCode };
       }
     }
   }

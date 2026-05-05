@@ -46,15 +46,57 @@ const _timeout = setTimeout(() => {
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
+const { readPosture } = require("./lib/state-io");
+
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
     const result = initializeSession(data);
+
+    // Trust-posture gate (mitigates red-team H4 / Phase 1 of trust-posture rollout)
+    let trustGate = "";
+    try {
+      const posture = readPosture(data.cwd);
+      const lines = [];
+      lines.push(
+        `\n## Trust Posture: ${posture.posture}` +
+          (posture._fail_closed
+            ? " (FAIL-CLOSED — state was missing/corrupt)"
+            : "") +
+          (posture._fresh ? " (fresh repo)" : ""),
+      );
+      lines.push(`since: ${posture.since}`);
+      const pv = (posture.pending_verification || []).filter(
+        (e) => e && e.rule_id,
+      );
+      if (pv.length) {
+        lines.push("\n⚠️ TRUST GATE — Verification Pending:");
+        for (const e of pv) {
+          const days = Math.floor(
+            (Date.now() - new Date(e.since).getTime()) / 86400000,
+          );
+          lines.push(
+            `  - ${e.rule_id} (day ${days + 1} of ${e.grace_period_days}). ` +
+              `Violation within grace = EMERGENCY DOWNGRADE. ` +
+              `Include \`[ack: ${e.rule_id}]\` in your first response.`,
+          );
+        }
+      }
+      trustGate = lines.join("\n");
+    } catch {
+      // If readPosture itself fails, surface a quiet warning — don't block session
+      trustGate =
+        "\n## Trust Posture: UNREADABLE — manual /posture init required";
+    }
+
     const output = { continue: true };
-    if (result.sessionNotesContext) {
+    const ctxParts = [];
+    if (result.sessionNotesContext) ctxParts.push(result.sessionNotesContext);
+    if (trustGate) ctxParts.push(trustGate);
+    if (ctxParts.length) {
       output.hookSpecificOutput = {
         hookEventName: "SessionStart",
-        additionalContext: result.sessionNotesContext,
+        additionalContext: ctxParts.join("\n\n"),
       };
     }
     console.log(JSON.stringify(output));

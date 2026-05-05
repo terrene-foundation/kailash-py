@@ -32,12 +32,16 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    saveSession(data);
-    // SessionEnd hooks don't support hookSpecificOutput in schema
+    const summary = saveSession(data);
+    // SessionEnd schema: no hookSpecificOutput. Surface a stderr summary so
+    // the user sees what was checkpointed (was DARK pre-fix).
+    if (summary) {
+      process.stderr.write(`[session-end] ${summary}\n`);
+    }
     console.log(JSON.stringify({ continue: true }));
     process.exit(0);
   } catch (error) {
-    console.error(`[HOOK ERROR] ${error.message}`);
+    process.stderr.write(`[session-end] HOOK ERROR: ${error.message}\n`);
     console.log(JSON.stringify({ continue: true }));
     process.exit(1);
   }
@@ -113,9 +117,15 @@ function saveSession(data) {
     // Clean up old sessions (keep last 20)
     cleanupOldSessions(sessionDir, 20);
 
-    return { saved: true, path: sessionFile };
+    // User-visible summary (was DARK before; mitigates red-team session-end-DARK)
+    const stats = sessionData.stats || {};
+    const fileCount = Object.values(stats).reduce(
+      (a, b) => a + (typeof b === "number" ? b : 0),
+      0,
+    );
+    return `checkpoint saved (session=${session_id.slice(0, 8)}, ~${fileCount} touched, learning digest built)`;
   } catch (error) {
-    return { saved: false, error: error.message };
+    return `checkpoint FAILED: ${error.message}`;
   }
 }
 
