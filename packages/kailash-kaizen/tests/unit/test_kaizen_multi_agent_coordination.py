@@ -456,62 +456,36 @@ class TestSpecializedAgentCreation:
         assert "reporting" in agent.capabilities
 
     def test_specialized_agent_role_based_behavior_traits(self, performance_tracker):
-        """Test specialized agents get appropriate behavior traits for their role."""
+        """Test specialized agents get a non-empty trait list[str] for their role.
+
+        Per Issue #829, trait derivation is LLM-first via
+        ``RoleToTraitsSignature`` — output is nondeterministic. This Tier-1
+        unit test asserts SHAPE only (per acceptance criterion #2), relying on
+        the autouse stub in ``conftest.py`` to bypass the real LLM call. The
+        stub returns a fixed list, so SHAPE is the only meaningful assertion.
+
+        Tier-2 coverage of the actual LLM derivation lives at
+        ``tests/integration/test_role_to_traits_llm_derivation.py``.
+        """
         import kaizen
 
         config = consolidated_fixtures.get_configuration("minimal")
         framework = kaizen.Framework(config=config)
 
-        # Create different specialized agents
-        research_agent = framework.create_specialized_agent(
-            name="researcher",
-            role="Research and analyze data",
-            config={"model": "gpt-4"},
-        )
-
-        creative_agent = framework.create_specialized_agent(
-            name="designer",
-            role="Creative design and innovation",
-            config={"model": "gpt-4"},
-        )
-
-        leadership_agent = framework.create_specialized_agent(
-            name="leader",
-            role="Lead and coordinate team efforts",
-            config={"model": "gpt-4"},
-        )
-
-        # Verify different behavior traits based on role
-        # Research agents should have analytical traits
-        research_config = research_agent.config
-        if "behavior_traits" in research_config:
-            traits = research_config["behavior_traits"]
-            analytical_traits = [
-                "thorough",
-                "analytical",
-                "evidence_based",
-                "methodical",
-            ]
-            assert any(trait in traits for trait in analytical_traits)
-
-        # Creative agents should have innovative traits
-        creative_config = creative_agent.config
-        if "behavior_traits" in creative_config:
-            traits = creative_config["behavior_traits"]
-            creative_traits = ["innovative", "divergent", "imaginative", "flexible"]
-            assert any(trait in traits for trait in creative_traits)
-
-        # Leadership agents should have collaborative traits
-        leadership_config = leadership_agent.config
-        if "behavior_traits" in leadership_config:
-            traits = leadership_config["behavior_traits"]
-            leadership_traits = [
-                "decisive",
-                "communicative",
-                "collaborative",
-                "strategic",
-            ]
-            assert any(trait in traits for trait in leadership_traits)
+        for name, role in [
+            ("researcher", "Research and analyze data"),
+            ("designer", "Creative design and innovation"),
+            ("leader", "Lead and coordinate team efforts"),
+        ]:
+            agent = framework.create_specialized_agent(
+                name=name, role=role, config={"model": "gpt-4"}
+            )
+            assert hasattr(agent, "behavior_traits")
+            assert isinstance(agent.behavior_traits, list)
+            assert len(agent.behavior_traits) > 0
+            assert all(
+                isinstance(t, str) and t.strip() for t in agent.behavior_traits
+            ), f"every trait must be non-empty str for role {role!r}: {agent.behavior_traits!r}"
 
     def test_specialized_agent_parameter_validation(self, performance_tracker):
         """Test specialized agent creation validates parameters."""
@@ -575,9 +549,9 @@ class TestMultiAgentCoordinationPerformance:
 
         # Should create agent in under 100ms
         performance_tracker.assert_performance("agent_creation", 100)
-        assert creation_time_ms < 100, (
-            f"Agent creation took {creation_time_ms:.2f}ms, expected < 100ms"
-        )
+        assert (
+            creation_time_ms < 100
+        ), f"Agent creation took {creation_time_ms:.2f}ms, expected < 100ms"
 
         # Verify agent was created correctly
         assert agent is not None
@@ -608,9 +582,9 @@ class TestMultiAgentCoordinationPerformance:
         creation_time_ms = performance_tracker.end_timer("workflow_creation")
 
         # Should create workflow in under 500ms
-        assert creation_time_ms < 500, (
-            f"Workflow creation took {creation_time_ms:.2f}ms, expected < 500ms"
-        )
+        assert (
+            creation_time_ms < 500
+        ), f"Workflow creation took {creation_time_ms:.2f}ms, expected < 500ms"
 
         # Verify workflow was created correctly
         assert consensus_workflow is not None
@@ -635,9 +609,9 @@ class TestMultiAgentCoordinationPerformance:
         creation_time_ms = performance_tracker.end_timer("team_creation")
 
         # Should create team in under 1000ms
-        assert creation_time_ms < 1000, (
-            f"Team creation took {creation_time_ms:.2f}ms, expected < 1000ms"
-        )
+        assert (
+            creation_time_ms < 1000
+        ), f"Team creation took {creation_time_ms:.2f}ms, expected < 1000ms"
 
         # Verify team was created correctly
         assert team is not None

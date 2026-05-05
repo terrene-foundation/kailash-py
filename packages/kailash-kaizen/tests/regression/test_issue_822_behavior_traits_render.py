@@ -65,27 +65,35 @@ def test_behavior_traits_render_in_prompt(
 
 
 @pytest.mark.regression
+@pytest.mark.integration
 def test_behavior_traits_default_from_role(
     monkeypatch: pytest.MonkeyPatch, _env_serialized: None
 ):
-    """No explicit traits → default keyword-matched traits attached + rendered.
+    """No explicit traits → LLM-first derivation populates a non-empty list[str].
 
-    NOTE: the keyword-matching default-derivation in
-    `_generate_role_based_traits` violates `agent-reasoning.md` Rule 1 and is
-    tracked in journal/0004 + Open Question #4 for follow-up. This test pins
-    the CURRENT behavior so the trait-rendering chain remains exercised.
+    Per Issue #829 fix, trait derivation goes through ``RoleToTraitsSignature``
+    + ``BaseAgent.run()`` (LLM-first per ``rules/agent-reasoning.md`` Rule 1).
+    LLM output is nondeterministic, so this test asserts the SHAPE of the
+    derived list (per acceptance criterion #2: "assertion on shape, not exact
+    contents") rather than exact-string membership in a hardcoded bucket.
+
+    Tier-2 integration test — requires a working LLM provider (.env).
     """
-    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")
+    import os
+
+    monkeypatch.setenv(
+        "KAIZEN_DEFAULT_MODEL",
+        os.environ.get("OPENAI_PROD_MODEL", "gpt-4o-mini"),
+    )
     kaizen = Kaizen()
     agent = kaizen.create_specialized_agent(
         name="researcher",
-        role="research analyst",  # matches the keyword bucket
+        role="research analyst",
         config={},
     )
     assert hasattr(agent, "behavior_traits")
-    assert agent.behavior_traits is not None
-    # Defaults for "research"/"analyze" bucket include "analytical"
-    assert any(
-        t in agent.behavior_traits
-        for t in ["analytical", "thorough", "evidence_based", "methodical"]
-    ), f"Expected at least one default research trait in {agent.behavior_traits}"
+    assert isinstance(agent.behavior_traits, list)
+    assert len(agent.behavior_traits) > 0
+    assert all(
+        isinstance(t, str) and t.strip() for t in agent.behavior_traits
+    ), f"every trait must be a non-empty string: {agent.behavior_traits!r}"

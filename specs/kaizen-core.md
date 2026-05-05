@@ -460,17 +460,118 @@ gate — only the canonical key flips it.
 attributes are NOT set in `Agent.__init__` but are dynamically attached by
 factory methods on `Kaizen`:
 
-| Attribute                     | Type                       | Set by                                    |
-| ----------------------------- | -------------------------- | ----------------------------------------- |
-| `role`                        | `Optional[str]`            | `Kaizen.create_specialized_agent`         |
-| `expertise`                   | `Optional[str]`            | `Kaizen.create_specialized_agent`         |
-| `capabilities`                | `Optional[List[str]]`      | `Kaizen.create_specialized_agent`         |
-| `behavior_traits`             | `Optional[List[str]]`      | `Kaizen.create_specialized_agent`         |
-| `authority_level`             | `Optional[str]`            | `Kaizen.create_agent_team`                |
-| `_generate_role_based_prompt` | `Optional[Any]` (Callable) | `Kaizen.create_specialized_agent`         |
+| Attribute                     | Type                       | Set by                                       |
+| ----------------------------- | -------------------------- | -------------------------------------------- |
+| `role`                        | `Optional[str]`            | `Kaizen.create_specialized_agent`            |
+| `expertise`                   | `Optional[str]`            | `Kaizen.create_specialized_agent`            |
+| `capabilities`                | `Optional[List[str]]`      | `Kaizen.create_specialized_agent`            |
+| `behavior_traits`             | `Optional[List[str]]`      | `Kaizen.create_specialized_agent` (see §7.5) |
+| `authority_level`             | `Optional[str]`            | `Kaizen.create_agent_team`                   |
+| `_generate_role_based_prompt` | `Optional[Any]` (Callable) | `Kaizen.create_specialized_agent`            |
 
 These appear as class-body Optional annotations on `Agent` so static-type
 checkers see the contract without moving the assignment into `__init__`.
+
+### 7.5 Trait Derivation
+
+`Kaizen.create_specialized_agent(name, role, config)` populates
+`agent.behavior_traits: List[str]` from one of two sources, in this priority order:
+
+1. **User-supplied** — if `config["behavior_traits"]` is present, that list is
+   used verbatim and no LLM call is made.
+2. **LLM-first derivation** — otherwise, the framework constructs a `BaseAgent`
+   wrapped around `RoleToTraitsSignature` (in
+   `kaizen.core._role_traits_signature`), invokes `BaseAgent.run(role=role)`
+   with `temperature=0`, parses the comma-separated `traits_csv` output, and
+   stores the result on `agent.behavior_traits`.
+
+#### Cache
+
+Derived results are cached on the `Kaizen` instance in `self._trait_cache:
+OrderedDict[str, List[str]]`, keyed by `role.strip().lower()`. The first call
+for a given normalized role pays one LLM round-trip; subsequent identical
+calls return from cache without re-invoking the LLM.
+
+The cache is **bounded** to `self._TRAIT_CACHE_MAX = 256` entries with LRU
+eviction. When a new entry exceeds the cap, the least-recently-accessed
+entry is evicted via `popitem(last=False)`. This defends against
+denial-of-service via unique-role pollution.
+
+Cache scope is the `Kaizen` instance lifetime — not process-wide, not
+persistent. Two `Kaizen()` instances in the same process maintain separate
+caches and may produce different outputs if configured with different default
+models.
+
+Concurrent calls for the same normalized role are benign — both fire LLM
+calls, both produce the same output (`temperature=0`), both write to the cache
+idempotently. The redundant LLM call is the only cost; the result is
+consistent.
+
+#### Determinism
+
+`temperature=0` plus the cache makes derivation deterministic per
+`(instance, normalized_role)` pair. The cache key normalization
+(`role.strip().lower()`) merges trivial variants (`"Research Analyst"`,
+`" research analyst "`, `"research analyst"` all hit the same slot).
+Aggressive semantic merging (e.g., `"investigator"` vs `"researcher"`) is
+deliberately NOT done — each distinct role string gets its own derivation.
+
+#### Default model resolution
+
+The derivation `BaseAgent` is constructed with
+`config={"model": KAIZEN_DEFAULT_MODEL, "temperature": 0}`. The model
+identifier is read from `os.environ.get("KAIZEN_DEFAULT_MODEL")` per
+`rules/env-models.md`. Hardcoded model literals are BLOCKED.
+
+#### Failure mode
+
+- **`KAIZEN_DEFAULT_MODEL` unset**: the call raises `RuntimeError` with a
+  message naming both escape hatches:
+  - Pass `behavior_traits=[...]` in `config` to skip derivation.
+  - Set `KAIZEN_DEFAULT_MODEL` in `.env`.
+- **LLM call fails** (network error, missing API key for the chosen provider,
+  rate limit): the underlying exception is re-raised wrapped in `RuntimeError`
+  with the same actionable message and `from e` chain preserving the
+  original cause.
+- **Empty / unparseable LLM output** (parses to zero traits): falls back to
+  the default list `["professional", "reliable", "adaptive"]` and emits a
+  WARN log line `kaizen.trait_derivation.empty_output` carrying the
+  role-hash (sha256[:8]) and raw-output length — NOT the role string itself
+  or the raw output. This is the empty-output guard, NOT a Rule 1
+  deterministic fallback. Hashing the role rather than logging it raw
+  defends against PII leakage to log aggregators (per
+  `rules/observability.md` Rule 8 spirit).
+
+#### Output sanitization (prompt-injection defense)
+
+Every parsed trait MUST match `^[a-z0-9_ ]{1,32}$` — alphanumeric +
+underscore + space, lowercase, max 32 chars. The list is capped at 5 traits.
+Non-conforming items are dropped silently (not logged — non-conforming
+traits are expected when an attacker tries to smuggle prompt-injection
+markers through the LLM); if every item fails validation, the empty-output
+fallback fires.
+
+This sanitization is the structural defense against prompt-injection chains
+where a malicious `role` string convinces the LLM to emit traits like
+`"ignore previous instructions"` that would otherwise be rendered into the
+agent's downstream system prompt at `_generate_role_based_prompt`. The
+Signature description (output format) is advisory only; the sanitizer is
+the contract.
+
+There is NO deterministic fallback to a keyword classifier — that pattern
+violates `rules/agent-reasoning.md` Rule 1 and is BLOCKED. The user-facing
+contract is: configure a working LLM provider OR pass `behavior_traits`
+explicitly.
+
+#### Out of scope
+
+- Cross-instance / cross-process cache (each `Kaizen()` instance has its own
+  cache; no persistent or shared store).
+- Semantic merging of synonyms (each distinct role string gets its own
+  derivation; cache normalizes only `strip + lower`).
+- User-injectable trait Signature (deferred — trait derivation Signature is
+  a private implementation detail of `Kaizen`; users override by passing
+  `behavior_traits` in `config`).
 
 ---
 

@@ -231,6 +231,17 @@ class Kaizen:
         self._signatures: Dict[str, Any] = {}
         self._memory_providers: Dict[str, Any] = {}
         self._optimization_engines: Dict[str, Any] = {}
+
+        # Issue #829: per-instance trait-derivation cache.
+        # See specs/kaizen-core.md §7.5 (Trait Derivation) for the contract.
+        # Cache key is `role.strip().lower()`; value is the derived trait list.
+        # Bounded LRU (max 256 entries) to defend against DoS via unique-role
+        # pollution. Bypassed entirely when caller supplies `behavior_traits`
+        # in config.
+        from collections import OrderedDict
+
+        self._trait_cache: "OrderedDict[str, List[str]]" = OrderedDict()
+        self._TRAIT_CACHE_MAX = 256
         self._state = {
             "initialized": True,
             "agents_created": 0,
@@ -511,29 +522,105 @@ class Kaizen:
         return agent
 
     def _generate_role_based_traits(self, role: str) -> List[str]:
-        """Generate behavior traits based on agent role."""
-        role_lower = role.lower()
+        """LLM-first derivation of behavior traits from agent role (Issue #829).
 
-        # Research-focused roles
-        if any(word in role_lower for word in ["research", "analyze", "study"]):
-            return ["thorough", "analytical", "evidence_based", "methodical"]
+        Cached per Kaizen instance keyed by ``role.strip().lower()``. With
+        ``temperature=0`` plus the cache, derivation is deterministic per
+        ``(instance, role)`` pair.
 
-        # Creative roles
-        elif any(word in role_lower for word in ["creative", "design", "innovative"]):
-            return ["innovative", "divergent", "imaginative", "flexible"]
+        Failures (no API key, network error, rate limit) propagate as
+        :class:`RuntimeError` per ``rules/agent-reasoning.md`` Rule 1 — there
+        is NO deterministic fallback to a keyword classifier. The escape hatch
+        is to pass ``behavior_traits`` in the ``config`` argument of
+        :meth:`create_specialized_agent`, which skips derivation entirely.
 
-        # Leadership/coordination roles
-        elif any(
-            word in role_lower for word in ["lead", "manage", "coordinate", "moderate"]
-        ):
-            return ["decisive", "communicative", "collaborative", "strategic"]
+        Empty LLM output (zero parsed traits) falls back to the default trait
+        list ``["professional", "reliable", "adaptive"]`` and emits a WARN log
+        — this is the empty-output guard, not a Rule 1 violation.
 
-        # Technical roles
-        elif any(word in role_lower for word in ["technical", "develop", "engineer"]):
-            return ["precise", "logical", "systematic", "detail_oriented"]
+        See ``specs/kaizen-core.md`` §7.5 (Trait Derivation) for the full
+        contract.
+        """
+        cache_key = role.strip().lower()
+        cached = self._trait_cache.get(cache_key)
+        if cached is not None:
+            # LRU bump: move recently-accessed entry to the end so old entries
+            # evict first when the bound is exceeded.
+            self._trait_cache.move_to_end(cache_key)
+            return cached
 
-        # Default traits
-        return ["professional", "reliable", "adaptive"]
+        # Lazy imports — keep module-load fast per the existing
+        # _lazy_import_signatures pattern in this file.
+        import hashlib
+        import os
+        import re
+
+        from kaizen.core._role_traits_signature import RoleToTraitsSignature
+        from kaizen.core.base_agent import BaseAgent
+
+        # Hash role for log lines so PII / sensitive role descriptions don't
+        # leak to log aggregators (per rules/observability.md Rule 8 spirit:
+        # WARN-level user content gets hashed, not raw).
+        role_hash = hashlib.sha256(role.encode("utf-8")).hexdigest()[:8]
+
+        model = os.environ.get("KAIZEN_DEFAULT_MODEL")
+        if not model:
+            raise RuntimeError(
+                f"trait derivation failed (role_hash={role_hash}) — "
+                "KAIZEN_DEFAULT_MODEL env var is not set. Pass "
+                "behavior_traits=[...] in config to skip derivation, or "
+                "configure a working LLM provider key in .env."
+            )
+
+        try:
+            agent = BaseAgent(
+                config={"model": model, "temperature": 0},
+                signature=RoleToTraitsSignature(),
+            )
+            result = agent.run(role=role)
+        except Exception as e:
+            raise RuntimeError(
+                f"trait derivation failed (role_hash={role_hash}) — pass "
+                "behavior_traits=[...] in config to skip derivation, or "
+                f"verify .env has a working LLM provider key. Underlying: {e}"
+            ) from e
+
+        traits_csv = (result or {}).get("traits_csv", "") or ""
+
+        # Issue #829 H1 — Output sanitization for prompt-injection defense.
+        # The role string flows in as user input; the LLM's traits_csv flows
+        # out into the agent's system prompt at framework.py
+        # _generate_role_based_prompt. A malicious role can subvert the LLM
+        # into emitting traits that, once embedded, alter the downstream
+        # agent's behavior. The Signature description is advisory; this is
+        # the structural defense. Per-trait validation:
+        #   - Strip to alphanumeric + underscore + space (kills injection markers).
+        #   - Cap at 32 chars (kills long-prompt smuggling).
+        #   - Cap list at 5 traits (matches Signature description).
+        # Drop non-conforming items; if zero remain, fall through to default.
+        _TRAIT_OK = re.compile(r"^[a-z0-9_ ]{1,32}$")
+        parsed: List[str] = []
+        for raw_t in str(traits_csv).split(","):
+            t = raw_t.strip().lower()
+            if _TRAIT_OK.match(t):
+                parsed.append(t)
+            if len(parsed) >= 5:
+                break
+
+        if not parsed:
+            logger.warning(
+                "kaizen.trait_derivation.empty_output role_hash=%s raw_len=%d",
+                role_hash,
+                len(str(traits_csv)),
+            )
+            parsed = ["professional", "reliable", "adaptive"]
+
+        # LRU eviction: bound the cache to MAX entries (defends against
+        # unique-role pollution DoS).
+        self._trait_cache[cache_key] = parsed
+        while len(self._trait_cache) > self._TRAIT_CACHE_MAX:
+            self._trait_cache.popitem(last=False)
+        return parsed
 
     def _generate_role_based_prompt(self, agent: "Agent", task: str) -> str:
         """Generate role-based system prompt for an agent."""
