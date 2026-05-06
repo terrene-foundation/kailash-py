@@ -57,12 +57,12 @@ import difflib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.token_counter import TokenCounter, get_token_counter
 from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 logger = logging.getLogger(__name__)
 
@@ -199,9 +199,9 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
     def __init__(
         self,
         config: ClaudeCodeConfig,
-        signature: Optional[Signature] = None,
-        strategy: Optional[MultiCycleStrategy] = None,
-        checkpoint_dir: Optional[Path] = None,
+        signature: Signature | None = None,
+        strategy: MultiCycleStrategy | None = None,
+        checkpoint_dir: Path | None = None,
         **kwargs,
     ):
         """
@@ -265,7 +265,7 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
     #   - New: Tools auto-available via MCP, no setup needed
     #   - See: kaizen.mcp.builtin_server for available MCP tools
 
-    async def _autonomous_loop(self, task: str) -> Dict[str, Any]:
+    async def _autonomous_loop(self, task: str) -> dict[str, Any]:
         """
         Override autonomous loop with Claude Code patterns.
 
@@ -384,7 +384,7 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
 
         return final_result
 
-    def _apply_changes_with_diff(self, changes: List[Dict[str, Any]]) -> str:
+    def _apply_changes_with_diff(self, changes: list[dict[str, Any]]) -> str:
         """
         Apply changes with diff-first workflow.
 
@@ -599,7 +599,7 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
             return ""
 
         try:
-            with open(claude_md_path, "r", encoding="utf-8") as f:
+            with open(claude_md_path, encoding="utf-8") as f:
                 content = f.read()
 
             logger.info(f"Loaded CLAUDE.md: {len(content)} characters")

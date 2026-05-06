@@ -11,7 +11,6 @@ These types enable progressive configuration while maintaining type safety.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Set
 
 
 class ExecutionMode(str, Enum):
@@ -153,7 +152,7 @@ class ToolAccess(str, Enum):
 
 
 # Tool categories for access level mapping
-READ_ONLY_TOOLS: Set[str] = frozenset(
+READ_ONLY_TOOLS: set[str] = frozenset(
     {
         "read",
         "glob",
@@ -171,7 +170,7 @@ READ_ONLY_TOOLS: Set[str] = frozenset(
     }
 )
 
-CONSTRAINED_TOOLS: Set[str] = frozenset(
+CONSTRAINED_TOOLS: set[str] = frozenset(
     {
         # Read-only tools
         *READ_ONLY_TOOLS,
@@ -192,7 +191,7 @@ CONSTRAINED_TOOLS: Set[str] = frozenset(
     }
 )
 
-DANGEROUS_TOOLS: Set[str] = frozenset(
+DANGEROUS_TOOLS: set[str] = frozenset(
     {
         "bash",
         "shell",
@@ -236,7 +235,7 @@ class AgentCapabilities:
     """
 
     # Execution capability axis
-    execution_modes: List[ExecutionMode] = field(
+    execution_modes: list[ExecutionMode] = field(
         default_factory=lambda: [ExecutionMode.SINGLE]
     )
     """Supported execution modes. Default: SINGLE only."""
@@ -250,10 +249,10 @@ class AgentCapabilities:
     """Tool access level. Default: NONE."""
 
     # Tool restrictions
-    allowed_tools: Optional[List[str]] = field(default=None)
+    allowed_tools: list[str] | None = field(default=None)
     """If set, only these tools are allowed (whitelist)."""
 
-    denied_tools: Optional[List[str]] = field(default=None)
+    denied_tools: list[str] | None = field(default=None)
     """If set, these tools are explicitly denied (blacklist)."""
 
     # Execution limits
@@ -328,7 +327,7 @@ class AgentCapabilities:
 
         return False
 
-    def get_available_tools(self) -> Set[str]:
+    def get_available_tools(self) -> set[str]:
         """
         Get the set of tools available at the current access level.
 

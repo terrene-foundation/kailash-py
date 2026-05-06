@@ -21,10 +21,11 @@ from enum import Enum
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory, FailureDiagnosis
+from kaizen_agents.orchestration.recovery.diagnoser import (
+    FailureDiagnosis,
+)
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
     EdgeType,
     MemoryConfig,
     Plan,
@@ -109,7 +110,9 @@ RECOVERY_SCHEMA: dict[str, Any] = {
             },
             "required": ["name", "description", "capabilities", "tool_ids"],
             "additionalProperties": False,
-            "description": ("New agent spec for REPLACE strategy. null for other strategies."),
+            "description": (
+                "New agent spec for REPLACE strategy. null for other strategies."
+            ),
         },
         "alternative_nodes": {
             "type": ["array", "null"],
@@ -147,7 +150,9 @@ RECOVERY_SCHEMA: dict[str, Any] = {
                 ],
                 "additionalProperties": False,
             },
-            "description": ("New nodes for RESTRUCTURE strategy. null for other strategies."),
+            "description": (
+                "New nodes for RESTRUCTURE strategy. null for other strategies."
+            ),
         },
         "skip_reason": {
             "type": ["string", "null"],
@@ -228,22 +233,29 @@ def _build_recovery_user_prompt(
 
     downstream_section = ""
     if downstream_info:
-        downstream_section = "\n## Downstream Nodes (affected by this failure)\n\n" + "\n".join(
-            downstream_info
+        downstream_section = (
+            "\n## Downstream Nodes (affected by this failure)\n\n"
+            + "\n".join(downstream_info)
         )
 
     # Summarize the plan structure
-    completed_nodes = [nid for nid, n in plan.nodes.items() if n.state == PlanNodeState.COMPLETED]
+    completed_nodes = [
+        nid for nid, n in plan.nodes.items() if n.state == PlanNodeState.COMPLETED
+    ]
     pending_nodes = [
         nid
         for nid, n in plan.nodes.items()
         if n.state in (PlanNodeState.PENDING, PlanNodeState.READY)
     ]
 
-    actions_str = "\n".join(f"  {i + 1}. {a}" for i, a in enumerate(diagnosis.suggested_actions))
+    actions_str = "\n".join(
+        f"  {i + 1}. {a}" for i, a in enumerate(diagnosis.suggested_actions)
+    )
 
     tools_str = (
-        ", ".join(failed_node.agent_spec.tool_ids) if failed_node.agent_spec.tool_ids else "(none)"
+        ", ".join(failed_node.agent_spec.tool_ids)
+        if failed_node.agent_spec.tool_ids
+        else "(none)"
     )
     caps_str = (
         ", ".join(failed_node.agent_spec.capabilities)
@@ -417,11 +429,13 @@ class Recomposer:
             raise ValueError(
                 f"Invalid recovery strategy '{strategy_str}'. "
                 f"Must be one of: {[s.value for s in RecoveryStrategy]}"
-            )
+            ) from None
 
         rationale = raw.get("rationale", "")
         if not rationale or not isinstance(rationale, str):
-            raise ValueError(f"Recovery plan missing or empty 'rationale': {rationale!r}")
+            raise ValueError(
+                f"Recovery plan missing or empty 'rationale': {rationale!r}"
+            )
 
         modifications: list[PlanModification] = []
 
@@ -436,7 +450,9 @@ class Recomposer:
 
         elif strategy == RecoveryStrategy.SKIP:
             skip_reason = raw.get("skip_reason") or rationale
-            modifications = [PlanModification.skip_node(failed_node.node_id, skip_reason)]
+            modifications = [
+                PlanModification.skip_node(failed_node.node_id, skip_reason)
+            ]
 
         elif strategy == RecoveryStrategy.RESTRUCTURE:
             modifications = self._build_restructure_modifications(
@@ -474,12 +490,16 @@ class Recomposer:
             ValueError: If replacement_spec is missing or invalid.
         """
         if not replacement_spec_raw or not isinstance(replacement_spec_raw, dict):
-            raise ValueError("REPLACE strategy requires a non-null 'replacement_spec' object")
+            raise ValueError(
+                "REPLACE strategy requires a non-null 'replacement_spec' object"
+            )
 
         name = replacement_spec_raw.get("name", "")
         description = replacement_spec_raw.get("description", "")
         if not name or not description:
-            raise ValueError("replacement_spec must include non-empty 'name' and 'description'")
+            raise ValueError(
+                "replacement_spec must include non-empty 'name' and 'description'"
+            )
 
         capabilities = replacement_spec_raw.get("capabilities", [])
         if not isinstance(capabilities, list):
@@ -538,10 +558,14 @@ class Recomposer:
             ValueError: If alternative_nodes is missing, empty, or invalid.
         """
         if alternative_nodes_raw is None or not isinstance(alternative_nodes_raw, list):
-            raise ValueError("RESTRUCTURE strategy requires a non-null 'alternative_nodes' list")
+            raise ValueError(
+                "RESTRUCTURE strategy requires a non-null 'alternative_nodes' list"
+            )
 
         if len(alternative_nodes_raw) == 0:
-            raise ValueError("RESTRUCTURE strategy requires at least one alternative node")
+            raise ValueError(
+                "RESTRUCTURE strategy requires at least one alternative node"
+            )
 
         modifications: list[PlanModification] = []
 
@@ -549,7 +573,7 @@ class Recomposer:
         modifications.append(
             PlanModification.skip_node(
                 failed_node.node_id,
-                f"Restructured: replaced by alternative path",
+                "Restructured: replaced by alternative path",
             )
         )
 
@@ -659,7 +683,9 @@ class Recomposer:
         for mod in recovery.modifications:
             if mod.modification_type.value == "add_node" and mod.node:
                 if mod.node.node_id in active_node_ids:
-                    raise ValueError(f"AddNode would create duplicate node ID: {mod.node.node_id}")
+                    raise ValueError(
+                        f"AddNode would create duplicate node ID: {mod.node.node_id}"
+                    )
                 active_node_ids.add(mod.node.node_id)
 
                 # Check edges reference valid nodes
@@ -672,14 +698,19 @@ class Recomposer:
                             )
                         if edge.to_node not in active_node_ids:
                             raise ValueError(
-                                f"AddNode edge references non-existent to_node: " f"{edge.to_node}"
+                                f"AddNode edge references non-existent to_node: "
+                                f"{edge.to_node}"
                             )
                         if edge.from_node == edge.to_node:
-                            raise ValueError(f"AddNode edge is a self-loop: {edge.from_node}")
+                            raise ValueError(
+                                f"AddNode edge is a self-loop: {edge.from_node}"
+                            )
 
             elif mod.modification_type.value == "remove_node" and mod.node_id:
                 if mod.node_id not in active_node_ids:
-                    raise ValueError(f"RemoveNode references non-existent node: {mod.node_id}")
+                    raise ValueError(
+                        f"RemoveNode references non-existent node: {mod.node_id}"
+                    )
                 active_node_ids.discard(mod.node_id)
 
             elif mod.modification_type.value == "replace_node":
@@ -694,7 +725,9 @@ class Recomposer:
 
             elif mod.modification_type.value == "skip_node" and mod.node_id:
                 if mod.node_id not in active_node_ids:
-                    raise ValueError(f"SkipNode references non-existent node: {mod.node_id}")
+                    raise ValueError(
+                        f"SkipNode references non-existent node: {mod.node_id}"
+                    )
 
             elif mod.modification_type.value == "add_edge" and mod.edge:
                 if mod.edge.from_node not in active_node_ids:
@@ -702,6 +735,8 @@ class Recomposer:
                         f"AddEdge references non-existent from_node: {mod.edge.from_node}"
                     )
                 if mod.edge.to_node not in active_node_ids:
-                    raise ValueError(f"AddEdge references non-existent to_node: {mod.edge.to_node}")
+                    raise ValueError(
+                        f"AddEdge references non-existent to_node: {mod.edge.to_node}"
+                    )
                 if mod.edge.from_node == mod.edge.to_node:
                     raise ValueError(f"AddEdge is a self-loop: {mod.edge.from_node}")

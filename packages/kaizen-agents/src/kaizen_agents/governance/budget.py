@@ -96,11 +96,15 @@ class BudgetTracker:
         max_agents: int = 100_000,
     ) -> None:
         if not math.isfinite(warning_threshold):
-            raise ValueError(f"warning_threshold must be finite, got {warning_threshold}")
+            raise ValueError(
+                f"warning_threshold must be finite, got {warning_threshold}"
+            )
         if not math.isfinite(hold_threshold):
             raise ValueError(f"hold_threshold must be finite, got {hold_threshold}")
         if warning_threshold < 0.0 or warning_threshold > 1.0:
-            raise ValueError(f"warning_threshold must be in [0, 1], got {warning_threshold}")
+            raise ValueError(
+                f"warning_threshold must be in [0, 1], got {warning_threshold}"
+            )
         if hold_threshold < warning_threshold:
             raise ValueError(
                 f"hold_threshold ({hold_threshold}) must be >= warning_threshold ({warning_threshold})"
@@ -141,7 +145,10 @@ class BudgetTracker:
 
         with self._lock:
             # R1-03: Bounded agent tracking for new agents only
-            if agent_id not in self._allocated and len(self._allocated) >= self._max_agents:
+            if (
+                agent_id not in self._allocated
+                and len(self._allocated) >= self._max_agents
+            ):
                 raise ValueError(
                     f"Agent registration limit ({self._max_agents}) reached. "
                     f"Cannot allocate for '{agent_id}'."
@@ -257,7 +264,9 @@ class BudgetTracker:
 
                 # If parent was HELD, check if reclamation resolves it
                 if parent_id in self._held and self._allocated[parent_id] > 0:
-                    parent_util = self._consumed.get(parent_id, 0.0) / self._allocated[parent_id]
+                    parent_util = (
+                        self._consumed.get(parent_id, 0.0) / self._allocated[parent_id]
+                    )
                     if parent_util < self._hold_threshold:
                         self._held.discard(parent_id)
 
@@ -316,18 +325,22 @@ class BudgetTracker:
             raise ValueError(f"amount must be positive, got {amount}")
 
         with self._lock:
-            from_remaining = self._allocated.get(from_agent_id, 0.0) - self._consumed.get(
+            from_remaining = self._allocated.get(
                 from_agent_id, 0.0
-            )
+            ) - self._consumed.get(from_agent_id, 0.0)
             if from_remaining < amount:
                 return None
 
             self._allocated[from_agent_id] -= amount
-            self._allocated[to_agent_id] = self._allocated.get(to_agent_id, 0.0) + amount
+            self._allocated[to_agent_id] = (
+                self._allocated.get(to_agent_id, 0.0) + amount
+            )
 
             # If recipient was HELD, check if reallocation resolves it
             if to_agent_id in self._held:
-                to_util = self._consumed.get(to_agent_id, 0.0) / self._allocated[to_agent_id]
+                to_util = (
+                    self._consumed.get(to_agent_id, 0.0) / self._allocated[to_agent_id]
+                )
                 if to_util < self._hold_threshold:
                     self._held.discard(to_agent_id)
                     self._warned.discard(to_agent_id)

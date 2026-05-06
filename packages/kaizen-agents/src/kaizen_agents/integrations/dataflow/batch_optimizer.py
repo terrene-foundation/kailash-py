@@ -14,8 +14,9 @@ Features:
 """
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -64,7 +65,7 @@ class BatchResult:
     total: int = 0
     successful: int = 0
     failed: int = 0
-    errors: List[Dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
     duration: float = 0.0
     batches_processed: int = 0
     throughput: float = 0.0
@@ -112,10 +113,10 @@ class BatchOptimizer:
 
     def batch_insert(
         self,
-        data: List[Dict[str, Any]],
-        insert_fn: Callable[[List[Dict[str, Any]]], Any],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        data: list[dict[str, Any]],
+        insert_fn: Callable[[list[dict[str, Any]]], Any],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Insert data in optimized batches.
 
@@ -201,10 +202,10 @@ class BatchOptimizer:
 
     def batch_update(
         self,
-        data: List[Dict[str, Any]],
-        update_fn: Callable[[List[Dict[str, Any]]], Any],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        data: list[dict[str, Any]],
+        update_fn: Callable[[list[dict[str, Any]]], Any],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Update data in optimized batches.
 
@@ -226,10 +227,10 @@ class BatchOptimizer:
 
     def batch_delete(
         self,
-        data: List[Dict[str, Any]],
-        delete_fn: Callable[[List[Dict[str, Any]]], Any],
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> Dict[str, Any]:
+        data: list[dict[str, Any]],
+        delete_fn: Callable[[list[dict[str, Any]]], Any],
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Delete data in optimized batches.
 
@@ -250,8 +251,8 @@ class BatchOptimizer:
         return self.batch_insert(data, delete_fn, progress_callback)
 
     def _execute_batch_with_retry(
-        self, batch: List[Dict[str, Any]], batch_index: int, operation_fn: Callable
-    ) -> Dict[str, Any]:
+        self, batch: list[dict[str, Any]], batch_index: int, operation_fn: Callable
+    ) -> dict[str, Any]:
         """
         Execute batch operation with retry logic.
 
@@ -317,7 +318,7 @@ class BatchOptimizer:
             ],
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get optimizer statistics.
 

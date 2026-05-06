@@ -23,22 +23,27 @@ Migration::
 import asyncio
 import uuid
 import warnings
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import Any
 
 from kaizen_agents.api.config import AgentConfig
-from kaizen_agents.api.result import AgentResult, ResultStatus, ToolCallRecord
+from kaizen_agents.api.result import AgentResult, ToolCallRecord
 from kaizen_agents.api.shortcuts import (
     resolve_execution_mode,
     resolve_memory_shortcut,
     resolve_model_shortcut,
     resolve_runtime_shortcut,
 )
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 from kaizen_agents.api.validation import (
     ConfigurationError,
     validate_configuration,
-    validate_model_runtime_compatibility,
 )
 
 
@@ -87,31 +92,31 @@ class Agent:
 
     def __init__(
         self,
-        model: Optional[str] = None,
+        model: str | None = None,
         *,
         # Execution configuration
-        execution_mode: Union[str, ExecutionMode] = "single",
+        execution_mode: str | ExecutionMode = "single",
         max_cycles: int = 100,
         max_turns: int = 50,
         timeout_seconds: float = 300.0,
         # Memory configuration
-        memory: Union[str, Any, None] = "stateless",
-        memory_path: Optional[str] = None,
+        memory: str | Any | None = "stateless",
+        memory_path: str | None = None,
         # Tool configuration
-        tool_access: Union[str, ToolAccess] = "none",
-        tools: Optional[List[Any]] = None,
-        allowed_tools: Optional[List[str]] = None,
-        denied_tools: Optional[List[str]] = None,
+        tool_access: str | ToolAccess = "none",
+        tools: list[Any] | None = None,
+        allowed_tools: list[str] | None = None,
+        denied_tools: list[str] | None = None,
         # Runtime configuration
-        runtime: Union[str, Any] = "local",
+        runtime: str | Any = "local",
         # LLM routing configuration
-        llm_routing: Optional[Dict[str, str]] = None,
+        llm_routing: dict[str, str] | None = None,
         routing_strategy: str = "balanced",
         # Model parameters
         temperature: float = 0.7,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         # Expert configuration (overrides all above)
-        config: Optional[AgentConfig] = None,
+        config: AgentConfig | None = None,
     ):
         """
         Initialize a new Agent.
@@ -176,7 +181,7 @@ class Agent:
                     'Use execution_mode="multi" for conversations',
                     'Use execution_mode="autonomous" for agentic tasks',
                 ],
-            )
+            ) from e
 
         try:
             resolved_tool_access = (
@@ -193,7 +198,7 @@ class Agent:
                     'Use tool_access="constrained" for safe tools with confirmation',
                     'Use tool_access="full" for all tools',
                 ],
-            )
+            ) from e
 
         # Validate configuration
         is_valid, errors = validate_configuration(
@@ -284,7 +289,9 @@ class Agent:
         self._runtime = None
 
         # LLM routing
-        self._llm_routing = config.llm_routing.task_model_mapping if config.llm_routing else None
+        self._llm_routing = (
+            config.llm_routing.task_model_mapping if config.llm_routing else None
+        )
         self._routing_strategy = config.routing_strategy
 
         # Capabilities
@@ -341,7 +348,7 @@ class Agent:
         self,
         task: str,
         *,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
     ) -> AgentResult:
         """
@@ -406,7 +413,7 @@ class Agent:
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return AgentResult.timeout(session_id=self._session_id)
         except Exception as e:
             return AgentResult.from_error(
@@ -421,7 +428,7 @@ class Agent:
         self,
         task: str,
         *,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
     ) -> AgentResult:
         """
@@ -445,7 +452,9 @@ class Agent:
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, self.run(task, context=context, **kwargs)).result()
+                return pool.submit(
+                    asyncio.run, self.run(task, context=context, **kwargs)
+                ).result()
         else:
             return asyncio.run(self.run(task, context=context, **kwargs))
 
@@ -453,7 +462,7 @@ class Agent:
         self,
         task: str,
         *,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """
@@ -493,7 +502,7 @@ class Agent:
         self,
         message: str,
         *,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
     ) -> AgentResult:
         """
@@ -563,7 +572,7 @@ class Agent:
         self._is_running = False
         self._is_paused = False
 
-    def set_mode(self, mode: Union[str, ExecutionMode]) -> "Agent":
+    def set_mode(self, mode: str | ExecutionMode) -> "Agent":
         """
         Switch execution mode at runtime.
 
@@ -616,9 +625,9 @@ class Agent:
     def _build_execution_context(
         self,
         task: str,
-        context: Optional[Dict[str, Any]],
+        context: dict[str, Any] | None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build execution context for runtime."""
         return {
             "task": task,
@@ -644,7 +653,7 @@ class Agent:
     async def _execute_single(
         self,
         runtime: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> AgentResult:
         """Execute a single-shot request."""
         try:
@@ -679,7 +688,7 @@ class Agent:
     async def _execute_multi(
         self,
         runtime: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> AgentResult:
         """Execute a multi-turn conversation step."""
         # Load conversation history
@@ -710,11 +719,10 @@ class Agent:
     async def _execute_autonomous(
         self,
         runtime: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> AgentResult:
         """Execute autonomous TAOD loop."""
         try:
-            from kaizen.runtime.adapter import ExecutionResult
             from kaizen.runtime.context import ExecutionContext
 
             exec_ctx = ExecutionContext(
@@ -730,7 +738,7 @@ class Agent:
             # Execute via runtime with progress callback
             tool_calls = []
 
-            def on_progress(event: Dict[str, Any]) -> None:
+            def on_progress(event: dict[str, Any]) -> None:
                 if event.get("type") == "tool_call":
                     tool_calls.append(
                         ToolCallRecord(

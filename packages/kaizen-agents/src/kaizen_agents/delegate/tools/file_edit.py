@@ -61,7 +61,9 @@ class FileEditTool(Tool):
             return ToolResult.failure(f"File not found: {file_path}")
 
         if old_string == new_string:
-            return ToolResult.failure("old_string and new_string are identical; no change needed.")
+            return ToolResult.failure(
+                "old_string and new_string are identical; no change needed."
+            )
 
         try:
             content = path.read_text(encoding="utf-8")
@@ -100,4 +102,6 @@ class FileEditTool(Tool):
             return ToolResult.failure(f"Error writing file: {exc}")
 
         replacements = count if replace_all else 1
-        return ToolResult.success(f"Replaced {replacements} occurrence(s) in {file_path}")
+        return ToolResult.success(
+            f"Replaced {replacements} occurrence(s) in {file_path}"
+        )

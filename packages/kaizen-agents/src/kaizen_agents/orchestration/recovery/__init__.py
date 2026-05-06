@@ -2,13 +2,13 @@
 
 from kaizen_agents.orchestration.recovery.diagnoser import (
     FailureCategory,
-    FailureDiagnosis,
     FailureDiagnoser,
+    FailureDiagnosis,
 )
 from kaizen_agents.orchestration.recovery.recomposer import (
+    Recomposer,
     RecoveryPlan,
     RecoveryStrategy,
-    Recomposer,
 )
 
 __all__ = [

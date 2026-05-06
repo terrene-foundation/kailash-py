@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.types import Plan, PlanNode, PlanNodeState
+from kaizen_agents.types import Plan, PlanNode
 
 
 class FailureCategory(Enum):
@@ -80,12 +80,19 @@ DIAGNOSIS_SCHEMA: dict[str, Any] = {
         "root_cause": {
             "type": "string",
             "description": (
-                "Clear explanation of why the node failed. Be specific: " "what went wrong and why."
+                "Clear explanation of why the node failed. Be specific: "
+                "what went wrong and why."
             ),
         },
         "category": {
             "type": "string",
-            "enum": ["transient", "permanent", "resource", "dependency", "configuration"],
+            "enum": [
+                "transient",
+                "permanent",
+                "resource",
+                "dependency",
+                "configuration",
+            ],
             "description": (
                 "Classification: transient (retry fixes it), permanent (need different approach), "
                 "resource (budget/timeout), dependency (upstream data issue), "
@@ -110,7 +117,13 @@ DIAGNOSIS_SCHEMA: dict[str, Any] = {
             "description": "Confidence in this diagnosis from 0.0 (guessing) to 1.0 (certain).",
         },
     },
-    "required": ["root_cause", "category", "recoverable", "suggested_actions", "confidence"],
+    "required": [
+        "root_cause",
+        "category",
+        "recoverable",
+        "suggested_actions",
+        "confidence",
+    ],
     "additionalProperties": False,
 }
 
@@ -168,7 +181,9 @@ def _build_diagnosis_user_prompt(
                 if upstream_node.output is not None:
                     output_str = str(upstream_node.output)
                     output_summary = f" (output: {output_str[:200]})"
-                upstream_info.append(f"  - {edge.from_node}: state={state_str}{output_summary}")
+                upstream_info.append(
+                    f"  - {edge.from_node}: state={state_str}{output_summary}"
+                )
 
     upstream_section = ""
     if upstream_info:
@@ -185,8 +200,9 @@ def _build_diagnosis_user_prompt(
 
     downstream_section = ""
     if downstream_info:
-        downstream_section = "\n## Downstream Nodes (blocked by this failure)\n\n" + "\n".join(
-            downstream_info
+        downstream_section = (
+            "\n## Downstream Nodes (blocked by this failure)\n\n"
+            + "\n".join(downstream_info)
         )
 
     context_section = ""
@@ -194,8 +210,14 @@ def _build_diagnosis_user_prompt(
         context_lines = [f"  - {k}: {v}" for k, v in execution_context.items()]
         context_section = "\n## Execution Context\n\n" + "\n".join(context_lines)
 
-    tools_str = ", ".join(node.agent_spec.tool_ids) if node.agent_spec.tool_ids else "(none)"
-    caps_str = ", ".join(node.agent_spec.capabilities) if node.agent_spec.capabilities else "(none)"
+    tools_str = (
+        ", ".join(node.agent_spec.tool_ids) if node.agent_spec.tool_ids else "(none)"
+    )
+    caps_str = (
+        ", ".join(node.agent_spec.capabilities)
+        if node.agent_spec.capabilities
+        else "(none)"
+    )
 
     return f"""## Failed Node
 
@@ -312,7 +334,9 @@ class FailureDiagnoser:
         """
         root_cause = raw.get("root_cause", "")
         if not root_cause or not isinstance(root_cause, str):
-            raise ValueError(f"Diagnosis missing or empty 'root_cause': {raw.get('root_cause')!r}")
+            raise ValueError(
+                f"Diagnosis missing or empty 'root_cause': {raw.get('root_cause')!r}"
+            )
 
         category_str = raw.get("category", "")
         try:
@@ -321,7 +345,7 @@ class FailureDiagnoser:
             raise ValueError(
                 f"Invalid failure category '{category_str}'. "
                 f"Must be one of: {[c.value for c in FailureCategory]}"
-            )
+            ) from None
 
         recoverable = raw.get("recoverable")
         if not isinstance(recoverable, bool):

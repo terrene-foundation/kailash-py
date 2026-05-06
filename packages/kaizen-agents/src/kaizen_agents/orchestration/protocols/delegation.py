@@ -13,7 +13,7 @@ task descriptions requires LLM judgment.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
@@ -23,7 +23,6 @@ from kaizen_agents.types import (
     DelegationPayload,
     Priority,
 )
-
 
 # JSON schema for the LLM-composed task description
 DELEGATION_COMPOSITION_SCHEMA: dict[str, Any] = {
@@ -38,12 +37,16 @@ DELEGATION_COMPOSITION_SCHEMA: dict[str, Any] = {
         },
         "priority_suggestion": {
             "type": "string",
-            "description": ("Suggested priority: 'low', 'normal', 'high', or 'critical'."),
+            "description": (
+                "Suggested priority: 'low', 'normal', 'high', or 'critical'."
+            ),
         },
         "required_context_keys": {
             "type": "array",
             "items": {"type": "string"},
-            "description": ("Context keys from the parent's context that the child needs to see."),
+            "description": (
+                "Context keys from the parent's context that the child needs to see."
+            ),
         },
     },
     "required": ["task_description", "priority_suggestion", "required_context_keys"],
@@ -140,7 +143,9 @@ def _build_composition_user_prompt(
             context_lines.append(f"- **{key}**: {value}")
         else:
             context_lines.append(f"- **{key}**: {value!r}")
-    context_section = "\n".join(context_lines) if context_lines else "(no context available)"
+    context_section = (
+        "\n".join(context_lines) if context_lines else "(no context available)"
+    )
 
     budget_info = ""
     if envelope.financial is not None:
@@ -190,7 +195,9 @@ def _build_processing_user_prompt(
     plan_context: dict[str, Any],
 ) -> str:
     """Build the user prompt for completion processing."""
-    result_str = str(completion.result) if completion.result is not None else "(no result)"
+    result_str = (
+        str(completion.result) if completion.result is not None else "(no result)"
+    )
     context_updates_str = (
         str(completion.context_updates) if completion.context_updates else "(none)"
     )
@@ -215,7 +222,9 @@ def _build_processing_user_prompt(
             plan_context_lines.append(f"- **{key}**: {value}")
         else:
             plan_context_lines.append(f"- **{key}**: {value!r}")
-    plan_ctx_section = "\n".join(plan_context_lines) if plan_context_lines else "(no plan context)"
+    plan_ctx_section = (
+        "\n".join(plan_context_lines) if plan_context_lines else "(no plan context)"
+    )
 
     return f"""## Child Completion Report
 

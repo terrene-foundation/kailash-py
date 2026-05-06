@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 from openai import AsyncStream
 from openai.types.chat import ChatCompletionChunk
@@ -54,7 +55,9 @@ class ToolCallAccumulator:
         try:
             return json.loads(self.arguments)
         except json.JSONDecodeError:
-            logger.warning("Failed to parse tool call arguments: %s", self.arguments[:200])
+            logger.warning(
+                "Failed to parse tool call arguments: %s", self.arguments[:200]
+            )
             return {}
 
 

@@ -33,8 +33,9 @@ Environment variable support:
 """
 
 import os
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -85,7 +86,7 @@ class StreamingChatConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class StreamingChatAgent(BaseAgent):
@@ -154,16 +155,16 @@ class StreamingChatAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        streaming: Optional[bool] = None,
-        chunk_size: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[StreamingChatConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        streaming: bool | None = None,
+        chunk_size: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: StreamingChatConfig | None = None,
         **kwargs,
     ):
         """

@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class AutonomousPhase(Enum):
@@ -84,17 +84,17 @@ class AutonomousConfig:
 
     # Execution limits
     max_cycles: int = 50
-    budget_limit_usd: Optional[float] = None
-    timeout_seconds: Optional[float] = None
+    budget_limit_usd: float | None = None
+    timeout_seconds: float | None = None
 
     # Checkpointing
     checkpoint_frequency: int = 10
     checkpoint_on_interrupt: bool = True
-    resume_from_checkpoint: Optional[str] = None
+    resume_from_checkpoint: str | None = None
 
     # Memory
     enable_learning: bool = False
-    memory_backend: Optional[str] = None
+    memory_backend: str | None = None
 
     # Planning
     planning_strategy: PlanningStrategy = PlanningStrategy.REACT
@@ -103,10 +103,10 @@ class AutonomousConfig:
     permission_mode: PermissionMode = PermissionMode.CONFIRM_DANGEROUS
 
     # Tools
-    tools: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -142,7 +142,7 @@ class AutonomousConfig:
                 f"checkpoint_frequency must be at least 1, got {self.checkpoint_frequency}"
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize configuration to dictionary.
 
         Returns:
@@ -167,7 +167,7 @@ class AutonomousConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AutonomousConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "AutonomousConfig":
         """Deserialize configuration from dictionary.
 
         Args:
@@ -220,19 +220,19 @@ class ExecutionState:
     phase: AutonomousPhase = AutonomousPhase.THINK
 
     # Conversation state
-    messages: List[Dict[str, Any]] = field(default_factory=list)
+    messages: list[dict[str, Any]] = field(default_factory=list)
 
     # Plan state (if using planning strategy)
-    plan: List[str] = field(default_factory=list)
+    plan: list[str] = field(default_factory=list)
     plan_index: int = 0
 
     # Tool execution state
-    pending_tool_calls: List[Dict[str, Any]] = field(default_factory=list)
-    tool_results: List[Dict[str, Any]] = field(default_factory=list)
+    pending_tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
 
     # Memory state
-    working_memory: Dict[str, Any] = field(default_factory=dict)
-    learned_patterns: List[str] = field(default_factory=list)
+    working_memory: dict[str, Any] = field(default_factory=dict)
+    learned_patterns: list[str] = field(default_factory=list)
 
     # Budget tracking
     tokens_used: int = 0
@@ -240,8 +240,8 @@ class ExecutionState:
 
     # Execution status
     status: str = "running"  # running, completed, interrupted, error
-    result: Optional[str] = None
-    error: Optional[str] = None
+    result: str | None = None
+    error: str | None = None
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -272,17 +272,17 @@ class ExecutionState:
         self.phase = phase
         self.updated_at = datetime.utcnow()
 
-    def add_message(self, message: Dict[str, Any]) -> None:
+    def add_message(self, message: dict[str, Any]) -> None:
         """Add a message to conversation history."""
         self.messages.append(message)
         self.updated_at = datetime.utcnow()
 
-    def add_tool_call(self, tool_call: Dict[str, Any]) -> None:
+    def add_tool_call(self, tool_call: dict[str, Any]) -> None:
         """Add a pending tool call."""
         self.pending_tool_calls.append(tool_call)
         self.updated_at = datetime.utcnow()
 
-    def add_tool_result(self, result: Dict[str, Any]) -> None:
+    def add_tool_result(self, result: dict[str, Any]) -> None:
         """Add a tool execution result."""
         self.tool_results.append(result)
         self.updated_at = datetime.utcnow()
@@ -328,7 +328,7 @@ class ExecutionState:
         self.status = "interrupted"
         self.updated_at = datetime.utcnow()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize state to dictionary for checkpointing.
 
         Returns:
@@ -356,7 +356,7 @@ class ExecutionState:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExecutionState":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionState":
         """Deserialize state from dictionary.
 
         Args:

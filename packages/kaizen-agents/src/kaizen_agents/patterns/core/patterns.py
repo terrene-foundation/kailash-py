@@ -9,7 +9,7 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen_agents.workflows.consensus import ConsensusWorkflow
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class CoordinationPattern(ABC):
     """Base class for coordination patterns."""
 
-    def __init__(self, pattern_name: str, kaizen_instance: Optional[Any] = None):
+    def __init__(self, pattern_name: str, kaizen_instance: Any | None = None):
         """
         Initialize coordination pattern.
 
@@ -43,11 +43,11 @@ class CoordinationPattern(ABC):
         pass
 
     @abstractmethod
-    def extract_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract structured results from workflow execution."""
         pass
 
-    def get_pattern_metadata(self) -> Dict[str, Any]:
+    def get_pattern_metadata(self) -> dict[str, Any]:
         """Get pattern metadata for auditing and monitoring."""
         return {
             "pattern_id": self.pattern_id,
@@ -60,16 +60,16 @@ class CoordinationPattern(ABC):
 class DebateCoordinationPattern(CoordinationPattern):
     """Advanced debate coordination pattern with enterprise features."""
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         super().__init__("debate", kaizen_instance)
 
     def create_workflow(
         self,
-        agents: List[Any],
+        agents: list[Any],
         topic: str,
         rounds: int = 3,
         decision_criteria: str = "evidence-based consensus",
-        enterprise_features: Optional[Dict[str, Any]] = None,
+        enterprise_features: dict[str, Any] | None = None,
         **kwargs,
     ) -> WorkflowBuilder:
         """
@@ -129,7 +129,7 @@ class DebateCoordinationPattern(CoordinationPattern):
 
         return workflow
 
-    def extract_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract structured debate results with enterprise enhancements."""
         # Find the debate workflow in results
         debate_workflow = None
@@ -160,8 +160,8 @@ class DebateCoordinationPattern(CoordinationPattern):
         return structured_results
 
     def _fallback_extract_debate_results(
-        self, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, results: dict[str, Any]
+    ) -> dict[str, Any]:
         """Fallback method to extract debate results when workflow not available."""
         return {
             "topic": "Unknown topic",
@@ -174,12 +174,12 @@ class DebateCoordinationPattern(CoordinationPattern):
 class ConsensusCoordinationPattern(CoordinationPattern):
     """Advanced consensus coordination pattern with iterative refinement."""
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         super().__init__("consensus", kaizen_instance)
 
     def create_workflow(
         self,
-        agents: List[Any],
+        agents: list[Any],
         topic: str,
         consensus_threshold: float = 0.75,
         max_iterations: int = 5,
@@ -231,7 +231,7 @@ class ConsensusCoordinationPattern(CoordinationPattern):
 
         return workflow
 
-    def extract_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract structured consensus results."""
         consensus_workflow = ConsensusWorkflow(
             agents=[],  # Placeholder
@@ -256,13 +256,13 @@ class ConsensusCoordinationPattern(CoordinationPattern):
 class HierarchicalCoordinationPattern(CoordinationPattern):
     """Supervisor-worker hierarchical coordination pattern."""
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         super().__init__("hierarchical", kaizen_instance)
 
     def create_workflow(
         self,
         supervisor: Any,
-        workers: List[Any],
+        workers: list[Any],
         task: str,
         coordination_pattern: str = "hierarchical",
         **kwargs,
@@ -319,7 +319,7 @@ class HierarchicalCoordinationPattern(CoordinationPattern):
 
         return workflow
 
-    def extract_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract structured hierarchical coordination results."""
         # Create placeholder workflow for result extraction
         hierarchical_workflow = SupervisorWorkerWorkflow(
@@ -348,7 +348,7 @@ class HierarchicalCoordinationPattern(CoordinationPattern):
 class TeamCoordinationPattern(CoordinationPattern):
     """Enhanced team coordination pattern with role-based collaboration."""
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         super().__init__("team", kaizen_instance)
 
     def create_workflow(
@@ -453,7 +453,7 @@ class TeamCoordinationPattern(CoordinationPattern):
 
         return workflow
 
-    def extract_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """Extract structured team coordination results."""
         team_results = {
             "coordination_type": "team",
@@ -484,7 +484,7 @@ class TeamCoordinationPattern(CoordinationPattern):
 class CoordinationPatternRegistry:
     """Registry for managing coordination patterns."""
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         """
         Initialize pattern registry.
 
@@ -492,7 +492,7 @@ class CoordinationPatternRegistry:
             kaizen_instance: Reference to Kaizen framework instance
         """
         self.kaizen = kaizen_instance
-        self._patterns: Dict[str, CoordinationPattern] = {}
+        self._patterns: dict[str, CoordinationPattern] = {}
         self._register_default_patterns()
 
     def _register_default_patterns(self):
@@ -513,7 +513,7 @@ class CoordinationPatternRegistry:
         self._patterns[name] = pattern
         logger.info(f"Registered coordination pattern: {name}")
 
-    def get_pattern(self, name: str) -> Optional[CoordinationPattern]:
+    def get_pattern(self, name: str) -> CoordinationPattern | None:
         """
         Get coordination pattern by name.
 
@@ -525,7 +525,7 @@ class CoordinationPatternRegistry:
         """
         return self._patterns.get(name)
 
-    def list_patterns(self) -> List[str]:
+    def list_patterns(self) -> list[str]:
         """
         List all registered pattern names.
 
@@ -536,7 +536,7 @@ class CoordinationPatternRegistry:
 
     def create_coordination_workflow(
         self, pattern_name: str, **kwargs
-    ) -> Optional[WorkflowBuilder]:
+    ) -> WorkflowBuilder | None:
         """
         Create coordination workflow using specified pattern.
 
@@ -553,8 +553,8 @@ class CoordinationPatternRegistry:
         return None
 
     def extract_coordination_results(
-        self, pattern_name: str, results: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, pattern_name: str, results: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """
         Extract structured results using specified pattern.
 
@@ -572,11 +572,11 @@ class CoordinationPatternRegistry:
 
 
 # Global pattern registry instance
-_global_registry: Optional[CoordinationPatternRegistry] = None
+_global_registry: CoordinationPatternRegistry | None = None
 
 
 def get_global_pattern_registry(
-    kaizen_instance: Optional[Any] = None,
+    kaizen_instance: Any | None = None,
 ) -> CoordinationPatternRegistry:
     """
     Get global coordination pattern registry.

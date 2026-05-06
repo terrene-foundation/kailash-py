@@ -44,7 +44,7 @@ Usage:
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 if TYPE_CHECKING:
     from kaizen.core.base_agent import BaseAgent
@@ -119,10 +119,10 @@ class PathwayContext:
     session_id: str
     pathway_id: str
     user_message: str
-    accumulated_context: Dict[str, Any]
-    conversation_history: List[Dict[str, Any]]
+    accumulated_context: dict[str, Any]
+    conversation_history: list[dict[str, Any]]
 
-    def to_input_dict(self) -> Dict[str, Any]:
+    def to_input_dict(self) -> dict[str, Any]:
         """
         Convert context to pipeline input dictionary.
 
@@ -152,11 +152,11 @@ class PathwayResult:
         error: Error message if execution failed
     """
 
-    outputs: Dict[str, Any]
-    accumulated: Dict[str, Any]
-    next_pathway: Optional[str]
+    outputs: dict[str, Any]
+    accumulated: dict[str, Any]
+    next_pathway: str | None
     is_complete: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ============================================================================
@@ -180,7 +180,7 @@ class PathwayMeta(type):
     """
 
     def __new__(
-        mcs, name: str, bases: tuple, namespace: Dict[str, Any], **kwargs
+        mcs, name: str, bases: tuple, namespace: dict[str, Any], **kwargs
     ) -> type:
         """Process Pathway class definition."""
         # Skip processing for the base Pathway class itself
@@ -252,16 +252,16 @@ class Pathway(metaclass=PathwayMeta):
     """
 
     # Class variables (set by PathwayMeta)
-    _signature: ClassVar[Optional[Type["Signature"]]] = None
-    _agents: ClassVar[List[str]] = []
+    _signature: ClassVar[type["Signature"] | None] = None
+    _agents: ClassVar[list[str]] = []
     _pipeline: ClassVar[str] = "sequential"
-    _pipeline_config: ClassVar[Dict[str, Any]] = (
+    _pipeline_config: ClassVar[dict[str, Any]] = (
         {}
     )  # REQ-INT-002: Pattern-specific config
-    _accumulate: ClassVar[List[str]] = []
-    _next: ClassVar[Optional[str]] = None
-    _guidelines: ClassVar[List[str]] = []
-    _return_behavior: ClassVar[Optional[ReturnBehavior]] = None
+    _accumulate: ClassVar[list[str]] = []
+    _next: ClassVar[str | None] = None
+    _guidelines: ClassVar[list[str]] = []
+    _return_behavior: ClassVar[ReturnBehavior | None] = None
 
     def __init__(self, manager: "PathwayManager"):
         """
@@ -271,8 +271,8 @@ class Pathway(metaclass=PathwayMeta):
             manager: PathwayManager that owns this pathway instance
         """
         self.manager = manager
-        self._signature_instance: Optional["Signature"] = None
-        self._pipeline_instance: Optional["Pipeline"] = None
+        self._signature_instance: Signature | None = None
+        self._pipeline_instance: Pipeline | None = None
 
     @property
     def signature(self) -> Optional["Signature"]:
@@ -311,7 +311,7 @@ class Pathway(metaclass=PathwayMeta):
         return self._signature_instance
 
     @property
-    def guidelines(self) -> List[str]:
+    def guidelines(self) -> list[str]:
         """
         Get merged guidelines from signature and pathway.
 
@@ -331,7 +331,7 @@ class Pathway(metaclass=PathwayMeta):
         return result
 
     @property
-    def agent_ids(self) -> List[str]:
+    def agent_ids(self) -> list[str]:
         """Get list of agent IDs for this pathway."""
         return self._agents.copy()
 
@@ -341,22 +341,22 @@ class Pathway(metaclass=PathwayMeta):
         return self._pipeline
 
     @property
-    def accumulate_fields(self) -> List[str]:
+    def accumulate_fields(self) -> list[str]:
         """Get list of fields to accumulate from results."""
         return self._accumulate.copy()
 
     @property
-    def next_pathway(self) -> Optional[str]:
+    def next_pathway(self) -> str | None:
         """Get default next pathway ID."""
         return self._next
 
     @property
-    def return_behavior(self) -> Optional[ReturnBehavior]:
+    def return_behavior(self) -> ReturnBehavior | None:
         """Get return behavior for navigation after completion."""
         return self._return_behavior
 
     @property
-    def pipeline_config(self) -> Dict[str, Any]:
+    def pipeline_config(self) -> dict[str, Any]:
         """
         Get pipeline-specific configuration (REQ-INT-002).
 
@@ -365,7 +365,7 @@ class Pathway(metaclass=PathwayMeta):
         """
         return self._pipeline_config.copy()
 
-    def validate_outputs(self, result: Dict[str, Any]) -> Dict[str, bool]:
+    def validate_outputs(self, result: dict[str, Any]) -> dict[str, bool]:
         """
         Validate outputs against signature contract (REQ-INT-001).
 
@@ -398,7 +398,7 @@ class Pathway(metaclass=PathwayMeta):
 
         return validation
 
-    def get_missing_outputs(self, result: Dict[str, Any]) -> List[str]:
+    def get_missing_outputs(self, result: dict[str, Any]) -> list[str]:
         """
         Get list of missing required output fields (REQ-INT-001).
 
@@ -472,7 +472,7 @@ class Pathway(metaclass=PathwayMeta):
                 error=str(e),
             )
 
-    def _resolve_agents(self) -> List["BaseAgent"]:
+    def _resolve_agents(self) -> list["BaseAgent"]:
         """
         Resolve agent IDs to agent instances from registry.
 
@@ -490,7 +490,7 @@ class Pathway(metaclass=PathwayMeta):
             agents.append(agent)
         return agents
 
-    def _build_pipeline(self, agents: List["BaseAgent"]) -> "Pipeline":
+    def _build_pipeline(self, agents: list["BaseAgent"]) -> "Pipeline":
         """
         Build pipeline from agents based on pipeline type (REQ-INT-002).
 
@@ -584,7 +584,7 @@ class Pathway(metaclass=PathwayMeta):
         else:
             raise ValueError(f"Unknown pipeline type: {pipeline_type}")
 
-    def _extract_accumulated_fields(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_accumulated_fields(self, result: dict[str, Any]) -> dict[str, Any]:
         """
         Extract fields to accumulate from result.
 
@@ -622,7 +622,7 @@ class JourneyMeta(type):
     """
 
     def __new__(
-        mcs, name: str, bases: tuple, namespace: Dict[str, Any], **kwargs
+        mcs, name: str, bases: tuple, namespace: dict[str, Any], **kwargs
     ) -> type:
         """Process Journey class definition."""
         # Skip processing for the base Journey class itself
@@ -630,7 +630,7 @@ class JourneyMeta(type):
             return super().__new__(mcs, name, bases, namespace)
 
         # Extract nested Pathway classes
-        pathways: Dict[str, Type[Pathway]] = {}
+        pathways: dict[str, type[Pathway]] = {}
         for attr_name, attr_value in list(namespace.items()):
             if isinstance(attr_value, type) and issubclass(attr_value, Pathway):
                 if attr_value is not Pathway:  # Skip base Pathway class
@@ -696,9 +696,11 @@ class JourneyMeta(type):
 
 # Import enhanced PathwayManager from manager.py
 # This provides full session management, context accumulation, and state persistence
-from kaizen_agents.journey.manager import JourneyResponse as EnhancedJourneyResponse
-from kaizen_agents.journey.manager import PathwayManager as EnhancedPathwayManager
-from kaizen_agents.journey.state import JourneySession
+# Late imports avoid a circular dependency: manager.py / state.py import from this module.
+from kaizen_agents.journey.manager import (  # noqa: E402  (late import — circular avoidance)
+    PathwayManager as EnhancedPathwayManager,
+)
+from kaizen_agents.journey.state import JourneySession  # noqa: E402
 
 
 # Alias for backward compatibility - the placeholder PathwayManager in core.py
@@ -745,11 +747,11 @@ class DetailedJourneyResponse:
 
     pathway_id: str
     result: PathwayResult
-    next_pathway_id: Optional[str]
-    accumulated_context: Dict[str, Any]
+    next_pathway_id: str | None
+    accumulated_context: dict[str, Any]
     message: str = ""
     pathway_changed: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # Alias for backward compatibility
@@ -798,14 +800,14 @@ class Journey(metaclass=JourneyMeta):
     """
 
     # Class variables (set by JourneyMeta)
-    _pathways: ClassVar[Dict[str, Type[Pathway]]] = {}
-    _entry_pathway: ClassVar[Optional[str]] = None
-    _transitions: ClassVar[List[Any]] = []
+    _pathways: ClassVar[dict[str, type[Pathway]]] = {}
+    _entry_pathway: ClassVar[str | None] = None
+    _transitions: ClassVar[list[Any]] = []
 
     def __init__(
         self,
         session_id: str,
-        config: Optional[JourneyConfig] = None,
+        config: JourneyConfig | None = None,
     ):
         """
         Initialize Journey instance.
@@ -824,7 +826,9 @@ class Journey(metaclass=JourneyMeta):
         self.config = config or JourneyConfig()
 
         # Use enhanced PathwayManager from manager.py
-        from kaizen_agents.journey.manager import PathwayManager as RuntimePathwayManager
+        from kaizen_agents.journey.manager import (
+            PathwayManager as RuntimePathwayManager,
+        )
 
         self.manager = RuntimePathwayManager(
             journey=self,
@@ -833,17 +837,17 @@ class Journey(metaclass=JourneyMeta):
         )
 
     @property
-    def pathways(self) -> Dict[str, Type[Pathway]]:
+    def pathways(self) -> dict[str, type[Pathway]]:
         """Get all registered pathways (copy to prevent mutation)."""
         return self._pathways.copy()
 
     @property
-    def entry_pathway(self) -> Optional[str]:
+    def entry_pathway(self) -> str | None:
         """Get entry pathway ID."""
         return self._entry_pathway
 
     @property
-    def transitions(self) -> List[Any]:
+    def transitions(self) -> list[Any]:
         """Get global transition rules (copy to prevent mutation)."""
         return self._transitions.copy()
 
@@ -858,7 +862,7 @@ class Journey(metaclass=JourneyMeta):
         self.manager.register_agent(agent_id, agent)
 
     async def start(
-        self, initial_context: Optional[Dict[str, Any]] = None
+        self, initial_context: dict[str, Any] | None = None
     ) -> JourneySession:
         """
         Start journey session at entry pathway.

@@ -30,8 +30,9 @@ Environment variable support:
 """
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
@@ -73,12 +74,12 @@ class HumanApprovalConfig:
     )
 
     # Human-in-loop configuration
-    approval_callback: Optional[Callable[[Dict[str, Any]], Tuple[bool, str]]] = None
+    approval_callback: Callable[[dict[str, Any]], tuple[bool, str]] | None = None
 
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class HumanApprovalAgent(BaseAgent):
@@ -144,18 +145,16 @@ class HumanApprovalAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        approval_callback: Optional[
-            Callable[[Dict[str, Any]], Tuple[bool, str]]
-        ] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[HumanApprovalConfig] = None,
-        mcp_servers: Optional[List[Dict]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        approval_callback: Callable[[dict[str, Any]], tuple[bool, str]] | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: HumanApprovalConfig | None = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
         **kwargs,
     ):
@@ -222,7 +221,7 @@ class HumanApprovalAgent(BaseAgent):
         self.approval_config = config
         self.tool_registry = tool_registry
 
-    async def run_async(self, prompt: str, **kwargs) -> Dict[str, Any]:
+    async def run_async(self, prompt: str, **kwargs) -> dict[str, Any]:
         """
         Make decision with human approval requirement.
 
@@ -270,7 +269,7 @@ class HumanApprovalAgent(BaseAgent):
 
         return mock_result
 
-    def get_approval_history(self) -> List[Dict[str, Any]]:
+    def get_approval_history(self) -> list[dict[str, Any]]:
         """
         Get history of all approval decisions.
 
@@ -291,10 +290,10 @@ class HumanApprovalAgent(BaseAgent):
 # Convenience function for quick approval workflows
 async def approve_decision(
     prompt: str,
-    approval_callback: Optional[Callable[[Dict[str, Any]], Tuple[bool, str]]] = None,
+    approval_callback: Callable[[dict[str, Any]], tuple[bool, str]] | None = None,
     llm_provider: str = "openai",
     model: str = "gpt-4",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Quick decision approval with default configuration.
 

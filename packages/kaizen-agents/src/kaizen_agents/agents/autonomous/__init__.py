@@ -95,7 +95,10 @@ responses, following Claude Code's proven `while(tool_call_exists)` pattern.
 from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Specialized agents
-from kaizen_agents.agents.autonomous.claude_code import ClaudeCodeAgent, ClaudeCodeConfig
+from kaizen_agents.agents.autonomous.claude_code import (
+    ClaudeCodeAgent,
+    ClaudeCodeConfig,
+)
 from kaizen_agents.agents.autonomous.codex import CodexAgent, CodexConfig
 
 __all__ = [

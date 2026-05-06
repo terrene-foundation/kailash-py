@@ -48,8 +48,8 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from kaizen_agents.journey.errors import StateError
 
@@ -84,13 +84,13 @@ class JourneySession:
     """
 
     session_id: str
-    journey_class: Optional[Type["Journey"]]
+    journey_class: type["Journey"] | None
     current_pathway_id: str
-    pathway_stack: List[str] = field(default_factory=list)
-    conversation_history: List[Dict[str, Any]] = field(default_factory=list)
-    accumulated_context: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    pathway_stack: list[str] = field(default_factory=list)
+    conversation_history: list[dict[str, Any]] = field(default_factory=list)
+    accumulated_context: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -113,7 +113,7 @@ class StateBackend(ABC):
     """
 
     @abstractmethod
-    async def save(self, session_id: str, data: Dict[str, Any]) -> None:
+    async def save(self, session_id: str, data: dict[str, Any]) -> None:
         """
         Save session data.
 
@@ -127,7 +127,7 @@ class StateBackend(ABC):
         pass
 
     @abstractmethod
-    async def load(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load(self, session_id: str) -> dict[str, Any] | None:
         """
         Load session data.
 
@@ -156,7 +156,7 @@ class StateBackend(ABC):
         pass
 
     @abstractmethod
-    async def list_sessions(self) -> List[str]:
+    async def list_sessions(self) -> list[str]:
         """
         List all session IDs.
 
@@ -211,10 +211,10 @@ class MemoryStateBackend(StateBackend):
 
     def __init__(self):
         """Initialize MemoryStateBackend with thread-safe lock."""
-        self._storage: Dict[str, Dict[str, Any]] = {}
+        self._storage: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
-    async def save(self, session_id: str, data: Dict[str, Any]) -> None:
+    async def save(self, session_id: str, data: dict[str, Any]) -> None:
         """
         Save session data to memory (thread-safe).
 
@@ -226,7 +226,7 @@ class MemoryStateBackend(StateBackend):
             # Deep copy to prevent external mutation
             self._storage[session_id] = json.loads(json.dumps(data))
 
-    async def load(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load(self, session_id: str) -> dict[str, Any] | None:
         """
         Load session data from memory (thread-safe).
 
@@ -253,7 +253,7 @@ class MemoryStateBackend(StateBackend):
         async with self._lock:
             self._storage.pop(session_id, None)
 
-    async def list_sessions(self) -> List[str]:
+    async def list_sessions(self) -> list[str]:
         """
         List all session IDs in memory (thread-safe).
 
@@ -348,7 +348,7 @@ class DataFlowStateBackend(StateBackend):
         self.db = db
         self.model_name = model_name
 
-    async def save(self, session_id: str, data: Dict[str, Any]) -> None:
+    async def save(self, session_id: str, data: dict[str, Any]) -> None:
         """
         Save session data to DataFlow.
 
@@ -372,10 +372,8 @@ class DataFlowStateBackend(StateBackend):
                     data.get("conversation_history", [])
                 ),
                 "accumulated_context": json.dumps(data.get("accumulated_context", {})),
-                "created_at": data.get(
-                    "created_at", datetime.now(timezone.utc).isoformat()
-                ),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": data.get("created_at", datetime.now(UTC).isoformat()),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
 
             # Check if session exists
@@ -391,9 +389,9 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow save failed: {e}")
-            raise StateError("save", session_id, str(e))
+            raise StateError("save", session_id, str(e)) from e
 
-    async def load(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load(self, session_id: str) -> dict[str, Any] | None:
         """
         Load session data from DataFlow.
 
@@ -430,7 +428,7 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow load failed: {e}")
-            raise StateError("load", session_id, str(e))
+            raise StateError("load", session_id, str(e)) from e
 
     async def delete(self, session_id: str) -> None:
         """
@@ -446,9 +444,9 @@ class DataFlowStateBackend(StateBackend):
             await self.db.express.delete(self.model_name, session_id)
         except Exception as e:
             logger.error(f"DataFlow delete failed: {e}")
-            raise StateError("delete", session_id, str(e))
+            raise StateError("delete", session_id, str(e)) from e
 
-    async def list_sessions(self) -> List[str]:
+    async def list_sessions(self) -> list[str]:
         """
         List all session IDs from DataFlow.
 
@@ -469,7 +467,7 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow list failed: {e}")
-            raise StateError("list", reason=str(e))
+            raise StateError("list", reason=str(e)) from e
 
 
 # ============================================================================
@@ -587,7 +585,7 @@ class JourneyStateManager:
     async def load_session(
         self,
         session_id: str,
-    ) -> Optional[JourneySession]:
+    ) -> JourneySession | None:
         """
         Load session from backend.
 
@@ -620,7 +618,7 @@ class JourneyStateManager:
         """
         await self._backend.delete(session_id)
 
-    async def list_sessions(self) -> List[str]:
+    async def list_sessions(self) -> list[str]:
         """
         List all active session IDs.
 
@@ -644,7 +642,7 @@ class JourneyStateManager:
         """
         return await self._backend.exists(session_id)
 
-    def _serialize_session(self, session: JourneySession) -> Dict[str, Any]:
+    def _serialize_session(self, session: JourneySession) -> dict[str, Any]:
         """
         Serialize session to storable format.
 
@@ -673,7 +671,7 @@ class JourneyStateManager:
             "updated_at": session.updated_at.isoformat(),
         }
 
-    def _deserialize_session(self, data: Dict[str, Any]) -> JourneySession:
+    def _deserialize_session(self, data: dict[str, Any]) -> JourneySession:
         """
         Deserialize session from stored format.
 
@@ -691,13 +689,13 @@ class JourneyStateManager:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.now(timezone.utc)
+            created_at = datetime.now(UTC)
 
         updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.now(timezone.utc)
+            updated_at = datetime.now(UTC)
 
         return JourneySession(
             session_id=data.get("session_id", ""),

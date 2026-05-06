@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from kaizen_agents.delegate.adapters.protocol import StreamEvent
 
@@ -97,8 +98,12 @@ class OpenAIStreamAdapter:
         Yields :class:`StreamEvent` instances as tokens arrive.
         """
         resolved_model = model or self._default_model
-        resolved_temp = temperature if temperature is not None else self._default_temperature
-        resolved_max = max_tokens if max_tokens is not None else self._default_max_tokens
+        resolved_temp = (
+            temperature if temperature is not None else self._default_temperature
+        )
+        resolved_max = (
+            max_tokens if max_tokens is not None else self._default_max_tokens
+        )
 
         is_new_api = any(resolved_model.startswith(p) for p in _NEW_API_PREFIXES)
 
@@ -170,8 +175,16 @@ class OpenAIStreamAdapter:
                             "id": tc_delta.id or "",
                             "type": tc_delta.type or "function",
                             "function": {
-                                "name": (tc_delta.function.name if tc_delta.function else "") or "",
-                                "arguments": (tc_delta.function.arguments if tc_delta.function else "") or "",
+                                "name": (
+                                    tc_delta.function.name if tc_delta.function else ""
+                                )
+                                or "",
+                                "arguments": (
+                                    tc_delta.function.arguments
+                                    if tc_delta.function
+                                    else ""
+                                )
+                                or "",
                             },
                         }
                         tool_accumulators[idx] = acc

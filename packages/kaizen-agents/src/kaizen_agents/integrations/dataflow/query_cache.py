@@ -17,7 +17,7 @@ import hashlib
 import json
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class QueryCache:
@@ -49,12 +49,12 @@ class QueryCache:
         """
         self.max_size = max_size
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._cache: Dict[str, Dict[str, Any]] = {}
-        self._access_order: List[str] = []  # For LRU tracking
+        self._cache: dict[str, dict[str, Any]] = {}
+        self._access_order: list[str] = []  # For LRU tracking
         self._lock = threading.RLock()  # Thread-safe operations
         self._stats = {"hits": 0, "misses": 0, "evictions": 0, "expirations": 0}
 
-    def get(self, query_key: str) -> Optional[Any]:
+    def get(self, query_key: str) -> Any | None:
         """
         Retrieve cached result if valid.
 
@@ -161,7 +161,7 @@ class QueryCache:
 
             elif pattern:
                 # Invalidate by pattern
-                keys_to_remove = [key for key in self._cache.keys() if pattern in key]
+                keys_to_remove = [key for key in self._cache if pattern in key]
                 for key in keys_to_remove:
                     del self._cache[key]
                     if key in self._access_order:
@@ -181,7 +181,7 @@ class QueryCache:
             self._access_order.clear()
             self._stats = {"hits": 0, "misses": 0, "evictions": 0, "expirations": 0}
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 

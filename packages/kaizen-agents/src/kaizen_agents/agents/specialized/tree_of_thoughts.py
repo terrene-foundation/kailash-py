@@ -32,10 +32,9 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, NotRequired, Optional, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from kailash.nodes.base import NodeMetadata
-
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -107,7 +106,7 @@ class ToTAgentConfig:
     parallel_execution: bool = True
     timeout: int = 30
     max_retries: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ToTSignature(Signature):
@@ -134,8 +133,8 @@ class ToTSignature(Signature):
     task: str = InputField(desc="Task requiring multiple reasoning paths")
 
     # Output fields
-    paths: List[ToTPath] = OutputField(desc="All generated reasoning paths")
-    evaluations: List[ToTEvaluation] = OutputField(desc="Path evaluations with scores")
+    paths: list[ToTPath] = OutputField(desc="All generated reasoning paths")
+    evaluations: list[ToTEvaluation] = OutputField(desc="Path evaluations with scores")
     best_path: ToTPath = OutputField(desc="Selected best path")
     final_result: str = OutputField(desc="Result from best path")
 
@@ -217,18 +216,18 @@ class ToTAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        num_paths: Optional[int] = None,
-        max_paths: Optional[int] = None,
-        evaluation_criteria: Optional[str] = None,
-        parallel_execution: Optional[bool] = None,
-        timeout: Optional[int] = None,
-        max_retries: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[ToTAgentConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        num_paths: int | None = None,
+        max_paths: int | None = None,
+        evaluation_criteria: str | None = None,
+        parallel_execution: bool | None = None,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: ToTAgentConfig | None = None,
         **kwargs,
     ):
         """
@@ -302,7 +301,7 @@ class ToTAgent(BaseAgent):
 
         self.tot_config = config
 
-    def _generate_path(self, task: str, path_id: int) -> Dict[str, Any]:
+    def _generate_path(self, task: str, path_id: int) -> dict[str, Any]:
         """
         Generate single reasoning path.
 
@@ -335,7 +334,7 @@ class ToTAgent(BaseAgent):
 
     async def _generate_path_async(
         self, task: str, path_id: int, semaphore: asyncio.Semaphore
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate single reasoning path asynchronously with semaphore control.
 
@@ -350,7 +349,7 @@ class ToTAgent(BaseAgent):
         async with semaphore:
             return self._generate_path(task, path_id)
 
-    def _generate_paths(self, task: str) -> List[Dict[str, Any]]:
+    def _generate_paths(self, task: str) -> list[dict[str, Any]]:
         """
         Generate multiple reasoning paths.
 
@@ -395,7 +394,7 @@ class ToTAgent(BaseAgent):
 
         return paths
 
-    def _evaluate_path(self, path: Dict[str, Any], task: str) -> Dict[str, Any]:
+    def _evaluate_path(self, path: dict[str, Any], task: str) -> dict[str, Any]:
         """
         Evaluate single reasoning path.
 
@@ -441,8 +440,8 @@ class ToTAgent(BaseAgent):
         }
 
     def _evaluate_paths(
-        self, paths: List[Dict[str, Any]], task: str
-    ) -> List[Dict[str, Any]]:
+        self, paths: list[dict[str, Any]], task: str
+    ) -> list[dict[str, Any]]:
         """
         Evaluate all reasoning paths.
 
@@ -463,7 +462,7 @@ class ToTAgent(BaseAgent):
 
         return evaluations
 
-    def _select_best_path(self, evaluations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _select_best_path(self, evaluations: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Select best path based on evaluation scores.
 
@@ -487,7 +486,7 @@ class ToTAgent(BaseAgent):
 
         return best_evaluation
 
-    def _execute_path(self, path: Dict[str, Any]) -> str:
+    def _execute_path(self, path: dict[str, Any]) -> str:
         """
         Execute the best path to get final result.
 
@@ -503,8 +502,8 @@ class ToTAgent(BaseAgent):
         return path.get("reasoning", "No result available")
 
     def run(
-        self, task: str, context: Optional[Dict[str, Any]] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, task: str, context: dict[str, Any] | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Universal execution method for ToT agent.
 
@@ -614,7 +613,7 @@ class ToTAgent(BaseAgent):
 
 
 # Convenience function for quick usage
-def explore_paths(task: str, **kwargs) -> Dict[str, Any]:
+def explore_paths(task: str, **kwargs) -> dict[str, Any]:
     """
     Quick one-liner for ToT execution.
 

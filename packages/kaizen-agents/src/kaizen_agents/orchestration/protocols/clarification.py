@@ -18,7 +18,6 @@ from typing import Any
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.types import ClarificationPayload
 
-
 # JSON schema for composing a clarification question
 CLARIFICATION_QUESTION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -126,7 +125,9 @@ def _build_question_user_prompt(
             context_lines.append(f"- **{key}**: {value}")
         else:
             context_lines.append(f"- **{key}**: {value!r}")
-    context_section = "\n".join(context_lines) if context_lines else "(no context available)"
+    context_section = (
+        "\n".join(context_lines) if context_lines else "(no context available)"
+    )
 
     options_section = ""
     if suggested_options:

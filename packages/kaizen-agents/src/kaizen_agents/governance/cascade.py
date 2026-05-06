@@ -101,7 +101,9 @@ class CascadeManager:
         if not math.isfinite(budget_allocated):
             raise ValueError(f"budget_allocated must be finite, got {budget_allocated}")
         if budget_allocated < 0:
-            raise ValueError(f"budget_allocated must be non-negative, got {budget_allocated}")
+            raise ValueError(
+                f"budget_allocated must be non-negative, got {budget_allocated}"
+            )
 
         with self._lock:
             if agent_id in self._parent:
@@ -158,7 +160,10 @@ class CascadeManager:
                 CascadeEvent(
                     event_type=CascadeEventType.ENVELOPE_TIGHTENED,
                     agent_id=agent_id,
-                    details={"old_envelope": old_envelope, "new_envelope": validated_envelope},
+                    details={
+                        "old_envelope": old_envelope,
+                        "new_envelope": validated_envelope,
+                    },
                 )
             )
 
@@ -270,7 +275,9 @@ class CascadeManager:
         with self._lock:
             if agent_id not in self._parent:
                 raise ValueError(f"Agent '{agent_id}' is not registered")
-            self._budget_consumed[agent_id] = self._budget_consumed.get(agent_id, 0.0) + amount
+            self._budget_consumed[agent_id] = (
+                self._budget_consumed.get(agent_id, 0.0) + amount
+            )
 
     def get_envelope(self, agent_id: str) -> dict[str, Any] | None:
         """Get the current envelope for an agent.
@@ -370,16 +377,25 @@ def _intersect_dicts(
             result[key] = parent_val
         elif isinstance(parent_val, dict) and isinstance(child_val, dict):
             result[key] = _intersect_dicts(parent_val, child_val, _depth + 1)
-        elif isinstance(parent_val, (int, float)) and isinstance(child_val, (int, float)):
+        elif isinstance(parent_val, (int, float)) and isinstance(
+            child_val, (int, float)
+        ):
             # NaN/Inf guard: fail-closed on non-finite values
-            if not math.isfinite(float(parent_val)) or not math.isfinite(float(child_val)):
+            if not math.isfinite(float(parent_val)) or not math.isfinite(
+                float(child_val)
+            ):
                 raise ValueError(
                     f"Non-finite value in envelope intersection for key '{key}': "
                     f"parent={parent_val}, child={child_val}"
                 )
             result[key] = min(parent_val, child_val)
         elif isinstance(parent_val, list) and isinstance(child_val, list):
-            if key in ("blocked", "blocked_actions", "blackout_periods", "blocked_data_types"):
+            if key in (
+                "blocked",
+                "blocked_actions",
+                "blackout_periods",
+                "blocked_data_types",
+            ):
                 result[key] = sorted(set(parent_val) | set(child_val))
             else:
                 result[key] = sorted(set(parent_val) & set(child_val))

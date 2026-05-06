@@ -15,7 +15,7 @@ Architecture:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
@@ -83,10 +83,10 @@ class QueryOptimizer(BaseAgent):
 
     def analyze_query(
         self,
-        query: Dict[str, Any],
-        table_schema: Optional[Dict[str, Any]] = None,
-        query_stats: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        query: dict[str, Any],
+        table_schema: dict[str, Any] | None = None,
+        query_stats: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Analyze query and suggest optimizations.
 
@@ -177,10 +177,10 @@ class BulkOperationOptimizer(BaseAgent):
 
     def optimize_bulk_insert(
         self,
-        data: List[Dict[str, Any]],
-        target_table: Optional[str] = None,
-        table_info: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        data: list[dict[str, Any]],
+        target_table: str | None = None,
+        table_info: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Optimize bulk insert operation.
 
@@ -243,10 +243,10 @@ class BulkOperationOptimizer(BaseAgent):
 
     def optimize_bulk_update(
         self,
-        filter_dict: Dict[str, Any],
-        update_data: Dict[str, Any],
-        table_info: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        filter_dict: dict[str, Any],
+        update_data: dict[str, Any],
+        table_info: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Optimize bulk update operation.
 
@@ -292,8 +292,8 @@ class BulkOperationOptimizer(BaseAgent):
         return {"batch_size": batch_size, "strategy": strategy}
 
     def optimize_bulk_delete(
-        self, filter_dict: Dict[str, Any], table_info: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, filter_dict: dict[str, Any], table_info: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Optimize bulk delete operation.
 

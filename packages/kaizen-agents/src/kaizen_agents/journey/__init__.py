@@ -105,7 +105,11 @@ See Also:
 """
 
 # Return behaviors
-from kaizen_agents.journey.behaviors import ReturnBehavior, ReturnToPrevious, ReturnToSpecific
+from kaizen_agents.journey.behaviors import (
+    ReturnBehavior,
+    ReturnToPrevious,
+    ReturnToSpecific,
+)
 
 # Context accumulation (TODO-JO-004)
 from kaizen_agents.journey.context import (
@@ -116,16 +120,12 @@ from kaizen_agents.journey.context import (
 )
 
 # Core classes
-from kaizen_agents.journey.core import (
-    DetailedJourneyResponse,  # Full response with PathwayResult
-)
-from kaizen_agents.journey.core import (
-    JourneyResponse,  # Alias for DetailedJourneyResponse (backward compat)
-)
 from kaizen_agents.journey.core import (  # Data classes; Metaclasses (for advanced use); Base classes; Internal (for testing/extension)
+    DetailedJourneyResponse,  # Full response with PathwayResult
     Journey,
     JourneyConfig,
     JourneyMeta,
+    JourneyResponse,  # Alias for DetailedJourneyResponse (backward compat)
     JourneySession,
     Pathway,
     PathwayContext,

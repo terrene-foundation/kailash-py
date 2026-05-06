@@ -113,7 +113,9 @@ class ClearanceEnforcer:
         """
         with self._lock:
             return {
-                cv.key: cv.value for cv in self._values.values() if cv.classification <= clearance
+                cv.key: cv.value
+                for cv in self._values.values()
+                if cv.classification <= clearance
             }
 
     def get_classification(self, key: str) -> ConfidentialityLevel | None:
@@ -168,7 +170,8 @@ _PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], ConfidentialityLevel]] = [
     (
         "api_key_generic",
         re.compile(
-            r"(?:api[_-]?key|token|secret)\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{20,}", re.IGNORECASE
+            r"(?:api[_-]?key|token|secret)\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{20,}",
+            re.IGNORECASE,
         ),
         ConfidentialityLevel.SECRET,
     ),
@@ -176,7 +179,9 @@ _PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], ConfidentialityLevel]] = [
     ("aws_key", re.compile(r"AKIA[0-9A-Z]{16}"), ConfidentialityLevel.SECRET),
     (
         "aws_secret",
-        re.compile(r"(?:aws_secret|AWS_SECRET)[_A-Z]*\s*[:=]\s*['\"]?[a-zA-Z0-9/+=]{30,}"),
+        re.compile(
+            r"(?:aws_secret|AWS_SECRET)[_A-Z]*\s*[:=]\s*['\"]?[a-zA-Z0-9/+=]{30,}"
+        ),
         ConfidentialityLevel.TOP_SECRET,
     ),
     # Email addresses (PII)
@@ -188,7 +193,11 @@ _PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], ConfidentialityLevel]] = [
     # SSN patterns
     ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), ConfidentialityLevel.TOP_SECRET),
     # Credit card patterns (basic Luhn-candidate)
-    ("credit_card", re.compile(r"\b(?:\d{4}[- ]?){3}\d{4}\b"), ConfidentialityLevel.SECRET),
+    (
+        "credit_card",
+        re.compile(r"\b(?:\d{4}[- ]?){3}\d{4}\b"),
+        ConfidentialityLevel.SECRET,
+    ),
     # Phone numbers (US format)
     (
         "phone",
@@ -204,7 +213,9 @@ _PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], ConfidentialityLevel]] = [
 ]
 
 
-def _extract_string_leaves(value: Any, max_depth: int = 10, _depth: int = 0) -> list[str]:
+def _extract_string_leaves(
+    value: Any, max_depth: int = 10, _depth: int = 0
+) -> list[str]:
     """Recursively extract all string leaves from nested dicts/lists.
 
     R1-04: Bounded recursion to prevent stack overflow on deeply nested
@@ -275,7 +286,14 @@ class ClassificationAssigner:
         # Check key name heuristics first
         key_sensitive = any(
             s in str_key
-            for s in ("password", "secret", "token", "api_key", "private_key", "credential")
+            for s in (
+                "password",
+                "secret",
+                "token",
+                "api_key",
+                "private_key",
+                "credential",
+            )
         )
         if key_sensitive:
             highest = max(highest, ConfidentialityLevel.SECRET)

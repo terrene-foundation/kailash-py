@@ -57,11 +57,11 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 logger = logging.getLogger(__name__)
 
@@ -196,9 +196,9 @@ class CodexAgent(BaseAutonomousAgent):
     def __init__(
         self,
         config: CodexConfig,
-        signature: Optional[Signature] = None,
-        strategy: Optional[MultiCycleStrategy] = None,
-        checkpoint_dir: Optional[Path] = None,
+        signature: Signature | None = None,
+        strategy: MultiCycleStrategy | None = None,
+        checkpoint_dir: Path | None = None,
         **kwargs,
     ):
         """
@@ -232,9 +232,9 @@ class CodexAgent(BaseAutonomousAgent):
         )
 
         # Codex-specific state
-        self.action_log: List[Dict[str, Any]] = []  # Action logging system
+        self.action_log: list[dict[str, Any]] = []  # Action logging system
         self.agents_md_content: str = ""  # Loaded AGENTS.md content
-        self.container_state: Dict[str, Any] = {}  # Container execution state
+        self.container_state: dict[str, Any] = {}  # Container execution state
         self.test_iteration_count: int = 0  # Test-driven iteration counter
 
         # Load AGENTS.md at initialization
@@ -242,7 +242,7 @@ class CodexAgent(BaseAutonomousAgent):
 
         logger.info("CodexAgent initialized with Codex patterns")
 
-    async def _setup_container(self, repo_path: str) -> Dict[str, Any]:
+    async def _setup_container(self, repo_path: str) -> dict[str, Any]:
         """
         Setup isolated container environment.
 
@@ -320,7 +320,7 @@ class CodexAgent(BaseAutonomousAgent):
             return ""
 
         try:
-            with open(agents_md_path, "r", encoding="utf-8") as f:
+            with open(agents_md_path, encoding="utf-8") as f:
                 content = f.read()
 
             logger.info(f"Loaded AGENTS.md: {len(content)} characters")
@@ -390,7 +390,7 @@ class CodexAgent(BaseAutonomousAgent):
         logger.warning(f"Test iteration timeout after {max_iterations} attempts")
         return False
 
-    async def _execute_command(self, command: str) -> Dict[str, Any]:
+    async def _execute_command(self, command: str) -> dict[str, Any]:
         """
         Execute command in container (simulated for MVP).
 
@@ -420,7 +420,7 @@ class CodexAgent(BaseAutonomousAgent):
 
         return result
 
-    def _parse_test_failures(self, output: str) -> List[Dict[str, Any]]:
+    def _parse_test_failures(self, output: str) -> list[dict[str, Any]]:
         """
         Parse test failure output to extract specific failures.
 
@@ -443,7 +443,7 @@ class CodexAgent(BaseAutonomousAgent):
 
         return failures
 
-    async def _generate_pr(self, changes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _generate_pr(self, changes: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Generate commit message and PR description with citations.
 
@@ -493,7 +493,7 @@ class CodexAgent(BaseAutonomousAgent):
         logger.info("PR generation complete")
         return pr_data
 
-    def _generate_commit_message(self, changes: List[Dict[str, Any]]) -> str:
+    def _generate_commit_message(self, changes: list[dict[str, Any]]) -> str:
         """
         Generate professional commit message.
 
@@ -516,7 +516,7 @@ class CodexAgent(BaseAutonomousAgent):
 
         return f"feat: {action.capitalize()} {file_count} file(s)"
 
-    def _generate_pr_description(self, changes: List[Dict[str, Any]]) -> str:
+    def _generate_pr_description(self, changes: list[dict[str, Any]]) -> str:
         """
         Generate comprehensive PR description.
 
@@ -605,7 +605,7 @@ class CodexAgent(BaseAutonomousAgent):
 
         return "\n".join(lines)
 
-    async def _autonomous_loop(self, task: str) -> Dict[str, Any]:
+    async def _autonomous_loop(self, task: str) -> dict[str, Any]:
         """
         Override autonomous loop with Codex patterns.
 

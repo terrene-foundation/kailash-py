@@ -18,16 +18,15 @@ Usage:
     >>> result = await adapter.execute(context)
 """
 
-import asyncio
-import json
 import logging
 import os
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +69,11 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gpt-4o",
         enable_code_interpreter: bool = True,
         enable_file_search: bool = False,
-        custom_tools: Optional[List[Dict[str, Any]]] = None,
+        custom_tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.7,
         max_completion_tokens: int = 4096,
         timeout_seconds: float = 300,
@@ -106,11 +105,11 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
         self.timeout_seconds = timeout_seconds
 
         # OpenAI client (lazily initialized)
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
         # Session tracking
-        self._current_session_id: Optional[str] = None
-        self._uploaded_files: Dict[str, str] = {}  # filename -> file_id
+        self._current_session_id: str | None = None
+        self._uploaded_files: dict[str, str] = {}  # filename -> file_id
 
         # Build capabilities
         self._capabilities = self._build_capabilities()
@@ -170,14 +169,14 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             except ImportError:
                 raise ImportError(
                     "OpenAI package not installed. Install with: pip install openai"
-                )
+                ) from None
 
         await super().ensure_initialized()
 
     async def execute(
         self,
         context: ExecutionContext,
-        on_progress: Optional[ProgressCallback] = None,
+        on_progress: ProgressCallback | None = None,
     ) -> ExecutionResult:
         """Execute a task using OpenAI Responses API.
 
@@ -238,7 +237,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
                 session_id=context.session_id,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"OpenAI execution timed out after {self.timeout_seconds}s")
             return ExecutionResult(
                 output="",
@@ -263,7 +262,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
         finally:
             self._current_session_id = None
 
-    def _build_tools(self, context: ExecutionContext) -> List[Dict[str, Any]]:
+    def _build_tools(self, context: ExecutionContext) -> list[dict[str, Any]]:
         """Build tools list for OpenAI API.
 
         Args:
@@ -431,8 +430,8 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
 
     def map_tools(
         self,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Map Kaizen tools to OpenAI format.
 
         Args:

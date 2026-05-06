@@ -38,10 +38,10 @@ References:
 """
 
 import json
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from kaizen_agents.journey.errors import ContextSizeExceededError
 
@@ -120,7 +120,7 @@ class ContextSnapshot:
         version: Accumulation version at snapshot time
     """
 
-    context: Dict[str, Any]
+    context: dict[str, Any]
     pathway_id: str
     timestamp: datetime
     version: int
@@ -171,9 +171,9 @@ class ContextAccumulator:
             config: Journey configuration with size limits
         """
         self.config = config
-        self._merge_strategies: Dict[str, MergeStrategy] = {}
-        self._field_history: Dict[str, List[AccumulatedField]] = {}
-        self._snapshots: List[ContextSnapshot] = []
+        self._merge_strategies: dict[str, MergeStrategy] = {}
+        self._field_history: dict[str, list[AccumulatedField]] = {}
+        self._snapshots: list[ContextSnapshot] = []
         self._version = 0
 
     def configure_field(
@@ -196,7 +196,7 @@ class ContextAccumulator:
         """
         self._merge_strategies[field_name] = strategy
 
-    def configure_fields(self, strategies: Dict[str, MergeStrategy]) -> None:
+    def configure_fields(self, strategies: dict[str, MergeStrategy]) -> None:
         """
         Configure merge strategies for multiple fields at once.
 
@@ -214,10 +214,10 @@ class ContextAccumulator:
 
     def accumulate(
         self,
-        context: Dict[str, Any],
-        new_values: Dict[str, Any],
+        context: dict[str, Any],
+        new_values: dict[str, Any],
         source_pathway: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Accumulate new values into context.
 
@@ -364,7 +364,7 @@ class ContextAccumulator:
             name=field_name,
             value=value,
             source_pathway=source_pathway,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             version=self._version,
         )
 
@@ -379,7 +379,7 @@ class ContextAccumulator:
 
     def snapshot(
         self,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         pathway_id: str,
     ) -> ContextSnapshot:
         """
@@ -403,7 +403,7 @@ class ContextAccumulator:
         snapshot = ContextSnapshot(
             context=context.copy(),
             pathway_id=pathway_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             version=self._version,
         )
         self._snapshots.append(snapshot)
@@ -415,7 +415,7 @@ class ContextAccumulator:
 
         return snapshot
 
-    def restore_snapshot(self, version: int) -> Optional[Dict[str, Any]]:
+    def restore_snapshot(self, version: int) -> dict[str, Any] | None:
         """
         Restore context from a specific version.
 
@@ -432,7 +432,7 @@ class ContextAccumulator:
                 return snapshot.context.copy()
         return None
 
-    def get_latest_snapshot(self) -> Optional[ContextSnapshot]:
+    def get_latest_snapshot(self) -> ContextSnapshot | None:
         """
         Get the most recent snapshot.
 
@@ -446,7 +446,7 @@ class ContextAccumulator:
     def get_field_history(
         self,
         field_name: str,
-    ) -> List[AccumulatedField]:
+    ) -> list[AccumulatedField]:
         """
         Get history of a specific field.
 
@@ -458,7 +458,7 @@ class ContextAccumulator:
         """
         return self._field_history.get(field_name, []).copy()
 
-    def get_context_size(self, context: Dict[str, Any]) -> int:
+    def get_context_size(self, context: dict[str, Any]) -> int:
         """
         Calculate approximate size of context in bytes.
 
@@ -476,7 +476,7 @@ class ContextAccumulator:
         except (TypeError, ValueError):
             return 0
 
-    def validate_size(self, context: Dict[str, Any]) -> bool:
+    def validate_size(self, context: dict[str, Any]) -> bool:
         """
         Check if context is within size limits.
 
@@ -498,7 +498,7 @@ class ContextAccumulator:
         """
         return self._version
 
-    def get_configured_strategies(self) -> Dict[str, MergeStrategy]:
+    def get_configured_strategies(self) -> dict[str, MergeStrategy]:
         """
         Get all configured merge strategies.
 
@@ -512,7 +512,7 @@ class ContextAccumulator:
         self._field_history.clear()
         self._snapshots.clear()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get accumulator statistics.
 

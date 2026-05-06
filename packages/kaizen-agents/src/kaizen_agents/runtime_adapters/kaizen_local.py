@@ -27,10 +27,12 @@ Example:
     >>> specialists = adapter.list_specialists()
 """
 
+import contextlib
 import json
 import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 from kaizen.core.kaizen_options import KaizenOptions
 from kaizen.core.specialist_types import (
@@ -39,6 +41,10 @@ from kaizen.core.specialist_types import (
     SpecialistDefinition,
 )
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
+from kaizen.runtime.capabilities import KAIZEN_LOCAL_CAPABILITIES, RuntimeCapabilities
+from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen.runtime.specialist_loader import SpecialistLoader
+from kaizen.runtime.specialist_registry import SkillRegistry, SpecialistRegistry
 from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     AutonomousPhase,
@@ -46,10 +52,6 @@ from kaizen_agents.runtime_adapters.types import (
     PermissionMode,
     PlanningStrategy,
 )
-from kaizen.runtime.capabilities import KAIZEN_LOCAL_CAPABILITIES, RuntimeCapabilities
-from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
-from kaizen.runtime.specialist_loader import SpecialistLoader
-from kaizen.runtime.specialist_registry import SkillRegistry, SpecialistRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +86,13 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
 
     def __init__(
         self,
-        config: Optional[AutonomousConfig] = None,
-        state_manager: Optional[Any] = None,
-        hook_manager: Optional[Any] = None,
-        interrupt_manager: Optional[Any] = None,
-        tool_registry: Optional[Any] = None,
-        llm_provider: Optional[Any] = None,
-        kaizen_options: Optional[KaizenOptions] = None,
+        config: AutonomousConfig | None = None,
+        state_manager: Any | None = None,
+        hook_manager: Any | None = None,
+        interrupt_manager: Any | None = None,
+        tool_registry: Any | None = None,
+        llm_provider: Any | None = None,
+        kaizen_options: KaizenOptions | None = None,
     ):
         """Initialize the LocalKaizenAdapter.
 
@@ -118,10 +120,10 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
 
         # Specialist System (ADR-013)
         self._kaizen_options = kaizen_options
-        self._specialist_registry: Optional[SpecialistRegistry] = None
-        self._skill_registry: Optional[SkillRegistry] = None
-        self._context_file: Optional[ContextFile] = None
-        self._specialist_loader: Optional[SpecialistLoader] = None
+        self._specialist_registry: SpecialistRegistry | None = None
+        self._skill_registry: SkillRegistry | None = None
+        self._context_file: ContextFile | None = None
+        self._specialist_loader: SpecialistLoader | None = None
 
         # Load specialists if options provided
         if kaizen_options is not None:
@@ -135,12 +137,12 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         self._llm_provider = llm_provider
 
         # Execution state
-        self._current_state: Optional[ExecutionState] = None
-        self._on_progress: Optional[ProgressCallback] = None
+        self._current_state: ExecutionState | None = None
+        self._on_progress: ProgressCallback | None = None
 
         # For specialist-specific adapters
-        self._available_tools: Optional[List[str]] = None
-        self._specialist_system_prompt: Optional[str] = None
+        self._available_tools: list[str] | None = None
+        self._specialist_system_prompt: str | None = None
 
         # Capabilities (cached)
         self._capabilities = self._build_capabilities()
@@ -173,12 +175,12 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         )
 
     @property
-    def kaizen_options(self) -> Optional[KaizenOptions]:
+    def kaizen_options(self) -> KaizenOptions | None:
         """Get the KaizenOptions used for this adapter."""
         return self._kaizen_options
 
     @property
-    def specialist_registry(self) -> Optional[SpecialistRegistry]:
+    def specialist_registry(self) -> SpecialistRegistry | None:
         """Get the specialist registry.
 
         Returns:
@@ -187,7 +189,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         return self._specialist_registry
 
     @property
-    def skill_registry(self) -> Optional[SkillRegistry]:
+    def skill_registry(self) -> SkillRegistry | None:
         """Get the skill registry.
 
         Returns:
@@ -196,7 +198,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         return self._skill_registry
 
     @property
-    def context_file(self) -> Optional[ContextFile]:
+    def context_file(self) -> ContextFile | None:
         """Get the loaded context file (e.g., KAIZEN.md).
 
         Returns:
@@ -205,12 +207,12 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         return self._context_file
 
     @property
-    def available_tools(self) -> Optional[List[str]]:
+    def available_tools(self) -> list[str] | None:
         """Get available tools, may be limited by specialist config."""
         return self._available_tools
 
     @property
-    def effective_budget_limit(self) -> Optional[float]:
+    def effective_budget_limit(self) -> float | None:
         """Get the effective budget limit.
 
         Config budget takes precedence over KaizenOptions budget.
@@ -231,7 +233,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return Path(self._kaizen_options.cwd)
         return Path.cwd()
 
-    def get_specialist(self, name: str) -> Optional[SpecialistDefinition]:
+    def get_specialist(self, name: str) -> SpecialistDefinition | None:
         """Get a specialist by name.
 
         Args:
@@ -244,7 +246,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return None
         return self._specialist_registry.get(name)
 
-    def list_specialists(self) -> List[str]:
+    def list_specialists(self) -> list[str]:
         """List all available specialist names.
 
         Returns:
@@ -254,7 +256,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return []
         return self._specialist_registry.list()
 
-    def get_skill(self, name: str) -> Optional[SkillDefinition]:
+    def get_skill(self, name: str) -> SkillDefinition | None:
         """Get a skill by name.
 
         Args:
@@ -267,7 +269,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return None
         return self._skill_registry.get(name)
 
-    def list_skills(self) -> List[str]:
+    def list_skills(self) -> list[str]:
         """List all available skill names.
 
         Returns:
@@ -290,7 +292,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return skill
         return self._specialist_loader.load_skill_content(skill)
 
-    def get_context_prompt_section(self) -> Optional[str]:
+    def get_context_prompt_section(self) -> str | None:
         """Get context file content formatted for system prompt.
 
         Returns:
@@ -372,22 +374,22 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
         return self._capabilities
 
     @property
-    def state_manager(self) -> Optional[Any]:
+    def state_manager(self) -> Any | None:
         """Get state manager, creating default if needed."""
         return self._state_manager
 
     @property
-    def hook_manager(self) -> Optional[Any]:
+    def hook_manager(self) -> Any | None:
         """Get hook manager, creating default if needed."""
         return self._hook_manager
 
     @property
-    def interrupt_manager(self) -> Optional[Any]:
+    def interrupt_manager(self) -> Any | None:
         """Get interrupt manager, creating default if needed."""
         return self._interrupt_manager
 
     @property
-    def tool_registry(self) -> Optional[Any]:
+    def tool_registry(self) -> Any | None:
         """Get tool registry, creating default if needed."""
         return self._tool_registry
 
@@ -430,7 +432,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
     async def execute(
         self,
         context: ExecutionContext,
-        on_progress: Optional[ProgressCallback] = None,
+        on_progress: ProgressCallback | None = None,
     ) -> ExecutionResult:
         """Execute a task using the TAOD loop.
 
@@ -778,7 +780,7 @@ You can execute tools automatically. Use good judgment about safety.
 
         return result
 
-    def _build_thinking_context(self, state: ExecutionState) -> Dict[str, Any]:
+    def _build_thinking_context(self, state: ExecutionState) -> dict[str, Any]:
         """Build complete context for LLM thinking phase.
 
         Combines system prompt, messages, tools, and model configuration
@@ -889,7 +891,7 @@ You can execute tools automatically. Use good judgment about safety.
             logger.error(f"LLM call failed: {e}")
             state.fail(error=f"LLM call failed: {e}")
 
-    def _parse_tool_call(self, tc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _parse_tool_call(self, tc: dict[str, Any]) -> dict[str, Any] | None:
         """Parse a tool call from LLM response.
 
         Args:
@@ -1104,28 +1106,29 @@ You can execute tools automatically. Use good judgment about safety.
             return True
 
         # Check interrupt
-        if self._interrupt_manager and hasattr(
-            self._interrupt_manager, "is_interrupted"
+        if (
+            self._interrupt_manager
+            and hasattr(self._interrupt_manager, "is_interrupted")
+            and self._interrupt_manager.is_interrupted()
         ):
-            if self._interrupt_manager.is_interrupted():
-                logger.info("Interrupted by user")
-                state.interrupt()
+            logger.info("Interrupted by user")
+            state.interrupt()
 
-                # Fire interrupt hook
-                await self._fire_hook(
-                    "interrupt",
-                    {
-                        "session_id": state.session_id,
-                        "cycle": state.current_cycle,
-                        "reason": "user_interrupt",
-                    },
-                )
+            # Fire interrupt hook
+            await self._fire_hook(
+                "interrupt",
+                {
+                    "session_id": state.session_id,
+                    "cycle": state.current_cycle,
+                    "reason": "user_interrupt",
+                },
+            )
 
-                # Checkpoint on interrupt if configured
-                if self.config.checkpoint_on_interrupt:
-                    await self._create_checkpoint(state, force=True)
+            # Checkpoint on interrupt if configured
+            if self.config.checkpoint_on_interrupt:
+                await self._create_checkpoint(state, force=True)
 
-                return True
+            return True
 
         return False
 
@@ -1147,13 +1150,10 @@ You can execute tools automatically. Use good judgment about safety.
             return True
 
         # Budget exceeded
-        if (
+        return bool(
             self.config.budget_limit_usd
             and state.cost_usd > self.config.budget_limit_usd
-        ):
-            return True
-
-        return False
+        )
 
     def _extract_final_output(self, state: ExecutionState) -> str:
         """Extract final output from state.
@@ -1205,9 +1205,9 @@ You can execute tools automatically. Use good judgment about safety.
         import asyncio
 
         # Use a queue to collect streaming chunks
-        chunk_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-        async def progress_callback(event: str, data: Dict[str, Any]) -> None:
+        async def progress_callback(event: str, data: dict[str, Any]) -> None:
             """Callback to capture progress and add to stream."""
             if event == "thinking":
                 await chunk_queue.put(f"[Thinking: cycle {data.get('cycle', '?')}]\n")
@@ -1248,10 +1248,8 @@ You can execute tools automatically. Use good judgment about safety.
             # Ensure task completes
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
     async def interrupt(
         self,
@@ -1288,8 +1286,8 @@ You can execute tools automatically. Use good judgment about safety.
 
     def map_tools(
         self,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Map tools from Kaizen format to runtime format.
 
         LocalKaizenAdapter uses the same OpenAI function calling format,
@@ -1386,7 +1384,7 @@ You can execute tools automatically. Use good judgment about safety.
             error_type="ExecutionError" if state.error else None,
         )
 
-    def get_current_session_id(self) -> Optional[str]:
+    def get_current_session_id(self) -> str | None:
         """Get the session ID of the current execution.
 
         Returns:
@@ -1403,7 +1401,7 @@ You can execute tools automatically. Use good judgment about safety.
     async def _fire_hook(
         self,
         event_type: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> None:
         """Fire a hook event if HookManager is available.
 
@@ -1442,7 +1440,7 @@ You can execute tools automatically. Use good judgment about safety.
         self,
         state: ExecutionState,
         force: bool = False,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Create a checkpoint of current state.
 
         Args:
@@ -1543,7 +1541,7 @@ etc."""
             state.plan = [state.task]
             state.plan_index = 0
 
-    def _parse_plan_from_response(self, response: str) -> List[str]:
+    def _parse_plan_from_response(self, response: str) -> list[str]:
         """Parse plan steps from LLM response.
 
         Handles various formats:
@@ -1613,7 +1611,7 @@ etc."""
         """
         return state.plan_index >= len(state.plan)
 
-    def _get_current_plan_step(self, state: ExecutionState) -> Optional[str]:
+    def _get_current_plan_step(self, state: ExecutionState) -> str | None:
         """Get the current plan step.
 
         Args:
@@ -1635,7 +1633,7 @@ etc."""
     # -------------------------------------------------------------------------
 
     # Model pricing (per 1M tokens) as of late 2024
-    _MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    _MODEL_PRICING: dict[str, dict[str, float]] = {
         # OpenAI models
         "gpt-4o": {"input": 5.0, "output": 15.0},
         "gpt-4o-mini": {"input": 0.15, "output": 0.6},
@@ -1695,7 +1693,7 @@ etc."""
 
         state.learned_patterns.append(pattern)
 
-    def _extract_patterns(self, state: ExecutionState) -> List[str]:
+    def _extract_patterns(self, state: ExecutionState) -> list[str]:
         """Extract patterns from execution.
 
         Analyzes the execution to identify useful patterns
@@ -1725,7 +1723,7 @@ etc."""
     def _check_tool_permission(
         self,
         tool_name: str,
-        tool_args: Dict[str, Any],
+        tool_args: dict[str, Any],
     ) -> bool:
         """Check if tool execution is permitted.
 
@@ -1760,7 +1758,7 @@ etc."""
     def _is_dangerous_tool(
         self,
         tool_name: str,
-        tool_args: Dict[str, Any],
+        tool_args: dict[str, Any],
     ) -> bool:
         """Check if a tool is considered dangerous.
 
@@ -1830,7 +1828,7 @@ etc."""
     def _clear_working_memory(
         self,
         state: ExecutionState,
-        key: Optional[str] = None,
+        key: str | None = None,
     ) -> None:
         """Clear working memory.
 

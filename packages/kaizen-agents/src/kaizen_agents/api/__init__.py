@@ -20,7 +20,12 @@ from kaizen_agents.api.shortcuts import (
     resolve_runtime_shortcut,
     resolve_tool_access_shortcut,
 )
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 from kaizen_agents.api.validation import (
     ConfigurationError,
     validate_configuration,

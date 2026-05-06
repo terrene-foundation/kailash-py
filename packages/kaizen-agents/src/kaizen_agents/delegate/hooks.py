@@ -36,7 +36,7 @@ import json
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -225,7 +225,9 @@ class HookManager:
             results.append(result)
 
             if result.blocked:
-                logger.warning("Hook BLOCKED by %s (event=%s)", script.name, event.value)
+                logger.warning(
+                    "Hook BLOCKED by %s (event=%s)", script.name, event.value
+                )
                 break
 
             if result.error:
@@ -286,7 +288,9 @@ class HookManager:
             )
 
             exit_code = proc.returncode or 0
-            stderr_str = stderr_raw.decode("utf-8", errors="replace") if stderr_raw else ""
+            stderr_str = (
+                stderr_raw.decode("utf-8", errors="replace") if stderr_raw else ""
+            )
 
             # Parse stdout JSON if present
             stdout_data: dict[str, Any] | None = None
@@ -308,7 +312,7 @@ class HookManager:
                 stderr=stderr_str,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Hook %s timed out after %.1fs", script.name, self._timeout)
             # Attempt to kill the process
             try:

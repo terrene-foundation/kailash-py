@@ -120,7 +120,9 @@ class GrepTool(Tool):
         return ToolResult.success("\n".join(matched))
 
     @staticmethod
-    def _count_mode(files: list[Path], regex: re.Pattern[str], head_limit: int) -> ToolResult:
+    def _count_mode(
+        files: list[Path], regex: re.Pattern[str], head_limit: int
+    ) -> ToolResult:
         results: list[str] = []
         for fp in files:
             content = _safe_read(fp)
@@ -236,7 +238,11 @@ def _collect_files(directory: Path, glob_filter: str | None) -> list[Path]:
     files: list[Path] = []
     if glob_filter:
         # Use the glob as a recursive pattern under the directory
-        pattern = glob_filter if "**" in glob_filter or "/" in glob_filter else f"**/{glob_filter}"
+        pattern = (
+            glob_filter
+            if "**" in glob_filter or "/" in glob_filter
+            else f"**/{glob_filter}"
+        )
         for p in directory.glob(pattern):
             if p.is_file() and p.suffix.lower() not in _BINARY_EXTENSIONS:
                 files.append(p)
@@ -252,7 +258,9 @@ def _collect_files(directory: Path, glob_filter: str | None) -> list[Path]:
                 continue
             for fn in filenames:
                 fp = root_path / fn
-                if fp.suffix.lower() not in _BINARY_EXTENSIONS and not fn.startswith("."):
+                if fp.suffix.lower() not in _BINARY_EXTENSIONS and not fn.startswith(
+                    "."
+                ):
                     files.append(fp)
     return sorted(files)
 

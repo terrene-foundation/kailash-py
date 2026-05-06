@@ -51,8 +51,8 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Optional
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -213,17 +213,17 @@ class IntentDetector:
         self.max_cache_size = max_cache_size
 
         # Cache: message hash -> (IntentMatch, timestamp)
-        self._cache: Dict[str, tuple] = {}
+        self._cache: dict[str, tuple] = {}
 
         # Lazy-initialized agent
-        self._agent: Optional[Any] = None
+        self._agent: Any | None = None
 
     async def detect_intent(
         self,
         message: str,
-        available_triggers: List["IntentTrigger"],
-        context: Dict[str, Any],
-    ) -> Optional[IntentMatch]:
+        available_triggers: list["IntentTrigger"],
+        context: dict[str, Any],
+    ) -> IntentMatch | None:
         """
         Detect intent from message.
 
@@ -287,9 +287,9 @@ class IntentDetector:
     async def _llm_classify(
         self,
         message: str,
-        triggers: List["IntentTrigger"],
-        context: Dict[str, Any],
-    ) -> Optional[IntentMatch]:
+        triggers: list["IntentTrigger"],
+        context: dict[str, Any],
+    ) -> IntentMatch | None:
         """
         Use LLM for intent classification.
 
@@ -327,8 +327,8 @@ class IntentDetector:
             )
 
         # Build intent list from triggers
-        intent_list: List[str] = []
-        trigger_map: Dict[str, "IntentTrigger"] = {}
+        intent_list: list[str] = []
+        trigger_map: dict[str, IntentTrigger] = {}
         for t in triggers:
             for pattern in t.patterns:
                 if pattern not in intent_list:
@@ -406,7 +406,7 @@ class IntentDetector:
     def _cache_key(
         self,
         message: str,
-        triggers: List["IntentTrigger"],
+        triggers: list["IntentTrigger"],
     ) -> str:
         """
         Generate cache key from message and triggers.
@@ -429,7 +429,7 @@ class IntentDetector:
         content = f"{msg_normalized}:{patterns_str}"
         return hashlib.md5(content.encode()).hexdigest()
 
-    def _get_cached(self, key: str) -> Optional[IntentMatch]:
+    def _get_cached(self, key: str) -> IntentMatch | None:
         """
         Get cached result if not expired.
 
@@ -474,7 +474,7 @@ class IntentDetector:
         """Clear all cached results."""
         self._cache.clear()
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 

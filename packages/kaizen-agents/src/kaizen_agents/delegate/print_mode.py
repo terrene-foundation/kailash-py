@@ -6,17 +6,16 @@ Supports plain text output and JSON output modes.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

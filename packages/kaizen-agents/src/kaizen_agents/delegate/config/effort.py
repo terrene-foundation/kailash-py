@@ -103,7 +103,13 @@ def get_effort_preset(
     return EffortPreset(
         level=base.level,
         model=model_override if model_override is not None else base.model,
-        temperature=temperature_override if temperature_override is not None else base.temperature,
-        max_tokens=max_tokens_override if max_tokens_override is not None else base.max_tokens,
+        temperature=(
+            temperature_override
+            if temperature_override is not None
+            else base.temperature
+        ),
+        max_tokens=(
+            max_tokens_override if max_tokens_override is not None else base.max_tokens
+        ),
         reasoning_effort=base.reasoning_effort,
     )

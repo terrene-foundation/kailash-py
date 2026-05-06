@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -106,9 +106,7 @@ def make_envelope(
         ops = operational
 
     # Temporal
-    if temporal is None:
-        tmp = TemporalConstraintConfig()
-    elif isinstance(temporal, dict):
+    if temporal is None or isinstance(temporal, dict):
         tmp = TemporalConstraintConfig()
     else:
         tmp = temporal
@@ -198,7 +196,9 @@ class PlanGradient:
 
     retry_budget: int = 2
     after_retry_exhaustion: GradientZone = GradientZone.HELD
-    resolution_timeout: timedelta = field(default_factory=lambda: timedelta(seconds=300))
+    resolution_timeout: timedelta = field(
+        default_factory=lambda: timedelta(seconds=300)
+    )
     optional_node_failure: GradientZone = GradientZone.FLAGGED
     budget_flag_threshold: float = 0.80
     budget_hold_threshold: float = 0.95
@@ -215,7 +215,9 @@ class PlanGradient:
                 f"got {self.after_retry_exhaustion}"
             )
         if self.optional_node_failure == GradientZone.BLOCKED:
-            raise ValueError("optional_node_failure cannot be BLOCKED; use a required node instead")
+            raise ValueError(
+                "optional_node_failure cannot be BLOCKED; use a required node instead"
+            )
         if not (0.0 <= self.budget_flag_threshold < self.budget_hold_threshold <= 1.0):
             raise ValueError(
                 f"Invalid budget thresholds: flag={self.budget_flag_threshold}, "
@@ -322,7 +324,7 @@ class AgentInstance:
     parent_id: str | None = None
     state: AgentState = AgentState.PENDING
     state_data: AgentStateData = field(default_factory=AgentStateData)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     active_envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
 
 
@@ -370,7 +372,11 @@ class PlanNodeState(Enum):
     @property
     def is_terminal(self) -> bool:
         """Whether this node state is terminal. HELD is NOT terminal."""
-        return self in (PlanNodeState.COMPLETED, PlanNodeState.FAILED, PlanNodeState.SKIPPED)
+        return self in (
+            PlanNodeState.COMPLETED,
+            PlanNodeState.FAILED,
+            PlanNodeState.SKIPPED,
+        )
 
 
 @dataclass
@@ -416,8 +422,8 @@ class Plan:
     nodes: dict[str, PlanNode] = field(default_factory=dict)
     edges: list[PlanEdge] = field(default_factory=list)
     state: PlanState = PlanState.DRAFT
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    modified_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    modified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +465,9 @@ class PlanModification:
     reason: str | None = None
 
     @staticmethod
-    def add_node(node: PlanNode, edges: list[PlanEdge] | None = None) -> PlanModification:
+    def add_node(
+        node: PlanNode, edges: list[PlanEdge] | None = None
+    ) -> PlanModification:
         """Create an AddNode modification."""
         return PlanModification(
             modification_type=PlanModificationType.ADD_NODE,
@@ -555,7 +563,7 @@ class PlanEvent:
     """
 
     event_type: PlanEventType
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     node_id: str | None = None
     instance_id: str | None = None
     output: Any | None = None
@@ -701,7 +709,7 @@ class L3Message:
     to_instance: str = ""
     message_type: L3MessageType = L3MessageType.STATUS
     correlation_id: str | None = None
-    sent_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    sent_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     ttl: timedelta | None = None
 
     # Payload — exactly one is populated based on message_type

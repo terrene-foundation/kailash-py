@@ -6,7 +6,7 @@ a supervisor agent with multiple worker agents in hierarchical patterns.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -24,10 +24,10 @@ class SupervisorWorkerWorkflow:
     def __init__(
         self,
         supervisor: Any,
-        workers: List[Any],
+        workers: list[Any],
         task: str,
         coordination_pattern: str = "hierarchical",
-        kaizen_instance: Optional[Any] = None,
+        kaizen_instance: Any | None = None,
     ):
         """
         Initialize supervisor-worker workflow.
@@ -53,7 +53,7 @@ class SupervisorWorkerWorkflow:
             f"Initialized supervisor-worker workflow: '{task}' with 1 supervisor and {len(workers)} workers"
         )
 
-    def _create_coordination_flow(self) -> Dict[str, Any]:
+    def _create_coordination_flow(self) -> dict[str, Any]:
         """Create the coordination flow structure for supervisor-worker pattern."""
         return {
             "pattern": "supervisor_worker",
@@ -193,7 +193,7 @@ class SupervisorWorkerWorkflow:
         )
         return workflow
 
-    def extract_coordination_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_coordination_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """
         Extract structured coordination results from workflow execution results.
 
@@ -259,7 +259,7 @@ class SupervisorWorkerWorkflow:
 
         return coordination_results
 
-    def execute(self, inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute the supervisor-worker coordination workflow.
 
@@ -355,8 +355,8 @@ class SupervisorWorkerWorkflow:
             }
 
     async def execute_async(
-        self, inputs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, inputs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Execute the supervisor-worker coordination workflow asynchronously.
 

@@ -26,13 +26,9 @@ OpenAI Function Calling Format:
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from kaizen_agents.runtime_adapters.tool_mapping.base import (
-    KaizenTool,
-    ToolMapper,
-    ToolMappingError,
-)
+from kaizen_agents.runtime_adapters.tool_mapping.base import KaizenTool, ToolMapper
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +64,9 @@ class OpenAIToolMapper(ToolMapper):
     @classmethod
     def to_runtime_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         strict: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Validate and normalize tools for OpenAI API.
 
         Args:
@@ -97,8 +93,8 @@ class OpenAIToolMapper(ToolMapper):
     @classmethod
     def from_runtime_format(
         cls,
-        runtime_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        runtime_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convert OpenAI tools to Kaizen format.
 
         Since formats are identical, this is mostly pass-through with validation.
@@ -114,7 +110,7 @@ class OpenAIToolMapper(ToolMapper):
         return [tool.to_dict() for tool in tools]
 
     @classmethod
-    def _normalize_tool(cls, tool: KaizenTool) -> Dict[str, Any]:
+    def _normalize_tool(cls, tool: KaizenTool) -> dict[str, Any]:
         """Normalize a tool to OpenAI format.
 
         Args:
@@ -137,7 +133,7 @@ class OpenAIToolMapper(ToolMapper):
         }
 
     @classmethod
-    def _normalize_parameters(cls, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
         """Normalize parameters schema for OpenAI.
 
         Ensures:
@@ -175,7 +171,7 @@ class OpenAIToolMapper(ToolMapper):
         return normalized
 
     @classmethod
-    def validate_tool(cls, tool: KaizenTool) -> List[str]:
+    def validate_tool(cls, tool: KaizenTool) -> list[str]:
         """Validate tool against OpenAI requirements.
 
         Args:
@@ -212,7 +208,7 @@ class OpenAIToolMapper(ToolMapper):
         return errors
 
     @classmethod
-    def _validate_strict_mode(cls, tool: KaizenTool) -> List[str]:
+    def _validate_strict_mode(cls, tool: KaizenTool) -> list[str]:
         """Validate tool for OpenAI strict mode.
 
         Strict mode requires:
@@ -256,10 +252,10 @@ class OpenAIToolMapper(ToolMapper):
     @classmethod
     def for_responses_api(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         enable_code_interpreter: bool = False,
         enable_file_search: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Format tools for OpenAI Responses API.
 
         The Responses API has additional capabilities that can be enabled.
@@ -286,8 +282,8 @@ class OpenAIToolMapper(ToolMapper):
     @classmethod
     def to_openai_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convenience alias for to_runtime_format.
 
         Args:

@@ -13,7 +13,7 @@ Uses .run() method for standardized execution interface.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from kaizen_agents.agents.multi_modal.document_extraction_agent import (
@@ -42,16 +42,16 @@ class MultiModalConfig(BaseAgentConfig):
     # Cost tracking
     enable_cost_tracking: bool = True
     warn_on_openai_usage: bool = True
-    budget_limit: Optional[float] = None
+    budget_limit: float | None = None
 
     # Multi-modal specific
-    vision_model: Optional[str] = None  # e.g., "llava:13b"
-    audio_model: Optional[str] = None  # e.g., "base" for Whisper
+    vision_model: str | None = None  # e.g., "llava:13b"
+    audio_model: str | None = None  # e.g., "base" for Whisper
 
     # Document extraction settings (NEW - opt-in)
     enable_document_extraction: bool = False
-    landing_ai_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    landing_ai_api_key: str | None = None
+    openai_api_key: str | None = None
     document_chunk_size: int = 512
 
 
@@ -114,10 +114,10 @@ class MultiModalAgent(BaseAgent):
         self,
         config: MultiModalConfig,
         signature: MultiModalSignature,
-        adapter: Optional[MultiModalAdapter] = None,
-        cost_tracker: Optional[CostTracker] = None,
-        shared_memory: Optional[SharedMemoryPool] = None,
-        agent_id: Optional[str] = None,
+        adapter: MultiModalAdapter | None = None,
+        cost_tracker: CostTracker | None = None,
+        shared_memory: SharedMemoryPool | None = None,
+        agent_id: str | None = None,
         **kwargs,
     ):
         """
@@ -152,7 +152,7 @@ class MultiModalAgent(BaseAgent):
                     auto_download=config.auto_download_models,
                 )
             except ValueError as e:
-                raise ValueError(f"No multi-modal adapter available: {e}")
+                raise ValueError(f"No multi-modal adapter available: {e}") from e
         else:
             self.adapter = adapter
 
@@ -168,7 +168,7 @@ class MultiModalAgent(BaseAgent):
             )
 
         # Lazy initialization for document extraction (NEW)
-        self._document_agent: Optional["DocumentExtractionAgent"] = None
+        self._document_agent: DocumentExtractionAgent | None = None
 
     def _verify_adapter_compatibility(self):
         """Verify adapter supports signature's modalities."""
@@ -228,7 +228,7 @@ class MultiModalAgent(BaseAgent):
 
         return self._document_agent
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute multi-modal analysis with .run() interface.
 
@@ -336,9 +336,9 @@ class MultiModalAgent(BaseAgent):
     def _process_with_document(
         self,
         document_path: str,
-        prompt: Optional[str],
+        prompt: str | None,
         store_in_memory: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Process document input with optional prompt-based question answering.
 
@@ -405,7 +405,7 @@ Please answer the question based on the document content above."""
 
         return result
 
-    def analyze(self, **kwargs) -> Dict[str, Any]:
+    def analyze(self, **kwargs) -> dict[str, Any]:
         """
         Convenience method for multi-modal analysis.
 
@@ -426,12 +426,12 @@ Please answer the question based on the document content above."""
 
     def batch_analyze(
         self,
-        images: Optional[List[Union[str, Path, ImageField]]] = None,
-        audios: Optional[List[Union[str, Path, AudioField]]] = None,
-        texts: Optional[List[str]] = None,
-        questions: Optional[List[str]] = None,
+        images: list[str | Path | ImageField] | None = None,
+        audios: list[str | Path | AudioField] | None = None,
+        texts: list[str] | None = None,
+        questions: list[str] | None = None,
         store_in_memory: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Batch process multiple inputs.
 
@@ -472,7 +472,7 @@ Please answer the question based on the document content above."""
 
         return results
 
-    def get_cost_summary(self) -> Dict[str, Any]:
+    def get_cost_summary(self) -> dict[str, Any]:
         """Get cost tracking summary."""
         if not self.cost_tracker:
             return {"enabled": False}

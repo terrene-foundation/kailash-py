@@ -5,9 +5,7 @@ This module provides pre-configured capability combinations for common use cases
 Presets are the recommended starting point for most users.
 """
 
-from typing import Any, Dict, Optional
-
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from typing import Any
 
 
 class CapabilityPresets:
@@ -35,7 +33,7 @@ class CapabilityPresets:
     def qa_assistant(
         model: str = "gpt-4",
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Simple Q&A assistant configuration.
 
@@ -71,7 +69,7 @@ class CapabilityPresets:
         model: str = "gpt-4",
         max_turns: int = 50,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Educational tutor configuration.
 
@@ -109,7 +107,7 @@ class CapabilityPresets:
         model: str = "gpt-4",
         max_cycles: int = 50,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Autonomous researcher configuration.
 
@@ -146,7 +144,7 @@ class CapabilityPresets:
         model: str = "gpt-4",
         max_cycles: int = 100,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Full-capability developer assistant configuration.
 
@@ -183,7 +181,7 @@ class CapabilityPresets:
         model: str = "gpt-4",
         max_cycles: int = 100,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Administrative agent with full tool access.
 
@@ -222,9 +220,9 @@ class CapabilityPresets:
     def chat_assistant(
         model: str = "gpt-4",
         max_turns: int = 100,
-        memory_path: Optional[str] = None,
+        memory_path: str | None = None,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Conversational chat assistant with persistent memory.
 
@@ -265,7 +263,7 @@ class CapabilityPresets:
         model: str = "gpt-4",
         max_cycles: int = 50,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Data analysis agent configuration.
 
@@ -310,7 +308,7 @@ class CapabilityPresets:
         model: str = "claude-3-opus",  # Claude excels at code review
         max_cycles: int = 30,
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Code review agent configuration.
 
@@ -348,7 +346,7 @@ class CapabilityPresets:
         memory: str = "stateless",
         tool_access: str = "none",
         **overrides,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a custom preset with specified capabilities.
 
@@ -382,7 +380,7 @@ class CapabilityPresets:
         return config
 
     @classmethod
-    def list_presets(cls) -> Dict[str, str]:
+    def list_presets(cls) -> dict[str, str]:
         """
         List all available presets with descriptions.
 
@@ -402,7 +400,7 @@ class CapabilityPresets:
         }
 
     @classmethod
-    def get_preset(cls, name: str, **kwargs) -> Dict[str, Any]:
+    def get_preset(cls, name: str, **kwargs) -> dict[str, Any]:
         """
         Get a preset by name.
 
@@ -439,7 +437,7 @@ class CapabilityPresets:
 
 
 # Convenience function for quick preset access
-def preset(name: str, **kwargs) -> Dict[str, Any]:
+def preset(name: str, **kwargs) -> dict[str, Any]:
     """
     Quick access to capability presets.
 

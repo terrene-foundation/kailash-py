@@ -63,10 +63,11 @@ References:
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any, Optional
 
 from kaizen_agents.journey.context import ContextAccumulator
 from kaizen_agents.journey.errors import (
@@ -83,11 +84,9 @@ if TYPE_CHECKING:
         Journey,
         JourneyConfig,
         Pathway,
-        PathwayContext,
         PathwayResult,
     )
     from kaizen_agents.journey.intent import IntentDetector
-    from kaizen_agents.journey.transitions import IntentTrigger, Transition
 
 logger = logging.getLogger(__name__)
 
@@ -158,10 +157,10 @@ class JourneyHookContext:
 
     event_type: JourneyHookEvent
     session_id: str
-    pathway_id: Optional[str]
+    pathway_id: str | None
     timestamp: float
-    data: Dict[str, Any]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -177,8 +176,8 @@ class JourneyHookResult:
     """
 
     success: bool
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    data: dict[str, Any] | None = None
+    error: str | None = None
     duration_ms: float = 0.0
 
 
@@ -219,8 +218,8 @@ class JourneyResponse:
     message: str
     pathway_id: str
     pathway_changed: bool
-    accumulated_context: Dict[str, Any]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    accumulated_context: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -286,19 +285,19 @@ class PathwayManager:
         self.config = config
 
         # Agent registry
-        self._agents: Dict[str, "BaseAgent"] = {}
+        self._agents: dict[str, BaseAgent] = {}
 
         # Runtime components (lazy initialization)
-        self._intent_detector: Optional["IntentDetector"] = None
+        self._intent_detector: IntentDetector | None = None
         self._context_accumulator = ContextAccumulator(config)
         self._state_manager = JourneyStateManager(config)
 
         # Session state
-        self._session: Optional[JourneySession] = None
-        self._pathway_instances: Dict[str, "Pathway"] = {}
+        self._session: JourneySession | None = None
+        self._pathway_instances: dict[str, Pathway] = {}
 
         # Hooks registry (REQ-INT-007)
-        self._hooks: Dict[JourneyHookEvent, List[JourneyHookHandler]] = {
+        self._hooks: dict[JourneyHookEvent, list[JourneyHookHandler]] = {
             event: [] for event in JourneyHookEvent
         }
         self._hook_timeout: float = 5.0  # Default timeout for hooks
@@ -331,7 +330,7 @@ class PathwayManager:
         """
         return self._agents.get(agent_id)
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """
         List all registered agent IDs.
 
@@ -372,7 +371,7 @@ class PathwayManager:
     def unregister_hook(
         self,
         event_type: JourneyHookEvent,
-        handler: Optional[JourneyHookHandler] = None,
+        handler: JourneyHookHandler | None = None,
     ) -> int:
         """
         Unregister hook handler(s) for an event.
@@ -396,10 +395,10 @@ class PathwayManager:
     async def _trigger_hooks(
         self,
         event_type: JourneyHookEvent,
-        pathway_id: Optional[str] = None,
-        data: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[JourneyHookResult]:
+        pathway_id: str | None = None,
+        data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> list[JourneyHookResult]:
         """
         Trigger all hooks for an event type.
 
@@ -415,7 +414,6 @@ class PathwayManager:
         Returns:
             List of JourneyHookResult from each executed hook
         """
-        import asyncio
 
         handlers = self._hooks.get(event_type, [])
         if not handlers:
@@ -466,7 +464,7 @@ class PathwayManager:
             result.duration_ms = (time.perf_counter() - start_time) * 1000
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             handler_name = getattr(handler, "__name__", repr(handler))
             error_msg = f"Hook timeout: {handler_name}"
             logger.warning(error_msg)
@@ -501,7 +499,7 @@ class PathwayManager:
 
     async def start_session(
         self,
-        initial_context: Optional[Dict[str, Any]] = None,
+        initial_context: dict[str, Any] | None = None,
     ) -> JourneySession:
         """
         Start a new journey session at entry pathway.
@@ -558,7 +556,7 @@ class PathwayManager:
 
         return self._session
 
-    async def get_session_state(self) -> Optional[JourneySession]:
+    async def get_session_state(self) -> JourneySession | None:
         """
         Get current session state.
 
@@ -567,7 +565,7 @@ class PathwayManager:
         """
         return self._session
 
-    async def restore_session(self, session_id: str) -> Optional[JourneySession]:
+    async def restore_session(self, session_id: str) -> JourneySession | None:
         """
         Restore session from persistence.
 
@@ -671,7 +669,7 @@ class PathwayManager:
             {
                 "role": "user",
                 "content": message,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "pathway": self._session.current_pathway_id,
             }
         )
@@ -803,13 +801,13 @@ class PathwayManager:
             {
                 "role": "assistant",
                 "content": response_message,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "pathway": self._session.current_pathway_id,
             }
         )
 
         # Update session timestamp
-        self._session.updated_at = datetime.now(timezone.utc)
+        self._session.updated_at = datetime.now(UTC)
 
         # Step 7: Persist session state
         await self._state_manager.save_session(self._session)

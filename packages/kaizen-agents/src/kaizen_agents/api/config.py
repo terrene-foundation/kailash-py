@@ -6,14 +6,20 @@ agent behavior. Use this for advanced use cases where presets are
 not sufficient.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 
 # Type aliases for hooks
-HookCallback = Callable[[Dict[str, Any]], None]
-AsyncHookCallback = Callable[[Dict[str, Any]], Any]  # Coroutine
+HookCallback = Callable[[dict[str, Any]], None]
+AsyncHookCallback = Callable[[dict[str, Any]], Any]  # Coroutine
 
 
 @dataclass
@@ -37,7 +43,7 @@ class CheckpointConfig:
     interval_cycles: int = 10
     """Number of cycles between checkpoints (for cycle-based strategy)."""
 
-    storage_path: Optional[str] = None
+    storage_path: str | None = None
     """Path for checkpoint storage. None uses default."""
 
     max_checkpoints: int = 10
@@ -66,40 +72,40 @@ class HookConfig:
     Hooks allow custom code to run at various points during execution.
     """
 
-    on_start: Optional[HookCallback] = None
+    on_start: HookCallback | None = None
     """Called when execution starts."""
 
-    on_cycle: Optional[HookCallback] = None
+    on_cycle: HookCallback | None = None
     """Called at the start of each TAOD cycle."""
 
-    on_think: Optional[HookCallback] = None
+    on_think: HookCallback | None = None
     """Called after Think phase."""
 
-    on_act: Optional[HookCallback] = None
+    on_act: HookCallback | None = None
     """Called after Act phase (tool calls)."""
 
-    on_observe: Optional[HookCallback] = None
+    on_observe: HookCallback | None = None
     """Called after Observe phase."""
 
-    on_decide: Optional[HookCallback] = None
+    on_decide: HookCallback | None = None
     """Called after Decide phase."""
 
-    on_tool_call: Optional[HookCallback] = None
+    on_tool_call: HookCallback | None = None
     """Called before each tool call."""
 
-    on_tool_result: Optional[HookCallback] = None
+    on_tool_result: HookCallback | None = None
     """Called after each tool call."""
 
-    on_error: Optional[HookCallback] = None
+    on_error: HookCallback | None = None
     """Called when an error occurs."""
 
-    on_complete: Optional[HookCallback] = None
+    on_complete: HookCallback | None = None
     """Called when execution completes."""
 
-    on_interrupt: Optional[HookCallback] = None
+    on_interrupt: HookCallback | None = None
     """Called when execution is interrupted."""
 
-    def get_hooks(self) -> Dict[str, Optional[HookCallback]]:
+    def get_hooks(self) -> dict[str, HookCallback | None]:
         """Get all configured hooks as a dictionary."""
         return {
             "on_start": self.on_start,
@@ -131,10 +137,10 @@ class LLMRoutingConfig:
     strategy: str = "balanced"
     """Routing strategy: 'rules', 'task_complexity', 'cost_optimized', 'quality_optimized', 'balanced'."""
 
-    task_model_mapping: Dict[str, str] = field(default_factory=dict)
+    task_model_mapping: dict[str, str] = field(default_factory=dict)
     """Map task types to specific models."""
 
-    fallback_chain: List[str] = field(default_factory=list)
+    fallback_chain: list[str] = field(default_factory=list)
     """Ordered list of fallback models."""
 
     max_retries: int = 3
@@ -188,7 +194,7 @@ class AgentConfig:
     model: str = "gpt-4"
     """Primary model to use."""
 
-    provider: Optional[str] = None
+    provider: str | None = None
     """LLM provider. None for auto-detection based on model."""
 
     # === Execution Configuration ===
@@ -216,14 +222,14 @@ class AgentConfig:
 
     # === Memory Configuration ===
 
-    memory: Optional[Any] = None
+    memory: Any | None = None
     """Memory provider instance or shortcut string.
 
     Shortcuts: 'stateless', 'session', 'persistent', 'learning'
     Or pass a MemoryProvider instance directly.
     """
 
-    memory_path: Optional[str] = None
+    memory_path: str | None = None
     """Path for persistent memory storage."""
 
     max_memory_tokens: int = 16000
@@ -234,13 +240,13 @@ class AgentConfig:
     tool_access: ToolAccess = ToolAccess.NONE
     """Tool access level: NONE, READ_ONLY, CONSTRAINED, FULL."""
 
-    tools: Optional[List[Any]] = None
+    tools: list[Any] | None = None
     """List of Tool instances to register."""
 
-    allowed_tools: Optional[List[str]] = None
+    allowed_tools: list[str] | None = None
     """Whitelist of allowed tool names."""
 
-    denied_tools: Optional[List[str]] = None
+    denied_tools: list[str] | None = None
     """Blacklist of denied tool names."""
 
     require_tool_confirmation: bool = False
@@ -248,19 +254,19 @@ class AgentConfig:
 
     # === Runtime Configuration ===
 
-    runtime: Optional[Any] = None
+    runtime: Any | None = None
     """Runtime adapter instance or shortcut string.
 
     Shortcuts: 'local', 'claude_code', 'codex', 'gemini_cli'
     Or pass a RuntimeAdapter instance directly.
     """
 
-    runtime_config: Dict[str, Any] = field(default_factory=dict)
+    runtime_config: dict[str, Any] = field(default_factory=dict)
     """Additional runtime configuration."""
 
     # === LLM Routing Configuration ===
 
-    llm_routing: Optional[LLMRoutingConfig] = None
+    llm_routing: LLMRoutingConfig | None = None
     """Multi-LLM routing configuration."""
 
     routing_strategy: str = "balanced"
@@ -268,12 +274,12 @@ class AgentConfig:
 
     # === Checkpointing Configuration ===
 
-    checkpoint: Optional[CheckpointConfig] = None
+    checkpoint: CheckpointConfig | None = None
     """Checkpoint configuration for state persistence."""
 
     # === Hook Configuration ===
 
-    hooks: Optional[HookConfig] = None
+    hooks: HookConfig | None = None
     """Execution hooks for custom callbacks."""
 
     # === Model Parameters ===
@@ -284,32 +290,32 @@ class AgentConfig:
     top_p: float = 1.0
     """Top-p sampling parameter."""
 
-    max_output_tokens: Optional[int] = None
+    max_output_tokens: int | None = None
     """Maximum output tokens. None for model default."""
 
-    stop_sequences: List[str] = field(default_factory=list)
+    stop_sequences: list[str] = field(default_factory=list)
     """Stop sequences for generation."""
 
     # === System Prompt ===
 
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     """Custom system prompt. None for default."""
 
-    system_prompt_template: Optional[str] = None
+    system_prompt_template: str | None = None
     """System prompt template with {placeholders}."""
 
     # === Metadata ===
 
-    name: Optional[str] = None
+    name: str | None = None
     """Agent name for identification."""
 
-    description: Optional[str] = None
+    description: str | None = None
     """Agent description."""
 
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     """Tags for categorization."""
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
     # === Methods ===

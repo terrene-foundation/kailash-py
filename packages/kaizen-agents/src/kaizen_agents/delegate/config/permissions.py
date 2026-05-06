@@ -128,7 +128,9 @@ class PermissionEngine:
             if not self._matches_tool(rule.tool, tool_name):
                 continue
 
-            if rule.args_contain and not self._matches_args(rule.args_contain, args_str):
+            if rule.args_contain and not self._matches_args(
+                rule.args_contain, args_str
+            ):
                 continue
 
             matching_actions.append(rule.action)

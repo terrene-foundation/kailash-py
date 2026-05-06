@@ -26,7 +26,7 @@ Environment variable support:
 import os
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
@@ -47,25 +47,33 @@ class MemoryConfig:
     3. Default values (lowest priority)
     """
 
-    llm_provider: str = field(default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai"))
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"))
+    llm_provider: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
+    )
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
     )
-    max_tokens: int = field(default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "500")))
+    max_tokens: int = field(
+        default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "500"))
+    )
     max_history_turns: int = field(
         default_factory=lambda: int(os.getenv("KAIZEN_MAX_HISTORY_TURNS", "10"))
     )
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ConversationSignature(Signature):
     """Signature for conversation with memory continuity."""
 
     message: str = InputField(desc="User's current message")
-    conversation_history: str = InputField(desc="Previous conversation context", default="")
+    conversation_history: str = InputField(
+        desc="Previous conversation context", default=""
+    )
 
     response: str = OutputField(desc="Agent's response considering history")
     memory_updated: bool = OutputField(desc="Whether memory was successfully updated")
@@ -81,7 +89,7 @@ class SimpleMemoryStore:
         Args:
             max_turns: Maximum number of conversation turns to keep per session
         """
-        self.conversations: Dict[str, List[Dict[str, Any]]] = {}
+        self.conversations: dict[str, list[dict[str, Any]]] = {}
         self.max_turns = max_turns
 
     def add_turn(self, session_id: str, role: str, content: str):
@@ -102,7 +110,9 @@ class SimpleMemoryStore:
 
         # Keep only last N turns (user + assistant pairs)
         if len(self.conversations[session_id]) > self.max_turns * 2:
-            self.conversations[session_id] = self.conversations[session_id][-(self.max_turns * 2) :]
+            self.conversations[session_id] = self.conversations[session_id][
+                -(self.max_turns * 2) :
+            ]
 
     def get_history(self, session_id: str) -> str:
         """
@@ -193,17 +203,17 @@ class MemoryAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_history_turns: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        memory_store: Optional[SimpleMemoryStore] = None,
-        config: Optional[MemoryConfig] = None,
-        mcp_servers: Optional[List[Dict]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_history_turns: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        memory_store: SimpleMemoryStore | None = None,
+        config: MemoryConfig | None = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
         **kwargs,
     ):
@@ -250,7 +260,9 @@ class MemoryAgent(BaseAgent):
         if config.timeout and (
             not config.provider_config or "timeout" not in config.provider_config
         ):
-            provider_cfg = config.provider_config.copy() if config.provider_config else {}
+            provider_cfg = (
+                config.provider_config.copy() if config.provider_config else {}
+            )
             provider_cfg["timeout"] = config.timeout
             config = replace(config, provider_config=provider_cfg)
 
@@ -264,7 +276,9 @@ class MemoryAgent(BaseAgent):
         )
 
         self.memory_config = config
-        self.memory_store = memory_store or SimpleMemoryStore(max_turns=config.max_history_turns)
+        self.memory_store = memory_store or SimpleMemoryStore(
+            max_turns=config.max_history_turns
+        )
         self.tool_registry = tool_registry
 
     def run(
@@ -273,7 +287,7 @@ class MemoryAgent(BaseAgent):
         session_id: str = "default",
         conversation_history: str = "",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Chat with memory continuity.
 
@@ -371,7 +385,9 @@ class MemoryAgent(BaseAgent):
             return 0
         return len(self.memory_store.conversations[session_id])
 
-    def chat(self, message: str, session_id: str = "default", **kwargs) -> Dict[str, Any]:
+    def chat(
+        self, message: str, session_id: str = "default", **kwargs
+    ) -> dict[str, Any]:
         """
         Convenience method for conversation with memory continuity.
 

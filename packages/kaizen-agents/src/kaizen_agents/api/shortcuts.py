@@ -10,9 +10,13 @@ Shortcut Categories:
 - Tool access shortcuts: "none", "read_only", "constrained", "full"
 """
 
-from typing import Any, Callable, Dict, Optional, Type, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Union
 
 from kaizen_agents.api.types import MemoryDepth, ToolAccess
+
+if TYPE_CHECKING:
+    from kaizen_agents.api.types import ExecutionMode
 
 # Type aliases for lazy loading
 MemoryProviderType = Any  # Will be MemoryProvider when imported
@@ -65,7 +69,7 @@ def _create_learning_memory(**kwargs) -> "MemoryProviderType":
 
 
 # Memory shortcut registry
-MEMORY_SHORTCUTS: Dict[str, Callable[..., "MemoryProviderType"]] = {
+MEMORY_SHORTCUTS: dict[str, Callable[..., "MemoryProviderType"]] = {
     "stateless": _create_stateless_memory,
     "session": _create_session_memory,
     "persistent": _create_persistent_memory,
@@ -73,7 +77,7 @@ MEMORY_SHORTCUTS: Dict[str, Callable[..., "MemoryProviderType"]] = {
 }
 
 # Map MemoryDepth enum to shortcuts
-MEMORY_DEPTH_TO_SHORTCUT: Dict[MemoryDepth, str] = {
+MEMORY_DEPTH_TO_SHORTCUT: dict[MemoryDepth, str] = {
     MemoryDepth.STATELESS: "stateless",
     MemoryDepth.SESSION: "session",
     MemoryDepth.PERSISTENT: "persistent",
@@ -122,7 +126,7 @@ def resolve_memory_shortcut(
     if isinstance(memory, str):
         shortcut = memory.lower().strip()
         if shortcut not in MEMORY_SHORTCUTS:
-            valid = ", ".join(f'"{k}"' for k in MEMORY_SHORTCUTS.keys())
+            valid = ", ".join(f'"{k}"' for k in MEMORY_SHORTCUTS)
             raise ValueError(
                 f"Unknown memory shortcut: '{memory}'. "
                 f"Valid shortcuts are: {valid}. "
@@ -155,7 +159,7 @@ def _create_claude_code_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "ClaudeCodeAdapter is not yet available. "
             "Use runtime='local' with model='claude-*' for now."
-        )
+        ) from None
 
 
 def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
@@ -169,7 +173,7 @@ def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "OpenAICodexAdapter is not yet available. "
             "Use runtime='local' with model='gpt-*' for now."
-        )
+        ) from None
 
 
 def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
@@ -183,11 +187,11 @@ def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "GeminiCLIAdapter is not yet available. "
             "Use runtime='local' with model='gemini-*' for now."
-        )
+        ) from None
 
 
 # Runtime shortcut registry
-RUNTIME_SHORTCUTS: Dict[str, Callable[..., "RuntimeAdapterType"]] = {
+RUNTIME_SHORTCUTS: dict[str, Callable[..., "RuntimeAdapterType"]] = {
     "local": _create_local_runtime,
     "kaizen": _create_local_runtime,  # Alias
     "native": _create_local_runtime,  # Alias
@@ -235,9 +239,7 @@ def resolve_runtime_shortcut(
         if shortcut not in RUNTIME_SHORTCUTS:
             shortcut = runtime.lower().strip()
         if shortcut not in RUNTIME_SHORTCUTS:
-            valid = ", ".join(
-                f'"{k}"' for k in RUNTIME_SHORTCUTS.keys() if "_" not in k
-            )
+            valid = ", ".join(f'"{k}"' for k in RUNTIME_SHORTCUTS if "_" not in k)
             raise ValueError(
                 f"Unknown runtime shortcut: '{runtime}'. "
                 f"Valid shortcuts are: {valid}. "
@@ -252,7 +254,7 @@ def resolve_runtime_shortcut(
 # === Tool Access Shortcuts ===
 
 # Tool access to tool policy mapping
-TOOL_ACCESS_POLICIES: Dict[ToolAccess, Dict[str, Any]] = {
+TOOL_ACCESS_POLICIES: dict[ToolAccess, dict[str, Any]] = {
     ToolAccess.NONE: {
         "enabled": False,
         "allowed_tools": [],
@@ -321,8 +323,8 @@ TOOL_ACCESS_POLICIES: Dict[ToolAccess, Dict[str, Any]] = {
 
 
 def resolve_tool_access_shortcut(
-    tool_access: Union[str, ToolAccess, None],
-) -> Dict[str, Any]:
+    tool_access: str | ToolAccess | None,
+) -> dict[str, Any]:
     """
     Resolve a tool access shortcut to a tool policy configuration.
 
@@ -359,7 +361,7 @@ def resolve_tool_access_shortcut(
         valid = ", ".join(f'"{ta.value}"' for ta in ToolAccess)
         raise ValueError(
             f"Unknown tool access level: '{tool_access}'. Valid levels are: {valid}."
-        )
+        ) from None
 
 
 # === Execution Mode Shortcuts ===
@@ -403,13 +405,15 @@ def resolve_execution_mode(
         return ExecutionMode(shortcut)
     except ValueError:
         valid = ", ".join(f'"{em.value}"' for em in ExecutionMode)
-        raise ValueError(f"Unknown execution mode: '{mode}'. Valid modes are: {valid}.")
+        raise ValueError(
+            f"Unknown execution mode: '{mode}'. Valid modes are: {valid}."
+        ) from None
 
 
 # === Model Shortcuts ===
 
 # Common model aliases
-MODEL_ALIASES: Dict[str, str] = {
+MODEL_ALIASES: dict[str, str] = {
     # GPT aliases
     "gpt4": "gpt-4",
     "gpt-4o": "gpt-4o",
@@ -459,7 +463,7 @@ def resolve_model_shortcut(model: str) -> str:
 # === All Shortcuts Summary ===
 
 
-def get_available_shortcuts() -> Dict[str, list]:
+def get_available_shortcuts() -> dict[str, list]:
     """
     Get all available shortcuts grouped by category.
 
@@ -474,7 +478,7 @@ def get_available_shortcuts() -> Dict[str, list]:
 
     return {
         "memory": list(MEMORY_SHORTCUTS.keys()),
-        "runtime": [k for k in RUNTIME_SHORTCUTS.keys() if "_" not in k],
+        "runtime": [k for k in RUNTIME_SHORTCUTS if "_" not in k],
         "tool_access": [ta.value for ta in ToolAccess],
         "execution_mode": [em.value for em in ExecutionMode],
         "model_aliases": list(MODEL_ALIASES.keys()),

@@ -162,7 +162,9 @@ class OpenAIStructuredAdapter:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": temperature if temperature is not None else self._temperature,
+            "temperature": (
+                temperature if temperature is not None else self._temperature
+            ),
             "max_tokens": max_tokens or self._max_tokens,
         }
 
@@ -179,14 +181,16 @@ class OpenAIStructuredAdapter:
         tool_calls_parsed: list[dict[str, Any]] = []
         if message.tool_calls:
             for tc in message.tool_calls:
-                tool_calls_parsed.append({
-                    "id": tc.id,
-                    "type": tc.type,
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                })
+                tool_calls_parsed.append(
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                )
 
         usage_dict: dict[str, int] = {}
         if response.usage:
@@ -269,7 +273,9 @@ class AnthropicStructuredAdapter:
                 "environment or pass api_key explicitly."
             )
 
-        self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self._model = model or os.environ.get(
+            "ANTHROPIC_MODEL", "claude-sonnet-4-20250514"
+        )
         self._temperature = temperature
         self._max_tokens = max_tokens
 
@@ -306,7 +312,9 @@ class AnthropicStructuredAdapter:
             "model": self._model,
             "messages": api_messages,
             "max_tokens": max_tokens or self._max_tokens,
-            "temperature": temperature if temperature is not None else self._temperature,
+            "temperature": (
+                temperature if temperature is not None else self._temperature
+            ),
         }
         if system_prompt:
             kwargs["system"] = system_prompt
@@ -315,11 +323,15 @@ class AnthropicStructuredAdapter:
             anthropic_tools = []
             for tool in tools:
                 func = tool.get("function", {})
-                anthropic_tools.append({
-                    "name": func.get("name", ""),
-                    "description": func.get("description", ""),
-                    "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
-                })
+                anthropic_tools.append(
+                    {
+                        "name": func.get("name", ""),
+                        "description": func.get("description", ""),
+                        "input_schema": func.get(
+                            "parameters", {"type": "object", "properties": {}}
+                        ),
+                    }
+                )
             kwargs["tools"] = anthropic_tools
 
         response = self._client.messages.create(**kwargs)
@@ -330,21 +342,24 @@ class AnthropicStructuredAdapter:
             if getattr(block, "type", "") == "text":
                 content_text += getattr(block, "text", "")
             elif getattr(block, "type", "") == "tool_use":
-                tool_calls.append({
-                    "id": getattr(block, "id", ""),
-                    "type": "function",
-                    "function": {
-                        "name": getattr(block, "name", ""),
-                        "arguments": json.dumps(getattr(block, "input", {})),
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": getattr(block, "id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": getattr(block, "name", ""),
+                            "arguments": json.dumps(getattr(block, "input", {})),
+                        },
+                    }
+                )
 
         usage_dict: dict[str, int] = {}
         if response.usage:
             usage_dict = {
                 "prompt_tokens": response.usage.input_tokens,
                 "completion_tokens": response.usage.output_tokens,
-                "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
+                "total_tokens": response.usage.input_tokens
+                + response.usage.output_tokens,
             }
 
         return StructuredResponse(
@@ -379,10 +394,14 @@ class AnthropicStructuredAdapter:
         if augmented_messages and augmented_messages[0].get("role") == "system":
             augmented_messages[0] = {
                 "role": "system",
-                "content": augmented_messages[0]["content"] + "\n\n" + schema_instruction,
+                "content": augmented_messages[0]["content"]
+                + "\n\n"
+                + schema_instruction,
             }
         else:
-            augmented_messages.insert(0, {"role": "user", "content": schema_instruction})
+            augmented_messages.insert(
+                0, {"role": "user", "content": schema_instruction}
+            )
 
         result = self.complete(
             messages=augmented_messages,

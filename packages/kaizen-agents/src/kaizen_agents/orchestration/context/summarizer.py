@@ -16,7 +16,6 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 
-
 # JSON schema for context value summarization
 SUMMARIZATION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -173,7 +172,9 @@ class ContextSummarizer:
         if estimated_tokens <= max_tokens:
             return {
                 "summary": context_value,
-                "preserved_items": ["(all content preserved -- no summarization needed)"],
+                "preserved_items": [
+                    "(all content preserved -- no summarization needed)"
+                ],
                 "dropped_items": [],
                 "was_summarized": False,
             }

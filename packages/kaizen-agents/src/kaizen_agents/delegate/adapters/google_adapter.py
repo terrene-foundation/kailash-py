@@ -16,7 +16,8 @@ import json
 import logging
 import os
 import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from kaizen_agents.delegate.adapters.protocol import StreamEvent
 
@@ -43,10 +44,12 @@ def _convert_messages_for_gemini(
             system_instruction = msg.get("content", "")
 
         elif role == "user":
-            contents.append({
-                "role": "user",
-                "parts": [{"text": msg.get("content", "")}],
-            })
+            contents.append(
+                {
+                    "role": "user",
+                    "parts": [{"text": msg.get("content", "")}],
+                }
+            )
 
         elif role == "assistant":
             parts: list[dict[str, Any]] = []
@@ -60,25 +63,31 @@ def _convert_messages_for_gemini(
                     args = json.loads(args_str) if args_str else {}
                 except json.JSONDecodeError:
                     args = {}
-                parts.append({
-                    "function_call": {
-                        "name": func.get("name", ""),
-                        "args": args,
+                parts.append(
+                    {
+                        "function_call": {
+                            "name": func.get("name", ""),
+                            "args": args,
+                        }
                     }
-                })
+                )
             if parts:
                 contents.append({"role": "model", "parts": parts})
 
         elif role == "tool":
-            contents.append({
-                "role": "user",
-                "parts": [{
-                    "function_response": {
-                        "name": msg.get("name", ""),
-                        "response": {"result": msg.get("content", "")},
-                    }
-                }],
-            })
+            contents.append(
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "function_response": {
+                                "name": msg.get("name", ""),
+                                "response": {"result": msg.get("content", "")},
+                            }
+                        }
+                    ],
+                }
+            )
 
     return system_instruction, contents
 
@@ -97,11 +106,15 @@ def _convert_tools_for_gemini(
     declarations: list[dict[str, Any]] = []
     for tool in tools:
         func = tool.get("function", {})
-        declarations.append({
-            "name": func.get("name", ""),
-            "description": func.get("description", ""),
-            "parameters": func.get("parameters", {"type": "object", "properties": {}}),
-        })
+        declarations.append(
+            {
+                "name": func.get("name", ""),
+                "description": func.get("description", ""),
+                "parameters": func.get(
+                    "parameters", {"type": "object", "properties": {}}
+                ),
+            }
+        )
 
     return [{"function_declarations": declarations}]
 
@@ -171,8 +184,12 @@ class GoogleStreamAdapter:
         Yields :class:`StreamEvent` instances as tokens arrive.
         """
         resolved_model = model or self._default_model
-        resolved_temp = temperature if temperature is not None else self._default_temperature
-        resolved_max = max_tokens if max_tokens is not None else self._default_max_tokens
+        resolved_temp = (
+            temperature if temperature is not None else self._default_temperature
+        )
+        resolved_max = (
+            max_tokens if max_tokens is not None else self._default_max_tokens
+        )
 
         system_instruction, gemini_contents = _convert_messages_for_gemini(messages)
         gemini_tools = _convert_tools_for_gemini(tools)
@@ -227,7 +244,9 @@ class GoogleStreamAdapter:
                             "type": "function",
                             "function": {
                                 "name": fc.name,
-                                "arguments": json.dumps(dict(fc.args)) if fc.args else "{}",
+                                "arguments": (
+                                    json.dumps(dict(fc.args)) if fc.args else "{}"
+                                ),
                             },
                         }
                         tool_calls.append(tc_dict)
@@ -252,10 +271,7 @@ class GoogleStreamAdapter:
                 }
 
         # Determine finish reason
-        if tool_calls:
-            finish_reason = "tool_calls"
-        else:
-            finish_reason = "stop"
+        finish_reason = "tool_calls" if tool_calls else "stop"
 
         yield StreamEvent(
             event_type="done",

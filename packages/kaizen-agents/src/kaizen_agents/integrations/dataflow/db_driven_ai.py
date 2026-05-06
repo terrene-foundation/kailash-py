@@ -12,10 +12,10 @@ Key Features:
 """
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
-from kaizen_agents.integrations.dataflow.base import DataFlowAwareAgent
 from kaizen.signatures.core import InputField, OutputField, Signature
+from kaizen_agents.integrations.dataflow.base import DataFlowAwareAgent
 
 # ============================================================================
 # Signatures
@@ -103,7 +103,7 @@ class DBTrainingPipeline(DataFlowAwareAgent):
         >>> print(f"Model ID: {result['model_id']}, Accuracy: {result['accuracy']}")
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """
         Initialize training pipeline.
 
@@ -118,7 +118,7 @@ class DBTrainingPipeline(DataFlowAwareAgent):
         self,
         table: str,
         model_objective: str,
-        training_filter: Optional[dict] = None,
+        training_filter: dict | None = None,
         validation_split: float = 0.2,
     ) -> dict:
         """
@@ -192,8 +192,8 @@ class DBTrainingPipeline(DataFlowAwareAgent):
         }
 
     def _extract_features(
-        self, data: List[dict], feature_columns: List[str]
-    ) -> List[List[Any]]:
+        self, data: list[dict], feature_columns: list[str]
+    ) -> list[list[Any]]:
         """Extract feature columns from raw data."""
         features = []
         for record in data:
@@ -201,11 +201,11 @@ class DBTrainingPipeline(DataFlowAwareAgent):
             features.append(feature_row)
         return features
 
-    def _extract_target(self, data: List[dict], target_column: str) -> List[Any]:
+    def _extract_target(self, data: list[dict], target_column: str) -> list[Any]:
         """Extract target column from raw data."""
         return [record.get(target_column) for record in data]
 
-    def _train_model(self, features: List[List[Any]], target: List[Any], config: dict):
+    def _train_model(self, features: list[list[Any]], target: list[Any], config: dict):
         """
         Train model (simplified mock implementation).
 
@@ -215,8 +215,8 @@ class DBTrainingPipeline(DataFlowAwareAgent):
         # Mock model for testing
         @dataclass
         class MockModel:
-            features: List[List[Any]]
-            target: List[Any]
+            features: list[list[Any]]
+            target: list[Any]
             config: dict
             accuracy: float = 0.85
 
@@ -287,7 +287,7 @@ class InferencePipeline(DataFlowAwareAgent):
         ...       f"Confidence: {prediction['confidence']}")
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """
         Initialize inference pipeline.
 
@@ -412,7 +412,7 @@ class PipelineOrchestrator(DataFlowAwareAgent):
         ...       f"Steps: {result['steps_executed']}")
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """
         Initialize pipeline orchestrator.
 
@@ -423,7 +423,7 @@ class PipelineOrchestrator(DataFlowAwareAgent):
         super().__init__(config, signature=PipelineOrchestrationSignature(), db=db)
 
     def create_pipeline(
-        self, pipeline_name: str, data_sources: List[str], objective: str
+        self, pipeline_name: str, data_sources: list[str], objective: str
     ) -> dict:
         """
         Create and execute automated data-AI pipeline.
@@ -481,7 +481,7 @@ class PipelineOrchestrator(DataFlowAwareAgent):
             "metrics": metrics,
         }
 
-    def _execute_pipeline(self, execution_plan: List[dict]) -> dict:
+    def _execute_pipeline(self, execution_plan: list[dict]) -> dict:
         """
         Execute pipeline steps in order.
 

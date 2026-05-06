@@ -23,7 +23,6 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 
-
 # JSON schema for LLM-based context selection
 CONTEXT_SELECTION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -39,7 +38,8 @@ CONTEXT_SELECTION_SCHEMA: dict[str, Any] = {
         "reasoning": {
             "type": "string",
             "description": (
-                "Brief explanation of why these keys were selected " "and why others were excluded."
+                "Brief explanation of why these keys were selected "
+                "and why others were excluded."
             ),
         },
     },

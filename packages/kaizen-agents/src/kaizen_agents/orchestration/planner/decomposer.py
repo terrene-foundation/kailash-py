@@ -76,7 +76,9 @@ DECOMPOSITION_SCHEMA: dict[str, Any] = {
                     "depends_on": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": ("Zero-based indices of subtasks that must complete first."),
+                        "description": (
+                            "Zero-based indices of subtasks that must complete first."
+                        ),
                     },
                     "output_keys": {
                         "type": "array",
@@ -105,7 +107,9 @@ def _build_system_prompt(envelope: ConstraintEnvelope) -> str:
     """Build the system prompt for the decomposer, incorporating envelope constraints."""
     budget_info = ""
     if envelope.financial is not None:
-        budget_info += f"\n- Financial budget limit: ${envelope.financial.max_spend_usd}"
+        budget_info += (
+            f"\n- Financial budget limit: ${envelope.financial.max_spend_usd}"
+        )
 
     blocked_ops = envelope.operational.blocked_actions
     if blocked_ops:
@@ -261,7 +265,9 @@ class TaskDecomposer:
         """
         raw_subtasks = raw.get("subtasks")
         if not isinstance(raw_subtasks, list):
-            raise ValueError(f"Expected 'subtasks' to be a list, got {type(raw_subtasks).__name__}")
+            raise ValueError(
+                f"Expected 'subtasks' to be a list, got {type(raw_subtasks).__name__}"
+            )
 
         if len(raw_subtasks) == 0:
             raise ValueError("Decomposition produced zero subtasks")
@@ -271,11 +277,15 @@ class TaskDecomposer:
 
         for idx, item in enumerate(raw_subtasks):
             if not isinstance(item, dict):
-                raise ValueError(f"Subtask at index {idx} is not a dict: {type(item).__name__}")
+                raise ValueError(
+                    f"Subtask at index {idx} is not a dict: {type(item).__name__}"
+                )
 
             description = item.get("description", "")
             if not description or not isinstance(description, str):
-                raise ValueError(f"Subtask at index {idx} has invalid or empty description")
+                raise ValueError(
+                    f"Subtask at index {idx} has invalid or empty description"
+                )
 
             complexity = item.get("estimated_complexity", 3)
             if not isinstance(complexity, int) or not (1 <= complexity <= 5):
@@ -288,7 +298,11 @@ class TaskDecomposer:
             # Validate dependency indices are in range and don't self-reference
             valid_deps = []
             for dep_idx in depends_on:
-                if isinstance(dep_idx, int) and 0 <= dep_idx < num_subtasks and dep_idx != idx:
+                if (
+                    isinstance(dep_idx, int)
+                    and 0 <= dep_idx < num_subtasks
+                    and dep_idx != idx
+                ):
                     valid_deps.append(dep_idx)
 
             capabilities = item.get("required_capabilities", [])

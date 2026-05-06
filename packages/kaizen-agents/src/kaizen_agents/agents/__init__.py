@@ -45,7 +45,6 @@ from kaizen_agents.agents.multi_modal.transcription_agent import (
 from kaizen_agents.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
 
 # Registry functions for agent type registration and discovery
-from kaizen_agents.agents.registry import register_agent_type  # Backward compatibility alias
 from kaizen_agents.agents.registry import (
     create_agent_from_type,
     get_agent_type_registration,
@@ -56,8 +55,9 @@ from kaizen_agents.agents.registry import (
     list_agent_type_names,
     list_agent_types,
     register_agent,
+    register_agent_type,
     unregister_agent_type,
-)
+)  # Backward compatibility alias
 from kaizen_agents.agents.specialized.batch_processing import BatchProcessingAgent
 from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
 from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent

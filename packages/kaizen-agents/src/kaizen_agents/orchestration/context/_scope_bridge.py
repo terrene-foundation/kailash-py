@@ -61,7 +61,9 @@ def _parse_classification(clearance: str) -> DataClassification:
     classification = _CLASSIFICATION_MAP.get(normalized)
     if classification is None:
         valid_keys = ", ".join(sorted(_CLASSIFICATION_MAP.keys()))
-        raise ValueError(f"Unknown classification '{clearance}'. " f"Valid values: {valid_keys}")
+        raise ValueError(
+            f"Unknown classification '{clearance}'. " f"Valid values: {valid_keys}"
+        )
     return classification
 
 
@@ -114,7 +116,8 @@ class ScopeBridge:
         """
         if not isinstance(root_scope, ContextScope):
             raise TypeError(
-                f"root_scope must be a ContextScope instance, " f"got {type(root_scope).__name__}"
+                f"root_scope must be a ContextScope instance, "
+                f"got {type(root_scope).__name__}"
             )
         self._root = root_scope
 
@@ -206,7 +209,9 @@ class ScopeBridge:
         )
 
         # Parse clearance if provided
-        effective_clearance = _parse_classification(clearance) if clearance is not None else None
+        effective_clearance = (
+            _parse_classification(clearance) if clearance is not None else None
+        )
 
         child = self._root.create_child(
             owner_id=child_owner_id,

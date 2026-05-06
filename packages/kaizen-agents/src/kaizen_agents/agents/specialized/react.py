@@ -30,7 +30,7 @@ Environment variable support:
 import os
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -75,7 +75,7 @@ class ReActConfig:
     enable_parallel_tools: bool = False
     timeout: int = 30
     max_retries: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ReActSignature(Signature):
@@ -179,19 +179,19 @@ class ReActAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_cycles: Optional[int] = None,
-        confidence_threshold: Optional[float] = None,
-        mcp_discovery_enabled: Optional[bool] = None,
-        enable_parallel_tools: Optional[bool] = None,
-        timeout: Optional[int] = None,
-        max_retries: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[ReActConfig] = None,
-        mcp_servers: Optional[List[Dict[str, Any]]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_cycles: int | None = None,
+        confidence_threshold: float | None = None,
+        mcp_discovery_enabled: bool | None = None,
+        enable_parallel_tools: bool | None = None,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: ReActConfig | None = None,
+        mcp_servers: list[dict[str, Any]] | None = None,
         **kwargs,
     ):
         """
@@ -272,7 +272,7 @@ class ReActAgent(BaseAgent):
         # during workflow generation (WorkflowGenerator calls it automatically).
         # No sync stub needed — the async BaseAgent method is the real implementation.
 
-    def _check_convergence(self, result: Dict[str, Any]) -> bool:
+    def _check_convergence(self, result: dict[str, Any]) -> bool:
         """
         Check if ReAct cycle should stop (convergence detection).
 
@@ -354,7 +354,7 @@ class ReActAgent(BaseAgent):
         # When no clear signals, assume converged to prevent infinite loops
         return True
 
-    def run(self, task: str, context: str = "", **kwargs) -> Dict[str, Any]:
+    def run(self, task: str, context: str = "", **kwargs) -> dict[str, Any]:
         """
         Universal execution method for ReAct agent.
 
@@ -420,7 +420,7 @@ class ReActAgent(BaseAgent):
 
 
 # Convenience function for quick usage
-def solve(task: str, **kwargs) -> Dict[str, Any]:
+def solve(task: str, **kwargs) -> dict[str, Any]:
     """
     Quick one-liner for solving tasks without creating an agent instance.
 

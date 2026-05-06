@@ -6,7 +6,7 @@ to engage in structured debates and reach consensus decisions.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -23,11 +23,11 @@ class DebateWorkflow:
 
     def __init__(
         self,
-        agents: List[Any],
+        agents: list[Any],
         topic: str,
         rounds: int = 3,
         decision_criteria: str = "evidence-based consensus",
-        kaizen_instance: Optional[Any] = None,
+        kaizen_instance: Any | None = None,
     ):
         """
         Initialize debate workflow.
@@ -53,7 +53,7 @@ class DebateWorkflow:
             f"Initialized debate workflow: '{topic}' with {len(agents)} agents, {rounds} rounds"
         )
 
-    def _create_coordination_flow(self) -> Dict[str, Any]:
+    def _create_coordination_flow(self) -> dict[str, Any]:
         """Create the coordination flow structure for debate."""
         return {
             "pattern": "debate",
@@ -156,7 +156,7 @@ class DebateWorkflow:
         logger.info(f"Built debate workflow with {len(self.agents)} agents")
         return workflow
 
-    def extract_debate_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_debate_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """
         Extract structured debate results from workflow execution results.
 
@@ -224,7 +224,7 @@ class DebateWorkflow:
 
         return debate_results
 
-    def execute(self, inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute the multi-agent debate workflow with coordination.
 
@@ -302,8 +302,8 @@ class DebateWorkflow:
             }
 
     async def execute_async(
-        self, inputs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, inputs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Execute the multi-agent debate workflow asynchronously with coordination.
 
@@ -391,8 +391,8 @@ class DebateWorkflow:
             }
 
     def _structure_debate_rounds(
-        self, debate_results: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, debate_results: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Structure debate results into round format."""
         rounds = []
 
@@ -434,7 +434,7 @@ class DebateWorkflow:
 
         return rounds
 
-    def _calculate_consensus_level(self, debate_results: Dict[str, Any]) -> float:
+    def _calculate_consensus_level(self, debate_results: dict[str, Any]) -> float:
         """Calculate consensus level based on debate results."""
         # Simple heuristic: if we have a final conclusion, assume moderate consensus
         if debate_results.get("final_conclusion"):
@@ -462,13 +462,13 @@ class EnterpriseDebateWorkflow(DebateWorkflow):
 
     def __init__(
         self,
-        agents: List[Any],
+        agents: list[Any],
         topic: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         rounds: int = 3,
         decision_criteria: str = "strategic_consensus_with_risk_mitigation",
-        enterprise_features: Optional[Dict[str, Any]] = None,
-        kaizen_instance: Optional[Any] = None,
+        enterprise_features: dict[str, Any] | None = None,
+        kaizen_instance: Any | None = None,
     ):
         """
         Initialize enterprise debate workflow.
@@ -493,8 +493,8 @@ class EnterpriseDebateWorkflow(DebateWorkflow):
         )
 
     def extract_enterprise_decision_results(
-        self, results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, results: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Extract enterprise decision results with audit trails and compliance validation.
 

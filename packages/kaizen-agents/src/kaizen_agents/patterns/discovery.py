@@ -6,7 +6,7 @@ Provides user-filtered agent discovery and skill metadata for UI integration.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .registry import AgentRegistry
 from .runtime import AgentMetadata, AgentStatus
@@ -16,15 +16,15 @@ from .runtime import AgentMetadata, AgentStatus
 class AccessConstraints:
     """Constraints on agent access for a user."""
 
-    max_daily_invocations: Optional[int] = None
-    max_tokens_per_session: Optional[int] = None
-    max_cost_per_session_usd: Optional[float] = None
-    allowed_tools: Optional[List[str]] = None
-    blocked_tools: Optional[List[str]] = None
-    time_window_start: Optional[str] = None  # ISO time (e.g., "09:00:00")
-    time_window_end: Optional[str] = None  # ISO time (e.g., "17:00:00")
+    max_daily_invocations: int | None = None
+    max_tokens_per_session: int | None = None
+    max_cost_per_session_usd: float | None = None
+    allowed_tools: list[str] | None = None
+    blocked_tools: list[str] | None = None
+    time_window_start: str | None = None  # ISO time (e.g., "09:00:00")
+    time_window_end: str | None = None  # ISO time (e.g., "17:00:00")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "max_daily_invocations": self.max_daily_invocations,
@@ -43,11 +43,11 @@ class AccessMetadata:
 
     permission_level: str = "execute"  # execute, view, admin
     constraints: AccessConstraints = field(default_factory=AccessConstraints)
-    granted_by: Optional[str] = None  # User/role that granted access
-    granted_at: Optional[str] = None  # ISO timestamp
-    expires_at: Optional[str] = None  # ISO timestamp
+    granted_by: str | None = None  # User/role that granted access
+    granted_at: str | None = None  # ISO timestamp
+    expires_at: str | None = None  # ISO timestamp
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "permission_level": self.permission_level,
@@ -87,7 +87,7 @@ class AgentWithAccess:
         """Get agent instance."""
         return self.metadata.agent
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "id": self.metadata.agent_id,
@@ -99,7 +99,7 @@ class AgentWithAccess:
             "_access": self.access.to_dict(),
         }
 
-    def _extract_capabilities(self) -> List[str]:
+    def _extract_capabilities(self) -> list[str]:
         """Extract capabilities from A2A card."""
         if not self.metadata.a2a_card:
             return []
@@ -133,17 +133,17 @@ class AgentSkillMetadata:
     id: str
     name: str
     description: str
-    capabilities: List[str] = field(default_factory=list)
-    suggested_prompts: List[str] = field(default_factory=list)
-    input_schema: Optional[Dict[str, Any]] = None
-    output_types: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
+    suggested_prompts: list[str] = field(default_factory=list)
+    input_schema: dict[str, Any] | None = None
+    output_types: list[str] = field(default_factory=list)
     avg_execution_time_seconds: float = 0.0
     avg_cost_cents: float = 0.0
-    tags: List[str] = field(default_factory=list)
-    icon: Optional[str] = None
-    category: Optional[str] = None
+    tags: list[str] = field(default_factory=list)
+    icon: str | None = None
+    category: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "id": self.id,
@@ -164,11 +164,11 @@ class AgentSkillMetadata:
     def from_agent(
         cls,
         agent: Any,
-        agent_id: Optional[str] = None,
-        suggested_prompts: Optional[List[str]] = None,
+        agent_id: str | None = None,
+        suggested_prompts: list[str] | None = None,
         avg_execution_time: float = 0.0,
         avg_cost_cents: float = 0.0,
-    ) -> "AgentSkillMetadata":
+    ) -> AgentSkillMetadata:
         """
         Create skill metadata from an agent instance.
 
@@ -234,7 +234,7 @@ class AgentSkillMetadata:
         cls,
         definition: Any,
         specialist_name: str,
-    ) -> "AgentSkillMetadata":
+    ) -> AgentSkillMetadata:
         """
         Create skill metadata from a SpecialistDefinition.
 
@@ -262,7 +262,7 @@ class AgentSkillMetadata:
         )
 
     @staticmethod
-    def _extract_input_schema(signature: Any) -> Optional[Dict[str, Any]]:
+    def _extract_input_schema(signature: Any) -> dict[str, Any] | None:
         """Extract JSON schema from signature input fields."""
         schema = {
             "type": "object",
@@ -297,7 +297,7 @@ class AgentSkillMetadata:
             return None
 
     @staticmethod
-    def _extract_output_types(signature: Any) -> List[str]:
+    def _extract_output_types(signature: Any) -> list[str]:
         """Extract output types from signature."""
         output_types = []
 
@@ -331,7 +331,7 @@ class UserFilteredAgentDiscovery:
     def __init__(
         self,
         registry: AgentRegistry,
-        permission_checker: Optional[Any] = None,
+        permission_checker: Any | None = None,
     ):
         """
         Initialize discovery extension.
@@ -347,9 +347,9 @@ class UserFilteredAgentDiscovery:
         self,
         user_id: str,
         organization_id: str,
-        status_filter: Optional[AgentStatus] = AgentStatus.ACTIVE,
-        capability_filter: Optional[str] = None,
-    ) -> List[AgentWithAccess]:
+        status_filter: AgentStatus | None = AgentStatus.ACTIVE,
+        capability_filter: str | None = None,
+    ) -> list[AgentWithAccess]:
         """
         Find agents accessible to a specific user.
 
@@ -446,7 +446,7 @@ class UserFilteredAgentDiscovery:
     async def get_skill_metadata(
         self,
         agent_id: str,
-    ) -> Optional[AgentSkillMetadata]:
+    ) -> AgentSkillMetadata | None:
         """
         Get skill metadata for an agent.
 
@@ -467,9 +467,9 @@ class UserFilteredAgentDiscovery:
 
     async def list_skill_metadata(
         self,
-        user_id: Optional[str] = None,
-        organization_id: Optional[str] = None,
-    ) -> List[AgentSkillMetadata]:
+        user_id: str | None = None,
+        organization_id: str | None = None,
+    ) -> list[AgentSkillMetadata]:
         """
         List skill metadata for all accessible agents.
 
