@@ -44,18 +44,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +56,10 @@ __all__ = [
     "compute_workflow_fingerprint",
     "build_checkpoint_key",
     "redact_event_for_persistence",
+    "encode_checkpoint_payload",
+    "decode_checkpoint_payload",
+    "check_shape_drift_or_raise",
+    "resolve_tenant_id",
 ]
 
 
