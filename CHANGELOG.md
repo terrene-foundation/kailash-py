@@ -7,37 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed (issue #803 — `MultiFactorAuthNode` test/production drift)
+## [2.13.5] - 2026-05-06
 
-- **Verify-failure semantic** — invalid TOTP / backup codes now return
-  `success=False` in lockstep with `verified=False`. Previously returned
-  `success=True, verified=False`, conflating "operation completed" with
-  "verification succeeded" and risking callers gating access on `success`
-  alone. Both sync (`run`) and async (`async_run`) paths fixed; same change
-  applies to the bad-pending-verification, bad-backup-code, and bad-method
-  branches.
-- **Verify-path rate limiting** — the `_check_rate_limit` dispatch on
-  `action="verify"` was commented out, leaving the verify path open to
-  brute-force probing. Now enforced; rate-limited responses include
-  `rate_limited=True` and `too_many_attempts=True`.
-- **Empty / whitespace `user_id` rejected** — `run` and `async_run` return a
-  typed `success=False, error="user_id is required..."` instead of silently
-  creating MFA state under the empty-string key.
-- **`action="reset"` implemented** — previously fell through to the
-  unknown-action branch. Now clears existing MFA state and returns a fresh
-  setup payload (new TOTP secret + backup codes).
-- **Response-shape `user_id` echo** — verify, status, and disable responses
-  now include `user_id` for audit / correlation consumers.
-- **Status `enabled_methods` alias** — status responses now expose
-  `enabled_methods` (alias of `enrolled_methods`) so callers built against
-  either contract resolve.
-- **Disable `disabled_methods`** — `_disable_all_mfa` and `_disable_method`
-  now report which methods were removed.
-- **`print()` removed from `_setup_totp`** — replaced with `logger.debug` and
-  field-only metadata, per `rules/observability.md` Rule 1.
+### Security
 
-Locked by `tests/regression/test_issue_803_mfa_response_contracts.py`
-(9 tests). Closes #803.
+- **HIGH:** `MultiFactorAuthNode` verify-failure path now returns `success=False` in lockstep with `verified=False` (previously returned `success=True`, allowing callers gating on `success` alone to grant access on invalid TOTP codes). Fixed in both sync and async dispatch paths. (#803, #848)
+- **HIGH:** Re-enabled commented-out rate-limit dispatch on `action="verify"` — brute-force protection on TOTP/SMS/email/backup-code verify is now functional. (#803, #848)
+
+### Fixed
+
+- `MultiFactorAuthNode` responses now echo `user_id` on verify, status, and disable. (#803)
+- `status` action returns both `enrolled_methods` and `enabled_methods` aliases. (#803)
+- `disable` action returns `disabled_methods: list[str]`. (#803)
+- `action="reset"` implemented (clears state + re-runs setup). (#803)
+- Empty/whitespace `user_id` now rejected with typed `user_id is required` error. (#803)
+- `_setup_totp` debug `print` replaced with `logger.debug` per observability rules. (#803)
 
 ## [2.13.4] — 2026-05-03 — issue #781 hygiene release (T4 + T5)
 
