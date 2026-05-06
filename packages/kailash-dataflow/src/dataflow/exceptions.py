@@ -179,3 +179,35 @@ class DataFlowValidationWarning(UserWarning):
     """Warning category for DataFlow validation issues."""
 
     pass
+
+
+class AppendOnlyViolationError(DataFlowError):
+    """Raised when a mutation is attempted on a model declared
+    ``@db.model(append_only=True)``.
+
+    Append-only models represent immutable event-log surfaces — Update,
+    Delete, Upsert, BulkUpdate, BulkDelete, and BulkUpsert operations are
+    rejected by the framework before any SQL is issued. Only Create,
+    BulkCreate, Read, List, and Count are permitted.
+
+    The check fires at TWO surfaces:
+
+    1. ``db.express.update`` / ``.delete`` / ``.upsert`` / ``.bulk_update``
+       / ``.bulk_delete`` / ``.bulk_upsert`` — direct call paths raise
+       ``AppendOnlyViolationError`` with an actionable message before
+       any side effect.
+    2. ``WorkflowBuilder.add_node("<Model>UpdateNode", ...)`` (or any
+       other mutation node type) — the corresponding node classes are
+       NOT generated for append-only models, so the workflow builder
+       sees an unknown node type AND DataFlow registers a stub at the
+       expected name that raises ``AppendOnlyViolationError`` at
+       construction time. Either path produces a typed, grep-able
+       rejection.
+
+    Remove ``append_only=True`` from the ``@db.model(...)`` decorator
+    call to permit mutations.
+
+    See issue #839.
+    """
+
+    pass

@@ -234,6 +234,50 @@ def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict
     return data_dict
 
 
+def _make_append_only_forbidden_node(model_name: str, operation: str) -> Type[Node]:
+    """Build a node class that rejects append-only mutation attempts.
+
+    Issue #839: when ``@db.model(append_only=True)`` is declared, the
+    Update / Delete / Upsert / BulkUpdate / BulkDelete / BulkUpsert
+    surfaces are replaced with stubs that raise
+    :class:`AppendOnlyViolationError` at construction time. This makes
+    ``WorkflowBuilder.add_node("<Model>UpdateNode", ...)`` fail loudly
+    with a typed, grep-able error AT add-node time — the rejection
+    comes from the framework, not from application code monkey-patching
+    ``WorkflowBuilder``.
+
+    The class name carries the ``AppendOnlyForbiddenNode`` suffix in
+    ``__qualname__`` so post-incident audits can grep for the pattern,
+    but is registered under the original ``<Model><Op>Node`` alias so
+    the user-facing error message references the name the caller used.
+    """
+    from dataflow.exceptions import AppendOnlyViolationError
+
+    op_human = operation.replace("_", " ").capitalize()
+
+    class AppendOnlyForbiddenNode(Node):
+        """Stub registered for forbidden mutations on append-only models.
+
+        Raises :class:`AppendOnlyViolationError` at construction time so
+        every workflow path that attempts to add the node fails before
+        any side effect.
+        """
+
+        def __init__(self, **kwargs):
+            raise AppendOnlyViolationError(
+                f"{op_human} rejected on append-only model "
+                f"'{model_name}'. Models declared with "
+                f"@db.model(append_only=True) only accept "
+                f"Create / BulkCreate / Read / List / Count. Remove "
+                f"`append_only=True` from the @db.model() decorator "
+                f"to permit mutations. See issue #839."
+            )
+
+    AppendOnlyForbiddenNode.__name__ = f"{model_name}{operation.capitalize()}Forbidden"
+    AppendOnlyForbiddenNode.__qualname__ = AppendOnlyForbiddenNode.__name__
+    return AppendOnlyForbiddenNode
+
+
 class NodeGenerator:
     """Generates workflow nodes for DataFlow models."""
 
@@ -318,8 +362,22 @@ class NodeGenerator:
         # Fallback to str for unknown types
         return str
 
-    def generate_crud_nodes(self, model_name: str, fields: Dict[str, Any]):
-        """Generate CRUD workflow nodes for a model."""
+    def generate_crud_nodes(
+        self,
+        model_name: str,
+        fields: Dict[str, Any],
+        *,
+        append_only: bool = False,
+    ):
+        """Generate CRUD workflow nodes for a model.
+
+        Issue #839: when ``append_only=True``, Update / Delete / Upsert
+        are NOT generated as functional nodes; instead an
+        ``AppendOnlyForbiddenNode`` stub is registered at each name so
+        ``WorkflowBuilder.add_node("<Model>UpdateNode", ...)`` raises
+        ``AppendOnlyViolationError`` at construction time.
+        """
+        # Read-side surfaces are always generated.
         nodes = {
             f"{model_name}CreateNode": self._create_node_class(
                 model_name, "create", fields
@@ -327,24 +385,24 @@ class NodeGenerator:
             f"{model_name}ReadNode": self._create_node_class(
                 model_name, "read", fields
             ),
-            f"{model_name}UpdateNode": self._create_node_class(
-                model_name, "update", fields
-            ),
-            f"{model_name}DeleteNode": self._create_node_class(
-                model_name, "delete", fields
-            ),
             f"{model_name}ListNode": self._create_node_class(
                 model_name, "list", fields
             ),
-            # NEW v0.8.0: Add UpsertNode as 6th CRUD operation (single-record upsert)
-            f"{model_name}UpsertNode": self._create_node_class(
-                model_name, "upsert", fields
-            ),
-            # NEW v0.8.1: Add CountNode as 7th CRUD operation (efficient count queries)
+            # NEW v0.8.1: CountNode (efficient count queries)
             f"{model_name}CountNode": self._create_node_class(
                 model_name, "count", fields
             ),
         }
+
+        # Mutation-side surfaces — generated normally OR replaced with
+        # AppendOnlyForbiddenNode stubs when append_only=True.
+        mutation_ops = ("update", "delete", "upsert")
+        for op in mutation_ops:
+            node_name = f"{model_name}{op.capitalize()}Node"
+            if append_only:
+                nodes[node_name] = _make_append_only_forbidden_node(model_name, op)
+            else:
+                nodes[node_name] = self._create_node_class(model_name, op, fields)
 
         # Register nodes with Kailash's NodeRegistry system
         for node_name, node_class in nodes.items():
@@ -356,22 +414,33 @@ class NodeGenerator:
 
         return nodes
 
-    def generate_bulk_nodes(self, model_name: str, fields: Dict[str, Any]):
-        """Generate bulk operation nodes for a model."""
+    def generate_bulk_nodes(
+        self,
+        model_name: str,
+        fields: Dict[str, Any],
+        *,
+        append_only: bool = False,
+    ):
+        """Generate bulk operation nodes for a model.
+
+        Issue #839: when ``append_only=True``, BulkUpdate / BulkDelete /
+        BulkUpsert are replaced with ``AppendOnlyForbiddenNode`` stubs.
+        Only ``BulkCreate`` is functional on append-only models.
+        """
         nodes = {
             f"{model_name}BulkCreateNode": self._create_node_class(
                 model_name, "bulk_create", fields
             ),
-            f"{model_name}BulkUpdateNode": self._create_node_class(
-                model_name, "bulk_update", fields
-            ),
-            f"{model_name}BulkDeleteNode": self._create_node_class(
-                model_name, "bulk_delete", fields
-            ),
-            f"{model_name}BulkUpsertNode": self._create_node_class(
-                model_name, "bulk_upsert", fields
-            ),
         }
+        bulk_mutation_ops = ("bulk_update", "bulk_delete", "bulk_upsert")
+        for op in bulk_mutation_ops:
+            # bulk_update -> BulkUpdateNode (not Bulk_updateNode)
+            camel = "".join(part.capitalize() for part in op.split("_"))
+            node_name = f"{model_name}{camel}Node"
+            if append_only:
+                nodes[node_name] = _make_append_only_forbidden_node(model_name, op)
+            else:
+                nodes[node_name] = self._create_node_class(model_name, op, fields)
 
         # Register nodes with Kailash's NodeRegistry system
         for node_name, node_class in nodes.items():

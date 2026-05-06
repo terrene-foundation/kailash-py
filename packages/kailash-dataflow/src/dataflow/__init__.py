@@ -47,6 +47,7 @@ from .configuration import (
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
 from .core.exceptions import DDLFailedError
+from .exceptions import AppendOnlyViolationError, DataFlowError
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import (
@@ -177,6 +178,9 @@ __all__ = [
     "get_field_classification",
     # Issue #696: Engine-layer exceptions for auto_migrate fail-fast
     "DDLFailedError",
+    # Issue #839: append-only event-log models
+    "AppendOnlyViolationError",
+    "DataFlowError",
 ]
 
 # Backward compatibility note:

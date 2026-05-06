@@ -1810,7 +1810,12 @@ class DataFlow(DataFlowEventMixin):
         # mutated) class; we propagate that back to the caller.
         return self.model(model_cls)
 
-    def model(self, cls: Type) -> Type:
+    def model(
+        self,
+        cls: Optional[Type] = None,
+        *,
+        append_only: bool = False,
+    ) -> Any:
         """Decorator to register a model with DataFlow.
 
         This decorator:
@@ -1819,12 +1824,55 @@ class DataFlow(DataFlowEventMixin):
         3. Sets up database table mapping
         4. Configures indexes and constraints
 
-        Example:
-            @db.model
-            class User:
-                name: str
-                email: str
-                active: bool = True
+        Args:
+            cls: Model class (when used as ``@db.model`` without parens).
+            append_only: When ``True``, declare the model as an immutable
+                event-log surface. DataFlow does NOT generate
+                ``Update`` / ``Delete`` / ``Upsert`` / ``BulkUpdate`` /
+                ``BulkDelete`` / ``BulkUpsert`` nodes for the model;
+                ``db.express`` mutation methods (``update``, ``delete``,
+                ``upsert``, ``bulk_update``, ``bulk_delete``,
+                ``bulk_upsert``) raise
+                :class:`AppendOnlyViolationError` before any SQL is
+                issued. ``Create``, ``BulkCreate``, ``Read``, ``List``,
+                and ``Count`` continue to work normally. See issue #839.
+
+        Examples:
+            Plain registration::
+
+                @db.model
+                class User:
+                    name: str
+                    email: str
+                    active: bool = True
+
+            Append-only event log::
+
+                @db.model(append_only=True)
+                class EventLog:
+                    event_type: str
+                    payload: str
+        """
+        # Support both ``@db.model`` and ``@db.model(append_only=True)``
+        # call shapes. When the decorator is applied with parens (kwargs
+        # supplied, ``cls is None``), return an inner function that
+        # captures the kwargs and calls back with the actual class.
+        if cls is None:
+
+            def _decorator(inner_cls: Type) -> Type:
+                return self._register_model_internal(inner_cls, append_only=append_only)
+
+            return _decorator
+
+        return self._register_model_internal(cls, append_only=append_only)
+
+    def _register_model_internal(self, cls: Type, *, append_only: bool = False) -> Type:
+        """Canonical model-registration body.
+
+        Both ``@db.model`` (no parens) and ``@db.model(append_only=True)``
+        (with kwargs) reach this method via ``model``. Keeping the body
+        in a single helper avoids duplicating the ~200 lines of
+        registration logic across the two decorator shapes.
         """
         # Validate model
         model_name = cls.__name__
@@ -1877,13 +1925,16 @@ class DataFlow(DataFlowEventMixin):
         if not table_name:
             table_name = self._class_name_to_table_name(model_name)
 
-        # Register model - store both class and structured info for compatibility
+        # Register model - store both class and structured info for compatibility.
+        # Issue #839: ``append_only`` is a model-level immutability flag that
+        # gates mutation-node generation AND express mutation methods.
         model_info = {
             "class": cls,
             "fields": fields,
             "config": config,
             "table_name": table_name,
             "registered_at": datetime.now(),
+            "append_only": append_only,
         }
 
         self._models[model_name] = model_info  # Store structured info
@@ -1921,9 +1972,15 @@ class DataFlow(DataFlowEventMixin):
         # This enables @db.model to work in async fixtures, FastAPI lifespan events, etc.
         self._pending_relationship_detection.add(model_name)
 
-        # Generate workflow nodes (TDD-aware if in TDD mode)
-        self._generate_crud_nodes(model_name, fields)
-        self._generate_bulk_nodes(model_name, fields)
+        # Generate workflow nodes (TDD-aware if in TDD mode).
+        # Issue #839: when ``append_only=True``, the bulk/CRUD generators
+        # skip Update/Delete/Upsert/Bulk* mutation surfaces AND register
+        # AppendOnlyForbiddenNode stubs at the same node names so
+        # ``WorkflowBuilder.add_node("<Model>UpdateNode", ...)`` raises
+        # ``AppendOnlyViolationError`` at construction time (loud
+        # rejection, no silent "unknown node type" string).
+        self._generate_crud_nodes(model_name, fields, append_only=append_only)
+        self._generate_bulk_nodes(model_name, fields, append_only=append_only)
 
         # Add DataFlow attributes via setattr (cls is a user-defined model class;
         # pyright cannot statically know it accepts these dynamic attrs).
@@ -1936,9 +1993,11 @@ class DataFlow(DataFlowEventMixin):
                 "model_name": model_name,
                 "fields": fields,
                 "registered_at": datetime.now(),
+                "append_only": append_only,
             },
         )
         setattr(cls, "_dataflow_config", getattr(cls, "__dataflow__", {}))
+        setattr(cls, "_dataflow_append_only", append_only)
 
         # TSG-103: Parse __validation__ dict into __field_validators__
         validation_dict = getattr(cls, "__validation__", None)
@@ -8593,11 +8652,27 @@ class DataFlow(DataFlowEventMixin):
         self._nodes["SchemaModificationNode"] = SchemaModificationNode
         self._nodes["MigrationNode"] = MigrationNode
 
-    def _generate_crud_nodes(self, model_name: str, fields: Dict[str, Any]):
-        """Generate CRUD nodes for a model."""
+    def _generate_crud_nodes(
+        self,
+        model_name: str,
+        fields: Dict[str, Any],
+        *,
+        append_only: bool = False,
+    ):
+        """Generate CRUD nodes for a model.
+
+        Issue #839: when ``append_only=True``, the generator emits
+        Create / Read / List / Count nodes AND registers
+        ``AppendOnlyForbiddenNode`` stubs at the Update / Delete /
+        Upsert names so the framework rejects mutation attempts at
+        ``WorkflowBuilder.add_node`` time with a typed
+        :class:`AppendOnlyViolationError`.
+        """
         # Delegate to node generator - it handles all storage in _nodes
         # NodeGenerator is TDD-aware and will use test connections if available
-        nodes = self._node_generator.generate_crud_nodes(model_name, fields)
+        nodes = self._node_generator.generate_crud_nodes(
+            model_name, fields, append_only=append_only
+        )
 
         # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
         if not nodes:
@@ -8618,11 +8693,24 @@ class DataFlow(DataFlowEventMixin):
                 f"Generated TDD-aware CRUD nodes for model {model_name} in test {self._test_context.test_id}"
             )
 
-    def _generate_bulk_nodes(self, model_name: str, fields: Dict[str, Any]):
-        """Generate bulk operation nodes for a model."""
+    def _generate_bulk_nodes(
+        self,
+        model_name: str,
+        fields: Dict[str, Any],
+        *,
+        append_only: bool = False,
+    ):
+        """Generate bulk operation nodes for a model.
+
+        Issue #839: when ``append_only=True``, the generator emits only
+        ``BulkCreate`` and registers ``AppendOnlyForbiddenNode`` stubs
+        at the BulkUpdate / BulkDelete / BulkUpsert names.
+        """
         # Delegate to node generator - it handles all storage in _nodes
         # NodeGenerator is TDD-aware and will use test connections if available
-        nodes = self._node_generator.generate_bulk_nodes(model_name, fields)
+        nodes = self._node_generator.generate_bulk_nodes(
+            model_name, fields, append_only=append_only
+        )
 
         # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
         if not nodes:
