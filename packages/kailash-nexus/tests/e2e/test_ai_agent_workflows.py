@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 import pytest
 import pytest_asyncio
 import websockets
+
 from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 
@@ -38,7 +39,20 @@ class TestAIAgentScenarios:
 
     @pytest_asyncio.fixture
     async def production_nexus(self):
-        """Create a production-like Nexus instance."""
+        """Create a production-like Nexus instance.
+
+        Configures Nexus in MCP WebSocket-only mode: ``enable_http_transport``
+        and ``enable_sse_transport`` are both False, which means the only
+        MCP transport bound on ``mcp_port`` is the always-on WebSocket
+        listener (provided by ``kailash_mcp.MCPServer`` with
+        ``transport="websocket"``). AI agents connect via
+        ``ws://localhost:<mcp_port>`` and dispatch JSON-RPC per the
+        MCP 2025-06-18 spec.
+
+        See ``packages/kailash-nexus/src/nexus/core.py::_initialize_mcp_server``
+        for the wiring — the WebSocket binding is unconditional regardless
+        of the HTTP/SSE flags, which only gate additional sub-transports.
+        """
         # Find free ports dynamically to avoid conflicts
         api_port = find_free_port(8890)
         mcp_port = find_free_port(api_port + 100)
@@ -48,7 +62,9 @@ class TestAIAgentScenarios:
             mcp_port=mcp_port,
             enable_auth=False,  # TODO: Test with auth in separate scenario
             enable_monitoring=True,
-            enable_http_transport=False,  # Use simple MCP server for WebSocket-only mode
+            # WebSocket-only mode: HTTP and SSE sub-transports off, but
+            # the base MCP WebSocket listener on mcp_port is always bound.
+            enable_http_transport=False,
             enable_sse_transport=False,
             enable_discovery=False,
             rate_limit_config={"default": 100, "burst": 200},
@@ -63,7 +79,7 @@ class TestAIAgentScenarios:
         server_thread = threading.Thread(target=app.start, daemon=True)
         server_thread.start()
 
-        # Wait for full initialization
+        # Wait for full initialization (HTTP gateway + MCP WebSocket bind)
         await asyncio.sleep(3)
 
         yield app
