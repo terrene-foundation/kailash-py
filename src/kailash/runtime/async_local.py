@@ -657,7 +657,7 @@ class AsyncLocalRuntime(LocalRuntime):
             and tracker is not None
         ):
             lock_key = run_id or ckpt_key
-            lock = self._checkpoint_locks.setdefault(lock_key, asyncio.Lock())
+            lock = self._get_or_create_checkpoint_lock(lock_key)
             async with lock:
                 blob = encode_checkpoint_payload(
                     workflow_fingerprint=wf_fp,

@@ -41,7 +41,7 @@ import logging
 import threading
 import time
 import warnings
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
@@ -105,6 +105,16 @@ from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
+
+# W1: bound for the per-run checkpoint-lock LRU.  Long-running runtime
+# instances (Nexus deployments, AsyncLocalRuntime singletons) accumulate
+# one ``asyncio.Lock`` per unique ``run_id`` / ``checkpoint_key``; the
+# LRU bound keeps the dict from growing without limit.  The bound is
+# generous because each entry is a single ``asyncio.Lock`` (≤200 bytes)
+# and active runs are promoted to most-recently-used on every access —
+# only stale runs (long-completed) are evicted.  Rule 7 (Bound In-Memory
+# Stores) of ``rules/infrastructure-sql.md`` mandates the bound.
+MAX_CHECKPOINT_LOCKS = 10_000
 
 # Allowlist of exception classes that can be referenced by name in retry config.
 # This replaces the unsafe eval() that was previously used to resolve exception names.
@@ -818,9 +828,17 @@ class LocalRuntime(
         # uncontended, BUT cycle/conditional paths can re-enter and
         # ``AsyncLocalRuntime`` (subclass) executes nodes concurrently.
         # The lock dict lives on the runtime so it survives the per-call
-        # boundary — a stale entry costs O(1) memory and is bounded by
-        # max_concurrent_workflows.
-        self._checkpoint_locks: Dict[str, asyncio.Lock] = {}
+        # boundary.
+        #
+        # Bounded LRU per ``rules/infrastructure-sql.md`` Rule 7
+        # (Bound In-Memory Stores).  Long-running runtime instances
+        # (Nexus deployments, AsyncLocalRuntime singletons) would
+        # otherwise leak one ``asyncio.Lock`` per unique run forever.
+        # An ``OrderedDict`` lets us evict the oldest entry once the
+        # bound is reached; ``move_to_end`` on access promotes the lock
+        # to most-recently-used so an active long-lived run is never
+        # evicted.
+        self._checkpoint_locks: "OrderedDict[str, asyncio.Lock]" = OrderedDict()
 
     # ------------------------------------------------------------------
     # W1: Durable execution — public hook API
@@ -842,6 +860,35 @@ class LocalRuntime(
         misbehaving subscriber MUST NOT take down workflow execution.
         """
         return self._hook_registry.register(callback)
+
+    def _get_or_create_checkpoint_lock(self, key: str) -> asyncio.Lock:
+        """Get or create the ``asyncio.Lock`` for ``key``, with LRU eviction.
+
+        Bounded LRU per ``rules/infrastructure-sql.md`` Rule 7 — long-running
+        runtime instances (Nexus deployments, AsyncLocalRuntime singletons)
+        would otherwise leak one Lock per unique run forever.  The bound is
+        :data:`MAX_CHECKPOINT_LOCKS` (10 000); on access an existing entry
+        is promoted to most-recently-used so an active run is never evicted
+        even after the bound is reached.
+
+        This accessor replaces the prior ``self._checkpoint_locks.setdefault(
+        key, asyncio.Lock())`` call sites in both LocalRuntime and
+        AsyncLocalRuntime.
+        """
+        lock = self._checkpoint_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._checkpoint_locks[key] = lock
+            # Drop oldest entries until we are back at or below the bound.
+            # ``OrderedDict.popitem(last=False)`` removes the FIFO head —
+            # the least-recently-used entry — in O(1).
+            while len(self._checkpoint_locks) > MAX_CHECKPOINT_LOCKS:
+                self._checkpoint_locks.popitem(last=False)
+        else:
+            # Promote on access so an active long-lived run never ages
+            # out under the bound.
+            self._checkpoint_locks.move_to_end(key)
+        return lock
 
     def _extract_secret_requirements(self, workflow: "Workflow") -> list:
         """Extract secret requirements from workflow nodes.
@@ -2709,7 +2756,7 @@ class LocalRuntime(
                     and execution_tracker is not None
                 ):
                     _lock_key = run_id or checkpoint_key
-                    _lock = self._checkpoint_locks.setdefault(_lock_key, asyncio.Lock())
+                    _lock = self._get_or_create_checkpoint_lock(_lock_key)
                     async with _lock:
                         _blob = encode_checkpoint_payload(
                             workflow_fingerprint=workflow_fingerprint or "",
