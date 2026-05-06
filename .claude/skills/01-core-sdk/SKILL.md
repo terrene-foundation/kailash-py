@@ -65,6 +65,11 @@ with LocalRuntime() as runtime:
 - **[runtime-progress](runtime-progress.md)** - ProgressRegistry for node progress tracking (contextvars, thread-safe callbacks, bounded deque)
 - **[runtime-watchdog](runtime-watchdog.md)** - EventLoopWatchdog for asyncio stall detection (heartbeat + thread, StallReport, task stack capture)
 
+### Recurring + Durable Execution
+
+- **`WorkflowScheduler`** (`kailash.runtime.scheduler`) — cron + interval + one-shot scheduling for recurring workflow execution; APScheduler-backed SQLite jobstore. See **[15-enterprise-infrastructure/scheduler-patterns](../15-enterprise-infrastructure/scheduler-patterns.md)**.
+- **`ExecutionTracker`** (`kailash.runtime.execution_tracker`) — per-node checkpoint primitive consumed by `DurableRequest` for resume-on-restart workflows. See **[15-enterprise-infrastructure/durability-patterns](../15-enterprise-infrastructure/durability-patterns.md)**.
+
 ## Key Concepts
 
 ### Canonical Node Pattern (4-Parameter)

@@ -1,11 +1,28 @@
 ---
 name: enterprise-infrastructure
-description: "Kailash enterprise infra: progressive infrastructure, dialect-portable SQL, store factory, task queues, worker registry, idempotency."
+description: "Kailash enterprise infra: progressive levels, dialect SQL, scheduler (cron/interval), durable execution + checkpointing, task queues, worker registry, idempotency."
 ---
 
 # Enterprise Infrastructure - Skills
 
-Comprehensive guide to Kailash's progressive infrastructure model for scaling from single-process SQLite to multi-worker PostgreSQL/MySQL deployments.
+Comprehensive guide to Kailash's progressive infrastructure model for scaling from single-process SQLite to multi-worker PostgreSQL/MySQL deployments, plus the scheduler and durable-execution primitives that ship in `kailash.runtime`, `kailash.middleware.gateway`, and `kailash.servers`.
+
+## Primitive Inventory
+
+Read this first before grepping the source tree. Every primitive listed below ships in the `kailash` package today.
+
+| Primitive                                            | Module                                                                                      | Purpose                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `WorkflowScheduler`                                  | `kailash.runtime.scheduler`                                                                 | Cron + interval + one-shot scheduling (APScheduler-backed SQLite jobstore)  |
+| `FabricScheduler`                                    | `dataflow.fabric.scheduler`                                                                 | DataFlow product-refresh cron (asyncio + croniter, supervised tasks)        |
+| `ExecutionTracker`                                   | `kailash.runtime.execution_tracker`                                                         | Per-node checkpoint primitive (records completion + cached output)          |
+| `Checkpoint` / `ExecutionJournal` / `DurableRequest` | `kailash.middleware.gateway.durable_request`                                                | Per-request event log + checkpoint blob + state machine                     |
+| `CheckpointManager` + `DBCheckpointStore`            | `kailash.middleware.gateway.checkpoint_manager` + `kailash.infrastructure.checkpoint_store` | Tiered checkpoint persistence (memory/disk/cloud + DB-backed durable store) |
+| `DurableWorkflowServer`                              | `kailash.servers.durable_workflow_server`                                                   | Server-mode wiring of checkpointing + dedup + event store                   |
+| `SQLTaskQueue`                                       | `kailash.infrastructure.task_queue`                                                         | DB-backed work queue for distributed execution (`FOR UPDATE SKIP LOCKED`)   |
+| `SQLWorkerRegistry`                                  | `kailash.infrastructure.worker_registry`                                                    | Worker-fleet membership + heartbeats + dead-worker reaping                  |
+| `IdempotentExecutor`                                 | `kailash.infrastructure.idempotency`                                                        | At-most-once execution semantics (claim-execute-store)                      |
+| `ConnectionManager`                                  | `kailash.db.connection`                                                                     | Dialect-portable connection pooling                                         |
 
 ## Features
 
@@ -18,6 +35,9 @@ The enterprise infrastructure layer provides:
 - **SQL Task Queue**: Database-backed task queue using `FOR UPDATE SKIP LOCKED`
 - **Worker Registry**: Heartbeat monitoring and dead worker reaping
 - **IdempotentExecutor**: Exactly-once workflow execution via claim-execute-store pattern
+- **WorkflowScheduler**: Cron + interval + one-shot recurring workflow execution with persistent SQLite jobstore
+- **FabricScheduler**: DataFlow-specific product-refresh cron with supervised asyncio tasks
+- **Durable execution**: `ExecutionTracker` checkpoints + `CheckpointManager` tiered storage + `DurableRequest` resumable state machine + `DurableWorkflowServer` server-mode wiring
 - **Schema Versioning**: `kailash_meta` table with downgrade protection
 
 ## Quick Start
@@ -32,6 +52,19 @@ runtime = LocalRuntime()  # SQLite stores, in-process
 
 # Level 2: Set KAILASH_QUEUE_URL=redis://localhost:6379/0
 # OR KAILASH_QUEUE_URL=postgresql://user:pass@localhost/kailash
+
+# Recurring schedules: APScheduler-backed cron + interval (persists across restarts)
+from kailash.runtime.scheduler import WorkflowScheduler
+
+scheduler = WorkflowScheduler()         # default jobstore: kailash_schedules.db
+scheduler.start()
+scheduler.schedule_cron(my_workflow, "0 22 * * *")        # daily 22:00 UTC
+scheduler.schedule_interval(my_workflow, seconds=300)     # every 5 minutes
+
+# Durable execution: server-mode with checkpointing + recovery
+from kailash.servers.durable_workflow_server import DurableWorkflowServer
+
+server = DurableWorkflowServer(enable_durability=True)    # default CheckpointManager
 ```
 
 The user's workflow code is identical at all levels.
@@ -48,6 +81,8 @@ The user's workflow code is identical at all levels.
 
 - **[task-queue-patterns](task-queue-patterns.md)** - SQL task queue, SKIP LOCKED, Redis vs SQL, worker registry
 - **[idempotency-patterns](idempotency-patterns.md)** - IdempotentExecutor, claim-execute-store, TTL expiry
+- **[scheduler-patterns](scheduler-patterns.md)** - `WorkflowScheduler` (cron + interval + one-shot), `FabricScheduler` (DataFlow product refresh), multi-instance hazards
+- **[durability-patterns](durability-patterns.md)** - `ExecutionTracker` per-node checkpoints, `CheckpointManager` + `DBCheckpointStore`, `DurableWorkflowServer`, resume-from-checkpoint contract
 
 ## Key Concepts
 
@@ -69,8 +104,8 @@ The user's workflow code is identical at all levels.
 
 ### Source Code Layout
 
-| Package                                           | Purpose                                                    |
-| ------------------------------------------------- | ---------------------------------------------------------- |
+| Package | Purpose |
+| ------- | ------- |
 
 ## Critical Rules
 
@@ -94,6 +129,11 @@ Use this skill when you need to:
 - Add idempotency guarantees to workflow execution
 - Manage worker registration and heartbeat monitoring
 - Understand schema versioning and migration patterns
+- Set up cron-driven workflow execution / replace an external cron daemon for Kailash workloads
+- Add durable execution to LocalRuntime workflows so they resume on restart instead of restarting from zero
+- Configure per-node checkpointing for long-running workflows where partial progress MUST survive a crash
+- Build a workflow execution journal / audit trail of every state transition a request goes through
+- Stand up a `DurableWorkflowServer` that wires checkpointing + dedup + event sourcing in one process
 
 ## Related Skills
 
