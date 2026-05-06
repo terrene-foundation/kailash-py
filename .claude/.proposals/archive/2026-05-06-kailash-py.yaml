@@ -1,0 +1,211 @@
+source_repo: kailash-py
+codify_date: "2026-05-06"
+codify_session: |
+  Session 2026-05-06 — codify cycle following kailash-kaizen 2.20.0 release
+  (issue #829: LLM-first trait derivation per `rules/agent-reasoning.md`
+  Rule 1).
+
+  Two genuinely-novel + reusable patterns surfaced. Both are AMENDMENTS to
+  existing rules — neither warrants a new top-level rule file (and so
+  neither needs Trust Posture Wiring per Step 6b — that gate fires only on
+  NEW rule files).
+
+  1. **Same-shard fix-immediately for security-reviewer findings**
+     (`rules/autonomous-execution.md` Rule 4 amendment). Rule 4 today
+     names "code review or self-verification" as the trigger surface.
+     The 2026-05-06 session demonstrated cleanly that the same trigger
+     applies to security-reviewer outputs: 1 HIGH (prompt-injection
+     sanitization) + 2 MEDIUM (PII-leakage role logging, DoS via
+     unbounded cache) findings landed in the same commit as the
+     originating PR — within the shard's remaining capacity (3
+     additional small modifications, all <30 LOC each). Filing
+     follow-up issues would have wasted the warm context. The
+     amendment broadens the rule's listed surfaces from "code
+     review" to "any gate-level review (reviewer, security-reviewer)".
+
+  2. **Conftest-scope stub replaces N call-site edits in Tier-1 sweeps**
+     (`rules/testing.md` § Tier-1 mocking pattern, advisory). When a
+     previously-deterministic internal method becomes side-effecting
+     (e.g., starts hitting an LLM), the canonical Tier-1 sweep is to
+     drop one autouse fixture in `tests/unit/conftest.py` that stubs
+     the method for the entire Tier-1 suite. The pattern's correctness
+     follows from pytest's conftest-scope rules (autouse fixtures
+     apply to every test under the conftest's directory; sibling
+     directories like `tests/integration/` are unaffected). Today's
+     session collapsed 36 NEEDS-FIX call sites across 8 files to one
+     conftest fixture. The pattern is OPTIONAL (an explicit
+     `behavior_traits=[...]` per call site is also valid) but the
+     conftest pattern wins on every dimension when the only thing that
+     varies is the side-effecting return shape.
+
+  Both originated from the kailash-kaizen 2.20.0 release cycle (PR #836
+  + deploy record #837 + tag `kaizen-v2.20.0` published successfully to
+  PyPI 2026-05-06).
+
+changes:
+  - rule: autonomous-execution
+    file: .claude/rules/autonomous-execution.md
+    action: AMEND
+    section: "MUST Rule 4 — Fix-Immediately When Review Surfaces A Same-Class Gap"
+    rationale: |
+      Rule 4 today names "code review or self-verification" as the
+      trigger surface. Empirically, same-shard fix-immediately
+      applies cleanly to security-reviewer outputs too. The 2026-05-06
+      session: security-reviewer flagged 1 HIGH + 2 MEDIUM findings
+      against the in-flight PR; all three fit within the shard budget
+      (each <30 LOC); all three landed in the same commit; the
+      originally-rejected PR re-passed security review on the new
+      diff. Filing follow-ups would have wasted the still-warm context
+      AND violated the rule's spirit ("the gap costs the least to fix
+      while the context is loaded").
+    proposed_text: |
+      Add to the Origin paragraph after the existing 2026-04-20 + 2026-05-01
+      evidence:
+
+      "Additional cross-class evidence — kailash-kaizen 2.20.0 release
+      cycle 2026-05-06: security-reviewer flagged 1 HIGH (prompt-injection
+      via output-rendered traits) + 2 MEDIUM (raw-role logging, unbounded
+      cache DoS) findings against PR #836; all three fit within the
+      shard's remaining budget (each <30 LOC, 4 invariants total); all
+      three landed in the same commit `ba476b88`; security-reviewer
+      re-approved on the post-fix diff. Confirms Rule 4 generalizes
+      from code-reviewer surfacings to security-reviewer surfacings —
+      same gate-level review pattern."
+
+      Also amend the rule's first sentence from "When a code review or
+      self-verification surfaces a latent gap..." to:
+
+      "When a gate-level review (reviewer, security-reviewer,
+      gold-standards-validator) or self-verification surfaces a latent
+      gap..."
+    classification_hint: GLOBAL
+    classification_reason: |
+      Applies across all SDKs and BUILD repos that run gate-level reviews.
+      Not Python-specific. Not framework-specific.
+    trust_posture_wiring: NOT_REQUIRED
+    trust_posture_reason: |
+      Amendment to existing rule (autonomous-execution.md). Step 6b
+      enforcement is for NEW rule files only.
+
+  - rule: testing
+    file: .claude/rules/testing.md
+    action: AMEND
+    section: "New subsection: Tier-1 Conftest-Scope Stub Pattern"
+    rationale: |
+      Today's session demonstrated that when a previously-deterministic
+      internal method becomes LLM-side-effecting (Issue #829:
+      `Kaizen._generate_role_based_traits` keyword classifier → LLM
+      Signature call), the cheapest Tier-1 sweep is one autouse
+      fixture in `tests/unit/conftest.py`. The mechanical alternative
+      (edit every call site to pass behavior_traits explicitly) was
+      36 edits across 8 files. The pytest scope rules guarantee the
+      stub does NOT leak to Tier-2 (`tests/integration/`) or Tier-3
+      (`tests/e2e/`).
+
+      The pattern is generalizable: any time a Tier-1 unit test's
+      transitive dependency becomes side-effecting (LLM call, DB
+      query, network fetch) without changing its return-shape
+      contract, an autouse conftest fixture in the SAME directory tree
+      stubs it once for every test below. Side-channel benefits:
+      (a) tests stay offline, (b) tests stay fast, (c) tests don't
+      require API keys in dev environments, (d) future test additions
+      pick up the stub for free.
+
+      ADVISORY pattern, not MUST — explicit `behavior_traits=...`
+      args per call site are also valid (just more code).
+    proposed_text: |
+      New subsection inserted between "## 3-Tier Testing" and the
+      next major heading:
+
+      ```
+      ## Tier-1 Conftest Stub for Newly-Side-Effecting Internal Methods (Advisory)
+
+      When an internal method that was previously deterministic becomes
+      side-effecting (e.g., an LLM call, a DB lookup, a network fetch)
+      WITHOUT changing its return-shape contract, the canonical Tier-1
+      sweep is one autouse fixture in the *deepest applicable* conftest:
+
+      ```python
+      # tests/unit/conftest.py
+      @pytest.fixture(autouse=True)
+      def _stub_<method_name>(monkeypatch):
+          from <pkg>.<module> import <Class>
+          monkeypatch.setattr(
+              <Class>, "<method_name>", lambda self, *a, **kw: <fixed_return>
+          )
+      ```
+
+      Pytest's conftest-scope rules guarantee the stub does NOT leak
+      to Tier-2 / Tier-3 (sibling `tests/integration/` and `tests/e2e/`
+      directories don't inherit `tests/unit/conftest.py`).
+
+      **When to use:**
+      - Method has many Tier-1 call sites (~10+); editing each costs
+        more than the stub.
+      - Tier-1 tests don't depend on the method's actual content,
+        only its return shape.
+      - The new side-effect is the side-effect (LLM, DB, network);
+        Tier-1 must remain offline + fast per the 3-Tier contract.
+
+      **When NOT to use:**
+      - The method's actual content is tested in Tier-1 (e.g., a
+        regression test for the keyword classifier itself). Rewrite
+        those tests to shape-only or move them to Tier-2.
+      - Only 1-3 call sites are affected — explicit args are clearer.
+
+      **Why:** A monkey-patch fixture keeps Tier-1 deterministic and
+      offline without touching N test files. Future test additions
+      pick up the stub automatically. The pattern collapsed a
+      36-call-site sweep to 1 file in the kailash-kaizen 2.20.0
+      release cycle (2026-05-06, issue #829).
+
+      ```
+    classification_hint: GLOBAL
+    classification_reason: |
+      Applies to any test suite using pytest with 3-Tier separation by
+      directory tree. Not Python-specific in spirit (the conftest-scope
+      idea has analogs in Rust integration-test directories), but the
+      proposed_text uses pytest specifically and would need a
+      Rust-variant overlay if loom decides this earns a sibling rule on
+      the kailash-rs side.
+    trust_posture_wiring: NOT_REQUIRED
+    trust_posture_reason: |
+      Amendment to existing rule (testing.md). Advisory pattern,
+      not MUST.
+
+# Note: per /codify Step 1 — learning-digest.json hash matches prior
+# codification (e0f13cde2fc1 ≈ sha256:e0f13). Digest itself yields no new
+# actions. The patterns above derive from THIS session's journal entries
+# (workspaces/issue-829-kaizen-llm-first-traits/journal/{0001,0002,0003}.md)
+# which the digest will pick up next cycle.
+
+status: distributed
+reviewed_date: "2026-05-06T00:00:00Z"
+distributed_date: "2026-05-06T19:03:11Z"
+reviewed_classification:
+  - rule: autonomous-execution
+    placement: GLOBAL
+    location: .claude/rules/autonomous-execution.md
+    notes: |
+      Applied as section edit. (1) First sentence of MUST Rule 4
+      broadened from "code review or self-verification" to
+      "gate-level review (reviewer, security-reviewer,
+      gold-standards-validator) or self-verification". (2) Origin
+      paragraph appended with kailash-kaizen 2.20.0 PR #836
+      evidence (1 HIGH + 2 MEDIUM, commit ba476b88, all <30 LOC,
+      same-commit landing).
+  - rule: testing
+    placement: GLOBAL
+    location: .claude/rules/testing.md
+    notes: |
+      New subsection "Tier-1 Conftest Stub for Newly-Side-Effecting
+      Internal Methods (Advisory)" inserted between "## 3-Tier
+      Testing" and "## Coverage Requirements". Pytest example
+      preserved as-is (consistent with the rest of the file's
+      pytest-heavy examples). Cross-SDK note: existing
+      variants/rs/rules/testing.md may want a Rust-equivalent
+      overlay covering the cargo `tests/common` / per-tier-directory
+      stub pattern; flagged for future consideration but not
+      authored here (advisory pattern, not MUST — Rust ecosystem
+      can adopt a parallel stub idiom when the same failure mode
+      surfaces).
