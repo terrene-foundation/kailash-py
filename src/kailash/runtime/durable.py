@@ -404,25 +404,33 @@ def redact_event_for_persistence(
     classified_count = 0
 
     for field_name, value in raw_outputs.items():
+        # FAIL-CLOSED on policy lookup error per rules/zero-tolerance.md
+        # Rule 2 (no fake redaction). A policy raise during classification
+        # MUST default to REDACT — silent fall-through to unclassified
+        # would let a policy bug leak classified data to the persistent
+        # checkpoint store.  The redactor IS a security gate, not just a
+        # display safety net: the classification policy may be unreachable
+        # (lazy-loaded, transient backend failure, attribute drift) and
+        # the persisted blob is the audit trail downstream consumers
+        # rely on.
+        policy_failed = False
         try:
             tag = _get_classification_tag(
                 classification_policy, event.node_id, field_name
             )
-        except Exception as exc:  # pragma: no cover — defensive belt
-            # Per rules/zero-tolerance.md Rule 3: do not silently swallow.
-            # Log at DEBUG (schema name is in the message) and treat as
-            # unclassified (fail-OPEN here is intentionally chosen — the
-            # security gate is the policy itself; the redactor is the
-            # display safety net).
-            logger.debug(
+        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as exc:
+            logger.warning(
                 "durable.redact.policy_lookup_failed",
                 extra={
-                    "node_id": event.node_id,
+                    "node_id_hash": _hash_short(event.node_id),
                     "field_name_hash": _hash_short(field_name),
-                    "error": type(exc).__name__,
+                    "error_type": type(exc).__name__,
                 },
             )
-            tag = None
+            tag = "REDACT"  # FAIL-CLOSED: replace value with [REDACTED]
+            policy_failed = True
 
         if tag == "REDACT":
             redacted_outputs[field_name] = "[REDACTED]"
@@ -431,8 +439,15 @@ def redact_event_for_persistence(
             redacted_outputs[field_name] = _hash_pk(value)
             classified_count += 1
         else:
+            # Only return the unclassified value when policy lookup
+            # CONFIRMED unclassified (returned None cleanly).  The
+            # policy_failed branch above already routed to REDACT.
             redacted_outputs[field_name] = value
             unclassified_fields.append(field_name)
+        # Belt-and-suspenders: if policy lookup failed AND somehow tag
+        # was not REDACT, the value is sentinel-replaced regardless.
+        if policy_failed and redacted_outputs[field_name] is value:
+            redacted_outputs[field_name] = "[REDACTED]"
 
     # Merge classification summary into metadata.
     new_metadata = dict(event.metadata)
