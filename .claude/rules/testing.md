@@ -138,6 +138,35 @@ Any two tests mutating SAME env var MUST serialize through a module-scope `threa
 
 **Why:** Mocks in Tier 2/3 hide real failures (connection handling, schema mismatches, transactions) that only surface against real infra. Exception — Protocol-Satisfying Deterministic Adapters: a class satisfying a `typing.Protocol` at runtime with deterministic output is NOT a mock. See guide § "Protocol Adapters" for full example.
 
+## Tier-1 Conftest Stub for Newly-Side-Effecting Internal Methods (Advisory)
+
+When an internal method that was previously deterministic becomes side-effecting (e.g., an LLM call, a DB lookup, a network fetch) WITHOUT changing its return-shape contract, the canonical Tier-1 sweep is one autouse fixture in the _deepest applicable_ conftest:
+
+```python
+# tests/unit/conftest.py
+@pytest.fixture(autouse=True)
+def _stub_<method_name>(monkeypatch):
+    from <pkg>.<module> import <Class>
+    monkeypatch.setattr(
+        <Class>, "<method_name>", lambda self, *a, **kw: <fixed_return>
+    )
+```
+
+Pytest's conftest-scope rules guarantee the stub does NOT leak to Tier-2 / Tier-3 (sibling `tests/integration/` and `tests/e2e/` directories don't inherit `tests/unit/conftest.py`).
+
+**When to use:**
+
+- Method has many Tier-1 call sites (~10+); editing each costs more than the stub.
+- Tier-1 tests don't depend on the method's actual content, only its return shape.
+- The new side-effect is the side-effect (LLM, DB, network); Tier-1 must remain offline + fast per the 3-Tier contract.
+
+**When NOT to use:**
+
+- The method's actual content is tested in Tier-1 (e.g., a regression test for the keyword classifier itself). Rewrite those tests to shape-only or move them to Tier-2.
+- Only 1-3 call sites are affected — explicit args are clearer.
+
+**Why:** A monkey-patch fixture keeps Tier-1 deterministic and offline without touching N test files. Future test additions pick up the stub automatically. The pattern collapsed a 36-call-site sweep to 1 file in the kailash-kaizen 2.20.0 release cycle (2026-05-06, issue #829).
+
 ## Coverage Requirements
 
 | Code Type                            | Minimum |

@@ -179,4 +179,33 @@ changes:
 # (workspaces/issue-829-kaizen-llm-first-traits/journal/{0001,0002,0003}.md)
 # which the digest will pick up next cycle.
 
-status: pending_review
+status: distributed
+reviewed_date: "2026-05-06T00:00:00Z"
+distributed_date: "2026-05-06T19:03:11Z"
+reviewed_classification:
+  - rule: autonomous-execution
+    placement: GLOBAL
+    location: .claude/rules/autonomous-execution.md
+    notes: |
+      Applied as section edit. (1) First sentence of MUST Rule 4
+      broadened from "code review or self-verification" to
+      "gate-level review (reviewer, security-reviewer,
+      gold-standards-validator) or self-verification". (2) Origin
+      paragraph appended with kailash-kaizen 2.20.0 PR #836
+      evidence (1 HIGH + 2 MEDIUM, commit ba476b88, all <30 LOC,
+      same-commit landing).
+  - rule: testing
+    placement: GLOBAL
+    location: .claude/rules/testing.md
+    notes: |
+      New subsection "Tier-1 Conftest Stub for Newly-Side-Effecting
+      Internal Methods (Advisory)" inserted between "## 3-Tier
+      Testing" and "## Coverage Requirements". Pytest example
+      preserved as-is (consistent with the rest of the file's
+      pytest-heavy examples). Cross-SDK note: existing
+      variants/rs/rules/testing.md may want a Rust-equivalent
+      overlay covering the cargo `tests/common` / per-tier-directory
+      stub pattern; flagged for future consideration but not
+      authored here (advisory pattern, not MUST — Rust ecosystem
+      can adopt a parallel stub idiom when the same failure mode
+      surfaces).
