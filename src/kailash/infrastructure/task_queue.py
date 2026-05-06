@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "SQLTaskQueue",
     "SQLTaskMessage",
+    "SQLTaskQueueDispatcher",
 ]
 
 
@@ -442,3 +443,223 @@ class SQLTaskQueue:
         if count:
             logger.info("Purged %d completed tasks from queue '%s'", count, queue_name)
         return count
+
+
+# =====================================================================
+# Dispatcher adapter — `kailash.runtime.dispatcher.Dispatcher` conformer
+# =====================================================================
+
+
+def _task_id_hash(task_id: str) -> str:
+    """Return an 8-char hash of a task_id, safe for log fields.
+
+    Per ``rules/observability.md`` Rule 8, schema-revealing identifiers
+    in WARN/ERROR log lines MUST be hashed -- the raw ``task_id`` is
+    a concatenation of schedule_id + planned_fire_time and reveals
+    business-meaningful schedule names + cron timing.
+    """
+    import hashlib
+
+    return hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8]
+
+
+class SQLTaskQueueDispatcher(Dispatcher):
+    """SQL-backed :class:`Dispatcher` adapter for ``WorkflowScheduler``.
+
+    Adapts the lower-level :class:`SQLTaskQueue` to the
+    :class:`~kailash.runtime.dispatcher.Dispatcher` ABC so a scheduler
+    constructed with ``dispatch_via=SQLTaskQueueDispatcher(conn_mgr)``
+    enqueues tasks to a SQL queue instead of executing in-process.
+
+    Idempotency contract
+    --------------------
+    :meth:`enqueue` uses ``task.task_id`` as the queue's PRIMARY KEY.
+    A duplicate enqueue with the SAME ``task_id`` is treated as a
+    silent no-op -- the multi-instance-scheduler double-fire scenario
+    becomes "already enqueued, skip" without raising to the caller.
+    Non-PK failures (connectivity, serialization) propagate after a
+    structured ERROR log line is emitted.
+
+    Resume hint (informational)
+    ---------------------------
+    Workers polling this dispatcher SHOULD pass the ``task_id`` as
+    the ``idempotency_key`` to ``runtime.execute(...)`` when paired
+    with a checkpoint store. This gives resume-from-checkpoint
+    semantics on crash recovery -- see ``specs/scheduling.md``
+    § "Queue Dispatch".
+
+    Parameters
+    ----------
+    conn:
+        An initialized :class:`~kailash.db.connection.ConnectionManager`.
+    table_name:
+        Name of the task queue table (default: ``kailash_task_queue``).
+        Validated against ``[a-zA-Z_][a-zA-Z0-9_]*`` in the underlying
+        :class:`SQLTaskQueue`.
+
+    See Also
+    --------
+    :class:`~kailash.runtime.dispatcher.Dispatcher` -- the abstract contract.
+    :func:`~kailash.runtime.dispatcher.compute_task_id` -- stable task_id helper.
+    :class:`~kailash.runtime.scheduler.WorkflowScheduler` -- the producer.
+    """
+
+    def __init__(self, conn: Any, table_name: str = "kailash_task_queue") -> None:
+        self._queue = SQLTaskQueue(conn, table_name=table_name)
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Create the underlying queue table if it does not exist.
+
+        Safe to call multiple times (idempotent). Most callers will
+        invoke this explicitly at startup so that the first
+        :meth:`enqueue` does not pay the DDL cost.
+        """
+        if self._initialized:
+            return
+        await self._queue.initialize()
+        self._initialized = True
+
+    async def enqueue(self, task: Task) -> None:
+        """Add a :class:`Task` to the queue.
+
+        Idempotent on ``task.task_id`` -- duplicate enqueue is a silent
+        no-op (DEBUG log; no exception). Non-duplicate failures log at
+        ERROR with grep-able ``schedule_id`` + ``task_id_hash`` and
+        propagate per the architecture plan §3 invariant 3.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        # Encode workflow_blob (bytes) as latin-1 -> str so it round-trips
+        # through JSON. The blob is opaque: workers decode and execute.
+        # latin-1 is bijective for arbitrary bytes <= 0xFF and survives
+        # JSON encoding without any escaping outside the standard set.
+        payload = {
+            "schedule_id": task.schedule_id,
+            "workflow_blob_b64": task.workflow_blob.decode("latin-1"),
+            "planned_fire_time": task.planned_fire_time,
+            "kwargs": task.kwargs,
+        }
+
+        try:
+            await self._queue.enqueue(
+                payload=payload,
+                queue_name=task.queue_name,
+                task_id=task.task_id,
+            )
+        except Exception as exc:
+            # Distinguish PK / unique-violation (silent skip) from genuine
+            # failure (ERROR log + re-raise). asyncpg raises
+            # UniqueViolationError; sqlite3 raises IntegrityError; aiomysql
+            # surfaces a generic error with sqlstate '23000'.
+            if _is_unique_violation(exc):
+                logger.debug(
+                    "task.enqueue.duplicate task_id_hash=%s schedule_id=%s",
+                    _task_id_hash(task.task_id),
+                    task.schedule_id,
+                )
+                return
+            logger.error(
+                "task.enqueue.failed task_id_hash=%s schedule_id=%s reason=%s",
+                _task_id_hash(task.task_id),
+                task.schedule_id,
+                type(exc).__name__,
+            )
+            raise
+
+    def poll(self, queue_name: str = "default") -> AsyncIterator[Task]:
+        """Yield tasks claimed from the queue, one at a time.
+
+        The async iterator dequeues atomically (via
+        :meth:`SQLTaskQueue.dequeue` which uses
+        ``FOR UPDATE SKIP LOCKED`` on PostgreSQL/MySQL and
+        ``BEGIN IMMEDIATE`` on SQLite). When the queue is empty the
+        iterator stops (it does NOT block waiting for new work);
+        callers wishing to long-poll should re-invoke ``poll()`` in a
+        loop with a sleep.
+
+        Returns
+        -------
+        AsyncIterator[Task]
+            Tasks reconstructed from the stored payload.
+        """
+        return self._poll_iter(queue_name)
+
+    async def _poll_iter(self, queue_name: str) -> AsyncIterator[Task]:
+        if not self._initialized:
+            await self.initialize()
+        while True:
+            msg = await self._queue.dequeue(
+                queue_name=queue_name, worker_id="dispatcher"
+            )
+            if msg is None:
+                return
+            yield Task(
+                task_id=msg.task_id,
+                schedule_id=msg.payload.get("schedule_id", ""),
+                workflow_blob=msg.payload.get("workflow_blob_b64", "").encode(
+                    "latin-1"
+                ),
+                planned_fire_time=msg.payload.get("planned_fire_time", ""),
+                queue_name=msg.queue_name,
+                kwargs=msg.payload.get("kwargs") or {},
+            )
+
+    async def ack(self, task_id: str) -> None:
+        """Mark a task as completed."""
+        if not self._initialized:
+            await self.initialize()
+        await self._queue.complete(task_id)
+
+    async def nack(self, task_id: str, *, reason: str) -> None:
+        """Mark a task as failed.
+
+        Logs a WARN line with grep-able ``task_id_hash`` per
+        ``rules/observability.md`` Rule 8 (raw task_id contains
+        schedule_id + fire-time and would reveal schedule timing
+        to log aggregators).
+        """
+        if not self._initialized:
+            await self.initialize()
+        logger.warning(
+            "task.nack task_id_hash=%s reason=%s",
+            _task_id_hash(task_id),
+            reason,
+        )
+        await self._queue.fail(task_id, error=reason)
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    """Detect a primary-key / unique-constraint violation across dialects.
+
+    PostgreSQL (asyncpg) raises ``asyncpg.exceptions.UniqueViolationError``
+    (subclass of ``IntegrityConstraintViolationError``).
+    SQLite raises ``sqlite3.IntegrityError`` whose ``args[0]`` contains
+    the substring ``"UNIQUE"``.
+    MySQL (aiomysql) raises with sqlstate ``'23000'`` and errno 1062;
+    we match on the exception's ``args`` for the duplicate-entry signal.
+
+    Per ``rules/zero-tolerance.md`` Rule 3 we MUST NOT swallow generic
+    exceptions; this function is narrowly scoped to PK / unique
+    constraint violations only and is the sole site that distinguishes
+    "already enqueued" from "real failure" in the dispatcher.
+    """
+    name = type(exc).__name__
+    if name in {"UniqueViolationError", "TransactionIntegrityConstraintViolationError"}:
+        return True
+    if name == "IntegrityError":
+        msg = str(exc).upper()
+        if "UNIQUE" in msg or "PRIMARY KEY" in msg or "DUPLICATE" in msg:
+            return True
+    # MySQL: aiomysql surfaces pymysql.err.IntegrityError; same heuristic.
+    if "INTEGRITY" in name.upper():
+        msg = str(exc).upper()
+        if (
+            "UNIQUE" in msg
+            or "PRIMARY KEY" in msg
+            or "DUPLICATE" in msg
+            or "1062" in msg
+        ):
+            return True
+    return False
