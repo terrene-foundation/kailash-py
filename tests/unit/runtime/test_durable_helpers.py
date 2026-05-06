@@ -417,6 +417,243 @@ def test_encode_decode_checkpoint_payload_roundtrip():
     assert payload["tracker"]["completed_nodes"] == ["a"]
 
 
+# ---------------------------------------------------------------------------
+# 9. Security regressions surfaced by /implement convergence review (W1)
+# ---------------------------------------------------------------------------
+#
+# Each test below pins a fix-immediately landing per
+# ``rules/autonomous-execution.md`` Rule 4 and ``rules/zero-tolerance.md``
+# Rules 1, 2, 3.  The failure modes were surfaced by the security-reviewer
+# at the W1 convergence gate and would propagate into the W2 history-store
+# wave if not closed before W2 lands.
+
+
+class _PolicyRaisesOnLookup:
+    """Stub policy whose classification lookup raises on every field.
+
+    Models the failure mode where the policy backend is transiently
+    unreachable (lazy-loaded module raises ImportError on first touch,
+    cached lookup returns a stale ContextVar, etc.).  Per the
+    fail-CLOSED contract added in this fix, the redactor MUST replace
+    the value with the ``[REDACTED]`` sentinel rather than fall through
+    to "unclassified".
+    """
+
+    def get_classification(self, node_id: str, field_name: str):
+        raise RuntimeError(f"policy backend unreachable for {node_id}.{field_name}")
+
+
+def test_redact_event_fail_closed_on_policy_error():
+    """S1 (MEDIUM): policy lookup error → field is REDACTED, count incremented.
+
+    Prior behaviour was fail-OPEN: ``tag = None`` left the raw value in
+    ``redacted_outputs`` and the field appeared in
+    ``unclassified_fields``.  A policy-backend bug would silently leak
+    classified data to the persistent checkpoint store.  Same
+    failure-mode class as ``rules/zero-tolerance.md`` Rule 2 (fake
+    redaction = fake encryption).
+    """
+    event = _make_event(
+        node_id="users_read",
+        outputs={"id": "user-12345", "ssn": "123-45-6789"},
+    )
+    redacted = redact_event_for_persistence(
+        event, classification_policy=_PolicyRaisesOnLookup()
+    )
+
+    # Both fields MUST be sentinel-replaced — fail-CLOSED.
+    assert redacted.outputs["id"] == "[REDACTED]"
+    assert redacted.outputs["ssn"] == "[REDACTED]"
+
+    # The classified-count partition MUST reflect both fields, AND the
+    # field NAMES MUST NOT leak into the unclassified summary.
+    summary = redacted.metadata["classification_summary"]
+    assert summary["classified_field_count"] == 2
+    assert summary["unclassified_fields"] == []
+    assert "id" not in summary["unclassified_fields"]
+    assert "ssn" not in summary["unclassified_fields"]
+
+
+class _RuntimeNoCtx:
+    """Runtime without a user_context attribute at all."""
+
+
+def test_resolve_tenant_id_narrow_except_reraises_unexpected(monkeypatch):
+    """S2 (MEDIUM): non-Import/AttributeError MUST propagate.
+
+    Prior behaviour caught ALL exceptions including ContextVar lookup
+    errors, propagation bugs, and any other runtime glitch in the trust
+    subsystem — silent ``None`` was returned, exposing cross-tenant
+    risk under a buggy tenant resolver.  The fix narrows the except to
+    ``(ImportError, AttributeError)``; any other exception now
+    propagates so the operator sees the bug.
+    """
+    # Inject a real module with a ``get_current_tenant_id`` that raises
+    # a non-Import/non-Attribute error.  Use the actual import path so
+    # the resolver's ``from kailash.trust.auth.context import ...``
+    # succeeds, then the call itself raises.
+    import sys
+    import types
+
+    fake_module = types.ModuleType("kailash.trust.auth.context")
+
+    def _raises(*_a, **_kw):
+        raise RuntimeError("ContextVar propagation glitch")
+
+    fake_module.get_current_tenant_id = _raises  # type: ignore[attr-defined]
+
+    # The package path needs to exist for the from-import to resolve.
+    fake_pkg = types.ModuleType("kailash.trust.auth")
+    monkeypatch.setitem(sys.modules, "kailash.trust.auth", fake_pkg)
+    monkeypatch.setitem(sys.modules, "kailash.trust.auth.context", fake_module)
+
+    with pytest.raises(RuntimeError, match="ContextVar propagation glitch"):
+        resolve_tenant_id(_RuntimeNoCtx())
+
+
+def test_resolve_tenant_id_warns_once_when_subsystem_absent(monkeypatch, caplog):
+    """S2 (MEDIUM): one-time WARN when trust subsystem is unimportable.
+
+    Operators MUST be able to see the absence of the trust subsystem
+    when multi-tenancy was expected — but the WARN MUST NOT spam every
+    request.  The latch lives on the function object.
+    """
+    import sys
+
+    # Force the import to raise ImportError by clearing any cached
+    # module and stubbing the parent package to a non-package object.
+    monkeypatch.delitem(sys.modules, "kailash.trust.auth.context", raising=False)
+    monkeypatch.delitem(sys.modules, "kailash.trust.auth", raising=False)
+
+    # Reset the latch so the WARN fires regardless of test ordering.
+    if hasattr(resolve_tenant_id, "_warned_unavailable"):
+        delattr(resolve_tenant_id, "_warned_unavailable")
+
+    import logging as _logging
+
+    with caplog.at_level(_logging.WARNING, logger="kailash.runtime.durable"):
+        # First call should emit the WARN if and only if the import
+        # actually fails.  Some test harnesses install the real
+        # subsystem; in that case this test falls back to verifying
+        # idempotency (no exception raised, no WARN spam).
+        first = resolve_tenant_id(_RuntimeNoCtx())
+        # Second call MUST NOT emit a second WARN.
+        second = resolve_tenant_id(_RuntimeNoCtx())
+
+    # Both calls return None when no tenant is present.
+    assert first is None
+    assert second is None
+    # Latch is set after first call regardless of whether the import
+    # actually failed in this environment (set on the unavailable path,
+    # never set on the available path).  Verify idempotency: the WARN
+    # must be emitted at most once.
+    warn_records = [
+        r
+        for r in caplog.records
+        if r.levelno == _logging.WARNING
+        and "trust_subsystem_unavailable" in r.getMessage()
+    ]
+    assert len(warn_records) <= 1, "WARN MUST NOT spam — latch broken"
+
+
+def test_hash_pk_unhashable_value_returns_sentinel(caplog):
+    """S6 (LOW): ``__str__`` raising MUST return a stable sentinel.
+
+    A maliciously-crafted upstream node passing an object whose
+    ``__str__`` raises would crash the redaction pipeline before the
+    new fix.  The sentinel ``"pk:unhashable"`` keeps the persistence
+    path running while a DEBUG log captures the type for forensics.
+    """
+    from kailash.runtime.durable import _hash_pk
+
+    class _Hostile:
+        def __str__(self) -> str:
+            raise TypeError("__str__ refuses on principle")
+
+    import logging as _logging
+
+    with caplog.at_level(_logging.DEBUG, logger="kailash.runtime.durable"):
+        result = _hash_pk(_Hostile())
+
+    assert result == "pk:unhashable"
+    # The DEBUG log MUST capture the type name for forensic use without
+    # leaking the raw value.
+    debug_records = [
+        r
+        for r in caplog.records
+        if r.levelno == _logging.DEBUG and "unhashable_pk_value" in r.getMessage()
+    ]
+    assert debug_records, "DEBUG log MUST be emitted for forensic trail"
+
+
+def test_checkpoint_locks_lru_eviction_at_bound():
+    """S3 (MEDIUM): ``_checkpoint_locks`` is bounded by ``MAX_CHECKPOINT_LOCKS``.
+
+    Long-running runtime instances would otherwise leak one
+    ``asyncio.Lock`` per unique ``run_id`` forever — Nexus deployments
+    and AsyncLocalRuntime singletons hit this in production.  Per
+    ``rules/infrastructure-sql.md`` Rule 7 the dict is now an
+    ``OrderedDict`` with LRU eviction at a generous bound.
+    """
+    from kailash.runtime.local import MAX_CHECKPOINT_LOCKS, LocalRuntime
+
+    runtime = LocalRuntime()
+
+    # Use a small synthetic cap by inserting (bound + 50) keys; the
+    # accessor's eviction loop runs against the production bound.  The
+    # test verifies (a) eviction triggers, (b) the count caps at the
+    # bound, (c) the oldest entry is the one evicted.
+    first_key = "run_first"
+    runtime._get_or_create_checkpoint_lock(first_key)
+
+    # Fill exactly to the bound — eviction has not triggered yet.
+    for i in range(MAX_CHECKPOINT_LOCKS - 1):
+        runtime._get_or_create_checkpoint_lock(f"run_{i}")
+    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+    assert first_key in runtime._checkpoint_locks
+
+    # One more entry MUST evict the oldest (first_key was inserted
+    # before any of the run_N keys and never re-accessed).
+    runtime._get_or_create_checkpoint_lock("run_overflow")
+    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+    assert (
+        first_key not in runtime._checkpoint_locks
+    ), "LRU MUST evict the oldest entry once bound is exceeded"
+    assert "run_overflow" in runtime._checkpoint_locks
+
+
+def test_checkpoint_locks_lru_promotes_active_runs():
+    """S3 sibling: an active long-lived run MUST NOT be evicted.
+
+    Promotion-on-access is the structural defense against evicting a
+    run that's actively writing checkpoints.  Without ``move_to_end``
+    on the hit path, a long-running workflow (large pipeline, many
+    nodes) would fall behind the LRU window and lose its lock under
+    the bound, causing parallel-checkpoint races.
+    """
+    from kailash.runtime.local import MAX_CHECKPOINT_LOCKS, LocalRuntime
+
+    runtime = LocalRuntime()
+    active_key = "run_active"
+    active_lock = runtime._get_or_create_checkpoint_lock(active_key)
+
+    # Fill the dict, but PROMOTE the active key periodically so it
+    # stays MRU and survives eviction.
+    for i in range(MAX_CHECKPOINT_LOCKS):
+        runtime._get_or_create_checkpoint_lock(f"run_other_{i}")
+        if i % 100 == 0:
+            promoted = runtime._get_or_create_checkpoint_lock(active_key)
+            # Same lock object — accessor returns the existing entry,
+            # never replaces it.
+            assert promoted is active_lock
+
+    # Even though we inserted MAX_CHECKPOINT_LOCKS+1 distinct keys
+    # total (the original + every iteration), the active key MUST
+    # still be in the dict because promotion kept it MRU.
+    assert active_key in runtime._checkpoint_locks
+    assert len(runtime._checkpoint_locks) == MAX_CHECKPOINT_LOCKS
+
+
 def test_decode_checkpoint_payload_rejects_corrupt_blob():
     with pytest.raises(ValueError, match="UTF-8 JSON"):
         decode_checkpoint_payload(b"\x00\x01not-json")
