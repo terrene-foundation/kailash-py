@@ -169,7 +169,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             except ImportError:
                 raise ImportError(
                     "OpenAI package not installed. Install with: pip install openai"
-                )
+                ) from None
 
         await super().ensure_initialized()
 

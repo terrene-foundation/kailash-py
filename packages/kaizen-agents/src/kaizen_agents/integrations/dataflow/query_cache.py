@@ -161,7 +161,7 @@ class QueryCache:
 
             elif pattern:
                 # Invalidate by pattern
-                keys_to_remove = [key for key in self._cache.keys() if pattern in key]
+                keys_to_remove = [key for key in self._cache if pattern in key]
                 for key in keys_to_remove:
                     del self._cache[key]
                     if key in self._access_order:

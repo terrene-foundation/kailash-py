@@ -65,7 +65,20 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+# Style-preference rules disabled at project level — kept the bug-class rules
+# (E*, F*, B9*, UP*, SIM118) and only suppress nested-if / contextlib.suppress
+# / negated-return / ternary-rewrite / dict-dispatch suggestions that frequently
+# obscure intent in the agent / pattern code (clearer to leave nested if/try forms).
+# Per-site `# noqa: <code>` is still preferred when the rule otherwise fires
+# but the local intent argues for keeping the original form.
+ignore = [
+    "E501",   # line-length (Black handles this)
+    "SIM102", # collapsible nested if — often clearer as written for agent code
+    "SIM103", # negated return — readability is per-site judgment
+    "SIM105", # contextlib.suppress — the try/except form is more grep-friendly here
+    "SIM108", # ternary — nested if-else with explanatory branches stays clearer
+    "SIM116", # dict dispatch — branch logic with side effects keeps if-elif
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["kaizen", "kaizen_agents", "kailash"]

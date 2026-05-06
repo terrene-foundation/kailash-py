@@ -635,7 +635,6 @@ class JourneyNexusAdapter:
 
         # Use AsyncPythonCodeNode to execute the journey handler
         # The handler is stored on the adapter instance which is accessible via closure
-        adapter_ref = self
 
         # Create the workflow code that calls our async handler
         code = """

@@ -286,7 +286,7 @@ class PlanValidator:
 
         # INV-PLAN-06: Budget summation
         total_child_budget = 0.0
-        for node_id, node in plan.nodes.items():
+        for _node_id, node in plan.nodes.items():
             child_limit = (
                 node.agent_spec.envelope.financial.max_spend_usd
                 if node.agent_spec.envelope.financial
@@ -696,7 +696,7 @@ class PlanComposer:
 
         # Build nodes
         nodes: dict[str, PlanNode] = {}
-        for idx, subtask in enumerate(subtasks):
+        for idx, _subtask in enumerate(subtasks):
             spec, _ = specs[idx]
             nodes[node_ids[idx]] = PlanNode(
                 node_id=node_ids[idx],

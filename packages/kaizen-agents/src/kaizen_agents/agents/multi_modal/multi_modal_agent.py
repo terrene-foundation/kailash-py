@@ -152,7 +152,7 @@ class MultiModalAgent(BaseAgent):
                     auto_download=config.auto_download_models,
                 )
             except ValueError as e:
-                raise ValueError(f"No multi-modal adapter available: {e}")
+                raise ValueError(f"No multi-modal adapter available: {e}") from e
         else:
             self.adapter = adapter
 

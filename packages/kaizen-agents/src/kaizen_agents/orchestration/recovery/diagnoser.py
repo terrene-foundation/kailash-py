@@ -345,7 +345,7 @@ class FailureDiagnoser:
             raise ValueError(
                 f"Invalid failure category '{category_str}'. "
                 f"Must be one of: {[c.value for c in FailureCategory]}"
-            )
+            ) from None
 
         recoverable = raw.get("recoverable")
         if not isinstance(recoverable, bool):

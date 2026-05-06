@@ -27,6 +27,7 @@ Example:
     >>> specialists = adapter.list_specialists()
 """
 
+import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -1105,28 +1106,29 @@ You can execute tools automatically. Use good judgment about safety.
             return True
 
         # Check interrupt
-        if self._interrupt_manager and hasattr(
-            self._interrupt_manager, "is_interrupted"
+        if (
+            self._interrupt_manager
+            and hasattr(self._interrupt_manager, "is_interrupted")
+            and self._interrupt_manager.is_interrupted()
         ):
-            if self._interrupt_manager.is_interrupted():
-                logger.info("Interrupted by user")
-                state.interrupt()
+            logger.info("Interrupted by user")
+            state.interrupt()
 
-                # Fire interrupt hook
-                await self._fire_hook(
-                    "interrupt",
-                    {
-                        "session_id": state.session_id,
-                        "cycle": state.current_cycle,
-                        "reason": "user_interrupt",
-                    },
-                )
+            # Fire interrupt hook
+            await self._fire_hook(
+                "interrupt",
+                {
+                    "session_id": state.session_id,
+                    "cycle": state.current_cycle,
+                    "reason": "user_interrupt",
+                },
+            )
 
-                # Checkpoint on interrupt if configured
-                if self.config.checkpoint_on_interrupt:
-                    await self._create_checkpoint(state, force=True)
+            # Checkpoint on interrupt if configured
+            if self.config.checkpoint_on_interrupt:
+                await self._create_checkpoint(state, force=True)
 
-                return True
+            return True
 
         return False
 
@@ -1148,13 +1150,10 @@ You can execute tools automatically. Use good judgment about safety.
             return True
 
         # Budget exceeded
-        if (
+        return bool(
             self.config.budget_limit_usd
             and state.cost_usd > self.config.budget_limit_usd
-        ):
-            return True
-
-        return False
+        )
 
     def _extract_final_output(self, state: ExecutionState) -> str:
         """Extract final output from state.
@@ -1249,10 +1248,8 @@ You can execute tools automatically. Use good judgment about safety.
             # Ensure task completes
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
     async def interrupt(
         self,

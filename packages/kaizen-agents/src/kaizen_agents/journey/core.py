@@ -696,8 +696,11 @@ class JourneyMeta(type):
 
 # Import enhanced PathwayManager from manager.py
 # This provides full session management, context accumulation, and state persistence
-from kaizen_agents.journey.manager import PathwayManager as EnhancedPathwayManager
-from kaizen_agents.journey.state import JourneySession
+# Late imports avoid a circular dependency: manager.py / state.py import from this module.
+from kaizen_agents.journey.manager import (  # noqa: E402  (late import — circular avoidance)
+    PathwayManager as EnhancedPathwayManager,
+)
+from kaizen_agents.journey.state import JourneySession  # noqa: E402
 
 
 # Alias for backward compatibility - the placeholder PathwayManager in core.py

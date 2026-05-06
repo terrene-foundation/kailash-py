@@ -15,6 +15,7 @@ Configuration comes from ``.kz/config.toml`` under ``[mcp.servers]``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -178,10 +179,8 @@ class McpClient:
         """Stop the MCP server subprocess."""
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
             self._reader_task = None
 
         if self._process is not None:

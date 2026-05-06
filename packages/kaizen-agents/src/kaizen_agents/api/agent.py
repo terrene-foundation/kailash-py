@@ -181,7 +181,7 @@ class Agent:
                     'Use execution_mode="multi" for conversations',
                     'Use execution_mode="autonomous" for agentic tasks',
                 ],
-            )
+            ) from e
 
         try:
             resolved_tool_access = (
@@ -198,7 +198,7 @@ class Agent:
                     'Use tool_access="constrained" for safe tools with confirmation',
                     'Use tool_access="full" for all tools',
                 ],
-            )
+            ) from e
 
         # Validate configuration
         is_valid, errors = validate_configuration(

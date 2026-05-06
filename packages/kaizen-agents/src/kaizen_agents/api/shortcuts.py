@@ -11,9 +11,12 @@ Shortcut Categories:
 """
 
 from collections.abc import Callable
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from kaizen_agents.api.types import MemoryDepth, ToolAccess
+
+if TYPE_CHECKING:
+    from kaizen_agents.api.types import ExecutionMode
 
 # Type aliases for lazy loading
 MemoryProviderType = Any  # Will be MemoryProvider when imported
@@ -156,7 +159,7 @@ def _create_claude_code_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "ClaudeCodeAdapter is not yet available. "
             "Use runtime='local' with model='claude-*' for now."
-        )
+        ) from None
 
 
 def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
@@ -170,7 +173,7 @@ def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "OpenAICodexAdapter is not yet available. "
             "Use runtime='local' with model='gpt-*' for now."
-        )
+        ) from None
 
 
 def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
@@ -184,7 +187,7 @@ def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
         raise ValueError(
             "GeminiCLIAdapter is not yet available. "
             "Use runtime='local' with model='gemini-*' for now."
-        )
+        ) from None
 
 
 # Runtime shortcut registry
@@ -358,7 +361,7 @@ def resolve_tool_access_shortcut(
         valid = ", ".join(f'"{ta.value}"' for ta in ToolAccess)
         raise ValueError(
             f"Unknown tool access level: '{tool_access}'. Valid levels are: {valid}."
-        )
+        ) from None
 
 
 # === Execution Mode Shortcuts ===
@@ -402,7 +405,9 @@ def resolve_execution_mode(
         return ExecutionMode(shortcut)
     except ValueError:
         valid = ", ".join(f'"{em.value}"' for em in ExecutionMode)
-        raise ValueError(f"Unknown execution mode: '{mode}'. Valid modes are: {valid}.")
+        raise ValueError(
+            f"Unknown execution mode: '{mode}'. Valid modes are: {valid}."
+        ) from None
 
 
 # === Model Shortcuts ===

@@ -389,7 +389,7 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow save failed: {e}")
-            raise StateError("save", session_id, str(e))
+            raise StateError("save", session_id, str(e)) from e
 
     async def load(self, session_id: str) -> dict[str, Any] | None:
         """
@@ -428,7 +428,7 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow load failed: {e}")
-            raise StateError("load", session_id, str(e))
+            raise StateError("load", session_id, str(e)) from e
 
     async def delete(self, session_id: str) -> None:
         """
@@ -444,7 +444,7 @@ class DataFlowStateBackend(StateBackend):
             await self.db.express.delete(self.model_name, session_id)
         except Exception as e:
             logger.error(f"DataFlow delete failed: {e}")
-            raise StateError("delete", session_id, str(e))
+            raise StateError("delete", session_id, str(e)) from e
 
     async def list_sessions(self) -> list[str]:
         """
@@ -467,7 +467,7 @@ class DataFlowStateBackend(StateBackend):
 
         except Exception as e:
             logger.error(f"DataFlow list failed: {e}")
-            raise StateError("list", reason=str(e))
+            raise StateError("list", reason=str(e)) from e
 
 
 # ============================================================================

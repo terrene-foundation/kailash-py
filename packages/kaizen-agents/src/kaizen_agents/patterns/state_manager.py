@@ -84,7 +84,7 @@ def _mask_connection_string(connection_string: str) -> str:
 # it returns ``None`` when the package is missing without ever
 # triggering an import, so static analysis sees no "unused import"
 # false positive.
-import importlib.util as _importlib_util
+import importlib.util as _importlib_util  # noqa: E402  (intentional probe placement, see comment above)
 
 SQLALCHEMY_AVAILABLE = _importlib_util.find_spec("sqlalchemy") is not None
 
@@ -105,8 +105,9 @@ try:
 except ImportError:
     RUNTIME_AVAILABLE = False
 
-# Model imports
-from kaizen_agents.patterns.models import (
+# Model imports — intentionally placed after the optional-dep probes above so
+# probe-state constants resolve before model validation pulls them in.
+from kaizen_agents.patterns.models import (  # noqa: E402  (intentional placement after probes)
     WORKFLOW_STATUS_VALUES,
     validate_workflow_checkpoint,
     validate_workflow_state,

@@ -287,7 +287,7 @@ class ParallelPipeline(Pipeline):
         try:
             # Check if we're already in an event loop
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # Already in async context, use sync execution to avoid nested loops
                 results = self._execute_parallel_sync(inputs)
             except RuntimeError:

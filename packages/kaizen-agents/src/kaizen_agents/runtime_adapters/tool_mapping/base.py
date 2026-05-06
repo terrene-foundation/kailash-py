@@ -270,7 +270,7 @@ class ToolMapper(ABC):
                         source_format="kaizen",
                         target_format=cls.FORMAT_NAME,
                         reason=str(e),
-                    )
+                    ) from e
                 logger.warning(f"Skipping unparseable tool at index {i}: {e}")
 
         return tools

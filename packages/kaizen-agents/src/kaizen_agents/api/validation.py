@@ -193,7 +193,6 @@ def validate_capability_consistency(
         # Warning but not error - autonomous can work without tools
     """
     errors = []
-    warnings = []
 
     # Check: AUTONOMOUS mode typically needs tools
     if ExecutionMode.AUTONOMOUS in capabilities.execution_modes:

@@ -429,7 +429,7 @@ class Recomposer:
             raise ValueError(
                 f"Invalid recovery strategy '{strategy_str}'. "
                 f"Must be one of: {[s.value for s in RecoveryStrategy]}"
-            )
+            ) from None
 
         rationale = raw.get("rationale", "")
         if not rationale or not isinstance(rationale, str):

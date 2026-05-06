@@ -176,7 +176,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
                 raise ImportError(
                     "Google Generative AI package not installed. "
                     "Install with: pip install google-generativeai"
-                )
+                ) from None
 
         await super().ensure_initialized()
 

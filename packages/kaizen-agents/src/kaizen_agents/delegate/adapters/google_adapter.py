@@ -271,10 +271,7 @@ class GoogleStreamAdapter:
                 }
 
         # Determine finish reason
-        if tool_calls:
-            finish_reason = "tool_calls"
-        else:
-            finish_reason = "stop"
+        finish_reason = "tool_calls" if tool_calls else "stop"
 
         yield StreamEvent(
             event_type="done",

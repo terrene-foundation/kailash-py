@@ -5,6 +5,15 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed (issue #815 — chore-only modernization sweep, packages/kaizen-agents/src/)
+
+- Applied Black + Ruff modernization sweep across `src/` clearing pre-existing drift the T3 hygiene release (`0.9.5`) flagged as out-of-scope. **No public API change**: `__init__.py` exports + `__all__` lists are byte-for-byte identical between main and HEAD on every package init module. Wheel content unchanged for any consumer-visible surface.
+- Black: 88 files reformatted at line-length=88 (aligned with repo-level pre-commit hook). Project `pyproject.toml::[tool.black]::line-length` updated 100 → 88 for single-source-of-truth.
+- Ruff: 376 of 433 diagnostics auto-fixed (PEP 604 `Optional[X] → X | None`, PEP 585 `List[X] → list[X]`, unused imports, deprecated `typing` re-exports). Manual triage: F821 (undefined `ExecutionMode` annotation in `api/shortcuts.py` — fixed via `TYPE_CHECKING` import), F841 unused locals (3 dead assignments removed in `validation.py`, `journey/nexus.py`, `patterns/parallel.py`), B904 raise-from-clause (17 sites — every `except X as e: raise Y(...)` now chains via `from e` or `from None` for `ImportError` lazy-load probes), B007 unused loop vars (2 renamed to `_node_id` / `_subtask`), E402 (4 intentional late imports kept with `# noqa: E402` + rationale comments — circular avoidance + optional-dep probe ordering). Style-preference rules SIM102/103/105/108/116 disabled at project level (`pyproject.toml::[tool.ruff.lint]::ignore`) — the nested-if / try-except / ternary forms read clearer in the agent / pattern code than the SIM-suggested rewrites.
+- Pre-commit hook coverage: repo-level `.pre-commit-config.yaml` already runs Black + Ruff against `packages/kaizen-agents/src/`; no per-package config added.
+
 ## [0.9.5] — 2026-05-03 — issue #781 hygiene release (T3)
 
 Patch release cutting PyPI for T3 (kaizen-agents TODO-NNN comment-strip) of the issue #781 cleanup workstream.
