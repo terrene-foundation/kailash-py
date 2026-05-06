@@ -550,7 +550,7 @@ A subclass missing any of the four methods raises `TypeError` on instantiation p
 ### 9.2 Task dataclass
 
 ```python
-@dataclass
+@dataclass(frozen=True)
 class Task:
     task_id: str
     schedule_id: str
@@ -560,14 +560,16 @@ class Task:
     kwargs: Dict[str, Any] = field(default_factory=dict)
 ```
 
-| Field               | Description                                                                                                                                                                                                 |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task_id`           | Stable hash of `(schedule_id, planned_fire_time_iso)` produced by `compute_task_id`. 32-character lowercase hex (128 bits of collision resistance). Used as the queue's PRIMARY KEY for idempotent enqueue. |
-| `schedule_id`       | The scheduler-assigned schedule identifier (e.g. `sched-abc123def456`).                                                                                                                                     |
-| `workflow_blob`     | The serialized workflow (pickled `WorkflowBuilder.build()` output). Workers deserialize and execute.                                                                                                        |
-| `planned_fire_time` | The trigger's intended fire time as an ISO 8601 string. The scheduler-computed fire instant — NOT wall-clock now() — so multi-instance double-fires produce the same `task_id`.                             |
-| `queue_name`        | Logical queue for routing (default `"default"`).                                                                                                                                                            |
-| `kwargs`            | Additional keyword arguments forwarded to `runtime.execute(...)` on the worker side.                                                                                                                        |
+`Task` is frozen per EATP P10 — instances flow across the queue boundary and MUST NOT be mutated after construction; the queue payload is the canonical state. `SQLTaskMessage` (the queue-layer message dataclass in `kailash.infrastructure.task_queue`) is also frozen on the same principle.
+
+| Field               | Description                                                                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_id`           | Stable hash of `(schedule_id, planned_fire_time_iso)` produced by `compute_task_id`. 32-character lowercase hex (128 bits of collision resistance). Used as the queue's PRIMARY KEY for idempotent enqueue.          |
+| `schedule_id`       | The scheduler-assigned schedule identifier (e.g. `sched-abc123def456`).                                                                                                                                              |
+| `workflow_blob`     | JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(...).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))` — NOT `pickle.loads()`. See §9.4.1. |
+| `planned_fire_time` | The trigger's intended fire time as an ISO 8601 string. The scheduler-computed fire instant — NOT wall-clock now() — so multi-instance double-fires produce the same `task_id`.                                      |
+| `queue_name`        | Logical queue for routing (default `"default"`).                                                                                                                                                                     |
+| `kwargs`            | Additional keyword arguments forwarded to `runtime.execute(...)` on the worker side.                                                                                                                                 |
 
 ### 9.3 compute_task_id helper
 
@@ -602,7 +604,21 @@ await dispatcher.initialize()
 scheduler = WorkflowScheduler(dispatch_via=dispatcher)
 ```
 
-Schema (managed by the underlying `SQLTaskQueue`): `task_id PK, queue_name, payload, status, created_at, updated_at, attempts, max_attempts, visibility_timeout, worker_id, error`. The Task fields are encoded into the `payload` JSON (`schedule_id`, `workflow_blob_b64`, `planned_fire_time`, `kwargs`).
+Schema (managed by the underlying `SQLTaskQueue`): `task_id PK, queue_name, payload, status, created_at, updated_at, attempts, max_attempts, visibility_timeout, worker_id, error`. The Task fields are encoded into the `payload` JSON (`schedule_id`, `workflow_blob_json`, `planned_fire_time`, `kwargs`). `workflow_blob_json` carries the JSON-encoded workflow representation (UTF-8 string in the outer JSON) — see §9.4.1.
+
+#### 9.4.1 Workflow serialization (JSON, not pickle)
+
+`Task.workflow_blob` is JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(workflow_dict).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
+
+Pickle on a queue payload is BLOCKED. Any party with `INSERT INTO <queue_table>` privilege would otherwise execute arbitrary code on the next worker poll via `pickle.loads()` of the attacker-supplied bytes — same threat class as arbitrary-code execution on user input per `rules/security.md` § "No arbitrary-code execution on user input". The JSON contract structurally prevents that class: deserializing a JSON payload produces only Python primitives (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) — no callable, no class instance, no code path the attacker can pivot to.
+
+If a workflow representation cannot be expressed as JSON (callables, opaque binary state), the dispatcher refuses to serialize and raises `TypeError` per `rules/zero-tolerance.md` Rule 3 — silent fallback to an unsafe path (pickle) is BLOCKED.
+
+#### 9.4.2 Multi-tenant queue isolation
+
+Multi-tenant deployments MUST provision a per-tenant queue table (e.g. `table_name="kailash_task_queue_<tenant>"`). Cross-tenant queue sharing is BLOCKED by deployment convention because the worker pool that polls the queue is a single trust boundary: any party with `INSERT INTO <shared_queue>` privilege can enqueue a workflow that the worker executes under its own runtime credentials. Sharing one queue across tenants therefore grants every tenant the privilege of every other tenant.
+
+The defense is structural, not application-level: the dispatcher does not perform tenant-scoping internally. The operator's responsibility is to provision one `SQLTaskQueueDispatcher(conn, table_name="kailash_task_queue_<tenant>")` per tenant. The `_validate_identifier` regex on `table_name` (per `rules/dataflow-identifier-safety.md`) ensures the per-tenant suffix cannot inject SQL.
 
 ### 9.5 Idempotent enqueue contract
 
