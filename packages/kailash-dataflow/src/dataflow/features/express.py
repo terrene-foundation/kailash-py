@@ -799,6 +799,7 @@ class DataFlowExpress:
         """
 
         async def _update():
+            self._check_append_only(model, "update")
             await self._validate_if_enabled(model, fields)
             # Phase 5.11: trust access check before the write.
             plan = await self._trust_check_write(model, "update")
@@ -885,6 +886,7 @@ class DataFlowExpress:
         """
 
         async def _delete():
+            self._check_append_only(model, "delete")
             # Phase 5.11: trust access check before the write.
             plan = await self._trust_check_write(model, "delete")
             try:
@@ -1215,6 +1217,7 @@ class DataFlowExpress:
         """
 
         async def _upsert():
+            self._check_append_only(model, "upsert")
             await self._validate_if_enabled(model, data)
             node = self._create_node(model, "Upsert")
 
@@ -1299,6 +1302,7 @@ class DataFlowExpress:
         """
 
         async def _upsert():
+            self._check_append_only(model, "upsert")
             node = self._create_node(model, "Upsert")
 
             params = {"where": where, "create": create, "update": update or create}
@@ -1432,6 +1436,7 @@ class DataFlowExpress:
         """
 
         async def _bulk_update():
+            self._check_append_only(model, "bulk_update")
             # Issue #490 redaction contract: bulk_update delegates to
             # self.update(), which applies _apply_classification_mask_record
             # on its return. Do NOT inline a SELECT + row_to_dict here
@@ -1494,6 +1499,7 @@ class DataFlowExpress:
         """
 
         async def _bulk_delete():
+            self._check_append_only(model, "bulk_delete")
             node = self._create_node(model, "BulkDelete")
             # Convert IDs list to filter format expected by BulkDeleteNode
             result = await node.async_run(filter={"id": {"$in": ids}})
@@ -1545,6 +1551,11 @@ class DataFlowExpress:
             ], conflict_on=["id"])
             print(result["created"], result["updated"])
         """
+        # Issue #839: append-only guard fires BEFORE conflict_on
+        # validation so callers see the typed AppendOnlyViolationError
+        # before any other work.
+        self._check_append_only(model, "bulk_upsert")
+
         conflict_fields = conflict_on or ["id"]
 
         # Validate conflict_on fields against the model schema.
@@ -1560,6 +1571,7 @@ class DataFlowExpress:
             pass  # get_model_fields not available — skip validation
 
         async def _bulk_upsert():
+            self._check_append_only(model, "bulk_upsert")
             node = self._create_node(model, "BulkUpsert")
             # BulkUpsertNode accepts conflict_columns in its config.
             node.conflict_columns = conflict_fields
@@ -1952,6 +1964,19 @@ class SyncExpress:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
 
+    def _check_append_only(self, model: str, operation: str) -> None:
+        """Sync delegate to :meth:`DataFlowExpress._check_append_only`.
+
+        Issue #839: every sync mutation surface MUST raise
+        ``AppendOnlyViolationError`` synchronously at the public-method
+        boundary BEFORE submitting any coroutine to the background loop —
+        otherwise the exception surfaces wrapped through
+        ``asyncio.run_coroutine_threadsafe`` and obscures the documented
+        contract. This delegate forwards to the async-class helper so both
+        surfaces share a single enforcement point and a single grep target.
+        """
+        self._express._check_append_only(model, operation)
+
     # ========================================================================
     # CRUD Operations
     # ========================================================================
@@ -2003,6 +2028,11 @@ class SyncExpress:
         Returns:
             Updated record
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface so callers see the typed AppendOnlyViolationError before
+        # any side effect (the inner async path checks it again as defense
+        # in depth).
+        self._check_append_only(model, "update")
         return self._run_sync(self._express.update(model, id, fields))
 
     def delete(self, model: str, id: Union[str, int]) -> bool:
@@ -2015,6 +2045,9 @@ class SyncExpress:
         Returns:
             True if deleted, False if not found
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface (defense in depth — async path also checks).
+        self._check_append_only(model, "delete")
         return self._run_sync(self._express.delete(model, id))
 
     def list(
@@ -2113,6 +2146,9 @@ class SyncExpress:
         Returns:
             The upserted record
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface (defense in depth — async path also checks).
+        self._check_append_only(model, "upsert")
         return self._run_sync(self._express.upsert(model, data, conflict_on))
 
     def upsert_advanced(
@@ -2135,6 +2171,9 @@ class SyncExpress:
         Returns:
             Dict with 'created' (bool), 'action' (str), 'record' (dict)
         """
+        # Issue #839: upsert_advanced is treated as the upsert operation per
+        # rules/zero-tolerance.md Rule 5 (consistent enforcement).
+        self._check_append_only(model, "upsert")
         return self._run_sync(
             self._express.upsert_advanced(model, where, create, update, conflict_on)
         )
@@ -2173,6 +2212,9 @@ class SyncExpress:
         Returns:
             List of updated records
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface (defense in depth — async path also checks).
+        self._check_append_only(model, "bulk_update")
         return self._run_sync(self._express.bulk_update(model, records, key_field))
 
     def bulk_delete(self, model: str, ids: List[str]) -> bool:
@@ -2185,6 +2227,9 @@ class SyncExpress:
         Returns:
             True if all deletions succeeded
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface (defense in depth — async path also checks).
+        self._check_append_only(model, "bulk_delete")
         return self._run_sync(self._express.bulk_delete(model, ids))
 
     def bulk_upsert(
@@ -2205,6 +2250,9 @@ class SyncExpress:
         Returns:
             ``{"records": [...], "created": int, "updated": int, "total": int}``
         """
+        # Issue #839: append-only guard fires synchronously at the public
+        # surface (defense in depth — async path also checks).
+        self._check_append_only(model, "bulk_upsert")
         return self._run_sync(
             self._express.bulk_upsert(model, records, conflict_on, batch_size)
         )

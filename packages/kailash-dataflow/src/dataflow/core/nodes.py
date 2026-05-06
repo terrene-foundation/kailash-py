@@ -261,6 +261,15 @@ def _make_append_only_forbidden_node(model_name: str, operation: str) -> Type[No
         Raises :class:`AppendOnlyViolationError` at construction time so
         every workflow path that attempts to add the node fails before
         any side effect.
+
+        :class:`Node` is an ABC with abstract :meth:`get_parameters` and
+        :meth:`run`. CPython checks abstract method satisfaction BEFORE
+        calling ``__init__``; without concrete implementations Python
+        raises ``TypeError: Can't instantiate abstract class …`` and the
+        construction-time AppendOnlyViolationError never fires. We
+        provide trivial concrete bodies so the ABC gate passes; the
+        bodies are unreachable because ``__init__`` raises before any
+        method is invoked.
         """
 
         def __init__(self, **kwargs):
@@ -272,6 +281,16 @@ def _make_append_only_forbidden_node(model_name: str, operation: str) -> Type[No
                 f"`append_only=True` from the @db.model() decorator "
                 f"to permit mutations. See issue #839."
             )
+
+        # Concrete stubs for the Node ABC — unreachable because __init__
+        # raises. Required so Python's abstract-method gate (CPython
+        # 3.11+ enforces the gate before __init__) does not raise
+        # TypeError and shadow the typed AppendOnlyViolationError.
+        def get_parameters(self):  # pragma: no cover — unreachable
+            return {}
+
+        def run(self, **kwargs):  # pragma: no cover — unreachable
+            return {}
 
     AppendOnlyForbiddenNode.__name__ = f"{model_name}{operation.capitalize()}Forbidden"
     AppendOnlyForbiddenNode.__qualname__ = AppendOnlyForbiddenNode.__name__
