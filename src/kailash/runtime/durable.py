@@ -514,10 +514,30 @@ def _hash_pk(value: Any) -> str:
     ``rules/event-payload-classification.md`` MUST Rule 1 — produces a
     stable, opaque, fixed-length identifier so cross-event correlation
     still works while the raw PK never lands in the event store.
+
+    A maliciously-crafted upstream node can pass an object whose
+    ``__str__`` raises (or whose ``__str__`` returns a non-string and
+    triggers a TypeError on ``encode``); rather than crashing the
+    redaction pipeline, return a stable sentinel ``"pk:unhashable"`` and
+    log at DEBUG.  Same fail-closed posture as
+    :func:`redact_event_for_persistence` — never let a malformed value
+    propagate raw to the event store.
     """
     if value is None:
         return "pk:null"
-    coerced = str(value).encode("utf-8")
+    try:
+        coerced = str(value).encode("utf-8")
+    except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:
+        logger.debug(
+            "durable.redact.unhashable_pk_value",
+            extra={
+                "value_type": type(value).__name__,
+                "error_type": type(exc).__name__,
+            },
+        )
+        return "pk:unhashable"
     digest = hashlib.sha256(coerced).hexdigest()[:16]
     return f"pk:{digest}"
 
