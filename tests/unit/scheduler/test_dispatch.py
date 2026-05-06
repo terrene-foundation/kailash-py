@@ -266,14 +266,17 @@ class TestWorkflowSchedulerDispatchVia:
 class _SubmitEventStub:
     """Minimal APScheduler-event-shaped record for the submit listener.
 
-    The listener only reads `event.job_id` and `event.scheduled_run_time`;
-    a small struct-like helper is sufficient to exercise the path
-    deterministically in Tier 1.
+    Mirrors APScheduler's ``JobSubmissionEvent`` contract:
+    ``event.job_id`` + ``event.scheduled_run_times: list[datetime]``.
+    The listener records ``run_times[-1]`` (the most recent fire from
+    the trigger) keyed by ``job_id``.
     """
 
     def __init__(self, job_id: str, scheduled_run_time: datetime) -> None:
         self.job_id = job_id
-        self.scheduled_run_time = scheduled_run_time
+        # APScheduler sends a list (coalesce/misfire may produce multiple);
+        # the listener records the LAST entry as the current fire instant.
+        self.scheduled_run_times = [scheduled_run_time]
 
 
 class TestPlannedFireTimeListener:
@@ -312,3 +315,40 @@ class TestPlannedFireTimeListener:
 
         with pytest.raises(RuntimeError, match="EVENT_JOB_SUBMITTED listener"):
             scheduler._planned_fire_time("sched-cleanup")
+
+    def test_on_job_submitted_picks_last_run_time(self) -> None:
+        """Multiple scheduled_run_times — listener records the latest.
+
+        APScheduler may pass multiple entries under coalesce/misfire
+        policies. The most recent fire (last element) is the trigger
+        instant the callback is firing for.
+        """
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        scheduler = WorkflowScheduler(job_store_path=None)
+
+        class _MultiRunEvent:
+            job_id = "sched-multi-run"
+            scheduled_run_times = [
+                datetime(2026, 5, 7, 9, 30, 0, tzinfo=UTC),
+                datetime(2026, 5, 7, 9, 30, 30, tzinfo=UTC),
+                datetime(2026, 5, 7, 9, 31, 0, tzinfo=UTC),  # current
+            ]
+
+        scheduler._on_job_submitted(_MultiRunEvent())
+        assert scheduler._planned_fire_time("sched-multi-run") == datetime(
+            2026, 5, 7, 9, 31, 0, tzinfo=UTC
+        )
+
+    def test_on_job_submitted_rejects_empty_run_times(self) -> None:
+        """Empty list violates APScheduler invariant — refuse, do not silently no-op."""
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        scheduler = WorkflowScheduler(job_store_path=None)
+
+        class _EmptyEvent:
+            job_id = "sched-empty"
+            scheduled_run_times: list[datetime] = []
+
+        with pytest.raises(RuntimeError, match="empty scheduled_run_times"):
+            scheduler._on_job_submitted(_EmptyEvent())

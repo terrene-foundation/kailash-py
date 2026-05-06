@@ -585,14 +585,29 @@ class WorkflowScheduler:
     def _on_job_submitted(self, event: Any) -> None:
         """APScheduler EVENT_JOB_SUBMITTED listener — record fire time.
 
-        Fires BEFORE the job callback with ``event.scheduled_run_time``
-        carrying the CURRENT fire instant. We key by ``event.job_id``
-        (== ``schedule_id``) so the dispatch callback can read the
+        Fires BEFORE the job callback with
+        ``event.scheduled_run_times: list[datetime]`` carrying the
+        CURRENT trigger fire instant(s). The list typically holds one
+        entry; under coalesce/misfire policies APScheduler may pass
+        multiple. We record the LAST element — the most recent fire
+        the trigger produced — so the dispatch callback can read the
         correct fire time without relying on ``job.next_run_time``
         (which APScheduler has already advanced to the next scheduled
         fire by the time the callback runs).
+
+        We key by ``event.job_id`` (== ``schedule_id``).
         """
-        self._fire_times[event.job_id] = event.scheduled_run_time
+        run_times = event.scheduled_run_times
+        if not run_times:
+            # Empty list violates APScheduler's own dispatch contract;
+            # raise so the failure surfaces at the listener boundary
+            # instead of producing a silently-misrecorded fire time.
+            raise RuntimeError(
+                f"EVENT_JOB_SUBMITTED for job_id={event.job_id!r} carried "
+                f"empty scheduled_run_times list — APScheduler internal "
+                f"invariant violation"
+            )
+        self._fire_times[event.job_id] = run_times[-1]
 
     def _on_job_done(self, event: Any) -> None:
         """Cleanup the recorded fire time after the job finishes.

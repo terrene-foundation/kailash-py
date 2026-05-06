@@ -276,6 +276,91 @@ class TestWorkflowSchedulerDispatchFullPath:
         assert len(rows) == 1, "scheduler dispatch_via MUST write through to DB"
         assert rows[0]["status"] == "pending"
 
+    async def test_planned_fire_time_uses_listener_not_next_run_time(
+        self, conn: ConnectionManager, dispatcher: SQLTaskQueueDispatcher
+    ) -> None:
+        """REAL APScheduler — recorded planned_fire_time matches each fire.
+
+        This is the F1 regression. Prior to the fix, _planned_fire_time
+        read job.next_run_time at callback time -- but APScheduler had
+        already advanced next_run_time to the NEXT scheduled fire. The
+        recorded planned_fire_time drifted by one interval on every fire.
+
+        Verification: schedule an interval job at 0.5s; let it fire 2x;
+        verify the persisted planned_fire_time on each row is within
+        ~150ms of the actual fire instant AND the two rows have distinct
+        timestamps. With the bug, both rows would carry timestamps from
+        the FUTURE (one interval ahead), and a single-fire test would
+        miss it because future-vs-now is invisible against datetime.now.
+        """
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        scheduler = WorkflowScheduler(
+            job_store_path=None,
+            dispatch_via=dispatcher,
+        )
+
+        # Use real APScheduler — no _planned_fire_time monkeypatch.
+        scheduler.start()
+        try:
+            schedule_id = scheduler.schedule_interval(
+                _IntegrationBuilder("listener-fire-time-regression"),
+                seconds=0.5,
+                name="F1-regression",
+            )
+
+            # Wait long enough for ~2 fires (interval=0.5s). Guard with a
+            # bounded sleep + poll loop so flakiness manifests as the
+            # explicit assertion below, not a hang.
+            await asyncio.sleep(1.5)
+
+            rows = await conn.fetch(
+                "SELECT task_id, payload, created_at FROM kailash_task_queue "
+                "WHERE payload LIKE ? ORDER BY created_at ASC",
+                f'%"schedule_id": "{schedule_id}"%',
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+
+        # MUST have at least 2 fires within 1.5s @ 0.5s interval.
+        assert (
+            len(rows) >= 2
+        ), f"expected >=2 fires from 0.5s interval over 1.5s, got {len(rows)}"
+
+        # Extract recorded planned_fire_time per row.
+        import json
+
+        recorded_times: list[datetime] = []
+        for row in rows:
+            payload_raw = row["payload"]
+            payload = (
+                json.loads(payload_raw)
+                if isinstance(payload_raw, (str, bytes))
+                else payload_raw
+            )
+            recorded_times.append(datetime.fromisoformat(payload["planned_fire_time"]))
+
+        # Distinct fires MUST have distinct recorded times — if the bug
+        # were present, all fires would share the same advanced
+        # next_run_time at callback entry (subsequent calls overwrite),
+        # OR they would drift by exactly one interval into the future.
+        assert len(set(recorded_times)) == len(
+            recorded_times
+        ), f"recorded planned_fire_time MUST be unique per fire: {recorded_times}"
+
+        # Each recorded planned_fire_time MUST match the actual firing
+        # instant (within ~250ms tolerance for callback latency on slow
+        # CI). Prior to the fix the recorded times were ~500ms in the
+        # future — outside the tolerance.
+        now = datetime.now(UTC)
+        for fire_time in recorded_times:
+            delta = (now - fire_time).total_seconds()
+            assert -0.05 <= delta <= 2.0, (
+                f"planned_fire_time={fire_time.isoformat()} drifted from "
+                f"now={now.isoformat()} by {delta:.3f}s; bug F1 would put "
+                f"this in the future (delta < 0)"
+            )
+
     async def test_concurrent_double_fire_dedupes_at_pk(
         self, conn: ConnectionManager
     ) -> None:
