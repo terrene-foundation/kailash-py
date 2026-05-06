@@ -282,15 +282,30 @@ def _make_append_only_forbidden_node(model_name: str, operation: str) -> Type[No
                 f"to permit mutations. See issue #839."
             )
 
-        # Concrete stubs for the Node ABC — unreachable because __init__
-        # raises. Required so Python's abstract-method gate (CPython
-        # 3.11+ enforces the gate before __init__) does not raise
-        # TypeError and shadow the typed AppendOnlyViolationError.
-        def get_parameters(self):  # pragma: no cover — unreachable
+        # Concrete stubs for the Node ABC. ``__init__`` raises so the
+        # happy path never reaches these bodies; required so Python's
+        # abstract-method gate (CPython 3.11+ enforces the gate before
+        # __init__) does not raise TypeError and shadow the typed
+        # AppendOnlyViolationError.
+        #
+        # Issue #857: ``run()`` is reachable IF an attacker bypasses
+        # __init__ via ``NodeClass.__new__(NodeClass)``. Defense in
+        # depth: also raise from run() so __new__-bypassed instances
+        # fail closed with the same typed error class — the security
+        # promise of @db.model(append_only=True) holds regardless of
+        # how the node was constructed.
+        def get_parameters(self):  # pragma: no cover — unreachable on __init__ path
             return {}
 
-        def run(self, **kwargs):  # pragma: no cover — unreachable
-            return {}
+        def run(self, **kwargs):
+            raise AppendOnlyViolationError(
+                f"{op_human} rejected on append-only model "
+                f"'{model_name}'. Models declared with "
+                f"@db.model(append_only=True) only accept "
+                f"Create / BulkCreate / Read / List / Count. Remove "
+                f"`append_only=True` from the @db.model() decorator "
+                f"to permit mutations. See issue #839."
+            )
 
     AppendOnlyForbiddenNode.__name__ = f"{model_name}{operation.capitalize()}Forbidden"
     AppendOnlyForbiddenNode.__qualname__ = AppendOnlyForbiddenNode.__name__
