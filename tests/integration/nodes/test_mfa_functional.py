@@ -1,10 +1,9 @@
 """Functional tests for nodes/auth/mfa.py that verify actual MFA functionality."""
 
-import base64
 import secrets
 import time
-from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, call, patch
+from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 
