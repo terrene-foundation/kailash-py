@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed (issue #803 — `MultiFactorAuthNode` test/production drift)
+
+- **Verify-failure semantic** — invalid TOTP / backup codes now return
+  `success=False` in lockstep with `verified=False`. Previously returned
+  `success=True, verified=False`, conflating "operation completed" with
+  "verification succeeded" and risking callers gating access on `success`
+  alone. Both sync (`run`) and async (`async_run`) paths fixed; same change
+  applies to the bad-pending-verification, bad-backup-code, and bad-method
+  branches.
+- **Verify-path rate limiting** — the `_check_rate_limit` dispatch on
+  `action="verify"` was commented out, leaving the verify path open to
+  brute-force probing. Now enforced; rate-limited responses include
+  `rate_limited=True` and `too_many_attempts=True`.
+- **Empty / whitespace `user_id` rejected** — `run` and `async_run` return a
+  typed `success=False, error="user_id is required..."` instead of silently
+  creating MFA state under the empty-string key.
+- **`action="reset"` implemented** — previously fell through to the
+  unknown-action branch. Now clears existing MFA state and returns a fresh
+  setup payload (new TOTP secret + backup codes).
+- **Response-shape `user_id` echo** — verify, status, and disable responses
+  now include `user_id` for audit / correlation consumers.
+- **Status `enabled_methods` alias** — status responses now expose
+  `enabled_methods` (alias of `enrolled_methods`) so callers built against
+  either contract resolve.
+- **Disable `disabled_methods`** — `_disable_all_mfa` and `_disable_method`
+  now report which methods were removed.
+- **`print()` removed from `_setup_totp`** — replaced with `logger.debug` and
+  field-only metadata, per `rules/observability.md` Rule 1.
+
+Locked by `tests/regression/test_issue_803_mfa_response_contracts.py`
+(9 tests). Closes #803.
+
 ## [2.13.4] — 2026-05-03 — issue #781 hygiene release (T4 + T5)
 
 Patch release cutting PyPI for T4 (core/runtime + nexus TODO-NNN comment-strip) and T5 (CI gate + regression test) of the issue #781 cleanup workstream.

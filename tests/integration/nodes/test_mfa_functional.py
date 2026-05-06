@@ -1,10 +1,9 @@
 """Functional tests for nodes/auth/mfa.py that verify actual MFA functionality."""
 
-import base64
 import secrets
 import time
-from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, call, patch
+from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -268,14 +267,18 @@ class TestMFASetupFunctionality:
                 or "provisioning_uri" in result
             )
 
-            # Verify provisioning URI format
+            # Verify provisioning URI format. The default issuer is "KailashSDK"
+            # (set by MultiFactorAuthNode.__init__); a configurable issuer would
+            # require constructing the node with `issuer="TestApp"` — which the
+            # test does not do, so we assert the actual default (issue #803).
             if "provisioning_uri" in result:
                 uri = result["provisioning_uri"]
                 assert "otpauth://totp/" in uri
-                assert "TestApp" in uri
+                assert "KailashSDK" in uri
                 assert "user123" in uri
 
-            # Verify backup codes
+            # Verify backup codes — production default is 10 codes per
+            # MultiFactorAuthNode(backup_codes_count: int = 10) (issue #803).
             assert "backup_codes" in result or "recovery_codes" in result
             backup_codes = result.get("backup_codes", result.get("recovery_codes", []))
             assert isinstance(backup_codes, list)
@@ -372,18 +375,28 @@ class TestMFASetupFunctionality:
 
             backup_codes = result["backup_codes"]
 
-            # Verify backup codes properties
-            assert len(backup_codes) == 5
+            # Verify backup codes properties.
+            # Production default is 10 codes per `backup_codes_count: int = 10`
+            # in MultiFactorAuthNode.__init__ (issue #803).
+            assert len(backup_codes) == 10
             for code in backup_codes:
                 assert isinstance(code, str)
                 assert len(code) >= 8
                 assert len(code) <= 16
-                # Should contain mix of letters and numbers
-                assert any(c.isalpha() for c in code)
-                assert any(c.isdigit() for c in code)
+                # Code MUST be drawn from the alphanumeric alphabet
+                # (uppercase letters + digits). Per-code alpha-AND-digit is
+                # overly strict — random 8-char codes from a 36-char alphabet
+                # may legitimately be all-letter or all-digit. Assert across
+                # the full set instead so the test is not flaky (issue #803).
+                assert all(c.isalnum() for c in code)
+
+            # Across the full set, both letters and digits appear.
+            joined = "".join(backup_codes)
+            assert any(c.isalpha() for c in joined)
+            assert any(c.isdigit() for c in joined)
 
             # Verify all codes are unique
-            assert len(set(backup_codes)) == 5
+            assert len(set(backup_codes)) == 10
 
         except ImportError:
             pytest.skip("MultiFactorAuthNode not available")
@@ -590,11 +603,17 @@ class TestMFARateLimitingAndSecurity:
     """Test MFA rate limiting and security features."""
 
     def test_rate_limiting_enforcement(self):
-        """Test rate limiting prevents brute force attacks."""
+        """Test rate limiting prevents brute force attacks.
+
+        Constructs the node with `rate_limit_attempts=3` so the test's 5-attempt
+        loop reliably triggers the rate-limit branch on attempt 4+. Production
+        default is 5 attempts; this test exercises the rate-limit enforcement
+        invariant, not the production tuning (issue #803).
+        """
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(rate_limit_attempts=3)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
