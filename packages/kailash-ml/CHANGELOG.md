@@ -1,5 +1,68 @@
 # kailash-ml Changelog
 
+## [Unreleased] — FeatureStore canonical surface bridge release
+
+Per `rules/zero-tolerance.md` Rule 6a (Public-API Removal Requires Deprecation
+Cycle), this bridge release emits a `DeprecationWarning` on first access of
+top-level `kailash_ml.FeatureStore` to surface the upcoming cutover before it
+lands. The legacy resolution path itself is unchanged — every existing 1.x
+caller keeps working — and the canonical surface at `kailash_ml.features` has
+been the documented destination since the 1.0 cut (see
+`specs/ml-feature-store.md` § 1.1). Closes #643 step 1.
+
+### Deprecated
+
+- Top-level `from kailash_ml import FeatureStore` now emits a
+  `DeprecationWarning` on first access. The attribute resolves through
+  `__getattr__` to the legacy module
+  `kailash_ml.engines.feature_store.FeatureStore` whose constructor is
+  `FeatureStore(conn: ConnectionManager, *, table_prefix="kml_feat_")`. The
+  canonical 1.0+ surface is
+  `from kailash_ml.features import FeatureStore` whose constructor is
+  `FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)`. The legacy
+  resolution path will be removed in kailash-ml 2.0.0; downstream callers MUST
+  migrate to the canonical import path AND switch the constructor signature
+  before that cutover. See `MIGRATION.md` for the recipe.
+
+### Added
+
+- Tier-2 wiring test
+  `packages/kailash-ml/tests/integration/test_feature_store_wiring.py`
+  exercises the canonical `kailash_ml.features.FeatureStore` end-to-end
+  against a real `DataFlow(...)` instance backed by file-based SQLite
+  (real infrastructure per `rules/testing.md` § Tier 2 — no mocks). Closes
+  the Wave-6 follow-up at `specs/ml-feature-store.md` § 7.2 and satisfies
+  `rules/facade-manager-detection.md` MUST 1 (every `*Store` manager exposed
+  via the public surface MUST have a Tier-2 test imported through the
+  framework facade) AND MUST 2 (file name
+  `test_<lowercase_manager_name>_wiring.py`). The test covers the 15
+  conformance assertions enumerated in `specs/ml-feature-store.md` § 10.
+
+### Migration (1.x → 2.0.0)
+
+```python
+# Before (1.x — emits DeprecationWarning at 1.x bridge release; raises in 2.0.0)
+from kailash.db.connection import ConnectionManager
+from kailash_ml import FeatureStore
+
+conn = ConnectionManager("sqlite:///ml.db")
+await conn.initialize()
+store = FeatureStore(conn, table_prefix="kml_feat_")
+
+# After (canonical 1.0+ surface — works today, will be the only path in 2.0.0)
+from dataflow import DataFlow
+from kailash_ml.features import FeatureStore
+
+df = DataFlow("sqlite:///ml.db", auto_migrate=True)
+store = FeatureStore(df, default_tenant_id="acme")
+```
+
+The constructor change is intentional: the canonical FeatureStore is a
+DataFlow-bridge primitive (one tenant-scoped store per request), not a
+ConnectionManager-coupled singleton. Migration only affects the FeatureStore
+construction site — `get_features` / cache-key helpers retain compatible
+return shapes.
+
 ## [1.7.1] — 2026-05-01 — Re-export `MultiModelAdapter` from `kailash_ml.serving`: closes #741
 
 `MultiModelAdapter` (the 1.5.0 → 1.6.0 hard-break recovery shim, GH

@@ -818,15 +818,27 @@ kailash-ml-gpu-setup
 
 ### "Module kailash_ml has no attribute ..."
 
-Engines are lazy-loaded. Make sure you are importing from the correct path:
+Engines are lazy-loaded. Most engines have a single canonical import path
+under `kailash_ml.<engine_module>`. Use that path; the top-level lazy
+re-export is kept for backwards compatibility only.
 
 ```python
-# Direct import (always works)
-from kailash_ml.engines.feature_store import FeatureStore
+# Canonical 1.0+ surface (preferred — no DeprecationWarning, future-proof)
+from kailash_ml.features import FeatureStore
+# Constructor: FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)
+# See specs/ml-feature-store.md § 1.1.
 
-# Lazy import from top-level (also works)
-from kailash_ml import FeatureStore
+# Legacy top-level shortcut (still works, emits DeprecationWarning at 1.7+)
+from kailash_ml import FeatureStore  # resolves to kailash_ml.engines.feature_store
+# This path will be removed in kailash-ml 2.0.0; migrate to
+# `from kailash_ml.features import FeatureStore` — see MIGRATION.md for the recipe.
 ```
+
+Migration note (1.x → 2.0.0): the top-level legacy resolution targets a
+ConnectionManager-coupled constructor that is incompatible with the
+canonical DataFlow-bridge primitive at `kailash_ml.features.FeatureStore`.
+The 1.7+ bridge release emits a `DeprecationWarning` at first access; the
+2.0.0 cutover flips the legacy resolution path to the canonical module.
 
 ### "kailash-ml-protocols not found"
 

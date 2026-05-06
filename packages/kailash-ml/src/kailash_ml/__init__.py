@@ -19,6 +19,7 @@ they are simply not advertised in ``from kailash_ml import *``.
 from __future__ import annotations
 
 import contextvars as _contextvars
+import warnings as _warnings
 from contextlib import contextmanager as _contextmanager
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
@@ -648,6 +649,32 @@ def __getattr__(name: str):  # noqa: N807
 
         return importlib.import_module("kailash_ml.metrics")
     if name in _engine_map:
+        # Issue #643 — bridge release: top-level ``kailash_ml.FeatureStore``
+        # currently resolves to the legacy module
+        # ``kailash_ml.engines.feature_store`` whose constructor signature is
+        # ``FeatureStore(conn: ConnectionManager, *, table_prefix=...)``. The
+        # canonical 1.0+ surface lives at ``kailash_ml.features.FeatureStore``
+        # with a different constructor
+        # ``FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)``.
+        # Per ``rules/zero-tolerance.md`` Rule 6a (Public-API Removal Requires
+        # Deprecation Cycle) we emit a DeprecationWarning here so 1.x callers
+        # see the migration path BEFORE the cutover lands in 2.0.0. The
+        # legacy resolution path itself is unchanged — this is signal-only.
+        if name == "FeatureStore":
+            _warnings.warn(
+                "Top-level `from kailash_ml import FeatureStore` resolves to "
+                "the legacy module `kailash_ml.engines.feature_store` "
+                "(constructor: `FeatureStore(conn: ConnectionManager, *, "
+                "table_prefix=...)`). The canonical 1.0+ surface is "
+                "`from kailash_ml.features import FeatureStore` (constructor: "
+                "`FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)`)"
+                ". The legacy resolution will be removed in kailash-ml 2.0.0; "
+                "migrate now. See `specs/ml-feature-store.md` for the canonical "
+                "contract and `packages/kailash-ml/MIGRATION.md` for the "
+                "migration recipe.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         import importlib
 
         module = importlib.import_module(_engine_map[name])

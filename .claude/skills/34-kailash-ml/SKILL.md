@@ -145,28 +145,38 @@ pip install kailash-ml[all-gpu]   # Everything (GPU)
 
 ## Quick Start
 
-### Feature Ingestion
+### Feature Retrieval (canonical 1.0+ surface)
 
 ```python
-from kailash.db.connection import ConnectionManager
-from kailash_ml import FeatureStore
-from kailash_ml.types import FeatureSchema, FeatureField
-import polars as pl
+from dataflow import DataFlow
+from kailash_ml.features import FeatureStore, FeatureSchema, FeatureField
 
-conn = ConnectionManager("sqlite:///ml.db")
-await conn.initialize()
+# 1. Live DataFlow instance owns the connection pool + schema migrations.
+df = DataFlow("sqlite:///ml.db", auto_migrate=True)
 
+# 2. Define the feature schema (polars-native dtype allowlist).
 schema = FeatureSchema(
     name="user_churn",
-    features=[
-        FeatureField(name="age", dtype="float"),
-        FeatureField(name="tenure_months", dtype="float"),
-    ],
-    target=FeatureField(name="churned", dtype="int"),
+    version=1,
+    fields=(
+        FeatureField(name="login_count_7d", dtype="int64"),
+        FeatureField(name="purchase_amount_30d", dtype="float64"),
+    ),
+    entity_id_column="user_id",
+    timestamp_column="event_time",
 )
 
-fs = FeatureStore(conn, table_prefix="kml_feat_")
-await fs.initialize()
+# 3. Construct the FeatureStore as a tenant-scoped DataFlow bridge.
+fs = FeatureStore(df, default_tenant_id="acme")
+features = await fs.get_features(schema, tenant_id="acme")
+```
+
+Migration note: top-level `from kailash_ml import FeatureStore` still
+works for 1.x callers but emits a `DeprecationWarning` at 1.7+ and resolves
+to the legacy `kailash_ml.engines.feature_store` module whose constructor
+takes a `ConnectionManager`. The legacy resolution will be removed in
+kailash-ml 2.0.0 — migrate to `from kailash_ml.features import FeatureStore`
+now. See `packages/kailash-ml/MIGRATION.md` for the full recipe.
 
 df = pl.read_csv("data.csv")
 await fs.ingest("user_features", schema, df)

@@ -29,48 +29,63 @@ SQLite / PostgreSQL / MySQL
 - Uses `?` canonical placeholders (ConnectionManager translates per dialect)
 - Table names use `_validate_identifier()` for SQL injection prevention
 
-## Quick Start
+## Quick Start (canonical 1.0+ surface)
 
 ```python
-from kailash.db.connection import ConnectionManager
-from kailash_ml import FeatureStore
-from kailash_ml.types import FeatureSchema, FeatureField
+from datetime import datetime, timezone
+from dataflow import DataFlow
+from kailash_ml.features import FeatureStore, FeatureSchema, FeatureField
 
-# 1. Create ConnectionManager (caller owns lifecycle)
-conn = ConnectionManager("sqlite:///ml.db")
-await conn.initialize()
+# 1. Live DataFlow instance owns the connection pool + auto-migration.
+df = DataFlow("sqlite:///ml.db", auto_migrate=True)
 
-# 2. Initialize FeatureStore with shared connection
-store = FeatureStore(conn, table_prefix="kml_feat_")
-
-# 3. Register a feature group
+# 2. Define the feature schema (polars-native dtypes, tuple of fields).
 schema = FeatureSchema(
     name="user_features",
-    entity_key="user_id",
-    features=[
-        FeatureField(name="login_count", dtype="int"),
-        FeatureField(name="avg_session_min", dtype="float"),
-    ],
+    version=1,
+    fields=(
+        FeatureField(name="login_count", dtype="int64"),
+        FeatureField(name="avg_session_min", dtype="float64"),
+    ),
+    entity_id_column="user_id",
+    timestamp_column="event_time",
 )
-await store.register_group(schema)
 
-# 4. Ingest features (polars DataFrame)
-import polars as pl
-df = pl.DataFrame({
-    "user_id": ["u1", "u2"],
-    "login_count": [42, 7],
-    "avg_session_min": [12.5, 3.2],
-})
-await store.ingest(schema.name, df)
+# 3. Construct the FeatureStore as a tenant-scoped DataFlow bridge.
+fs = FeatureStore(df, default_tenant_id="acme")
 
-# 5. Point-in-time query
-result = await store.get_features(
-    schema.name,
+# 4. Point-in-time query — routes through dataflow.ml_feature_source(...)
+result = await fs.get_features(
+    schema,
+    timestamp=datetime(2026, 3, 30, tzinfo=timezone.utc),
+    tenant_id="acme",
     entity_ids=["u1", "u2"],
-    as_of=datetime(2026, 3, 30, tzinfo=UTC),  # temporal correctness
 )
 # Returns polars DataFrame
 ```
+
+The canonical FeatureStore is a thin DataFlow bridge — the parent `DataFlow`
+owns DDL, connection pooling, and the migration framework; the FeatureStore
+delegates every feature read through `dataflow.ml_feature_source(...)`. See
+`specs/ml-feature-store.md` § 1.1 for the contract and `specs/dataflow-ml-integration.md`
+§ 1.1 for the polars-LazyFrame binding.
+
+### Legacy ConnectionManager path (1.x bridge release)
+
+```python
+# DEPRECATED at 1.7+ — emits DeprecationWarning, removed in 2.0.0
+from kailash.db.connection import ConnectionManager
+from kailash_ml import FeatureStore  # resolves to legacy engines.feature_store
+
+conn = ConnectionManager("sqlite:///ml.db")
+await conn.initialize()
+store = FeatureStore(conn, table_prefix="kml_feat_")
+```
+
+This top-level import is retained for 1.x backwards compatibility; first
+access emits a `DeprecationWarning` pointing at the canonical surface above.
+The legacy resolution path will be removed in kailash-ml 2.0.0. See
+`packages/kailash-ml/MIGRATION.md` for the migration recipe.
 
 ## Why Not Express API?
 
