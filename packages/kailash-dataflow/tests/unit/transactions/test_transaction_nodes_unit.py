@@ -34,9 +34,14 @@ class TestTransactionNodeImplementation:
         mock_transaction_cm.__aenter__.return_value = mock_transaction
         mock_adapter.transaction = Mock(return_value=mock_transaction_cm)
 
+        # Issue #835: TransactionScopeNode now resolves adapters via
+        # `dataflow._get_or_create_async_sql_node(db_type)._get_adapter()`
+        # (async). The previously-imagined `_get_cached_db_node` was a
+        # phantom; this mock matches the actual `DataFlow` API.
         mock_db_node = Mock()
-        mock_db_node.adapter = mock_adapter
-        mock_dataflow._get_cached_db_node = Mock(return_value=mock_db_node)
+        mock_db_node._get_adapter = AsyncMock(return_value=mock_adapter)
+        mock_dataflow._detect_database_type = Mock(return_value="sqlite")
+        mock_dataflow._get_or_create_async_sql_node = Mock(return_value=mock_db_node)
 
         # Create node and set workflow context
         node = TransactionScopeNode()

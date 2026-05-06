@@ -47,13 +47,20 @@ def _make_mock_adapter():
 
 
 def _make_mock_dataflow(adapter):
-    """Create a mock DataFlow instance that returns the given adapter via _get_cached_db_node."""
+    """Create a mock DataFlow instance that returns the given adapter via
+    ``_get_or_create_async_sql_node().._get_adapter()`` (issue #835 — the
+    cached-node helper is named ``_get_or_create_async_sql_node`` on
+    ``DataFlow``, not the previously-imagined ``_get_cached_db_node``)."""
     mock_df = MagicMock()
     mock_df.config.database.url = "sqlite:///:memory:"
+    mock_df._detect_database_type.return_value = "sqlite"
 
     mock_db_node = MagicMock()
-    mock_db_node.adapter = adapter
-    mock_df._get_cached_db_node.return_value = mock_db_node
+    # `AsyncSQLDatabaseNode._get_adapter` is async — return adapter via
+    # AsyncMock so the production `await db_node._get_adapter()` resolves
+    # to the test adapter.
+    mock_db_node._get_adapter = AsyncMock(return_value=adapter)
+    mock_df._get_or_create_async_sql_node.return_value = mock_db_node
 
     return mock_df
 

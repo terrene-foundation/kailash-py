@@ -1,5 +1,24 @@
 # DataFlow Changelog
 
+## [2.7.9] — 2026-05-06 — Async transaction event-loop mismatch (#835)
+
+Patch release fixing a runtime regression where `db.transactions.transaction()` raised `RuntimeError: Event loop is closed` when invoked from an event loop different from the one that constructed the DataFlow instance. Bug fix; no public API surface change; no migration required.
+
+### Fixed
+
+- **`db.transactions.transaction()` now resolves its asyncpg pool through the same per-loop registry as `db.express.*`.** `TransactionManager._get_adapter` previously returned a wrapper around the long-lived `_connection_manager._adapter` whose pool was bound to the worker-thread loop that ran `DataFlow.__init__`; that loop closed at return and every subsequent `transaction()` call from a fresh loop hit `pool.acquire()` against the closed loop. Resolution now walks `_get_or_create_async_sql_node(db_type)._get_adapter()` — priority chain `_shared_pools` → runtime pool → `_PROCESS_POOL_REGISTRY` (WeakValueDictionary, reaped on loop close) → fallback `connect()` — under per-key creation locks. Issue #835.
+- **`_get_adapter_from_context` (used by `TransactionScopeNode` / `TransactionSavepointNode`) is now async.** Every caller awaits it. The previous attribute-based access returned `None` when the cached node had not yet been initialized on the calling loop; the await ensures the priority chain runs.
+
+### Changed
+
+- **`ConnectionManager.initialize_pool()` now uses a transient reachability check** instead of retaining a long-lived adapter on `_connection_manager._adapter`. The init-time fail-fast contract from `dataflow-pool.md` Rule 2 (`await adapter.connect()` MUST succeed before `DataFlow.__init__` returns) is preserved exactly — the adapter is opened, verified, and `disconnect()`-ed within one `async_safe_run` call.
+- **`_connection_manager._adapter` field is removed.** Internal callers (`health_check`, `get_connection_stats`, `disconnect`, dialect-detection sites in `engine.py` / `engine.async_methods.py`) migrated to walking `_PROCESS_POOL_REGISTRY` for live pool stats, or to the existing `dialect_factory` for type-only queries. Internal API only — no `__all__` export, no spec coverage; per `zero-tolerance.md` Rule 6a internal-only carve-out, no deprecation shim is required.
+- **`_PoolWrapper` (internal) is removed.** It previously wrapped the dead-code branch of `TransactionManager._get_adapter()` and is no longer reachable after the routing change above.
+
+### Tests
+
+- 9 new Tier-2 regression tests at `tests/regression/test_issue_835_transaction_cross_loop.py` covering: cross-loop `begin()`, nested savepoint/rollback paths, `TransactionScope` async-cm, concurrent `begin()` from two loops, WeakValueDictionary reaping on loop close, and pool-cap stress (50 sequential loops). Autouse fixture lowers `idle_timeout=2` so pool churn under pytest-xdist parallelism does not breach `max_pool_count_per_process=100`. Production defaults are unchanged.
+
 ## [2.7.8] — 2026-05-06 — CLI generate command: filename validation hardening
 
 Patch release closing a Tier-1 test isolation bug AND the production code path that allowed it. Bug fix; no API surface change; no migration required.

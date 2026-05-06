@@ -27,14 +27,7 @@ import threading
 import warnings
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
-from typing import (
-    Any,
-    AsyncGenerator,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-)
+from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +262,24 @@ class TransactionManager:
             return
 
         # Top-level transaction
-        adapter = self._get_adapter()
-        if adapter is None or adapter.connection_pool is None:
+        adapter = await self._get_adapter()
+        # Normalize pool access across adapter shapes:
+        #
+        # - DataFlow-package adapters (`packages/kailash-dataflow/src/dataflow/
+        #   adapters/postgresql.py`) expose the asyncpg pool on
+        #   ``self.connection_pool``.
+        # - Core-SDK adapters (`src/kailash/nodes/data/async_sql.py::PostgreSQLAdapter`,
+        #   ``ProductionPostgreSQLAdapter``) expose it on ``self._pool``.
+        #
+        # After issue #835's per-loop migration, ``_get_adapter`` resolves to
+        # the core-SDK adapter (returned by ``AsyncSQLDatabaseNode._get_adapter``),
+        # so we read both attributes and use whichever holds the pool. The
+        # historical `_PoolWrapper` class did this same normalization; its
+        # responsibility moved here once `_get_adapter` was simplified.
+        pool = getattr(adapter, "connection_pool", None) or getattr(
+            adapter, "_pool", None
+        )
+        if adapter is None or pool is None:
             raise RuntimeError(
                 "TransactionManager: no database connection available. "
                 "Ensure DataFlow is initialized with a database URL."
@@ -287,7 +296,7 @@ class TransactionManager:
             },
         )
 
-        conn = await adapter.connection_pool.acquire()
+        conn = await pool.acquire()
         token = _active_transaction.set(conn)
 
         try:
@@ -333,7 +342,7 @@ class TransactionManager:
 
         finally:
             _active_transaction.reset(token)
-            await adapter.connection_pool.release(conn)
+            await pool.release(conn)
 
     @asynccontextmanager
     async def _savepoint(self) -> AsyncGenerator[TransactionScope, None]:
@@ -384,31 +393,52 @@ class TransactionManager:
         finally:
             _savepoint_depth.reset(depth_token)
 
-    def _get_adapter(self) -> Any:
-        """Get the database adapter from the DataFlow instance.
+    async def _get_adapter(self) -> Any:
+        """Resolve the per-loop database adapter via DataFlow's cached
+        ``AsyncSQLDatabaseNode``.
 
-        Walks the DataFlow instance to find an adapter with a live
-        connection pool.
+        Routes through ``DataFlow._get_or_create_async_sql_node(db_type)`` —
+        the single source of truth for the cached node, with built-in
+        event-loop change detection (engine.py:7794) — and then through the
+        node's own ``_get_adapter()`` priority chain (async_sql.py:4173:
+        ``_shared_pools`` → runtime pool → ``_PROCESS_POOL_REGISTRY`` →
+        fallback). The 5-component pool key
+        ``loop_id|db_type|connection|pool_size|max_pool_size``
+        (async_sql.py:4130 ``_generate_pool_key``) means the transaction
+        path and ``db.express.*`` share one entry per loop in
+        ``_PROCESS_POOL_REGISTRY``.
+
+        Resolves issue #835: prior implementation read
+        ``_connection_manager._adapter``, an asyncpg pool bound to whichever
+        loop the lazy ``_ensure_connected`` happened to run inside (typically
+        the daemon thread loop or a worker-thread loop closed at return).
+        Subsequent ``begin()`` from any caller-loop hit
+        ``RuntimeError: Event loop is closed`` on ``pool.acquire()``.
+        Per-loop resolution + WeakValueDictionary auto-reaping
+        (specs/dataflow-cache.md §13.4) makes the failure mode unreachable.
+
+        Raises:
+            RuntimeError: When called outside a running event loop, or
+                when the priority chain returns ``None``.
         """
-        # Try the connection manager's adapter
-        if hasattr(self.dataflow, "_connection_manager"):
-            cm = self.dataflow._connection_manager
-            if hasattr(cm, "_adapter") and cm._adapter is not None:
-                return cm._adapter
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError as e:
+            raise RuntimeError(
+                "TransactionManager.begin() requires a running event loop. "
+                "Call from within an async function or `asyncio.run(...)`."
+            ) from e
 
-        # Try direct adapter references
-        for attr in ("_adapter", "_db_adapter", "adapter"):
-            adapter = getattr(self.dataflow, attr, None)
-            if adapter is not None and hasattr(adapter, "connection_pool"):
-                return adapter
-
-        # Try getting from the node cache
-        if hasattr(self.dataflow, "_cached_async_node"):
-            node = self.dataflow._cached_async_node
-            if hasattr(node, "_pool") and node._pool is not None:
-                return _PoolWrapper(node._pool)
-
-        return None
+        db_type = self.dataflow._detect_database_type()
+        node = self.dataflow._get_or_create_async_sql_node(db_type)
+        adapter = await node._get_adapter()
+        if adapter is None:
+            raise RuntimeError(
+                "TransactionManager could not resolve a database adapter — "
+                "the AsyncSQLDatabaseNode priority chain returned None. "
+                "Check DataFlow init logs."
+            )
+        return adapter
 
     @staticmethod
     def get_active_connection() -> Any:
@@ -436,13 +466,6 @@ class TransactionManager:
             "total_rolled_back": 0,
         }
         return {"rolled_back_transactions": [], "count": count, "success": True}
-
-
-class _PoolWrapper:
-    """Minimal wrapper to present a raw pool as an adapter-like object."""
-
-    def __init__(self, pool: Any) -> None:
-        self.connection_pool = pool
 
 
 # ============================================================================
@@ -814,7 +837,11 @@ class SyncTransactionManager:
                 "SyncTransactionManager: could not resolve database URL "
                 "from DataFlow instance."
             )
-        return url
+        # `url` resolves through `getattr` chains so mypy sees `Any`; coerce
+        # to the declared `str` return type per rules/zero-tolerance.md Rule 1
+        # (mypy --strict was complaining; pre-existing minor typing gap fixed
+        # in same shard as #835's transaction migration).
+        return str(url)
 
     # --- Public: begin() ---
 

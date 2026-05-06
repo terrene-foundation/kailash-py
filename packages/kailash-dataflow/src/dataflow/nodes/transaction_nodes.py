@@ -14,7 +14,7 @@ Transaction flow:
 
 import logging
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_async import AsyncNode
@@ -23,12 +23,18 @@ from kailash.sdk_exceptions import NodeExecutionError
 logger = logging.getLogger(__name__)
 
 
-def _get_adapter_from_context(node: AsyncNode):
+async def _get_adapter_from_context(node: AsyncNode):
     """Extract the database adapter from the DataFlow instance in workflow context.
 
     The DataFlow instance is expected to be stored under the 'dataflow_instance' key
-    in the workflow context. The adapter is obtained by detecting the database type
-    and creating/reusing the appropriate adapter via _get_cached_db_node().
+    in the workflow context. The adapter is obtained by routing through
+    ``DataFlow._get_or_create_async_sql_node(db_type)._get_adapter()`` — the same
+    per-loop priority chain used by ``db.express.*`` and ``db.transactions.begin()``
+    (see ``rules/dataflow-cache.md`` §13.4 + issue #835 fix).
+
+    Async because ``AsyncSQLDatabaseNode._get_adapter`` is async (priority-chain
+    + per-key creation lock); calling it via attribute access returns a stale
+    ``None`` when the node has not yet been initialized on this loop.
 
     Args:
         node: The AsyncNode instance requesting the adapter.
@@ -46,20 +52,19 @@ def _get_adapter_from_context(node: AsyncNode):
             "Ensure the workflow is executed with a DataFlow instance in context."
         )
 
-    # Get the database type from the DataFlow config
-    db_url = getattr(dataflow_instance.config.database, "url", None) or ""
-    if "postgresql" in db_url or "postgres" in db_url:
-        db_type = "postgresql"
-    elif "mysql" in db_url:
-        db_type = "mysql"
-    else:
-        db_type = "sqlite"
+    # Detect the database type via the DataFlow's canonical helper (DRY with
+    # `db.express.*` and `db.transactions.begin()` paths).
+    db_type = dataflow_instance._detect_database_type()
 
-    # Use the DataFlow engine's cached db node to get the adapter
-    db_node = dataflow_instance._get_cached_db_node(db_type)
+    # Resolve the cached AsyncSQLDatabaseNode (event-loop-aware: recreates on
+    # loop change to avoid the asyncpg `attached to different loop` failure
+    # mode that issue #835 closed for the direct `transactions.begin()` path).
+    db_node = dataflow_instance._get_or_create_async_sql_node(db_type)
 
-    # The AsyncSQLDatabaseNode holds the adapter reference
-    adapter = getattr(db_node, "adapter", None) or getattr(db_node, "_adapter", None)
+    # The node's `_get_adapter` is async — it walks the priority chain
+    # (`_shared_pools` → runtime pool → `_PROCESS_POOL_REGISTRY` → fallback)
+    # under per-key creation locks, returning the per-loop adapter.
+    adapter = await db_node._get_adapter()
     if adapter is None:
         raise NodeExecutionError(
             f"Could not obtain database adapter from cached db node for type '{db_type}'. "
@@ -121,7 +126,7 @@ class TransactionScopeNode(AsyncNode):
         timeout = kwargs.get("timeout", self.timeout)
         rollback_on_error = kwargs.get("rollback_on_error", self.rollback_on_error)
 
-        adapter = _get_adapter_from_context(self)
+        adapter = await _get_adapter_from_context(self)
         transaction_id = f"tx_{uuid.uuid4().hex[:12]}"
 
         try:
@@ -318,7 +323,7 @@ class TransactionSavepointNode(AsyncNode):
     a SAVEPOINT SQL statement. Tracks savepoints in workflow context.
     """
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: Optional[str] = None, **kwargs):
         self.savepoint_name = name
         super().__init__(**kwargs)
 
@@ -388,7 +393,7 @@ class TransactionRollbackToSavepointNode(AsyncNode):
     savepoints created after it from tracking.
     """
 
-    def __init__(self, savepoint: str = None, **kwargs):
+    def __init__(self, savepoint: Optional[str] = None, **kwargs):
         self.savepoint = savepoint
         super().__init__(**kwargs)
 
