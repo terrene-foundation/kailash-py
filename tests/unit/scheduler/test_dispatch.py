@@ -256,3 +256,59 @@ class TestWorkflowSchedulerDispatchVia:
         assert "sched-err" in msg
         assert "task_id_hash=" in msg
         assert "RuntimeError" in msg
+
+
+# ---------------------------------------------------------------------------
+# EVENT_JOB_SUBMITTED listener fire-time capture (closes F1 + F2)
+# ---------------------------------------------------------------------------
+
+
+class _SubmitEventStub:
+    """Minimal APScheduler-event-shaped record for the submit listener.
+
+    The listener only reads `event.job_id` and `event.scheduled_run_time`;
+    a small struct-like helper is sufficient to exercise the path
+    deterministically in Tier 1.
+    """
+
+    def __init__(self, job_id: str, scheduled_run_time: datetime) -> None:
+        self.job_id = job_id
+        self.scheduled_run_time = scheduled_run_time
+
+
+class TestPlannedFireTimeListener:
+    """Validate _on_job_submitted/_planned_fire_time semantics (F1 + F2)."""
+
+    def _make_scheduler(self) -> Any:
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        return WorkflowScheduler(job_store_path=None)
+
+    def test_planned_fire_time_returns_listener_recorded_time(self) -> None:
+        """_on_job_submitted records; _planned_fire_time reads it back."""
+        scheduler = self._make_scheduler()
+        fire_time = datetime(2026, 5, 7, 9, 30, 0, tzinfo=UTC)
+
+        scheduler._on_job_submitted(_SubmitEventStub("sched-listener", fire_time))
+
+        assert scheduler._planned_fire_time("sched-listener") == fire_time
+
+    def test_planned_fire_time_raises_when_no_submit_recorded(self) -> None:
+        """No silent now() fallback (rules/zero-tolerance.md Rule 3)."""
+        scheduler = self._make_scheduler()
+
+        with pytest.raises(RuntimeError, match="EVENT_JOB_SUBMITTED listener"):
+            scheduler._planned_fire_time("sched-never-fired")
+
+    def test_on_job_done_clears_recorded_fire_time(self) -> None:
+        """Cleanup listener removes the entry after the job finishes."""
+        scheduler = self._make_scheduler()
+        fire_time = datetime(2026, 5, 7, 9, 30, 0, tzinfo=UTC)
+
+        scheduler._on_job_submitted(_SubmitEventStub("sched-cleanup", fire_time))
+        assert scheduler._planned_fire_time("sched-cleanup") == fire_time
+
+        scheduler._on_job_done(_SubmitEventStub("sched-cleanup", fire_time))
+
+        with pytest.raises(RuntimeError, match="EVENT_JOB_SUBMITTED listener"):
+            scheduler._planned_fire_time("sched-cleanup")
