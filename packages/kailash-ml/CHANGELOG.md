@@ -1,6 +1,6 @@
 # kailash-ml Changelog
 
-## [Unreleased] — FeatureStore canonical surface bridge release
+## [1.7.2] — 2026-05-06 — FeatureStore deprecation-warning bridge (#643)
 
 Per `rules/zero-tolerance.md` Rule 6a (Public-API Removal Requires Deprecation
 Cycle), this bridge release emits a `DeprecationWarning` on first access of
