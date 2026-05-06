@@ -89,12 +89,12 @@ WorkflowScheduler(
 
 **Parameters**:
 
-| Parameter         | Type                  | Default                  | Description                                                                                                                                                                                                                                                                  |
-| ----------------- | --------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `job_store_path`  | `Optional[str]`       | `"kailash_schedules.db"` | Path to the SQLite database for APScheduler job persistence. `None` uses in-memory store.                                                                                                                                                                                    |
-| `runtime_factory` | `Optional[Callable]`  | `None`                   | Callable returning a runtime instance. Default creates a new `LocalRuntime()` per execution.                                                                                                                                                                                  |
-| `timezone`        | `str`                 | `"UTC"`                  | Timezone string for cron expression evaluation.                                                                                                                                                                                                                              |
-| `dispatch_via`    | `Optional[Dispatcher]` | `None`                  | Optional `kailash.runtime.dispatcher.Dispatcher`. When provided, every fired trigger enqueues a `Task` to the dispatcher instead of executing in-process. Default `None` preserves the existing in-process behavior. Keyword-only. See §10 "Queue Dispatch" for the contract. |
+| Parameter         | Type                   | Default                  | Description                                                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_store_path`  | `Optional[str]`        | `"kailash_schedules.db"` | Path to the SQLite database for APScheduler job persistence. `None` uses in-memory store.                                                                                                                                                                                     |
+| `runtime_factory` | `Optional[Callable]`   | `None`                   | Callable returning a runtime instance. Default creates a new `LocalRuntime()` per execution.                                                                                                                                                                                  |
+| `timezone`        | `str`                  | `"UTC"`                  | Timezone string for cron expression evaluation.                                                                                                                                                                                                                               |
+| `dispatch_via`    | `Optional[Dispatcher]` | `None`                   | Optional `kailash.runtime.dispatcher.Dispatcher`. When provided, every fired trigger enqueues a `Task` to the dispatcher instead of executing in-process. Default `None` preserves the existing in-process behavior. Keyword-only. See §10 "Queue Dispatch" for the contract. |
 
 **Raises**:
 
@@ -538,12 +538,12 @@ class Dispatcher(ABC):
 
 The contract is intentionally minimal:
 
-| Method      | Contract                                                                                                                                                                                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enqueue`   | Idempotent on `task.task_id`. A duplicate enqueue with the same `task_id` MUST be a silent no-op (no exception). Non-duplicate failures (connectivity, serialization) propagate after a structured ERROR log.                                              |
-| `poll`      | Returns an `AsyncIterator[Task]` that yields claimed tasks one at a time. Implementations atomically transition each task to `processing` status. When the queue is empty the iterator stops; long-polling callers re-invoke `poll()` in a loop.        |
-| `ack`       | Marks a task as completed. Idempotent (acking a completed task is a no-op).                                                                                                                                                                                |
-| `nack`      | Marks a task as failed with a short reason. The dispatcher decides whether to requeue (transient failure) or dead-letter (max attempts exceeded) based on its own attempt counter. The reason MUST NOT contain secrets or PII.                            |
+| Method    | Contract                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enqueue` | Idempotent on `task.task_id`. A duplicate enqueue with the same `task_id` MUST be a silent no-op (no exception). Non-duplicate failures (connectivity, serialization) propagate after a structured ERROR log.                                    |
+| `poll`    | Returns an `AsyncIterator[Task]` that yields claimed tasks one at a time. Implementations atomically transition each task to `processing` status. When the queue is empty the iterator stops; long-polling callers re-invoke `poll()` in a loop. |
+| `ack`     | Marks a task as completed. Idempotent (acking a completed task is a no-op).                                                                                                                                                                      |
+| `nack`    | Marks a task as failed with a short reason. The dispatcher decides whether to requeue (transient failure) or dead-letter (max attempts exceeded) based on its own attempt counter. The reason MUST NOT contain secrets or PII.                   |
 
 A subclass missing any of the four methods raises `TypeError` on instantiation per Python's `ABC` contract.
 
@@ -560,14 +560,14 @@ class Task:
     kwargs: Dict[str, Any] = field(default_factory=dict)
 ```
 
-| Field               | Description                                                                                                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task_id`           | Stable hash of `(schedule_id, planned_fire_time_iso)` produced by `compute_task_id`. 32-character lowercase hex (128 bits of collision resistance). Used as the queue's PRIMARY KEY for idempotent enqueue.                                  |
-| `schedule_id`       | The scheduler-assigned schedule identifier (e.g. `sched-abc123def456`).                                                                                                                                                                      |
-| `workflow_blob`     | The serialized workflow (pickled `WorkflowBuilder.build()` output). Workers deserialize and execute.                                                                                                                                          |
-| `planned_fire_time` | The trigger's intended fire time as an ISO 8601 string. The scheduler-computed fire instant — NOT wall-clock now() — so multi-instance double-fires produce the same `task_id`.                                                              |
-| `queue_name`        | Logical queue for routing (default `"default"`).                                                                                                                                                                                              |
-| `kwargs`            | Additional keyword arguments forwarded to `runtime.execute(...)` on the worker side.                                                                                                                                                          |
+| Field               | Description                                                                                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_id`           | Stable hash of `(schedule_id, planned_fire_time_iso)` produced by `compute_task_id`. 32-character lowercase hex (128 bits of collision resistance). Used as the queue's PRIMARY KEY for idempotent enqueue. |
+| `schedule_id`       | The scheduler-assigned schedule identifier (e.g. `sched-abc123def456`).                                                                                                                                     |
+| `workflow_blob`     | The serialized workflow (pickled `WorkflowBuilder.build()` output). Workers deserialize and execute.                                                                                                        |
+| `planned_fire_time` | The trigger's intended fire time as an ISO 8601 string. The scheduler-computed fire instant — NOT wall-clock now() — so multi-instance double-fires produce the same `task_id`.                             |
+| `queue_name`        | Logical queue for routing (default `"default"`).                                                                                                                                                            |
+| `kwargs`            | Additional keyword arguments forwarded to `runtime.execute(...)` on the worker side.                                                                                                                        |
 
 ### 9.3 compute_task_id helper
 
@@ -622,15 +622,25 @@ When `dispatch_via=None` (the default), `WorkflowScheduler._execute_workflow` ru
 
 Every enqueue failure (whether silently-skipped duplicate or genuinely-failed) generates exactly one structured log line:
 
-| Outcome                      | Level | Fields                                                              |
-| ---------------------------- | ----- | ------------------------------------------------------------------- |
-| Duplicate (silent skip)      | DEBUG | `task.enqueue.duplicate task_id_hash=… schedule_id=…`                |
-| Non-duplicate failure        | ERROR | `task.enqueue.failed task_id_hash=… schedule_id=… reason=<ExcName>`  |
-| Successful enqueue           | INFO  | `scheduler.dispatch.enqueued schedule_id=… task_id_hash=…`           |
-| Serialization failure        | ERROR | `scheduler.dispatch.serialize_failed schedule_id=… task_id_hash=…`   |
-| Dispatch invocation start    | INFO  | `scheduler.dispatch.start schedule_id=… task_id_hash=… run_id=…`     |
+| Outcome                   | Level | Fields                                                              |
+| ------------------------- | ----- | ------------------------------------------------------------------- |
+| Duplicate (silent skip)   | DEBUG | `task.enqueue.duplicate task_id_hash=… schedule_id=…`               |
+| Non-duplicate failure     | ERROR | `task.enqueue.failed task_id_hash=… schedule_id=… reason=<ExcName>` |
+| Successful enqueue        | INFO  | `scheduler.dispatch.enqueued schedule_id=… task_id_hash=…`          |
+| Serialization failure     | ERROR | `scheduler.dispatch.serialize_failed schedule_id=… task_id_hash=…`  |
+| Dispatch invocation start | INFO  | `scheduler.dispatch.start schedule_id=… task_id_hash=… run_id=…`    |
 
 `task_id_hash` is the first 8 hex chars of `sha256(task_id)` per `rules/observability.md` Rule 8 (raw `task_id` reveals the schedule identifier and fire-time, which is schema-revealing for log aggregators).
+
+### 9.9 planned_fire_time capture mechanism
+
+`planned_fire_time` is captured at job-submission time via APScheduler's `EVENT_JOB_SUBMITTED` listener — NOT read from `job.next_run_time` at callback entry. The submission event fires BEFORE the job callback runs and exposes `event.scheduled_run_times: list[datetime]`, the actual trigger fire instants for the currently-firing job. The scheduler records the LAST element (the most recent fire — typically the only one; coalesce/misfire policies may produce several) keyed by `event.job_id`.
+
+This mechanism is required because by the time the dispatch callback runs, APScheduler has already advanced `job.next_run_time` to the NEXT scheduled fire. Reading `job.next_run_time` from inside the callback would record a fire instant one interval ahead of truth on every cron/interval trigger.
+
+The capture is symmetric: `EVENT_JOB_EXECUTED | EVENT_JOB_ERROR` listener clears the recorded entry once the job finishes. If `_planned_fire_time(schedule_id)` is invoked without a prior submit-event recording, it raises `RuntimeError` rather than falling back to `datetime.now(UTC)` — silent fallback would silently break multi-instance dedup (each scheduler instance would compute a different `task_id` for the same fire).
+
+Stability across multi-instance schedulers: every instance receives the same `scheduled_run_times` from APScheduler for the same trigger fire, so `compute_task_id(schedule_id, fire_time)` produces the SAME `task_id` and the queue layer dedups via PRIMARY KEY.
 
 ---
 
