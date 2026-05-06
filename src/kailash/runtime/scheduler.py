@@ -188,6 +188,25 @@ class WorkflowScheduler:
         self._timezone = timezone
         self._dispatcher: Optional["Dispatcher"] = dispatch_via
 
+        # Per-job fire-time capture: APScheduler's EVENT_JOB_SUBMITTED listener
+        # fires BEFORE the job callback with `event.scheduled_run_time`, the
+        # ACTUAL fire instant for the currently-firing job. We record it here
+        # keyed by job_id so `_planned_fire_time(schedule_id)` can return the
+        # current fire time -- NOT `job.next_run_time`, which APScheduler has
+        # already advanced to the NEXT scheduled fire by the time the callback
+        # runs (interval/cron schedules drift by one interval otherwise).
+        self._fire_times: Dict[str, datetime] = {}
+        from apscheduler.events import (
+            EVENT_JOB_ERROR,
+            EVENT_JOB_EXECUTED,
+            EVENT_JOB_SUBMITTED,
+        )
+
+        self._scheduler.add_listener(self._on_job_submitted, EVENT_JOB_SUBMITTED)
+        self._scheduler.add_listener(
+            self._on_job_done, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
+        )
+
         logger.info(
             "WorkflowScheduler initialized (job_store=%s, timezone=%s, dispatch=%s)",
             job_store_path or "memory",
@@ -509,11 +528,13 @@ class WorkflowScheduler:
 
         from kailash.runtime.dispatcher import Task, compute_task_id
 
-        # APScheduler delivers the trigger's fire time via job.next_run_time
-        # at submit time; once the job is firing we read it from the job
-        # context. For now, use scheduler-internal lookup: the planned fire
-        # time was stamped onto the schedule when registered or comes from
-        # the trigger evaluation. Fall back to current UTC if not available.
+        # APScheduler delivers the CURRENT fire time via the
+        # EVENT_JOB_SUBMITTED listener (`event.scheduled_run_time`); see
+        # ``_on_job_submitted`` for the capture point. Reading
+        # ``job.next_run_time`` here would be wrong — by the time this
+        # callback runs APScheduler has already advanced ``next_run_time``
+        # to the NEXT scheduled fire, so the recorded ``planned_fire_time``
+        # would drift by one interval on every cron/interval trigger.
         planned_fire_time = self._planned_fire_time(schedule_id)
         task_id = compute_task_id(schedule_id, planned_fire_time)
         task_id_hash = hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8]
@@ -561,27 +582,62 @@ class WorkflowScheduler:
             task_id_hash,
         )
 
-    def _planned_fire_time(self, schedule_id: str) -> datetime:
-        """Return the planned fire time for the currently-firing schedule.
+    def _on_job_submitted(self, event: Any) -> None:
+        """APScheduler EVENT_JOB_SUBMITTED listener — record fire time.
 
-        APScheduler does not pass the planned fire time directly into the
-        job callback. We read it from the underlying job's
-        ``next_run_time`` (the trigger-computed instant for the current
-        fire). If the job has been removed or has no scheduled next-fire,
-        we fall back to the current UTC time so dispatch still works
-        deterministically for one-shot tasks.
+        Fires BEFORE the job callback with ``event.scheduled_run_time``
+        carrying the CURRENT fire instant. We key by ``event.job_id``
+        (== ``schedule_id``) so the dispatch callback can read the
+        correct fire time without relying on ``job.next_run_time``
+        (which APScheduler has already advanced to the next scheduled
+        fire by the time the callback runs).
         """
-        try:
-            job = self._scheduler.get_job(schedule_id)
-            if job is not None and job.next_run_time is not None:
-                return job.next_run_time
-        except Exception:
-            logger.debug(
-                "scheduler.planned_fire_time.lookup_failed schedule_id=%s",
-                schedule_id,
-                exc_info=True,
+        self._fire_times[event.job_id] = event.scheduled_run_time
+
+    def _on_job_done(self, event: Any) -> None:
+        """Cleanup the recorded fire time after the job finishes.
+
+        Listens on ``EVENT_JOB_EXECUTED | EVENT_JOB_ERROR``. If the
+        scheduler ever drops a job mid-flight without firing either
+        event, the entry remains in ``_fire_times`` for the next
+        successful submission to overwrite — bounded by the number of
+        active schedules.
+        """
+        self._fire_times.pop(event.job_id, None)
+
+    def _planned_fire_time(self, schedule_id: str) -> datetime:
+        """Return the actual fire time of the currently-firing job.
+
+        Reads from ``_fire_times``, populated by the
+        ``EVENT_JOB_SUBMITTED`` listener (``_on_job_submitted``). This
+        is the SCHEDULED fire instant the trigger fired for, NOT
+        ``job.next_run_time`` — which APScheduler advances to the NEXT
+        scheduled fire as soon as the current job is submitted.
+
+        Stable across multi-instance schedulers: every instance receives
+        the same ``scheduled_run_time`` from APScheduler for the same
+        trigger fire, so ``compute_task_id(schedule_id, fire_time)``
+        produces the SAME ``task_id`` and the queue layer dedups via PK.
+
+        Raises:
+            RuntimeError: if invoked for a ``schedule_id`` whose
+                ``EVENT_JOB_SUBMITTED`` listener has not yet recorded a
+                fire time. Falling back to ``datetime.now(UTC)`` would
+                silently break the dedup invariant
+                (``rules/zero-tolerance.md`` Rule 3).
+        """
+        fire_time = self._fire_times.get(schedule_id)
+        if fire_time is None:
+            raise RuntimeError(
+                f"_planned_fire_time invoked for schedule_id={schedule_id!r} "
+                f"but EVENT_JOB_SUBMITTED listener has not recorded a fire "
+                f"time. Dispatch was called outside the APScheduler job-firing "
+                f"path, or the listener was not registered. Refusing to fall "
+                f"back to datetime.now(UTC) -- doing so would silently break "
+                f"multi-instance dedup (each scheduler instance would compute "
+                f"a different task_id for the same fire)."
             )
-        return datetime.now(UTC)
+        return fire_time
 
     def _get_runtime(self) -> Any:
         """Get or create a runtime instance for execution.
