@@ -376,6 +376,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         start_time = datetime.now(UTC)
 
         try:
+            # Validate required user_id — empty or whitespace-only is invalid input.
+            # Prevents accidental setup under "" key in user_mfa_data, which causes
+            # silent state corruption (issue #803).
+            if not user_id or not str(user_id).strip():
+                return {
+                    "success": False,
+                    "error": "user_id is required and must be non-empty",
+                    "user_id": user_id,
+                    "processing_time_ms": 0.0,
+                    "timestamp": start_time.isoformat(),
+                }
+
             # Handle phone_number parameter alias
             final_user_phone = user_phone or phone_number or ""
 
@@ -404,15 +416,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # self.log_node_execution("mfa_operation_start", action=action, method=method)
 
-            # Check rate limits for sensitive operations (disabled for debugging)
-            # if action in ["verify", "setup"] and not self._check_rate_limit(user_id):
-            #     self.mfa_stats["rate_limited_attempts"] += 1
-            #     return {
-            #         "success": False,
-            #         "error": "Rate limit exceeded. Please try again later.",
-            #         "rate_limited": True,
-            #         "timestamp": start_time.isoformat()
-            #     }
+            # Check rate limits for verification operations (issue #803).
+            # Brute-force protection: at rate_limit_attempts (default 5) failed
+            # verify attempts within rate_limit_window (default 300s), reject
+            # further verify calls. Setup/status/disable are not rate-limited
+            # because they are not attacker-driven probe surfaces.
+            if action == "verify" and not self._check_rate_limit(user_id):
+                self.mfa_stats["rate_limited_attempts"] += 1
+                return {
+                    "success": False,
+                    "verified": False,
+                    "user_id": user_id,
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "rate_limited": True,
+                    "too_many_attempts": True,
+                    "processing_time_ms": 0.0,
+                    "timestamp": start_time.isoformat(),
+                }
 
             # Route to appropriate action handler
             if action in ["setup", "enroll"]:  # Handle both setup and enroll
@@ -468,6 +488,25 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     }
             elif action == "initiate_recovery":
                 result = self._initiate_recovery(user_id, recovery_method or "email")
+            elif action == "reset":
+                # Reset: clear existing MFA state, then re-run setup. Returns
+                # the new setup payload (fresh secret + backup codes) so the
+                # caller can re-enroll the user (issue #803).
+                with self._data_lock:
+                    self.user_mfa_data.pop(user_id, None)
+                    self.pending_verifications.pop(user_id, None)
+                    self.trusted_devices.pop(user_id, None)
+                result = self._setup_mfa(
+                    user_id,
+                    method,
+                    user_email,
+                    user_phone,
+                    user_data or {},
+                    device_info or {},
+                )
+                if result.get("success"):
+                    result["reset"] = True
+                    result["user_id"] = user_id
             else:
                 result = {"success": False, "error": f"Unknown action: {action}"}
 
@@ -576,8 +615,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Use username from user_data if available, otherwise fall back to user_id
         username = (user_data or {}).get("username")
         account_name = username if username else user_id
-        print(
-            f"DEBUG: user_data={user_data}, username={username}, account_name={account_name}"
+        logger.debug(
+            "totp_setup.account_name_resolved",
+            extra={
+                "has_user_data": bool(user_data),
+                "username_present": username is not None,
+                "account_name_present": bool(account_name),
+            },
         )
 
         # Create TOTP URI
@@ -1121,12 +1165,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                             "pending_verification": True,
                         }
                     else:
-                        # Increment attempts on failed verification
+                        # Increment attempts on failed verification.
+                        # Return success=False to keep `success` consistent with
+                        # `verified`: an invalid/expired code is a verification
+                        # failure, not a successful operation (issue #803).
                         self.pending_verifications[user_id]["attempts"] = attempts + 1
                         return {
-                            "success": True,
+                            "success": False,
                             "verified": False,
+                            "user_id": user_id,
+                            "method": method,
                             "message": "Invalid code or expired verification",
+                            "error": "Invalid code or expired verification",
                         }
 
                 # For testing purposes, auto-setup TOTP if not configured
@@ -1181,6 +1231,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 return {
                     "success": True,
                     "verified": True,
+                    "user_id": user_id,
                     "method": "backup_code",
                     "session_id": session_id,
                     "codes_remaining": len(user_data.get("backup_codes", [])),
@@ -1200,16 +1251,21 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     return {
                         "success": True,
                         "verified": True,
+                        "user_id": user_id,
                         "method": "backup_code",
                         "session_id": session_id,
                         "codes_remaining": len(user_data.get("backup_codes", [])),
                     }
                 else:
+                    # Failed verification — return success=False for consistency
+                    # with `verified=False` (issue #803).
                     return {
-                        "success": True,
+                        "success": False,
                         "verified": False,
+                        "user_id": user_id,
                         "method": "backup_code",
                         "message": "Backup code already used or invalid",
+                        "error": "Backup code already used or invalid",
                     }
 
             # Verify using specified method
@@ -1255,12 +1311,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 }
             else:
                 # Log failed verification (sync version - no security event logging)
-
+                # Return success=False for consistency with `verified=False`
+                # (issue #803). Previously returned success=True which conflated
+                # "operation completed" with "verification succeeded" and risked
+                # callers gating access on `success` alone.
                 return {
-                    "success": True,
+                    "success": False,
                     "verified": False,
+                    "user_id": user_id,
                     "method": method,
                     "message": "Invalid code",
+                    "error": "Invalid code",
                 }
 
     async def _verify_mfa_async(
@@ -1337,6 +1398,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 return {
                     "success": True,
                     "verified": True,
+                    "user_id": user_id,
                     "method": "backup_code",
                     "session_id": session_id,
                     "codes_remaining": len(user_data.get("backup_codes", [])),
@@ -1356,16 +1418,21 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     return {
                         "success": True,
                         "verified": True,
+                        "user_id": user_id,
                         "method": "backup_code",
                         "session_id": session_id,
                         "codes_remaining": len(user_data.get("backup_codes", [])),
                     }
                 else:
+                    # Failed verification — return success=False for consistency
+                    # with `verified=False` (issue #803).
                     return {
-                        "success": True,
+                        "success": False,
                         "verified": False,
+                        "user_id": user_id,
                         "method": "backup_code",
                         "message": "Backup code already used or invalid",
+                        "error": "Backup code already used or invalid",
                     }
 
             # Verify using specified method
@@ -1411,11 +1478,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 }
             else:
                 # Log failed verification
-                # Log security event (sync version - no security event logging)
-
+                # Return success=False for consistency with `verified=False`
+                # (issue #803).
                 return {
-                    "success": True,
+                    "success": False,
                     "verified": False,
+                    "user_id": user_id,
                     "method": method,
                     "error": "Invalid verification code",
                 }
@@ -1624,9 +1692,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             if user_id not in self.user_mfa_data:
                 return {
                     "success": True,
+                    "user_id": user_id,
                     "mfa_enabled": False,
                     "methods": [],
                     "enrolled_methods": [],
+                    "enabled_methods": [],
                 }
 
             user_data = self.user_mfa_data[user_id]
@@ -1645,9 +1715,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             enrolled_methods = list(user_data["methods"].keys())
             return {
                 "success": True,
+                "user_id": user_id,
                 "mfa_enabled": len(user_data["methods"]) > 0,
                 "methods": methods_status,
                 "enrolled_methods": enrolled_methods,
+                # Alias for `enrolled_methods` — preserved for callers that
+                # consumed the older response shape (issue #803).
+                "enabled_methods": enrolled_methods,
                 "backup_codes_available": len(user_data.get("backup_codes", [])),
                 "backup_codes_generated_at": user_data.get("backup_codes_generated_at"),
                 "created_at": user_data.get("created_at"),
@@ -1997,6 +2071,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         start_time = datetime.now(UTC)
 
         try:
+            # Validate required user_id — empty or whitespace-only is invalid
+            # input. Mirrors the sync `run()` validation (issue #803).
+            if not user_id or not str(user_id).strip():
+                return {
+                    "success": False,
+                    "error": "user_id is required and must be non-empty",
+                    "user_id": user_id,
+                    "processing_time_ms": 0.0,
+                    "timestamp": start_time.isoformat(),
+                }
+
             # Validate and sanitize inputs (disabled for debugging - causing deadlock)
             # safe_params = self.validate_and_sanitize_inputs({
             #     "action": action,
@@ -2024,15 +2109,20 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # self.log_node_execution("mfa_operation_start", action=action, method=method)
 
-            # Check rate limits for sensitive operations (disabled for debugging)
-            # if action in ["verify", "setup"] and not self._check_rate_limit(user_id):
-            #     self.mfa_stats["rate_limited_attempts"] += 1
-            #     return {
-            #         "success": False,
-            #         "error": "Rate limit exceeded. Please try again later.",
-            #         "rate_limited": True,
-            #         "timestamp": start_time.isoformat()
-            #     }
+            # Check rate limits for verification operations (issue #803).
+            # Mirrors the sync run() rate-limit dispatch.
+            if action == "verify" and not self._check_rate_limit(user_id):
+                self.mfa_stats["rate_limited_attempts"] += 1
+                return {
+                    "success": False,
+                    "verified": False,
+                    "user_id": user_id,
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "rate_limited": True,
+                    "too_many_attempts": True,
+                    "processing_time_ms": 0.0,
+                    "timestamp": start_time.isoformat(),
+                }
 
             # Route to appropriate action handler
             if action == "setup":
@@ -2279,9 +2369,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             if user_id not in self.user_mfa_data:
                 return {
                     "success": True,  # Already disabled
+                    "user_id": user_id,
                     "mfa_disabled": True,
+                    "disabled_methods": [],
                     "message": "MFA was not enabled for user",
                 }
+
+            # Capture which methods were enabled before deletion (issue #803).
+            disabled_methods = list(
+                self.user_mfa_data[user_id].get("methods", {}).keys()
+            )
 
             # Clear all MFA data for user
             del self.user_mfa_data[user_id]
@@ -2296,7 +2393,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             return {
                 "success": True,
+                "user_id": user_id,
                 "mfa_disabled": True,
+                "disabled_methods": disabled_methods,
                 "message": "All MFA methods disabled for user",
             }
 
@@ -2304,7 +2403,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         """Disable specific MFA method for user."""
         with self._data_lock:
             if user_id not in self.user_mfa_data:
-                return {"success": False, "error": "MFA not setup for user"}
+                return {
+                    "success": False,
+                    "user_id": user_id,
+                    "error": "MFA not setup for user",
+                }
 
             user_data = self.user_mfa_data[user_id]
             methods = user_data.get("methods", {})
@@ -2312,10 +2415,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             if method not in methods:
                 return {
                     "success": False,
+                    "user_id": user_id,
                     "error": f"Method {method} not setup for user",
                 }
 
             # Remove the method
             del methods[method]
 
-            return {"success": True, "method_disabled": method}
+            return {
+                "success": True,
+                "user_id": user_id,
+                "method_disabled": method,
+                "disabled_methods": [method],
+            }
