@@ -960,35 +960,62 @@ class Nexus:
     def _initialize_mcp_server(self):
         """Initialize MCP server for AI agent integration.
 
-        Uses the Core SDK's MCPServer + MCPChannel for full protocol support.
-        The old Nexus-specific MCP server has been removed in favour of the
-        unified ``kailash-platform`` MCP server (``kailash_mcp.platform_server``).
+        Uses the Core SDK's MCPServer for full protocol support over a
+        WebSocket transport bound to ``self._mcp_port``. The MCP server
+        binds the port unconditionally — the ``enable_http_transport`` and
+        ``enable_sse_transport`` flags only gate the *additional* HTTP/SSE
+        sub-transports inside the MCP server, not the always-on WebSocket
+        listener that AI agents connect to (per spec ``ws://host:mcp_port``).
+
+        WebSocket-only mode (``enable_http_transport=False AND
+        enable_sse_transport=False``) is supported and is the default for
+        production AI-agent deployments — the WebSocket transport is the
+        single bound listener.
+
+        MCPChannel is only used when HTTP/SSE sub-transports are enabled,
+        because the channel layer adds workflow-management semantics on top
+        of HTTP routing. In WebSocket-only mode the MCPServer's own
+        ``_run_websocket()`` path handles JSON-RPC dispatch directly.
         """
-        if not self._enable_http_transport:
-            # Without HTTP transport, MCP is not available
-            self._mcp_server = None
-            self._mcp_channel = None
-            logger.info(
-                "HTTP transport disabled; MCP server not started. "
-                "Use kailash-mcp for MCP access."
-            )
-            return
-
         try:
-            # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
-            from kailash_mcp import MCPServer
-            from kailash_mcp.auth.providers import APIKeyAuth
+            # Import Core SDK's comprehensive MCP implementation
+            from kailash_mcp import MCPServer  # noqa: F401  (import-time guard)
+            from kailash_mcp.auth.providers import APIKeyAuth  # noqa: F401
 
-            from kailash.channels import ChannelConfig, ChannelType, MCPChannel
-
-            # Create production-ready MCP server using Core SDK
+            # Create production-ready MCP server using Core SDK.
+            # The server binds a WebSocket transport on ``self._mcp_port``
+            # via its built-in ``WebSocketServerTransport`` (uses
+            # ``websockets.serve``; no fastmcp dependency).
             self._mcp_server = self._create_sdk_mcp_server()
 
-            # Create MCP channel for workflow management
-            self._mcp_channel = self._setup_mcp_channel()
-            logger.info("Full MCP protocol support enabled (tools, resources, prompts)")
+            # MCPChannel is only useful when HTTP/SSE sub-transports are
+            # enabled (it bolts workflow-management hooks onto the HTTP
+            # path). In WebSocket-only mode the MCPServer's own JSON-RPC
+            # handler dispatches tools/list, resources/list, tools/call
+            # directly — MCPChannel adds nothing.
+            if self._enable_http_transport or self._enable_sse_transport:
+                self._mcp_channel = self._setup_mcp_channel()
+                logger.info(
+                    "Full MCP protocol support enabled (tools, resources, "
+                    "prompts) via WebSocket + HTTP/SSE transports"
+                )
+            else:
+                # WebSocket-only mode: bypass MCPChannel
+                self._mcp_channel = None
+                logger.info(
+                    "MCP WebSocket-only mode enabled (tools, resources, "
+                    "prompts via JSON-RPC over WebSocket)"
+                )
 
-            logger.info(f"Production MCP server initialized on port {self._mcp_port}")
+            # Wire default resources (system info, workflow descriptors,
+            # docs, config, help) into the MCP server's resource registry
+            # so resources/list returns them. Without this call,
+            # _register_default_mcp_resources stays orphan code.
+            self._register_default_mcp_resources()
+
+            logger.info(
+                f"Production MCP server initialized on ws://0.0.0.0:{self._mcp_port}"
+            )
 
         except ImportError as e:
             # Core SDK MCP not available -- direct users to kailash-mcp
@@ -1000,65 +1027,30 @@ class Nexus:
             self._mcp_channel = None
 
     def _register_default_mcp_resources(self):
-        """Register default MCP resources (system, docs, config, help)."""
+        """Register default MCP resources (docs, config, help) on the
+        Core SDK MCPServer's resource registry.
+
+        Resource handlers MUST return a JSON string (or other serializable
+        text) — the MCPServer's ``_handle_read_resource`` calls
+        ``str(handler())`` to populate the ``text`` field of the response.
+        Returning a dict produces Python repr() which is not valid JSON
+        and breaks JSON-RPC consumers.
+
+        Per-workflow ``workflow://<name>`` resources are registered at
+        ``register()`` time (see :meth:`register`), not here, because the
+        set of workflows is dynamic.
+        """
         import json
 
-        # System info resource
-        async def system_info_handler(uri: str):
-            info = {
-                "platform": "Kailash Nexus",
-                "version": getattr(self, "_version", "1.0.0"),
-                "workflows": list(self._workflows.keys()),
-                "api_port": self._api_port,
-                "mcp_port": self._mcp_port,
-            }
-            return {
-                "content": json.dumps(info, indent=2),
-                "mimeType": "application/json",
-            }
-
-        self._mcp_server._resources["system://nexus/info"] = system_info_handler
-
-        # Workflow resource handler (detailed)
-        async def workflow_detail_handler(uri: str):
-            # Extract workflow name from URI (workflow://name)
-            workflow_name = uri.split("://")[1] if "://" in uri else uri
-            if workflow_name not in self._workflows:
-                return {
-                    "content": json.dumps(
-                        {"error": f"Workflow not found: {workflow_name}"}
-                    ),
-                    "mimeType": "application/json",
-                }
-
-            workflow = self._workflows[workflow_name]
-            workflow_info = {
-                "name": workflow_name,
-                "type": "workflow",
-                "nodes": [
-                    {"id": node_id, "type": str(type(node).__name__)}
-                    for node_id, node in workflow.nodes.items()
-                ],
-                "schema": {
-                    "inputs": (
-                        getattr(workflow.metadata, "parameters", {})
-                        if hasattr(workflow, "metadata") and workflow.metadata
-                        else {}
-                    ),
-                    "outputs": {},
-                },
-            }
-            return {
-                "content": json.dumps(workflow_info, indent=2),
-                "mimeType": "application/json",
-            }
-
-        # Register workflow:// pattern (wildcard)
-        self._mcp_server._resources["workflow://*"] = workflow_detail_handler
+        if self._mcp_server is None or not callable(
+            getattr(self._mcp_server, "resource", None)
+        ):
+            return
 
         # Documentation resource
-        async def docs_handler(uri: str):
-            docs_content = """# Nexus Quick Start Guide
+        @self._mcp_server.resource("docs://quickstart")
+        async def _docs_handler() -> str:
+            return """# Nexus Quick Start Guide
 
 Welcome to Kailash Nexus! This guide will help you get started.
 
@@ -1076,12 +1068,10 @@ Nexus is a multi-channel platform that exposes workflows via:
 
 For more information, visit the documentation.
 """
-            return {"content": docs_content, "mimeType": "text/markdown"}
 
-        self._mcp_server._resources["docs://quickstart"] = docs_handler
-
-        # Configuration resource
-        async def config_handler(uri: str):
+        # Configuration resource (snapshot of current platform state)
+        @self._mcp_server.resource("config://platform")
+        async def _config_handler() -> str:
             config = {
                 "name": "Kailash Nexus",
                 "api_port": self._api_port,
@@ -1094,19 +1084,12 @@ For more information, visit the documentation.
                     "auth": self._enable_auth,
                 },
             }
-            return {
-                "content": json.dumps(config, indent=2),
-                "mimeType": "application/json",
-            }
+            return json.dumps(config, indent=2)
 
-        self._mcp_server._resources["config://platform"] = config_handler
-
-        # Help resource
-        async def help_handler(uri: str):
-            help_content = """# Getting Started with Nexus
-
-## Available Workflows
-"""
+        # Help resource — describes available URIs
+        @self._mcp_server.resource("help://getting-started")
+        async def _help_handler() -> str:
+            help_content = "# Getting Started with Nexus\n\n## Available Workflows\n"
             for workflow_name in self._workflows.keys():
                 help_content += f"- **{workflow_name}**: Workflow tool\n"
 
@@ -1121,9 +1104,53 @@ For more information, visit the documentation.
 ## Need Help?
 Check the documentation or explore available resources.
 """
-            return {"content": help_content, "mimeType": "text/markdown"}
+            return help_content
 
-        self._mcp_server._resources["help://getting-started"] = help_handler
+    def _register_workflow_as_mcp_resource(self, name: str, workflow):
+        """Register a single workflow as an MCP resource at ``workflow://<name>``.
+
+        The resource handler returns a JSON string describing the workflow's
+        nodes and schema. This satisfies the MCP ``resources/list`` and
+        ``resources/read`` contracts for AI-agent discovery.
+
+        Resource handlers MUST return a JSON string — see
+        :meth:`_register_default_mcp_resources` for the str(handler())
+        contract MCPServer enforces.
+        """
+        import json
+
+        if self._mcp_server is None or not callable(
+            getattr(self._mcp_server, "resource", None)
+        ):
+            return
+
+        uri = f"workflow://{name}"
+
+        @self._mcp_server.resource(uri)
+        async def _workflow_resource_handler() -> str:
+            # Bind workflow + name into closure so each registered handler
+            # describes its own workflow (closure capture, not loop-shared).
+            wf = workflow
+            wf_name = name
+            workflow_info = {
+                "name": wf_name,
+                "type": "workflow",
+                "nodes": [
+                    {"id": node_id, "type": str(type(node).__name__)}
+                    for node_id, node in wf.nodes.items()
+                ],
+                "schema": {
+                    "inputs": (
+                        getattr(wf.metadata, "parameters", {})
+                        if hasattr(wf, "metadata") and wf.metadata
+                        else {}
+                    ),
+                    "outputs": {},
+                },
+            }
+            return json.dumps(workflow_info, indent=2)
+
+        logger.debug(f"Workflow '{name}' registered as MCP resource at {uri}")
 
     def _create_mock_mcp_server(self):
         """Create a simple mock MCP server for testing."""
@@ -1171,9 +1198,23 @@ Check the documentation or explore available resources.
                 # APIKeyAuth expects a list of keys when using simple format
                 auth_provider = APIKeyAuth(list(api_keys.values()))
 
-        # Create enhanced MCP server with all enterprise features
+        # Create enhanced MCP server with all enterprise features.
+        #
+        # transport="websocket" routes the server through MCPServer's
+        # _run_websocket() path, which binds a WebSocketServerTransport
+        # on (websocket_host, websocket_port) using ``websockets.serve``.
+        # AI agents connect via ``ws://host:mcp_port`` and the server
+        # dispatches JSON-RPC (tools/list, resources/list, tools/call,
+        # initialize, etc.) per the MCP 2025-06-18 spec.
+        #
+        # The enable_http_transport / enable_sse_transport flags below
+        # gate ADDITIONAL sub-transports the server can expose, NOT the
+        # base WebSocket listener — that one is always bound.
         server = MCPServer(
             name=f"{self.name}-mcp",
+            transport="websocket",
+            websocket_host="0.0.0.0",
+            websocket_port=self._mcp_port,
             enable_cache=True,
             enable_metrics=True,
             auth_provider=auth_provider,
@@ -1242,7 +1283,14 @@ Check the documentation or explore available resources.
         """Register a workflow as an MCP tool dynamically.
 
         This is used when MCPChannel is not available (WebSocket-only mode).
-        We manually register the workflow as a tool with the Core SDK's MCPServer.
+        Registers the workflow with the Core SDK's MCPServer via its
+        ``tool()`` decorator path, which populates ``_tool_registry`` —
+        the dict ``_handle_list_tools`` reads to answer ``tools/list``.
+
+        Direct writes to ``_mcp_server._tools`` are BLOCKED: that dict only
+        exists on the FastMCP fallback shim (kailash_mcp/server.py:236) and
+        is invisible to the MCPServer's JSON-RPC handlers, so tools added
+        that way never appear in ``tools/list`` over WebSocket.
 
         Uses self.runtime (server-level shared runtime) instead of creating
         a new AsyncLocalRuntime per invocation (M3-001 fix).
@@ -1265,14 +1313,40 @@ Check the documentation or explore available resources.
                 "run_id": run_id,
             }
 
-        # Register as tool with the MCPServer
-        # The @tool decorator syntax won't work dynamically, so we use internal registration
+        # Set the function name so MCPServer's tool decorator picks it up
+        # (the decorator uses func.__name__ when no explicit name kwarg is
+        # provided to register the tool).
+        workflow_tool.__name__ = name
+        workflow_tool.__doc__ = f"Execute workflow '{name}'"
+
+        # Register via the proper @tool() decorator path — this writes to
+        # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from.
+        if hasattr(self._mcp_server, "tool") and callable(
+            getattr(self._mcp_server, "tool")
+        ):
+            try:
+                self._mcp_server.tool()(workflow_tool)
+                logger.info(
+                    f"Workflow '{name}' registered as MCP tool (WebSocket mode)"
+                )
+                return
+            except Exception as e:
+                logger.warning(
+                    f"MCPServer.tool() registration for '{name}' failed: {e}; "
+                    f"falling back to direct registry write"
+                )
+
+        # Fallback: write to the FastMCP-shim _tools dict for compatibility
+        # with simple/mock MCP servers used in tests.
         if hasattr(self._mcp_server, "_tools"):
             self._mcp_server._tools[name] = workflow_tool
-            logger.info(f"Workflow '{name}' registered as MCP tool (WebSocket mode)")
+            logger.info(
+                f"Workflow '{name}' registered as MCP tool via fallback _tools dict"
+            )
         else:
             logger.warning(
-                f"Could not register workflow '{name}' as MCP tool - _tools attribute missing"
+                f"Could not register workflow '{name}' as MCP tool - "
+                f"neither tool() decorator nor _tools attribute available"
             )
 
     def _get_api_keys(self) -> Dict[str, str]:
@@ -1369,6 +1443,9 @@ Check the documentation or explore available resources.
             # MCPChannel automatically exposes workflow as tool
             self._mcp_channel.register_workflow(name, workflow)
             logger.info(f"Workflow '{name}' registered with enhanced MCP channel")
+            # Also register as a workflow:// resource so resources/list
+            # surfaces the workflow descriptor for AI-agent discovery.
+            self._register_workflow_as_mcp_resource(name, workflow)
         elif hasattr(self, "_mcp_server") and self._mcp_server:
             # Register workflow as MCP tool when using WebSocket wrapper
             # Core SDK MCPServer uses decorators, so we register dynamically
@@ -1378,6 +1455,8 @@ Check the documentation or explore available resources.
             else:
                 # Core SDK MCPServer - register as tool manually
                 self._register_workflow_as_mcp_tool(name, workflow)
+            # Register as workflow:// resource for resources/list discovery.
+            self._register_workflow_as_mcp_resource(name, workflow)
 
         # Track performance metric
         registration_time = time.time() - registration_start
@@ -3071,27 +3150,52 @@ Check the documentation or explore available resources.
             )
 
     def _run_mcp_server(self):
-        """Run MCP server in thread."""
+        """Run MCP server in thread.
+
+        Dispatches by what the platform configured at init time:
+
+        * ``self._mcp_channel`` set (HTTP/SSE sub-transports enabled) →
+          run the channel's lifecycle, which orchestrates HTTP routes plus
+          a background-task wrapping ``mcp_server.run()``.
+        * ``self._mcp_server`` set without a channel (WebSocket-only mode)
+          → call the synchronous ``run()`` method directly. ``MCPServer.run()``
+          dispatches on its ``transport`` attribute: when ``transport``
+          is ``"websocket"`` (set by :meth:`_create_sdk_mcp_server`), it
+          internally calls ``asyncio.run(self._run_websocket())`` which
+          binds the WebSocket port via ``websockets.serve`` and runs the
+          JSON-RPC dispatcher.
+
+        ``MCPServerBase.start()`` is BLOCKED here: that method is hard-coded
+        to stdio (kailash_mcp/server.py:286) and ignores the ``transport``
+        attribute, so it would silently route the WebSocket-only mode into
+        stdio and bind no port.
+        """
         try:
             import asyncio
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            # Use MCP channel if available (full protocol support)
+            # Use MCP channel if available (HTTP/SSE sub-transports active)
             if hasattr(self, "_mcp_channel") and self._mcp_channel:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._mcp_channel.start())
-            elif hasattr(self, "_mcp_server") and self._mcp_server:
-                # Core SDK MCPServer -- start if it has start()
-                if hasattr(self._mcp_server, "start"):
-                    loop.run_until_complete(self._mcp_server.start())
-                else:
-                    logger.warning("MCP server has no start() method, skipping")
-            else:
-                logger.info("No MCP server configured. Use kailash-mcp for MCP access.")
+                loop.run_forever()
                 return
 
-            loop.run_forever()
+            # WebSocket-only mode: call MCPServer.run() directly.
+            # run() is synchronous and blocks until shutdown — it manages
+            # its own asyncio loop internally for the websocket transport.
+            if hasattr(self, "_mcp_server") and self._mcp_server:
+                if hasattr(self._mcp_server, "run") and callable(self._mcp_server.run):
+                    # Blocks the thread until shutdown. The MCP server's
+                    # transport=='websocket' branch calls asyncio.run()
+                    # internally which is safe in a worker thread that
+                    # has no preexisting event loop.
+                    self._mcp_server.run()
+                else:
+                    logger.warning("MCP server has no run() method, skipping")
+                return
+
+            logger.info("No MCP server configured. Use kailash-mcp for MCP access.")
         except Exception as e:
             logger.warning(f"MCP server error: {e}. Continuing with other channels.")
 
