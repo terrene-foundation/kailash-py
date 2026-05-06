@@ -5,7 +5,12 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.6] — 2026-05-06 — black + ruff modernization sweep (#815, PR #850)
+
+1222 unit tests pass (PR #850 CI). No public API change: `__init__.py` exports + `__all__`
+lists are byte-for-byte identical between main and HEAD on every package init module.
+Wheel content unchanged for any consumer-visible surface.
+Pre-existing pyright drift (not introduced by this release) tracked in issue #855.
 
 ### Changed (issue #815 — chore-only modernization sweep, packages/kaizen-agents/src/)
 
