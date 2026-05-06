@@ -47,7 +47,6 @@ from .configuration import (
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
 from .core.exceptions import DDLFailedError
-from .exceptions import AppendOnlyViolationError, DataFlowError
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import (
@@ -68,6 +67,7 @@ from .engine import (
     QueryEngine,
     ValidationLayer,
 )
+from .exceptions import AppendOnlyViolationError, DataFlowError
 from .features.express import SyncExpress
 from .utils.suppress_warnings import (
     configure_dataflow_logging,
@@ -109,7 +109,7 @@ from .validation import (
 install_dataflow_logger_mask()
 
 # Legacy compatibility - maintain the original imports
-__version__ = "2.7.9"
+__version__ = "2.8.0"
 
 __all__ = [
     "DataFlow",
