@@ -1,6 +1,6 @@
 # Nexus Changelog
 
-## [Unreleased] — fix MCP WebSocket transport binding (#816)
+## [2.6.2] — 2026-05-06 — fix MCP WebSocket transport binding (#816)
 
 Wires the MCP WebSocket transport so AI agents can actually connect to a Nexus instance over `ws://host:mcp_port`. Prior to this fix the MCP server was constructed in stdio mode and never bound a TCP listener — every WebSocket connect attempt failed with a connection-refused error.
 
