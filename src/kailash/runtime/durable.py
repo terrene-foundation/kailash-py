@@ -770,9 +770,15 @@ def resolve_tenant_id(runtime: Any) -> Optional[str]:
     2. ``kailash.trust.auth.context.get_current_tenant_id()`` if importable
     3. ``None`` (single-tenant deployments)
 
-    The resolver never raises — a missing tenant context is a valid
-    single-tenant deployment, NOT a security failure. Tenant enforcement
-    happens at the storage layer (composite key includes ``tenant_id``).
+    A missing trust subsystem (ImportError / AttributeError on the
+    ``kailash.trust.auth.context`` surface) is a valid single-tenant
+    deployment posture and is logged WARN once per process for operator
+    visibility.  ANY other exception (ContextVar lookup error, runtime
+    bug, propagation glitch) is RE-RAISED — silently swallowing them
+    would mask cross-tenant exposure under a buggy trust subsystem.
+    Same posture as ``rules/zero-tolerance.md`` Rule 3 (no silent
+    fallbacks): narrow the except clause to the documented "optional
+    surface" path; let everything else propagate.
     """
     user_ctx = getattr(runtime, "user_context", None)
     if user_ctx is not None:
@@ -781,13 +787,35 @@ def resolve_tenant_id(runtime: Any) -> Optional[str]:
             return str(tenant_id)
     try:
         from kailash.trust.auth.context import get_current_tenant_id
-
-        tenant_id = get_current_tenant_id()
-        if tenant_id:
-            return str(tenant_id)
-    except Exception:  # pragma: no cover — optional surface
-        pass
+    except (ImportError, AttributeError):
+        if not getattr(resolve_tenant_id, "_warned_unavailable", False):
+            logger.warning(
+                "durable.tenant.trust_subsystem_unavailable",
+                extra={
+                    "hint": (
+                        "kailash.trust.auth.context.get_current_tenant_id "
+                        "is not importable; tenant_id will be None.  "
+                        "Multi-tenant safety is reduced — verify the "
+                        "trust extras are installed if multi-tenancy is "
+                        "expected."
+                    ),
+                },
+            )
+            resolve_tenant_id._warned_unavailable = True  # type: ignore[attr-defined]
+        return None
+    # ANY exception from the actual tenant lookup propagates — a
+    # ContextVar lookup error or a propagation bug is NOT an "optional
+    # surface" — silencing it would mask cross-tenant exposure.
+    tenant_id = get_current_tenant_id()
+    if tenant_id:
+        return str(tenant_id)
     return None
+
+
+# Module-scope flag init for the WARN-once latch above.  Stored on the
+# function object directly so that test fixtures can reset it via
+# ``del resolve_tenant_id._warned_unavailable`` between tests.
+resolve_tenant_id._warned_unavailable = False  # type: ignore[attr-defined]
 
 
 # Re-export for symmetry with redact_event_for_persistence — both
