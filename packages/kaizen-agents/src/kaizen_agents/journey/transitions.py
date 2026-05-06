@@ -52,8 +52,9 @@ References:
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from kaizen_agents.journey.intent import IntentDetector
@@ -80,8 +81,8 @@ class TransitionResult:
 
     matched: bool
     transition: Optional["Transition"] = None
-    trigger_result: Optional[Dict[str, Any]] = None
-    updated_context: Optional[Dict[str, Any]] = None
+    trigger_result: dict[str, Any] | None = None
+    updated_context: dict[str, Any] | None = None
 
 
 # ============================================================================
@@ -102,7 +103,7 @@ class BaseTrigger(ABC):
     """
 
     @abstractmethod
-    def evaluate(self, message: str, context: Dict[str, Any]) -> bool:
+    def evaluate(self, message: str, context: dict[str, Any]) -> bool:
         """
         Evaluate if trigger condition is met.
 
@@ -146,14 +147,14 @@ class IntentTrigger(BaseTrigger):
         False
     """
 
-    patterns: List[str] = field(default_factory=list)
+    patterns: list[str] = field(default_factory=list)
     use_llm_fallback: bool = True
     confidence_threshold: float = 0.7
 
     # Set by IntentDetector during async evaluation
     _detector: Optional["IntentDetector"] = field(default=None, repr=False)
 
-    def evaluate(self, message: str, context: Dict[str, Any]) -> bool:
+    def evaluate(self, message: str, context: dict[str, Any]) -> bool:
         """
         Evaluate if message matches intent patterns.
 
@@ -231,10 +232,10 @@ class ConditionTrigger(BaseTrigger):
         Exceptions in condition are caught and return False (fail-safe).
     """
 
-    condition: Optional[Callable[[Dict[str, Any]], bool]] = None
+    condition: Callable[[dict[str, Any]], bool] | None = None
     description: str = ""
 
-    def evaluate(self, message: str, context: Dict[str, Any]) -> bool:
+    def evaluate(self, message: str, context: dict[str, Any]) -> bool:
         """
         Evaluate condition against context.
 
@@ -303,7 +304,7 @@ class AlwaysTrigger(BaseTrigger):
         ... )
     """
 
-    def evaluate(self, message: str, context: Dict[str, Any]) -> bool:
+    def evaluate(self, message: str, context: dict[str, Any]) -> bool:
         """
         Always returns True.
 
@@ -361,16 +362,16 @@ class Transition:
     """
 
     trigger: BaseTrigger
-    from_pathway: Union[str, List[str]] = "*"
+    from_pathway: str | list[str] = "*"
     to_pathway: str = ""
-    context_update: Optional[Dict[str, str]] = None
+    context_update: dict[str, str] | None = None
     priority: int = 0
 
     def matches(
         self,
         current_pathway: str,
         message: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> bool:
         """
         Check if transition should activate.
@@ -400,9 +401,9 @@ class Transition:
 
     def apply_context_update(
         self,
-        context: Dict[str, Any],
-        result: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        context: dict[str, Any],
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Apply context updates specified in transition.
 

@@ -23,7 +23,6 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 
-
 # JSON schema for LLM-based context selection
 CONTEXT_SELECTION_SCHEMA: dict[str, Any] = {
     "type": "object",

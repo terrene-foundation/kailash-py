@@ -31,10 +31,9 @@ import concurrent.futures
 import logging
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
-
 from kaizen_agents.patterns.llm_routing import LLMBased
 from kaizen_agents.wrapper_base import WrapperBase
 
@@ -74,7 +73,7 @@ class SupervisorWrapper(WrapperBase):
         inner: BaseAgent,
         workers: list[BaseAgent],
         *,
-        routing: Optional[LLMBased] = None,
+        routing: LLMBased | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(inner, **kwargs)
@@ -219,7 +218,7 @@ class SupervisorWrapper(WrapperBase):
         self,
         task_text: str,
         correlation_id: str,
-    ) -> Optional[BaseAgent]:
+    ) -> BaseAgent | None:
         """Run async ``select_best`` from a sync context."""
         coro = self._routing.select_best(
             task_text,

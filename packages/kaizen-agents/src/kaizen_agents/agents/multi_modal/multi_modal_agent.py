@@ -168,7 +168,7 @@ class MultiModalAgent(BaseAgent):
             )
 
         # Lazy initialization for document extraction (NEW)
-        self._document_agent: "DocumentExtractionAgent" | None = None
+        self._document_agent: DocumentExtractionAgent | None = None
 
     def _verify_adapter_compatibility(self):
         """Verify adapter supports signature's modalities."""

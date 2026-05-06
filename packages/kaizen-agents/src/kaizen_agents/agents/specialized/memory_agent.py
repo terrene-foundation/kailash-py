@@ -26,7 +26,7 @@ Environment variable support:
 import os
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
@@ -64,7 +64,7 @@ class MemoryConfig:
     )
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ConversationSignature(Signature):
@@ -89,7 +89,7 @@ class SimpleMemoryStore:
         Args:
             max_turns: Maximum number of conversation turns to keep per session
         """
-        self.conversations: Dict[str, List[Dict[str, Any]]] = {}
+        self.conversations: dict[str, list[dict[str, Any]]] = {}
         self.max_turns = max_turns
 
     def add_turn(self, session_id: str, role: str, content: str):
@@ -203,17 +203,17 @@ class MemoryAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_history_turns: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        memory_store: Optional[SimpleMemoryStore] = None,
-        config: Optional[MemoryConfig] = None,
-        mcp_servers: Optional[List[Dict]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_history_turns: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        memory_store: SimpleMemoryStore | None = None,
+        config: MemoryConfig | None = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
         **kwargs,
     ):
@@ -287,7 +287,7 @@ class MemoryAgent(BaseAgent):
         session_id: str = "default",
         conversation_history: str = "",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Chat with memory continuity.
 
@@ -387,7 +387,7 @@ class MemoryAgent(BaseAgent):
 
     def chat(
         self, message: str, session_id: str = "default", **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convenience method for conversation with memory continuity.
 

@@ -24,7 +24,6 @@ from kaizen.l3.factory.instance import (
 )
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec as SdkAgentSpec
-
 from kaizen_agents._sdk_compat import envelope_to_dict
 from kaizen_agents.types import AgentSpec as LocalAgentSpec
 

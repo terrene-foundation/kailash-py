@@ -40,8 +40,8 @@ References:
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
@@ -94,8 +94,8 @@ class JourneySessionModel:
     accumulated_context: str = "{}"  # JSON object
     created_at: str = ""
     updated_at: str = ""
-    expires_at: Optional[str] = None
-    tenant_id: Optional[str] = None
+    expires_at: str | None = None
+    tenant_id: str | None = None
 
 
 @dataclass
@@ -143,7 +143,7 @@ class JourneyConversationModel:
     pathway_id: str = ""
     timestamp: str = ""
     metadata: str = "{}"  # JSON object
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
 
 
 @dataclass
@@ -185,7 +185,7 @@ class IntentCacheModel:
     """
 
     id: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
     input_hash: str = ""
     intent: str = ""
     confidence: float = 0.0
@@ -239,8 +239,8 @@ def register_journey_models(db: "DataFlow") -> None:
         accumulated_context: str
         created_at: str
         updated_at: str
-        expires_at: Optional[str] = None
-        tenant_id: Optional[str] = None
+        expires_at: str | None = None
+        tenant_id: str | None = None
 
     # Register JourneyConversation model
     @db.model
@@ -253,13 +253,13 @@ def register_journey_models(db: "DataFlow") -> None:
         pathway_id: str
         timestamp: str
         metadata: str
-        tenant_id: Optional[str] = None
+        tenant_id: str | None = None
 
     # Register IntentCache model
     @db.model
     class IntentCache:
         id: str
-        session_id: Optional[str] = None
+        session_id: str | None = None
         input_hash: str
         intent: str
         confidence: float
@@ -315,7 +315,7 @@ class EnhancedDataFlowStateBackend:
         session_model: str = "JourneySession",
         conversation_model: str = "JourneyConversation",
         intent_cache_model: str = "IntentCache",
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ):
         """
         Initialize enhanced backend.
@@ -340,7 +340,7 @@ class EnhancedDataFlowStateBackend:
     async def save_session(
         self,
         session_id: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> None:
         """
         Save session data.
@@ -349,7 +349,7 @@ class EnhancedDataFlowStateBackend:
             session_id: Session identifier
             data: Session state data
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         serialized = {
             "id": session_id,
@@ -372,7 +372,7 @@ class EnhancedDataFlowStateBackend:
         else:
             await self.db.express.create(self.session_model, serialized)
 
-    async def load_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load_session(self, session_id: str) -> dict[str, Any] | None:
         """
         Load session data.
 
@@ -430,7 +430,7 @@ class EnhancedDataFlowStateBackend:
         role: str,
         content: str,
         pathway_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Save a single conversation turn.
@@ -453,7 +453,7 @@ class EnhancedDataFlowStateBackend:
                 "role": role,
                 "content": content,
                 "pathway_id": pathway_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "metadata": json.dumps(metadata or {}),
                 "tenant_id": self.tenant_id,
             },
@@ -464,7 +464,7 @@ class EnhancedDataFlowStateBackend:
         session_id: str,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Load paginated conversation history.
 
@@ -530,8 +530,8 @@ class EnhancedDataFlowStateBackend:
     async def get_cached_intent(
         self,
         input_hash: str,
-        session_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        session_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Get cached intent result.
 
@@ -554,7 +554,7 @@ class EnhancedDataFlowStateBackend:
         if expires_at:
             try:
                 expiry = datetime.fromisoformat(expires_at)
-                if datetime.now(timezone.utc) > expiry:
+                if datetime.now(UTC) > expiry:
                     # Expired - delete and return None
                     await self.db.express.delete(self.intent_cache_model, cache_id)
                     return None
@@ -579,8 +579,8 @@ class EnhancedDataFlowStateBackend:
         confidence: float,
         model: str,
         ttl_seconds: int = 300,
-        session_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Cache intent detection result.
@@ -597,7 +597,7 @@ class EnhancedDataFlowStateBackend:
         from datetime import timedelta
 
         cache_id = f"{session_id or 'global'}:{input_hash}"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl_seconds)
 
         await self.db.express.create(

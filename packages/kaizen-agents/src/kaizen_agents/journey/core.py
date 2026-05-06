@@ -271,8 +271,8 @@ class Pathway(metaclass=PathwayMeta):
             manager: PathwayManager that owns this pathway instance
         """
         self.manager = manager
-        self._signature_instance: "Signature" | None = None
-        self._pipeline_instance: "Pipeline" | None = None
+        self._signature_instance: Signature | None = None
+        self._pipeline_instance: Pipeline | None = None
 
     @property
     def signature(self) -> Optional["Signature"]:

@@ -36,7 +36,7 @@ import json
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -312,7 +312,7 @@ class HookManager:
                 stderr=stderr_str,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Hook %s timed out after %.1fs", script.name, self._timeout)
             # Attempt to kill the process
             try:

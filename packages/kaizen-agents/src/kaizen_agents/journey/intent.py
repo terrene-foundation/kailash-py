@@ -328,7 +328,7 @@ class IntentDetector:
 
         # Build intent list from triggers
         intent_list: list[str] = []
-        trigger_map: dict[str, "IntentTrigger"] = {}
+        trigger_map: dict[str, IntentTrigger] = {}
         for t in triggers:
             for pattern in t.patterns:
                 if pattern not in intent_list:

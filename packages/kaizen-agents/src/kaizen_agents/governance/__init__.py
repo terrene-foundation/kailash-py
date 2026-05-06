@@ -8,7 +8,6 @@ from kaizen_agents.governance.accountability import (
 )
 from kaizen_agents.governance.budget import BudgetEvent, BudgetSnapshot, BudgetTracker
 from kaizen_agents.governance.bypass import BypassManager, BypassRecord
-from kaizen_agents.governance.cost_model import CostModel
 from kaizen_agents.governance.cascade import (
     CascadeEvent,
     CascadeEventType,
@@ -20,6 +19,7 @@ from kaizen_agents.governance.clearance import (
     ClearanceEnforcer,
     DataClassification,
 )
+from kaizen_agents.governance.cost_model import CostModel
 from kaizen_agents.governance.dereliction import (
     DerelictionDetector,
     DerelictionStats,

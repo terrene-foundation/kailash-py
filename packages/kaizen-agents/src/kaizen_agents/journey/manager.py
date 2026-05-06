@@ -285,16 +285,16 @@ class PathwayManager:
         self.config = config
 
         # Agent registry
-        self._agents: dict[str, "BaseAgent"] = {}
+        self._agents: dict[str, BaseAgent] = {}
 
         # Runtime components (lazy initialization)
-        self._intent_detector: "IntentDetector" | None = None
+        self._intent_detector: IntentDetector | None = None
         self._context_accumulator = ContextAccumulator(config)
         self._state_manager = JourneyStateManager(config)
 
         # Session state
         self._session: JourneySession | None = None
-        self._pathway_instances: dict[str, "Pathway"] = {}
+        self._pathway_instances: dict[str, Pathway] = {}
 
         # Hooks registry (REQ-INT-007)
         self._hooks: dict[JourneyHookEvent, list[JourneyHookHandler]] = {

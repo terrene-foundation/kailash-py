@@ -22,12 +22,10 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.recovery.diagnoser import (
-    FailureCategory,
     FailureDiagnosis,
 )
 from kaizen_agents.types import (
     AgentSpec,
-    ConstraintEnvelope,
     EdgeType,
     MemoryConfig,
     Plan,
@@ -575,7 +573,7 @@ class Recomposer:
         modifications.append(
             PlanModification.skip_node(
                 failed_node.node_id,
-                f"Restructured: replaced by alternative path",
+                "Restructured: replaced by alternative path",
             )
         )
 

@@ -142,7 +142,7 @@ class JourneySessionManager:
         """Initialize session manager with thread-safe lock."""
         self._sessions: dict[str, NexusSessionInfo] = {}
         self._user_sessions: dict[str, list[str]] = {}
-        self._journey_managers: dict[str, "PathwayManager"] = {}
+        self._journey_managers: dict[str, PathwayManager] = {}
         self._lock = threading.Lock()  # Thread-safe access to session data
 
     def create_session(

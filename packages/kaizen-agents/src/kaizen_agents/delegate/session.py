@@ -14,13 +14,13 @@ import re
 import shutil
 import stat
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from kaizen_agents.delegate.loop import Conversation, UsageTracker
     from kaizen_agents.delegate.config.loader import KzConfig
+    from kaizen_agents.delegate.loop import Conversation, UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class SessionManager:
         -------
         Path to the written JSON file.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         messages = conversation.messages if conversation else []
         user_turns = sum(1 for m in messages if m.get("role") == "user")
@@ -209,7 +209,7 @@ class SessionManager:
         try:
             data = json.loads(dest_path.read_text(encoding="utf-8"))
             data["name"] = new_name
-            data["timestamp"] = datetime.now(timezone.utc).isoformat()
+            data["timestamp"] = datetime.now(UTC).isoformat()
             _secure_write(dest_path, json.dumps(data, indent=2, default=str))
         except (json.JSONDecodeError, OSError) as exc:
             logger.error("Failed to update forked session metadata: %s", exc)

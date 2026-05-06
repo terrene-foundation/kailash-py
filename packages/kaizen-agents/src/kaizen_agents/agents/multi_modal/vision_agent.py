@@ -140,7 +140,7 @@ class VisionAgent(BaseAgent):
         self.config = config
 
         # Lazy initialization for document extraction (NEW)
-        self._document_agent: "DocumentExtractionAgent" | None = None
+        self._document_agent: DocumentExtractionAgent | None = None
 
     def run(self, **kwargs) -> dict[str, Any]:
         """

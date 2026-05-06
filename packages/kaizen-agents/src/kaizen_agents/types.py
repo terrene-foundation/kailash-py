@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -106,9 +106,7 @@ def make_envelope(
         ops = operational
 
     # Temporal
-    if temporal is None:
-        tmp = TemporalConstraintConfig()
-    elif isinstance(temporal, dict):
+    if temporal is None or isinstance(temporal, dict):
         tmp = TemporalConstraintConfig()
     else:
         tmp = temporal
@@ -326,7 +324,7 @@ class AgentInstance:
     parent_id: str | None = None
     state: AgentState = AgentState.PENDING
     state_data: AgentStateData = field(default_factory=AgentStateData)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     active_envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
 
 
@@ -424,8 +422,8 @@ class Plan:
     nodes: dict[str, PlanNode] = field(default_factory=dict)
     edges: list[PlanEdge] = field(default_factory=list)
     state: PlanState = PlanState.DRAFT
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    modified_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    modified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +563,7 @@ class PlanEvent:
     """
 
     event_type: PlanEventType
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     node_id: str | None = None
     instance_id: str | None = None
     output: Any | None = None
@@ -711,7 +709,7 @@ class L3Message:
     to_instance: str = ""
     message_type: L3MessageType = L3MessageType.STATUS
     correlation_id: str | None = None
-    sent_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    sent_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     ttl: timedelta | None = None
 
     # Payload — exactly one is populated based on message_type

@@ -24,7 +24,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
@@ -55,7 +55,7 @@ class ResilientConfig:
     """
 
     # Fallback chain configuration
-    models: List[str] = field(default_factory=lambda: ["gpt-4", "gpt-3.5-turbo"])
+    models: list[str] = field(default_factory=lambda: ["gpt-4", "gpt-3.5-turbo"])
 
     # LLM configuration
     llm_provider: str = field(
@@ -71,7 +71,7 @@ class ResilientConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate configuration."""
@@ -153,15 +153,15 @@ class ResilientAgent(BaseAgent):
 
     def __init__(
         self,
-        models: Optional[List[str]] = None,
-        llm_provider: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[ResilientConfig] = None,
-        mcp_servers: Optional[List[Dict]] = None,
+        models: list[str] | None = None,
+        llm_provider: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: ResilientConfig | None = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
         **kwargs,
     ):
@@ -233,7 +233,7 @@ class ResilientAgent(BaseAgent):
         self.resilient_config = config
         self.tool_registry = tool_registry
 
-    async def run_async(self, query: str, **kwargs) -> Dict[str, Any]:
+    async def run_async(self, query: str, **kwargs) -> dict[str, Any]:
         """
         Process query with automatic fallback.
 
@@ -257,7 +257,7 @@ class ResilientAgent(BaseAgent):
         result = await self.strategy.execute(self, {"query": query})
         return result
 
-    def get_error_summary(self) -> List[Dict[str, Any]]:
+    def get_error_summary(self) -> list[dict[str, Any]]:
         """
         Get error summary from failed strategies.
 
@@ -279,10 +279,10 @@ class ResilientAgent(BaseAgent):
 # Convenience function for quick resilient queries
 async def query_with_fallback(
     query: str,
-    models: List[str] = None,
+    models: list[str] = None,
     llm_provider: str = "openai",
     temperature: float = 0.7,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Quick resilient query with default configuration.
 

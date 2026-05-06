@@ -38,11 +38,11 @@ from kaizen_agents.orchestration.protocols import (
 )
 from kaizen_agents.orchestration.recovery import (
     FailureCategory,
-    FailureDiagnosis,
     FailureDiagnoser,
+    FailureDiagnosis,
+    Recomposer,
     RecoveryPlan,
     RecoveryStrategy,
-    Recomposer,
 )
 
 __all__ = [

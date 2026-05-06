@@ -18,7 +18,6 @@ from typing import Any
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.types import ClarificationPayload
 
-
 # JSON schema for composing a clarification question
 CLARIFICATION_QUESTION_SCHEMA: dict[str, Any] = {
     "type": "object",

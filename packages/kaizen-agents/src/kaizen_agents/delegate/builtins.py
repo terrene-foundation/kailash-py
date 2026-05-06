@@ -14,13 +14,12 @@ Context keys (provided by the agent loop when executing):
 
 from __future__ import annotations
 
-import sys
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kaizen_agents.delegate.commands import CommandRegistry
 
 if TYPE_CHECKING:
-    from kaizen_agents.delegate.config.effort import EffortLevel
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +269,7 @@ def _format_plan(result: Any) -> str:
         elif node.state == PlanNodeState.FAILED and node.error:
             lines.append(f"           !! {node.error}")
         elif node.state == PlanNodeState.HELD:
-            lines.append(f"           ** Awaiting approval")
+            lines.append("           ** Awaiting approval")
 
     # Summary
     total = len(plan.nodes)

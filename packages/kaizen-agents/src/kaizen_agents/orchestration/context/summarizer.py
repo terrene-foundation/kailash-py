@@ -16,7 +16,6 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 
-
 # JSON schema for context value summarization
 SUMMARIZATION_SCHEMA: dict[str, Any] = {
     "type": "object",

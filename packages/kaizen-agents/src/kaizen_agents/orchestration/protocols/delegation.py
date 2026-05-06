@@ -13,7 +13,7 @@ task descriptions requires LLM judgment.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
@@ -23,7 +23,6 @@ from kaizen_agents.types import (
     DelegationPayload,
     Priority,
 )
-
 
 # JSON schema for the LLM-composed task description
 DELEGATION_COMPOSITION_SCHEMA: dict[str, Any] = {

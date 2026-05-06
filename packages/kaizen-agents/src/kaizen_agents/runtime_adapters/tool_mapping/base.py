@@ -9,7 +9,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,10 @@ class ToolMappingError(Exception):
     def __init__(
         self,
         message: str,
-        tool_name: Optional[str] = None,
+        tool_name: str | None = None,
         source_format: str = "kaizen",
         target_format: str = "unknown",
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ):
         self.tool_name = tool_name
         self.source_format = source_format
@@ -62,11 +62,11 @@ class KaizenTool:
 
     name: str
     description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     strict: bool = False
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "KaizenTool":
+    def from_dict(cls, data: dict[str, Any]) -> "KaizenTool":
         """Create KaizenTool from dictionary.
 
         Handles both flat format and nested function format.
@@ -95,7 +95,7 @@ class KaizenTool:
             strict=data.get("strict", False),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to OpenAI function format dictionary.
 
         Returns:
@@ -111,7 +111,7 @@ class KaizenTool:
             },
         }
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """Validate the tool definition.
 
         Returns:
@@ -137,7 +137,7 @@ class KaizenTool:
 
 
 # Generic type for mapped tool format
-MappedToolType = TypeVar("MappedToolType", bound=Dict[str, Any])
+MappedToolType = TypeVar("MappedToolType", bound=dict[str, Any])
 
 
 @dataclass
@@ -156,7 +156,7 @@ class MappedTool(Generic[MappedToolType]):
     original: KaizenTool
     mapped: MappedToolType
     format_name: str
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class ToolMapper(ABC):
@@ -173,9 +173,9 @@ class ToolMapper(ABC):
     @abstractmethod
     def to_runtime_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         strict: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Convert Kaizen tools to runtime-specific format.
 
         Args:
@@ -194,8 +194,8 @@ class ToolMapper(ABC):
     @abstractmethod
     def from_runtime_format(
         cls,
-        runtime_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        runtime_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convert runtime-specific tools back to Kaizen format.
 
         Useful for normalizing tool definitions from external sources.
@@ -209,7 +209,7 @@ class ToolMapper(ABC):
         pass
 
     @classmethod
-    def validate_tool(cls, tool: KaizenTool) -> List[str]:
+    def validate_tool(cls, tool: KaizenTool) -> list[str]:
         """Validate a tool against format-specific requirements.
 
         Override in subclasses for format-specific validation.
@@ -225,9 +225,9 @@ class ToolMapper(ABC):
     @classmethod
     def _parse_kaizen_tools(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         strict: bool = False,
-    ) -> List[KaizenTool]:
+    ) -> list[KaizenTool]:
         """Parse raw tool dictionaries into KaizenTool objects.
 
         Args:
@@ -302,9 +302,9 @@ class ToolMapper(ABC):
 
 
 def extract_tool_call(
-    response: Dict[str, Any],
+    response: dict[str, Any],
     format_name: str = "openai",
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Extract tool call from LLM response.
 
     Handles different response formats from various providers.
@@ -368,7 +368,7 @@ def format_tool_result(
     result: Any,
     format_name: str = "openai",
     is_error: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Format tool result for inclusion in conversation.
 
     Args:

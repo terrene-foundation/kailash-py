@@ -35,7 +35,8 @@ Usage:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
@@ -80,7 +81,7 @@ class Pipeline(ABC):
     """
 
     @abstractmethod
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute the pipeline.
 
@@ -94,8 +95,8 @@ class Pipeline(ABC):
 
     def to_agent(
         self,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> BaseAgent:
         """
         Convert pipeline to an Agent for composition.
@@ -129,8 +130,8 @@ class Pipeline(ABC):
 
             def __init__(
                 self,
-                config: Optional[BaseAgentConfig] = None,
-                signature: Optional[Signature] = None,
+                config: BaseAgentConfig | None = None,
+                signature: Signature | None = None,
             ):
                 """
                 Initialize PipelineAgent.
@@ -162,16 +163,16 @@ class Pipeline(ABC):
                 class PipelineSignature(Signature):
                     """Generic pipeline signature."""
 
-                    inputs: Dict[str, Any] = InputField(
+                    inputs: dict[str, Any] = InputField(
                         description="Pipeline inputs (dict)"
                     )
-                    outputs: Dict[str, Any] = OutputField(
+                    outputs: dict[str, Any] = OutputField(
                         description="Pipeline outputs (dict)"
                     )
 
                 return PipelineSignature()
 
-            def run(self, **inputs) -> Dict[str, Any]:
+            def run(self, **inputs) -> dict[str, Any]:
                 """
                 Execute the wrapped pipeline.
 
@@ -210,7 +211,7 @@ class Pipeline(ABC):
 
     @staticmethod
     def router(
-        agents: List["BaseAgent"],
+        agents: list["BaseAgent"],
         routing_strategy: str = "semantic",
         error_handling: str = "graceful",
     ) -> "Pipeline":
@@ -257,11 +258,11 @@ class Pipeline(ABC):
 
     @staticmethod
     def parallel(
-        agents: List["BaseAgent"],
-        aggregator: Optional[Callable[[List[Dict[str, Any]]], Dict[str, Any]]] = None,
+        agents: list["BaseAgent"],
+        aggregator: Callable[[list[dict[str, Any]]], dict[str, Any]] | None = None,
         max_workers: int = 10,
         error_handling: str = "graceful",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> "Pipeline":
         """
         Create Parallel Pipeline for concurrent agent execution.
@@ -315,7 +316,7 @@ class Pipeline(ABC):
 
     @staticmethod
     def ensemble(
-        agents: List["BaseAgent"],
+        agents: list["BaseAgent"],
         synthesizer: "BaseAgent",
         discovery_mode: str = "a2a",
         top_k: int = 3,
@@ -378,7 +379,7 @@ class Pipeline(ABC):
 
     @staticmethod
     def blackboard(
-        specialists: List["BaseAgent"],
+        specialists: list["BaseAgent"],
         controller: "BaseAgent",
         selection_mode: str = "semantic",
         max_iterations: int = 5,
@@ -445,7 +446,7 @@ class Pipeline(ABC):
     # ========================================================================
 
     @staticmethod
-    def sequential(agents: List["BaseAgent"]) -> "SequentialPipeline":
+    def sequential(agents: list["BaseAgent"]) -> "SequentialPipeline":
         """
         Create Sequential Pipeline for linear agent execution.
 
@@ -477,7 +478,7 @@ class Pipeline(ABC):
     @staticmethod
     def supervisor_worker(
         supervisor: "BaseAgent",
-        workers: List["BaseAgent"],
+        workers: list["BaseAgent"],
         shared_memory: Optional["SharedMemoryPool"] = None,
         selection_mode: str = "semantic",
     ) -> "Pipeline":
@@ -535,7 +536,7 @@ class Pipeline(ABC):
 
     @staticmethod
     def consensus(
-        agents: List["BaseAgent"],
+        agents: list["BaseAgent"],
         threshold: float = 0.5,
         voting_strategy: str = "majority",
         shared_memory: Optional["SharedMemoryPool"] = None,
@@ -586,7 +587,7 @@ class Pipeline(ABC):
 
     @staticmethod
     def debate(
-        agents: List["BaseAgent"],
+        agents: list["BaseAgent"],
         rounds: int = 3,
         judge: Optional["BaseAgent"] = None,
         shared_memory: Optional["SharedMemoryPool"] = None,
@@ -637,8 +638,8 @@ class Pipeline(ABC):
 
     @staticmethod
     def handoff(
-        agents: List["BaseAgent"],
-        handoff_condition: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        agents: list["BaseAgent"],
+        handoff_condition: Callable[[dict[str, Any]], bool] | None = None,
     ) -> "Pipeline":
         """
         Create Handoff Pattern for tier escalation.
@@ -717,7 +718,7 @@ class SequentialPipeline(Pipeline):
         """
         self.agents = agents
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute agents sequentially.
 

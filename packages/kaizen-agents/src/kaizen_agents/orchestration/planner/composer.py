@@ -18,8 +18,8 @@ requires LLM judgment, while validation is deterministic.
 from __future__ import annotations
 
 import uuid
-from collections import defaultdict, deque
-from dataclasses import dataclass, field
+from collections import deque
+from dataclasses import dataclass
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
@@ -35,7 +35,6 @@ from kaizen_agents.types import (
     PlanNodeOutput,
     PlanState,
 )
-
 
 # ---------------------------------------------------------------------------
 # Validation error type

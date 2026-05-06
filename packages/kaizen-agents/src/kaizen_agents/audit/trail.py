@@ -18,7 +18,7 @@ import threading
 import uuid
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ class AuditTrail:
         parent_id: str | None = None,
     ) -> AuditRecord:
         """Create, hash, and append. Caller must hold lock."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         record_hash = self._compute_hash(
             prev_hash=self._prev_hash,
             record_type=record_type,

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgentConfig
 from kaizen.llm.reasoning import llm_capability_match, llm_text_similarity
@@ -54,7 +54,7 @@ class LLMBased:
         defaults per ``rules/env-models.md``.
     """
 
-    def __init__(self, config: Optional[BaseAgentConfig] = None) -> None:
+    def __init__(self, config: BaseAgentConfig | None = None) -> None:
         self._config = config
 
     # ------------------------------------------------------------------
@@ -66,7 +66,7 @@ class LLMBased:
         task: str,
         capability: Any,
         *,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> float:
         """Score how well *capability* matches *task* via the LLM.
 
@@ -86,7 +86,7 @@ class LLMBased:
         task: str,
         candidates: list[Any],
         *,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> Any:
         """Score all *candidates* against *task* and return the highest.
 

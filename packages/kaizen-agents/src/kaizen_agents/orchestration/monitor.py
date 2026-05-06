@@ -24,15 +24,15 @@ from __future__ import annotations
 import logging
 import math
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.composer import PlanComposer, PlanValidator
 from kaizen_agents.orchestration.planner.decomposer import TaskDecomposer
 from kaizen_agents.orchestration.planner.designer import AgentDesigner, SpawnDecision
 from kaizen_agents.orchestration.recovery.diagnoser import (
-    FailureCategory,
     FailureDiagnoser,
 )
 from kaizen_agents.orchestration.recovery.recomposer import Recomposer, RecoveryStrategy
@@ -175,8 +175,8 @@ class PlanMonitor:
             A list of error strings. Empty means the plan passes all
             SDK validation checks.
         """
-        from kaizen_agents._sdk_compat import plan_to_sdk
         from kaizen.l3.plan.validator import PlanValidator as SdkPlanValidator
+        from kaizen_agents._sdk_compat import plan_to_sdk
 
         sdk_plan = plan_to_sdk(plan)
         errors: list[str] = []

@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.types import Plan, PlanNode, PlanNodeState
+from kaizen_agents.types import Plan, PlanNode
 
 
 class FailureCategory(Enum):

@@ -21,13 +21,12 @@ import enum
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from kaizen.l3.envelope.errors import SplitError
 from kaizen.l3.envelope.splitter import EnvelopeSplitter
 from kaizen.l3.envelope.types import AllocationRequest as SdkAllocationRequest
-
-from kaizen_agents.types import ConstraintEnvelope, GradientZone
+from kaizen_agents.types import ConstraintEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +176,7 @@ class EnvelopeAllocator:
         result = allocator.weighted_split(subtasks)
     """
 
-    def __init__(self, policy: Optional[BudgetPolicy] = None) -> None:
+    def __init__(self, policy: BudgetPolicy | None = None) -> None:
         self._policy = policy or BudgetPolicy()
 
     @property
@@ -281,7 +280,7 @@ class EnvelopeAllocator:
     def weighted_split_asymmetric(
         self,
         subtasks: list[Subtask],
-        temporal_weights: Optional[dict[str, float]] = None,
+        temporal_weights: dict[str, float] | None = None,
     ) -> SplitResult:
         """Divide budget with different weights for financial vs temporal dimensions.
 

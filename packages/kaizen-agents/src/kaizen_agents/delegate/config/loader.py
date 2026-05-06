@@ -24,7 +24,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from kaizen_agents.delegate.config.effort import EffortLevel
 
-
 # ---------------------------------------------------------------------------
 # .kzignore
 # ---------------------------------------------------------------------------

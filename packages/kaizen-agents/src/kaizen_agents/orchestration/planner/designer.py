@@ -16,22 +16,21 @@ Includes:
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from kaizen_agents.llm import LLMClient
-from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
+from kaizen_agents.llm import LLMClient
+from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
     MemoryConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # CapabilityMatcher — finds existing specs matching required capabilities

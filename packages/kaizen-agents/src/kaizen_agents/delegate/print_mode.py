@@ -6,7 +6,6 @@ Supports plain text output and JSON output modes.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sys
