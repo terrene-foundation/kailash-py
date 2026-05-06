@@ -337,21 +337,18 @@ Filesystem sweep: `find packages/kailash-ml/tests -name 'test_feature*'` yields 
 | File                                          | Tier | Surface exercised                                                                                                                                   |
 | --------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tests/unit/test_feature_store_unit.py`       | T1   | Canonical (`from kailash_ml.features import FeatureStore`) — constructor validation, tenant resolution, cache helpers, deferred-import loud failure |
-| `tests/unit/test_feature_store_schema.py`     | T1   | Canonical (`from kailash_ml.features import FeatureField, FeatureSchema`)                                                                           |
-| `tests/unit/test_feature_store_cache_keys.py` | T1   | Canonical (`from kailash_ml.features import ...`)                                                                                                   |
-| `tests/integration/test_feature_store.py`     | T2   | **LEGACY** (`from kailash_ml.engines.feature_store import FeatureStore`) — exercises the 0.x engine, NOT the 1.0+ canonical surface                 |
-| `tests/unit/test_feature_engineer.py`         | T1   | Out-of-scope (feature-engineering primitive, not FeatureStore)                                                                                      |
-| `tests/unit/test_feature_sql.py`              | T1   | Out-of-scope (legacy SQL builder)                                                                                                                   |
+| `tests/unit/test_feature_store_schema.py`         | T1   | Canonical (`from kailash_ml.features import FeatureField, FeatureSchema`)                                                                                  |
+| `tests/unit/test_feature_store_cache_keys.py`     | T1   | Canonical (`from kailash_ml.features import ...`)                                                                                                          |
+| `tests/integration/test_feature_store_wiring.py`  | T2   | Canonical (`from kailash_ml.features import FeatureStore`) — exercises the 1.0+ surface end-to-end against a real `DataFlow(...)` instance                  |
+| `tests/integration/test_feature_store.py`         | T2   | Legacy (`from kailash_ml.engines.feature_store import FeatureStore`) — exercises the legacy `engines.feature_store` module retained for 0.x callers         |
+| `tests/unit/test_feature_engineer.py`             | T1   | Out-of-scope (feature-engineering primitive, not FeatureStore)                                                                                              |
+| `tests/unit/test_feature_sql.py`                  | T1   | Out-of-scope (legacy SQL builder)                                                                                                                           |
 
-### 7.2 Test The Canonical FeatureStore Currently Lacks
+### 7.2 Canonical FeatureStore Tier-2 Wiring Test
 
-The canonical 1.0+ `kailash_ml.features.FeatureStore` has **zero Tier-2 wiring tests** — the existing `tests/integration/test_feature_store.py` exercises the LEGACY `kailash_ml.engines.feature_store` module (verified by reading line 15: `from kailash_ml.engines.feature_store import FeatureStore`).
+The canonical 1.0+ `kailash_ml.features.FeatureStore` has a Tier-2 wiring test at `packages/kailash-ml/tests/integration/test_feature_store_wiring.py` (added W6-022, commit `fdb6e8e3`). The test imports through the framework facade (`from kailash_ml.features import FeatureStore`), constructs against a real `DataFlow(...)` instance backed by file-based SQLite, and covers the fifteen conformance assertions enumerated in § 10. File-backed SQLite is real infrastructure for kailash-ml's Tier-2 contract per `rules/testing.md` § "Tier 2 (Integration): Real infrastructure" — no mocks.
 
-Per `rules/facade-manager-detection.md` MUST 1 (every `*Store` manager exposed via the public surface MUST have a Tier-2 test imported through the framework facade) AND MUST 2 (the test file MUST be named `test_<lowercase_manager_name>_wiring.py` so the absence is grep-able), this is a gap.
-
-#### Wave 6 follow-up: create `packages/kailash-ml/tests/integration/test_feature_store_wiring.py` exercising `kailash_ml.features.FeatureStore` via a real `DataFlow(...)` instance + real Postgres + the `dataflow.ml_feature_source` binding. The wiring test SHOULD cover the conformance assertions in § 10.
-
-Until that test lands, the canonical FeatureStore surface MUST be marked as having a Tier-2 wiring gap in any release notes that announce it as production-ready.
+This test satisfies `rules/facade-manager-detection.md` MUST 1 (every `*Store` manager exposed via the public surface MUST have a Tier-2 test imported through the framework facade) AND MUST 2 (file name `test_<lowercase_manager_name>_wiring.py` so the absence is grep-able).
 
 ### 7.3 Source-Comment Drift To Clean Up In Wave 6
 
