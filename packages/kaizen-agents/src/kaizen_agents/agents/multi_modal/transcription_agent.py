@@ -10,7 +10,7 @@ Uses .run() method for standardized execution interface.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.audio.whisper_processor import WhisperConfig, WhisperProcessor
@@ -37,7 +37,7 @@ class TranscriptionAgentConfig:
     model_size: str = "base"  # Whisper model size
     device: str = "cpu"
     compute_type: str = "int8"
-    language: Optional[str] = None
+    language: str | None = None
     word_timestamps: bool = True
 
 
@@ -106,7 +106,7 @@ class TranscriptionAgent(BaseAgent):
 
         self.config = config
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute audio transcription with .run() interface.
 
@@ -182,10 +182,10 @@ class TranscriptionAgent(BaseAgent):
 
     def transcribe(
         self,
-        audio: Union[AudioField, str, Path],
-        language: Optional[str] = None,
+        audio: AudioField | str | Path,
+        language: str | None = None,
         store_in_memory: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convenience method for audio transcription.
 
@@ -208,9 +208,9 @@ class TranscriptionAgent(BaseAgent):
 
     def transcribe_batch(
         self,
-        audio_files: List[Union[AudioField, str, Path]],
-        language: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        audio_files: list[AudioField | str | Path],
+        language: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Transcribe multiple audio files.
 
@@ -229,7 +229,7 @@ class TranscriptionAgent(BaseAgent):
 
         return results
 
-    def detect_language(self, audio: Union[AudioField, str, Path]) -> Dict[str, Any]:
+    def detect_language(self, audio: AudioField | str | Path) -> dict[str, Any]:
         """
         Detect language of audio file.
 

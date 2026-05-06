@@ -9,7 +9,12 @@ not sufficient.
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 
 # Type aliases for hooks
 HookCallback = Callable[[Dict[str, Any]], None]

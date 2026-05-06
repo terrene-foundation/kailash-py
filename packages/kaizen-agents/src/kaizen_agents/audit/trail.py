@@ -99,7 +99,9 @@ class AuditTrail:
     ) -> AuditRecord:
         """Create, hash, and append a new record to the trail. Thread-safe."""
         with self._lock:
-            return self._append_record_locked(record_type, agent_id, action, details, parent_id)
+            return self._append_record_locked(
+                record_type, agent_id, action, details, parent_id
+            )
 
     def _append_record_locked(
         self,
@@ -305,7 +307,8 @@ class AuditTrail:
             # Verify prev_hash linkage
             if not hmac_mod.compare_digest(record.prev_hash, prev_hash):
                 logger.warning(
-                    "Hash chain broken: record %s prev_hash mismatch " "(expected=%s, got=%s)",
+                    "Hash chain broken: record %s prev_hash mismatch "
+                    "(expected=%s, got=%s)",
                     record.record_id,
                     prev_hash,
                     record.prev_hash,
@@ -322,7 +325,8 @@ class AuditTrail:
             )
             if not hmac_mod.compare_digest(record.record_hash, expected_hash):
                 logger.warning(
-                    "Hash chain tampered: record %s hash mismatch " "(expected=%s, got=%s)",
+                    "Hash chain tampered: record %s hash mismatch "
+                    "(expected=%s, got=%s)",
                     record.record_id,
                     expected_hash,
                     record.record_hash,

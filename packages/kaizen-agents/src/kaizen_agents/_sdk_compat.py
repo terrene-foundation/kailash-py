@@ -114,7 +114,9 @@ _PLAN_STATE_FROM_SDK: dict[SdkPlanState, LocalPlanState] = {
 }
 
 # GradientZone string names used in serialized gradient dicts.
-_GRADIENT_ZONE_NAME_TO_LOCAL: dict[str, LocalGradientZone] = {z.name: z for z in LocalGradientZone}
+_GRADIENT_ZONE_NAME_TO_LOCAL: dict[str, LocalGradientZone] = {
+    z.name: z for z in LocalGradientZone
+}
 
 
 # ---------------------------------------------------------------------------
@@ -321,9 +323,13 @@ def plan_gradient_from_dict(data: dict[str, Any]) -> LocalPlanGradient:
 
     return LocalPlanGradient(
         retry_budget=int(data["retry_budget"]),
-        after_retry_exhaustion=_GRADIENT_ZONE_NAME_TO_LOCAL[data["after_retry_exhaustion"]],
+        after_retry_exhaustion=_GRADIENT_ZONE_NAME_TO_LOCAL[
+            data["after_retry_exhaustion"]
+        ],
         resolution_timeout=timedelta(seconds=float(data["resolution_timeout"])),
-        optional_node_failure=_GRADIENT_ZONE_NAME_TO_LOCAL[data["optional_node_failure"]],
+        optional_node_failure=_GRADIENT_ZONE_NAME_TO_LOCAL[
+            data["optional_node_failure"]
+        ],
         budget_flag_threshold=float(data["budget_flag_threshold"]),
         budget_hold_threshold=float(data["budget_hold_threshold"]),
         dimension_thresholds=dim_thresholds,

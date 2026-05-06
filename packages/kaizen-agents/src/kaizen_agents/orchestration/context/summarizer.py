@@ -173,7 +173,9 @@ class ContextSummarizer:
         if estimated_tokens <= max_tokens:
             return {
                 "summary": context_value,
-                "preserved_items": ["(all content preserved -- no summarization needed)"],
+                "preserved_items": [
+                    "(all content preserved -- no summarization needed)"
+                ],
                 "dropped_items": [],
                 "was_summarized": False,
             }

@@ -129,7 +129,9 @@ class McpClient:
                 f"MCP server {self._config.name!r}: command not found: {self._config.command!r}"
             ) from exc
         except OSError as exc:
-            raise RuntimeError(f"MCP server {self._config.name!r}: failed to start: {exc}") from exc
+            raise RuntimeError(
+                f"MCP server {self._config.name!r}: failed to start: {exc}"
+            ) from exc
 
         # Start background reader for stdout
         self._reader_task = asyncio.create_task(self._read_stdout())
@@ -160,7 +162,7 @@ class McpClient:
             # Send initialized notification (no response expected)
             await self._send_notification("notifications/initialized", {})
 
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             await self.stop()
             raise RuntimeError(
                 f"MCP server {self._config.name!r}: initialize handshake timed out "
@@ -187,7 +189,7 @@ class McpClient:
                 try:
                     self._process.send_signal(signal.SIGTERM)
                     await asyncio.wait_for(self._process.wait(), timeout=5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self._process.kill()
                     await self._process.wait()
                 except ProcessLookupError:
@@ -302,7 +304,9 @@ class McpClient:
         self._request_id += 1
         return self._request_id
 
-    async def _send_request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _send_request(
+        self, method: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for the response.
 
         Returns the ``result`` field from the response.
@@ -446,7 +450,9 @@ def load_mcp_server_configs(raw_config: dict[str, Any]) -> list[McpServerConfig]
 
     for name, server_data in servers_section.items():
         if not isinstance(server_data, dict):
-            logger.warning("MCP server %r: invalid config (expected dict), skipping", name)
+            logger.warning(
+                "MCP server %r: invalid config (expected dict), skipping", name
+            )
             continue
 
         command = server_data.get("command")

@@ -162,8 +162,12 @@ class Pipeline(ABC):
                 class PipelineSignature(Signature):
                     """Generic pipeline signature."""
 
-                    inputs: Dict[str, Any] = InputField(description="Pipeline inputs (dict)")
-                    outputs: Dict[str, Any] = OutputField(description="Pipeline outputs (dict)")
+                    inputs: Dict[str, Any] = InputField(
+                        description="Pipeline inputs (dict)"
+                    )
+                    outputs: Dict[str, Any] = OutputField(
+                        description="Pipeline outputs (dict)"
+                    )
 
                 return PipelineSignature()
 
@@ -241,7 +245,9 @@ class Pipeline(ABC):
             ADR-018: Pipeline Pattern Architecture
             docs/testing/pipeline-edge-case-test-matrix.md
         """
-        from kaizen_agents.patterns.patterns.meta_controller import MetaControllerPipeline
+        from kaizen_agents.patterns.patterns.meta_controller import (
+            MetaControllerPipeline,
+        )
 
         return MetaControllerPipeline(
             agents=agents,
@@ -731,7 +737,9 @@ class SequentialPipeline(Pipeline):
             result = agent.run(**current_inputs)
 
             # Store result
-            results.append({"agent": agent.__class__.__name__, "step": i + 1, "output": result})
+            results.append(
+                {"agent": agent.__class__.__name__, "step": i + 1, "output": result}
+            )
 
             # Use output as input for next agent
             current_inputs = result

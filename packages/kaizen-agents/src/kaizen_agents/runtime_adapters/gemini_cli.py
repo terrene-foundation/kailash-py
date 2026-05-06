@@ -21,12 +21,13 @@ Usage:
 import asyncio
 import logging
 import os
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from collections.abc import AsyncIterator
+from typing import Any
 
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,14 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gemini-1.5-pro",
         enable_code_execution: bool = False,
-        custom_tools: Optional[List[Dict[str, Any]]] = None,
+        custom_tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.7,
         max_output_tokens: int = 8192,
         timeout_seconds: float = 300,
-        safety_settings: Optional[Dict[str, str]] = None,
+        safety_settings: dict[str, str] | None = None,
     ):
         """Initialize the GeminiCLIAdapter.
 
@@ -100,12 +101,12 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         self.safety_settings = safety_settings
 
         # Gemini client (lazily initialized)
-        self._client: Optional[Any] = None
-        self._generative_model: Optional[Any] = None
+        self._client: Any | None = None
+        self._generative_model: Any | None = None
 
         # Session tracking
-        self._current_session_id: Optional[str] = None
-        self._chat_session: Optional[Any] = None
+        self._current_session_id: str | None = None
+        self._chat_session: Any | None = None
 
         # Build capabilities
         self._capabilities = self._build_capabilities()
@@ -179,7 +180,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
 
         await super().ensure_initialized()
 
-    def _get_safety_settings(self) -> Optional[List[Dict[str, Any]]]:
+    def _get_safety_settings(self) -> list[dict[str, Any]] | None:
         """Get safety settings configuration.
 
         Returns:
@@ -192,7 +193,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         # Production should use stricter settings
         return None
 
-    def _get_generation_config(self) -> Dict[str, Any]:
+    def _get_generation_config(self) -> dict[str, Any]:
         """Get generation configuration.
 
         Returns:
@@ -206,7 +207,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
     async def execute(
         self,
         context: ExecutionContext,
-        on_progress: Optional[ProgressCallback] = None,
+        on_progress: ProgressCallback | None = None,
     ) -> ExecutionResult:
         """Execute a task using Gemini API.
 
@@ -265,7 +266,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
                 session_id=context.session_id,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Gemini execution timed out after {self.timeout_seconds}s")
             return ExecutionResult(
                 output="",
@@ -290,7 +291,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         finally:
             self._current_session_id = None
 
-    def _build_tools(self, context: ExecutionContext) -> Optional[List[Any]]:
+    def _build_tools(self, context: ExecutionContext) -> list[Any] | None:
         """Build tools configuration for Gemini API.
 
         Args:
@@ -457,8 +458,8 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
 
     def map_tools(
         self,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Map Kaizen tools to Gemini format.
 
         Args:

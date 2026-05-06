@@ -7,7 +7,12 @@ Presets are the recommended starting point for most users.
 
 from typing import Any, Dict, Optional
 
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 
 
 class CapabilityPresets:

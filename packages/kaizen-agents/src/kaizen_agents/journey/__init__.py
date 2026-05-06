@@ -105,7 +105,11 @@ See Also:
 """
 
 # Return behaviors
-from kaizen_agents.journey.behaviors import ReturnBehavior, ReturnToPrevious, ReturnToSpecific
+from kaizen_agents.journey.behaviors import (
+    ReturnBehavior,
+    ReturnToPrevious,
+    ReturnToSpecific,
+)
 
 # Context accumulation (TODO-JO-004)
 from kaizen_agents.journey.context import (

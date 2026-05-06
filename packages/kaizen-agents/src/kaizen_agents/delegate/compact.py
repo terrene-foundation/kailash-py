@@ -126,7 +126,9 @@ def compact_conversation(
     topic_str = "; ".join(topics) if topics else "general conversation"
 
     # Build the summary message
-    summary_content = f"[Compacted {len(old_msgs)} older messages. " f"Key topics: {topic_str}]"
+    summary_content = (
+        f"[Compacted {len(old_msgs)} older messages. " f"Key topics: {topic_str}]"
+    )
     summary_msg: dict[str, Any] = {"role": "assistant", "content": summary_content}
 
     # Rebuild the message list in-place

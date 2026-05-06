@@ -47,12 +47,18 @@ class MemoryConfig:
     3. Default values (lowest priority)
     """
 
-    llm_provider: str = field(default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai"))
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"))
+    llm_provider: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
+    )
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
     )
-    max_tokens: int = field(default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "500")))
+    max_tokens: int = field(
+        default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "500"))
+    )
     max_history_turns: int = field(
         default_factory=lambda: int(os.getenv("KAIZEN_MAX_HISTORY_TURNS", "10"))
     )
@@ -65,7 +71,9 @@ class ConversationSignature(Signature):
     """Signature for conversation with memory continuity."""
 
     message: str = InputField(desc="User's current message")
-    conversation_history: str = InputField(desc="Previous conversation context", default="")
+    conversation_history: str = InputField(
+        desc="Previous conversation context", default=""
+    )
 
     response: str = OutputField(desc="Agent's response considering history")
     memory_updated: bool = OutputField(desc="Whether memory was successfully updated")
@@ -102,7 +110,9 @@ class SimpleMemoryStore:
 
         # Keep only last N turns (user + assistant pairs)
         if len(self.conversations[session_id]) > self.max_turns * 2:
-            self.conversations[session_id] = self.conversations[session_id][-(self.max_turns * 2) :]
+            self.conversations[session_id] = self.conversations[session_id][
+                -(self.max_turns * 2) :
+            ]
 
     def get_history(self, session_id: str) -> str:
         """
@@ -250,7 +260,9 @@ class MemoryAgent(BaseAgent):
         if config.timeout and (
             not config.provider_config or "timeout" not in config.provider_config
         ):
-            provider_cfg = config.provider_config.copy() if config.provider_config else {}
+            provider_cfg = (
+                config.provider_config.copy() if config.provider_config else {}
+            )
             provider_cfg["timeout"] = config.timeout
             config = replace(config, provider_config=provider_cfg)
 
@@ -264,7 +276,9 @@ class MemoryAgent(BaseAgent):
         )
 
         self.memory_config = config
-        self.memory_store = memory_store or SimpleMemoryStore(max_turns=config.max_history_turns)
+        self.memory_store = memory_store or SimpleMemoryStore(
+            max_turns=config.max_history_turns
+        )
         self.tool_registry = tool_registry
 
     def run(
@@ -371,7 +385,9 @@ class MemoryAgent(BaseAgent):
             return 0
         return len(self.memory_store.conversations[session_id])
 
-    def chat(self, message: str, session_id: str = "default", **kwargs) -> Dict[str, Any]:
+    def chat(
+        self, message: str, session_id: str = "default", **kwargs
+    ) -> Dict[str, Any]:
         """
         Convenience method for conversation with memory continuity.
 

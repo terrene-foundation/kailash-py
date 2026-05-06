@@ -198,7 +198,9 @@ class PlanGradient:
 
     retry_budget: int = 2
     after_retry_exhaustion: GradientZone = GradientZone.HELD
-    resolution_timeout: timedelta = field(default_factory=lambda: timedelta(seconds=300))
+    resolution_timeout: timedelta = field(
+        default_factory=lambda: timedelta(seconds=300)
+    )
     optional_node_failure: GradientZone = GradientZone.FLAGGED
     budget_flag_threshold: float = 0.80
     budget_hold_threshold: float = 0.95
@@ -215,7 +217,9 @@ class PlanGradient:
                 f"got {self.after_retry_exhaustion}"
             )
         if self.optional_node_failure == GradientZone.BLOCKED:
-            raise ValueError("optional_node_failure cannot be BLOCKED; use a required node instead")
+            raise ValueError(
+                "optional_node_failure cannot be BLOCKED; use a required node instead"
+            )
         if not (0.0 <= self.budget_flag_threshold < self.budget_hold_threshold <= 1.0):
             raise ValueError(
                 f"Invalid budget thresholds: flag={self.budget_flag_threshold}, "
@@ -370,7 +374,11 @@ class PlanNodeState(Enum):
     @property
     def is_terminal(self) -> bool:
         """Whether this node state is terminal. HELD is NOT terminal."""
-        return self in (PlanNodeState.COMPLETED, PlanNodeState.FAILED, PlanNodeState.SKIPPED)
+        return self in (
+            PlanNodeState.COMPLETED,
+            PlanNodeState.FAILED,
+            PlanNodeState.SKIPPED,
+        )
 
 
 @dataclass
@@ -459,7 +467,9 @@ class PlanModification:
     reason: str | None = None
 
     @staticmethod
-    def add_node(node: PlanNode, edges: list[PlanEdge] | None = None) -> PlanModification:
+    def add_node(
+        node: PlanNode, edges: list[PlanEdge] | None = None
+    ) -> PlanModification:
         """Create an AddNode modification."""
         return PlanModification(
             modification_type=PlanModificationType.ADD_NODE,

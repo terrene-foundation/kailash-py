@@ -24,15 +24,15 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import os
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +68,13 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
 
     def __init__(
         self,
-        working_directory: Optional[str] = None,
-        custom_tools: Optional[List[Dict[str, Any]]] = None,
-        mcp_servers: Optional[Dict[str, Dict[str, Any]]] = None,
-        system_prompt: Optional[str] = None,
+        working_directory: str | None = None,
+        custom_tools: list[dict[str, Any]] | None = None,
+        mcp_servers: dict[str, dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
         max_tokens: int = 8192,
         timeout_seconds: float = 300,
-        allowed_commands: Optional[List[str]] = None,
+        allowed_commands: list[str] | None = None,
         model: str = "claude-sonnet-4-20250514",
     ):
         """Initialize the ClaudeCodeAdapter.
@@ -107,8 +107,8 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
         self.model = model
 
         # Session tracking
-        self._current_session_id: Optional[str] = None
-        self._current_process: Optional[asyncio.subprocess.Process] = None
+        self._current_session_id: str | None = None
+        self._current_process: asyncio.subprocess.Process | None = None
 
         # Build capabilities
         self._capabilities = self._build_capabilities()
@@ -170,7 +170,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
     async def execute(
         self,
         context: ExecutionContext,
-        on_progress: Optional[ProgressCallback] = None,
+        on_progress: ProgressCallback | None = None,
     ) -> ExecutionResult:
         """Execute a task using Claude Code SDK.
 
@@ -225,7 +225,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
                     error_type="ClaudeCodeError",
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 f"Claude Code execution timed out after {self.timeout_seconds}s"
             )
@@ -253,7 +253,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
             self._current_session_id = None
             self._current_process = None
 
-    def _build_command(self, context: ExecutionContext) -> List[str]:
+    def _build_command(self, context: ExecutionContext) -> list[str]:
         """Build the Claude Code CLI command.
 
         Args:
@@ -296,8 +296,8 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
 
     async def _run_claude_code(
         self,
-        cmd: List[str],
-        on_progress: Optional[ProgressCallback] = None,
+        cmd: list[str],
+        on_progress: ProgressCallback | None = None,
     ) -> tuple[str, str, int]:
         """Run Claude Code CLI subprocess.
 
@@ -331,7 +331,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
                 process.returncode or 0,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Kill the process on timeout
             process.kill()
             await process.wait()
@@ -423,8 +423,8 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
 
     def map_tools(
         self,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Map Kaizen tools to MCP format for Claude Code.
 
         Custom tools are exposed to Claude Code via MCP servers.

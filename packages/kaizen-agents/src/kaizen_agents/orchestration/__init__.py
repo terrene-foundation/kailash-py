@@ -12,7 +12,11 @@ Modules:
     monitor: PlanMonitor — the autonomous orchestration execution engine.
 """
 
-from kaizen_agents.orchestration.context import ContextInjector, ContextSummarizer, ScopeBridge
+from kaizen_agents.orchestration.context import (
+    ContextInjector,
+    ContextSummarizer,
+    ScopeBridge,
+)
 from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
 from kaizen_agents.orchestration.planner import (
     AgentDesigner,

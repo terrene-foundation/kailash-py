@@ -125,7 +125,9 @@ class PlanValidator:
                 errors.append(
                     ValidationError(
                         code="MISSING_EDGE_SOURCE",
-                        message=(f"Edge references non-existent source node '{edge.from_node}'."),
+                        message=(
+                            f"Edge references non-existent source node '{edge.from_node}'."
+                        ),
                         node_id=edge.from_node,
                     )
                 )
@@ -133,7 +135,9 @@ class PlanValidator:
                 errors.append(
                     ValidationError(
                         code="MISSING_EDGE_TARGET",
-                        message=(f"Edge references non-existent target node '{edge.to_node}'."),
+                        message=(
+                            f"Edge references non-existent target node '{edge.to_node}'."
+                        ),
                         node_id=edge.to_node,
                     )
                 )
@@ -216,7 +220,10 @@ class PlanValidator:
         # INV-PLAN-03: Root existence (no incoming DataDependency/CompletionDependency)
         has_incoming: set[str] = set()
         for edge in plan.edges:
-            if edge.edge_type in (EdgeType.DATA_DEPENDENCY, EdgeType.COMPLETION_DEPENDENCY):
+            if edge.edge_type in (
+                EdgeType.DATA_DEPENDENCY,
+                EdgeType.COMPLETION_DEPENDENCY,
+            ):
                 has_incoming.add(edge.to_node)
 
         root_nodes = node_ids - has_incoming
@@ -234,7 +241,10 @@ class PlanValidator:
         # INV-PLAN-04: Leaf existence (no outgoing DataDependency/CompletionDependency)
         has_outgoing: set[str] = set()
         for edge in plan.edges:
-            if edge.edge_type in (EdgeType.DATA_DEPENDENCY, EdgeType.COMPLETION_DEPENDENCY):
+            if edge.edge_type in (
+                EdgeType.DATA_DEPENDENCY,
+                EdgeType.COMPLETION_DEPENDENCY,
+            ):
                 has_outgoing.add(edge.from_node)
 
         leaf_nodes = node_ids - has_outgoing
@@ -270,7 +280,9 @@ class PlanValidator:
             return errors
 
         parent_limit = (
-            plan.envelope.financial.max_spend_usd if plan.envelope.financial else float("inf")
+            plan.envelope.financial.max_spend_usd
+            if plan.envelope.financial
+            else float("inf")
         )
 
         # INV-PLAN-06: Budget summation
@@ -303,7 +315,9 @@ class PlanValidator:
             child_env = node.agent_spec.envelope
 
             # Financial: child limit must not exceed parent limit
-            child_limit = child_env.financial.max_spend_usd if child_env.financial else 0.0
+            child_limit = (
+                child_env.financial.max_spend_usd if child_env.financial else 0.0
+            )
             if child_limit > parent_limit:
                 errors.append(
                     ValidationError(
@@ -395,7 +409,11 @@ COMPOSITION_SCHEMA: dict[str, Any] = {
                     },
                     "edge_type": {
                         "type": "string",
-                        "enum": ["data_dependency", "completion_dependency", "co_start"],
+                        "enum": [
+                            "data_dependency",
+                            "completion_dependency",
+                            "co_start",
+                        ],
                         "description": (
                             "Type of dependency: data_dependency (output needed), "
                             "completion_dependency (must finish first), "
@@ -493,7 +511,8 @@ def _build_composer_user_prompt(
         lines.append(f"  Depends on: {subtask.depends_on or '(none)'}")
         lines.append(f"  Output keys: {subtask.output_keys or '(none)'}")
         lines.append(
-            f"  Required capabilities: " f"{', '.join(subtask.required_capabilities) or '(none)'}"
+            f"  Required capabilities: "
+            f"{', '.join(subtask.required_capabilities) or '(none)'}"
         )
         lines.append("")
 

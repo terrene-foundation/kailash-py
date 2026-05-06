@@ -32,7 +32,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -118,8 +118,8 @@ class RAGConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
-    memory_config: Optional[Dict[str, Any]] = None
+    provider_config: dict[str, Any] = field(default_factory=dict)
+    memory_config: dict[str, Any] | None = None
 
 
 class RAGSignature(Signature):
@@ -221,20 +221,20 @@ class RAGResearchAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        top_k_documents: Optional[int] = None,
-        similarity_threshold: Optional[float] = None,
-        embedding_model: Optional[str] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        vector_store: Optional[SimpleVectorStore] = None,
-        memory_config: Optional[Dict[str, Any]] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[RAGConfig] = None,
-        mcp_servers: Optional[List[Dict[str, Any]]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_k_documents: int | None = None,
+        similarity_threshold: float | None = None,
+        embedding_model: str | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        vector_store: SimpleVectorStore | None = None,
+        memory_config: dict[str, Any] | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: RAGConfig | None = None,
+        mcp_servers: list[dict[str, Any]] | None = None,
         **kwargs,
     ):
         """
@@ -330,7 +330,7 @@ class RAGResearchAgent(BaseAgent):
         else:
             self.vector_store = vector_store
 
-    def _check_convergence(self, result: Dict[str, Any]) -> bool:
+    def _check_convergence(self, result: dict[str, Any]) -> bool:
         """
         Check if research cycle should stop (convergence detection).
 
@@ -389,8 +389,8 @@ class RAGResearchAgent(BaseAgent):
         return True
 
     def run(
-        self, query: str, session_id: Optional[str] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, query: str, session_id: str | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Perform RAG-based research on a query using semantic vector search.
 
@@ -538,7 +538,7 @@ Cite specific documents when referencing information."""
 
 
 # Convenience function for quick usage
-def research(query: str, **kwargs) -> Dict[str, Any]:
+def research(query: str, **kwargs) -> dict[str, Any]:
     """
     Quick one-liner for RAG research without creating an agent instance.
 

@@ -10,7 +10,7 @@ Uses .run() method for standardized execution interface.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -57,8 +57,8 @@ class VisionAgentConfig:
 
     # Document extraction settings (NEW - opt-in)
     enable_document_extraction: bool = False
-    landing_ai_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    landing_ai_api_key: str | None = None
+    openai_api_key: str | None = None
     ollama_base_url: str = "http://localhost:11434"
     default_chunk_size: int = 512
     default_chunk_overlap: int = 100
@@ -140,9 +140,9 @@ class VisionAgent(BaseAgent):
         self.config = config
 
         # Lazy initialization for document extraction (NEW)
-        self._document_agent: Optional["DocumentExtractionAgent"] = None
+        self._document_agent: "DocumentExtractionAgent" | None = None
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute vision analysis with .run() interface.
 
@@ -198,10 +198,10 @@ class VisionAgent(BaseAgent):
 
     def analyze(
         self,
-        image: Union[ImageField, str, Path],
+        image: ImageField | str | Path,
         question: str,
         store_in_memory: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convenience method for vision analysis.
 
@@ -222,9 +222,7 @@ class VisionAgent(BaseAgent):
         """
         return self.run(image=image, question=question, store_in_memory=store_in_memory)
 
-    def describe(
-        self, image: Union[ImageField, str, Path], detail: str = "auto"
-    ) -> str:
+    def describe(self, image: ImageField | str | Path, detail: str = "auto") -> str:
         """
         Generate description of image.
 
@@ -237,7 +235,7 @@ class VisionAgent(BaseAgent):
         """
         return self.vision_provider.describe_image(image=image, detail=detail)
 
-    def extract_text(self, image: Union[ImageField, str, Path]) -> str:
+    def extract_text(self, image: ImageField | str | Path) -> str:
         """
         Extract text from image (OCR).
 
@@ -250,8 +248,8 @@ class VisionAgent(BaseAgent):
         return self.vision_provider.extract_text(image)
 
     def batch_analyze(
-        self, images: List[Union[ImageField, str, Path]], question: str
-    ) -> List[Dict[str, Any]]:
+        self, images: list[ImageField | str | Path], question: str
+    ) -> list[dict[str, Any]]:
         """
         Analyze multiple images with same question.
 
@@ -323,10 +321,10 @@ class VisionAgent(BaseAgent):
         file_path: str,
         extract_tables: bool = True,
         chunk_for_rag: bool = False,
-        chunk_size: Optional[int] = None,
+        chunk_size: int | None = None,
         store_in_memory: bool = True,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Extract content from document (PDF, DOCX, TXT, etc.).
 
@@ -391,7 +389,7 @@ class VisionAgent(BaseAgent):
 
     def estimate_document_cost(
         self, file_path: str, provider: str = "auto"
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Estimate document extraction cost before processing.
 

@@ -160,7 +160,9 @@ def _context_handler(args: str, **context: Any) -> str:
     message_count = len(conversation.messages)
     system_count = sum(1 for m in conversation.messages if m.get("role") == "system")
     user_count = sum(1 for m in conversation.messages if m.get("role") == "user")
-    assistant_count = sum(1 for m in conversation.messages if m.get("role") == "assistant")
+    assistant_count = sum(
+        1 for m in conversation.messages if m.get("role") == "assistant"
+    )
     tool_count = sum(1 for m in conversation.messages if m.get("role") == "tool")
 
     lines = [
@@ -476,22 +478,34 @@ def _reject_handler(args: str, **context: Any) -> str:
 
 def register_builtins(registry: CommandRegistry) -> None:
     """Register all built-in commands on *registry*."""
-    registry.register("help", "List all available commands", _help_handler, aliases=["h", "?"])
+    registry.register(
+        "help", "List all available commands", _help_handler, aliases=["h", "?"]
+    )
     registry.register("exit", "Exit the session", _exit_handler, aliases=["quit", "q"])
     registry.register("cost", "Show token usage and estimated cost", _cost_handler)
     registry.register("model", "Show or switch the current model", _model_handler)
-    registry.register("effort", "Show or switch effort level (low/medium/high)", _effort_handler)
+    registry.register(
+        "effort", "Show or switch effort level (low/medium/high)", _effort_handler
+    )
     registry.register("context", "Show context window usage", _context_handler)
-    registry.register("clear", "Clear conversation history (keep system prompt)", _clear_handler)
+    registry.register(
+        "clear", "Clear conversation history (keep system prompt)", _clear_handler
+    )
     registry.register("plan", "Execute governed multi-agent planning", _plan_handler)
-    registry.register("compact", "Compact conversation by pruning older messages", _compact_handler)
+    registry.register(
+        "compact", "Compact conversation by pruning older messages", _compact_handler
+    )
     registry.register("save", "Save current session (/save <name>)", _save_handler)
     registry.register("load", "Load a saved session (/load <name>)", _load_handler)
     registry.register("sessions", "List saved sessions", _sessions_handler)
     registry.register("fork", "Fork current session (/fork <name>)", _fork_handler)
     registry.register("holds", "List held governance actions", _holds_handler)
-    registry.register("approve", "Approve a held action (/approve <node_id>)", _approve_handler)
-    registry.register("reject", "Reject a held action (/reject <node_id>)", _reject_handler)
+    registry.register(
+        "approve", "Approve a held action (/approve <node_id>)", _approve_handler
+    )
+    registry.register(
+        "reject", "Reject a held action (/reject <node_id>)", _reject_handler
+    )
 
 
 def create_default_commands() -> CommandRegistry:

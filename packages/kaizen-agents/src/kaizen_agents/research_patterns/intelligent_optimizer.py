@@ -10,14 +10,14 @@ Advanced optimization capabilities:
 
 import random
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 @dataclass
 class OptimizationResult:
     """Result of optimization."""
 
-    best_params: Dict[str, Any]
+    best_params: dict[str, Any]
     improvement: float
     iterations: int
 
@@ -33,8 +33,8 @@ class IntelligentOptimizer:
         crossover_rate: float = 0.8,
         mutation_rate: float = 0.1,
         epsilon: float = 0.1,
-        objectives: Optional[List[str]] = None,
-        weights: Optional[List[float]] = None,
+        objectives: list[str] | None = None,
+        weights: list[float] | None = None,
     ):
         self.strategy = strategy
         self.acquisition_function = acquisition
@@ -52,10 +52,10 @@ class IntelligentOptimizer:
     def optimize(
         self,
         feature_id: str,
-        parameter_space: Dict[str, Tuple],
+        parameter_space: dict[str, tuple],
         n_iterations: int = 10,
         n_generations: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run optimization."""
         if self.strategy == "bayesian":
             return self._bayesian_optimize(parameter_space, n_iterations)
@@ -66,8 +66,8 @@ class IntelligentOptimizer:
         return {}
 
     def _bayesian_optimize(
-        self, parameter_space: Dict[str, Tuple], n_iterations: int
-    ) -> Dict[str, Any]:
+        self, parameter_space: dict[str, tuple], n_iterations: int
+    ) -> dict[str, Any]:
         """Bayesian optimization using acquisition function."""
         best_params = {}
         best_score = 0.0
@@ -95,8 +95,8 @@ class IntelligentOptimizer:
         }
 
     def _genetic_optimize(
-        self, parameter_space: Dict[str, Tuple], n_generations: int
-    ) -> Dict[str, Any]:
+        self, parameter_space: dict[str, tuple], n_generations: int
+    ) -> dict[str, Any]:
         """Genetic algorithm optimization."""
         # Initialize population
         population = []
@@ -140,8 +140,8 @@ class IntelligentOptimizer:
         return {"best_genome": best_genome, "fitness": best_fitness}
 
     def _multi_objective_optimize(
-        self, parameter_space: Dict[str, Tuple], n_iterations: int
-    ) -> Dict[str, Any]:
+        self, parameter_space: dict[str, tuple], n_iterations: int
+    ) -> dict[str, Any]:
         """Multi-objective optimization with Pareto frontier."""
         solutions = []
 
@@ -173,14 +173,14 @@ class IntelligentOptimizer:
 
         return {"pareto_frontier": pareto_frontier, "n_solutions": len(solutions)}
 
-    def _dominates(self, obj1: Dict, obj2: Dict) -> bool:
+    def _dominates(self, obj1: dict, obj2: dict) -> bool:
         """Check if obj1 dominates obj2."""
-        better_in_all = all(obj1.get(k, 0) >= obj2.get(k, 0) for k in obj1.keys())
-        better_in_one = any(obj1.get(k, 0) > obj2.get(k, 0) for k in obj1.keys())
+        better_in_all = all(obj1.get(k, 0) >= obj2.get(k, 0) for k in obj1)
+        better_in_one = any(obj1.get(k, 0) > obj2.get(k, 0) for k in obj1)
         return better_in_all and better_in_one
 
     # RL methods
-    def select_action(self, state: Dict) -> str:
+    def select_action(self, state: dict) -> str:
         """Select action using epsilon-greedy."""
         state_key = str(sorted(state.items()))
 
@@ -200,6 +200,6 @@ class IntelligentOptimizer:
             self.policy[action] = []
         self.policy[action].append(reward)
 
-    def get_policy(self) -> Dict:
+    def get_policy(self) -> dict:
         """Get learned policy."""
         return self.policy

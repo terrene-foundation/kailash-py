@@ -23,7 +23,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -54,8 +54,8 @@ class SimpleQAConfig:
     timeout: int = 30
     retry_attempts: int = 3
     min_confidence_threshold: float = 0.5
-    max_turns: Optional[int] = None  # None = memory disabled (opt-in)
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    max_turns: int | None = None  # None = memory disabled (opt-in)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class QASignature(Signature):
@@ -129,16 +129,16 @@ class SimpleQAAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        min_confidence_threshold: Optional[float] = None,
-        max_turns: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[SimpleQAConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        min_confidence_threshold: float | None = None,
+        max_turns: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: SimpleQAConfig | None = None,
         **kwargs,
     ):
         """
@@ -216,9 +216,9 @@ class SimpleQAAgent(BaseAgent):
         self,
         question: str,
         context: str = "",
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Universal execution method for SimpleQA agent.
 

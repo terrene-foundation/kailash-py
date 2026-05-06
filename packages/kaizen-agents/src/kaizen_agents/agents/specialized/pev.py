@@ -30,10 +30,9 @@ Environment variable support:
 import logging
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, NotRequired, Optional, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from kailash.nodes.base import NodeMetadata
-
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -68,7 +67,7 @@ class PEVAgentConfig:
     enable_error_recovery: bool = True
     timeout: int = 30
     max_retries: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class PEVPlan(TypedDict, total=False):
@@ -153,7 +152,7 @@ class PEVSignature(Signature):
     verification: PEVVerificationResult = OutputField(
         desc="Verification result with issues"
     )
-    refinements: List[str] = OutputField(desc="Refinements made")
+    refinements: list[str] = OutputField(desc="Refinements made")
     final_result: str = OutputField(desc="Final verified result")
 
 
@@ -232,17 +231,17 @@ class PEVAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_iterations: Optional[int] = None,
-        verification_strictness: Optional[str] = None,
-        enable_error_recovery: Optional[bool] = None,
-        timeout: Optional[int] = None,
-        max_retries: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[PEVAgentConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_iterations: int | None = None,
+        verification_strictness: str | None = None,
+        enable_error_recovery: bool | None = None,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: PEVAgentConfig | None = None,
         **kwargs,
     ):
         """
@@ -309,7 +308,7 @@ class PEVAgent(BaseAgent):
 
         self.pev_config = config
 
-    def _create_initial_plan(self, task: str) -> Dict[str, Any]:
+    def _create_initial_plan(self, task: str) -> dict[str, Any]:
         """
         Create initial execution plan from task.
 
@@ -332,7 +331,7 @@ class PEVAgent(BaseAgent):
         else:
             return {"description": str(result.get("plan", task)), "steps": []}
 
-    def _execute_plan(self, plan: Dict[str, Any], task: str) -> Dict[str, Any]:
+    def _execute_plan(self, plan: dict[str, Any], task: str) -> dict[str, Any]:
         """
         Execute the current plan.
 
@@ -364,8 +363,8 @@ class PEVAgent(BaseAgent):
             }
 
     def _verify_result(
-        self, execution_result: Dict[str, Any], task: str
-    ) -> Dict[str, Any]:
+        self, execution_result: dict[str, Any], task: str
+    ) -> dict[str, Any]:
         """
         Verify execution result quality.
 
@@ -416,11 +415,11 @@ class PEVAgent(BaseAgent):
 
     def _refine_plan(
         self,
-        plan: Dict[str, Any],
-        execution_result: Dict[str, Any],
-        verification: Dict[str, Any],
+        plan: dict[str, Any],
+        execution_result: dict[str, Any],
+        verification: dict[str, Any],
         task: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Refine plan based on verification feedback.
 
@@ -456,8 +455,8 @@ class PEVAgent(BaseAgent):
         return refined_plan
 
     def run(
-        self, task: str, context: Optional[Dict[str, Any]] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, task: str, context: dict[str, Any] | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Universal execution method for PEV agent.
 
@@ -584,7 +583,7 @@ class PEVAgent(BaseAgent):
 
 
 # Convenience function for quick usage
-def verify_and_refine(task: str, **kwargs) -> Dict[str, Any]:
+def verify_and_refine(task: str, **kwargs) -> dict[str, Any]:
     """
     Quick one-liner for PEV execution.
 

@@ -5,9 +5,14 @@ This module provides validation for agent configurations with helpful error mess
 All errors include remediation suggestions to help users fix configuration issues.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 
 
 class ConfigurationError(Exception):
@@ -26,9 +31,9 @@ class ConfigurationError(Exception):
     def __init__(
         self,
         message: str,
-        field: Optional[str] = None,
+        field: str | None = None,
         value: Any = None,
-        suggestions: Optional[List[str]] = None,
+        suggestions: list[str] | None = None,
     ):
         self.message = message
         self.field = field
@@ -57,7 +62,7 @@ class ConfigurationError(Exception):
 # === Model-Runtime Compatibility ===
 
 # Models that require specific runtimes
-RUNTIME_LOCKED_MODELS: Dict[str, str] = {
+RUNTIME_LOCKED_MODELS: dict[str, str] = {
     # Claude Code runtime models
     "claude-3-opus": "claude_code",
     "claude-3-sonnet": "claude_code",
@@ -68,13 +73,13 @@ RUNTIME_LOCKED_MODELS: Dict[str, str] = {
 }
 
 # Models that only work with specific runtimes (hard constraints)
-RUNTIME_REQUIRED_MODELS: Dict[str, Set[str]] = {
+RUNTIME_REQUIRED_MODELS: dict[str, set[str]] = {
     # Models locked to their native runtimes in external adapters
     # But ALL models work with "local" runtime via LocalKaizenAdapter
 }
 
 # Runtimes and their supported model families
-RUNTIME_MODEL_FAMILIES: Dict[str, Set[str]] = {
+RUNTIME_MODEL_FAMILIES: dict[str, set[str]] = {
     "local": {
         "gpt-",
         "claude-",
@@ -95,7 +100,7 @@ RUNTIME_MODEL_FAMILIES: Dict[str, Set[str]] = {
 def validate_model_runtime_compatibility(
     model: str,
     runtime: str,
-) -> Tuple[bool, Optional[ConfigurationError]]:
+) -> tuple[bool, ConfigurationError | None]:
     """
     Validate that a model and runtime are compatible.
 
@@ -159,7 +164,7 @@ def validate_model_runtime_compatibility(
 
 def validate_capability_consistency(
     capabilities: AgentCapabilities,
-) -> Tuple[bool, List[ConfigurationError]]:
+) -> tuple[bool, list[ConfigurationError]]:
     """
     Validate that capability settings are internally consistent.
 
@@ -280,9 +285,9 @@ def validate_configuration(
     execution_mode: str = "single",
     memory: str = "stateless",
     tool_access: str = "none",
-    capabilities: Optional[AgentCapabilities] = None,
+    capabilities: AgentCapabilities | None = None,
     **kwargs,
-) -> Tuple[bool, List[ConfigurationError]]:
+) -> tuple[bool, list[ConfigurationError]]:
     """
     Validate a complete agent configuration.
 
@@ -415,7 +420,7 @@ def validate_configuration(
 # === Validation Helpers ===
 
 
-def validate_model_name(model: str) -> Tuple[bool, Optional[str]]:
+def validate_model_name(model: str) -> tuple[bool, str | None]:
     """
     Check if a model name is valid/recognized.
 
@@ -460,7 +465,7 @@ def validate_model_name(model: str) -> Tuple[bool, Optional[str]]:
 def validate_execution_mode_for_task(
     task: str,
     mode: ExecutionMode,
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Suggest optimal execution mode based on task characteristics.
 
@@ -524,7 +529,7 @@ def validate_execution_mode_for_task(
 def get_recommended_configuration(
     task: str,
     model: str = "gpt-4",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get recommended configuration based on task description.
 

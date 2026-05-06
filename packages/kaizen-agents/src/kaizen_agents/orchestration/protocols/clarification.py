@@ -126,7 +126,9 @@ def _build_question_user_prompt(
             context_lines.append(f"- **{key}**: {value}")
         else:
             context_lines.append(f"- **{key}**: {value!r}")
-    context_section = "\n".join(context_lines) if context_lines else "(no context available)"
+    context_section = (
+        "\n".join(context_lines) if context_lines else "(no context available)"
+    )
 
     options_section = ""
     if suggested_options:

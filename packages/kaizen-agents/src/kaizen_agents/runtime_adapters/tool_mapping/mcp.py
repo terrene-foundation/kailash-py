@@ -22,7 +22,7 @@ MCP Tool Schema:
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
@@ -87,9 +87,9 @@ class MCPToolMapper(ToolMapper):
     @classmethod
     def to_runtime_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         strict: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Convert Kaizen tools to MCP format.
 
         Args:
@@ -130,8 +130,8 @@ class MCPToolMapper(ToolMapper):
     @classmethod
     def from_runtime_format(
         cls,
-        runtime_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        runtime_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convert MCP tools back to Kaizen/OpenAI format.
 
         Args:
@@ -149,7 +149,7 @@ class MCPToolMapper(ToolMapper):
         return kaizen_tools
 
     @classmethod
-    def _to_mcp_tool(cls, tool: KaizenTool) -> Dict[str, Any]:
+    def _to_mcp_tool(cls, tool: KaizenTool) -> dict[str, Any]:
         """Convert a single KaizenTool to MCP format.
 
         Args:
@@ -177,7 +177,7 @@ class MCPToolMapper(ToolMapper):
         return mcp_tool
 
     @classmethod
-    def _from_mcp_tool(cls, mcp_tool: Dict[str, Any]) -> Dict[str, Any]:
+    def _from_mcp_tool(cls, mcp_tool: dict[str, Any]) -> dict[str, Any]:
         """Convert MCP tool back to Kaizen/OpenAI format.
 
         Args:
@@ -200,7 +200,7 @@ class MCPToolMapper(ToolMapper):
         }
 
     @classmethod
-    def _convert_to_input_schema(cls, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_to_input_schema(cls, parameters: dict[str, Any]) -> dict[str, Any]:
         """Convert OpenAI parameters to MCP inputSchema.
 
         The formats are largely compatible, but MCP has some nuances.
@@ -227,7 +227,7 @@ class MCPToolMapper(ToolMapper):
         return schema
 
     @classmethod
-    def validate_tool(cls, tool: KaizenTool) -> List[str]:
+    def validate_tool(cls, tool: KaizenTool) -> list[str]:
         """Validate tool against MCP requirements.
 
         Args:
@@ -259,8 +259,8 @@ class MCPToolMapper(ToolMapper):
     @classmethod
     def to_mcp_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convenience alias for to_runtime_format.
 
         Args:
@@ -274,8 +274,8 @@ class MCPToolMapper(ToolMapper):
     @classmethod
     def from_mcp_format(
         cls,
-        mcp_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        mcp_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convenience alias for from_runtime_format.
 
         Args:

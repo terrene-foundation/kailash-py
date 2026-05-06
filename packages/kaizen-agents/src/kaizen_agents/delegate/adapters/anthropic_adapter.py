@@ -20,7 +20,8 @@ import json
 import logging
 import os
 import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from kaizen_agents.delegate.adapters.protocol import StreamEvent
 
@@ -63,12 +64,14 @@ def _convert_messages_for_anthropic(
                     args = json.loads(args_str) if args_str else {}
                 except json.JSONDecodeError:
                     args = {}
-                content_blocks.append({
-                    "type": "tool_use",
-                    "id": tc.get("id", str(uuid.uuid4())),
-                    "name": func.get("name", ""),
-                    "input": args,
-                })
+                content_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.get("id", str(uuid.uuid4())),
+                        "name": func.get("name", ""),
+                        "input": args,
+                    }
+                )
             if content_blocks:
                 anthropic_msgs.append({"role": "assistant", "content": content_blocks})
             else:
@@ -76,14 +79,18 @@ def _convert_messages_for_anthropic(
 
         elif role == "tool":
             # Anthropic expects tool results as user messages with tool_result blocks
-            anthropic_msgs.append({
-                "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": msg.get("tool_call_id", ""),
-                    "content": msg.get("content", ""),
-                }],
-            })
+            anthropic_msgs.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg.get("tool_call_id", ""),
+                            "content": msg.get("content", ""),
+                        }
+                    ],
+                }
+            )
 
     return system_prompt, anthropic_msgs
 
@@ -102,11 +109,15 @@ def _convert_tools_for_anthropic(
     anthropic_tools: list[dict[str, Any]] = []
     for tool in tools:
         func = tool.get("function", {})
-        anthropic_tools.append({
-            "name": func.get("name", ""),
-            "description": func.get("description", ""),
-            "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
-        })
+        anthropic_tools.append(
+            {
+                "name": func.get("name", ""),
+                "description": func.get("description", ""),
+                "input_schema": func.get(
+                    "parameters", {"type": "object", "properties": {}}
+                ),
+            }
+        )
     return anthropic_tools
 
 
@@ -169,8 +180,12 @@ class AnthropicStreamAdapter:
         Yields :class:`StreamEvent` instances as tokens arrive.
         """
         resolved_model = model or self._default_model
-        resolved_temp = temperature if temperature is not None else self._default_temperature
-        resolved_max = max_tokens if max_tokens is not None else self._default_max_tokens
+        resolved_temp = (
+            temperature if temperature is not None else self._default_temperature
+        )
+        resolved_max = (
+            max_tokens if max_tokens is not None else self._default_max_tokens
+        )
 
         system_prompt, anthropic_messages = _convert_messages_for_anthropic(messages)
         anthropic_tools = _convert_tools_for_anthropic(tools)
@@ -208,7 +223,9 @@ class AnthropicStreamAdapter:
                         resp_model = getattr(msg, "model", resolved_model)
                         msg_usage = getattr(msg, "usage", None)
                         if msg_usage:
-                            usage["prompt_tokens"] = getattr(msg_usage, "input_tokens", 0)
+                            usage["prompt_tokens"] = getattr(
+                                msg_usage, "input_tokens", 0
+                            )
 
                 elif event_type == "content_block_start":
                     current_block_idx += 1
@@ -247,7 +264,9 @@ class AnthropicStreamAdapter:
                         elif delta_type == "input_json_delta":
                             partial_json = getattr(delta, "partial_json", "")
                             if partial_json and current_block_idx in tool_blocks:
-                                tool_blocks[current_block_idx]["function"]["arguments"] += partial_json
+                                tool_blocks[current_block_idx]["function"][
+                                    "arguments"
+                                ] += partial_json
                                 yield StreamEvent(
                                     event_type="tool_call_delta",
                                     content=content,
@@ -276,8 +295,12 @@ class AnthropicStreamAdapter:
                                 finish_reason = stop_reason
                     msg_usage = getattr(event, "usage", None)
                     if msg_usage:
-                        usage["completion_tokens"] = getattr(msg_usage, "output_tokens", 0)
-                        usage["total_tokens"] = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
+                        usage["completion_tokens"] = getattr(
+                            msg_usage, "output_tokens", 0
+                        )
+                        usage["total_tokens"] = usage.get(
+                            "prompt_tokens", 0
+                        ) + usage.get("completion_tokens", 0)
 
         # Finalise tool calls
         final_tool_calls: list[dict[str, Any]] = []

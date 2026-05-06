@@ -29,8 +29,9 @@ Part of ADR-020: Unified Agent API Architecture & Phase 1 Implementation
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 
@@ -53,19 +54,19 @@ class AgentRegistration:
     name: str
     """Agent type name (e.g., 'react', 'reflection', 'planning')"""
 
-    agent_class: Type[BaseAgent]
+    agent_class: type[BaseAgent]
     """Agent class to instantiate"""
 
     description: str
     """Human-readable description of agent capabilities"""
 
-    default_strategy: Optional[Type] = None
+    default_strategy: type | None = None
     """Default execution strategy class (optional)"""
 
-    preset_config: Dict[str, Any] = field(default_factory=dict)
+    preset_config: dict[str, Any] = field(default_factory=dict)
     """Default configuration parameters"""
 
-    factory: Optional[Callable] = None
+    factory: Callable | None = None
     """Optional factory function for custom instantiation logic"""
 
     category: str = "general"
@@ -84,7 +85,7 @@ AgentTypeRegistration = AgentRegistration
 # =============================================================================
 
 
-_AGENT_REGISTRY: Dict[str, AgentRegistration] = {}
+_AGENT_REGISTRY: dict[str, AgentRegistration] = {}
 """Global registry of agents"""
 
 # Backward compatibility alias
@@ -98,10 +99,10 @@ _AGENT_TYPE_REGISTRY = _AGENT_REGISTRY
 
 def register_agent(
     name: str,
-    agent_class: Type[BaseAgent] = None,
+    agent_class: type[BaseAgent] = None,
     description: str = "",
-    default_strategy: Type = None,
-    preset_config: Dict[str, Any] = None,
+    default_strategy: type = None,
+    preset_config: dict[str, Any] = None,
     factory: Callable = None,
     category: str = "general",
     tags: list = None,
@@ -277,7 +278,7 @@ def list_agent_type_names() -> list:
     return list(_AGENT_TYPE_REGISTRY.keys())
 
 
-def list_agent_types(category: str = None) -> Dict[str, str]:
+def list_agent_types(category: str = None) -> dict[str, str]:
     """
     Get dictionary of agent types and descriptions.
 
@@ -386,8 +387,8 @@ def create_agent_from_type(agent_type: str, model: str, **kwargs) -> BaseAgent:
 def agent_type(
     name: str,
     description: str = "",
-    default_strategy: Type = None,
-    preset_config: Dict[str, Any] = None,
+    default_strategy: type = None,
+    preset_config: dict[str, Any] = None,
     category: str = "general",
     tags: list = None,
 ):
@@ -417,7 +418,7 @@ def agent_type(
         ...         super().__init__(config=config, signature=ResearchSignature())
     """
 
-    def decorator(cls: Type[BaseAgent]):
+    def decorator(cls: type[BaseAgent]):
         # Register the agent type
         register_agent_type(
             name=name,

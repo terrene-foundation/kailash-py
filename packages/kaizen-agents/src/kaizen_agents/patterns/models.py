@@ -36,7 +36,7 @@ Reference: DataFlow specialist guidance on state persistence patterns
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 # DataFlow models will be registered when DataFlow instance is created
 # Models use @db.model decorator from DataFlow instance
@@ -112,7 +112,7 @@ class WorkflowState:
 
     # Timestamps
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
 
     # Execution context
     runtime_id: str  # Which OrchestrationRuntime instance
@@ -126,11 +126,11 @@ class WorkflowState:
     success_rate: float = 0.0
 
     # Error tracking
-    error_message: Optional[str] = None
-    error_type: Optional[str] = None
+    error_message: str | None = None
+    error_type: str | None = None
 
     # Flexible metadata (JSON field - returns as STRING, must parse!)
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
     # Auto-managed fields (NEVER set manually!)
     # created_at: datetime  # Auto-set by DataFlow on insert
@@ -228,15 +228,15 @@ class AgentExecutionRecord:
 
     # Timestamps
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     execution_time_seconds: float = 0.0
 
     # Results (structured data as JSON - returns as STRING, must parse!)
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
 
     # Error tracking
-    error: Optional[str] = None
-    error_stack_trace: Optional[str] = None
+    error: str | None = None
+    error_stack_trace: str | None = None
 
     # Cost tracking
     cost_usd: float = 0.0
@@ -324,7 +324,7 @@ class WorkflowCheckpoint:
 
     # Snapshot data (incremental - only changed state)
     # Stored as JSON, can contain compressed binary data as hex string
-    snapshot_data: Dict[str, Any] = {}
+    snapshot_data: dict[str, Any] = {}
 
     # Custom timestamp (not auto-managed - we control this)
     created_at_timestamp: datetime
@@ -334,7 +334,7 @@ class WorkflowCheckpoint:
     compression_ratio: float = 1.0
 
     # Parent checkpoint (for incremental chain)
-    parent_checkpoint_id: Optional[str] = None
+    parent_checkpoint_id: str | None = None
 
     # Auto-managed fields (NEVER set manually!)
     # created_at: datetime
@@ -348,7 +348,7 @@ CHECKPOINT_TYPE_VALUES = ["AUTO", "MANUAL", "ERROR_RECOVERY"]
 ROUTING_STRATEGY_VALUES = ["semantic", "round-robin", "random", "least-loaded"]
 
 
-def validate_workflow_state(data: Dict[str, Any]) -> None:
+def validate_workflow_state(data: dict[str, Any]) -> None:
     """
     Validate WorkflowState data before creating/updating.
 
@@ -378,7 +378,7 @@ def validate_workflow_state(data: Dict[str, Any]) -> None:
         )
 
 
-def validate_agent_execution_record(data: Dict[str, Any]) -> None:
+def validate_agent_execution_record(data: dict[str, Any]) -> None:
     """
     Validate AgentExecutionRecord data before creating/updating.
 
@@ -402,7 +402,7 @@ def validate_agent_execution_record(data: Dict[str, Any]) -> None:
         )
 
 
-def validate_workflow_checkpoint(data: Dict[str, Any]) -> None:
+def validate_workflow_checkpoint(data: dict[str, Any]) -> None:
     """
     Validate WorkflowCheckpoint data before creating/updating.
 

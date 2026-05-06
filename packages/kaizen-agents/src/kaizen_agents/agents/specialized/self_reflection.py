@@ -27,7 +27,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -84,7 +84,7 @@ class SelfReflectionConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class SelfReflectionAgent(BaseAgent):
@@ -158,15 +158,15 @@ class SelfReflectionAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_cycles: Optional[int] = None,
-        improvement_threshold: Optional[float] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[SelfReflectionConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_cycles: int | None = None,
+        improvement_threshold: float | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: SelfReflectionConfig | None = None,
         **kwargs,
     ):
         """
@@ -232,7 +232,7 @@ class SelfReflectionAgent(BaseAgent):
             **kwargs,
         )
 
-    def _check_quality(self, cycle_results: List[Dict[str, Any]]) -> bool:
+    def _check_quality(self, cycle_results: list[dict[str, Any]]) -> bool:
         """
         Check if quality threshold is met.
 
@@ -257,7 +257,7 @@ class SelfReflectionAgent(BaseAgent):
         previous_attempt: str = "",
         previous_critique: str = "",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Complete task with iterative self-improvement.
 
@@ -305,7 +305,7 @@ class SelfReflectionAgent(BaseAgent):
 
         return result
 
-    def get_reflection_history(self) -> List[Dict[str, Any]]:
+    def get_reflection_history(self) -> list[dict[str, Any]]:
         """
         Get history of all reflection cycles.
 
@@ -329,7 +329,7 @@ def reflect_and_improve(
     improvement_threshold: float = 0.8,
     llm_provider: str = "openai",
     model: str = "gpt-3.5-turbo",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Quick self-reflection with default configuration.
 

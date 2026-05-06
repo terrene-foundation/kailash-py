@@ -13,7 +13,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class PatternStrategy(Enum):
@@ -43,14 +43,14 @@ class LearningStrategy(Enum):
 class CompositionalPattern:
     """Pattern that composes multiple research features."""
 
-    features: List[str]
+    features: list[str]
     strategy: str
     num_components: int = 0
 
     def __post_init__(self):
         self.num_components = len(self.features)
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute the compositional pattern."""
         if self.strategy == "sequential":
             return self._execute_sequential(input_data)
@@ -59,7 +59,7 @@ class CompositionalPattern:
         elif self.strategy == "ensemble":
             return self._execute_ensemble(input_data)
 
-    def _execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_sequential(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute features sequentially."""
         current_output = input_data
         execution_order = []
@@ -71,7 +71,7 @@ class CompositionalPattern:
 
         return {"output": current_output, "execution_order": execution_order}
 
-    def _execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_parallel(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute features in parallel."""
         outputs = []
 
@@ -81,7 +81,7 @@ class CompositionalPattern:
 
         return {"outputs": outputs, "num_parallel": len(outputs)}
 
-    def _execute_ensemble(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_ensemble(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute with ensemble voting."""
         # Simulate ensemble execution
         votes = [f"output_{i}" for i in range(len(self.features))]
@@ -96,19 +96,19 @@ class CompositionalPattern:
 class HierarchicalPattern:
     """Pattern with multi-level hierarchy."""
 
-    levels: List[List[str]]
+    levels: list[list[str]]
     num_levels: int = 0
 
     def __post_init__(self):
         self.num_levels = len(self.levels)
 
-    def get_level_features(self, level: int) -> List[str]:
+    def get_level_features(self, level: int) -> list[str]:
         """Get features at specific level."""
         if 0 <= level < self.num_levels:
             return self.levels[level]
         return []
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute hierarchical pattern."""
         execution_levels = []
         current_data = input_data
@@ -147,18 +147,18 @@ class HierarchicalPattern:
 class AdaptivePattern:
     """Pattern that adapts based on performance."""
 
-    base_features: List[str]
+    base_features: list[str]
     adaptation_strategy: str
     can_adapt: bool = True
-    adaptation_history: List[Dict] = field(default_factory=list)
-    performance_stats: Dict[str, float] = field(default_factory=dict)
+    adaptation_history: list[dict] = field(default_factory=list)
+    performance_stats: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
         # Initialize performance stats
         for feature in self.base_features:
             self.performance_stats[feature] = 0.5  # Neutral initial value
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute adaptive pattern."""
         selected_feature = self._select_feature()
 
@@ -195,7 +195,7 @@ class AdaptivePattern:
 
         return self.base_features[0]
 
-    def get_adaptation_history(self) -> List[Dict]:
+    def get_adaptation_history(self) -> list[dict]:
         """Get adaptation history."""
         return self.adaptation_history
 
@@ -204,12 +204,12 @@ class AdaptivePattern:
 class MetaLearningPattern:
     """Pattern that learns from execution history."""
 
-    candidate_features: List[str]
+    candidate_features: list[str]
     learning_strategy: str
     exploration_rate: float = 0.1
-    execution_history: List[Dict] = field(default_factory=list)
-    feature_weights: Dict[str, float] = field(default_factory=dict)
-    feature_rewards: Dict[str, List[float]] = field(
+    execution_history: list[dict] = field(default_factory=list)
+    feature_weights: dict[str, float] = field(default_factory=dict)
+    feature_rewards: dict[str, list[float]] = field(
         default_factory=lambda: defaultdict(list)
     )
 
@@ -219,7 +219,7 @@ class MetaLearningPattern:
         for feature in self.candidate_features:
             self.feature_weights[feature] = initial_weight
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """Execute with meta-learning."""
         execution_id = f"exec_{len(self.execution_history)}"
 
@@ -284,7 +284,7 @@ class MetaLearningPattern:
 
                 break
 
-    def get_learning_stats(self) -> Dict[str, Any]:
+    def get_learning_stats(self) -> dict[str, Any]:
         """Get learning statistics."""
         return {
             "total_executions": len(self.execution_history),
@@ -295,7 +295,7 @@ class MetaLearningPattern:
             },
         }
 
-    def get_feature_weights(self) -> Dict[str, float]:
+    def get_feature_weights(self) -> dict[str, float]:
         """Get current feature weights."""
         return self.feature_weights
 
@@ -303,22 +303,20 @@ class MetaLearningPattern:
 class AdvancedPatternBuilder:
     """Builder for advanced research patterns."""
 
-    def __init__(
-        self, registry: Optional[Any] = None, feature_manager: Optional[Any] = None
-    ):
+    def __init__(self, registry: Any | None = None, feature_manager: Any | None = None):
         self.registry = registry
         self.feature_manager = feature_manager
 
-    def compose(self, features: List[str], strategy: str) -> CompositionalPattern:
+    def compose(self, features: list[str], strategy: str) -> CompositionalPattern:
         """Create compositional pattern."""
         return CompositionalPattern(features=features, strategy=strategy)
 
-    def hierarchical(self, levels: List[List[str]]) -> HierarchicalPattern:
+    def hierarchical(self, levels: list[list[str]]) -> HierarchicalPattern:
         """Create hierarchical pattern."""
         return HierarchicalPattern(levels=levels)
 
     def adaptive(
-        self, base_features: List[str], adaptation_strategy: str
+        self, base_features: list[str], adaptation_strategy: str
     ) -> AdaptivePattern:
         """Create adaptive pattern."""
         return AdaptivePattern(
@@ -327,7 +325,7 @@ class AdvancedPatternBuilder:
 
     def meta_learning(
         self,
-        candidate_features: List[str],
+        candidate_features: list[str],
         learning_strategy: str,
         exploration_rate: float = 0.1,
     ) -> MetaLearningPattern:
@@ -338,7 +336,7 @@ class AdvancedPatternBuilder:
             exploration_rate=exploration_rate,
         )
 
-    def get_available_features(self) -> List[str]:
+    def get_available_features(self) -> list[str]:
         """Get available features from registry."""
         if self.registry:
             # Would query registry in real implementation

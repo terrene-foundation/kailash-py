@@ -35,7 +35,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
@@ -86,7 +86,7 @@ class BatchProcessingConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class BatchProcessingAgent(BaseAgent):
@@ -160,16 +160,16 @@ class BatchProcessingAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_concurrent: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[BatchProcessingConfig] = None,
-        mcp_servers: Optional[List[Dict]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_concurrent: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: BatchProcessingConfig | None = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
         **kwargs,
     ):
@@ -236,7 +236,7 @@ class BatchProcessingAgent(BaseAgent):
         self.batch_config = config
         self.tool_registry = tool_registry
 
-    async def process_batch(self, batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def process_batch(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Process batch of inputs concurrently.
 
@@ -268,11 +268,11 @@ class BatchProcessingAgent(BaseAgent):
 
 # Convenience function for quick batch processing
 async def process_batch_quick(
-    items: List[str],
+    items: list[str],
     max_concurrent: int = 10,
     llm_provider: str = "openai",
     model: str = "gpt-3.5-turbo",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Quick batch processing with default configuration.
 

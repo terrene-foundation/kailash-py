@@ -225,7 +225,9 @@ class HookManager:
             results.append(result)
 
             if result.blocked:
-                logger.warning("Hook BLOCKED by %s (event=%s)", script.name, event.value)
+                logger.warning(
+                    "Hook BLOCKED by %s (event=%s)", script.name, event.value
+                )
                 break
 
             if result.error:
@@ -286,7 +288,9 @@ class HookManager:
             )
 
             exit_code = proc.returncode or 0
-            stderr_str = stderr_raw.decode("utf-8", errors="replace") if stderr_raw else ""
+            stderr_str = (
+                stderr_raw.decode("utf-8", errors="replace") if stderr_raw else ""
+            )
 
             # Parse stdout JSON if present
             stdout_data: dict[str, Any] | None = None

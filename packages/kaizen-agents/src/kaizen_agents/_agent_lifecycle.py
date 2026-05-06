@@ -84,7 +84,9 @@ class AgentLifecycleManager:
         )
         return instance
 
-    async def terminate_agent(self, instance_id: str, reason: str = "explicit_termination") -> None:
+    async def terminate_agent(
+        self, instance_id: str, reason: str = "explicit_termination"
+    ) -> None:
         """Terminate an agent and cascade to all descendants.
 
         Converts the reason string to an SDK TerminationReason enum.
@@ -131,7 +133,9 @@ class AgentLifecycleManager:
             InstanceNotFound: If the instance does not exist.
             InvalidStateTransitionError: If the transition is invalid.
         """
-        await self._factory.update_state(instance_id, AgentLifecycleState.completed(result=result))
+        await self._factory.update_state(
+            instance_id, AgentLifecycleState.completed(result=result)
+        )
 
     async def get_children(self, parent_id: str) -> list[AgentInstance]:
         """Return direct children of a parent instance.
@@ -186,7 +190,9 @@ class AgentLifecycleManager:
                 "persistent": local.memory_config.persistent,
             },
             max_lifetime=(
-                local.max_lifetime.total_seconds() if local.max_lifetime is not None else None
+                local.max_lifetime.total_seconds()
+                if local.max_lifetime is not None
+                else None
             ),
             max_children=local.max_children,
             max_depth=local.max_depth,

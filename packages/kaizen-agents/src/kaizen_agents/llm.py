@@ -133,7 +133,9 @@ class LLMClient:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": temperature if temperature is not None else self._temperature,
+            "temperature": (
+                temperature if temperature is not None else self._temperature
+            ),
             "max_tokens": max_tokens or self._max_tokens,
         }
 

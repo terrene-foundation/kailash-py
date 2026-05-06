@@ -10,7 +10,7 @@ Architecture:
 - Optional activation: Works with or without DataFlow instance
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     from dataflow import DataFlow
@@ -50,7 +50,7 @@ class DataFlowOperationsMixin:
         db_connection: Optional DataFlowConnection instance
     """
 
-    db_connection: Optional[DataFlowConnection] = None
+    db_connection: DataFlowConnection | None = None
 
     def connect_dataflow(self, db: "DataFlow"):
         """
@@ -86,10 +86,10 @@ class DataFlowOperationsMixin:
     def query_database(
         self,
         table: str,
-        filter: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
-        order_by: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        filter: dict[str, Any] | None = None,
+        limit: int | None = None,
+        order_by: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Execute database query via DataFlow.
 
@@ -138,7 +138,7 @@ class DataFlowOperationsMixin:
         # In real implementation, this would build and execute a workflow
         return []
 
-    def insert_record(self, table: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def insert_record(self, table: str, data: dict[str, Any]) -> dict[str, Any]:
         """
         Insert a record into the database.
 
@@ -166,8 +166,8 @@ class DataFlowOperationsMixin:
         return data
 
     def update_record(
-        self, table: str, record_id: Any, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, table: str, record_id: Any, data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Update a record in the database.
 
@@ -219,8 +219,8 @@ class DataFlowOperationsMixin:
         return True
 
     def bulk_insert(
-        self, table: str, records: List[Dict[str, Any]], batch_size: int = 1000
-    ) -> List[Dict[str, Any]]:
+        self, table: str, records: list[dict[str, Any]], batch_size: int = 1000
+    ) -> list[dict[str, Any]]:
         """
         Bulk insert records into the database.
 
@@ -298,7 +298,7 @@ class DataFlowAwareAgent(BaseAgent, DataFlowOperationsMixin):
         if db is not None:
             self.connect_dataflow(db)
 
-    def get_database_info(self) -> Dict[str, Any]:
+    def get_database_info(self) -> dict[str, Any]:
         """
         Get information about connected database.
 
@@ -318,7 +318,7 @@ class DataFlowAwareAgent(BaseAgent, DataFlowOperationsMixin):
             "database": "connected",
         }
 
-    def list_available_tables(self) -> List[str]:
+    def list_available_tables(self) -> list[str]:
         """
         List all available database tables.
 
@@ -337,7 +337,7 @@ class DataFlowAwareAgent(BaseAgent, DataFlowOperationsMixin):
 
         return self.db_connection.list_tables()
 
-    def get_table_schema(self, table_name: str) -> Dict[str, Any]:
+    def get_table_schema(self, table_name: str) -> dict[str, Any]:
         """
         Get schema for a specific table.
 

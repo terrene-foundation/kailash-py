@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ResultStatus(str, Enum):
@@ -45,13 +45,13 @@ class ToolCallRecord:
     name: str
     """Tool name that was called."""
 
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
     """Arguments passed to the tool."""
 
     result: Any = None
     """Result returned by the tool."""
 
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if the tool call failed."""
 
     duration_ms: int = 0
@@ -132,11 +132,11 @@ class AgentResult:
     """Execution status."""
 
     # Execution history
-    tool_calls: List[ToolCallRecord] = field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = field(default_factory=list)
     """History of tool calls made during execution."""
 
     # Token usage
-    tokens: Dict[str, int] = field(
+    tokens: dict[str, int] = field(
         default_factory=lambda: {
             "input": 0,
             "output": 0,
@@ -174,10 +174,10 @@ class AgentResult:
     """ISO timestamp when execution completed."""
 
     # Error details
-    error: Optional[str] = None
+    error: str | None = None
     """Error message if execution failed."""
 
-    error_type: Optional[str] = None
+    error_type: str | None = None
     """Error type/class if execution failed."""
 
     # Model info
@@ -188,7 +188,7 @@ class AgentResult:
     """Provider that handled the request."""
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     """Additional execution metadata."""
 
     # === Convenience Properties ===
@@ -219,12 +219,12 @@ class AgentResult:
         return len(self.tool_calls)
 
     @property
-    def successful_tool_calls(self) -> List[ToolCallRecord]:
+    def successful_tool_calls(self) -> list[ToolCallRecord]:
         """Tool calls that succeeded."""
         return [tc for tc in self.tool_calls if tc.succeeded]
 
     @property
-    def failed_tool_calls(self) -> List[ToolCallRecord]:
+    def failed_tool_calls(self) -> list[ToolCallRecord]:
         """Tool calls that failed."""
         return [tc for tc in self.tool_calls if not tc.succeeded]
 
@@ -250,7 +250,7 @@ class AgentResult:
 
     # === Tool Call Helpers ===
 
-    def get_tool_calls_by_name(self, name: str) -> List[ToolCallRecord]:
+    def get_tool_calls_by_name(self, name: str) -> list[ToolCallRecord]:
         """
         Get all tool calls with a specific name.
 
@@ -262,7 +262,7 @@ class AgentResult:
         """
         return [tc for tc in self.tool_calls if tc.name.lower() == name.lower()]
 
-    def get_last_tool_call(self) -> Optional[ToolCallRecord]:
+    def get_last_tool_call(self) -> ToolCallRecord | None:
         """
         Get the most recent tool call.
 
@@ -271,7 +271,7 @@ class AgentResult:
         """
         return self.tool_calls[-1] if self.tool_calls else None
 
-    def get_tool_results(self, name: Optional[str] = None) -> List[Any]:
+    def get_tool_results(self, name: str | None = None) -> list[Any]:
         """
         Get results from tool calls.
 

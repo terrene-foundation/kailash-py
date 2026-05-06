@@ -31,7 +31,10 @@ from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.composer import PlanComposer, PlanValidator
 from kaizen_agents.orchestration.planner.decomposer import TaskDecomposer
 from kaizen_agents.orchestration.planner.designer import AgentDesigner, SpawnDecision
-from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory, FailureDiagnoser
+from kaizen_agents.orchestration.recovery.diagnoser import (
+    FailureCategory,
+    FailureDiagnoser,
+)
 from kaizen_agents.orchestration.recovery.recomposer import Recomposer, RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
@@ -273,7 +276,9 @@ class PlanMonitor:
 
         while True:
             ready_nodes = [
-                nid for nid, node in plan.nodes.items() if node.state == PlanNodeState.READY
+                nid
+                for nid, node in plan.nodes.items()
+                if node.state == PlanNodeState.READY
             ]
 
             if not ready_nodes:
@@ -510,7 +515,10 @@ class PlanMonitor:
         # Build the set of upstream dependencies per node
         upstream: dict[str, set[str]] = defaultdict(set)
         for edge in plan.edges:
-            if edge.edge_type in (EdgeType.DATA_DEPENDENCY, EdgeType.COMPLETION_DEPENDENCY):
+            if edge.edge_type in (
+                EdgeType.DATA_DEPENDENCY,
+                EdgeType.COMPLETION_DEPENDENCY,
+            ):
                 upstream[edge.to_node].add(edge.from_node)
 
         for node_id, node in plan.nodes.items():
@@ -536,7 +544,9 @@ class PlanMonitor:
             if all_deps_resolved:
                 node.state = PlanNodeState.READY
 
-    def _resolve_inputs(self, node: PlanNode, node_outputs: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_inputs(
+        self, node: PlanNode, node_outputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """Resolve a node's input_mapping against completed upstream outputs.
 
         For each entry in input_mapping, looks up the source node's output
@@ -557,7 +567,9 @@ class PlanMonitor:
                 resolved[input_key] = None
                 continue
             if isinstance(source_output, dict):
-                resolved[input_key] = source_output.get(mapping.output_key, source_output)
+                resolved[input_key] = source_output.get(
+                    mapping.output_key, source_output
+                )
             else:
                 resolved[input_key] = source_output
         return resolved
@@ -735,7 +747,9 @@ class PlanMonitor:
         elif mod_type == PlanModificationType.REMOVE_NODE and mod.node_id:
             plan.nodes.pop(mod.node_id, None)
             plan.edges = [
-                e for e in plan.edges if e.from_node != mod.node_id and e.to_node != mod.node_id
+                e
+                for e in plan.edges
+                if e.from_node != mod.node_id and e.to_node != mod.node_id
             ]
 
         elif mod_type == PlanModificationType.REPLACE_NODE:
@@ -747,10 +761,14 @@ class PlanMonitor:
                 # Rewire edges: replace references to old_id with new_node.node_id
                 new_edges: list[PlanEdge] = []
                 for edge in plan.edges:
-                    from_n = new_node.node_id if edge.from_node == old_id else edge.from_node
+                    from_n = (
+                        new_node.node_id if edge.from_node == old_id else edge.from_node
+                    )
                     to_n = new_node.node_id if edge.to_node == old_id else edge.to_node
                     new_edges.append(
-                        PlanEdge(from_node=from_n, to_node=to_n, edge_type=edge.edge_type)
+                        PlanEdge(
+                            from_node=from_n, to_node=to_n, edge_type=edge.edge_type
+                        )
                     )
                 plan.edges = new_edges
 
@@ -807,9 +825,7 @@ class PlanMonitor:
                             PlanNodeState.READY,
                         ):
                             downstream_node.state = PlanNodeState.FAILED
-                            downstream_node.error = (
-                                f"Cascaded failure from upstream node '{failed_node_id}'"
-                            )
+                            downstream_node.error = f"Cascaded failure from upstream node '{failed_node_id}'"
                         visited.add(edge.to_node)
                         queue.append(edge.to_node)
 

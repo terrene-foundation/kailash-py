@@ -38,7 +38,7 @@ Example:
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.providers.document import ProviderManager
@@ -119,7 +119,7 @@ class DocumentExtractionSignature(Signature):
         description="Prefer free providers (Ollama) when available",
         default=False,
     )
-    max_cost: Optional[float] = InputField(
+    max_cost: float | None = InputField(
         description="Maximum cost in USD (budget constraint)",
         default=None,
     )
@@ -131,19 +131,19 @@ class DocumentExtractionSignature(Signature):
     markdown: str = OutputField(
         description="Markdown representation with structure",
     )
-    tables: List[Dict[str, Any]] = OutputField(
+    tables: list[dict[str, Any]] = OutputField(
         description="Extracted tables with headers and rows",
     )
-    images: List[Dict[str, Any]] = OutputField(
+    images: list[dict[str, Any]] = OutputField(
         description="Extracted image descriptions",
     )
-    chunks: List[Dict[str, Any]] = OutputField(
+    chunks: list[dict[str, Any]] = OutputField(
         description="Semantic chunks for RAG with page numbers and bounding boxes",
     )
-    metadata: Dict[str, Any] = OutputField(
+    metadata: dict[str, Any] = OutputField(
         description="Document metadata (file name, pages, type)",
     )
-    bounding_boxes: List[Dict[str, Any]] = OutputField(
+    bounding_boxes: list[dict[str, Any]] = OutputField(
         description="Bounding box coordinates for text regions (Landing AI only)",
     )
     cost: float = OutputField(
@@ -211,10 +211,10 @@ class DocumentExtractionConfig:
     # Provider configuration
     provider: str = "auto"
     prefer_free: bool = False
-    max_cost_per_doc: Optional[float] = None
-    landing_ai_key: Optional[str] = None
-    openai_key: Optional[str] = None
-    ollama_base_url: Optional[str] = None
+    max_cost_per_doc: float | None = None
+    landing_ai_key: str | None = None
+    openai_key: str | None = None
+    ollama_base_url: str | None = None
 
     # Extraction options
     extract_tables: bool = True
@@ -223,11 +223,11 @@ class DocumentExtractionConfig:
     chunk_size: int = 512
 
     # BaseAgentConfig parameters (for agent reasoning, optional)
-    llm_provider: Optional[str] = None
-    model: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    provider_config: Optional[Dict[str, Any]] = None
+    llm_provider: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    provider_config: dict[str, Any] | None = None
 
     # Feature flags (inherited from BaseAgentConfig)
     logging_enabled: bool = True
@@ -295,8 +295,8 @@ class DocumentExtractionAgent(BaseAgent):
     def __init__(
         self,
         config: DocumentExtractionConfig,
-        signature: Optional[DocumentExtractionSignature] = None,
-        mcp_servers: Optional[List[str]] = None,
+        signature: DocumentExtractionSignature | None = None,
+        mcp_servers: list[str] | None = None,
         **kwargs,
     ):
         """
@@ -347,15 +347,15 @@ class DocumentExtractionAgent(BaseAgent):
     def extract(
         self,
         file_path: str,
-        file_type: Optional[str] = None,
-        provider: Optional[str] = None,
-        extract_tables: Optional[bool] = None,
-        extract_images: Optional[bool] = None,
-        chunk_for_rag: Optional[bool] = None,
-        chunk_size: Optional[int] = None,
-        prefer_free: Optional[bool] = None,
-        max_cost: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        file_type: str | None = None,
+        provider: str | None = None,
+        extract_tables: bool | None = None,
+        extract_images: bool | None = None,
+        chunk_for_rag: bool | None = None,
+        chunk_size: int | None = None,
+        prefer_free: bool | None = None,
+        max_cost: float | None = None,
+    ) -> dict[str, Any]:
         """
         Extract content from document.
 
@@ -444,7 +444,7 @@ class DocumentExtractionAgent(BaseAgent):
 
         return result
 
-    def _extract_direct(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_direct(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """
         Direct extraction using provider manager (bypasses LLM for efficiency).
 
@@ -487,9 +487,9 @@ class DocumentExtractionAgent(BaseAgent):
     async def extract_async(
         self,
         file_path: str,
-        file_type: Optional[str] = None,
+        file_type: str | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Async version of extract() for use in async contexts.
 
@@ -535,7 +535,7 @@ class DocumentExtractionAgent(BaseAgent):
 
         return extraction_result.to_dict()
 
-    def estimate_cost(self, file_path: str, provider: str = "auto") -> Dict[str, float]:
+    def estimate_cost(self, file_path: str, provider: str = "auto") -> dict[str, float]:
         """
         Estimate extraction cost before processing.
 
@@ -569,7 +569,7 @@ class DocumentExtractionAgent(BaseAgent):
             )
         )
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """
         Get list of available providers (properly configured).
 
@@ -582,7 +582,7 @@ class DocumentExtractionAgent(BaseAgent):
         """
         return self.provider_manager.get_available_providers()
 
-    def get_provider_capabilities(self) -> Dict[str, Dict[str, Any]]:
+    def get_provider_capabilities(self) -> dict[str, dict[str, Any]]:
         """
         Get capabilities for all providers.
 

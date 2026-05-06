@@ -43,7 +43,9 @@ ESCALATION_COMPOSITION_SCHEMA: dict[str, Any] = {
         },
         "severity": {
             "type": "string",
-            "description": ("Severity level: 'warning', 'blocked', 'budget_alert', or 'critical'."),
+            "description": (
+                "Severity level: 'warning', 'blocked', 'budget_alert', or 'critical'."
+            ),
         },
         "suggested_action": {
             "type": "string",
@@ -289,7 +291,9 @@ class EscalationProtocol:
             A fully populated EscalationPayload ready to send to the parent.
         """
         system_prompt = _build_composition_system_prompt()
-        user_prompt = _build_composition_user_prompt(problem, mitigations_tried, severity)
+        user_prompt = _build_composition_user_prompt(
+            problem, mitigations_tried, severity
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -318,7 +322,10 @@ class EscalationProtocol:
             suggested_action = None
 
         violating_dim = raw_result.get("violating_dimension")
-        if not isinstance(violating_dim, str) or violating_dim.lower().strip() == "none":
+        if (
+            not isinstance(violating_dim, str)
+            or violating_dim.lower().strip() == "none"
+        ):
             violating_dim = None
 
         return EscalationPayload(
@@ -366,7 +373,9 @@ class EscalationProtocol:
         action_str = raw_result.get("action", "escalate_further")
         if not isinstance(action_str, str):
             action_str = "escalate_further"
-        action = _ACTION_MAP.get(action_str.lower().strip(), EscalationAction.ESCALATE_FURTHER)
+        action = _ACTION_MAP.get(
+            action_str.lower().strip(), EscalationAction.ESCALATE_FURTHER
+        )
 
         reasoning = raw_result.get("reasoning", "")
         if not isinstance(reasoning, str):

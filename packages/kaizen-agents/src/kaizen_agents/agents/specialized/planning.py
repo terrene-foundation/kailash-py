@@ -31,10 +31,9 @@ Environment variable support:
 import logging
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, NotRequired, Optional, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from kailash.nodes.base import NodeMetadata
-
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -128,7 +127,7 @@ class PlanningConfig:
     enable_replanning: bool = True
     timeout: int = 30
     max_retries: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class PlanGenerationSignature(Signature):
@@ -151,7 +150,7 @@ class PlanGenerationSignature(Signature):
     context: dict = InputField(desc="Additional context for planning", default={})
 
     # Output field - only plan for this phase
-    plan: List[PlanStep] = OutputField(desc="Detailed execution plan steps")
+    plan: list[PlanStep] = OutputField(desc="Detailed execution plan steps")
 
 
 class PlanningSignature(Signature):
@@ -179,9 +178,9 @@ class PlanningSignature(Signature):
     context: dict = InputField(desc="Additional context for planning", default={})
 
     # Output fields
-    plan: List[PlanStep] = OutputField(desc="Detailed execution plan steps")
+    plan: list[PlanStep] = OutputField(desc="Detailed execution plan steps")
     validation_result: ValidationResult = OutputField(desc="Plan validation results")
-    execution_results: List[ExecutionResult] = OutputField(
+    execution_results: list[ExecutionResult] = OutputField(
         desc="Results from each step"
     )
     final_result: str = OutputField(desc="Aggregated final result")
@@ -260,17 +259,17 @@ class PlanningAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_plan_steps: Optional[int] = None,
-        validation_mode: Optional[str] = None,
-        enable_replanning: Optional[bool] = None,
-        timeout: Optional[int] = None,
-        max_retries: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[PlanningConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_plan_steps: int | None = None,
+        validation_mode: str | None = None,
+        enable_replanning: bool | None = None,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: PlanningConfig | None = None,
         **kwargs,
     ):
         """
@@ -336,8 +335,8 @@ class PlanningAgent(BaseAgent):
         self.planning_config = config
 
     def _generate_plan(
-        self, task: str, context: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, task: str, context: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Generate execution plan from task description.
 
@@ -445,7 +444,7 @@ class PlanningAgent(BaseAgent):
 
         return structured_plan
 
-    def _validate_plan(self, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _validate_plan(self, plan: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Validate plan feasibility and completeness.
 
@@ -536,8 +535,8 @@ class PlanningAgent(BaseAgent):
             return {"status": "valid"}
 
     def _execute_plan(
-        self, plan: List[Dict[str, Any]]
-    ) -> tuple[List[Dict[str, Any]], str]:
+        self, plan: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], str]:
         """
         Execute validated plan step by step.
 
@@ -593,8 +592,8 @@ class PlanningAgent(BaseAgent):
         return execution_results, final_result
 
     def run(
-        self, task: str, context: Optional[Dict[str, Any]] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, task: str, context: dict[str, Any] | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Universal execution method for Planning agent.
 
@@ -704,7 +703,7 @@ class PlanningAgent(BaseAgent):
 
 
 # Convenience function for quick usage
-def plan_and_execute(task: str, **kwargs) -> Dict[str, Any]:
+def plan_and_execute(task: str, **kwargs) -> dict[str, Any]:
     """
     Quick one-liner for planning and executing tasks.
 

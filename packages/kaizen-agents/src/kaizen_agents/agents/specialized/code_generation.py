@@ -32,10 +32,9 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
-
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
@@ -92,7 +91,7 @@ class CodeGenConfig:
     # Technical configuration
     timeout: int = 30
     retry_attempts: int = 3
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class CodeGenSignature(Signature):
@@ -186,18 +185,18 @@ class CodeGenerationAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        programming_language: Optional[str] = None,
-        include_tests: Optional[bool] = None,
-        include_documentation: Optional[bool] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[CodeGenConfig] = None,
-        mcp_servers: Optional[List[Dict[str, Any]]] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        programming_language: str | None = None,
+        include_tests: bool | None = None,
+        include_documentation: bool | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: CodeGenConfig | None = None,
+        mcp_servers: list[dict[str, Any]] | None = None,
         **kwargs,
     ):
         """
@@ -269,7 +268,7 @@ class CodeGenerationAgent(BaseAgent):
 
         self.codegen_config = config
 
-    def _check_convergence(self, result: Dict[str, Any]) -> bool:
+    def _check_convergence(self, result: dict[str, Any]) -> bool:
         """
         Check if code generation cycle should stop (convergence detection).
 
@@ -326,8 +325,8 @@ class CodeGenerationAgent(BaseAgent):
         return True
 
     def run(
-        self, task_description: str, language: Optional[str] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, task_description: str, language: str | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Generate code from natural language description.
 
@@ -390,8 +389,8 @@ class CodeGenerationAgent(BaseAgent):
         return result
 
     def generate_code(
-        self, task_description: str, language: Optional[str] = None, **kwargs
-    ) -> Dict[str, Any]:
+        self, task_description: str, language: str | None = None, **kwargs
+    ) -> dict[str, Any]:
         """
         Convenience method for code generation.
 
@@ -414,7 +413,7 @@ class CodeGenerationAgent(BaseAgent):
 
     def generate_tests(
         self, code: str, language: str = "python"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate test cases for existing code.
 
@@ -486,7 +485,7 @@ Provide:
 
     def refactor_code(
         self, code: str, refactoring_goal: str, language: str = "python"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Refactor existing code to improve quality.
 
@@ -569,7 +568,7 @@ Provide:
 
 
 # Convenience function for quick code generation
-def generate_code_quick(task: str, language: str = "python") -> Dict[str, Any]:
+def generate_code_quick(task: str, language: str = "python") -> dict[str, Any]:
     """
     Quick code generation with default configuration.
 

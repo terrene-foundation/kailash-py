@@ -73,7 +73,9 @@ class BashTool(Tool):
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return ToolResult.failure(f"Command timed out after {timeout} seconds: {command}")
+            return ToolResult.failure(
+                f"Command timed out after {timeout} seconds: {command}"
+            )
         except OSError as exc:
             return ToolResult.failure(f"Error executing command: {exc}")
 

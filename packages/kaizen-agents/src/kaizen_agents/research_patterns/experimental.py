@@ -9,7 +9,7 @@ Components:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Type
+from typing import Any
 
 from kaizen.research.parser import ResearchPaper
 from kaizen.research.validator import ValidationResult
@@ -58,12 +58,12 @@ class ExperimentalFeature:
     feature_id: str
     paper: ResearchPaper
     validation: ValidationResult
-    signature_class: Type[Signature]
+    signature_class: type[Signature]
     version: str
     status: str  # "experimental", "beta", "stable", "deprecated"
-    compatibility: Dict[str, str]
-    performance: Dict[str, float]
-    metadata: Dict[str, Any]
+    compatibility: dict[str, str]
+    performance: dict[str, float]
+    metadata: dict[str, Any]
 
     def __post_init__(self):
         """Initialize feature state after dataclass construction."""

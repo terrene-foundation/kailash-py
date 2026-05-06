@@ -179,7 +179,9 @@ class DerelictionDetector:
         return self._threshold
 
 
-def _compute_dimension_ratios(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, float]:
+def _compute_dimension_ratios(
+    parent: dict[str, Any], child: dict[str, Any]
+) -> dict[str, float]:
     """Compute per-dimension tightening ratios.
 
     For each dimension, ratio = 1 - (child_value / parent_value).

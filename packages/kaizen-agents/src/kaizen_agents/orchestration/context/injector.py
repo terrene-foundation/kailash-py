@@ -39,7 +39,8 @@ CONTEXT_SELECTION_SCHEMA: dict[str, Any] = {
         "reasoning": {
             "type": "string",
             "description": (
-                "Brief explanation of why these keys were selected " "and why others were excluded."
+                "Brief explanation of why these keys were selected "
+                "and why others were excluded."
             ),
         },
     },

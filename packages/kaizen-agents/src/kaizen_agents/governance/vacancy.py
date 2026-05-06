@@ -80,7 +80,9 @@ class VacancyManager:
         # -> acting_parent_designated event
     """
 
-    def __init__(self, deadline_seconds: float = 60.0, max_agents: int = 100_000) -> None:
+    def __init__(
+        self, deadline_seconds: float = 60.0, max_agents: int = 100_000
+    ) -> None:
         if not math.isfinite(deadline_seconds) or deadline_seconds <= 0:
             raise ValueError(
                 f"deadline_seconds must be finite and positive, got {deadline_seconds}"
@@ -159,7 +161,10 @@ class VacancyManager:
                 )
 
                 # Auto-designate grandparent if alive
-                if grandparent_id is not None and grandparent_id not in self._terminated:
+                if (
+                    grandparent_id is not None
+                    and grandparent_id not in self._terminated
+                ):
                     self._orphans[child_id] = OrphanRecord(
                         agent_id=child_id,
                         terminated_parent_id=parent_id,
@@ -183,7 +188,9 @@ class VacancyManager:
 
             return events
 
-    def designate_acting_parent(self, agent_id: str, acting_parent_id: str) -> VacancyEvent | None:
+    def designate_acting_parent(
+        self, agent_id: str, acting_parent_id: str
+    ) -> VacancyEvent | None:
         """Manually designate an acting parent for an orphaned agent.
 
         Args:

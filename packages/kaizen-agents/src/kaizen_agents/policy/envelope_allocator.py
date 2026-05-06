@@ -125,7 +125,9 @@ class BudgetPolicy:
         if not math.isfinite(self.reserve_pct):
             raise ValueError(f"reserve_pct must be finite, got {self.reserve_pct}")
         if self.reserve_pct < 0.0 or self.reserve_pct > 1.0:
-            raise ValueError(f"reserve_pct must be between 0.0 and 1.0, got {self.reserve_pct}")
+            raise ValueError(
+                f"reserve_pct must be between 0.0 and 1.0, got {self.reserve_pct}"
+            )
         if not isinstance(self.exhaustion_action, ExhaustionAction):
             raise ValueError(
                 f"exhaustion_action must be an ExhaustionAction enum value, "
@@ -134,7 +136,10 @@ class BudgetPolicy:
 
     def should_reallocate_on_exhaustion(self) -> bool:
         """Whether the policy calls for reallocation when a child runs low."""
-        return self.reallocation_enabled and self.exhaustion_action == ExhaustionAction.REALLOCATE
+        return (
+            self.reallocation_enabled
+            and self.exhaustion_action == ExhaustionAction.REALLOCATE
+        )
 
     def should_escalate_on_exhaustion(self) -> bool:
         """Whether the policy calls for escalation when a child runs low."""
@@ -303,14 +308,18 @@ class EnvelopeAllocator:
 
         total_complexity = sum(task.complexity for task in subtasks)
         if total_complexity <= 0.0:
-            raise AllocationError("Total complexity must be positive for weighted split.")
+            raise AllocationError(
+                "Total complexity must be positive for weighted split."
+            )
 
         available = 1.0 - self._policy.reserve_pct
 
         # Financial ratios from complexity
         financial_ratios: dict[str, float] = {}
         for task in subtasks:
-            financial_ratios[task.child_id] = available * (task.complexity / total_complexity)
+            financial_ratios[task.child_id] = available * (
+                task.complexity / total_complexity
+            )
 
         # Temporal ratios from explicit weights or fallback to complexity
         if temporal_weights is not None:
@@ -416,7 +425,9 @@ class EnvelopeAllocator:
                 reserve_pct=split_result.reserve_pct,
             )
         except SplitError as exc:
-            raise AllocationError(f"SDK EnvelopeSplitter rejected the allocation: {exc}") from exc
+            raise AllocationError(
+                f"SDK EnvelopeSplitter rejected the allocation: {exc}"
+            ) from exc
 
         # Convert SDK results back to local ConstraintEnvelope objects
         return [
@@ -463,7 +474,9 @@ def _validate_ratio(value: float, child_id: str, field_name: str) -> None:
     if not math.isfinite(value):
         raise ValueError(f"{field_name} for '{child_id}' must be finite, got {value}")
     if value < 0.0:
-        raise ValueError(f"{field_name} for '{child_id}' must be non-negative, got {value}")
+        raise ValueError(
+            f"{field_name} for '{child_id}' must be non-negative, got {value}"
+        )
     if value > 1.0:
         raise ValueError(f"{field_name} for '{child_id}' must be <= 1.0, got {value}")
 

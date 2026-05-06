@@ -33,8 +33,9 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import (
@@ -92,11 +93,11 @@ class AutonomousConfig:
     checkpoint_on_interrupt: bool = True  # Save checkpoint on interrupt
 
     # BaseAgentConfig parameters (for conversion)
-    llm_provider: Optional[str] = None
-    model: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    provider_config: Optional[Dict[str, Any]] = None
+    llm_provider: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    provider_config: dict[str, Any] | None = None
 
     # Feature flags
     logging_enabled: bool = True
@@ -171,11 +172,11 @@ class BaseAutonomousAgent(BaseAgent):
     def __init__(
         self,
         config: AutonomousConfig,
-        signature: Optional[Signature] = None,
-        strategy: Optional[MultiCycleStrategy] = None,
-        checkpoint_dir: Optional[Path] = None,
-        state_manager: Optional[StateManager] = None,
-        interrupt_manager: Optional[InterruptManager] = None,
+        signature: Signature | None = None,
+        strategy: MultiCycleStrategy | None = None,
+        checkpoint_dir: Path | None = None,
+        state_manager: StateManager | None = None,
+        interrupt_manager: InterruptManager | None = None,
         **kwargs,
     ):
         """
@@ -219,16 +220,13 @@ class BaseAutonomousAgent(BaseAgent):
         # Autonomous-specific state
         self.checkpoint_dir = checkpoint_dir or Path("./checkpoints")
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.current_plan: List[Dict[str, Any]] = []
+        self.current_plan: list[dict[str, Any]] = []
         self.cycle_count: int = 0
 
         # State persistence
-        self.state_manager = (
-            state_manager
-            or StateManager(
-                checkpoint_frequency=config.checkpoint_frequency,
-                checkpoint_interval=config.checkpoint_interval_seconds,  # StateManager uses 'checkpoint_interval'
-            )
+        self.state_manager = state_manager or StateManager(
+            checkpoint_frequency=config.checkpoint_frequency,
+            checkpoint_interval=config.checkpoint_interval_seconds,  # StateManager uses 'checkpoint_interval'
         )
         self.current_step: int = 0
 
@@ -251,11 +249,11 @@ class BaseAutonomousAgent(BaseAgent):
             self.memory = BufferMemory()  # Creates in-memory conversation buffer
 
         # State tracking for checkpoints
-        self._approval_history: List[Dict[str, Any]] = []
-        self._tool_usage_counts: Dict[str, int] = {}
-        self._workflow_state: Dict[str, Any] = {}
+        self._approval_history: list[dict[str, Any]] = []
+        self._tool_usage_counts: dict[str, int] = {}
+        self._workflow_state: dict[str, Any] = {}
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """
         Execute autonomous task with .run() interface.
 
@@ -319,7 +317,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     async def _autonomous_loop(
         self, task: str, session_id: str | None = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Autonomous execution loop following while(tool_calls_exist) pattern.
 
@@ -352,7 +350,7 @@ class BaseAutonomousAgent(BaseAgent):
         # Step 0: Load memory context (if enabled and session_id provided)
         memory_context = {}
         if self.memory and session_id:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             from kaizen.core.autonomy.hooks.types import HookEvent
 
@@ -504,7 +502,7 @@ class BaseAutonomousAgent(BaseAgent):
 
         # Save memory turn (if enabled and session_id provided)
         if self.memory and session_id:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             from kaizen.core.autonomy.hooks.types import HookEvent
 
@@ -543,7 +541,7 @@ class BaseAutonomousAgent(BaseAgent):
 
         return final_result
 
-    def _check_convergence(self, response: Dict[str, Any]) -> bool:
+    def _check_convergence(self, response: dict[str, Any]) -> bool:
         """
         Check if agent has converged using objective detection (ADR-013).
 
@@ -617,7 +615,7 @@ class BaseAutonomousAgent(BaseAgent):
         logger.debug("Default convergence: no clear signals")
         return True
 
-    async def _create_plan(self, task: str) -> List[Dict[str, Any]]:
+    async def _create_plan(self, task: str) -> list[dict[str, Any]]:
         """
         Generate TODO-style structured task plan.
 
@@ -679,7 +677,7 @@ class BaseAutonomousAgent(BaseAgent):
 
         return plan
 
-    async def _generate_plan_from_llm(self, task: str) -> List[Dict[str, Any]]:
+    async def _generate_plan_from_llm(self, task: str) -> list[dict[str, Any]]:
         """
         Use LLM to generate a structured task plan.
 
@@ -707,7 +705,7 @@ class BaseAutonomousAgent(BaseAgent):
             }
         ]
 
-    def _save_checkpoint(self, state: Dict[str, Any], cycle_num: int) -> None:
+    def _save_checkpoint(self, state: dict[str, Any], cycle_num: int) -> None:
         """
         Save execution checkpoint in JSONL format.
 
@@ -740,7 +738,7 @@ class BaseAutonomousAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"Failed to save checkpoint: {e}")
 
-    def _load_checkpoint(self, cycle_num: int) -> Optional[Dict[str, Any]]:
+    def _load_checkpoint(self, cycle_num: int) -> dict[str, Any] | None:
         """
         Load checkpoint from JSONL file.
 
@@ -763,7 +761,7 @@ class BaseAutonomousAgent(BaseAgent):
             return None
 
         try:
-            with open(checkpoint_file, "r") as f:
+            with open(checkpoint_file) as f:
                 # Read last line (most recent checkpoint)
                 lines = f.readlines()
                 if lines:
@@ -854,7 +852,7 @@ class BaseAutonomousAgent(BaseAgent):
 
     # Helper methods for state capture
 
-    def _get_conversation_history(self) -> List[Dict[str, Any]]:
+    def _get_conversation_history(self) -> list[dict[str, Any]]:
         """Get conversation history for checkpoint."""
         if self.memory is not None:
             # Extract conversation from memory
@@ -864,7 +862,7 @@ class BaseAutonomousAgent(BaseAgent):
             ]
         return []
 
-    def _get_memory_contents(self) -> Dict[str, Any]:
+    def _get_memory_contents(self) -> dict[str, Any]:
         """Get memory contents for checkpoint."""
         if self.memory is not None:
             return {
@@ -873,7 +871,7 @@ class BaseAutonomousAgent(BaseAgent):
             }
         return {}
 
-    def _get_pending_actions(self) -> List[Dict[str, Any]]:
+    def _get_pending_actions(self) -> list[dict[str, Any]]:
         """Get pending actions for checkpoint."""
         # Extract from current_plan if available
         if self.current_plan:
@@ -884,7 +882,7 @@ class BaseAutonomousAgent(BaseAgent):
             ]
         return []
 
-    def _get_completed_actions(self) -> List[Dict[str, Any]]:
+    def _get_completed_actions(self) -> list[dict[str, Any]]:
         """Get completed actions for checkpoint."""
         if self.current_plan:
             return [
@@ -900,7 +898,7 @@ class BaseAutonomousAgent(BaseAgent):
             return self.execution_context.budget_used
         return 0.0
 
-    def _get_approval_history(self) -> List[Dict[str, Any]]:
+    def _get_approval_history(self) -> list[dict[str, Any]]:
         """
         Get approval history for checkpoint.
 
@@ -921,7 +919,7 @@ class BaseAutonomousAgent(BaseAgent):
         """
         return self._approval_history.copy()
 
-    def _get_tool_usage_counts(self) -> Dict[str, int]:
+    def _get_tool_usage_counts(self) -> dict[str, int]:
         """
         Get tool usage counts for checkpoint.
 
@@ -942,7 +940,7 @@ class BaseAutonomousAgent(BaseAgent):
         """
         return self._tool_usage_counts.copy()
 
-    def _get_workflow_state(self) -> Dict[str, Any]:
+    def _get_workflow_state(self) -> dict[str, Any]:
         """
         Get workflow execution state for checkpoint.
 
@@ -973,7 +971,7 @@ class BaseAutonomousAgent(BaseAgent):
         tool_name: str,
         approved: bool,
         action: str = "once",
-        tool_input: Optional[Dict[str, Any]] = None,
+        tool_input: dict[str, Any] | None = None,
     ) -> None:
         """
         Record an approval decision for audit trail and checkpoint persistence.
@@ -991,7 +989,7 @@ class BaseAutonomousAgent(BaseAgent):
             >>> agent.record_approval("Bash", True, "once", {"command": "ls -la"})
             >>> agent.record_approval("Write", False, "deny_all")
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create input summary (truncated for storage)
         input_summary = ""
@@ -1005,7 +1003,7 @@ class BaseAutonomousAgent(BaseAgent):
             "tool_name": tool_name,
             "approved": approved,
             "action": action,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "input_summary": input_summary,
         }
 
@@ -1038,11 +1036,11 @@ class BaseAutonomousAgent(BaseAgent):
 
     def update_workflow_state(
         self,
-        run_id: Optional[str] = None,
-        status: Optional[str] = None,
-        current_node: Optional[str] = None,
-        node_results: Optional[Dict[str, Any]] = None,
-        execution_time: Optional[float] = None,
+        run_id: str | None = None,
+        status: str | None = None,
+        current_node: str | None = None,
+        node_results: dict[str, Any] | None = None,
+        execution_time: float | None = None,
         **kwargs,
     ) -> None:
         """
@@ -1066,7 +1064,7 @@ class BaseAutonomousAgent(BaseAgent):
             ...     current_node="process_data",
             ... )
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         if run_id is not None:
             self._workflow_state["run_id"] = run_id
@@ -1089,14 +1087,14 @@ class BaseAutonomousAgent(BaseAgent):
             self._workflow_state[key] = value
 
         # Always update last_updated timestamp
-        self._workflow_state["last_updated"] = datetime.now(timezone.utc).isoformat()
+        self._workflow_state["last_updated"] = datetime.now(UTC).isoformat()
 
         logger.debug(f"Workflow state updated: {list(self._workflow_state.keys())}")
 
     # Helper methods for state restoration
 
     def _restore_conversation_history(
-        self, conversation_history: List[Dict[str, Any]]
+        self, conversation_history: list[dict[str, Any]]
     ) -> None:
         """Restore conversation history from checkpoint."""
         if self.memory is not None and conversation_history:
@@ -1110,14 +1108,14 @@ class BaseAutonomousAgent(BaseAgent):
                     role=msg.get("role", "user"), content=msg.get("content", "")
                 )
 
-    def _restore_memory_contents(self, memory_contents: Dict[str, Any]) -> None:
+    def _restore_memory_contents(self, memory_contents: dict[str, Any]) -> None:
         """Restore memory contents from checkpoint."""
         if self.memory is not None and memory_contents:
             # Restore metadata
             if "metadata" in memory_contents:
                 self.memory.metadata = memory_contents["metadata"]
 
-    def _restore_pending_actions(self, pending_actions: List[Dict[str, Any]]) -> None:
+    def _restore_pending_actions(self, pending_actions: list[dict[str, Any]]) -> None:
         """Restore pending actions from checkpoint."""
         # Update current_plan with pending actions
         for action in pending_actions:
@@ -1125,7 +1123,7 @@ class BaseAutonomousAgent(BaseAgent):
                 self.current_plan.append(action)
 
     def _restore_completed_actions(
-        self, completed_actions: List[Dict[str, Any]]
+        self, completed_actions: list[dict[str, Any]]
     ) -> None:
         """Restore completed actions from checkpoint."""
         # Update current_plan with completed actions
@@ -1226,7 +1224,7 @@ class BaseAutonomousAgent(BaseAgent):
                 )
                 return status
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     f"Graceful shutdown timed out after {timeout}s, forcing immediate shutdown"
                 )
@@ -1307,7 +1305,7 @@ class BaseAutonomousAgent(BaseAgent):
             logger.debug(f"Unregistered child agent: {child_agent.agent_id}")
 
     async def _save_final_checkpoint(
-        self, interrupted: bool = False, reason: Optional[InterruptReason] = None
+        self, interrupted: bool = False, reason: InterruptReason | None = None
     ) -> str:
         """
         Save final checkpoint with interrupt metadata.

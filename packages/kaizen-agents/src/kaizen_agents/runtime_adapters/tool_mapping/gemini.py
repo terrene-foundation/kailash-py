@@ -26,13 +26,9 @@ Key differences from OpenAI:
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
-from kaizen_agents.runtime_adapters.tool_mapping.base import (
-    KaizenTool,
-    ToolMapper,
-    ToolMappingError,
-)
+from kaizen_agents.runtime_adapters.tool_mapping.base import KaizenTool, ToolMapper
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +80,9 @@ class GeminiToolMapper(ToolMapper):
     @classmethod
     def to_runtime_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
+        kaizen_tools: list[dict[str, Any]],
         strict: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Convert Kaizen tools to Gemini Function Declarations.
 
         Args:
@@ -112,8 +108,8 @@ class GeminiToolMapper(ToolMapper):
     @classmethod
     def from_runtime_format(
         cls,
-        runtime_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        runtime_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convert Gemini Function Declarations back to Kaizen format.
 
         Args:
@@ -131,7 +127,7 @@ class GeminiToolMapper(ToolMapper):
         return kaizen_tools
 
     @classmethod
-    def _to_gemini_declaration(cls, tool: KaizenTool) -> Dict[str, Any]:
+    def _to_gemini_declaration(cls, tool: KaizenTool) -> dict[str, Any]:
         """Convert a single KaizenTool to Gemini Function Declaration.
 
         Args:
@@ -157,7 +153,7 @@ class GeminiToolMapper(ToolMapper):
         return declaration
 
     @classmethod
-    def _from_gemini_declaration(cls, gemini_tool: Dict[str, Any]) -> Dict[str, Any]:
+    def _from_gemini_declaration(cls, gemini_tool: dict[str, Any]) -> dict[str, Any]:
         """Convert Gemini Function Declaration to Kaizen format.
 
         Args:
@@ -180,7 +176,7 @@ class GeminiToolMapper(ToolMapper):
         }
 
     @classmethod
-    def _convert_schema_to_gemini(cls, schema: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_schema_to_gemini(cls, schema: dict[str, Any]) -> dict[str, Any]:
         """Convert JSON Schema to Gemini format (recursive).
 
         Args:
@@ -230,7 +226,7 @@ class GeminiToolMapper(ToolMapper):
         return result
 
     @classmethod
-    def _convert_schema_from_gemini(cls, schema: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_schema_from_gemini(cls, schema: dict[str, Any]) -> dict[str, Any]:
         """Convert Gemini schema back to JSON Schema format (recursive).
 
         Args:
@@ -280,7 +276,7 @@ class GeminiToolMapper(ToolMapper):
         return result
 
     @classmethod
-    def validate_tool(cls, tool: KaizenTool) -> List[str]:
+    def validate_tool(cls, tool: KaizenTool) -> list[str]:
         """Validate tool against Gemini requirements.
 
         Args:
@@ -305,8 +301,8 @@ class GeminiToolMapper(ToolMapper):
     @classmethod
     def to_gemini_format(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convenience alias for to_runtime_format.
 
         Args:
@@ -320,8 +316,8 @@ class GeminiToolMapper(ToolMapper):
     @classmethod
     def from_gemini_format(
         cls,
-        gemini_tools: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        gemini_tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Convenience alias for from_runtime_format.
 
         Args:
@@ -335,8 +331,8 @@ class GeminiToolMapper(ToolMapper):
     @classmethod
     def wrap_for_api(
         cls,
-        kaizen_tools: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        kaizen_tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Wrap tools for Gemini API request.
 
         Gemini API expects tools in a specific wrapper structure.

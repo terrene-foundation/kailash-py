@@ -15,7 +15,7 @@ Architecture:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -107,11 +107,11 @@ class NLToSQLAgent(DataFlowAwareAgent):
         >>> print(result['results'])
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """Initialize NL to SQL agent."""
         super().__init__(config=config, signature=NLQuerySignature(), db=db)
 
-    def query(self, natural_query: str) -> Dict[str, Any]:
+    def query(self, natural_query: str) -> dict[str, Any]:
         """
         Execute natural language query against database.
 
@@ -215,13 +215,13 @@ class DataTransformAgent(DataFlowAwareAgent):
         >>> print(f"Confidence: {result['confidence']}")
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """Initialize data transformation agent."""
         super().__init__(config=config, signature=DataTransformSignature(), db=db)
 
     def transform_data(
-        self, source_data: List[Dict[str, Any]], target_table: str
-    ) -> Dict[str, Any]:
+        self, source_data: list[dict[str, Any]], target_table: str
+    ) -> dict[str, Any]:
         """
         Transform data to match target schema.
 
@@ -302,7 +302,7 @@ class DataTransformAgent(DataFlowAwareAgent):
             "transformation_rules": transformation_rules,
         }
 
-    def _infer_schema(self, data: List[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    def _infer_schema(self, data: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
         """Infer schema from data sample."""
         if not data:
             return {}
@@ -317,8 +317,8 @@ class DataTransformAgent(DataFlowAwareAgent):
         return schema
 
     def _apply_transforms(
-        self, source_data: List[Dict[str, Any]], rules: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, source_data: list[dict[str, Any]], rules: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Apply transformation rules to data."""
         transformed = []
 
@@ -376,16 +376,16 @@ class DataQualityAgent(DataFlowAwareAgent):
         >>> print(f"Issues: {result['issues_found']}")
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """Initialize data quality agent."""
         super().__init__(config=config, signature=DataQualitySignature(), db=db)
 
     def assess_quality(
         self,
-        data_sample: List[Dict[str, Any]],
-        schema: Dict[str, Any],
-        quality_rules: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        data_sample: list[dict[str, Any]],
+        schema: dict[str, Any],
+        quality_rules: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Assess data quality.
 
@@ -447,7 +447,7 @@ class DataQualityAgent(DataFlowAwareAgent):
             "suggested_fixes": suggested_fixes,
         }
 
-    def clean_data(self, data_sample: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def clean_data(self, data_sample: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Clean and normalize data.
 
@@ -501,11 +501,11 @@ class SemanticSearchAgent(DataFlowAwareAgent):
         >>> print(result['results'])
     """
 
-    def __init__(self, config, db: Optional[Any] = None):
+    def __init__(self, config, db: Any | None = None):
         """Initialize semantic search agent."""
         super().__init__(config=config, signature=SemanticSearchSignature(), db=db)
 
-    def search(self, query: str, context: Optional[str] = None) -> Dict[str, Any]:
+    def search(self, query: str, context: str | None = None) -> dict[str, Any]:
         """
         Execute semantic search across database.
 

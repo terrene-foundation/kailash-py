@@ -52,13 +52,13 @@ References:
     - .claude/skills/03-nexus/SKILL.md
 """
 
-import json
 import logging
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from nexus import Nexus
@@ -95,9 +95,9 @@ class NexusSessionInfo:
     user_id: str = ""
     channel: str = "api"
     journey_class_name: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class JourneySessionManager:
@@ -140,9 +140,9 @@ class JourneySessionManager:
 
     def __init__(self):
         """Initialize session manager with thread-safe lock."""
-        self._sessions: Dict[str, NexusSessionInfo] = {}
-        self._user_sessions: Dict[str, List[str]] = {}
-        self._journey_managers: Dict[str, "PathwayManager"] = {}
+        self._sessions: dict[str, NexusSessionInfo] = {}
+        self._user_sessions: dict[str, list[str]] = {}
+        self._journey_managers: dict[str, "PathwayManager"] = {}
         self._lock = threading.Lock()  # Thread-safe access to session data
 
     def create_session(
@@ -150,8 +150,8 @@ class JourneySessionManager:
         user_id: str,
         channel: str,
         journey_class_name: str,
-        session_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Create a new session (thread-safe).
@@ -189,7 +189,7 @@ class JourneySessionManager:
         logger.info(f"Created session {session_id} for user {user_id} via {channel}")
         return session_id
 
-    def get_session(self, session_id: str) -> Optional[NexusSessionInfo]:
+    def get_session(self, session_id: str) -> NexusSessionInfo | None:
         """
         Get session information (thread-safe).
 
@@ -202,10 +202,10 @@ class JourneySessionManager:
         with self._lock:
             session = self._sessions.get(session_id)
             if session:
-                session.last_accessed = datetime.now(timezone.utc)
+                session.last_accessed = datetime.now(UTC)
             return session
 
-    def get_user_sessions(self, user_id: str) -> List[str]:
+    def get_user_sessions(self, user_id: str) -> list[str]:
         """
         Get all session IDs for a user (thread-safe).
 
@@ -221,7 +221,7 @@ class JourneySessionManager:
     def get_journey_manager(
         self,
         session_id: str,
-        journey_class: Type["Journey"],
+        journey_class: type["Journey"],
         config: Optional["JourneyConfig"] = None,
     ) -> Optional["PathwayManager"]:
         """
@@ -376,10 +376,10 @@ class JourneyNexusAdapter:
 
     def __init__(
         self,
-        journey_class: Type["Journey"],
-        workflow_name: Optional[str] = None,
+        journey_class: type["Journey"],
+        workflow_name: str | None = None,
         config: Optional["JourneyConfig"] = None,
-        description: Optional[str] = None,
+        description: str | None = None,
     ):
         """
         Initialize adapter.
@@ -397,9 +397,9 @@ class JourneyNexusAdapter:
         self.config = config
         self.description = description or f"Journey: {journey_class.__name__}"
         self.session_manager = JourneySessionManager()
-        self._agents: Dict[str, Any] = {}
-        self._pre_process_hooks: List[Callable] = []
-        self._post_process_hooks: List[Callable] = []
+        self._agents: dict[str, Any] = {}
+        self._pre_process_hooks: list[Callable] = []
+        self._post_process_hooks: list[Callable] = []
 
     def register_agent(self, agent_id: str, agent: Any) -> None:
         """
@@ -434,7 +434,7 @@ class JourneyNexusAdapter:
         """
         self._post_process_hooks.append(hook)
 
-    def to_workflow(self) -> Dict[str, Any]:
+    def to_workflow(self) -> dict[str, Any]:
         """
         Convert Journey to Nexus workflow definition.
 
@@ -448,11 +448,11 @@ class JourneyNexusAdapter:
 
         async def workflow_handler(
             message: str,
-            session_id: Optional[str] = None,
+            session_id: str | None = None,
             user_id: str = "",
             channel: str = "api",
-            initial_context: Optional[Dict[str, Any]] = None,
-        ) -> Dict[str, Any]:
+            initial_context: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
             """
             Workflow handler for Nexus integration.
 
@@ -685,7 +685,7 @@ else:
 
         logger.info(f"Registered journey {self.workflow_name} with Nexus")
 
-    def create_rest_endpoint(self) -> Dict[str, Any]:
+    def create_rest_endpoint(self) -> dict[str, Any]:
         """
         Create REST API endpoint definition.
 
@@ -713,7 +713,7 @@ else:
             "description": self.description,
         }
 
-    def create_cli_command(self) -> Dict[str, Any]:
+    def create_cli_command(self) -> dict[str, Any]:
         """
         Create CLI command definition.
 
@@ -742,7 +742,7 @@ else:
             "description": self.description,
         }
 
-    def create_mcp_tool(self) -> Dict[str, Any]:
+    def create_mcp_tool(self) -> dict[str, Any]:
         """
         Create MCP tool definition.
 
@@ -782,10 +782,10 @@ else:
 
 
 def deploy_journey_to_nexus(
-    journey_class: Type["Journey"],
+    journey_class: type["Journey"],
     nexus: "Nexus",
-    agents: Optional[Dict[str, Any]] = None,
-    workflow_name: Optional[str] = None,
+    agents: dict[str, Any] | None = None,
+    workflow_name: str | None = None,
     config: Optional["JourneyConfig"] = None,
 ) -> JourneyNexusAdapter:
     """

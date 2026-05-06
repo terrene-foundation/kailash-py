@@ -14,7 +14,7 @@ with persistent state and coordination patterns.
 import logging
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ class AgentTeam:
         name: str,
         pattern: str,
         coordination: str,
-        members: List[Any],
-        kaizen_instance: Optional[Any] = None,
+        members: list[Any],
+        kaizen_instance: Any | None = None,
     ):
         """
         Initialize agent team.
@@ -73,22 +73,22 @@ class AgentTeam:
             f"Initialized agent team '{name}' with {len(members)} members, pattern: {pattern}"
         )
 
-    def set_state(self, state: Dict[str, Any]):
+    def set_state(self, state: dict[str, Any]):
         """Set team state."""
         self._state.update(state)
         self._state_management_enabled = True
         logger.debug(f"Team {self.name} state updated: {list(state.keys())}")
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get current team state."""
         return self._state.copy()
 
     @property
-    def state(self) -> Dict[str, Any]:
+    def state(self) -> dict[str, Any]:
         """Get current team state (property access)."""
         return self._state.copy()
 
-    def progress_workflow(self, stage: str, data: Dict[str, Any]):
+    def progress_workflow(self, stage: str, data: dict[str, Any]):
         """Progress the workflow to a new stage with data."""
         if stage == "input_processed":
             self._state["workflow_stage"] = "processing"
@@ -102,17 +102,20 @@ class AgentTeam:
 
         logger.debug(f"Team {self.name} progressed to stage: {stage}")
 
-    def get_agent_by_role(self, role: str) -> Optional[Any]:
+    def get_agent_by_role(self, role: str) -> Any | None:
         """Get agent by their team role."""
         for member in self.members:
-            if hasattr(member, "config") and member.config.get("team_role") == role:
-                return member
-            elif hasattr(member, "role") and role.lower() in member.role.lower():
+            if (
+                hasattr(member, "config")
+                and member.config.get("team_role") == role
+                or hasattr(member, "role")
+                and role.lower() in member.role.lower()
+            ):
                 return member
 
         return None
 
-    def coordinate_task(self, task: str, timeout: float = 5.0) -> Dict[str, Any]:
+    def coordinate_task(self, task: str, timeout: float = 5.0) -> dict[str, Any]:
         """
         Coordinate a task across team members.
 
@@ -174,8 +177,8 @@ class AgentTeam:
         return coordination_result
 
     def coordinate(
-        self, task: str, context: Optional[Dict[str, Any]] = None, timeout: float = 5.0
-    ) -> Dict[str, Any]:
+        self, task: str, context: dict[str, Any] | None = None, timeout: float = 5.0
+    ) -> dict[str, Any]:
         """
         Coordinate a task across team members with optional context.
 
@@ -218,7 +221,7 @@ class AgentTeam:
 
         return coordination_result
 
-    def distribute_tasks(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def distribute_tasks(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Distribute tasks among team members with load balancing.
 
@@ -254,7 +257,7 @@ class AgentTeam:
         )
         return task_distribution
 
-    def resolve_conflict(self, conflict_scenario: Dict[str, Any]) -> Dict[str, Any]:
+    def resolve_conflict(self, conflict_scenario: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve conflicts within the team.
 
@@ -299,7 +302,7 @@ class TeamCoordinator:
     and complex multi-team scenarios.
     """
 
-    def __init__(self, kaizen_instance: Optional[Any] = None):
+    def __init__(self, kaizen_instance: Any | None = None):
         """
         Initialize team coordinator.
 
@@ -307,7 +310,7 @@ class TeamCoordinator:
             kaizen_instance: Reference to Kaizen framework instance
         """
         self.kaizen = kaizen_instance
-        self.teams: Dict[str, AgentTeam] = {}
+        self.teams: dict[str, AgentTeam] = {}
 
         logger.info("Initialized TeamCoordinator")
 
@@ -317,8 +320,8 @@ class TeamCoordinator:
         logger.info(f"Registered team: {team.name}")
 
     def coordinate_multi_team_task(
-        self, task: str, participating_teams: List[str]
-    ) -> Dict[str, Any]:
+        self, task: str, participating_teams: list[str]
+    ) -> dict[str, Any]:
         """
         Coordinate a task across multiple teams.
 

@@ -16,7 +16,9 @@ from kaizen_agents.agents.autonomous.claude_code import ClaudeCodeAgent
 from kaizen_agents.agents.autonomous.codex import CodexAgent
 
 # Import multi-agent coordination pattern (document extraction agent is internal-only)
-from kaizen_agents.agents.multi_modal.document_extraction_agent import DocumentExtractionAgent
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
+    DocumentExtractionAgent,
+)
 from kaizen_agents.agents.multi_modal.multi_modal_agent import MultiModalAgent
 from kaizen_agents.agents.multi_modal.transcription_agent import TranscriptionAgent
 

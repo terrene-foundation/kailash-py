@@ -54,7 +54,9 @@ class ToolCallAccumulator:
         try:
             return json.loads(self.arguments)
         except json.JSONDecodeError:
-            logger.warning("Failed to parse tool call arguments: %s", self.arguments[:200])
+            logger.warning(
+                "Failed to parse tool call arguments: %s", self.arguments[:200]
+            )
             return {}
 
 

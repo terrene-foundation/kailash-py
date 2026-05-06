@@ -34,7 +34,12 @@ from kaizen_agents.api.shortcuts import (
     resolve_model_shortcut,
     resolve_runtime_shortcut,
 )
-from kaizen_agents.api.types import AgentCapabilities, ExecutionMode, MemoryDepth, ToolAccess
+from kaizen_agents.api.types import (
+    AgentCapabilities,
+    ExecutionMode,
+    MemoryDepth,
+    ToolAccess,
+)
 from kaizen_agents.api.validation import (
     ConfigurationError,
     validate_configuration,
@@ -284,7 +289,9 @@ class Agent:
         self._runtime = None
 
         # LLM routing
-        self._llm_routing = config.llm_routing.task_model_mapping if config.llm_routing else None
+        self._llm_routing = (
+            config.llm_routing.task_model_mapping if config.llm_routing else None
+        )
         self._routing_strategy = config.routing_strategy
 
         # Capabilities
@@ -445,7 +452,9 @@ class Agent:
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, self.run(task, context=context, **kwargs)).result()
+                return pool.submit(
+                    asyncio.run, self.run(task, context=context, **kwargs)
+                ).result()
         else:
             return asyncio.run(self.run(task, context=context, **kwargs))
 

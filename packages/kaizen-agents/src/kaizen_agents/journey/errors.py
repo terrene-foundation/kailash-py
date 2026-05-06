@@ -31,7 +31,7 @@ References:
     - TODO-JO-004: Runtime Components
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JourneyError(Exception):
@@ -68,7 +68,7 @@ class PathwayNotFoundError(JourneyError):
         PathwayNotFoundError: Pathway 'faq' not found. Available: ['intake', 'booking', 'confirmation']
     """
 
-    def __init__(self, pathway_id: str, available: List[str]):
+    def __init__(self, pathway_id: str, available: list[str]):
         """
         Initialize PathwayNotFoundError.
 
@@ -101,7 +101,7 @@ class SessionNotStartedError(JourneyError):
         SessionNotStartedError: Session 'session-123' not started or expired.
     """
 
-    def __init__(self, session_id: Optional[str] = None):
+    def __init__(self, session_id: str | None = None):
         """
         Initialize SessionNotStartedError.
 
@@ -170,7 +170,7 @@ class MaxPathwayDepthError(JourneyError):
     """
 
     def __init__(
-        self, depth: int, max_depth: int, pathway_stack: Optional[List[str]] = None
+        self, depth: int, max_depth: int, pathway_stack: list[str] | None = None
     ):
         """
         Initialize MaxPathwayDepthError.
@@ -218,7 +218,7 @@ class TransitionError(JourneyError):
         self,
         transition_name: str,
         reason: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ):
         """
         Initialize TransitionError.
@@ -257,7 +257,7 @@ class StateError(JourneyError):
     def __init__(
         self,
         operation: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         reason: str = "",
     ):
         """

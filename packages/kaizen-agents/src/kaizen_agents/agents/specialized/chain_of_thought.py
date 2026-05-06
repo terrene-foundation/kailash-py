@@ -26,7 +26,7 @@ Environment variable support:
 
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, Optional
+from typing import Any
 
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
@@ -59,7 +59,7 @@ class ChainOfThoughtConfig:
     reasoning_steps: int = 5
     confidence_threshold: float = 0.7
     enable_verification: bool = True
-    provider_config: Dict[str, Any] = field(default_factory=dict)
+    provider_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ChainOfThoughtSignature(Signature):
@@ -158,17 +158,17 @@ class ChainOfThoughtAgent(BaseAgent):
 
     def __init__(
         self,
-        llm_provider: Optional[str] = None,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        timeout: Optional[int] = None,
-        retry_attempts: Optional[int] = None,
-        reasoning_steps: Optional[int] = None,
-        confidence_threshold: Optional[float] = None,
-        enable_verification: Optional[bool] = None,
-        provider_config: Optional[Dict[str, Any]] = None,
-        config: Optional[ChainOfThoughtConfig] = None,
+        llm_provider: str | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        timeout: int | None = None,
+        retry_attempts: int | None = None,
+        reasoning_steps: int | None = None,
+        confidence_threshold: float | None = None,
+        enable_verification: bool | None = None,
+        provider_config: dict[str, Any] | None = None,
+        config: ChainOfThoughtConfig | None = None,
         **kwargs,
     ):
         """
@@ -233,7 +233,7 @@ class ChainOfThoughtAgent(BaseAgent):
 
         self.cot_config = config
 
-    def run(self, problem: str, context: str = "", **kwargs) -> Dict[str, Any]:
+    def run(self, problem: str, context: str = "", **kwargs) -> dict[str, Any]:
         """
         Solve a complex problem using Chain-of-Thought reasoning.
 
@@ -304,7 +304,7 @@ class ChainOfThoughtAgent(BaseAgent):
 
         return result
 
-    def _extract_from_text_response(self, text: str) -> Dict[str, Any]:
+    def _extract_from_text_response(self, text: str) -> dict[str, Any]:
         """
         Extract structured fields from a plain-text LLM response.
 
@@ -314,7 +314,7 @@ class ChainOfThoughtAgent(BaseAgent):
         """
         import re
 
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         remaining = text
 
         # Try to extract numbered steps (e.g., "Step 1:", "Step 2:", "1.", "2.")

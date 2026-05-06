@@ -30,7 +30,9 @@ def _secure_write(path: Path, content: str) -> None:
     if sys.platform == "win32":
         path.write_text(content, encoding="utf-8")
         return
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
+    fd = os.open(
+        str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
+    )
     try:
         os.write(fd, content.encode("utf-8"))
     finally:

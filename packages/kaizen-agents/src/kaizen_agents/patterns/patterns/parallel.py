@@ -34,7 +34,8 @@ Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 
 import asyncio
 import concurrent.futures
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen_agents.patterns.pipeline import Pipeline
@@ -68,11 +69,11 @@ class ParallelPipeline(Pipeline):
 
     def __init__(
         self,
-        agents: List[BaseAgent],
-        aggregator: Optional[Callable[[List[Dict[str, Any]]], Dict[str, Any]]] = None,
+        agents: list[BaseAgent],
+        aggregator: Callable[[list[dict[str, Any]]], dict[str, Any]] | None = None,
         max_workers: int = 10,
         error_handling: str = "graceful",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ):
         """
         Initialize Parallel Pipeline.
@@ -96,7 +97,7 @@ class ParallelPipeline(Pipeline):
         self.error_handling = error_handling
         self.timeout = timeout
 
-    def _default_aggregator(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _default_aggregator(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Default aggregator: return list of all results.
 
@@ -109,8 +110,8 @@ class ParallelPipeline(Pipeline):
         return {"results": results}
 
     def _execute_agent_sync(
-        self, agent: BaseAgent, inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, agent: BaseAgent, inputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Execute single agent synchronously with error handling.
 
@@ -146,7 +147,7 @@ class ParallelPipeline(Pipeline):
                     "traceback": traceback.format_exc(),
                 }
 
-    def _execute_parallel_sync(self, inputs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _execute_parallel_sync(self, inputs: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Execute all agents in parallel using ThreadPoolExecutor.
 
@@ -201,8 +202,8 @@ class ParallelPipeline(Pipeline):
             return results
 
     async def _execute_agent_async(
-        self, agent: BaseAgent, inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, agent: BaseAgent, inputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Execute single agent asynchronously (wraps sync execution).
 
@@ -221,8 +222,8 @@ class ParallelPipeline(Pipeline):
         return result
 
     async def _execute_parallel_async(
-        self, inputs: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        self, inputs: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Execute all agents in parallel using asyncio.
 
@@ -263,7 +264,7 @@ class ParallelPipeline(Pipeline):
 
         return results
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute parallel pipeline: run all agents concurrently.
 

@@ -6,7 +6,7 @@ multiple agents to reach consensus on topics through iterative discussion.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -23,11 +23,11 @@ class ConsensusWorkflow:
 
     def __init__(
         self,
-        agents: List[Any],
+        agents: list[Any],
         topic: str,
         consensus_threshold: float = 0.75,
         max_iterations: int = 5,
-        kaizen_instance: Optional[Any] = None,
+        kaizen_instance: Any | None = None,
     ):
         """
         Initialize consensus workflow.
@@ -53,7 +53,7 @@ class ConsensusWorkflow:
             f"Initialized consensus workflow: '{topic}' with {len(agents)} agents, threshold {consensus_threshold}"
         )
 
-    def _create_coordination_flow(self) -> Dict[str, Any]:
+    def _create_coordination_flow(self) -> dict[str, Any]:
         """Create the coordination flow structure for consensus building."""
         return {
             "pattern": "consensus",
@@ -136,7 +136,7 @@ class ConsensusWorkflow:
         logger.info(f"Built consensus workflow with {len(self.agents)} agents")
         return workflow
 
-    def extract_consensus_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_consensus_results(self, results: dict[str, Any]) -> dict[str, Any]:
         """
         Extract structured consensus results from workflow execution results.
 
@@ -207,7 +207,7 @@ class ConsensusWorkflow:
 
         return consensus_results
 
-    def execute(self, inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(self, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute the multi-agent consensus workflow with coordination.
 
@@ -294,8 +294,8 @@ class ConsensusWorkflow:
             }
 
     async def execute_async(
-        self, inputs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, inputs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Execute the multi-agent consensus workflow asynchronously with coordination.
 
@@ -391,7 +391,7 @@ class ConsensusWorkflow:
                 "error": str(e),
             }
 
-    def _calculate_consensus_score(self, consensus_results: Dict[str, Any]) -> float:
+    def _calculate_consensus_score(self, consensus_results: dict[str, Any]) -> float:
         """Calculate consensus score based on results."""
         if consensus_results.get("consensus_achieved"):
             # High consensus score if achieved

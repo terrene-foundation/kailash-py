@@ -160,10 +160,14 @@ class AgentRegistry:
         self.status_index: dict[AgentStatus, set[str]] = defaultdict(set)
 
         # Event listeners: {event_type: List[callback]}
-        self.event_listeners: dict[RegistryEventType, list[Callable]] = defaultdict(list)
+        self.event_listeners: dict[RegistryEventType, list[Callable]] = defaultdict(
+            list
+        )
 
         # Event queue for broadcasting
-        self.event_queue: asyncio.Queue = asyncio.Queue(maxsize=self.config.event_queue_size)
+        self.event_queue: asyncio.Queue = asyncio.Queue(
+            maxsize=self.config.event_queue_size
+        )
 
         # Background tasks
         self._running = False
@@ -190,7 +194,9 @@ class AgentRegistry:
 
         # Start heartbeat monitoring
         if self.config.enable_heartbeat_monitoring:
-            self._heartbeat_monitor_task = asyncio.create_task(self._monitor_heartbeats())
+            self._heartbeat_monitor_task = asyncio.create_task(
+                self._monitor_heartbeats()
+            )
 
         # Start event broadcaster
         if self.config.enable_event_broadcasting:
@@ -738,12 +744,14 @@ class AgentRegistry:
 
         # Status distribution
         status_counts = {
-            status.value: len(agent_ids) for status, agent_ids in self.status_index.items()
+            status.value: len(agent_ids)
+            for status, agent_ids in self.status_index.items()
         }
 
         # Runtime distribution
         runtime_distribution = {
-            runtime_id: len(agent_ids) for runtime_id, agent_ids in self.runtime_agents.items()
+            runtime_id: len(agent_ids)
+            for runtime_id, agent_ids in self.runtime_agents.items()
         }
 
         return {
