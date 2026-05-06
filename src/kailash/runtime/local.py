@@ -43,7 +43,7 @@ import time
 import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 if TYPE_CHECKING:
     from kailash.runtime.shutdown import ShutdownCoordinator
@@ -52,6 +52,18 @@ from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
+from kailash.runtime.durable import (
+    NodeCompletionCallback,
+    NodeCompletionEvent,
+    NodeCompletionHookRegistry,
+    build_checkpoint_key,
+    check_shape_drift_or_raise,
+    compute_workflow_fingerprint,
+    decode_checkpoint_payload,
+    encode_checkpoint_payload,
+    redact_event_for_persistence,
+    resolve_tenant_id,
+)
 from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.mixins import (
     ConditionalExecutionMixin,
@@ -337,6 +349,10 @@ class LocalRuntime(
         audit_log_to_stdout: bool = False,
         # P0A-003: Opt-in resource limit checks
         enable_resource_limits: bool = False,
+        # W1: Durable execution — per-node checkpointing + node-completion hooks
+        checkpoint_store: Optional[Any] = None,
+        checkpoint_after_each_node: bool = False,
+        history_store: Optional[Any] = None,
     ):
         """Initialize the unified runtime.
 
@@ -784,6 +800,49 @@ class LocalRuntime(
         # Maps run_id -> {"signal_channel": SignalChannel, "query_registry": QueryRegistry}
         self._workflow_signals: Dict[str, Dict[str, Any]] = {}
 
+        # === W1: Durable execution wiring ===
+        # checkpoint_store + checkpoint_after_each_node drive per-node
+        # checkpoint emission inside ``_execute_workflow_async``.
+        # history_store is the W2 placeholder kwarg — the W1 shard accepts
+        # it now so callers can pass it without breakage; the W2 shard
+        # wires the dispatch path. The hook registry serves both W1 (the
+        # runtime dispatches every NodeCompletionEvent) and downstream
+        # subscribers (W2 history store, metrics, audit).
+        self._checkpoint_store = checkpoint_store
+        self._checkpoint_after_each_node = bool(checkpoint_after_each_node)
+        self._history_store = history_store
+        self._hook_registry = NodeCompletionHookRegistry()
+        # Per-run asyncio.Lock for parallel-node checkpoint atomicity.
+        # LocalRuntime executes nodes sequentially in
+        # ``_execute_workflow_async`` so the lock would normally be
+        # uncontended, BUT cycle/conditional paths can re-enter and
+        # ``AsyncLocalRuntime`` (subclass) executes nodes concurrently.
+        # The lock dict lives on the runtime so it survives the per-call
+        # boundary — a stale entry costs O(1) memory and is bounded by
+        # max_concurrent_workflows.
+        self._checkpoint_locks: Dict[str, asyncio.Lock] = {}
+
+    # ------------------------------------------------------------------
+    # W1: Durable execution — public hook API
+    # ------------------------------------------------------------------
+
+    def on_node_complete(self, callback: NodeCompletionCallback) -> Any:
+        """Register *callback* for every node completion this runtime emits.
+
+        Returns an unregister function — call it to remove the callback.
+
+        Subscribers see one ``NodeCompletionEvent`` per node, regardless of
+        whether the node succeeded or failed; the event's ``error`` field
+        carries the failure repr when set. The runtime applies
+        :func:`redact_event_for_persistence` to the event BEFORE dispatch
+        so no subscriber ever observes a classified PK or a redacted
+        field's raw value.
+
+        Subscriber exceptions are caught and logged at WARN level — a
+        misbehaving subscriber MUST NOT take down workflow execution.
+        """
+        return self._hook_registry.register(callback)
+
     def _extract_secret_requirements(self, workflow: "Workflow") -> list:
         """Extract secret requirements from workflow nodes.
 
@@ -807,6 +866,9 @@ class LocalRuntime(
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         search_attributes: Optional[Dict[str, Any]] = None,
+        *,
+        idempotency_key: Optional[str] = None,
+        force_resume_with_drift: bool = False,
         **kwargs: Any,
     ) -> tuple[dict[str, Any], str | None]:
         """
@@ -903,6 +965,12 @@ class LocalRuntime(
         # CARE-017: Get effective trust context
         effective_trust_ctx = self._get_effective_trust_context()
 
+        # W1: pass durable-execution kwargs through to the async path
+        durable_kwargs: Dict[str, Any] = {
+            "idempotency_key": idempotency_key,
+            "force_resume_with_drift": force_resume_with_drift,
+        }
+
         try:
             try:
                 # Check if we're already in an event loop
@@ -918,6 +986,7 @@ class LocalRuntime(
                             parameters=parameters,
                             cancellation_token=cancellation_token,
                             search_attributes=search_attributes,
+                            **durable_kwargs,
                         )
                 else:
                     return self._execute_sync(
@@ -926,6 +995,7 @@ class LocalRuntime(
                         parameters=parameters,
                         cancellation_token=cancellation_token,
                         search_attributes=search_attributes,
+                        **durable_kwargs,
                     )
             except RuntimeError:
                 # No event loop running, use persistent loop
@@ -960,6 +1030,7 @@ class LocalRuntime(
                                 parameters=parameters,
                                 cancellation_token=cancellation_token,
                                 search_attributes=search_attributes,
+                                **durable_kwargs,
                             )
                         )
                 else:
@@ -971,6 +1042,7 @@ class LocalRuntime(
                             parameters=parameters,
                             cancellation_token=cancellation_token,
                             search_attributes=search_attributes,
+                            **durable_kwargs,
                         )
                     )
         finally:
@@ -987,6 +1059,9 @@ class LocalRuntime(
         cancellation_token: CancellationToken | None = None,
         execution_tracker: ExecutionTracker | None = None,
         search_attributes: Optional[Dict[str, Any]] = None,
+        *,
+        idempotency_key: Optional[str] = None,
+        force_resume_with_drift: bool = False,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow asynchronously (for AsyncLocalRuntime compatibility).
 
@@ -1018,6 +1093,8 @@ class LocalRuntime(
             cancellation_token=cancellation_token,
             execution_tracker=execution_tracker,
             search_attributes=search_attributes,
+            idempotency_key=idempotency_key,
+            force_resume_with_drift=force_resume_with_drift,
         )
 
     # === Signal/Query Public API ===
@@ -1645,6 +1722,9 @@ class LocalRuntime(
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         search_attributes: Optional[Dict[str, Any]] = None,
+        *,
+        idempotency_key: Optional[str] = None,
+        force_resume_with_drift: bool = False,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute workflow synchronously when already in an event loop.
 
@@ -1687,6 +1767,8 @@ class LocalRuntime(
                         parameters=parameters,
                         cancellation_token=cancellation_token,
                         search_attributes=search_attributes,
+                        idempotency_key=idempotency_key,
+                        force_resume_with_drift=force_resume_with_drift,
                     )
                 )
                 result_container.append(result)
@@ -1772,9 +1854,71 @@ class LocalRuntime(
         cancellation_token: CancellationToken | None = kwargs.get("cancellation_token")
         execution_tracker: ExecutionTracker | None = kwargs.get("execution_tracker")
         search_attributes: dict[str, Any] | None = kwargs.get("search_attributes")
+        # W1: durable-execution kwargs
+        idempotency_key: Optional[str] = kwargs.get("idempotency_key")
+        force_resume_with_drift: bool = bool(
+            kwargs.get("force_resume_with_drift", False)
+        )
 
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
+
+        # W1: shape-drift check + checkpoint resume — runs BEFORE the
+        # execution tracker is constructed so we can rebuild the tracker
+        # from the persisted checkpoint when the resume is accepted.
+        # Compute the workflow fingerprint once and stash it on the
+        # local; we'll thread it into the per-node hook event.
+        workflow_fingerprint = compute_workflow_fingerprint(workflow)
+        tenant_id = resolve_tenant_id(self)
+        checkpoint_key: Optional[str] = None
+        if idempotency_key is not None:
+            checkpoint_key = build_checkpoint_key(
+                workflow_fingerprint,
+                idempotency_key,
+                parameters if isinstance(parameters, Mapping) else None,
+                tenant_id=tenant_id,
+            )
+            if self._checkpoint_store is not None:
+                # Try to load any prior checkpoint for this key.  When the
+                # store is async (DBCheckpointStore), ``load`` returns the
+                # raw bytes blob; we decode + drift-check here.  When no
+                # prior blob exists, ``load`` returns None.
+                try:
+                    prior_blob = await self._checkpoint_store.load(checkpoint_key)
+                except Exception as load_err:  # pragma: no cover — defensive
+                    self.logger.warning(
+                        "durable.checkpoint.load_failed",
+                        extra={
+                            "error_type": type(load_err).__name__,
+                        },
+                    )
+                    prior_blob = None
+                if prior_blob is not None:
+                    stored_payload = decode_checkpoint_payload(prior_blob)
+                    check_shape_drift_or_raise(
+                        idempotency_key=idempotency_key,
+                        stored_payload=stored_payload,
+                        current_fingerprint=workflow_fingerprint,
+                        force_resume_with_drift=force_resume_with_drift,
+                    )
+                    # Resume-ready: rebuild the execution tracker from
+                    # the persisted state IF the caller did not supply
+                    # one explicitly.  An explicit caller-supplied
+                    # tracker wins (test scenarios use this).
+                    if execution_tracker is None:
+                        execution_tracker = ExecutionTracker.from_dict(
+                            stored_payload.get("tracker", {})
+                        )
+
+        # W1: durable-execution kwargs bundle for the per-execution
+        # _execute_workflow_async calls below.  Threaded through all
+        # five branches (cyclic / conditional / standard / fallback).
+        _w1_kwargs: Dict[str, Any] = {
+            "workflow_fingerprint": workflow_fingerprint,
+            "checkpoint_key": checkpoint_key,
+            "tenant_id": tenant_id,
+            "idempotency_key": idempotency_key,
+        }
 
         run_id = None
         _deferred_storage = None  # P0D-007: Initialize before try block
@@ -1961,6 +2105,7 @@ class LocalRuntime(
                                 workflow_context=workflow_context,
                                 cancellation_token=cancellation_token,
                                 execution_tracker=execution_tracker,
+                                **_w1_kwargs,
                             )
                         else:
                             # Continue with conditional execution
@@ -1985,6 +2130,7 @@ class LocalRuntime(
                                     workflow_context=workflow_context,
                                     cancellation_token=cancellation_token,
                                     execution_tracker=execution_tracker,
+                                    **_w1_kwargs,
                                 )
                     else:
                         # No switch recommended, continue with current mode
@@ -2012,6 +2158,7 @@ class LocalRuntime(
                                 workflow_context=workflow_context,
                                 cancellation_token=cancellation_token,
                                 execution_tracker=execution_tracker,
+                                **_w1_kwargs,
                             )
                 else:
                     # Performance monitoring disabled
@@ -2039,6 +2186,7 @@ class LocalRuntime(
                             workflow_context=workflow_context,
                             cancellation_token=cancellation_token,
                             execution_tracker=execution_tracker,
+                            **_w1_kwargs,
                         )
             else:
                 # Execute standard DAG workflow with enterprise features
@@ -2058,6 +2206,7 @@ class LocalRuntime(
                     workflow_context=workflow_context,
                     cancellation_token=cancellation_token,
                     execution_tracker=execution_tracker,
+                    **_w1_kwargs,
                 )
 
             # Enterprise Audit: Log successful completion
@@ -2216,6 +2365,12 @@ class LocalRuntime(
         workflow_context: dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         execution_tracker: ExecutionTracker | None = None,
+        *,
+        # W1: durable-execution wiring
+        workflow_fingerprint: Optional[str] = None,
+        checkpoint_key: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> dict[str, Any]:
         """Execute the workflow nodes in topological order.
 
@@ -2407,6 +2562,9 @@ class LocalRuntime(
                 parent_span=_wf_span,
             )
 
+            # W1: capture per-node start timestamp for NodeCompletionEvent
+            _node_started_at = datetime.now(UTC)
+
             inputs: dict[str, Any] = {}
             try:
                 # Prepare inputs
@@ -2504,6 +2662,86 @@ class LocalRuntime(
                 # Record completion so that checkpoint captures include this node.
                 if execution_tracker is not None:
                     execution_tracker.record_completion(node_id, outputs)
+
+                # === W1: Durable execution — checkpoint + hook dispatch ===
+                # Build the canonical NodeCompletionEvent (post-redaction)
+                # and (a) persist a checkpoint blob if checkpoint_after_each_node
+                # is True, (b) dispatch the event to every subscriber.  Both
+                # paths route through redact_event_for_persistence first so
+                # neither the store nor any subscriber sees a classified
+                # PK or a redacted field's raw value.
+                _node_ended_at = datetime.now(UTC)
+                _node_duration_ms = int(
+                    (_node_ended_at - _node_started_at).total_seconds() * 1000
+                )
+                _raw_outputs: Mapping[str, Any] = (
+                    outputs if isinstance(outputs, Mapping) else {"result": outputs}
+                )
+                _completion_event = NodeCompletionEvent(
+                    run_id=run_id,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    workflow_fingerprint=workflow_fingerprint or "",
+                    node_id=node_id,
+                    node_type=node_instance.__class__.__name__,
+                    outputs=_raw_outputs,
+                    started_at=_node_started_at,
+                    ended_at=_node_ended_at,
+                    duration_ms=_node_duration_ms,
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                    error=None,
+                    metadata={},
+                )
+                _classification_policy = getattr(self, "_classification_policy", None)
+                _redacted_event = redact_event_for_persistence(
+                    _completion_event,
+                    classification_policy=_classification_policy,
+                )
+
+                # Persist the checkpoint blob if requested AND a store is
+                # configured AND we have a checkpoint_key.  The lock
+                # serialises the per-run save against parallel-node
+                # paths in subclasses.
+                if (
+                    self._checkpoint_after_each_node
+                    and self._checkpoint_store is not None
+                    and checkpoint_key is not None
+                    and execution_tracker is not None
+                ):
+                    _lock_key = run_id or checkpoint_key
+                    _lock = self._checkpoint_locks.setdefault(_lock_key, asyncio.Lock())
+                    async with _lock:
+                        _blob = encode_checkpoint_payload(
+                            workflow_fingerprint=workflow_fingerprint or "",
+                            tracker_state=execution_tracker.to_dict(),
+                            tenant_id=tenant_id,
+                            workflow_id=getattr(workflow, "workflow_id", "") or "",
+                            idempotency_key=idempotency_key,
+                        )
+                        try:
+                            await self._checkpoint_store.save(checkpoint_key, _blob)
+                        except (
+                            asyncio.CancelledError,
+                            KeyboardInterrupt,
+                            SystemExit,
+                        ):
+                            raise
+                        except Exception as save_err:
+                            self.logger.warning(
+                                "durable.checkpoint.save_failed",
+                                extra={
+                                    "node_id_hash": hashlib.sha256(
+                                        node_id.encode("utf-8")
+                                    ).hexdigest()[:8],
+                                    "error_type": type(save_err).__name__,
+                                },
+                            )
+
+                # Dispatch the (redacted) event to all subscribers.  Sync
+                # and async callbacks are both honored.  Subscriber
+                # exceptions are caught + WARN-logged inside dispatch.
+                if self._hook_registry.subscriber_count > 0:
+                    await self._hook_registry.dispatch_async(_redacted_event)
 
                 if self.debug:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
