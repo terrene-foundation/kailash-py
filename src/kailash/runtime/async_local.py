@@ -125,6 +125,16 @@ class ExecutionContext:
         # Cleanup state
         self._cleaned_up = False
 
+        # W1: durable-execution context attached via attributes (NOT
+        # ``variables``) so node-input sanitisation never sees the
+        # ExecutionTracker as a "user variable".
+        self._w1_workflow_fingerprint: Optional[str] = None
+        self._w1_checkpoint_key: Optional[str] = None
+        self._w1_tenant_id: Optional[str] = None
+        self._w1_idempotency_key: Optional[str] = None
+        self._w1_run_id: Optional[str] = None
+        self._w1_execution_tracker: Optional["ExecutionTracker"] = None
+
     def set_variable(self, key: str, value: Any) -> None:
         """Set a context variable accessible to all nodes."""
         self.variables[key] = value
@@ -602,14 +612,14 @@ class AsyncLocalRuntime(LocalRuntime):
         # Read W1 context stashed by execute_workflow_async.  Defensive
         # gets — when the AsyncLocalRuntime is invoked through a code
         # path that didn't go through execute_workflow_async (legacy
-        # entry points), these are absent and the W1 wiring is a no-op.
-        wf_fp: str = context.variables.get("_w1_workflow_fingerprint") or ""
-        ckpt_key: Optional[str] = context.variables.get("_w1_checkpoint_key")
-        tenant_id: Optional[str] = context.variables.get("_w1_tenant_id")
-        idempotency_key: Optional[str] = context.variables.get("_w1_idempotency_key")
-        run_id: Optional[str] = context.variables.get("_w1_run_id")
-        tracker: Optional[ExecutionTracker] = context.variables.get(
-            "_w1_execution_tracker"
+        # entry points), these are None and the W1 wiring is a no-op.
+        wf_fp: str = getattr(context, "_w1_workflow_fingerprint", None) or ""
+        ckpt_key: Optional[str] = getattr(context, "_w1_checkpoint_key", None)
+        tenant_id: Optional[str] = getattr(context, "_w1_tenant_id", None)
+        idempotency_key: Optional[str] = getattr(context, "_w1_idempotency_key", None)
+        run_id: Optional[str] = getattr(context, "_w1_run_id", None)
+        tracker: Optional[ExecutionTracker] = getattr(
+            context, "_w1_execution_tracker", None
         )
 
         # Record into the tracker so the persisted blob includes this node.
@@ -865,16 +875,17 @@ class AsyncLocalRuntime(LocalRuntime):
                         stored_payload.get("tracker", {})
                     )
 
-        # Stash durable-execution context onto the ExecutionContext so the
-        # per-node hot path (_execute_node_async / _execute_sync_node_async)
-        # can read it without growing every method's signature.  Using
-        # underscore-prefixed keys to mark them runtime-internal.
-        context.variables["_w1_workflow_fingerprint"] = workflow_fingerprint
-        context.variables["_w1_checkpoint_key"] = checkpoint_key
-        context.variables["_w1_tenant_id"] = tenant_id
-        context.variables["_w1_idempotency_key"] = idempotency_key
-        context.variables["_w1_run_id"] = run_id
-        context.variables["_w1_execution_tracker"] = (
+        # Stash durable-execution context as ATTRIBUTES on the
+        # ExecutionContext (not ``variables``) so the per-node input
+        # sanitiser never treats them as user-supplied parameters.  The
+        # attribute path is initialised on every ExecutionContext (see
+        # ExecutionContext.__init__) so a None default is always present.
+        context._w1_workflow_fingerprint = workflow_fingerprint
+        context._w1_checkpoint_key = checkpoint_key
+        context._w1_tenant_id = tenant_id
+        context._w1_idempotency_key = idempotency_key
+        context._w1_run_id = run_id
+        context._w1_execution_tracker = (
             execution_tracker if execution_tracker is not None else ExecutionTracker()
         )
 
@@ -1017,6 +1028,18 @@ class AsyncLocalRuntime(LocalRuntime):
                     f"{len(execution_plan.execution_levels)} levels"
                 )
 
+            # W1: when durable execution wiring is active, force the
+            # node-level async path (mixed workflow) so per-node hooks
+            # fire.  The sync-only fallback (``_execute_sync_workflow``)
+            # bypasses ``_execute_sync_node_async`` and would silently
+            # swallow every NodeCompletionEvent — exactly the orphan
+            # failure mode this routing override prevents.
+            w1_active = (
+                self._checkpoint_after_each_node
+                or self._hook_registry.subscriber_count > 0
+                or getattr(context, "_w1_idempotency_key", None) is not None
+            )
+
             # Choose execution strategy based on analysis
             if execution_plan and execution_plan.is_fully_async:
                 tracker_result = await self._execute_fully_async_workflow(
@@ -1026,10 +1049,65 @@ class AsyncLocalRuntime(LocalRuntime):
                 tracker_result = await self._execute_mixed_workflow(
                     workflow, context, execution_plan
                 )
+            elif w1_active:
+                # Force the mixed-workflow path so the per-node async
+                # entry point fires.  When the analyzer hasn't classified
+                # any nodes as async, treat them all as sync — they go
+                # through _execute_sync_node_async (thread pool) which
+                # IS a W1-emit caller.
+                synthetic_plan = self._build_w1_sync_only_plan(workflow)
+                tracker_result = await self._execute_mixed_workflow(
+                    workflow, context, synthetic_plan
+                )
             else:
                 tracker_result = await self._execute_sync_workflow(workflow, context)
 
         return tracker_result
+
+    def _build_w1_sync_only_plan(self, workflow) -> "ExecutionPlan":
+        """Build a synthetic ExecutionPlan that classifies every node as sync.
+
+        Routes the workflow through ``_execute_mixed_workflow`` so the
+        per-node async entry point (`_execute_sync_node_async`) fires —
+        that's the only sync-node code path that calls
+        ``_w1_emit_node_completion``.  Without this synthetic plan a
+        pure-sync workflow under W1 wiring would bypass hook + checkpoint
+        emission entirely.
+
+        Each level groups nodes that share the same longest-path depth
+        from any source.  Predecessors land in earlier levels so that
+        ``_prepare_async_node_inputs`` finds their outputs in the tracker
+        when the level executes.
+        """
+        graph = workflow.graph
+        all_nodes = set(graph.nodes())
+        # Compute longest-path-from-source depth per node.
+        depth: Dict[str, int] = {}
+        try:
+            order = workflow.get_execution_order()
+        except Exception:
+            order = list(all_nodes)
+        for node in order:
+            preds = list(graph.predecessors(node))
+            depth[node] = 0 if not preds else 1 + max(depth.get(p, 0) for p in preds)
+        # Group nodes by depth → ExecutionLevel.
+        max_depth = max(depth.values()) if depth else 0
+        levels: List[ExecutionLevel] = []
+        for d in range(max_depth + 1):
+            level_nodes = {n for n in all_nodes if depth.get(n, 0) == d}
+            if level_nodes:
+                levels.append(ExecutionLevel(level=d, nodes=level_nodes))
+
+        plan = ExecutionPlan(
+            workflow_id=getattr(workflow, "workflow_id", "") or "",
+            async_nodes=set(),
+            sync_nodes=set(all_nodes),
+            execution_levels=levels,
+            required_resources=set(),
+            estimated_duration=0.0,
+            max_concurrent_nodes=max(1, max(len(level.nodes) for level in levels)),
+        )
+        return plan
 
     async def _execute_fully_async_workflow(
         self, workflow, context: ExecutionContext, execution_plan: ExecutionPlan
