@@ -289,6 +289,42 @@ class DataFlowExpress:
             raise DataFlowError(f"Validation failed for {model}: {error_msgs}")
 
     # ========================================================================
+    # Append-Only Mutation Guard (Issue #839)
+    # ========================================================================
+
+    def _check_append_only(self, model: str, operation: str) -> None:
+        """Reject mutations on models declared ``@db.model(append_only=True)``.
+
+        Issue #839: append-only models represent immutable event-log
+        surfaces. ``update`` / ``delete`` / ``upsert`` /
+        ``bulk_update`` / ``bulk_delete`` / ``bulk_upsert`` MUST raise
+        :class:`AppendOnlyViolationError` BEFORE any SQL is issued and
+        BEFORE any side effect (cache invalidation, event emit, trust
+        record). The check fires at the express call site so callers
+        get a typed, grep-able error referencing both the model and the
+        operation they attempted.
+
+        ``Create`` / ``BulkCreate`` / ``Read`` / ``List`` / ``Count``
+        do NOT call this guard — they are permitted on append-only
+        models by design.
+        """
+        model_info = self._db._models.get(model)
+        if not isinstance(model_info, dict):
+            return
+        if not model_info.get("append_only", False):
+            return
+        from dataflow.exceptions import AppendOnlyViolationError
+
+        op_human = operation.replace("_", " ").capitalize()
+        raise AppendOnlyViolationError(
+            f"{op_human} rejected on append-only model '{model}'. "
+            f"Models declared with @db.model(append_only=True) only "
+            f"accept Create / BulkCreate / Read / List / Count. "
+            f"Remove `append_only=True` from the @db.model() decorator "
+            f"to permit mutations. See issue #839."
+        )
+
+    # ========================================================================
     # Trust-plane integration helpers (Phase 5.11)
     # ========================================================================
 
