@@ -144,10 +144,19 @@ class _RecordingDispatcher(Dispatcher):
 
 
 class _RecordingWorkflow:
-    """A picklable, runtime-executable workflow stand-in."""
+    """A JSON-serializable, runtime-executable workflow stand-in.
+
+    Provides ``to_dict()`` so the scheduler's JSON serialization path
+    accepts it. Workers in production reconstruct via
+    ``Workflow.from_dict(json.loads(blob.decode("utf-8")))`` — pickle
+    on queue payloads is BLOCKED per ``rules/security.md`` (RCE).
+    """
 
     def __init__(self, name: str = "wf") -> None:
         self.name = name
+
+    def to_dict(self) -> dict:
+        return {"name": self.name}
 
 
 class _RecordingBuilder:

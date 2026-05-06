@@ -24,9 +24,9 @@ Scenarios covered:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
-import pickle
 import socket
 from datetime import UTC, datetime
 from typing import AsyncGenerator
@@ -108,10 +108,18 @@ async def dispatcher(
 
 
 class _IntegrationWorkflow:
-    """A pickle-able deterministic workflow stand-in."""
+    """A JSON-serializable deterministic workflow stand-in.
+
+    Provides ``to_dict()`` so the scheduler's JSON-serialization path
+    treats it as a real workflow per ``rules/security.md`` (no pickle
+    on queue payloads — RCE).
+    """
 
     def __init__(self, name: str = "wf") -> None:
         self.name = name
+
+    def to_dict(self) -> dict:
+        return {"name": self.name}
 
 
 class _IntegrationBuilder:
@@ -129,11 +137,14 @@ class _IntegrationBuilder:
 
 def _make_task(schedule_id: str = "sched-int") -> Task:
     fire_time = datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC)
-    workflow = _IntegrationWorkflow("integration-wf")
+    # JSON serialization (NOT pickle) per `rules/security.md` — pickle on
+    # queue payloads is RCE. The blob round-trips through workers via
+    # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
+    workflow_dict = _IntegrationWorkflow("integration-wf").to_dict()
     return Task(
         task_id=compute_task_id(schedule_id, fire_time),
         schedule_id=schedule_id,
-        workflow_blob=pickle.dumps(workflow),
+        workflow_blob=json.dumps(workflow_dict).encode("utf-8"),
         planned_fire_time=fire_time.isoformat(),
     )
 
@@ -232,8 +243,9 @@ class TestSQLTaskQueueDispatcherTier2:
         assert polled[0].task_id == task.task_id
         assert polled[0].schedule_id == "sched-poll"
         assert polled[0].planned_fire_time == task.planned_fire_time
-        # workflow_blob round-trip MUST be byte-identical (pickle is the
-        # opaque transport per spec).
+        # workflow_blob round-trip MUST be byte-identical — JSON-encoded
+        # UTF-8 (NOT pickle) per `rules/security.md`. Workers reconstruct
+        # the workflow via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
         assert polled[0].workflow_blob == task.workflow_blob
 
 

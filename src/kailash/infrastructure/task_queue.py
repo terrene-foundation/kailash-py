@@ -36,9 +36,13 @@ __all__ = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True)
 class SQLTaskMessage:
     """A task message stored in the SQL task queue.
+
+    Frozen per EATP P10 — message instances flow across the queue boundary
+    and MUST NOT be mutated after construction; the database row is the
+    canonical state.
 
     Attributes:
         task_id: Unique identifier for the task.
@@ -488,6 +492,19 @@ class SQLTaskQueueDispatcher(Dispatcher):
     semantics on crash recovery -- see ``specs/scheduling.md``
     § "Queue Dispatch".
 
+    Multi-tenant deployment contract
+    --------------------------------
+    Multi-tenant deployments MUST provision a per-tenant queue table
+    (e.g. ``table_name="kailash_task_queue_<tenant>"``). Cross-tenant
+    queue sharing is BLOCKED by deployment convention: any party with
+    ``INSERT INTO <queue_table>`` privilege can enqueue a workflow
+    that the worker pool will execute under its own runtime. Because
+    the worker is a single trust boundary, sharing one queue across
+    tenants effectively grants every tenant the privilege of every
+    other tenant. The defense is structural — each tenant gets its
+    own table; no application-level multi-tenancy is performed inside
+    the dispatcher.
+
     Parameters
     ----------
     conn:
@@ -495,7 +512,8 @@ class SQLTaskQueueDispatcher(Dispatcher):
     table_name:
         Name of the task queue table (default: ``kailash_task_queue``).
         Validated against ``[a-zA-Z_][a-zA-Z0-9_]*`` in the underlying
-        :class:`SQLTaskQueue`.
+        :class:`SQLTaskQueue`. For multi-tenant deployments use one
+        table per tenant (see "Multi-tenant deployment contract").
 
     See Also
     --------
@@ -531,13 +549,14 @@ class SQLTaskQueueDispatcher(Dispatcher):
         if not self._initialized:
             await self.initialize()
 
-        # Encode workflow_blob (bytes) as latin-1 -> str so it round-trips
-        # through JSON. The blob is opaque: workers decode and execute.
-        # latin-1 is bijective for arbitrary bytes <= 0xFF and survives
-        # JSON encoding without any escaping outside the standard set.
+        # workflow_blob is JSON-encoded UTF-8 bytes per
+        # `kailash.runtime.dispatcher.Task` (NOT pickle, by deliberate
+        # design — pickle on a queue payload is RCE per
+        # `rules/security.md`). Decode UTF-8 and embed the JSON string
+        # so the outer payload remains a pure JSON object.
         payload = {
             "schedule_id": task.schedule_id,
-            "workflow_blob_b64": task.workflow_blob.decode("latin-1"),
+            "workflow_blob_json": task.workflow_blob.decode("utf-8"),
             "planned_fire_time": task.planned_fire_time,
             "kwargs": task.kwargs,
         }
@@ -598,9 +617,7 @@ class SQLTaskQueueDispatcher(Dispatcher):
             yield Task(
                 task_id=msg.task_id,
                 schedule_id=msg.payload.get("schedule_id", ""),
-                workflow_blob=msg.payload.get("workflow_blob_b64", "").encode(
-                    "latin-1"
-                ),
+                workflow_blob=msg.payload.get("workflow_blob_json", "").encode("utf-8"),
                 planned_fire_time=msg.payload.get("planned_fire_time", ""),
                 queue_name=msg.queue_name,
                 kwargs=msg.payload.get("kwargs") or {},

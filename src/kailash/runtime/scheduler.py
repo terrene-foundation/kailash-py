@@ -37,12 +37,13 @@ Version:
     Added in: v0.13.0
 """
 
+import json
 import logging
 import math
 import os
-import pickle
 import stat
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -60,6 +61,13 @@ __all__ = [
 ]
 
 # Lazy import check for APScheduler
+# Bound on the per-job fire-time map below. Schedulers that submit and never
+# clean up (cancelled mid-flight, EVENT_JOB_EXECUTED suppressed by listener
+# error, etc.) would otherwise grow `_fire_times` without bound. 10_000 is
+# the same default as `rules/infrastructure-sql.md` Rule 7 ("Bounded
+# In-Memory Stores"); active-schedule counts in production are O(100s).
+MAX_FIRE_TIMES = 10_000
+
 _apscheduler_available: Optional[bool] = None
 
 
@@ -195,7 +203,13 @@ class WorkflowScheduler:
         # current fire time -- NOT `job.next_run_time`, which APScheduler has
         # already advanced to the NEXT scheduled fire by the time the callback
         # runs (interval/cron schedules drift by one interval otherwise).
-        self._fire_times: Dict[str, datetime] = {}
+        #
+        # `OrderedDict` + LRU eviction at MAX_FIRE_TIMES per
+        # `rules/infrastructure-sql.md` Rule 7. EVENT_JOB_EXECUTED |
+        # EVENT_JOB_ERROR pop entries on the happy path; LRU eviction is
+        # the safety net for jobs cancelled mid-flight where the cleanup
+        # listener never fires. `cancel()` also pops the entry explicitly.
+        self._fire_times: "OrderedDict[str, datetime]" = OrderedDict()
         from apscheduler.events import (
             EVENT_JOB_ERROR,
             EVENT_JOB_EXECUTED,
@@ -426,6 +440,11 @@ class WorkflowScheduler:
 
         self._scheduler.remove_job(schedule_id)
         del self._schedules[schedule_id]
+        # Drop the per-job fire-time entry. Cancellation can race the
+        # EVENT_JOB_EXECUTED | EVENT_JOB_ERROR cleanup listener; explicit
+        # pop here closes the leak window for jobs cancelled while
+        # APScheduler considered them in-flight.
+        self._fire_times.pop(schedule_id, None)
 
         logger.info("Cancelled schedule: %s", schedule_id)
 
@@ -548,7 +567,29 @@ class WorkflowScheduler:
 
         try:
             workflow = workflow_builder.build()
-            workflow_blob = pickle.dumps(workflow)
+            # JSON serialization (NOT pickle) per `rules/security.md`
+            # § "No arbitrary-code execution on user input": pickle.loads
+            # on a queue payload an attacker can INSERT into is remote
+            # code execution. The
+            # canonical workflow shape is `Workflow.to_dict()` from
+            # `kailash.workflow.graph`; workers reconstruct via
+            # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
+            #
+            # Stub workflows used in unit tests provide their own
+            # `to_dict()` returning a JSON-serializable mapping; if
+            # neither method exists we refuse to serialize rather than
+            # fall back to pickle (`rules/zero-tolerance.md` Rule 3 —
+            # silent fallback to an unsafe path is BLOCKED).
+            if hasattr(workflow, "to_dict") and callable(workflow.to_dict):
+                workflow_dict = workflow.to_dict()
+            else:
+                raise TypeError(
+                    f"workflow_builder.build() returned {type(workflow).__name__} "
+                    f"which is missing to_dict() — queue dispatch requires JSON-"
+                    f"serializable workflow representation. Implement to_dict() "
+                    f"returning a mapping reconstructable via from_dict()."
+                )
+            workflow_blob = json.dumps(workflow_dict).encode("utf-8")
         except Exception:
             logger.exception(
                 "scheduler.dispatch.serialize_failed schedule_id=%s task_id_hash=%s",
@@ -607,7 +648,18 @@ class WorkflowScheduler:
                 f"empty scheduled_run_times list — APScheduler internal "
                 f"invariant violation"
             )
+        # Move-to-end semantics: re-submitting the same job_id refreshes
+        # its LRU position so eviction targets truly stale entries.
+        if event.job_id in self._fire_times:
+            self._fire_times.move_to_end(event.job_id)
         self._fire_times[event.job_id] = run_times[-1]
+        # LRU eviction safety net: bound at MAX_FIRE_TIMES per
+        # `rules/infrastructure-sql.md` Rule 7. EVENT_JOB_EXECUTED |
+        # EVENT_JOB_ERROR is the happy-path cleanup; this evicts when
+        # those listeners drop fires (jobs cancelled mid-flight, listener
+        # exceptions, etc.).
+        while len(self._fire_times) > MAX_FIRE_TIMES:
+            self._fire_times.popitem(last=False)
 
     def _on_job_done(self, event: Any) -> None:
         """Cleanup the recorded fire time after the job finishes.

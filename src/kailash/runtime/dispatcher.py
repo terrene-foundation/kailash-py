@@ -78,7 +78,7 @@ def compute_task_id(schedule_id: str, planned_fire_time: datetime) -> str:
     return hashlib.sha256(payload).hexdigest()[:32]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Task:
     """A scheduled workflow task ready for dispatch.
 
@@ -88,6 +88,10 @@ class Task:
     result, including the deterministic ``task_id`` used for both
     queue-layer dedup AND (informationally) for runtime-side
     idempotency on the worker.
+
+    Frozen per EATP P10 — Task instances flow across the queue boundary
+    and MUST NOT be mutated after construction; the queue payload is the
+    canonical state.
 
     Attributes
     ----------
@@ -100,8 +104,14 @@ class Task:
     schedule_id:
         The scheduler-assigned schedule identifier.
     workflow_blob:
-        The serialized workflow (pickled WorkflowBuilder or its
-        ``.build()`` output). Workers deserialize this and execute.
+        The JSON-serialized workflow representation produced by
+        ``Workflow.to_dict()`` and encoded as UTF-8. Workers MUST
+        deserialize via ``Workflow.from_dict(json.loads(...))`` —
+        NOT ``pickle.loads()``. Pickled payloads on a queue accessible
+        to arbitrary INSERT actors are remote-code-execution primitives;
+        this contract uses JSON to structurally prevent that class
+        per ``rules/security.md`` § "No arbitrary-code execution on
+        user input" (the same threat class).
     planned_fire_time:
         The trigger's intended fire time (UTC ISO 8601 string).
     queue_name:
