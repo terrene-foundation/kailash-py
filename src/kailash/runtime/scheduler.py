@@ -40,12 +40,16 @@ Version:
 import logging
 import math
 import os
+import pickle
 import stat
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from kailash.runtime.dispatcher import Dispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +123,10 @@ class WorkflowScheduler:
         runtime_factory: Optional callable that returns a runtime instance.
             Defaults to creating a new LocalRuntime for each execution.
         timezone: Timezone for cron expressions. Defaults to UTC.
+        dispatch_via: Optional :class:`~kailash.runtime.dispatcher.Dispatcher`.
+            When provided, every fired trigger enqueues a Task to the
+            dispatcher instead of executing the workflow in-process.
+            Default ``None`` preserves the existing in-process behavior.
 
     Raises:
         ImportError: If APScheduler is not installed.
@@ -128,6 +136,14 @@ class WorkflowScheduler:
         >>> scheduler.start()
         >>> sid = scheduler.schedule_interval(my_workflow, seconds=60)
         >>> scheduler.shutdown()
+
+        # Multi-instance / worker-side resume:
+        >>> from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+        >>> from kailash.db.connection import ConnectionManager
+        >>> conn = ConnectionManager("postgresql://...")
+        >>> await conn.initialize()
+        >>> dispatcher = SQLTaskQueueDispatcher(conn)
+        >>> scheduler = WorkflowScheduler(dispatch_via=dispatcher)
     """
 
     def __init__(
@@ -135,6 +151,8 @@ class WorkflowScheduler:
         job_store_path: Optional[str] = "kailash_schedules.db",
         runtime_factory: Optional[Callable] = None,
         timezone: str = "UTC",
+        *,
+        dispatch_via: Optional["Dispatcher"] = None,
     ) -> None:
         if not _check_apscheduler():
             raise ImportError(
@@ -168,11 +186,13 @@ class WorkflowScheduler:
         self._runtime_factory = runtime_factory
         self._schedules: Dict[str, ScheduleInfo] = {}
         self._timezone = timezone
+        self._dispatcher: Optional["Dispatcher"] = dispatch_via
 
         logger.info(
-            "WorkflowScheduler initialized (job_store=%s, timezone=%s)",
+            "WorkflowScheduler initialized (job_store=%s, timezone=%s, dispatch=%s)",
             job_store_path or "memory",
             timezone,
+            "queue" if dispatch_via is not None else "in_process",
         )
 
     def start(self) -> None:
@@ -237,7 +257,7 @@ class WorkflowScheduler:
             self._execute_workflow,
             trigger=trigger,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -295,7 +315,7 @@ class WorkflowScheduler:
             trigger="interval",
             seconds=seconds,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -350,7 +370,7 @@ class WorkflowScheduler:
             trigger="date",
             run_date=run_at,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -408,19 +428,47 @@ class WorkflowScheduler:
 
         return list(self._schedules.values())
 
-    async def _execute_workflow(self, workflow_builder: Any, **kwargs: Any) -> None:
+    async def _execute_workflow(
+        self, workflow_builder: Any, schedule_id: str = "", **kwargs: Any
+    ) -> None:
         """Execute a workflow from a scheduled trigger.
 
-        This is the callback invoked by APScheduler. It builds the workflow
-        from the builder and executes it using the configured runtime.
+        This is the callback invoked by APScheduler at fire time. The
+        behavior depends on whether the scheduler was constructed with
+        ``dispatch_via=``:
+
+        * **In-process (default, ``dispatch_via=None``):** builds the
+          workflow and executes it via the configured runtime in the
+          current process.
+        * **Queue dispatch (``dispatch_via=<Dispatcher>``):** serializes
+          the workflow into a :class:`~kailash.runtime.dispatcher.Task`
+          and enqueues it via the dispatcher; a worker pool polls the
+          queue and executes against its own runtime. ``task_id`` is
+          ``compute_task_id(schedule_id, planned_fire_time)`` so a
+          multi-instance scheduler that double-fires produces the same
+          task_id and the queue dedups.
 
         Args:
             workflow_builder: The WorkflowBuilder to build and execute.
-            **kwargs: Additional runtime execution parameters.
+            schedule_id: The scheduler-assigned schedule identifier.
+                Wired in by ``schedule_cron`` / ``schedule_interval`` /
+                ``schedule_once`` when registering the APScheduler job.
+            **kwargs: Additional runtime execution parameters (in-process
+                path) or task kwargs (queue dispatch path).
         """
         run_id = str(uuid.uuid4())
-        logger.info("Scheduled execution starting: run_id=%s", run_id)
 
+        if self._dispatcher is not None:
+            await self._dispatch_to_queue(
+                workflow_builder=workflow_builder,
+                schedule_id=schedule_id,
+                run_id=run_id,
+                **kwargs,
+            )
+            return
+
+        # In-process fallback (existing behavior).
+        logger.info("Scheduled execution starting: run_id=%s", run_id)
         try:
             workflow = workflow_builder.build()
             runtime = self._get_runtime()
@@ -433,6 +481,107 @@ class WorkflowScheduler:
         except Exception:
             logger.exception("Scheduled execution failed: run_id=%s", run_id)
             raise
+
+    async def _dispatch_to_queue(
+        self,
+        *,
+        workflow_builder: Any,
+        schedule_id: str,
+        run_id: str,
+        **kwargs: Any,
+    ) -> None:
+        """Serialize the workflow and enqueue a Task via the dispatcher.
+
+        Per architecture plan §3 invariant 1, ``task_id`` is the stable
+        SHA-256 hash of ``(schedule_id, planned_fire_time_iso)``. The
+        planned fire time is the trigger's intended fire instant -- not
+        wall-clock now() -- so multi-instance scheduler double-fires
+        produce the SAME task_id and the queue layer dedups.
+
+        Per architecture plan §3 invariant 3, every enqueue failure
+        logs at ERROR with grep-able schedule_id + task_id_hash before
+        propagating to APScheduler (which records the missed-fire
+        per its own retry/misfire policy).
+        """
+        # Lazy import to keep `from kailash.runtime.scheduler import ...`
+        # path free of dispatcher dependencies for in-process-only users.
+        import hashlib
+
+        from kailash.runtime.dispatcher import Task, compute_task_id
+
+        # APScheduler delivers the trigger's fire time via job.next_run_time
+        # at submit time; once the job is firing we read it from the job
+        # context. For now, use scheduler-internal lookup: the planned fire
+        # time was stamped onto the schedule when registered or comes from
+        # the trigger evaluation. Fall back to current UTC if not available.
+        planned_fire_time = self._planned_fire_time(schedule_id)
+        task_id = compute_task_id(schedule_id, planned_fire_time)
+        task_id_hash = hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8]
+
+        logger.info(
+            "scheduler.dispatch.start schedule_id=%s task_id_hash=%s run_id=%s",
+            schedule_id,
+            task_id_hash,
+            run_id,
+        )
+
+        try:
+            workflow = workflow_builder.build()
+            workflow_blob = pickle.dumps(workflow)
+        except Exception:
+            logger.exception(
+                "scheduler.dispatch.serialize_failed schedule_id=%s task_id_hash=%s",
+                schedule_id,
+                task_id_hash,
+            )
+            raise
+
+        task = Task(
+            task_id=task_id,
+            schedule_id=schedule_id,
+            workflow_blob=workflow_blob,
+            planned_fire_time=planned_fire_time.isoformat(),
+            kwargs=dict(kwargs),
+        )
+
+        try:
+            await self._dispatcher.enqueue(task)  # type: ignore[union-attr]
+        except Exception as exc:
+            logger.error(
+                "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
+                schedule_id,
+                task_id_hash,
+                type(exc).__name__,
+            )
+            raise
+
+        logger.info(
+            "scheduler.dispatch.enqueued schedule_id=%s task_id_hash=%s",
+            schedule_id,
+            task_id_hash,
+        )
+
+    def _planned_fire_time(self, schedule_id: str) -> datetime:
+        """Return the planned fire time for the currently-firing schedule.
+
+        APScheduler does not pass the planned fire time directly into the
+        job callback. We read it from the underlying job's
+        ``next_run_time`` (the trigger-computed instant for the current
+        fire). If the job has been removed or has no scheduled next-fire,
+        we fall back to the current UTC time so dispatch still works
+        deterministically for one-shot tasks.
+        """
+        try:
+            job = self._scheduler.get_job(schedule_id)
+            if job is not None and job.next_run_time is not None:
+                return job.next_run_time
+        except Exception:
+            logger.debug(
+                "scheduler.planned_fire_time.lookup_failed schedule_id=%s",
+                schedule_id,
+                exc_info=True,
+            )
+        return datetime.now(UTC)
 
     def _get_runtime(self) -> Any:
         """Get or create a runtime instance for execution.
