@@ -48,8 +48,6 @@ def _strip_asyncpg_driver_suffix(url: str) -> str:
     context manager, ``pool_utils.probe_max_connections``, migration sites,
     model registry) sees the normalized URL.
     """
-    if not isinstance(url, str):
-        return url
     for prefix, replacement in _ASYNCPG_DRIVER_SUFFIXES:
         if url.startswith(prefix):
             return replacement + url[len(prefix) :]
