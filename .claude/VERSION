@@ -1,15 +1,15 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-05-05",
+  "updated": "2026-05-06",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.17.0",
-    "build_version": "2.17.0",
-    "synced_at": "2026-05-05T14:41:00Z",
-    "loom_sha": "76a3bfc",
+    "version": "2.20.0",
+    "build_version": "2.20.0",
+    "synced_at": "2026-05-06T01:30:59Z",
+    "loom_sha": "5811f4c",
     "sdk_packages": {
       "kailash": "2.13.3",
       "kailash-dataflow": "2.7.5",
@@ -21,16 +21,37 @@
       "kailash-align": "0.7.0",
       "kaizen-agents": "0.9.4"
     },
-    "template_version": "2.17.0",
-    "source_commit": "76a3bfc"
+    "template_version": "2.20.0",
+    "source_commit": "5811f4c"
   },
   "changelog": [
     {
+      "version": "1.0.7",
+      "date": "2026-05-06",
+      "summary": "Sync loom 2.17.0 → 2.20.0 + codify-2026-05-06 cumulatively. Three-release jump covering 2.18.0 (zero-tolerance Rule 3d + build-repo-release-discipline), 2.19.0 (coc-sync-landing rule + drift-warn hook), 2.20.0 (hook-output-discipline + sync-completeness + detectRepoScopeDriftBash fix), plus same-day codify amendments to autonomous-execution Rule 4 and testing.md (Tier-1 conftest stub advisory). VERSION schema migrates to canonical sync-completeness.md MUST-3 form: upstream.version is the canonical field; upstream.build_version retained for one cycle of back-compat per the rule's transition guidance.",
+      "changes": [
+        "RULE NEW: .claude/rules/hook-output-discipline.md (priority:10, scope:path-scoped on .claude/hooks/** + variants/**/hooks/** + test-harness/**). 4 MUST clauses binding every halting hook to instructAndWait shape, forbidding severity:block from lexical regex alone, mandating shell-variable skip for command-string detectors, requiring committed audit fixtures per scope-restriction predicate. Trust Posture Wiring: halt-and-report severity, 7-day grace from 2026-05-06, regression-within-grace = emergency L5→L4.",
+        "RULE NEW: .claude/rules/sync-completeness.md (priority:10, scope:path-scoped). 4 MUST clauses mandating manifest-based template enumeration at every /sync* invocation, per-template verification table emission, uniform VERSION schema (upstream.version canonical), verifying-command sourcing for session-notes numerical claims. Trust Posture Wiring: halt-and-report severity, 7-day grace, regression-within-grace = emergency L5→L4.",
+        "RULE NEW: .claude/rules/coc-sync-landing.md — BUILD-side discipline for handling /sync-to-build delivery. 3 MUST clauses (COC drift lands as PR #1, stage explicit paths, admin-merge per owner workflow). Pairs with new .claude/hooks/coc-drift-warn.js (SessionStart).",
+        "HOOK NEW: .claude/hooks/coc-drift-warn.js — SessionStart drift detection. Compares loom’s VERSION against working-tree .claude/ tree state and surfaces COC ARTIFACT DRIFT DETECTED banner when delivery sits uncommitted on main.",
+        "HOOK NEW (extract): .claude/guides/rule-extracts/coc-sync-landing.md — BLOCKED rationalizations + extended bash examples + origin post-mortem for the rule.",
+        "HOOK MODIFIED: .claude/hooks/lib/violation-patterns.js — detectRepoScopeDriftBash false-positive fix. Severity downgraded block→halt-and-report (per hook-output-discipline.md MUST-2). Added shell-variable / ${VAR} / $(...) / backtick skip clause (per MUST-3). Added quote-strip on captured target. Origin: 2026-05-06 — sweep blocked on `gh issue list --repo \"$REPO\"` literal pre-expansion match.",
+        "AUDIT FIXTURES NEW: .claude/audit-fixtures/violation-patterns/detectRepoScopeDriftBash/ (5 fixture files + README) covering clean current-repo / flag explicit-other-repo / skip shell-variable / skip braced-variable / skip command-substitution. Per cc-artifacts.md Rule 9 (audit tools ship with committed test fixtures).",
+        "RULE AMENDED: .claude/rules/autonomous-execution.md Rule 4 — trigger surface broadened from “code review or self-verification” to “any gate-level review (reviewer, security-reviewer, gold-standards-validator)”. Origin line appended with kailash-kaizen 2.20.0 release-cycle evidence (1 HIGH + 2 MEDIUM security-reviewer findings landed in same shard, all <30 LOC, security-reviewer re-approved post-fix). Inbound from kailash-py /codify proposal.",
+        "RULE AMENDED: .claude/rules/testing.md — new advisory subsection “Tier-1 Conftest Stub for Newly-Side-Effecting Internal Methods” (between 3-Tier Testing and Coverage Requirements). Captures the autouse-fixture pattern: when a previously-deterministic internal method becomes side-effecting (LLM call, DB lookup, network fetch) without changing return-shape contract, the canonical Tier-1 sweep is one autouse fixture in tests/unit/conftest.py. When-to-use / when-NOT bullets included. Origin: kailash-kaizen 2.20.0 issue #829 collapsed 36-call-site sweep to 1 file. Inbound from kailash-py /codify proposal.",
+        "RULE AMENDED: .claude/rules/worktree-isolation.md — frontmatter demoted from priority:0/scope:baseline to priority:10/scope:path-scoped (paths: .claude/agents/**, .claude/commands/**, .claude/skills/**, **/*worktree*, **/workspaces/**). Per loom 2.19.0 “restore cap-headroom”: rule loaded path-scoped because worktree isolation only applies inside agent/command/skill authoring + worktree-named paths, not on every session.",
+        "SETTINGS MODIFIED: .claude/settings.json — SessionStart hook chain extended with .claude/hooks/coc-drift-warn.js (timeout:5). Pairs with the new coc-sync-landing.md rule.",
+        "PRESERVED (BUILD-divergent): .claude/rules/build-repo-release-discipline.md — BUILD repo carries its own Rule 1a wording (“Test-only, docs-only, and workspace-only diffs are carved out per Rule 1a”) which is AHEAD of loom’s text. Flagged for human review at next /codify cycle so loom can absorb the carve-out language.",
+        "OBSOLETED CONTRACT (no-op): .coc-obsoleted already current; all listed paths (scripts/hooks/, .claude/scripts/, etc.) already absent in working tree.",
+        "VERSION SCHEMA MIGRATION: upstream.version is now the canonical sync-completeness.md MUST-3 field (was previously read from upstream.template_version on /sync-to-build). upstream.build_version retained for one cycle for back-compat per the rule’s transition guidance; subsequent /sync-to-build cycles will drop the back-compat field."
+      ]
+    },
+    {
       "version": "1.0.6",
       "date": "2026-05-05",
-      "summary": "Sync loom 2.17.0 \u2014 graduated trust-posture system. Per-repo posture ladder (L1_PSEUDO_AGENT through L5_DELEGATED) with automatic downgrade on rule violations and human-gated upgrade via /posture upgrade challenge-nonce paste-back. NEW path-scoped rule rules/trust-posture.md. NEW skill skills/32-trust-posture/ (7 files). NEW hooks detect-violations.js + posture-gate.js + 4 shared libs (instruct-and-wait, state-io, state-resolver, violation-patterns). NEW agent agents/management/posture-auditor.md (read-only weekly audit). NEW command commands/posture.md (show / history / violations / init / upgrade / override). State files (posture.json, violations.jsonl, .initialized) protected by settings.json permissions.deny + three-layer Bash mutation detection per Layer 1 redirects/heredoc/tee/sed -i, Layer 2 cp/mv/dd/rsync/install/truncate/ln, Layer 3 interpreter -c/-e/-m bodies. State files NEVER synced (per-repo, runtime-generated). MODIFIED hooks: validate-bash-command.js +3 patterns + segment-anchored regex + three-layer state-file mutation detection adopted from issue #25; enforce-framework-first.js + validate-workflow.js + validate-deployment.js refactored through instruct-and-wait; session-start.js trust-posture additionalContext; session-end.js + pre-compact.js stderr summary lines. MODIFIED commands/codify.md Step 6b ENFORCED Trust Posture Wiring requirement. MODIFIED commands/redteam.md Step 0 posture-aware audit depth (L4 = Round 1, L3 = Round 1+2, L2 = full red-team). MODIFIED agents/cc-architect.md Audit Dimension 5 mechanical wiring grep sweep. settings.json: NEW permissions.deny block on .claude/learning/* state files; detect-violations.js wired to PreToolUse(Read), PostToolUse(Bash, Edit|Write), Stop, UserPromptSubmit; posture-gate.js wired to SessionStart + PreToolUse(Bash, Edit|Write). Origin: 2026-05-05 design session grounded in CARE Principle 7 (Evolutionary Trust) + EATP graduated postures + Mirror Thesis. Red-team validated: 2 adversarial review agents + 37/37 subprocess tests at loom .claude/test-harness/trust-posture-poc/. Two-phase rollout: Phase 1 (this release) hooks + state + observer-mode detection + emergency triggers live; Phase 2 (after \u22651 month real-session bake) full PreToolUse posture-gate teeth at L2/L3.",
+      "summary": "Sync loom 2.17.0 — graduated trust-posture system. Per-repo posture ladder (L1_PSEUDO_AGENT through L5_DELEGATED) with automatic downgrade on rule violations and human-gated upgrade via /posture upgrade challenge-nonce paste-back. NEW path-scoped rule rules/trust-posture.md. NEW skill skills/32-trust-posture/ (7 files). NEW hooks detect-violations.js + posture-gate.js + 4 shared libs (instruct-and-wait, state-io, state-resolver, violation-patterns). NEW agent agents/management/posture-auditor.md (read-only weekly audit). NEW command commands/posture.md (show / history / violations / init / upgrade / override). State files (posture.json, violations.jsonl, .initialized) protected by settings.json permissions.deny + three-layer Bash mutation detection per Layer 1 redirects/heredoc/tee/sed -i, Layer 2 cp/mv/dd/rsync/install/truncate/ln, Layer 3 interpreter -c/-e/-m bodies. State files NEVER synced (per-repo, runtime-generated). MODIFIED hooks: validate-bash-command.js +3 patterns + segment-anchored regex + three-layer state-file mutation detection adopted from issue #25; enforce-framework-first.js + validate-workflow.js + validate-deployment.js refactored through instruct-and-wait; session-start.js trust-posture additionalContext; session-end.js + pre-compact.js stderr summary lines. MODIFIED commands/codify.md Step 6b ENFORCED Trust Posture Wiring requirement. MODIFIED commands/redteam.md Step 0 posture-aware audit depth (L4 = Round 1, L3 = Round 1+2, L2 = full red-team). MODIFIED agents/cc-architect.md Audit Dimension 5 mechanical wiring grep sweep. settings.json: NEW permissions.deny block on .claude/learning/* state files; detect-violations.js wired to PreToolUse(Read), PostToolUse(Bash, Edit|Write), Stop, UserPromptSubmit; posture-gate.js wired to SessionStart + PreToolUse(Bash, Edit|Write). Origin: 2026-05-05 design session grounded in CARE Principle 7 (Evolutionary Trust) + EATP graduated postures + Mirror Thesis. Red-team validated: 2 adversarial review agents + 37/37 subprocess tests at loom .claude/test-harness/trust-posture-poc/. Two-phase rollout: Phase 1 (this release) hooks + state + observer-mode detection + emergency triggers live; Phase 2 (after ≥1 month real-session bake) full PreToolUse posture-gate teeth at L2/L3.",
       "changes": [
-        "RULE: .claude/rules/trust-posture.md NEW. priority:10/scope:path-scoped on .claude/{rules,skills,agents,hooks,commands,learning}/** + settings.json + sync-manifest.yaml. 7 MUST clauses defining posture ladder L1-L5, transition triggers (cumulative 3\u00d7 same-rule = 1 downgrade; 1\u00d7 critical = emergency to L1; regression-within-grace = emergency 1 posture), upgrade requirements (\u22657d, 0 same-class violations, demonstrated correction, human approval).",
+        "RULE: .claude/rules/trust-posture.md NEW. priority:10/scope:path-scoped on .claude/{rules,skills,agents,hooks,commands,learning}/** + settings.json + sync-manifest.yaml. 7 MUST clauses defining posture ladder L1-L5, transition triggers (cumulative 3× same-rule = 1 downgrade; 1× critical = emergency to L1; regression-within-grace = emergency 1 posture), upgrade requirements (≥7d, 0 same-class violations, demonstrated correction, human approval).",
         "SKILL: .claude/skills/32-trust-posture/ NEW (7 files: SKILL.md, codify-integration.md, implement-integration.md, redteam-integration.md, rule-authoring-checklist.md, posture-spec.md, grace-period-mechanics.md).",
         "COMMAND: .claude/commands/posture.md NEW. show / history / violations / init / upgrade / override.",
         "AGENT: .claude/agents/management/posture-auditor.md NEW. Read-only weekly audit; cannot self-modify state.",
@@ -40,16 +61,16 @@
         "COMMANDS MODIFIED: codify.md Step 6b ENFORCED Trust Posture Wiring; redteam.md Step 0 posture-aware audit depth.",
         "AGENT MODIFIED: cc-architect.md Audit Dimension 5 mechanical wiring grep sweep.",
         "SETTINGS: NEW permissions.deny on .claude/learning/{posture.json,posture.json.bak,violations.jsonl,violations.jsonl.*,.initialized}; detect-violations.js + posture-gate.js wired across PreToolUse / PostToolUse / SessionStart / Stop / UserPromptSubmit.",
-        "EXCLUDED FROM SYNC: .claude/learning/posture.json, .claude/learning/.initialized, .claude/learning/violations.jsonl \u2014 per-repo runtime state, NEVER synced. Initialize at L5_DELEGATED on first /posture init or first session-start hook run."
+        "EXCLUDED FROM SYNC: .claude/learning/posture.json, .claude/learning/.initialized, .claude/learning/violations.jsonl — per-repo runtime state, NEVER synced. Initialize at L5_DELEGATED on first /posture init or first session-start hook run."
       ]
     },
     {
       "version": "1.0.5",
       "date": "2026-04-28",
-      "summary": "Sync loom 2.9.5 \u2014 multi-CLI architect wave (cli-orchestrator + codex-architect + gemini-architect), hooks consolidation under .claude/hooks/, autonomize command, multi-CLI parity rule, Nexus HTTP-status + webhook-HMAC + UI-backend-defense rules, kailash-ml skill suite, MCP platform skills.",
+      "summary": "Sync loom 2.9.5 — multi-CLI architect wave (cli-orchestrator + codex-architect + gemini-architect), hooks consolidation under .claude/hooks/, autonomize command, multi-CLI parity rule, Nexus HTTP-status + webhook-HMAC + UI-backend-defense rules, kailash-ml skill suite, MCP platform skills.",
       "changes": [
-        "NEW AGENTS: cc-architect, cli-orchestrator, codex-architect, gemini-architect \u2014 multi-CLI architect wave (CC + Codex + Gemini emission targets).",
-        "NEW COMMAND: commands/autonomize.md \u2014 autonomous execution under user permission envelope.",
+        "NEW AGENTS: cc-architect, cli-orchestrator, codex-architect, gemini-architect — multi-CLI architect wave (CC + Codex + Gemini emission targets).",
+        "NEW COMMAND: commands/autonomize.md — autonomous execution under user permission envelope.",
         "NEW RULES: rules/cross-cli-parity.md, rules/nexus-http-status-convention.md, rules/nexus-webhook-hmac.md, rules/ui-backend-defense.md, rules/variant-authoring.md.",
         "NEW GUIDE: guides/deterministic-quality/09-parallel-agent-bundles.md.",
         "NEW SKILLS (Nexus): handler-status-codes, nexus-extractors, nexus-http-status-convention.",
@@ -58,44 +79,44 @@
         "NEW SKILLS (kailash-ml): ml-agent-guardrails, ml-drift-monitoring, ml-feature-pipelines, ml-inference-server, ml-model-registry, ml-onnx-export, ml-training-pipeline.",
         "NEW SKILLS (architecture): allowlist-extension-pattern, multi-axis-decomposition, ci-runner-troubleshooting, sdk-upstream-donation.",
         "NEW SKILLS: kailash-align suite (35-kailash-align/), test-skip-discipline, project skills.",
-        "REORG: hooks consolidated under .claude/hooks/ (was scripts/hooks/ + .claude/scripts/hooks/) \u2014 Anthropic-documented canonical location, eliminates dual source-of-truth per cross-repo.md Rule 3.",
-        "REORG: scripts/resolve-template.js \u2192 .claude/bin/resolve-template.js.",
-        "OBSOLETED: scripts/hooks/, .claude/scripts/, scripts/resolve-template.js \u2014 declared in .claude/.coc-obsoleted; deleted on this sync per cross-repo.md Rule 4 obsoletion exemption.",
-        "UPDATE: 196 artifacts modified across agents/commands/rules/skills/guides \u2014 Cycle 8/9 institutional knowledge accumulated since loom 2.8.7."
+        "REORG: hooks consolidated under .claude/hooks/ (was scripts/hooks/ + .claude/scripts/hooks/) — Anthropic-documented canonical location, eliminates dual source-of-truth per cross-repo.md Rule 3.",
+        "REORG: scripts/resolve-template.js → .claude/bin/resolve-template.js.",
+        "OBSOLETED: scripts/hooks/, .claude/scripts/, scripts/resolve-template.js — declared in .claude/.coc-obsoleted; deleted on this sync per cross-repo.md Rule 4 obsoletion exemption.",
+        "UPDATE: 196 artifacts modified across agents/commands/rules/skills/guides — Cycle 8/9 institutional knowledge accumulated since loom 2.8.7."
       ]
     },
     {
       "version": "1.0.4",
       "date": "2026-04-12",
-      "summary": "Sync loom 2.8.1 \u2014 trinity\u2192quartet terminology fix, FastAPI\u2192Nexus in kaizen skill.",
+      "summary": "Sync loom 2.8.1 — trinity→quartet terminology fix, FastAPI→Nexus in kaizen skill.",
       "changes": [
-        "FIX: rules/terrene-naming.md \u2014 'trinity' updated to 'quartet' (CARE + EATP + CO + PACT).",
-        "FIX: skills/co-reference/behavioral-guidelines.md \u2014 same trinity\u2192quartet update.",
-        "FIX: skills/04-kaizen/kaizen-baseagent-quick.md \u2014 3 FastAPI references updated to Nexus."
+        "FIX: rules/terrene-naming.md — 'trinity' updated to 'quartet' (CARE + EATP + CO + PACT).",
+        "FIX: skills/co-reference/behavioral-guidelines.md — same trinity→quartet update.",
+        "FIX: skills/04-kaizen/kaizen-baseagent-quick.md — 3 FastAPI references updated to Nexus."
       ]
     },
     {
       "version": "1.0.3",
       "date": "2026-04-09",
-      "summary": "Sync loom 2.8.0 \u2014 deterministic quality guide + rule-authoring meta-rule + Phase 9.4 rule extensions. Institutionalizes 0052-DISCOVERY session productivity patterns. Gate reviews upgraded from RECOMMENDED to MUST at /implement and /release with background agent pattern.",
+      "summary": "Sync loom 2.8.0 — deterministic quality guide + rule-authoring meta-rule + Phase 9.4 rule extensions. Institutionalizes 0052-DISCOVERY session productivity patterns. Gate reviews upgraded from RECOMMENDED to MUST at /implement and /release with background agent pattern.",
       "changes": [
-        "NEW GUIDE: guides/deterministic-quality/ \u2014 9 files. Part I (CO insights): rule-authoring principles, session architecture, enforcement ladder. Part II (code primitives): type system enforcement, runtime safety defaults, observability primitives, destructive operation gates, cross-SDK parity.",
-        "NEW RULE: rules/rule-authoring.md \u2014 meta-rule for authoring COC rules. 6 MUST clauses + Loud/Linguistic/Layered test. Subprocess-tested: rule quality 2/6 \u2192 6/6.",
+        "NEW GUIDE: guides/deterministic-quality/ — 9 files. Part I (CO insights): rule-authoring principles, session architecture, enforcement ladder. Part II (code primitives): type system enforcement, runtime safety defaults, observability primitives, destructive operation gates, cross-SDK parity.",
+        "NEW RULE: rules/rule-authoring.md — meta-rule for authoring COC rules. 6 MUST clauses + Loud/Linguistic/Layered test. Subprocess-tested: rule quality 2/6 → 6/6.",
         "NEW RULES (Phase 9.4 DataFlow audit): dataflow-identifier-safety.md, facade-manager-detection.md, orphan-detection.md, tenant-isolation.md.",
-        "UPDATE: rules/agents.md \u2014 gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern + BLOCKED phrases for skip rationalizations.",
-        "UPDATE: rules/git.md \u2014 commit bodies MUST answer 'why' not 'what', with DO/DON'T example.",
-        "UPDATE: rules/observability.md \u2014 bulk ops MUST log at WARN on partial failure.",
-        "UPDATE: rules/zero-tolerance.md \u2014 extended examples from Phase 5 audit (fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics).",
-        "UPDATE: rules/cc-artifacts.md \u2014 Clause #10 requires new rules to follow rule-authoring.md meta-rule.",
-        "UPDATE: rules/dataflow-pool.md \u2014 Phase 9.4 extensions.",
-        "UPDATE: commands/analyze, codify, implement, redteam, todos, wrapup \u2014 phase-gate journal automation + lean wrapup.",
-        "UPDATE: scripts/hooks/ \u2014 session-end.js, log-triage-gate.js, lib/workspace-utils.js."
+        "UPDATE: rules/agents.md — gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern + BLOCKED phrases for skip rationalizations.",
+        "UPDATE: rules/git.md — commit bodies MUST answer 'why' not 'what', with DO/DON'T example.",
+        "UPDATE: rules/observability.md — bulk ops MUST log at WARN on partial failure.",
+        "UPDATE: rules/zero-tolerance.md — extended examples from Phase 5 audit (fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics).",
+        "UPDATE: rules/cc-artifacts.md — Clause #10 requires new rules to follow rule-authoring.md meta-rule.",
+        "UPDATE: rules/dataflow-pool.md — Phase 9.4 extensions.",
+        "UPDATE: commands/analyze, codify, implement, redteam, todos, wrapup — phase-gate journal automation + lean wrapup.",
+        "UPDATE: scripts/hooks/ — session-end.js, log-triage-gate.js, lib/workspace-utils.js."
       ]
     },
     {
       "version": "1.0.2",
       "date": "2026-04-08",
-      "summary": "Sync loom 2.7.0 \u2014 framework mandate enforcement wave. Observability + schema-migration rules, integration-hygiene + log-triage-gate hooks, 16-agent description updates, work-domain binding in framework-first.md, warnings-as-errors in zero-tolerance.md.",
+      "summary": "Sync loom 2.7.0 — framework mandate enforcement wave. Observability + schema-migration rules, integration-hygiene + log-triage-gate hooks, 16-agent description updates, work-domain binding in framework-first.md, warnings-as-errors in zero-tolerance.md.",
       "changes": [
         "NEW: rules/observability.md (mandatory log points, correlation IDs, log triage gate)",
         "NEW: rules/schema-migration.md (numbered migrations, reversibility, data fixes)",
@@ -117,21 +138,21 @@
         "UPDATE: scripts/hooks/validate-prod-deploy.js (execFileSync hardening over execSync)",
         "UPDATE: .claude/settings.json registers integration-hygiene + log-triage-gate hooks",
         "UPDATE: Why: rationale added to ~15 additional rules per cc-artifacts Rule 4",
-        "ABSENT (build_exclude): commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md \u2014 BUILD repo uses /release for SDK publishing",
+        "ABSENT (build_exclude): commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md — BUILD repo uses /release for SDK publishing",
         "PRESERVED: agents/frameworks/infrastructure-specialist.md (BUILD-local adaptations with src/kailash/db/ paths)"
       ]
     },
     {
       "version": "1.0.1",
       "date": "2026-04-08",
-      "summary": "Sync loom 2.6.2 \u2014 spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
+      "summary": "Sync loom 2.6.2 — spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
       "changes": [
         "NEW: skills/spec-compliance/SKILL.md (Python-only)",
         "REWRITE: commands/redteam.md (semantic verification, language-agnostic phrasing)",
-        "UPDATE: rules/testing.md (Audit Mode Rules \u2014 pytest --collect-only, no cargo)",
+        "UPDATE: rules/testing.md (Audit Mode Rules — pytest --collect-only, no cargo)",
         "UPDATE: agents/analysis/analyst.md, agents/testing/testing-specialist.md (/redteam ownership)",
-        "UPDATE: commands/wrapup.md (4-state deploy classification \u2014 Python BUILD falls under State C/D as expected)",
-        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude \u2014 BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
+        "UPDATE: commands/wrapup.md (4-state deploy classification — Python BUILD falls under State C/D as expected)",
+        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude — BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
       ]
     }
   ]

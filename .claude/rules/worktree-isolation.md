@@ -1,6 +1,12 @@
 ---
-priority: 0
-scope: baseline
+priority: 10
+scope: path-scoped
+paths:
+  - ".claude/agents/**"
+  - ".claude/commands/**"
+  - ".claude/skills/**"
+  - "**/*worktree*"
+  - "**/workspaces/**"
 ---
 
 # Worktree Isolation Rules
