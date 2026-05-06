@@ -7,11 +7,12 @@ Generates workflow reports, diagrams, and documentation.
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 import click
+
 from dataflow.cli.output import get_formatter
 from dataflow.cli.validate import load_workflow
+from dataflow.utils.filenames import safe_workflow_filename
 
 
 @click.group()
@@ -152,8 +153,11 @@ def docs(workflow_path: str, output_dir: str):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        # Write documentation
-        doc_file = output_path / f"{workflow.name}.md"
+        # Write documentation. Route workflow.name through the validation
+        # helper so a malformed name (path-traversal, filesystem-unsafe chars,
+        # Mock-object repr leaked from a fixture) raises WorkflowNameError
+        # BEFORE the filesystem touch — see dataflow.utils.filenames.
+        doc_file = output_path / safe_workflow_filename(workflow.name, "md")
         doc_file.write_text(docs_content)
 
         formatter.print_success(f"Documentation generated in {output_dir}/")

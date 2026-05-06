@@ -1,6 +1,7 @@
 """DataFlow Utilities."""
 
 from .connection import ConnectionManager
+from .filenames import WorkflowNameError, safe_workflow_filename
 from .suppress_warnings import (
     configure_dataflow_logging,
     dataflow_logging_context,
@@ -14,6 +15,9 @@ from .suppress_warnings import (
 __all__ = [
     # Connection management
     "ConnectionManager",
+    # Filesystem-safe filename construction
+    "WorkflowNameError",
+    "safe_workflow_filename",
     # Logging utilities
     "configure_dataflow_logging",
     "restore_dataflow_logging",
