@@ -188,6 +188,19 @@ async with db.transactions.begin() as txn:
     # Both committed atomically on clean exit
 ```
 
+**Loop affinity.** `db.transactions.begin()` resolves a per-loop asyncpg
+pool via `AsyncSQLDatabaseNode._get_adapter()`, which routes through the
+DPI-B priority chain (`_shared_pools` → runtime pool → `_PROCESS_POOL_REGISTRY`
+→ fallback) using a 5-component key
+`loop_id|db_type|connection|pool_size|max_pool_size`. Each event loop
+receives its own pool; pools are auto-reaped on loop close via
+`WeakValueDictionary` semantics + the per-loop reaper task documented in
+§13.4. Calling `begin()` outside a running loop raises `RuntimeError`.
+This mirrors the loop-binding semantics already documented in §12.7 for
+the sync transaction surface, and aligns async transactions with the
+per-loop pool model used by `db.express.*`. Tier-2 regression coverage
+at `packages/kailash-dataflow/tests/regression/test_issue_835_transaction_cross_loop.py`.
+
 ### 12.2 Isolation Levels
 
 ```python
@@ -466,3 +479,21 @@ surface — registry, cap, idle timeout, `PoolExhaustedError` — even
 where the Rust idioms diverge (e.g. tokio task primitives vs asyncio).
 The structural-invariant test (cap-check arithmetic + WARN log shape)
 is the cross-SDK contract per `rules/cross-sdk-inspection.md` Rule 1.
+
+**Async transaction participation (issue #835):**
+
+The async transaction surface (§12.1) participates in the priority chain
+through the same `AsyncSQLDatabaseNode._get_adapter()` entry point as
+`db.express.*`. `TransactionManager._get_adapter` and
+`_get_adapter_from_context` (workflow-graph composition via
+`TransactionScopeNode`) both delegate to
+`DataFlow._get_or_create_async_sql_node(db_type)`, which owns the
+event-loop-aware cached node and resolves the per-loop pool via the
+5-component key. The legacy `_connection_manager._adapter` retained-pool
+model is removed: `ConnectionManager.initialize_pool()` performs a
+transient reachability check (open adapter, verify `connect()` succeeds,
+disconnect) and retains no long-lived pool. `ConnectionManager.health_check()`
+opens a transient adapter on demand; `get_connection_stats()` aggregates
+over per-loop pools by walking `_PROCESS_POOL_REGISTRY` filtered by this
+DataFlow's connection string. Tier-2 regression coverage at
+`packages/kailash-dataflow/tests/regression/test_issue_835_transaction_cross_loop.py`.
