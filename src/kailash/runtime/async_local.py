@@ -15,6 +15,7 @@ Key Features:
 """
 
 import asyncio
+import hashlib
 import logging
 import os
 import time
@@ -23,11 +24,22 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
+from kailash.runtime.durable import (
+    NodeCompletionEvent,
+    build_checkpoint_key,
+    check_shape_drift_or_raise,
+    compute_workflow_fingerprint,
+    decode_checkpoint_payload,
+    encode_checkpoint_payload,
+    redact_event_for_persistence,
+    resolve_tenant_id,
+)
+from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
 from kailash.tracking import TaskManager, TaskStatus
@@ -564,6 +576,104 @@ class AsyncLocalRuntime(LocalRuntime):
             )
         return self._semaphore
 
+    async def _w1_emit_node_completion(
+        self,
+        *,
+        workflow,
+        node_id: str,
+        node_type: str,
+        result: Any,
+        started_at: datetime,
+        ended_at: datetime,
+        context: "ExecutionContext",
+        error: Optional[str] = None,
+    ) -> None:
+        """W1: emit a NodeCompletionEvent post-redaction.
+
+        Persists the checkpoint blob (if checkpoint_after_each_node=True
+        AND a store is configured) and dispatches the redacted event to
+        every subscriber registered via ``runtime.on_node_complete``.
+
+        The asyncio.Lock keyed by run_id serialises parallel-node saves
+        so the persisted blob represents a consistent snapshot of the
+        execution tracker.  Save failures WARN-log; they MUST NOT take
+        down the workflow execution.
+        """
+        # Read W1 context stashed by execute_workflow_async.  Defensive
+        # gets — when the AsyncLocalRuntime is invoked through a code
+        # path that didn't go through execute_workflow_async (legacy
+        # entry points), these are absent and the W1 wiring is a no-op.
+        wf_fp: str = context.variables.get("_w1_workflow_fingerprint") or ""
+        ckpt_key: Optional[str] = context.variables.get("_w1_checkpoint_key")
+        tenant_id: Optional[str] = context.variables.get("_w1_tenant_id")
+        idempotency_key: Optional[str] = context.variables.get("_w1_idempotency_key")
+        run_id: Optional[str] = context.variables.get("_w1_run_id")
+        tracker: Optional[ExecutionTracker] = context.variables.get(
+            "_w1_execution_tracker"
+        )
+
+        # Record into the tracker so the persisted blob includes this node.
+        if tracker is not None:
+            tracker.record_completion(node_id, result)
+
+        duration_ms = int((ended_at - started_at).total_seconds() * 1000)
+        raw_outputs: Mapping[str, Any] = (
+            result if isinstance(result, Mapping) else {"result": result}
+        )
+        event = NodeCompletionEvent(
+            run_id=run_id,
+            workflow_id=getattr(workflow, "workflow_id", "") or "",
+            workflow_fingerprint=wf_fp,
+            node_id=node_id,
+            node_type=node_type,
+            outputs=raw_outputs,
+            started_at=started_at,
+            ended_at=ended_at,
+            duration_ms=duration_ms,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+            error=error,
+            metadata={},
+        )
+        classification_policy = getattr(self, "_classification_policy", None)
+        redacted = redact_event_for_persistence(
+            event, classification_policy=classification_policy
+        )
+
+        if (
+            self._checkpoint_after_each_node
+            and self._checkpoint_store is not None
+            and ckpt_key is not None
+            and tracker is not None
+        ):
+            lock_key = run_id or ckpt_key
+            lock = self._checkpoint_locks.setdefault(lock_key, asyncio.Lock())
+            async with lock:
+                blob = encode_checkpoint_payload(
+                    workflow_fingerprint=wf_fp,
+                    tracker_state=tracker.to_dict(),
+                    tenant_id=tenant_id,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    idempotency_key=idempotency_key,
+                )
+                try:
+                    await self._checkpoint_store.save(ckpt_key, blob)
+                except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as save_err:
+                    logger.warning(
+                        "durable.checkpoint.save_failed",
+                        extra={
+                            "node_id_hash": hashlib.sha256(
+                                node_id.encode("utf-8")
+                            ).hexdigest()[:8],
+                            "error_type": type(save_err).__name__,
+                        },
+                    )
+
+        if self._hook_registry.subscriber_count > 0:
+            await self._hook_registry.dispatch_async(redacted)
+
     def execute(
         self,
         workflow,
@@ -668,6 +778,9 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         inputs: Dict[str, Any],
         context: Optional[ExecutionContext] = None,
+        *,
+        idempotency_key: Optional[str] = None,
+        force_resume_with_drift: bool = False,
     ) -> Tuple[Dict[str, Any], str]:
         """
         Execute workflow with native async support and production safeguards.
@@ -713,6 +826,57 @@ class AsyncLocalRuntime(LocalRuntime):
 
         # Add inputs to context
         context.variables.update(inputs)
+
+        # === W1: Durable execution — shape-drift check + checkpoint context ===
+        # Compute the fingerprint once, build the checkpoint key, and run
+        # the shape-drift gate BEFORE any node executes.  The same
+        # invariants apply here as in LocalRuntime._execute_async — the
+        # per-node hot path below will emit + persist + dispatch events
+        # using the values stashed onto the context.
+        workflow_fingerprint = compute_workflow_fingerprint(workflow)
+        tenant_id = resolve_tenant_id(self)
+        checkpoint_key: Optional[str] = None
+        execution_tracker: Optional[ExecutionTracker] = None
+        if idempotency_key is not None:
+            checkpoint_key = build_checkpoint_key(
+                workflow_fingerprint,
+                idempotency_key,
+                inputs if isinstance(inputs, dict) else None,
+                tenant_id=tenant_id,
+            )
+            if self._checkpoint_store is not None:
+                try:
+                    prior_blob = await self._checkpoint_store.load(checkpoint_key)
+                except Exception as load_err:  # pragma: no cover — defensive
+                    logger.warning(
+                        "durable.checkpoint.load_failed",
+                        extra={"error_type": type(load_err).__name__},
+                    )
+                    prior_blob = None
+                if prior_blob is not None:
+                    stored_payload = decode_checkpoint_payload(prior_blob)
+                    check_shape_drift_or_raise(
+                        idempotency_key=idempotency_key,
+                        stored_payload=stored_payload,
+                        current_fingerprint=workflow_fingerprint,
+                        force_resume_with_drift=force_resume_with_drift,
+                    )
+                    execution_tracker = ExecutionTracker.from_dict(
+                        stored_payload.get("tracker", {})
+                    )
+
+        # Stash durable-execution context onto the ExecutionContext so the
+        # per-node hot path (_execute_node_async / _execute_sync_node_async)
+        # can read it without growing every method's signature.  Using
+        # underscore-prefixed keys to mark them runtime-internal.
+        context.variables["_w1_workflow_fingerprint"] = workflow_fingerprint
+        context.variables["_w1_checkpoint_key"] = checkpoint_key
+        context.variables["_w1_tenant_id"] = tenant_id
+        context.variables["_w1_idempotency_key"] = idempotency_key
+        context.variables["_w1_run_id"] = run_id
+        context.variables["_w1_execution_tracker"] = (
+            execution_tracker if execution_tracker is not None else ExecutionTracker()
+        )
 
         # CARE-017: Get effective trust context and set up propagation
         effective_trust_ctx = self._get_effective_trust_context()
@@ -1159,6 +1323,7 @@ class AsyncLocalRuntime(LocalRuntime):
     ) -> None:
         """Execute a single async node."""
         start_time = time.time()
+        node_started_at = datetime.now(UTC)
         node_instance = None
 
         async with self.execution_semaphore:
@@ -1217,6 +1382,18 @@ class AsyncLocalRuntime(LocalRuntime):
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
 
+                # === W1: emit checkpoint + dispatch hook event ===
+                await self._w1_emit_node_completion(
+                    workflow=workflow,
+                    node_id=node_id,
+                    node_type=node_instance.__class__.__name__,
+                    result=result,
+                    started_at=node_started_at,
+                    ended_at=datetime.now(UTC),
+                    context=context,
+                    error=None,
+                )
+
                 logger.debug(f"Node '{node_id}' completed in {execution_time:.2f}s")
 
             except Exception as e:
@@ -1249,6 +1426,7 @@ class AsyncLocalRuntime(LocalRuntime):
     ) -> None:
         """Execute a sync node in thread pool."""
         start_time = time.time()
+        node_started_at = datetime.now(UTC)
 
         async with self.execution_semaphore:
             try:
@@ -1290,6 +1468,18 @@ class AsyncLocalRuntime(LocalRuntime):
 
                 execution_time = time.time() - start_time
                 await tracker.record_result(node_id, result, execution_time)
+
+                # === W1: emit checkpoint + dispatch hook event ===
+                await self._w1_emit_node_completion(
+                    workflow=workflow,
+                    node_id=node_id,
+                    node_type=node_instance.__class__.__name__,
+                    result=result,
+                    started_at=node_started_at,
+                    ended_at=datetime.now(UTC),
+                    context=context,
+                    error=None,
+                )
 
                 logger.debug(
                     f"Sync node '{node_id}' completed in {execution_time:.2f}s"
