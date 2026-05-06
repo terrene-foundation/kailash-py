@@ -17,6 +17,43 @@ from .models import Environment
 
 logger = logging.getLogger(__name__)
 
+
+# ============================================================================
+# Connection URL Normalization (issue #819)
+# ============================================================================
+
+# SQLAlchemy-style driver suffixes carried by many DATABASE_URL env-vars and
+# docker-compose stacks. The bare scheme is consumable by BOTH SQLAlchemy
+# (which infers a driver from `postgresql://`) AND asyncpg (which rejects
+# any scheme other than `postgresql://` or `postgres://`). Stripping the
+# suffix at the canonical accessor (`DatabaseConfig.get_connection_url`)
+# means every caller — `engine.connection_context()`, `pool_utils`,
+# migrations, model registry — benefits from one fix.
+_ASYNCPG_DRIVER_SUFFIXES = (
+    ("postgresql+asyncpg://", "postgresql://"),
+    ("postgres+asyncpg://", "postgres://"),
+    ("postgresql+psycopg2://", "postgresql://"),
+    ("postgres+psycopg2://", "postgres://"),
+)
+
+
+def _strip_asyncpg_driver_suffix(url: str) -> str:
+    """Strip SQLAlchemy ``+asyncpg`` / ``+psycopg2`` driver suffix from URL.
+
+    Returns ``url`` unchanged if it does not begin with a known suffix.
+
+    See issue #819 — asyncpg rejects ``postgresql+asyncpg://`` even though
+    SQLAlchemy emits and consumes that form. The canonical fix lives at the
+    config-level accessor so every caller (the engine's ``get_connection()``
+    context manager, ``pool_utils.probe_max_connections``, migration sites,
+    model registry) sees the normalized URL.
+    """
+    for prefix, replacement in _ASYNCPG_DRIVER_SUFFIXES:
+        if url.startswith(prefix):
+            return replacement + url[len(prefix) :]
+    return url
+
+
 # ============================================================================
 # ErrorEnhancer Performance Configuration
 # ============================================================================
@@ -307,18 +344,30 @@ class DatabaseConfig:
             self.pool_max_overflow = self.max_overflow
 
     def get_connection_url(self, environment: Environment) -> str:
-        """Generate connection URL based on configuration and environment"""
+        """Generate connection URL based on configuration and environment.
+
+        The SQLAlchemy ``+asyncpg`` / ``+psycopg2`` driver suffix is stripped
+        before the URL is returned so the result is consumable by both
+        SQLAlchemy (which accepts the bare ``postgresql://`` scheme and
+        infers a driver) and asyncpg (which rejects any scheme other than
+        ``postgresql://`` or ``postgres://``). Many docker-compose stacks
+        and ``DATABASE_URL`` env-vars carry the SQLAlchemy form; without
+        normalization, ``async with db.get_connection()`` raises
+        ``ValueError: invalid dsn: invalid connection option "asyncpg"``.
+
+        See issue #819.
+        """
         # Check for explicit URL first
         if self.url:
             # Handle :memory: shorthand for SQLite in-memory
             if self.url == ":memory:":
                 return "sqlite:///:memory:"
-            return self.url
+            return _strip_asyncpg_driver_suffix(self.url)
 
         # Check environment variables
         env_url = os.getenv("DATABASE_URL")
         if env_url:
-            return env_url
+            return _strip_asyncpg_driver_suffix(env_url)
 
         # Build URL from components
         if all([self.driver, self.host, self.database]):
@@ -330,7 +379,8 @@ class DatabaseConfig:
                 auth += "@"
 
             port = f":{self.port}" if self.port else ""
-            return f"{self.driver}://{auth}{self.host}{port}/{self.database}"
+            built = f"{self.driver}://{auth}{self.host}{port}/{self.database}"
+            return _strip_asyncpg_driver_suffix(built)
 
         # Default based on environment
         if environment == Environment.DEVELOPMENT:

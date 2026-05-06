@@ -10133,12 +10133,20 @@ class DataFlow(DataFlowEventMixin):
             warn_sqlite_async_limitation(url)
             return True
 
-        # Supported database schemes (11 variants for 4 database types)
+        # Supported database schemes. The SQLAlchemy `+asyncpg` / `+psycopg2`
+        # driver-suffix forms are accepted at the validator gate so users
+        # whose DATABASE_URL carries the SQLAlchemy form (common in
+        # docker-compose stacks) are not rejected at __init__; the suffix
+        # is then stripped by `DatabaseConfig.get_connection_url()` so
+        # asyncpg sees only the bare scheme. See issue #819.
         supported_schemes = [
-            # PostgreSQL (3 variants)
+            # PostgreSQL (5 variants — bare + SQLAlchemy driver suffixes)
             "postgresql",
             "postgres",
             "postgresql+asyncpg",
+            "postgres+asyncpg",
+            "postgresql+psycopg2",
+            "postgres+psycopg2",
             # MySQL (4 variants)
             "mysql",
             "mysql+pymysql",

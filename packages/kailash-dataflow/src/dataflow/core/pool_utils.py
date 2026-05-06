@@ -164,11 +164,14 @@ def _probe_postgresql(database_url: str) -> Optional[int]:
         )
         return None
 
-    # Normalize SQLAlchemy-style URLs for psycopg2
-    # psycopg2 expects postgresql:// not postgresql+asyncpg://
-    conn_url = database_url
-    if "+asyncpg" in conn_url or "+psycopg2" in conn_url:
-        conn_url = conn_url.split("+")[0] + "://" + conn_url.split("://", 1)[1]
+    # Normalize SQLAlchemy-style URLs for psycopg2 via the canonical helper
+    # (issue #819). psycopg2 expects postgresql:// not postgresql+asyncpg://.
+    # Defense-in-depth: callers that pass URLs not routed through
+    # DatabaseConfig.get_connection_url (e.g., a raw os.environ["DATABASE_URL"]
+    # fallback) still get the suffix stripped here.
+    from dataflow.core.config import _strip_asyncpg_driver_suffix
+
+    conn_url = _strip_asyncpg_driver_suffix(database_url)
 
     try:
         with psycopg2.connect(conn_url, connect_timeout=_PROBE_TIMEOUT_SECS) as conn:

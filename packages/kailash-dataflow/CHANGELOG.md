@@ -1,5 +1,22 @@
 # DataFlow Changelog
 
+## [Unreleased] — `+asyncpg` driver-suffix DSN normalization (#819)
+
+Patch fixing a runtime regression where `async with db.get_connection()` raised `ValueError: invalid dsn: invalid connection option "asyncpg"` whenever the configured database URL carried the SQLAlchemy `+asyncpg` driver suffix — the form many docker-compose stacks and `DATABASE_URL` env-vars use (`postgresql+asyncpg://user:pass@host:5432/db`). Bug fix; no public API surface change; no migration required.
+
+### Fixed
+
+- **`DatabaseConfig.get_connection_url()` now strips the SQLAlchemy `+asyncpg` / `+psycopg2` driver suffix.** Previously the method returned `self.url` verbatim and the engine's `connection_context()` handed that string straight to `asyncpg.connect()`, which rejects any scheme other than `postgresql://` or `postgres://`. The bare scheme is consumable by both SQLAlchemy (which infers the driver) AND asyncpg (which requires the bare scheme), so stripping at the canonical accessor means every caller — `engine.connection_context()`, `pool_utils.probe_max_connections`, migration sites, model registry — benefits from one fix. Issue #819.
+- **`DataFlow.__init__()` URL validator now accepts the four driver-suffix variants:** `postgresql+asyncpg`, `postgres+asyncpg`, `postgresql+psycopg2`, `postgres+psycopg2`. Previously only `postgresql+asyncpg` passed the validator, so users whose `DATABASE_URL` carried `postgres+asyncpg://` (the alternative bare scheme some Heroku-style stacks emit) hit `DF-401` at construction time before the new normalization could run.
+
+### Changed
+
+- **`pool_utils._probe_postgresql` now routes its inline `+asyncpg` strip through the canonical helper** (`dataflow.core.config._strip_asyncpg_driver_suffix`). Defense-in-depth — callers passing raw URLs that have not been routed through `DatabaseConfig.get_connection_url()` (e.g., a fallback `os.environ["DATABASE_URL"]` read) still get the suffix stripped here.
+
+### Tests
+
+- 10 new Tier-2 regression tests at `tests/integration/test_issue_819_asyncpg_dsn_normalization.py` covering: helper passthrough on plain / non-Postgres URLs; helper strip on `postgresql+asyncpg`, `postgres+asyncpg`, `postgresql+psycopg2`; `DatabaseConfig.get_connection_url` returns stripped form for all three Postgres inputs; real-Postgres `DataFlow.get_connection()` round-trip succeeds on `postgresql+asyncpg://`, plain `postgresql://`, and `postgres+asyncpg://` DSNs; raw asyncpg connect succeeds on the stripped output for all three forms.
+
 ## [2.7.9] — 2026-05-06 — Async transaction event-loop mismatch (#835)
 
 Patch release fixing a runtime regression where `db.transactions.transaction()` raised `RuntimeError: Event loop is closed` when invoked from an event loop different from the one that constructed the DataFlow instance. Bug fix; no public API surface change; no migration required.
