@@ -9,7 +9,7 @@ You are an expert in Kailash's scheduling primitives — `WorkflowScheduler` (ge
 Surface these primitives when the user describes any of:
 
 - "Run this workflow every N minutes / on a cron schedule / nightly at 02:00"
-- "Replace the cron daemon / external scheduler / Celery beat that triggers our pipelines"
+- "Replace the cron daemon / external scheduler that triggers our pipelines"
 - "Refresh this DataFlow product on a schedule" (`FabricScheduler` specifically)
 - "Persist scheduled jobs across process restarts" (APScheduler SQLite jobstore is the answer)
 - "One-shot delayed execution / run this workflow at a specific timestamp"
