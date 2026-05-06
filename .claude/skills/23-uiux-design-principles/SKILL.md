@@ -1,6 +1,6 @@
 ---
 name: uiux-design-principles
-description: "Framework-agnostic UI/UX design principles and guidelines for enterprise applications. CRITICAL for ALL frontend work regardless of framework (React, Flutter, etc.). Use when asking about 'design principles', 'layout', 'visual hierarchy', 'information architecture', 'enterprise UX', 'responsive design', 'accessibility', 'design system', 'top-down design', 'component design', 'user experience', or any frontend design decisions."
+description: "Framework-agnostic UI/UX design for enterprise apps. CRITICAL for ALL frontend work (React, Flutter, etc.). Layout, hierarchy, accessibility, design systems."
 ---
 
 # UI/UX Design Principles

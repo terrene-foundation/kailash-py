@@ -1,6 +1,6 @@
 ---
 name: interactive-widgets
-description: "Interactive widget systems for AI applications including LLM-driven widget generation, dynamic UI components, form builders, and streaming response widgets. Use when asking about 'interactive widgets', 'dynamic UI', 'LLM widgets', 'widget generation', 'streaming widgets', 'form widgets', 'AI response widgets', 'structured responses', or 'widget protocol'."
+description: "Interactive widget systems for AI apps: LLM-driven widget generation, dynamic UI, form builders, streaming response widgets."
 ---
 
 # Interactive Widget System

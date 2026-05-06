@@ -1,6 +1,6 @@
 ---
 name: architecture-decisions
-description: "Architecture decision guides for Kailash SDK including framework selection (Core SDK vs DataFlow vs Nexus vs Kaizen), runtime selection (Async vs Sync), database selection (PostgreSQL vs SQLite), node selection, and test tier selection. Use when asking about 'which framework', 'choose framework', 'which runtime', 'which database', 'which node', 'architecture decision', 'when to use', 'Core SDK vs DataFlow', 'PostgreSQL vs SQLite', 'AsyncLocalRuntime vs LocalRuntime', or 'test tier selection'."
+description: "Kailash SDK architecture decisions: framework (Core/DataFlow/Nexus/Kaizen), runtime (Async/Sync), DB (PostgreSQL/SQLite), node, test tier. Use for 'which X' choice."
 ---
 
 # Kailash Architecture Decisions
@@ -12,7 +12,7 @@ Decision guides for selecting the right frameworks, runtimes, databases, nodes, 
 | Decision  | File                                                                      | Quick Answer                                                                |
 | --------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Framework | [decide-framework](decide-framework.md)                                   | Core SDK (custom), DataFlow (DB), Nexus (multi-channel), Kaizen (AI agents) |
-| Runtime   | [decide-runtime](decide-runtime.md)                                       | Docker/async -> AsyncLocalRuntime; CLI/Scripts -> LocalRuntime            |
+| Runtime   | [decide-runtime](decide-runtime.md)                                       | Docker/async -> AsyncLocalRuntime; CLI/Scripts -> LocalRuntime              |
 | Database  | [decide-database-postgresql-sqlite](decide-database-postgresql-sqlite.md) | Production -> PostgreSQL; Dev/Test -> SQLite                                |
 | Node      | [decide-node-for-task](decide-node-for-task.md)                           | See node selection flow below                                               |
 | Test Tier | [decide-test-tier](decide-test-tier.md)                                   | Unit (fast), Integration (real infra), E2E (full system)                    |

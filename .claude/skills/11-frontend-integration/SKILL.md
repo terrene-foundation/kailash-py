@@ -1,6 +1,6 @@
 ---
 name: frontend-integration
-description: "Frontend integration guides for React and Flutter with Kailash SDK workflows, including setup, API integration, state management, and best practices. Use when asking about 'frontend integration', 'React integration', 'Flutter integration', 'frontend developer', 'UI integration', 'React with Kailash', 'Flutter with Kailash', 'frontend workflow', 'API client', 'React query', or 'Flutter state management'."
+description: "Kailash frontend integration: React + Flutter — setup, API integration, state management, best practices."
 ---
 
 # Kailash Frontend Integration

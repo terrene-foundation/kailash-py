@@ -1,10 +1,16 @@
 ---
-priority: 0
-scope: baseline
+priority: 10
+scope: path-scoped
+paths:
+  - "**/.github/**"
+  - "**/CONTRIBUTING.md"
+  - "**/SECURITY.md"
+  - "**/.session-notes"
+  - "**/journal/**"
+  - "**/workspaces/**"
 ---
 
 # Upstream Issue Hygiene
-
 
 When a downstream session — a Python / Ruby / Rust binding consumer working with `kailash` / `kailash_*` packages — discovers a defect or feature gap in the underlying SDK, the natural action is to file an issue against the SDK repo. That action MUST be human-gated, and the issue body MUST contain ONLY information from the SDK's public-API surface — never the consumer project's name, internal paths, workspace identifiers, finding tags, or session context.
 
@@ -59,7 +65,7 @@ The issue body MUST NOT contain any of:
 - "Origin: <consumer-app>" footers, "<consumer-app> workaround" sections, "Discovered during <consumer-name> red team" lines
 - References to private SDK repos when filing on the public SDK repo
 
-```markdown
+````markdown
 # DO — body is scoped to the SDK API surface, no consumer context
 
 ## Summary
@@ -76,6 +82,7 @@ df = kailash.DataFlow("postgresql://...")
 df.execute_raw("INSERT INTO t (col) VALUES ($1)", [None])
 df.execute_raw("INSERT INTO t (col) VALUES ($1)", ["ascii-only"])  # raises UTF-8 error
 ```
+````
 
 # DO NOT — body carries consumer-project name + internal paths + finding IDs
 
@@ -91,7 +98,8 @@ live_oauth.py:192-237 and pseudo-atomic in oauth.py:470-536.
 ## Workspace
 
 workspaces/<consumer-app>/journal/0020-DISCOVERY-dataflow-execute-raw-utf8-corruption.md
-```
+
+````
 
 **BLOCKED rationalizations:**
 
@@ -131,32 +139,45 @@ df.execute_raw("CREATE TABLE t (col TEXT)")
 df.execute_raw("INSERT INTO t VALUES ($1)", [None])
 df.execute_raw("INSERT INTO t VALUES ($1)", ["ascii-only"])
 # Raises: psycopg.errors.CharacterNotInRepertoire: invalid byte sequence
-```
+````
 
 ## Expected vs actual
+
 Expected: ASCII-only string parameter binds correctly.
 Actual: UTF-8 decoding error on a parameter that contains zero non-ASCII bytes.
 
 ## Severity
+
 HIGH — corrupts data path; non-deterministic; reproduces in CI.
 
 ## Acceptance criteria
+
 - [ ] `execute_raw(sql, [None])` followed by `execute_raw(sql, [ascii_str])` succeeds.
 - [ ] Tier 2 regression test added at `tests/integration/dataflow/test_execute_raw_null_bind.py`.
 
 # DO NOT — the historical kitchen-sink shape
 
 ## Summary
+
 [5 paragraphs of context including consumer name]
+
 ## Workspace
+
 workspaces/<consumer-app>/journal/...
+
 ## Workaround
+
 The consumer worked around it by ... [3 paragraphs of consumer-internal architecture]
+
 ## Cross-SDK alignment
+
 This is the Python equivalent of <sibling-SDK>#NNN ...
+
 ## References
+
 - <consumer-app> shard: S36d
-- Tier 2 test suite: tests/integration/test_websocket_*.py [in the consumer repo]
+- Tier 2 test suite: tests/integration/test*websocket*\*.py [in the consumer repo]
+
 ```
 
 **BLOCKED rationalizations:**
@@ -184,3 +205,4 @@ This is the Python equivalent of <sibling-SDK>#NNN ...
 **Why:** Auto-cross-filing replicates whatever leakage the first body contained, doubling the surface area; cross-SDK parity is a maintainer concern, not a consumer one.
 
 Origin: A 2026-04-29 public SDK issue body leaked `F-G1-HIGH S-H3 finding (<consumer-app> repo, 2026-04-27): non-atomic store_tokens in live_oauth.py:192-237 and pseudo-atomic in oauth.py:470-536` into a public SDK issue. Sibling leaks confirmed across ~13 issues spanning two public SDK repos (consumer-app workspace paths, finding tags, "<consumer-app> workaround" sections, references to private SDK repos). Drafted as the structural defense after the leakage audit (loom 2026-04-30).
+```

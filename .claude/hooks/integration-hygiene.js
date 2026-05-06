@@ -5,31 +5,24 @@
  * Matcher: Edit|Write
  * Purpose: Catch integration-hygiene anti-patterns the moment they land in code.
  *
- *   Detects (advisory, non-blocking):
+ *   Detects (WARN, non-blocking):
  *   - Raw SQL strings in non-migration source files (DataFlow bypass)
  *   - MOCK_/FAKE_/DUMMY_/SAMPLE_ frontend constants (hidden stub data)
  *   - Silent-swallow exception handlers (`except: pass`, `catch(e){}`, bare rescue)
  *   - New endpoint handlers with no logger call in the function body
  *   - Raw HTTP client calls (requests./httpx./fetch()) without surrounding log
  *
- * Severity: advisory (per `hooks/lib/instruct-and-wait.js`).
- * Non-blocking by design — the agent acknowledges and self-corrects in
- * the same session. Blocking here would break too many legitimate edge
- * cases that the agent rightly ignores (test fixtures, SQL migration
- * tools, deliberately bare rescue blocks at framework cleanup boundaries).
- *
- * Output shape: routes through instructAndWait so the agent receives the
- * canonical WHAT HAPPENED / WHY / REPORT TO USER / THEN structure rather
- * than a flat array of validation strings (loom 2026-05-05 hook redesign).
+ * Returns WARN only -- never blocks. Intent is to surface the violation so the
+ * agent self-corrects in the same session. Blocking here would break too many
+ * legitimate edge cases that the agent rightly ignores.
  *
  * Exit Codes:
- *   0 = success / advisory warn
+ *   0 = success / warn
  *   1 = hook error (e.g. timeout, malformed input)
  */
 
 const fs = require("fs");
 const path = require("path");
-const { instructAndWait } = require("./lib/instruct-and-wait");
 
 const TIMEOUT_MS = 3000;
 const timeout = setTimeout(() => {
@@ -46,35 +39,16 @@ process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
     const result = checkFile(data);
-
-    // No findings → bare passthrough (no validation noise)
-    if (!result.findings || result.findings.length === 0) {
-      console.log(JSON.stringify({ continue: true }));
-      process.exit(0);
-      return;
-    }
-
-    // Findings → canonical advisory shape with each pattern enumerated
-    const fileLabel = result.rel || "(edit)";
-    const findingLines = result.findings.map(
-      (f) => `${f.rule}: ${f.message}`,
+    console.log(
+      JSON.stringify({
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: "PostToolUse",
+          validation: result.messages,
+        },
+      }),
     );
-
-    const out = instructAndWait({
-      hookEvent: "PostToolUse",
-      severity: "advisory",
-      what_happened: `${result.findings.length} integration-hygiene finding(s) on ${fileLabel}`,
-      why: "Multiple rules — see each REPORT line for the specific clause violated (zero-tolerance.md Rule 2 / Rule 3, framework-first.md, observability.md)",
-      agent_must_report: [
-        ...findingLines,
-        "Self-correct in this session: rewrite via the framework specialist OR add the missing log lines OR remove the mock-data constant",
-      ],
-      agent_must_wait:
-        "Acknowledge in your next message; do NOT defer to /redteam (these are write-time hygiene checks, not audit-time).",
-      user_summary: `integration-hygiene: ${result.findings.length} finding(s) on ${fileLabel.split("/").pop()}`,
-    });
-    console.log(JSON.stringify(out.json));
-    process.exit(out.exitCode);
+    process.exit(0);
   } catch (error) {
     console.error(`[HOOK ERROR] integration-hygiene: ${error.message}`);
     console.log(JSON.stringify({ continue: true }));
@@ -91,7 +65,7 @@ function checkFile(data) {
   const ext = path.extname(filePath).toLowerCase();
 
   const sourceExts = [".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".rb"];
-  if (!sourceExts.includes(ext)) return { findings: [] };
+  if (!sourceExts.includes(ext)) return { messages: [] };
 
   // Skip migration, test, and generated files -- they have legitimate
   // reasons to contain patterns this hook would otherwise flag.
@@ -100,17 +74,17 @@ function checkFile(data) {
       filePath,
     )
   ) {
-    return { findings: [] };
+    return { messages: [] };
   }
 
   let content = "";
   try {
     content = fs.readFileSync(filePath, "utf8");
   } catch {
-    return { findings: [] }; // file deleted or unreadable; nothing to check
+    return { messages: [] }; // file deleted or unreadable; nothing to check
   }
 
-  const findings = [];
+  const messages = [];
   const rel = path.relative(data.cwd || process.cwd(), filePath);
 
   // 1. Raw SQL strings outside migration files (DataFlow bypass)
@@ -120,7 +94,8 @@ function checkFile(data) {
     sqlPattern.test(content) &&
     !/\/(?:db|infrastructure|dialect)\//.test(filePath)
   ) {
-    findings.push({
+    messages.push({
+      severity: "warn",
       rule: "framework-first.md § Work-Domain Binding",
       message: `${rel}: raw SQL string detected. DataFlow (@db.model, db.express) is MANDATORY for all DB work. Consult dataflow-specialist.`,
     });
@@ -129,7 +104,8 @@ function checkFile(data) {
   // 2. Frontend mock-data constants
   const mockPattern = /\b(MOCK|FAKE|DUMMY|SAMPLE)_[A-Z][A-Z0-9_]*\s*[:=]/;
   if (mockPattern.test(content)) {
-    findings.push({
+    messages.push({
+      severity: "warn",
       rule: "zero-tolerance.md Rule 2",
       message: `${rel}: mock/fake/dummy constant detected. Frontend mock data is a stub -- remove before ship.`,
     });
@@ -147,7 +123,8 @@ function checkFile(data) {
   ];
   for (const { pat, lang } of silentSwallowPatterns) {
     if (pat.test(content)) {
-      findings.push({
+      messages.push({
+        severity: "warn",
         rule: "zero-tolerance.md Rule 3",
         message: `${rel}: silent ${lang} exception swallow. BLOCKED per Rule 3 -- log AND act (retry, fall back, re-raise) or re-raise.`,
       });
@@ -161,7 +138,8 @@ function checkFile(data) {
   const loggerPattern =
     /(?:logger\.(?:info|warn|warning|error|debug|exception)|structlog\.|Rails\.logger|semantic_logger|tracing::)/;
   if (endpointPattern.test(content) && !loggerPattern.test(content)) {
-    findings.push({
+    messages.push({
+      severity: "warn",
       rule: "observability.md § Mandatory Log Points",
       message: `${rel}: endpoint handler detected with no logger call. Every endpoint MUST log entry, exit, and error paths.`,
     });
@@ -171,11 +149,12 @@ function checkFile(data) {
   const rawHttpPattern =
     /(?:requests\.(?:get|post|put|patch|delete)|httpx\.(?:get|post|put|patch|delete)|\bfetch\s*\(|urllib\.request)/;
   if (rawHttpPattern.test(content) && !loggerPattern.test(content)) {
-    findings.push({
+    messages.push({
+      severity: "warn",
       rule: "framework-first.md § Work-Domain Binding + observability.md",
       message: `${rel}: raw HTTP client call detected with no surrounding log. Outbound integrations MUST log intent + result. Consult nexus-specialist.`,
     });
   }
 
-  return { rel, findings };
+  return { messages };
 }

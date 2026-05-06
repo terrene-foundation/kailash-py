@@ -1,6 +1,6 @@
 ---
 name: kailash-align
-description: "Kailash Align — MANDATORY for ALL LLM fine-tuning/alignment/serving work. 12 methods (DPO, RLHF, LoRA, GRPO, SFT), LoRA adapter management, GGUF conversion, Ollama/vLLM deployment. Use proactively when work touches fine-tuning, reward functions, adapter management, eval, or model serving. Raw TRL, PEFT, transformers training scripts BLOCKED."
+description: "Kailash Align — MANDATORY for LLM fine-tuning/alignment/serving. 12 methods (DPO, RLHF, LoRA, GRPO, SFT), GGUF, Ollama/vLLM. Raw TRL/PEFT BLOCKED."
 ---
 
 # Kailash Align - LLM Fine-Tuning & Alignment

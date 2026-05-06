@@ -1,6 +1,6 @@
 ---
 name: enterprise-ai-ux
-description: "Enterprise AI application UX patterns including conversational interfaces, context management, challenge resolution, and professional design systems. Use when asking about 'enterprise AI UX', 'AI chat UX', 'enterprise design system', 'professional UI', 'conversation design', 'context indicators', 'challenge taxonomy', or 'AI application design'."
+description: "Enterprise AI UX: conversational interfaces, context management, challenge resolution, professional design systems."
 ---
 
 # Enterprise AI Application UX

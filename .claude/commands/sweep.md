@@ -60,12 +60,18 @@ Surface: drafts >7d, PRs with red CI (never merge red — fix in same branch per
 
 `/redteam` re-derived as a repo-wide sweep. Use `skills/spec-compliance/SKILL.md` protocol — AST/grep verification, never file existence.
 
+Sweep 5 MUST invoke `tools/sweep-redteam.py` (or the equivalent at `tools/` for the consumer project's language) and embed its sentinel comment + findings into the sweep report. Substituting `tools/spec-cite-check.py` or any other proxy for the mandated per-spec symbol + Tier 2 coverage verification is BLOCKED — see `rules/sweep-completeness.md` for the human-gate requirement when proxy substitution is genuinely warranted. The TOOL is BUILD-local (each repo owns `tools/`); the SKILL text mandates the invocation pattern.
+
 ```bash
 for ws in workspaces/*/; do
   [ -d "$ws/specs" ] && echo "WORKSPACE: $ws"
 done
-# Per workspace, per spec: grep production source for each MUST symbol;
-# verify the contract holds; verify Tier 2 coverage exists.
+# Per workspace, per spec: invoke tools/sweep-redteam.py — single-pass
+# walk + compiled regex per MUST symbol; verify the contract holds;
+# verify Tier 2 coverage exists. Embed the tool's sentinel comment
+# `<!-- sweep-redteam:v1:OK specs=N symbols=M orphans=O coverage_gaps=C stubs=S -->`
+# into the sweep report so readers (and any future enforcement hook)
+# can verify the mandated step actually ran.
 ```
 
 Categorize findings:

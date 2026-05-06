@@ -1,6 +1,6 @@
 ---
 name: nodes-reference
-description: "Comprehensive node reference documentation for all 110+ Kailash SDK nodes organized by category: AI, API, Code, Data, Database, File, Logic, Monitoring, Admin, Transaction, and Transform nodes. Use when asking about 'node reference', 'available nodes', 'node list', 'AI nodes', 'API nodes', 'code nodes', 'data nodes', 'database nodes', 'file nodes', 'logic nodes', 'monitoring nodes', 'transaction nodes', 'transform nodes', 'which nodes', 'node documentation', or 'node capabilities'."
+description: "Kailash 110+ nodes by category: AI, API, Code, Data, Database, File, Logic, Monitoring, Admin, Transaction, Transform. Use for node reference, lookup, capability questions."
 ---
 
 # Kailash Nodes - Complete Reference

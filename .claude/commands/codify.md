@@ -136,8 +136,7 @@ Deploy these agents as a team for codification:
 
 **Creation team:**
 
-- **reviewer** — Validate that skill examples are correct and runnable
-- **reviewer** — Review agent/skill quality before finalizing
+- **reviewer** — Validate skill examples are runnable + review agent/skill quality before finalizing
 
 **Validation team (red team the agents and skills):**
 
