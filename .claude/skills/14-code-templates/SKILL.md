@@ -1,6 +1,6 @@
 ---
 name: code-templates
-description: "Production-ready code templates for Kailash SDK including basic workflows, cyclic workflows, custom nodes, MCP servers, and all three test tiers (unit, integration, end-to-end). Use when asking about 'template', 'example code', 'starter code', 'boilerplate', 'scaffold', 'workflow template', 'custom node template', 'MCP server template', 'test template', 'unit test template', 'integration test template', or 'E2E test template'."
+description: "Kailash code templates: workflows (basic + cyclic), custom nodes, MCP servers, all 3 test tiers (unit/integration/E2E)."
 ---
 
 # Kailash Code Templates

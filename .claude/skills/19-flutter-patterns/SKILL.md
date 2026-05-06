@@ -1,6 +1,6 @@
 ---
 name: flutter-patterns
-description: "Flutter development patterns including design system creation, responsive layouts, state management, and cross-platform best practices. Use when asking about 'Flutter design system', 'Flutter patterns', 'responsive Flutter', 'Flutter components', 'Flutter theming', 'dark mode', 'Flutter architecture', or 'cross-platform Flutter'."
+description: "Flutter development: design systems, responsive layouts, state management, cross-platform best practices."
 ---
 
 # Flutter Development Patterns

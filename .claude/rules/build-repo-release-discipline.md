@@ -24,7 +24,7 @@ ALL sessions in a BUILD repo (the SDK source repo this rule ships to) that merge
 
 ## ABSOLUTE: "Done" Means Released, Not Merged
 
-A session touching BUILD-repo source (new feature, bug fix, refactor) MUST proceed through the full release cycle — admin-merge → `/release` → PyPI publication → installable verification — within the same session. Reporting "done" / "complete" / "shipped" at admin-merge is BLOCKED. Test-only, docs-only, and workspace-only diffs are carved out per Rule 1a — those produce no consumer-visible artifact change and the carve-out lets them merge without `/release`.
+A session touching BUILD-repo source (new feature, bug fix, refactor, new test, new docs surface) MUST proceed through the full release cycle — admin-merge → `/release` → PyPI publication → installable verification — within the same session. Reporting "done" / "complete" / "shipped" at admin-merge is BLOCKED.
 
 **Why:** Downstream consumers (USE templates, application repos, external packages like MLFP coursework, third-party integrations) consume BUILD repos only via PyPI. A PR merged to BUILD-main is invisible to everyone downstream until the release cut. Stopping at merge conflates BUILD-state with consumable-state and leaves every consumer blocked on the next scheduled release — which may be days or weeks away.
 

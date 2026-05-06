@@ -1,6 +1,6 @@
 ---
 name: enterprise-infrastructure
-description: "Enterprise infrastructure patterns including progressive infrastructure model, dialect-portable SQL, store factory, task queues, worker management, and idempotency. Use when asking about 'database portability', 'store factory', 'task queue', 'KAILASH_DATABASE_URL', 'idempotency', 'worker registry', 'SKIP LOCKED', 'Level 0/1/2', 'ConnectionManager', or 'QueryDialect'."
+description: "Kailash enterprise infra: progressive infrastructure, dialect-portable SQL, store factory, task queues, worker registry, idempotency."
 ---
 
 # Enterprise Infrastructure - Skills

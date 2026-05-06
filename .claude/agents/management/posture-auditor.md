@@ -1,6 +1,6 @@
 ---
 name: posture-auditor
-description: Read-only trust posture auditor. Use weekly or after a violation cluster to scan violations.jsonl + posture.json and recommend posture changes. Cannot self-modify state — recommendations route through /posture upgrade or /posture override (human-gated nonce).
+description: Trust posture auditor. Read-only sweep of violations.jsonl + posture.json; recommends via /posture upgrade or override.
 tools: Read, Grep, Glob, Bash
 ---
 

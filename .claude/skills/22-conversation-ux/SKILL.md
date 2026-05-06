@@ -1,6 +1,6 @@
 ---
 name: conversation-ux
-description: "Conversation UX patterns for AI applications including multi-conversation management, branching threads, context switching, and chat history organization. Use when asking about 'conversation UX', 'multi-conversation', 'chat threads', 'conversation branching', 'chat history', 'context switching', 'Lark-style chat', 'conversation management', or 'thread navigation'."
+description: "Conversation UX for AI apps: multi-conversation management, thread branching, context switching, chat history organization."
 ---
 
 # Conversation UX Patterns

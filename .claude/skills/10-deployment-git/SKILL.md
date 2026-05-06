@@ -1,6 +1,6 @@
 ---
 name: deployment-git
-description: "SDK release and Git workflow guides for the Kailash Python SDK including PyPI publishing, CI/CD pipelines, documentation deployment, and Git workflows. Use when asking about 'deployment', 'release', 'PyPI publish', 'CI/CD', 'GitHub Actions', 'documentation deployment', 'TestPyPI', 'wheel building', 'version bump', 'changelog', 'Git workflow', 'Git branching', 'package release', or 'multi-package coordination'."
+description: "Kailash deployment + Git: PyPI publish, CI/CD, docs deployment, TestPyPI, wheels, version bump, branching, multi-package coordination."
 ---
 
 # SDK Release & Git Workflows

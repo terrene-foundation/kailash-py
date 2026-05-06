@@ -181,6 +181,39 @@ When a spec file exceeds 300 lines, it MUST be split into sub-domain files and `
 
 **Why:** Oversized spec files crowd out implementation reasoning when loaded into context, and make delegation prompts enormous.
 
+### 9. Workspace Specs Reference Canonical Artifacts (Not Restate)
+
+When a workspace spec describes the mechanism of a canonical artifact (a command, rule, skill, hook, or agent under `.claude/`), the spec MUST cite the artifact by `<path>:<line>` (or `<path> §<section>`) rather than restating the artifact's verbatim content.
+
+```text
+# DO — workspace spec references canonical source
+
+The lint at `.claude/commands/cc-audit.md:35` flags any non-`paths:` key in
+opening rule frontmatter. Block-scoping is preserved by the `i==1` predicate
+(see line 35 of the canonical command).
+
+# DO NOT — workspace spec restates the implementation
+
+awk 'FNR==1{i=0} /^---$/{i++; next} i==1 && ...' .claude/rules/*.md
+
+(verbatim copy of the awk line that already lives in
+`.claude/commands/cc-audit.md:35` — update to one without
+the other creates silent drift)
+```
+
+**BLOCKED responses:**
+
+- "Restating makes the spec self-contained, which is more readable"
+- "The reader shouldn't have to open the canonical artifact to understand the spec"
+- "Specs and canonical artifacts will stay in sync; nothing to worry about"
+- "Both versions are short — duplication is fine"
+
+**Why:** Workspace specs describe semantics while canonical artifacts encode implementation; restating implementation in specs creates parallel sources of truth that drift silently. The reference style forces the canonical artifact to be the single source of truth and forces specs to focus on what they uniquely contribute — semantics, invariants, and rationale.
+
+**Exception:** Educational specs in `.claude/rules/` that show DO / DO NOT implementations per `rules/cc-artifacts.md` MUST §3 are explicitly NOT covered by this rule — those examples teach by restating. The exception applies only to *workspace* specs (under `workspaces/<project>/specs/`), not canonical rule files.
+
+Origin: atelier `cc-audit-lint-generalize` 2026-05-03 (test fixtures and spec canonicalization deferred to /codify; /vet adversarial round L1). Inbound from atelier `/sync-to-coc`.
+
 ## MUST NOT
 
 - Organize specs by COC process stages (duplicates workspaces/)

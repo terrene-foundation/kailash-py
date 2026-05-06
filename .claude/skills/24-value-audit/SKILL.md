@@ -1,6 +1,6 @@
 ---
 name: value-audit
-description: Value-critical QA methodology for enterprise product demos. Evaluates products from skeptical buyer perspective — value propositions, value flow coherence, data credibility, narrative strength. Use when asking about 'value audit', 'demo readiness', 'demo critique', 'value flow', 'demo QA', 'client perspective', 'enterprise demo', 'value chain analysis', 'demo data', 'narrative coherence', or 'product story'.
+description: "Value-critical QA for enterprise demos: skeptical-buyer evaluation of value props, value flow, data credibility, narrative coherence."
 ---
 
 # Value Audit Skills

@@ -1,6 +1,6 @@
 ---
 name: validation-patterns
-description: "Validation patterns and compliance checking for Kailash SDK including parameter validation, DataFlow pattern validation, connection validation, absolute import validation, workflow structure validation, security validation, and codebase hygiene marker scrubbing. Use when asking about 'validation', 'validate', 'check compliance', 'verify', 'lint', 'code review', 'parameter validation', 'connection validation', 'import validation', 'security validation', 'workflow validation', 'codebase hygiene', 'TODO marker scrub', 'marker cleanup', 'three-layer gate', or 'regex gate'."
+description: "Kailash validation: parameter, DataFlow, connection, import, workflow structure, security, codebase-hygiene marker scrubbing."
 ---
 
 # Kailash Validation Patterns

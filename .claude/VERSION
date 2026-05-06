@@ -6,10 +6,10 @@
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.20.0",
-    "build_version": "2.20.0",
-    "synced_at": "2026-05-06T01:30:59Z",
-    "loom_sha": "5811f4c",
+    "version": "2.21.2",
+    "build_version": "2.21.2",
+    "synced_at": "2026-05-06T18:10:00Z",
+    "loom_sha": "c52c1e0",
     "sdk_packages": {
       "kailash": "2.13.3",
       "kailash-dataflow": "2.7.5",
@@ -21,8 +21,8 @@
       "kailash-align": "0.7.0",
       "kaizen-agents": "0.9.4"
     },
-    "template_version": "2.20.0",
-    "source_commit": "5811f4c"
+    "template_version": "2.21.2",
+    "source_commit": "c52c1e0"
   },
   "changelog": [
     {

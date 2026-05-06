@@ -1,6 +1,6 @@
 ---
 name: kailash-ml
-description: "Kailash ML 1.0.0 — MANDATORY for ALL ML training/inference/feature/drift/AutoML/RL work. Engine-first km.* surface (train/register/serve/track/diagnose/watch/dashboard/seed/reproduce/resume/lineage/rl_train/engine_info/list_engines/autolog) + 18 engines. Raw sklearn / pytorch / numpy training loops BLOCKED."
+description: "Kailash ML — MANDATORY for ML training/inference/feature/drift/AutoML/RL. Engine-first km.* surface + 18 engines. Raw sklearn/pytorch BLOCKED."
 ---
 
 # Kailash ML 1.0.0 — Classical / Deep Learning / RL Lifecycle
@@ -145,38 +145,28 @@ pip install kailash-ml[all-gpu]   # Everything (GPU)
 
 ## Quick Start
 
-### Feature Retrieval (canonical 1.0+ surface)
+### Feature Ingestion
 
 ```python
-from dataflow import DataFlow
-from kailash_ml.features import FeatureStore, FeatureSchema, FeatureField
+from kailash.db.connection import ConnectionManager
+from kailash_ml import FeatureStore
+from kailash_ml.types import FeatureSchema, FeatureField
+import polars as pl
 
-# 1. Live DataFlow instance owns the connection pool + schema migrations.
-df = DataFlow("sqlite:///ml.db", auto_migrate=True)
+conn = ConnectionManager("sqlite:///ml.db")
+await conn.initialize()
 
-# 2. Define the feature schema (polars-native dtype allowlist).
 schema = FeatureSchema(
     name="user_churn",
-    version=1,
-    fields=(
-        FeatureField(name="login_count_7d", dtype="int64"),
-        FeatureField(name="purchase_amount_30d", dtype="float64"),
-    ),
-    entity_id_column="user_id",
-    timestamp_column="event_time",
+    features=[
+        FeatureField(name="age", dtype="float"),
+        FeatureField(name="tenure_months", dtype="float"),
+    ],
+    target=FeatureField(name="churned", dtype="int"),
 )
 
-# 3. Construct the FeatureStore as a tenant-scoped DataFlow bridge.
-fs = FeatureStore(df, default_tenant_id="acme")
-features = await fs.get_features(schema, tenant_id="acme")
-```
-
-Migration note: top-level `from kailash_ml import FeatureStore` still
-works for 1.x callers but emits a `DeprecationWarning` at 1.7+ and resolves
-to the legacy `kailash_ml.engines.feature_store` module whose constructor
-takes a `ConnectionManager`. The legacy resolution will be removed in
-kailash-ml 2.0.0 — migrate to `from kailash_ml.features import FeatureStore`
-now. See `packages/kailash-ml/MIGRATION.md` for the full recipe.
+fs = FeatureStore(conn, table_prefix="kml_feat_")
+await fs.initialize()
 
 df = pl.read_csv("data.csv")
 await fs.ingest("user_features", schema, df)

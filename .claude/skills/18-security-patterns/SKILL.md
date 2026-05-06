@@ -1,6 +1,6 @@
 ---
 name: security-patterns
-description: "Security patterns and best practices for Kailash SDK including input validation, secret management, injection prevention, authentication, authorization, and OWASP compliance. Use when asking about 'security', 'secrets', 'authentication', 'authorization', 'injection prevention', 'input validation', 'OWASP', 'credentials', 'API keys', 'secure coding', or 'security review'."
+description: "Kailash security: input validation, secret management, injection prevention, authn/z, OWASP compliance. Use for credentials, API keys, secure coding, security review."
 ---
 
 # Security Patterns - Kailash SDK
