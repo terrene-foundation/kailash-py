@@ -1210,6 +1210,19 @@ Check the documentation or explore available resources.
         # The enable_http_transport / enable_sse_transport flags below
         # gate ADDITIONAL sub-transports the server can expose, NOT the
         # base WebSocket listener — that one is always bound.
+        # NOTE — circuit_breaker_config intentionally omitted.
+        # kailash_mcp.MCPServer ships a circuit-breaker pre-check that
+        # constructs ``MCPError("Circuit breaker check")`` with the default
+        # ``retryable=False`` and feeds it into ``should_retry()`` (server.py
+        # line 929-940). In the closed state, ``should_retry()`` returns
+        # ``error.is_retryable()`` — which is False for that synthetic error
+        # — so EVERY tool call fails on the first attempt with
+        # "Circuit breaker open for <tool>". Passing ``circuit_breaker_config=None``
+        # (the default) sets ``self.circuit_breaker = None`` (server.py line 538)
+        # so the gate at line 929 short-circuits past the broken check.
+        # This is a workaround for the upstream behavior; until kailash_mcp
+        # adjusts its synthetic-error retryability the breaker cannot be
+        # enabled here.
         server = MCPServer(
             name=f"{self.name}-mcp",
             transport="websocket",
@@ -1221,29 +1234,29 @@ Check the documentation or explore available resources.
             enable_http_transport=self._enable_http_transport,
             enable_sse_transport=self._enable_sse_transport,
             rate_limit_config=self.rate_limit_config,
-            circuit_breaker_config={"failure_threshold": 5},
             enable_discovery=self._enable_discovery,
             enable_streaming=True,
         )
 
-        # Register default system information as a resource
+        # Register default system information as a resource.
+        # Resource handlers MUST return a JSON string (or other plain text)
+        # — MCPServer's _handle_read_resource calls str(handler()) into the
+        # response's text field. Returning a dict produces Python repr()
+        # which is not valid JSON. See _register_default_mcp_resources for
+        # the same str(handler()) contract on docs/config/help resources.
         @server.resource("system://nexus/info")
-        async def get_system_info() -> Dict[str, Any]:
-            """Provide Nexus system information."""
-            return {
-                "uri": "system://nexus/info",
-                "mimeType": "application/json",
-                "content": json.dumps(
-                    {
-                        "platform": "Kailash Nexus",
-                        "version": "1.0.0",
-                        "workflows": list(self._workflows.keys()),
-                        "capabilities": ["tools", "resources", "prompts"],
-                        "transports": self._get_enabled_transports(),
-                    },
-                    indent=2,
-                ),
-            }
+        async def get_system_info() -> str:
+            """Provide Nexus system information as a JSON string."""
+            return json.dumps(
+                {
+                    "platform": "Kailash Nexus",
+                    "version": "1.0.0",
+                    "workflows": list(self._workflows.keys()),
+                    "capabilities": ["tools", "resources", "prompts"],
+                    "transports": self._get_enabled_transports(),
+                },
+                indent=2,
+            )
 
         return server
 
@@ -1299,19 +1312,56 @@ Check the documentation or explore available resources.
         shared_runtime = self.runtime
 
         async def workflow_tool(**params):
-            """Execute workflow with given parameters."""
+            """Execute workflow with given parameters.
+
+            Args from MCP ``tools/call`` arrive as kwargs in ``params``.
+            They are wrapped under the ``parameters`` key when forwarded to
+            the runtime — Kailash workflow nodes (esp. PythonCodeNode) read
+            their inputs as ``parameters.get(...)`` from the executing
+            namespace, so the workflow's ``parameters`` variable is the
+            on-wire convention shared with the HTTP /execute endpoint.
+
+            Returns a JSON string. ``MCPServer._handle_call_tool`` wraps
+            the return value with ``str(result)`` into a text content
+            item; downstream MCP clients expect that text to be parseable
+            JSON (per MCP 2025-06-18 ``tools/call`` response shape).
+            Returning a Python dict here would produce Python repr() in
+            the response (single-quoted keys) which is NOT valid JSON.
+            """
+            import json
+
             execution_result = await shared_runtime.execute_workflow_async(
-                workflow, inputs=params
+                workflow, inputs={"parameters": params}
             )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
             else:
                 results = execution_result.get("results", execution_result)
                 run_id = execution_result.get("run_id", None)
-            return {
-                "results": results,
-                "run_id": run_id,
-            }
+
+            # Workflows commonly produce one node's ``result`` dict (the
+            # PythonCodeNode convention is ``result = {...}`` at end of
+            # script). Surface that shape directly when there's a single
+            # node-result so MCP clients see ``{"analysis": {...}}`` not
+            # ``{"node_id": {"result": {"analysis": {...}}}}``.
+            #
+            # Fallback: surface the full ``results`` map alongside run_id
+            # when the workflow has multiple nodes / non-trivial output.
+            payload: Dict[str, Any]
+            if (
+                isinstance(results, dict)
+                and len(results) == 1
+                and isinstance(next(iter(results.values())), dict)
+                and "result" in next(iter(results.values()))
+            ):
+                inner = next(iter(results.values()))["result"]
+                if isinstance(inner, dict):
+                    payload = inner
+                else:
+                    payload = {"result": inner, "run_id": run_id}
+            else:
+                payload = {"results": results, "run_id": run_id}
+            return json.dumps(payload)
 
         # Set the function name so MCPServer's tool decorator picks it up
         # (the decorator uses func.__name__ when no explicit name kwarg is
