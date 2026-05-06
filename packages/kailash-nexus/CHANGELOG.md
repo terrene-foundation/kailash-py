@@ -1,5 +1,30 @@
 # Nexus Changelog
 
+## [Unreleased] — fix MCP WebSocket transport binding (#816)
+
+Wires the MCP WebSocket transport so AI agents can actually connect to a Nexus instance over `ws://host:mcp_port`. Prior to this fix the MCP server was constructed in stdio mode and never bound a TCP listener — every WebSocket connect attempt failed with a connection-refused error.
+
+### Fixed
+
+- **MCP WebSocket transport bound on `_mcp_port` (#816)** — `Nexus._initialize_mcp_server` now constructs `kailash_mcp.MCPServer` with `transport="websocket"`, `websocket_host="0.0.0.0"`, and `websocket_port=self._mcp_port`. Previously the server defaulted to `transport="stdio"` and dispatched through `MCPServerBase.start()` (hardcoded to stdio); the `_mcp_port` attribute was never actually bound. AI agents connecting via `ws://localhost:<mcp_port>` now reach a real WebSocket listener that handles MCP 2025-06-18 JSON-RPC dispatch (`tools/list`, `resources/list`, `tools/call`, `resources/read`, etc.).
+- **WebSocket-only mode supported** — `enable_http_transport=False AND enable_sse_transport=False` is now a first-class deployment shape (the canonical AI-agent-only configuration). Previously `_initialize_mcp_server` early-exited and set `_mcp_server = None` whenever HTTP was disabled, leaving the WebSocket transport orphaned. The HTTP/SSE flags now correctly gate only the **additional** sub-transports inside the MCP server, not the always-on WebSocket listener.
+- **Workflow-as-MCP-tool registration via the proper decorator path** — `_register_workflow_as_mcp_tool` now registers via `mcp_server.tool()(workflow_tool)` instead of writing to `mcp_server._tools[name]` directly. The previous direct write populated only the FastMCP-shim dict (which the MCPServer's JSON-RPC handlers do NOT read); the decorator path populates `_tool_registry` which `tools/list` actually iterates. Workflows registered before this fix never appeared in `tools/list` over WebSocket.
+- **Workflow inputs forwarded under `parameters` key** — `workflow_tool` now passes `inputs={"parameters": params}` to `execute_workflow_async`, matching the on-wire convention shared with the HTTP `/execute` endpoint. PythonCodeNode workflows reading `parameters.get(...)` now receive their args correctly. Previously args arrived as direct top-level keys, raising `NameError: name 'parameters' is not defined`.
+- **JSON response payloads** — `workflow_tool` and resource handlers now return JSON strings rather than Python dicts. `MCPServer._handle_call_tool` and `_handle_read_resource` wrap return values via `str(...)`; returning a dict produced Python repr() (single-quoted keys), invalid JSON for downstream MCP clients. Single-node workflow results are unwrapped from `{"<node_id>": {"result": {...}}}` to the inner dict so agents see `{"echo": "hello"}` not `{"echo": {"result": {...}}}`.
+- **`workflow://<name>` resources registered per-workflow** — `Nexus.register()` now installs a `workflow://<name>` MCP resource alongside the tool registration. `resources/list` returns the workflow descriptor URIs and `resources/read workflow://<name>` returns a JSON-encoded summary of the workflow's nodes and schema.
+- **Default MCP resources wired** — `_register_default_mcp_resources()` (previously orphan code, never called) now registers `docs://quickstart`, `config://platform`, and `help://getting-started` via the proper `@server.resource()` decorator path so they appear in `resources/list`. `system://nexus/info` returns a JSON string instead of a dict-with-content-field.
+- **Circuit-breaker disabled in MCP server** — Removed `circuit_breaker_config={"failure_threshold": 5}` from `MCPServer` construction. The kailash_mcp circuit-breaker pre-check synthesizes `MCPError("Circuit breaker check")` with the default `retryable=False`, which causes `should_retry()` to return False on the very first tool call in the closed state. The `circuit_breaker_config=None` default disables the pre-check until the upstream behavior is corrected.
+
+### Tests
+
+- `packages/kailash-nexus/tests/integration/test_mcp_websocket_discovery.py` — new Tier-2 sibling test covering the MCP WebSocket discovery contract (5 tests: tools/list, resources/list, system info JSON, tools/call JSON payload, workflow resource read). Independent of `tests/e2e/test_ai_agent_workflows.py` so an E2E flake does not lose discovery-contract coverage.
+- All 7 tests under `tests/e2e/test_ai_agent_workflows.py::TestAIAgentScenarios` (using the `production_nexus` fixture) now pass.
+
+### Internal
+
+- `_run_mcp_server` calls `MCPServer.run()` (which dispatches on the `transport` attribute) instead of `MCPServer.start()` (which hardcodes stdio).
+- MCPChannel is bypassed in WebSocket-only mode — its `_server_loop` only sleeps and binds nothing, so it adds no value when HTTP/SSE sub-transports are off.
+
 ## [2.6.1] — 2026-05-03 — issue #781 hygiene release (T4)
 
 Patch release cutting PyPI for T4 (nexus TODO-NNN comment-strip) of the issue #781 cleanup workstream.
