@@ -1,5 +1,27 @@
 # DataFlow Changelog
 
+## [2.7.8] — 2026-05-06 — CLI generate command: filename validation hardening
+
+Patch release closing a Tier-1 test isolation bug AND the production code path that allowed it. Bug fix; no API surface change; no migration required.
+
+### Fixed
+
+- **CLI `dataflow generate docs` no longer accepts unsafe `workflow.name` values for filename interpolation.** `dataflow.cli.generate.docs` previously interpolated `workflow.name` directly into the output filename via `f"{workflow.name}.md"`. Any non-string, path-traversal substring (`..`), or filesystem-unsafe character (`/`, `\`, control chars, shell metacharacters) was written to disk verbatim. Now routes through `dataflow.utils.filenames.safe_workflow_filename(name, ext)` which validates against `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`, rejects path-traversal substrings, and raises `WorkflowNameError` (a `ValueError` subclass) on any invalid input.
+
+### Added
+
+- **NEW: `dataflow.utils.filenames`** — public helper module exporting `safe_workflow_filename()` and `WorkflowNameError`. Same trust-boundary discipline as `dialect.quote_identifier()` for SQL identifiers, applied to filesystem identifiers. Logs at WARN with a hashed `sha256[:8]` fingerprint on rejection (per `observability.md` Rule 8 — the raw input is never echoed to logs).
+- **NEW: 52 Tier-1 regression tests** at `tests/unit/utils/test_filenames.py` pinning the helper's accept/reject contract: 9 accepted forms, 23 rejected forms (path-traversal, control chars, shell metacharacters, length cap, Unicode bidi-override, non-string, Mock-repr leak vector), 9 extension validation cases, plus error-message and logging hygiene assertions.
+- **NEW regression test** `test_generate_documentation_rejects_unsafe_workflow_name` at `tests/unit/cli/test_generate_command.py` — exercises the historical Mock-leak vector end-to-end through the Click runner; asserts `exit_code == 2` and zero `<Mock` files written.
+
+### Changed
+
+- **`tests/unit/cli/test_generate_command.py`** — replaced `Mock(name="test_workflow")` (which sets the Mock's repr-name, NOT `.name`) with a `_make_workflow_mock()` helper that constructs the Mock then assigns `.name = "test_workflow"` post-construction. The `docs` test now uses `tmp_path` for `--output-dir` (per `tests/unit/CLAUDE.md` Tier-1 filesystem-isolation contract); previously pointed at the real `./docs/` directory and `Path.write_text` (used by `generate.py`) is NOT intercepted by `patch("builtins.open", mock_open())`.
+
+### Origin
+
+108 orphan `<Mock name='test_workflow.name' id='*'>.md` files accumulated under `docs/` (107) and `packages/kailash-dataflow/docs/` (1) since 2026-04-15 because the `unittest.mock.Mock(name=...)` API surface diverges from caller expectation: the `name=` kwarg sets the Mock's repr-name, NOT the `.name` attribute. Production code that f-strings `workflow.name` into a filename interpolated the child-Mock's `__str__` ("`<Mock name='test_workflow.name' id='...'>`") into a real path. Fix is two-layered: (a) the production code now validates at the trust boundary regardless of test-side correctness, (b) the test correctly constructs the Mock and uses `tmp_path`. Workspace `issue-829-kaizen-llm-first-traits/journal/0005-DECISION-codify-loopback-close-after-loom-sync-2.20.0.md` § F4 captures the discovery and the orphan-file cleanup.
+
 ## [2.7.7] — 2026-05-04 — engine.py pyright cleanup (dataflow-engine-pyright-cleanup workspace)
 
 Patch release cutting PyPI for the dataflow-engine-pyright-cleanup workspace (T1–T8). Static-analysis-only diff: brings `engine.py` from `5 errors, 56 warnings` to `0 errors, 8 warnings` against pinned `pyright==1.1.371`.
