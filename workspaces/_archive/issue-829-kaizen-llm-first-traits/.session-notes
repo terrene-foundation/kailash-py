@@ -1,0 +1,48 @@
+# Session Notes — 2026-05-06
+
+## Where we are
+
+Issue #829 fully closed: codify loop-back done after loom 2.20.0 sync; F4
+docs/Mock leak fixed AND released. kailash-dataflow 2.7.8 live on PyPI
+(verified clean-venv install). Workspace is closeable — todos all in
+`completed/`, journal 0001-0005 complete, redteam clean.
+
+## Read first
+
+1. `journal/0005-DECISION-codify-loopback-close-after-loom-sync-2.20.0.md` —
+   loop-back close decision + the 4 surfaced findings (F1-F4).
+2. `journal/0004-DECISION-codified-rule-4-amend-and-conftest-stub-pattern.md` —
+   what was upstreamed to loom (Rule 4 amend + conftest stub).
+3. `.claude/.proposals/latest.yaml` — proposal status: `distributed`.
+4. `packages/kailash-dataflow/src/dataflow/utils/filenames.py` — new helper
+   that closed F4 (entry point if continuing the validation theme).
+5. `CLAUDE.md` — entry point if pivoting to a different workstream.
+
+## In-flight state
+
+- Workspace `todos/active/` is empty. Workspace itself is closeable —
+  next session can `git mv` it to `workspaces/_archive/` if no follow-up
+  attaches, OR leave it in place as a reference.
+- F1 (synced `coc-sync-landing.md` shipped without `## Trust Posture
+  Wiring` section) is loom-side; surfaced to user, not autonomously filed.
+- Cross-SDK inspection per `cross-sdk-inspection.md`: kailash-rs may have
+  the same doc-generator Mock-leak class — out of repo-scope here. Pick
+  it up in next kailash-rs session.
+
+## Traps
+
+- 3 pre-existing pyright warnings in
+  `packages/kailash-dataflow/src/dataflow/cli/generate.py:52/110/149`
+  ("Inspector lacks generate_report/generate_diagram/generate_documentation").
+  Pre-existing duck-typing; needs dataflow-specialist + Inspector class
+  refactor — separate workstream, not blocking.
+- `Mock(name="X")` sets the Mock's repr-name, NOT `.name` — anytime a
+  Mock-derived value flows into a filesystem path or other identifier
+  surface, route through `dataflow.utils.filenames.safe_workflow_filename`
+  or assert-test against `WorkflowNameError`. The bug recurs silently
+  whenever this anti-pattern is re-introduced.
+- The 4 sibling `tests/unit/cli/test_*_command.py` files all use
+  `Mock(name="test_workflow")` — they don't currently leak (only the
+  `docs` subcommand interpolates `.name` into a filename) but the same
+  anti-pattern is one signature change away from leaking again. Fix
+  preventatively if touching those tests.

@@ -1,0 +1,32 @@
+# Session Notes — 2026-05-06
+
+## Where we are
+
+`/implement` complete for issue #835 (DataFlow async transaction event-loop
+mismatch). All 9 Tier-2 regression tests pass against real Postgres + 12
+sibling tests (#707, #711) green + mypy + pre-commit clean. Working-tree
+diff ready; no commits per BUILD-repo standing feedback. Next is Todo 05
+(PR assembly).
+
+## Read first
+
+1. `workspaces/issue-835-dataflow-transaction-eventloop/journal/0008-DISCOVERY-tier2-verification-found-adapter-shape-mismatch.md` — the post-Phase-1 fix that emerged from Tier-2; explains the `connection_pool` vs `_pool` adapter normalization currently in `transactions.py`.
+2. `workspaces/issue-835-dataflow-transaction-eventloop/journal/0007-DECISION-implement-discoveries-fold-todo-07-and-defer-strict-mode-orphans.md` — Todo 07 was folded into Phase 1; `StrictConnectionValidator` orphan tests deferred.
+3. `workspaces/issue-835-dataflow-transaction-eventloop/todos/active/05-pr-assembly-and-changelog.md` — the 4-commit ordering, CHANGELOG text, PR body template, and pre-FIRST-push CI parity commands.
+4. `workspaces/issue-835-dataflow-transaction-eventloop/journal/0004-DECISION-revised-plan-after-red-team-c1c2c3-h2h3h4h5h6-m2.md` — the revised architecture plan rationale; supersedes journal 0002.
+5. `specs/dataflow-cache.md` §12.1 + §13.4 — the post-merge spec text added in Phase 4.
+
+## In-flight state
+
+- Working-tree diff is uncommitted (BUILD-repo discipline). 6 files modified + 1 new test file across `packages/kailash-dataflow/` and `specs/dataflow-cache.md`.
+- Issue #829 workspace was archived to `workspaces/_archive/` via `git mv` earlier; renames still uncommitted.
+- A separate follow-up surfaced but NOT filed: 1861 LOC of orphan tests for `dataflow.validators.connection_validator.StrictConnectionValidator` (a non-existent module). User-gated whether to investigate or delete.
+
+## Traps
+
+- `AsyncSQLDatabaseNode._get_adapter()` returns the core-SDK `ProductionPostgreSQLAdapter` whose pool is `self._pool`, NOT `connection_pool`. Read pool via `getattr(adapter, "connection_pool", None) or getattr(adapter, "_pool", None)` — see `transactions.py:271-280`. Removing this normalizer breaks 8 of 9 #835 regression tests.
+- `_get_cached_db_node` does NOT exist on DataFlow; the actual helper is `_get_or_create_async_sql_node(db_type)` at `core/engine.py:7794`. Older grep hits in journals/docstrings reference the obsolete name as historical context.
+- `_get_adapter_from_context` is now `async`; every caller MUST `await` it.
+- `pytest --collect-only` against `packages/kailash-dataflow/tests/` fails on 2 pre-existing strict-mode test files. Use `--ignore=` or scope to a sub-tree until the orphan tests are addressed.
+- Tests that need a fresh event loop inside a pytest-asyncio test MUST run on a worker thread (`asyncio.to_thread(...)`) — `loop.run_until_complete` from inside an `async def` test raises "another loop is running".
+- BUILD repo: never auto-commit / push / open PR / file `gh issue create`. Working-tree only; user owns the merge. Per the session-start `[RELEASE-DRIFT]` advisories, multiple sub-packages may be unreleased — investigate via `node .claude/hooks/lib/release-drift.js` only after #835's PR merges (Todo 08).
