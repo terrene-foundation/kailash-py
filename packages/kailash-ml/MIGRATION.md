@@ -275,17 +275,56 @@ removed; imports fail hard.
 # 0.x -- top-level primitive imports
 from kailash_ml import FeatureStore, ModelRegistry, TrainingPipeline
 
-# 1.0.0 -- primitives still re-exported at top level for 1.x compatibility
-from kailash_ml import FeatureStore, ModelRegistry, TrainingPipeline  # works
+# 1.7.x bridge release (issue #643) — top-level import still works,
+# now emits DeprecationWarning on first access pointing at the canonical
+# surface. Resolves to the LEGACY module
+# `kailash_ml.engines.feature_store.FeatureStore` whose constructor is
+# `FeatureStore(conn: ConnectionManager, *, table_prefix=...)`.
+from kailash_ml import FeatureStore  # DeprecationWarning emitted
 
-# 2.x -- same imports emit DeprecationWarning pointing at km.* replacements
-# DeprecationWarning: `FeatureStore` is moving to `kailash_ml.legacy.FeatureStore`.
-# Use `km.train(...)` for the replacement Engine-first API. This import will be
-# removed in kailash-ml 3.0.
+# 1.x canonical (preferred — no warning, future-proof)
+from kailash_ml.features import FeatureStore
+# Constructor: FeatureStore(dataflow: DataFlow, *, default_tenant_id=None)
+# See specs/ml-feature-store.md § 1.1 for the contract.
 
-# 3.0 -- imports removed; use the legacy namespace explicitly if you still need them
-from kailash_ml.legacy import FeatureStore  # explicit opt-in; no DeprecationWarning
+# 2.0.0 (planned) -- top-level import flips to canonical module; legacy
+# `kailash_ml.engines.feature_store.FeatureStore` is removed. Callers still
+# on the 0.x ConnectionManager constructor MUST migrate to the canonical
+# DataFlow constructor before this cutover.
+
+# 3.0 -- ModelRegistry and TrainingPipeline imports removed; use the
+# legacy namespace explicitly if you still need them
+from kailash_ml.legacy import ModelRegistry  # explicit opt-in; no DeprecationWarning
 ```
+
+### FeatureStore canonical surface migration recipe (1.x)
+
+The canonical FeatureStore is a DataFlow-bridge primitive — it wraps a live
+`DataFlow` instance and routes feature reads through
+`dataflow.ml_feature_source(...)`. Migration is two lines:
+
+```python
+# Before (legacy 0.x ConnectionManager constructor — DeprecationWarning at 1.7+)
+from kailash.db.connection import ConnectionManager
+from kailash_ml import FeatureStore
+
+conn = ConnectionManager("sqlite:///ml.db")
+await conn.initialize()
+store = FeatureStore(conn, table_prefix="kml_feat_")
+
+# After (canonical 1.0+ surface — DataFlow-bridge constructor)
+from dataflow import DataFlow
+from kailash_ml.features import FeatureStore
+
+df = DataFlow("sqlite:///ml.db", auto_migrate=True)
+store = FeatureStore(df, default_tenant_id="acme")
+features = await store.get_features(schema, tenant_id="acme")
+```
+
+Migration only affects the construction site. `get_features`, cache-key
+helpers, and tenant-scoped invalidation patterns share compatible
+return shapes across both surfaces. See
+`specs/ml-feature-store.md` § 4 for the full method contract.
 
 The migration sequence is deterministic:
 
