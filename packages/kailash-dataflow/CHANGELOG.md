@@ -1,4 +1,11 @@
 # DataFlow Changelog
+## [Unreleased]
+
+### Added
+
+- `@db.model(append_only=True)` for immutable event-log models. DataFlow registers `AppendOnlyForbiddenNode` stubs at Update/Delete/Upsert/BulkUpdate/BulkDelete/BulkUpsert node names; express mutation methods raise `AppendOnlyViolationError` before issuing SQL. Create/BulkCreate/Read/List/Count continue to be generated normally. See issue #839.
+- `AppendOnlyViolationError` typed exception in `dataflow.exceptions` (re-exported at top level).
+
 
 ## [Unreleased] — `+asyncpg` driver-suffix DSN normalization (#819)
 

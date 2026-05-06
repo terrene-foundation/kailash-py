@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from dataflow.decorators import ValidationError as DecoratorValidationError
+    from dataflow.decorators import ValidationError
 
 
 @dataclass
