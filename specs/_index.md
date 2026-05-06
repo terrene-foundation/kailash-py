@@ -8,7 +8,7 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | -------------------------------------- | ----------------------------------------------------------------------------- |
 | [core-nodes.md](core-nodes.md)         | Node architecture, Node base class, NodeParameter, NodeMetadata, NodeRegistry |
 | [core-workflows.md](core-workflows.md) | WorkflowBuilder, Connection, CyclicConnection, workflow validation            |
-| [core-runtime.md](core-runtime.md)     | LocalRuntime, AsyncLocalRuntime, DistributedRuntime, cycles, resilience, DLQ  |
+| [core-runtime.md](core-runtime.md)     | LocalRuntime, AsyncLocalRuntime, DistributedRuntime, cycles, resilience, DLQ, durable execution (checkpoint + on_node_complete) |
 | [core-servers.md](core-servers.md)     | WorkflowServer variants, create_gateway, error/exception hierarchy            |
 
 ## DataFlow
