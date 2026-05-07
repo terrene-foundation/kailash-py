@@ -79,6 +79,44 @@ def _validate_task_id(tid: Any) -> None:
         )
 
 
+def _extract_context_from_schedule_id(
+    schedule_id: str,
+) -> "tuple[Optional[str], Optional[str]]":
+    """Parse W4 ``engine.{tenant_id}.{fingerprint[:12]}.{idempotency_key}``.
+
+    Returns ``(tenant_id, idempotency_key)`` extracted from the
+    schedule_id format produced by
+    :class:`kailash.runtime.durable.DurableExecutionEngine` (W4) at
+    `kailash/runtime/durable.py:1284`.  Per W4 the format is fixed
+    4-part dot-delimited string:
+
+        engine.<tenant_id>.<fingerprint[:12]>.<idempotency_key>
+
+    The tenant_id segment may be empty (single-tenant deployments
+    collapse to ``engine..<fp>.<key>``); empty-string is normalised
+    to ``None`` for the synthetic event's ``tenant_id`` field.
+
+    Returns ``(None, None)`` when the schedule_id does NOT match the
+    engine format — covers caller-supplied schedule_ids (Scheduler
+    tasks predating W4, test fixtures, manual ``Task`` construction).
+    The classification policy then falls back to an unscoped lookup
+    (same behavior as pre-W6).
+
+    This helper is used by both ``_redact_kwargs`` and
+    ``_redact_workflow_blob`` per ``rules/security.md`` § Multi-Site
+    Kwarg Plumbing — single helper, both call sites.
+    """
+    if not isinstance(schedule_id, str) or not schedule_id.startswith("engine."):
+        return None, None
+    parts = schedule_id.split(".", 3)
+    if len(parts) < 4:
+        return None, None
+    # parts = ["engine", tenant, fingerprint12, idempotency_key]
+    tenant = parts[1] or None
+    key = parts[3] or None
+    return tenant, key
+
+
 @dataclass(frozen=True)
 class SQLTaskMessage:
     """A task message stored in the SQL task queue.
@@ -708,10 +746,25 @@ class SQLTaskQueueDispatcher(Dispatcher):
 
         # W6 — apply classification-aware redaction when a policy is set.
         # Default (None) is no-op so existing callers see the same
-        # behavior they had before this kwarg was introduced.
+        # behavior they had before this kwarg was introduced.  Extract
+        # tenant_id from the W4 schedule_id format so per-tenant policies
+        # see the right scope on the dispatcher path; for non-engine
+        # schedule_ids the format-mismatch helper returns None and the
+        # synthetic events fall back to an unscoped policy lookup.
         if self._classification_policy is not None:
-            workflow_blob_json = self._redact_workflow_blob(workflow_blob_json)
-            kwargs = self._redact_kwargs(kwargs)
+            tenant_id, idempotency_key = _extract_context_from_schedule_id(
+                task.schedule_id
+            )
+            workflow_blob_json = self._redact_workflow_blob(
+                workflow_blob_json,
+                tenant_id=tenant_id,
+                idempotency_key=idempotency_key,
+            )
+            kwargs = self._redact_kwargs(
+                kwargs,
+                tenant_id=tenant_id,
+                idempotency_key=idempotency_key,
+            )
 
         payload = {
             "schedule_id": task.schedule_id,
@@ -754,14 +807,23 @@ class SQLTaskQueueDispatcher(Dispatcher):
         if self._soft_row_cap is not None:
             await self._maybe_warn_row_count(task.queue_name)
 
-    def _redact_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _redact_kwargs(
+        self,
+        kwargs: Dict[str, Any],
+        *,
+        tenant_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Redact classified fields in a kwargs dict.
 
         Routes through :func:`redact_event_for_persistence` by treating
         the kwargs dict as a synthetic event's outputs.  The synthetic
         event uses an empty ``node_id`` so the policy decides solely
         on the field name — appropriate for kwargs which are not
-        scoped to any one workflow node.
+        scoped to any one workflow node.  ``tenant_id`` and
+        ``idempotency_key`` are extracted from ``task.schedule_id`` by
+        the caller (per W4 ``engine.{tenant}.{fp}.{key}`` format) so
+        per-tenant classification policies see the right scope.
 
         Returns a NEW dict; the input is never mutated.
         """
@@ -784,8 +846,8 @@ class SQLTaskQueueDispatcher(Dispatcher):
             started_at=ts,
             ended_at=ts,
             duration_ms=0,
-            tenant_id=None,
-            idempotency_key=None,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
             error=None,
             metadata={},
         )
@@ -794,7 +856,13 @@ class SQLTaskQueueDispatcher(Dispatcher):
         )
         return dict(redacted.outputs)
 
-    def _redact_workflow_blob(self, workflow_blob_json: str) -> str:
+    def _redact_workflow_blob(
+        self,
+        workflow_blob_json: str,
+        *,
+        tenant_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> str:
         """Redact classified fields in node-config dicts inside a workflow blob.
 
         Walks the workflow's ``nodes`` map (per
@@ -804,7 +872,10 @@ class SQLTaskQueueDispatcher(Dispatcher):
         as scope, so the policy can decide per-node-per-field.  Other
         top-level workflow fields (workflow_id, name, connections,
         metadata, etc.) are NOT redacted — they carry no classified
-        payload by contract.
+        payload by contract.  ``tenant_id`` and ``idempotency_key`` are
+        extracted from ``task.schedule_id`` by the caller (W4 format)
+        and propagated into every per-node synthetic event so per-
+        tenant classification policies see the right scope.
 
         Returns the re-serialised JSON string.  When the blob is not
         valid JSON OR has no ``nodes`` map, the original blob is
@@ -849,8 +920,8 @@ class SQLTaskQueueDispatcher(Dispatcher):
                 started_at=ts,
                 ended_at=ts,
                 duration_ms=0,
-                tenant_id=None,
-                idempotency_key=None,
+                tenant_id=tenant_id,
+                idempotency_key=idempotency_key,
                 error=None,
                 metadata={},
             )
