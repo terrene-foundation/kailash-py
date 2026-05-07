@@ -1571,6 +1571,11 @@ class DataFlowExpress:
             pass  # get_model_fields not available — skip validation
 
         async def _bulk_upsert():
+            # Issue #857: defense-in-depth — redundant with the outer-body
+            # guard at L1557. Kept so direct invocations of the inner
+            # coroutine (callers that bypass the public `bulk_upsert`
+            # entry point) also fail closed with AppendOnlyViolationError.
+            # Removing this line would silently re-open the bypass.
             self._check_append_only(model, "bulk_upsert")
             node = self._create_node(model, "BulkUpsert")
             # BulkUpsertNode accepts conflict_columns in its config.
