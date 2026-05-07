@@ -367,7 +367,9 @@ def redact_event_for_persistence(
       configured), the event is returned unchanged. This matches the
       runtime's default single-tenant single-classification posture.
     * If ``classification_policy`` is provided, this function consults
-      the policy for each top-level field of ``event.outputs`` and:
+      the policy for each field of ``event.outputs`` AT EVERY DEPTH
+      (recursive walk through nested ``Mapping`` and ``Sequence``
+      values) and:
 
       - drops any field tagged ``REDACT`` and replaces it with the
         sentinel ``"[REDACTED]"`` (NOT ``None`` — ``None`` is a valid
@@ -375,6 +377,23 @@ def redact_event_for_persistence(
       - hashes any field tagged ``HASH_PK`` via
         ``format_record_id_for_event`` (a stable SHA-256-based digest),
       - leaves classification-free fields untouched.
+
+    Recursive walk semantics (W6 nested-redaction fix):
+
+    * The policy is consulted with ``field_path`` joined by ``.``
+      separators, e.g. ``"customer.ssn"`` for a top-level
+      ``customer`` dict containing ``ssn``, or ``"items.0.password"``
+      for the first element of a top-level ``items`` list whose dict
+      carries ``password``.
+    * If the policy returns ``REDACT`` / ``HASH_PK`` for a non-leaf
+      (a Mapping or Sequence at the path), the entire subtree is
+      replaced with the sentinel — same wrapper-level semantics
+      as before W6 for callers that tag the outer field.
+    * Strings and bytes are leaves even though they are Sequences;
+      iterating their characters/octets is never a redaction goal.
+    * Recursion is fail-closed at every depth: a policy raise mid-
+      recursion routes that node to ``REDACT`` exactly like the
+      top-level path used to.
 
     The function NEVER raises on a missing policy method — when the
     policy doesn't expose the expected duck-typed surface, it returns
@@ -404,53 +423,24 @@ def redact_event_for_persistence(
     raw_outputs = dict(event.outputs)
     redacted_outputs: Dict[str, Any] = {}
     unclassified_fields: List[str] = []
-    classified_count = 0
+    classified_counter = [0]  # mutable so the recursive helper can increment
 
     for field_name, value in raw_outputs.items():
-        # FAIL-CLOSED on policy lookup error per rules/zero-tolerance.md
-        # Rule 2 (no fake redaction). A policy raise during classification
-        # MUST default to REDACT — silent fall-through to unclassified
-        # would let a policy bug leak classified data to the persistent
-        # checkpoint store.  The redactor IS a security gate, not just a
-        # display safety net: the classification policy may be unreachable
-        # (lazy-loaded, transient backend failure, attribute drift) and
-        # the persisted blob is the audit trail downstream consumers
-        # rely on.
-        policy_failed = False
-        try:
-            tag = _get_classification_tag(
-                classification_policy, event.node_id, field_name
-            )
-        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
-            raise
-        except Exception as exc:
-            logger.warning(
-                "durable.redact.policy_lookup_failed",
-                extra={
-                    "node_id_hash": _hash_short(event.node_id),
-                    "field_name_hash": _hash_short(field_name),
-                    "error_type": type(exc).__name__,
-                },
-            )
-            tag = "REDACT"  # FAIL-CLOSED: replace value with [REDACTED]
-            policy_failed = True
-
-        if tag == "REDACT":
-            redacted_outputs[field_name] = "[REDACTED]"
-            classified_count += 1
-        elif tag == "HASH_PK":
-            redacted_outputs[field_name] = _hash_pk(value)
-            classified_count += 1
-        else:
-            # Only return the unclassified value when policy lookup
-            # CONFIRMED unclassified (returned None cleanly).  The
-            # policy_failed branch above already routed to REDACT.
-            redacted_outputs[field_name] = value
+        new_value, top_tag = _redact_value(
+            classification_policy=classification_policy,
+            node_id=event.node_id,
+            field_path=field_name,
+            value=value,
+            classified_counter=classified_counter,
+        )
+        redacted_outputs[field_name] = new_value
+        if top_tag is None:
+            # Top-level field unclassified.  Per rules/event-payload-
+            # classification.md MUST Rule 3 the summary lists only
+            # top-level unclassified field NAMES, never nested paths.
             unclassified_fields.append(field_name)
-        # Belt-and-suspenders: if policy lookup failed AND somehow tag
-        # was not REDACT, the value is sentinel-replaced regardless.
-        if policy_failed and redacted_outputs[field_name] is value:
-            redacted_outputs[field_name] = "[REDACTED]"
+
+    classified_count = classified_counter[0]
 
     # Merge classification summary into metadata.
     new_metadata = dict(event.metadata)
@@ -474,6 +464,106 @@ def redact_event_for_persistence(
         error=event.error,
         metadata=new_metadata,
     )
+
+
+def _redact_value(
+    *,
+    classification_policy: Any,
+    node_id: str,
+    field_path: str,
+    value: Any,
+    classified_counter: List[int],
+) -> Tuple[Any, Optional[str]]:
+    """Recursively redact ``value`` against ``classification_policy``.
+
+    Walks Mapping and Sequence values (excluding ``str``/``bytes``) and
+    consults the policy at every depth using ``field_path`` joined by
+    ``.`` (e.g. ``customer.ssn``, ``items.0.password``).  Closes the
+    nested-leak class surfaced by W6 security review: pre-fix, only
+    top-level fields were checked, so a node returning
+    ``{"customer": {"ssn": "..."}}`` could not be tagged at
+    ``customer.ssn`` independently of the wrapper.
+
+    Returns a ``(new_value, top_tag)`` tuple where ``top_tag`` is the
+    policy's verdict on the ``field_path`` itself (``"REDACT"``,
+    ``"HASH_PK"``, or ``None``).  The caller uses ``top_tag`` to decide
+    whether to add the field name to ``unclassified_fields`` — only
+    top-level paths with ``top_tag is None`` qualify.
+
+    Same FAIL-CLOSED posture as the top-level loop:
+    a policy raise routes the entire subtree to ``REDACT``, with a
+    WARN log line carrying hashed (not raw) schema identifiers per
+    ``rules/observability.md`` Rule 8.
+
+    The ``classified_counter`` argument is a single-element list used
+    as a mutable counter so every leaf classified anywhere in the tree
+    increments the event-level total.  The summary metadata reports
+    the aggregate; callers do not need per-depth counts.
+    """
+    # 1. Consult the policy at the current path (FAIL-CLOSED).
+    policy_failed = False
+    try:
+        tag = _get_classification_tag(classification_policy, node_id, field_path)
+    except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:
+        logger.warning(
+            "durable.redact.policy_lookup_failed",
+            extra={
+                "node_id_hash": _hash_short(node_id),
+                "field_path_hash": _hash_short(field_path),
+                "error_type": type(exc).__name__,
+            },
+        )
+        tag = "REDACT"
+        policy_failed = True
+
+    # 2. Wrapper-level redaction takes precedence over recursion.
+    if tag == "REDACT":
+        classified_counter[0] += 1
+        return "[REDACTED]", tag
+    if tag == "HASH_PK":
+        classified_counter[0] += 1
+        return _hash_pk(value), tag
+
+    # 3. Recurse into containers when the current path is unclassified.
+    #    str/bytes are deliberately NOT iterated — character-level
+    #    redaction is never the contract.
+    if isinstance(value, Mapping):
+        new_dict: Dict[str, Any] = {}
+        for sub_key, sub_value in value.items():
+            sub_path = f"{field_path}.{sub_key}"
+            new_sub, _sub_tag = _redact_value(
+                classification_policy=classification_policy,
+                node_id=node_id,
+                field_path=sub_path,
+                value=sub_value,
+                classified_counter=classified_counter,
+            )
+            new_dict[sub_key] = new_sub
+        return new_dict, None
+    if isinstance(value, (list, tuple)) and not isinstance(value, (str, bytes)):
+        new_list: List[Any] = []
+        for idx, sub_value in enumerate(value):
+            sub_path = f"{field_path}.{idx}"
+            new_sub, _sub_tag = _redact_value(
+                classification_policy=classification_policy,
+                node_id=node_id,
+                field_path=sub_path,
+                value=sub_value,
+                classified_counter=classified_counter,
+            )
+            new_list.append(new_sub)
+        # Preserve sequence shape: tuples stay tuples, lists stay lists.
+        if isinstance(value, tuple):
+            return tuple(new_list), None
+        return new_list, None
+
+    # 4. Leaf, unclassified.  Belt-and-suspenders against a policy_failed
+    #    flag that somehow escaped REDACT: replace with sentinel.
+    if policy_failed:
+        return "[REDACTED]", "REDACT"
+    return value, None
 
 
 def redacted_tracker_state_for_checkpoint(
@@ -536,6 +626,21 @@ def redacted_tracker_state_for_checkpoint(
         Context propagated into the synthetic events so a future
         policy implementation that consults event-level context (per
         the architecture plan §3.1 invariant) sees the right scope.
+
+    Known constraints
+    -----------------
+    Synthetic events constructed by this helper use
+    ``datetime.now(timezone.utc)`` as both ``started_at`` and
+    ``ended_at`` because the per-node tracker state captured by
+    :class:`~kailash.runtime.execution_tracker.ExecutionTracker` does
+    not preserve those wall-clock fields.  Policies that consult
+    time-bounded classification rules (e.g. "redact incidents younger
+    than 30 days") will see the redaction-execution time at this
+    surface, NOT the original event timestamps.  Such policies MUST
+    use the real ``runtime.on_node_complete`` hook surface where the
+    runtime supplies actual ``started_at`` / ``ended_at`` per node.
+    The checkpoint write-path is a persistence-redaction surface only;
+    time-windowed policy decisions belong on the hook surface.
 
     Returns
     -------
@@ -603,6 +708,8 @@ def redacted_tracker_state_for_checkpoint(
 
     new_state["node_outputs"] = redacted_node_outputs
     return new_state
+
+
 def _get_classification_tag(
     policy: Any, node_id: str, field_name: str
 ) -> Optional[str]:
