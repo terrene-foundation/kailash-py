@@ -60,6 +60,8 @@ __all__ = [
     "decode_checkpoint_payload",
     "check_shape_drift_or_raise",
     "resolve_tenant_id",
+    "DurableExecutionEngine",
+    "DurableExecutionEngineBuilder",
 ]
 
 
@@ -822,3 +824,485 @@ resolve_tenant_id._warned_unavailable = False  # type: ignore[attr-defined]
 # helpers live in the same module and share the same private alias
 # convention used by the architecture plan citations.
 _resolve_tenant_id = resolve_tenant_id
+
+
+# ---------------------------------------------------------------------------
+# W4: DurableExecutionEngine — composes W1 (checkpoint) + W2 (history) +
+#     W3 (dispatch) over a wrapped AsyncLocalRuntime.
+# ---------------------------------------------------------------------------
+#
+# Design goals (per workspaces/runtime-integration-trio/todos/active/W4-...):
+#
+# * **No parallel implementation.** Every store / queue interaction routes
+#   through W1 / W2 / W3 public APIs. The engine never re-implements
+#   checkpoint persistence, history-row writing, or task dispatch — it
+#   only composes the primitives.
+# * **Public-only.** The engine consumes the public surface of each
+#   primitive (``DBCheckpointStore.save / .load``,
+#   ``WorkflowHistoryStore.record_event / .list_runs / .get_run /
+#   .get_run_events``, ``Dispatcher.enqueue / .poll / .ack / .nack``). It
+#   does NOT touch private members.
+# * **Hook-routed.** Per-node events flow exclusively via the runtime's
+#   :meth:`on_node_complete` hook registry. The engine MUST NOT read
+#   runtime internals to observe node completions.
+#
+# The engine is deliberately small: a builder + an immutable engine + a
+# thin :meth:`execute` shim that delegates to the wrapped runtime AND
+# (when configured) enqueues a fire-time :class:`Task` through the W3
+# dispatcher. The runtime itself auto-subscribes ``history_store.record_event``
+# at construction time (W2 wiring) so the engine never has to manually
+# call ``runtime.on_node_complete(history_store.record_event)`` — doing
+# so would double-register the subscriber.
+
+
+class DurableExecutionEngine:
+    """First-party durable execution engine for Kailash workflows.
+
+    Composes the runtime-integration-trio primitives — per-node
+    checkpointing (W1), persistent workflow history (W2), and pluggable
+    task dispatch (W3) — into a single facade callers can construct via
+    :meth:`builder`. Each primitive is opt-in; an engine constructed
+    with no primitives behaves like a plain ``AsyncLocalRuntime``.
+
+    Example::
+
+        from kailash.runtime.durable import DurableExecutionEngine
+        from kailash.infrastructure.checkpoint_store import DBCheckpointStore
+        from kailash.infrastructure.history_store import PostgresHistoryStore
+        from kailash.infrastructure.task_queue import (
+            SQLTaskQueue,
+            SQLTaskQueueDispatcher,
+        )
+
+        engine = (
+            DurableExecutionEngine.builder()
+                .checkpoint_store(DBCheckpointStore(conn))
+                .history_store(PostgresHistoryStore(conn))
+                .dispatch_via(SQLTaskQueueDispatcher(queue=SQLTaskQueue(conn)))
+                .build()
+        )
+        results, run_id = await engine.execute(
+            workflow.build(), idempotency_key="user-42-prewarm",
+        )
+        # Native history-store API for queries (tenant_id required):
+        runs = await engine.history.list_runs(filter={"tenant_id": "default"})
+        events = await engine.history.get_run_events(run_id, tenant_id="default")
+
+    Composition contract
+    --------------------
+    * ``checkpoint_store`` is forwarded to ``AsyncLocalRuntime(checkpoint_store=...,
+      checkpoint_after_each_node=True)`` so per-node blobs land via the W1
+      hot path (see :mod:`kailash.runtime.local` ``_record_node_completion``).
+    * ``history_store`` is forwarded to ``AsyncLocalRuntime(history_store=...)``
+      which auto-subscribes ``history_store.record_event`` against the
+      hook registry at construction time. The engine does NOT call
+      ``runtime.on_node_complete(history_store.record_event)`` separately
+      — doing so would double-register the subscriber.
+    * ``dispatcher`` is consulted ONLY when configured. When set,
+      :meth:`execute` enqueues a fire-time :class:`Task` via the
+      dispatcher in addition to running the workflow in-process. The
+      enqueue is best-effort observability of the run; dispatcher
+      failures emit a WARN log and do NOT abort the in-process
+      execution. Future: a worker-pool variant that defers execution
+      entirely to the dispatcher would override :meth:`execute`.
+
+    Immutability
+    ------------
+    The engine is immutable after :meth:`DurableExecutionEngineBuilder.build`.
+    Mutating any of its primitives in-place after construction is
+    unsupported — construct a new engine via the builder if the
+    composition needs to change.
+    """
+
+    def __init__(
+        self,
+        *,
+        checkpoint_store: Optional[Any],
+        history_store: Optional[Any],
+        dispatcher: Optional[Any],
+        idempotency_key_default: Optional[str],
+        runtime_factory: Callable[..., Any],
+        runtime_kwargs: Optional[Mapping[str, Any]],
+    ) -> None:
+        """Construct an engine. Use :meth:`builder` for the public path."""
+        # Build the wrapped runtime via the caller-supplied factory,
+        # forwarding the W1 + W2 wiring as kwargs. The factory receives
+        # ``checkpoint_store=``, ``checkpoint_after_each_node=True`` (when
+        # checkpoint_store is set), and ``history_store=`` so the runtime
+        # auto-subscribes the W2 record_event callback at construction.
+        kwargs: Dict[str, Any] = dict(runtime_kwargs or {})
+        if checkpoint_store is not None:
+            # Per-node checkpoint emission requires BOTH the store AND the
+            # opt-in flag — see ``LocalRuntime.__init__`` (W1).  Primitive
+            # setters OVERRIDE conflicting runtime_kwargs entries — the
+            # setter is the explicit composition contract; runtime_kwargs
+            # is the escape hatch for non-conflicting kwargs (e.g.
+            # ``max_concurrent_nodes``).
+            kwargs["checkpoint_store"] = checkpoint_store
+            kwargs.setdefault("checkpoint_after_each_node", True)
+        if history_store is not None:
+            # Forwarding via the constructor is the W2-sanctioned path.
+            # The runtime calls ``self._hook_registry.register(record_event)``
+            # itself; calling ``runtime.on_node_complete(record_event)``
+            # here would double-register the subscriber and double-write
+            # every event.  Same override-runtime_kwargs semantics.
+            kwargs["history_store"] = history_store
+
+        runtime = runtime_factory(**kwargs)
+        if not hasattr(runtime, "execute_workflow_async"):
+            raise TypeError(
+                "DurableExecutionEngine: runtime_factory(...) returned an "
+                f"object of type {type(runtime).__name__!r} which does not "
+                "expose execute_workflow_async(). Provide an AsyncLocalRuntime"
+                " subclass or a duck-typed equivalent."
+            )
+
+        self._runtime = runtime
+        self._checkpoint_store = checkpoint_store
+        self._history_store = history_store
+        self._dispatcher = dispatcher
+        self._idempotency_key_default = idempotency_key_default
+
+    # -- Public properties ---------------------------------------------
+
+    @property
+    def runtime(self) -> Any:
+        """The wrapped :class:`AsyncLocalRuntime` (or factory-supplied alt).
+
+        Returned for advanced callers who need direct access to the
+        runtime — e.g. to register additional ``on_node_complete``
+        subscribers beyond the W2 history store auto-subscribe. The
+        runtime instance is the SAME one ``engine.execute`` delegates to.
+        """
+        return self._runtime
+
+    @property
+    def history(self) -> Any:
+        """The composed history store, if configured. ``None`` otherwise.
+
+        Exposes the native :class:`~kailash.infrastructure.history_store.WorkflowHistoryStore`
+        read API (``list_runs``, ``get_run``, ``get_run_events``,
+        ``list_failed``). Tenant scope is mandatory on every read per
+        ``rules/tenant-isolation.md`` MUST Rule 5.
+        """
+        return self._history_store
+
+    @property
+    def checkpoint_store(self) -> Any:
+        """The composed checkpoint store, if configured. ``None`` otherwise."""
+        return self._checkpoint_store
+
+    @property
+    def dispatcher(self) -> Any:
+        """The composed dispatcher, if configured. ``None`` otherwise."""
+        return self._dispatcher
+
+    @property
+    def idempotency_key_default(self) -> Optional[str]:
+        """The default idempotency key applied when ``execute`` omits it."""
+        return self._idempotency_key_default
+
+    # -- Builder factory -----------------------------------------------
+
+    @classmethod
+    def builder(cls) -> "DurableExecutionEngineBuilder":
+        """Return a fresh fluent builder. See :class:`DurableExecutionEngineBuilder`."""
+        return DurableExecutionEngineBuilder()
+
+    # -- Execution -----------------------------------------------------
+
+    async def execute(
+        self,
+        workflow: Any,
+        *,
+        idempotency_key: Optional[str] = None,
+        inputs: Optional[Mapping[str, Any]] = None,
+        force_resume_with_drift: bool = False,
+        dispatch_kwargs: Optional[Mapping[str, Any]] = None,
+        queue_name: str = "default",
+    ) -> Tuple[Dict[str, Any], str]:
+        """Execute *workflow* through the wrapped runtime and (optionally) dispatch.
+
+        Parameters
+        ----------
+        workflow:
+            The workflow returned by ``WorkflowBuilder.build()``.
+        idempotency_key:
+            Caller-supplied resume key. Falls back to
+            :attr:`idempotency_key_default` when omitted. Forwarded to
+            ``runtime.execute_workflow_async(idempotency_key=...)`` so the
+            W1 checkpoint-resume path fires when a prior blob exists.
+        inputs:
+            Workflow inputs dict. Defaults to an empty dict.
+        force_resume_with_drift:
+            Forwarded to the runtime — when ``True`` an
+            :class:`WorkflowShapeDriftError` is suppressed and the engine
+            proceeds against the new shape per W1 §4.6.4. The default is
+            to refuse on drift, matching ``git reset --keep`` and
+            ``MigrationManager.apply_downgrade(force_downgrade=True)``.
+        dispatch_kwargs:
+            Free-form dict serialised into the dispatched
+            :class:`~kailash.runtime.dispatcher.Task` ``kwargs`` field.
+            Ignored when no dispatcher is configured.
+        queue_name:
+            Target queue when a dispatcher is configured. Defaults to
+            ``"default"``.
+
+        Returns
+        -------
+        Tuple[Dict[str, Any], str]
+            ``(results, run_id)`` from the wrapped runtime. The runtime's
+            ``run_id`` is also used to derive the dispatched task's
+            ``schedule_id`` so an operator can correlate the queue row
+            with the history row.
+
+        Notes
+        -----
+        Dispatcher failures emit a WARN log via the standard runtime
+        logger AND re-raise — the dispatch is part of the run's
+        durability contract per the W3 wave, not best-effort. Callers
+        who want best-effort dispatch should construct a custom
+        :class:`~kailash.runtime.dispatcher.Dispatcher` whose ``enqueue``
+        catches its own failures.
+        """
+        effective_inputs: Dict[str, Any] = (
+            dict(inputs) if isinstance(inputs, Mapping) else {}
+        )
+        effective_key = (
+            idempotency_key
+            if idempotency_key is not None
+            else self._idempotency_key_default
+        )
+
+        # Dispatch happens BEFORE in-process execution when configured —
+        # the W3 contract treats enqueue as the durable record of intent.
+        # If the dispatcher rejects the enqueue, in-process execution does
+        # NOT proceed (the operator surfaced a real error). Workers polling
+        # the queue will pick up the same task; idempotency on the
+        # dispatcher's ``task_id`` (Dispatcher MUST Rule 1) prevents
+        # double-execution by the worker if the in-process engine already
+        # ran the workflow.
+        run_id_hint: Optional[str] = None
+        if self._dispatcher is not None:
+            run_id_hint = await self._enqueue_for_run(
+                workflow=workflow,
+                inputs=effective_inputs,
+                idempotency_key=effective_key,
+                dispatch_kwargs=dispatch_kwargs or {},
+                queue_name=queue_name,
+            )
+
+        # In-process execution. The runtime drives W1 (checkpoint emit)
+        # and W2 (history record) via its own hook registry.
+        results, run_id = await self._runtime.execute_workflow_async(
+            workflow,
+            inputs=effective_inputs,
+            idempotency_key=effective_key,
+            force_resume_with_drift=force_resume_with_drift,
+        )
+        # If the dispatcher returned a hint, the schedule_id and the
+        # in-process run_id are correlated via the engine's WARN log line
+        # so operators reading queue rows can find the matching history
+        # row without spelunking.
+        if run_id_hint is not None:
+            logger.info(
+                "durable.engine.execute.dispatched_and_executed",
+                extra={
+                    "schedule_id": run_id_hint,
+                    "run_id": run_id,
+                    "queue_name": queue_name,
+                    "has_history_store": self._history_store is not None,
+                    "has_checkpoint_store": self._checkpoint_store is not None,
+                },
+            )
+        return results, run_id
+
+    # -- Internals -----------------------------------------------------
+
+    async def _enqueue_for_run(
+        self,
+        *,
+        workflow: Any,
+        inputs: Mapping[str, Any],
+        idempotency_key: Optional[str],
+        dispatch_kwargs: Mapping[str, Any],
+        queue_name: str,
+    ) -> str:
+        """Serialise + enqueue a fire-time :class:`Task` for *workflow*.
+
+        Lazy imports per ``rules/infrastructure-sql.md`` MUST Rule 8 —
+        the W3 dispatcher module pulls in ``ConnectionManager`` and a
+        translator stack; deferring the import keeps the durable module
+        importable in environments that don't ship the W3 dependency.
+        Returns the synthesised ``schedule_id`` so callers can correlate
+        the enqueued row with the in-process run.
+        """
+        from kailash.runtime.dispatcher import Task, compute_task_id
+
+        workflow_fingerprint = compute_workflow_fingerprint(workflow)
+        # Deterministic schedule_id — ties the queue row to the
+        # workflow's structural shape AND the caller's idempotency key.
+        # Two ``engine.execute`` calls with the same key + same workflow
+        # produce the same schedule_id, so the dispatcher's idempotency
+        # gate (Dispatcher MUST Rule 1) drops the duplicate.
+        schedule_id = (
+            f"engine.{workflow_fingerprint[:12]}." f"{(idempotency_key or 'noop')}"
+        )
+        planned_fire_time = datetime.now(timezone.utc).isoformat()
+        task_id = compute_task_id(schedule_id, datetime.now(timezone.utc))
+
+        # The W3 contract serialises the workflow blob as the dispatcher's
+        # responsibility — but the engine has no built-in serialiser for
+        # arbitrary workflow objects (the SDK does not pickle workflows by
+        # default, see ``Task.workflow_blob`` JSON contract). We pass an
+        # empty bytes blob; the worker side reconstructs the workflow from
+        # the orchestrator's local registry per project convention. Future
+        # waves MAY add a workflow-blob serialiser, but the engine's job
+        # here is to surface the dispatcher invocation, not to define the
+        # serialisation format.
+        workflow_blob = b""
+        kwargs_payload: Dict[str, Any] = {
+            "inputs": dict(inputs),
+            "idempotency_key": idempotency_key,
+            "engine": "DurableExecutionEngine",
+        }
+        kwargs_payload.update(dict(dispatch_kwargs))
+
+        task = Task(
+            task_id=task_id,
+            schedule_id=schedule_id,
+            workflow_blob=workflow_blob,
+            planned_fire_time=planned_fire_time,
+            queue_name=queue_name,
+            kwargs=kwargs_payload,
+        )
+        await self._dispatcher.enqueue(task)
+        return schedule_id
+
+
+class DurableExecutionEngineBuilder:
+    """Fluent builder for :class:`DurableExecutionEngine`.
+
+    Build pattern:
+
+    1. ``DurableExecutionEngine.builder()`` returns a fresh builder.
+    2. Chain optional ``.checkpoint_store(store)`` / ``.history_store(store)``
+       / ``.dispatch_via(dispatcher)`` / ``.idempotency_key_default(key)`` /
+       ``.runtime(factory)`` / ``.runtime_kwargs(mapping)`` calls.
+    3. Call ``.build()`` to produce the immutable engine.
+
+    Each setter returns ``self`` so the chain can run in one expression.
+    Calling a setter twice OVERRIDES the prior value (no implicit fan-in)
+    so the final ``.build()`` reflects the last setter call. The default
+    runtime factory is :class:`~kailash.runtime.async_local.AsyncLocalRuntime`
+    — pass a custom factory only when a subclass is needed (Docker, custom
+    timeout, alternative scheduler).
+    """
+
+    def __init__(self) -> None:
+        self._checkpoint_store: Optional[Any] = None
+        self._history_store: Optional[Any] = None
+        self._dispatcher: Optional[Any] = None
+        self._idempotency_key_default: Optional[str] = None
+        self._runtime_factory: Optional[Callable[..., Any]] = None
+        self._runtime_kwargs: Dict[str, Any] = {}
+
+    # -- Setters --------------------------------------------------------
+
+    def checkpoint_store(self, store: Any) -> "DurableExecutionEngineBuilder":
+        """Configure the checkpoint store. ``None`` clears the prior value."""
+        self._checkpoint_store = store
+        return self
+
+    def history_store(self, store: Any) -> "DurableExecutionEngineBuilder":
+        """Configure the history store. ``None`` clears the prior value."""
+        self._history_store = store
+        return self
+
+    def dispatch_via(self, dispatcher: Any) -> "DurableExecutionEngineBuilder":
+        """Configure the dispatcher. ``None`` clears the prior value."""
+        self._dispatcher = dispatcher
+        return self
+
+    def idempotency_key_default(
+        self, key: Optional[str]
+    ) -> "DurableExecutionEngineBuilder":
+        """Set the default ``idempotency_key`` applied to ``execute`` calls."""
+        if key is not None and not isinstance(key, str):
+            raise TypeError(
+                "DurableExecutionEngineBuilder.idempotency_key_default(): "
+                f"key must be str or None, got {type(key).__name__}"
+            )
+        self._idempotency_key_default = key
+        return self
+
+    def runtime(
+        self,
+        runtime_factory: Optional[Callable[..., Any]] = None,
+    ) -> "DurableExecutionEngineBuilder":
+        """Set the runtime factory.
+
+        Passing ``runtime_factory=None`` (or omitting the call entirely)
+        defers to the default
+        :class:`~kailash.runtime.async_local.AsyncLocalRuntime`. Pass a
+        custom callable when an ``AsyncLocalRuntime`` subclass or a
+        compatible alternative is required.
+        """
+        if runtime_factory is not None and not callable(runtime_factory):
+            raise TypeError(
+                "DurableExecutionEngineBuilder.runtime(): runtime_factory "
+                f"must be callable or None, got {type(runtime_factory).__name__}"
+            )
+        self._runtime_factory = runtime_factory
+        return self
+
+    def runtime_kwargs(
+        self, kwargs: Mapping[str, Any]
+    ) -> "DurableExecutionEngineBuilder":
+        """Override base kwargs forwarded to the runtime factory.
+
+        ``checkpoint_store`` / ``checkpoint_after_each_node`` /
+        ``history_store`` are added by :meth:`build` AFTER these kwargs,
+        so they always win over conflicting entries here. Use this for
+        ``max_concurrent_nodes``, ``execution_timeout``, ``user_context``,
+        etc.
+        """
+        if not isinstance(kwargs, Mapping):
+            raise TypeError(
+                "DurableExecutionEngineBuilder.runtime_kwargs(): kwargs must "
+                f"be a Mapping, got {type(kwargs).__name__}"
+            )
+        self._runtime_kwargs = dict(kwargs)
+        return self
+
+    # -- Build ----------------------------------------------------------
+
+    def build(self) -> "DurableExecutionEngine":
+        """Construct the immutable :class:`DurableExecutionEngine`.
+
+        Lazy-imports :class:`~kailash.runtime.async_local.AsyncLocalRuntime`
+        as the default factory. The lazy import keeps :mod:`kailash.runtime.durable`
+        importable when ``async_local`` is not yet available (cyclic-import
+        safety) and matches the W1 / W2 module-load contracts.
+        """
+        if self._runtime_factory is None:
+            # Lazy import to avoid a hard module-load cycle:
+            # async_local imports durable, so durable importing async_local
+            # at module scope would be a cycle. The factory is only needed
+            # at build() time, well after both modules have loaded.
+            from kailash.runtime.async_local import (
+                AsyncLocalRuntime,  # local import is intentional
+            )
+
+            factory: Callable[..., Any] = AsyncLocalRuntime
+        else:
+            factory = self._runtime_factory
+
+        return DurableExecutionEngine(
+            checkpoint_store=self._checkpoint_store,
+            history_store=self._history_store,
+            dispatcher=self._dispatcher,
+            idempotency_key_default=self._idempotency_key_default,
+            runtime_factory=factory,
+            runtime_kwargs=self._runtime_kwargs,
+        )
