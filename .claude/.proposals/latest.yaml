@@ -124,4 +124,146 @@ changes:
       Posture Wiring required) fires only on NEW rule files per
       rules/trust-posture.md MUST Rule 7.
 
-status: pending_review
+status: distributed
+reviewed_date: 2026-05-07
+distributed_date: 2026-05-07
+distributed_to:
+  - kailash-coc-claude-py (template_version 3.14.1)
+  - kailash-coc-py        (template_version 1.5.1, multi-cli skills emitted to .codex/.gemini)
+distributed_loom_sha: c9dfa54
+
+gate1_classification:
+  reviewer: sync-reviewer (Gate 1)
+  reviewed_at: 2026-05-07
+  classification_summary: 4 global, 0 variant-py, 0 skip; +4 unclassified BUILD-side drift in 01-core-sdk SKILL.md, all classified GLOBAL.
+
+  per_file:
+    - file: .claude/skills/15-enterprise-infrastructure/SKILL.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/SKILL.md
+      rationale: |
+        Primitive-inventory framing is language-invariant. Module-path table
+        labels (`kailash.runtime.scheduler` etc.) are package-prefix tokens
+        of the same shape Rust would use (`kailash::runtime::scheduler`)
+        when sibling primitives land. Description ≤200 chars, failure-mode
+        framed per cc-artifacts.md Rule 1b. Placed verbatim from BUILD.
+
+    - file: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
+      rationale: |
+        Conceptual content (multi-instance hazards, single-leader vs
+        queue-dispatch dedup, cron expression contract, jobstore
+        persistence) is language-invariant. Code examples are Python-
+        specific but kailash-rs has no analog yet (per proposal cross-SDK
+        note); when a Rust scheduler trait lands, a variant overlay can
+        replace the body. BUILD-internal issue numbers (#859) stripped
+        and replaced with neutral phrasing per the global-placement
+        BUILD-reference inspection step.
+
+    - file: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
+      rationale: |
+        Same shape as scheduler-patterns — language-invariant resume
+        contract + Independence Note (preserved verbatim per
+        rules/independence.md). BUILD-internal issue numbers (#860, #861)
+        stripped. Independence Note retained per Foundation independence
+        directive.
+
+    - file: .claude/skills/01-core-sdk/SKILL.md
+      classification: global
+      destination: .claude/skills/01-core-sdk/SKILL.md
+      rationale: |
+        Cross-link section (Recurring + Durable Execution) is the
+        proposal's documented change. Placed plus four BUILD-side drift
+        hunks NOT covered by current proposal — all four align with
+        existing loom rules and were classified as GLOBAL hygiene
+        upgrades; see unclassified_drift_findings below.
+
+  unclassified_drift_findings:
+    description: |
+      Diff sweep of BUILD-side .claude/skills/01-core-sdk/SKILL.md vs
+      loom-side surfaced 4 hunks NOT documented in the proposal. All
+      four align with established loom rules and represent BUILD-side
+      ahead-of-loom hygiene. Classified GLOBAL and placed.
+    hunks:
+      - hunk: description-line-rewrite
+        loom_before: |
+          "Kailash Core SDK — WorkflowBuilder, nodes, runtime, async, cycles, MCP, tracing."
+        build_after: |
+          "Kailash Core SDK — workflows, 110+ nodes, runtime, async, cycles, MCP, OpenTelemetry. Use for WorkflowBuilder + connections + runtime patterns."
+        classification: global
+        rationale: |
+          BUILD version uses failure-mode framing per cc-artifacts.md
+          Rule 1b ("Use for ..." trigger). 185 chars (≤200 budget).
+          Loom version is keyword-listy and lacks the "Use for ..."
+          activation hook.
+
+      - hunk: when-to-use-removal
+        loom_before: |
+          ## When to Use
+          Use Core SDK when asking about workflow basics, core sdk, create workflow, workflow builder, ... [keyword dump]
+        build_after: |
+          (section removed)
+        classification: global
+        rationale: |
+          The keyword-dump pattern violates cc-artifacts.md Rule 1b
+          ("keyword-dump patterns ... are BLOCKED ... defeat semantic
+          activation"). BUILD removed it; the trigger phrase moved into
+          the description: line per Rule 1b. Net token savings on every
+          turn.
+
+      - hunk: fastapi-to-nexus-rename
+        loom_before: |
+          AsyncLocalRuntime: For Docker/FastAPI (async contexts) ...
+          AsyncLocalRuntime (Docker/FastAPI) ...
+          Docker/FastAPI: Use AsyncLocalRuntime (mandatory)
+        build_after: |
+          AsyncLocalRuntime: For Docker/Nexus (async contexts) ...
+          AsyncLocalRuntime (Docker/Nexus) ...
+          Docker/Nexus: Use AsyncLocalRuntime (mandatory)
+        classification: global
+        rationale: |
+          Per feedback_nexus_no_fastapi.md (user memory 2026-04-05):
+          "Nexus fully replaces FastAPI; never use comparative framing."
+          BUILD is correct. 4 occurrences renamed.
+
+      - hunk: emoji-removal-from-critical-rules
+        loom_before: |
+          - ✅ ALWAYS: ...
+          - ❌ NEVER: ...
+        build_after: |
+          - ALWAYS: ...
+          - NEVER: ...
+        classification: global
+        rationale: |
+          Per rules/communication.md "Only use emojis if the user
+          explicitly requests it. Avoid writing emojis to files unless
+          asked." BUILD removed emojis; the ALWAYS/NEVER prose alone
+          carries the directive without decorative tokens.
+
+  cross_sdk_alignment:
+    note: |
+      Per proposal cross-SDK note: kailash-rs has analogous scheduler +
+      durable-execution primitives that should sibling-update on a
+      kailash-rs codify cycle. No rs variant overlay authored in this
+      Gate 1 — defer to a kailash-rs codify cycle when the Rust
+      scheduler/durability primitives stabilize. The variant overlay
+      slot under .claude/variants/rs/skills/15-enterprise-infrastructure/
+      remains available.
+
+  manifest_updates:
+    additions: none
+    removals: none
+    reclassifications: none
+    rationale: |
+      All four files placed at global tier. No manifest changes needed —
+      the global skill 15-enterprise-infrastructure/ already exists in
+      sync-manifest.yaml; the two new sub-files inherit global membership
+      automatically (skills/* directory is globally-included).
+
+  open_questions:
+    - none
+
+  ready_for: gate2_distribute
