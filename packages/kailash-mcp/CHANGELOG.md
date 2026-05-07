@@ -5,6 +5,14 @@ All notable changes to the Kailash MCP package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] — 2026-05-07 — ErrorAggregator orphan polish
+
+Patch bump shipping a previously-orphaned bug fix to `ErrorAggregator.get_error_trends()` that landed in commit `5ca2f993` ("docs(w1): add §4.6 Durable Execution to specs/core-runtime.md + fix flaky aggregator") without an accompanying version bump. Caught at `/release`-time scope enumeration per `build-repo-release-discipline.md` MUST Rule 5.
+
+### Fixed
+
+- **`ErrorAggregator.get_error_trends()` empty-bucket on fresh errors (commit `5ca2f993`)** — when `oldest_error.timestamp ≈ now` (sub-second wall-clock skew, common in unit tests and fast services), the prior `while bucket_start < now` loop never executed and returned an empty trends list despite having recorded errors. Replaced with `do-while` semantics so a single fresh error still emits one bucket containing it.
+
 ## [0.2.11] — 2026-05-03 — sibling-release sweep (W6-002 + LOW-6 triage)
 
 Patch release cutting PyPI for previously-unreleased commits on main per `build-repo-release-discipline.md` Rule 1 (every BUILD-repo session releases all packages whose main is ahead of PyPI). Triggered by the issue #781 cleanup release wave (kailash 2.13.4 + dataflow/kaizen/nexus/kaizen-agents siblings).

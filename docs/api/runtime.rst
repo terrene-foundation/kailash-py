@@ -167,6 +167,23 @@ Asynchronous runtime for I/O-bound operations.
 
    results = asyncio.run(run())
 
+Durable Execution & Distributed Dispatch (v2.14.0+)
+====================================================
+
+The durable execution module provides per-node checkpoint persistence so workflows can resume from the last completed node after process restart, crash, or scheduled re-run. Both ``LocalRuntime`` and ``AsyncLocalRuntime`` route node completions through ``runtime.on_node_complete`` when an ``ExecutionTracker`` is configured.
+
+.. automodule:: kailash.runtime.durable
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+The dispatcher module provides a pluggable ``Dispatcher`` ABC that ``WorkflowScheduler`` accepts via ``dispatch_via=`` to route scheduled workflow firings through a task queue (e.g., for distributed execution across worker pools).
+
+.. automodule:: kailash.runtime.dispatcher
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 CyclicWorkflowExecutor
 ======================
 
