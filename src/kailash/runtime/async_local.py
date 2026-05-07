@@ -37,6 +37,7 @@ from kailash.runtime.durable import (
     decode_checkpoint_payload,
     encode_checkpoint_payload,
     redact_event_for_persistence,
+    redacted_tracker_state_for_checkpoint,
     resolve_tenant_id,
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
@@ -656,12 +657,31 @@ class AsyncLocalRuntime(LocalRuntime):
             and ckpt_key is not None
             and tracker is not None
         ):
+            # W6 redaction discipline: tracker.to_dict() embeds raw
+            # classified node outputs in node_outputs[<node_id>].  Route
+            # through the same classification-aware helper that the
+            # subscriber surface uses (see redacted dispatch above) so
+            # the persisted blob carries [REDACTED] / hashed-PK sentinels
+            # for every classified field.  Mirrors the sync runtime fix
+            # in local.py; both paths SHARE the helper from
+            # kailash.runtime.durable so divergence is structurally
+            # impossible.  See rules/zero-tolerance.md Rule 2 ("fake
+            # redaction") and rules/dataflow-classification.md MUST
+            # Rule 1 ("every mutation return-path applies redaction").
             lock_key = run_id or ckpt_key
             lock = self._get_or_create_checkpoint_lock(lock_key)
             async with lock:
+                redacted_tracker_state = redacted_tracker_state_for_checkpoint(
+                    tracker.to_dict(),
+                    classification_policy=classification_policy,
+                    workflow_id=getattr(workflow, "workflow_id", "") or "",
+                    workflow_fingerprint=wf_fp,
+                    tenant_id=tenant_id,
+                    idempotency_key=idempotency_key,
+                )
                 blob = encode_checkpoint_payload(
                     workflow_fingerprint=wf_fp,
-                    tracker_state=tracker.to_dict(),
+                    tracker_state=redacted_tracker_state,
                     tenant_id=tenant_id,
                     workflow_id=getattr(workflow, "workflow_id", "") or "",
                     idempotency_key=idempotency_key,

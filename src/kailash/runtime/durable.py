@@ -56,6 +56,7 @@ __all__ = [
     "compute_workflow_fingerprint",
     "build_checkpoint_key",
     "redact_event_for_persistence",
+    "redacted_tracker_state_for_checkpoint",
     "encode_checkpoint_payload",
     "decode_checkpoint_payload",
     "check_shape_drift_or_raise",
@@ -475,6 +476,133 @@ def redact_event_for_persistence(
     )
 
 
+def redacted_tracker_state_for_checkpoint(
+    tracker_state: Mapping[str, Any],
+    *,
+    classification_policy: Optional[Any] = None,
+    workflow_id: str = "",
+    workflow_fingerprint: str = "",
+    tenant_id: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Return a copy of ``tracker_state`` with per-node outputs redacted.
+
+    The W2 ``runtime.on_node_complete`` hook contract — "no subscriber
+    ever observes a classified PK or a redacted field's raw value"
+    (``LocalRuntime.on_node_complete()`` docstring) — extends to EVERY
+    persistence surface that handles per-node outputs.  The checkpoint
+    write-path is one such surface: ``encode_checkpoint_payload`` was
+    previously called with ``tracker_state=execution_tracker.to_dict()``,
+    which embeds raw classified outputs in ``node_outputs[<node_id>]``.
+
+    Anyone using ``LocalRuntime(checkpoint_store=…,
+    checkpoint_after_each_node=True)`` with a ``classification_policy``
+    was silently writing raw classified field values to disk — exactly
+    the "fake redaction / fake classification" failure mode named by
+    ``rules/zero-tolerance.md`` Rule 2 and the "every persistence
+    surface that handles classified fields routes through
+    redact_event_for_persistence semantics" invariant established by W6.
+
+    Strategy: walk ``tracker_state["node_outputs"]`` and, for each
+    node's cached outputs dict, build a synthetic
+    :class:`NodeCompletionEvent` whose ``outputs`` carry the cached
+    payload, run :func:`redact_event_for_persistence` over it, and
+    write the redacted outputs back into a fresh tracker-state dict.
+    Other tracker fields (``completed_nodes`` ordering) are copied
+    verbatim — they carry no classified content.
+
+    Behavior matches :func:`redact_event_for_persistence` exactly: when
+    ``classification_policy`` is ``None`` the function returns a deep
+    copy of ``tracker_state`` unchanged.  When a policy is provided,
+    every classified field in every per-node output dict is replaced
+    with the ``"[REDACTED]"`` sentinel or hashed via
+    ``HASH_PK`` semantics.
+
+    The function NEVER raises on a missing ``node_outputs`` key — the
+    tracker shape is treated permissively so downstream callers (test
+    fixtures, alternative trackers) can skip the field if they have no
+    per-node outputs to record.
+
+    Parameters
+    ----------
+    tracker_state:
+        The dict produced by ``ExecutionTracker.to_dict()`` (or any
+        compatible structure with ``node_outputs`` keyed by node_id).
+    classification_policy:
+        Same policy object passed to
+        :func:`redact_event_for_persistence`.  When ``None``, returns a
+        deep copy unchanged (no-op redaction = back-compat).
+    workflow_id, workflow_fingerprint, tenant_id, idempotency_key:
+        Context propagated into the synthetic events so a future
+        policy implementation that consults event-level context (per
+        the architecture plan §3.1 invariant) sees the right scope.
+
+    Returns
+    -------
+    A NEW dict.  The input ``tracker_state`` is never mutated; a
+    deep-copy of ``node_outputs`` is taken so the caller's tracker is
+    safe.
+    """
+    # Defensive deep-copy of the top-level structure so the caller's
+    # tracker dict is never mutated even on the no-op path.
+    new_state: Dict[str, Any] = {}
+    for key, value in tracker_state.items():
+        if key == "node_outputs":
+            continue  # populated below
+        new_state[key] = value
+
+    raw_outputs_map = tracker_state.get("node_outputs", {})
+    if not isinstance(raw_outputs_map, Mapping):
+        # Defensive: an unexpected tracker shape passes through untouched
+        # so a future tracker variant doesn't crash the checkpoint path.
+        new_state["node_outputs"] = raw_outputs_map
+        return new_state
+
+    if classification_policy is None:
+        # No policy → no redaction, but still copy the per-node dicts so
+        # the returned structure is independent of the input.
+        new_state["node_outputs"] = {
+            node_id: dict(outputs) if isinstance(outputs, Mapping) else outputs
+            for node_id, outputs in raw_outputs_map.items()
+        }
+        return new_state
+
+    # With a policy: route every per-node output dict through the same
+    # redaction helper that the on_node_complete subscriber surface uses.
+    # Synthetic events carry only the fields the redactor consults
+    # (node_id + outputs); timestamps are stable sentinels so the
+    # synthetic event satisfies the dataclass shape but does not leak
+    # any wall-clock surface back into the tracker.
+    sentinel_ts = datetime.now(timezone.utc)
+    redacted_node_outputs: Dict[str, Any] = {}
+    for node_id, outputs in raw_outputs_map.items():
+        if not isinstance(outputs, Mapping):
+            # Unexpected shape — copy as-is rather than crash.  Same
+            # permissive posture as the non-policy branch above.
+            redacted_node_outputs[node_id] = outputs
+            continue
+        synthetic = NodeCompletionEvent(
+            run_id=None,
+            workflow_id=workflow_id,
+            workflow_fingerprint=workflow_fingerprint,
+            node_id=str(node_id),
+            node_type="",
+            outputs=dict(outputs),
+            started_at=sentinel_ts,
+            ended_at=sentinel_ts,
+            duration_ms=0,
+            tenant_id=tenant_id,
+            idempotency_key=idempotency_key,
+            error=None,
+            metadata={},
+        )
+        redacted = redact_event_for_persistence(
+            synthetic, classification_policy=classification_policy
+        )
+        redacted_node_outputs[node_id] = dict(redacted.outputs)
+
+    new_state["node_outputs"] = redacted_node_outputs
+    return new_state
 def _get_classification_tag(
     policy: Any, node_id: str, field_name: str
 ) -> Optional[str]:
