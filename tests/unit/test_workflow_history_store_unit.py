@@ -450,3 +450,75 @@ def test_workflow_history_store_is_abstract() -> None:
 def test_postgres_and_sqlite_subclass_workflow_history_store() -> None:
     assert issubclass(PostgresHistoryStore, WorkflowHistoryStore)
     assert issubclass(SQLiteHistoryStore, WorkflowHistoryStore)
+
+
+def test_get_or_create_run_lock_returns_same_lock_per_run_id() -> None:
+    """Per-run lock LRU cache returns the SAME asyncio.Lock for repeated
+    calls with the same ``run_id``.  The lock is the structural defense
+    against the ``MAX(event_seq) + 1`` race for concurrent record_event
+    calls per ``rules/zero-tolerance.md`` Rule 2 (no fake-classification
+    via missing serialisation guard).
+    """
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn)
+    lock_a1 = store._get_or_create_run_lock("run-A")
+    lock_a2 = store._get_or_create_run_lock("run-A")
+    lock_b = store._get_or_create_run_lock("run-B")
+    assert lock_a1 is lock_a2  # same run_id → same lock
+    assert lock_a1 is not lock_b  # different run_id → different lock
+
+
+def test_get_or_create_run_lock_lru_eviction_bounds_memory() -> None:
+    """The LRU cache evicts the least-recently-used entry once
+    ``_MAX_RUN_LOCKS`` is exceeded.  Mirrors the W1 ``_checkpoint_locks``
+    pattern in :mod:`kailash.runtime.local`.  Unbounded growth would
+    otherwise leak one Lock per unique ``run_id`` per
+    ``rules/infrastructure-sql.md`` Rule 7.
+    """
+    from kailash.infrastructure import history_store as hs_mod
+
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn)
+    # Patch the bound to a small number for the test.
+    original_bound = hs_mod._MAX_RUN_LOCKS
+    hs_mod._MAX_RUN_LOCKS = 3
+    try:
+        lock_1 = store._get_or_create_run_lock("run-1")
+        lock_2 = store._get_or_create_run_lock("run-2")
+        lock_3 = store._get_or_create_run_lock("run-3")
+        # Cache is now full.  Adding a 4th entry should evict run-1.
+        lock_4 = store._get_or_create_run_lock("run-4")
+        assert "run-1" not in store._run_locks
+        assert "run-2" in store._run_locks
+        assert "run-4" in store._run_locks
+        # Re-acquiring run-1 creates a NEW lock (the prior was evicted).
+        lock_1_again = store._get_or_create_run_lock("run-1")
+        assert lock_1_again is not lock_1
+    finally:
+        hs_mod._MAX_RUN_LOCKS = original_bound
+
+
+def test_get_or_create_run_lock_promotes_on_access() -> None:
+    """Accessing an existing entry promotes it to most-recently-used so
+    an active long-lived run is never evicted under bound pressure.
+    """
+    from kailash.infrastructure import history_store as hs_mod
+
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn)
+    original_bound = hs_mod._MAX_RUN_LOCKS
+    hs_mod._MAX_RUN_LOCKS = 3
+    try:
+        store._get_or_create_run_lock("run-1")
+        store._get_or_create_run_lock("run-2")
+        store._get_or_create_run_lock("run-3")
+        # Touch run-1 to promote it to MRU.
+        store._get_or_create_run_lock("run-1")
+        # Adding run-4 should now evict run-2 (LRU), not run-1.
+        store._get_or_create_run_lock("run-4")
+        assert "run-1" in store._run_locks
+        assert "run-2" not in store._run_locks
+        assert "run-3" in store._run_locks
+        assert "run-4" in store._run_locks
+    finally:
+        hs_mod._MAX_RUN_LOCKS = original_bound

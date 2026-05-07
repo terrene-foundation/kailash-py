@@ -67,11 +67,13 @@ Per-tenant cap:
 
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import json
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union
 
@@ -102,6 +104,13 @@ _DEFAULT_RETENTION_DAYS = 30
 
 #: Default per-tenant cap; oldest run evicted with WARN log on overflow.
 _DEFAULT_PER_TENANT_CAP = 10_000
+
+#: Bound on the per-run ``asyncio.Lock`` LRU cache.  Long-running stores
+#: shared across many runs would otherwise leak one Lock per unique
+#: ``run_id`` forever.  Mirrors ``MAX_CHECKPOINT_LOCKS`` in
+#: :mod:`kailash.runtime.local`.  Per ``rules/infrastructure-sql.md``
+#: Rule 7 (bound in-memory stores).
+_MAX_RUN_LOCKS = 10_000
 
 #: ContextVar guarding ``delete_runs_older_than`` during an internal lazy
 #: eviction sweep so the recursion through write-time eviction does not
@@ -225,6 +234,17 @@ class WorkflowHistoryStore(ABC):
         self._per_tenant_cap = per_tenant_cap
         self._policy = classification_policy
         self._initialized = False
+        # Per-run asyncio.Lock for serialising concurrent ``record_event``
+        # calls for the SAME run_id.  Mirrors the ``_checkpoint_locks``
+        # pattern in :mod:`kailash.runtime.local` (W1).  Today the W1
+        # ``NodeCompletionHookRegistry.dispatch_async`` awaits subscribers
+        # sequentially per event, so concurrent record_event calls only
+        # arise across multiple runtime instances or future parallel-
+        # branch dispatch surfaces — the lock is defense-in-depth that
+        # closes the ``MAX(event_seq) + 1`` race under READ COMMITTED
+        # isolation.  Bounded LRU per ``rules/infrastructure-sql.md``
+        # Rule 7.
+        self._run_locks: "OrderedDict[str, asyncio.Lock]" = OrderedDict()
 
     @abstractmethod
     async def initialize(self) -> None:
@@ -235,6 +255,24 @@ class WorkflowHistoryStore(ABC):
         ``/redteam`` mechanical sweep (Rule 1a) MUST grep for inline DDL
         outside ``initialize`` and BLOCK on hits.
         """
+
+    def _get_or_create_run_lock(self, run_id: str) -> asyncio.Lock:
+        """Get or create the per-run :class:`asyncio.Lock`, with LRU eviction.
+
+        Bounded by :data:`_MAX_RUN_LOCKS`.  On access an existing entry
+        is promoted to most-recently-used so an active long-lived run is
+        never aged out under the bound.  Mirrors
+        :meth:`kailash.runtime.local.LocalRuntime._get_or_create_checkpoint_lock`.
+        """
+        lock = self._run_locks.get(run_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._run_locks[run_id] = lock
+            while len(self._run_locks) > _MAX_RUN_LOCKS:
+                self._run_locks.popitem(last=False)
+        else:
+            self._run_locks.move_to_end(run_id)
+        return lock
 
     async def close(self) -> None:
         """Release any resources held by the backend.
@@ -313,6 +351,57 @@ class WorkflowHistoryStore(ABC):
         node_id_hash = _hash_short(redacted.node_id)
         is_terminal_failure = redacted.error is not None
 
+        # ``redacted.run_id`` is non-None here — the early-return at the
+        # top of this method covered ``event.run_id is None``, and the
+        # redaction helper preserves run_id verbatim.  Local rebind so
+        # the type narrows for the lock-key argument.
+        run_id_str: str = redacted.run_id  # type: ignore[assignment]
+
+        # Per-run lock serialises concurrent record_event calls for the
+        # same run_id.  Without this lock, two writers under READ COMMITTED
+        # isolation can both observe the same MAX(event_seq) and one INSERT
+        # collides with UNIQUE(run_id, event_seq).  The W1 hook registry
+        # serialises dispatch within ONE runtime instance, so this lock is
+        # primarily defense-in-depth against future parallel-branch dispatch
+        # surfaces (W3+) or shared-store deployments where multiple runtime
+        # instances target the same history_store with overlapping run_ids.
+        async with self._get_or_create_run_lock(run_id_str):
+            await self._record_event_locked(
+                redacted=redacted,
+                payload_json=payload_json,
+                classified_field_count=classified_field_count,
+                started_at_iso=started_at_iso,
+                ts_iso=ts_iso,
+                node_id_hash=node_id_hash,
+                is_terminal_failure=is_terminal_failure,
+            )
+
+        # 3) Lazy retention sweep + per-tenant cap.  These run OUTSIDE
+        #    the transaction so they cannot rollback the write that
+        #    triggered them.  Every site that performs a destructive
+        #    sweep enters via the internal-eviction context to bypass
+        #    the public ``force_downgrade=True`` gate per Rule 7.
+        await self._lazy_retention_sweep()
+        await self._enforce_per_tenant_cap(_tenant_partition(redacted.tenant_id))
+
+    async def _record_event_locked(
+        self,
+        *,
+        redacted: NodeCompletionEvent,
+        payload_json: str,
+        classified_field_count: int,
+        started_at_iso: str,
+        ts_iso: str,
+        node_id_hash: str,
+        is_terminal_failure: bool,
+    ) -> None:
+        """Inner persistence path for :meth:`record_event`.
+
+        Caller MUST hold ``self._get_or_create_run_lock(redacted.run_id)``
+        for the duration of this call so the ``MAX(event_seq) + 1``
+        computation inside the transaction cannot race against another
+        writer for the same ``run_id``.
+        """
         async with self._conn.transaction() as tx:
             # 1) Upsert the run row.  Status becomes "failed" on the
             #    first error event; otherwise runs as "running" until
@@ -356,8 +445,10 @@ class WorkflowHistoryStore(ABC):
                 )
 
             # 2) Append the per-node event.  ``event_seq`` is monotonic
-            #    per run — derived inside the same transaction so two
-            #    concurrent writers cannot collide.
+            #    per run — caller-held :meth:`_get_or_create_run_lock`
+            #    serialises concurrent writers for the same run_id so the
+            #    ``MAX(event_seq) + 1`` computation cannot race against
+            #    another writer's INSERT under READ COMMITTED isolation.
             seq_row = await tx.fetchone(
                 f"SELECT COALESCE(MAX(event_seq), 0) AS max_seq "
                 f"FROM {self._events_table} WHERE run_id = ?",
@@ -379,14 +470,6 @@ class WorkflowHistoryStore(ABC):
                 classified_field_count,
                 ts_iso,
             )
-
-        # 3) Lazy retention sweep + per-tenant cap.  These run OUTSIDE
-        #    the transaction so they cannot rollback the write that
-        #    triggered them.  Every site that performs a destructive
-        #    sweep enters via the internal-eviction context to bypass
-        #    the public ``force_downgrade=True`` gate per Rule 7.
-        await self._lazy_retention_sweep()
-        await self._enforce_per_tenant_cap(_tenant_partition(redacted.tenant_id))
 
     # ------------------------------------------------------------------
     # Read API (every method tenant-isolated)
@@ -494,21 +577,20 @@ class WorkflowHistoryStore(ABC):
                 "get_run_events: tenant_id MUST be a non-empty string.  "
                 "Cross-tenant reads are blocked at the store layer."
             )
-        # Tenant-scope check: confirm the run row exists for this tenant
-        # before returning any events.
-        run = await self._conn.fetchone(
-            f"SELECT 1 FROM {self._runs_table} " f"WHERE run_id = ? AND tenant_id = ?",
+        # Tenant scope is enforced by JOINing to the runs table — an event
+        # whose run is owned by a different tenant returns no rows.  This
+        # is defense-in-depth: the data fetch itself partitions by tenant,
+        # not just the existence check.  Closes a defense-in-depth gap
+        # surfaced by /redteam (cross-SDK security audit, 2026-05-07).
+        rows = await self._conn.fetch(
+            f"SELECT e.id, e.run_id, e.event_seq, e.node_id_hash, "
+            f"e.event_type, e.payload_json, e.classified_field_count, e.ts "
+            f"FROM {self._events_table} e "
+            f"JOIN {self._runs_table} r ON e.run_id = r.run_id "
+            f"WHERE r.run_id = ? AND r.tenant_id = ? "
+            f"ORDER BY e.event_seq ASC",
             run_id,
             _tenant_partition(tenant_id),
-        )
-        if run is None:
-            return []
-        rows = await self._conn.fetch(
-            f"SELECT id, run_id, event_seq, node_id_hash, event_type, "
-            f"payload_json, classified_field_count, ts "
-            f"FROM {self._events_table} "
-            f"WHERE run_id = ? ORDER BY event_seq ASC",
-            run_id,
         )
         result: List[Dict[str, Any]] = []
         for row in rows:
