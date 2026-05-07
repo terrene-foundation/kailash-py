@@ -378,3 +378,232 @@ async def test_sync_runtime_checkpoint_redacts_classified_outputs(
         "write path."
     )
     assert b"[REDACTED]" in blob
+
+
+# ---------------------------------------------------------------------------
+# W6 round-2 — nested-dict redaction (security-reviewer Finding 1)
+# ---------------------------------------------------------------------------
+
+
+class _NestedLeafRedactPolicy:
+    """REDACT a nested-leaf path (e.g. ``customer.ssn``) but leave
+    sibling leaves and the wrapper alone.  Pre-W6-round-2 the
+    ``redact_event_for_persistence`` helper iterated only top-level
+    keys — wrapper-only tagging worked, leaf tagging silently passed
+    the raw value through.
+    """
+
+    def __init__(self, target_path: str) -> None:
+        self._target = target_path
+
+    def get_classification(self, _node_id: str, field_path: str):
+        if field_path == self._target:
+            return "REDACT"
+        return None
+
+
+class _NestedWrapperRedactPolicy:
+    """REDACT the wrapper itself (``customer``) — verifies that
+    wrapper-level tagging still replaces the entire subtree.  This is
+    the pre-W6-round-2 behavior baseline; the test guards against a
+    future refactor that accidentally narrows it.
+    """
+
+    def get_classification(self, _node_id: str, field_path: str):
+        if field_path == "customer":
+            return "REDACT"
+        return None
+
+
+def _build_nested_workflow(payload_code: str):
+    """One-node PythonCodeNode workflow whose output emits nested
+    dicts and lists under PythonCodeNode's ``result`` wrapper."""
+    wb = WorkflowBuilder()
+    wb.add_node("PythonCodeNode", "leak_node", {"code": payload_code})
+    return wb.build()
+
+
+@pytest.mark.integration
+async def test_redact_event_persistence_nested_dict_leaf_redacted(
+    pg_conn: ConnectionManager,
+    checkpoint_store: DBCheckpointStore,
+):
+    """A nested-leaf classified field MUST be replaced by the
+    [REDACTED] sentinel while UNCLASSIFIED siblings AND the wrapper
+    survive verbatim.  Pre-W6-round-2 the persisted blob carried the
+    raw nested SSN because the helper iterated only top-level keys.
+    """
+    raw_ssn = "555-12-3456-DO-NOT-LEAK"
+    public_name = "Alice-public-survives"
+    workflow = _build_nested_workflow(
+        f"result = {{'customer': {{'ssn': '{raw_ssn}', 'name': '{public_name}'}}}}"
+    )
+    idempotency_key = f"async_nested_leaf_{uuid.uuid4().hex[:8]}"
+    fingerprint = compute_workflow_fingerprint(workflow)
+    expected_key = build_checkpoint_key(fingerprint, idempotency_key, None)
+
+    runtime = AsyncLocalRuntime(
+        checkpoint_store=checkpoint_store,
+        checkpoint_after_each_node=True,
+    )
+    runtime._classification_policy = _NestedLeafRedactPolicy(  # noqa: SLF001
+        "result.customer.ssn"
+    )
+
+    await runtime.execute_workflow_async(
+        workflow,
+        inputs={},
+        idempotency_key=idempotency_key,
+    )
+
+    rows = await pg_conn.fetch(
+        "SELECT data FROM kailash_checkpoints WHERE checkpoint_key = ?",
+        expected_key,
+    )
+    assert len(rows) == 1
+    blob = rows[0]["data"]
+    if isinstance(blob, memoryview):
+        blob = bytes(blob)
+
+    assert raw_ssn.encode("utf-8") not in blob, (
+        "Raw nested SSN leaked to checkpoint blob — recursive "
+        "redaction did not redact result.customer.ssn at depth 3."
+    )
+    assert b"[REDACTED]" in blob, (
+        "Sentinel missing from checkpoint blob — recursive helper " "did not run."
+    )
+    # Unclassified sibling at the same depth survives.
+    assert public_name.encode("utf-8") in blob, (
+        "Sibling result.customer.name was over-redacted — recursive "
+        "helper is touching fields outside the policy's scope."
+    )
+
+    # Decoded shape: the wrapper dict survives; only the leaf is sentinel.
+    decoded = decode_checkpoint_payload(blob)
+    leak_outputs = decoded["tracker"]["node_outputs"].get("leak_node", {})
+    customer = leak_outputs.get("result", {}).get("customer", {})
+    assert customer.get("ssn") == "[REDACTED]"
+    assert customer.get("name") == public_name
+
+
+@pytest.mark.integration
+async def test_redact_event_persistence_nested_dict_wrapper_redacted(
+    pg_conn: ConnectionManager,
+    checkpoint_store: DBCheckpointStore,
+):
+    """When the WRAPPER is tagged (``result.customer``), the entire
+    subtree MUST be replaced — neither the leaf nor the sibling
+    survives.  Backwards-compat with pre-W6-round-2 wrapper-only
+    tagging behavior; locks it as a contract.
+    """
+    raw_ssn = "888-12-3456-DO-NOT-LEAK"
+    raw_name = "should-also-be-gone"
+    workflow = _build_nested_workflow(
+        f"result = {{'customer': {{'ssn': '{raw_ssn}', 'name': '{raw_name}'}}, 'public_field': 'OK'}}"
+    )
+    idempotency_key = f"async_nested_wrapper_{uuid.uuid4().hex[:8]}"
+    fingerprint = compute_workflow_fingerprint(workflow)
+    expected_key = build_checkpoint_key(fingerprint, idempotency_key, None)
+
+    class _ResultCustomerWrapperPolicy:
+        def get_classification(self, _node_id: str, field_path: str):
+            if field_path == "result.customer":
+                return "REDACT"
+            return None
+
+    runtime = AsyncLocalRuntime(
+        checkpoint_store=checkpoint_store,
+        checkpoint_after_each_node=True,
+    )
+    runtime._classification_policy = _ResultCustomerWrapperPolicy()  # noqa: SLF001
+
+    await runtime.execute_workflow_async(
+        workflow,
+        inputs={},
+        idempotency_key=idempotency_key,
+    )
+
+    rows = await pg_conn.fetch(
+        "SELECT data FROM kailash_checkpoints WHERE checkpoint_key = ?",
+        expected_key,
+    )
+    assert len(rows) == 1
+    blob = rows[0]["data"]
+    if isinstance(blob, memoryview):
+        blob = bytes(blob)
+
+    # Both nested leaves gone (whole subtree replaced).
+    assert raw_ssn.encode("utf-8") not in blob
+    assert raw_name.encode("utf-8") not in blob
+    # Sibling top-level field survives.
+    assert b"OK" in blob
+
+    # Decoded: result.customer is the literal sentinel string.
+    decoded = decode_checkpoint_payload(blob)
+    leak_outputs = decoded["tracker"]["node_outputs"].get("leak_node", {})
+    assert leak_outputs.get("result", {}).get("customer") == "[REDACTED]"
+    assert leak_outputs.get("result", {}).get("public_field") == "OK"
+
+
+@pytest.mark.integration
+async def test_redact_event_persistence_nested_list_index_redacted(
+    pg_conn: ConnectionManager,
+    checkpoint_store: DBCheckpointStore,
+):
+    """A classified field inside a list item MUST be redacted via
+    indexed path (``items.0.password``).  Pre-W6-round-2 lists were
+    invisible to the helper — every list-of-dicts shape silently
+    leaked classified fields.  Pins recursion through Sequence values.
+    """
+    raw_pwd = "shared-secret-pwd-XYZ-789"
+    public_user = "username-survives"
+    workflow = _build_nested_workflow(
+        f"result = {{'items': [{{'password': '{raw_pwd}', 'username': '{public_user}'}}]}}"
+    )
+    idempotency_key = f"async_nested_list_{uuid.uuid4().hex[:8]}"
+    fingerprint = compute_workflow_fingerprint(workflow)
+    expected_key = build_checkpoint_key(fingerprint, idempotency_key, None)
+
+    class _ListIndexRedactPolicy:
+        def get_classification(self, _node_id: str, field_path: str):
+            if field_path == "result.items.0.password":
+                return "REDACT"
+            return None
+
+    runtime = AsyncLocalRuntime(
+        checkpoint_store=checkpoint_store,
+        checkpoint_after_each_node=True,
+    )
+    runtime._classification_policy = _ListIndexRedactPolicy()  # noqa: SLF001
+
+    await runtime.execute_workflow_async(
+        workflow,
+        inputs={},
+        idempotency_key=idempotency_key,
+    )
+
+    rows = await pg_conn.fetch(
+        "SELECT data FROM kailash_checkpoints WHERE checkpoint_key = ?",
+        expected_key,
+    )
+    assert len(rows) == 1
+    blob = rows[0]["data"]
+    if isinstance(blob, memoryview):
+        blob = bytes(blob)
+
+    assert raw_pwd.encode("utf-8") not in blob, (
+        "Raw password in list item leaked to checkpoint blob — list "
+        "recursion did not run on result.items.0.password."
+    )
+    assert public_user.encode("utf-8") in blob, (
+        "Sibling username field over-redacted; list recursion " "exceeded policy scope."
+    )
+    assert b"[REDACTED]" in blob
+
+    # Decoded: items[0].password is sentinel, items[0].username is raw.
+    decoded = decode_checkpoint_payload(blob)
+    leak_outputs = decoded["tracker"]["node_outputs"].get("leak_node", {})
+    items = leak_outputs.get("result", {}).get("items", [])
+    assert len(items) == 1
+    assert items[0].get("password") == "[REDACTED]"
+    assert items[0].get("username") == public_user
