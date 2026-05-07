@@ -23,7 +23,7 @@ emission and history-event subscription into the runtime's hot path
 * :func:`build_checkpoint_key` — deterministic hash of
   ``(workflow.fingerprint, idempotency_key, parameters)`` per architecture
   plan §6 risk register. Stable across processes; safe as a primary key.
-* :func:`_redact_event_for_persistence` — shared classification-aware
+* :func:`redact_event_for_persistence` — shared classification-aware
   redaction helper. Both this module's checkpoint persistence path AND the
   W2 history store path MUST route through this helper before persisting
   any payload that may carry classified PKs or field names. Per
@@ -475,12 +475,6 @@ def redact_event_for_persistence(
     )
 
 
-# Internal-name alias kept for cross-architecture-plan citations
-# (the plan references ``_redact_event_for_persistence`` as the helper
-# name; the public re-export is the un-prefixed name).
-_redact_event_for_persistence = redact_event_for_persistence
-
-
 def _get_classification_tag(
     policy: Any, node_id: str, field_name: str
 ) -> Optional[str]:
@@ -578,8 +572,13 @@ class NodeCompletionHookRegistry:
 
     def register(self, callback: NodeCompletionCallback) -> Callable[[], None]:
         """Register ``callback``. Returns an unregister function."""
-        if not callable(callback):
-            raise TypeError(
+        # Defensive runtime check per rules/zero-tolerance.md Rule 3a — Python's
+        # static annotations are unenforced at runtime, so a non-callable can
+        # still arrive here through a duck-typed caller. pyright sees the
+        # parameter annotation and flags the negative branch as unreachable;
+        # the runtime guard is intentional.
+        if not callable(callback):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(  # pyright: ignore[reportUnreachable]
                 f"NodeCompletionHookRegistry.register(): callback must be "
                 f"callable, got {type(callback).__name__}"
             )
@@ -818,12 +817,6 @@ def resolve_tenant_id(runtime: Any) -> Optional[str]:
 # function object directly so that test fixtures can reset it via
 # ``del resolve_tenant_id._warned_unavailable`` between tests.
 resolve_tenant_id._warned_unavailable = False  # type: ignore[attr-defined]
-
-
-# Re-export for symmetry with redact_event_for_persistence — both
-# helpers live in the same module and share the same private alias
-# convention used by the architecture plan citations.
-_resolve_tenant_id = resolve_tenant_id
 
 
 # ---------------------------------------------------------------------------
@@ -1176,6 +1169,18 @@ class DurableExecutionEngine:
             queue_name=queue_name,
             kwargs=kwargs_payload,
         )
+        # Typed delegate guard per rules/zero-tolerance.md Rule 3a — although
+        # the public ``execute()`` only calls _enqueue_for_run when
+        # self._dispatcher is not None, the helper is a private method that
+        # could be reached via subclassing or refactor.  The guard turns an
+        # opaque AttributeError on ``None.enqueue`` into an actionable
+        # RuntimeError naming the missing builder call.
+        if self._dispatcher is None:
+            raise RuntimeError(
+                "DurableExecutionEngine._enqueue_for_run(): no dispatcher "
+                "configured.  Call .dispatch_via(<Dispatcher>) on the builder, "
+                "or invoke .execute() without dispatch for in-process execution."
+            )
         await self._dispatcher.enqueue(task)
         return schedule_id
 
@@ -1228,8 +1233,16 @@ class DurableExecutionEngineBuilder:
         self, key: Optional[str]
     ) -> "DurableExecutionEngineBuilder":
         """Set the default ``idempotency_key`` applied to ``execute`` calls."""
-        if key is not None and not isinstance(key, str):
-            raise TypeError(
+        # Defensive runtime type guard per rules/zero-tolerance.md Rule 3a.
+        # The Optional[str] annotation is unenforced at runtime; a duck-typed
+        # caller passing an int / dict / object would otherwise propagate to
+        # the workflow_runs row write where the typed error would be
+        # opaque.  pyright sees the annotation and flags the negative branch
+        # as unreachable; the runtime guard is intentional.
+        if key is not None and not isinstance(
+            key, str
+        ):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(  # pyright: ignore[reportUnreachable]
                 "DurableExecutionEngineBuilder.idempotency_key_default(): "
                 f"key must be str or None, got {type(key).__name__}"
             )
@@ -1248,8 +1261,12 @@ class DurableExecutionEngineBuilder:
         custom callable when an ``AsyncLocalRuntime`` subclass or a
         compatible alternative is required.
         """
+        # Defensive runtime guard per rules/zero-tolerance.md Rule 3a — the
+        # Optional[Callable] annotation does not prevent a duck-typed caller
+        # from passing a non-callable.  pyright sees the annotation and flags
+        # the negative branch as unreachable; the runtime guard is intentional.
         if runtime_factory is not None and not callable(runtime_factory):
-            raise TypeError(
+            raise TypeError(  # pyright: ignore[reportUnreachable]
                 "DurableExecutionEngineBuilder.runtime(): runtime_factory "
                 f"must be callable or None, got {type(runtime_factory).__name__}"
             )
@@ -1267,8 +1284,15 @@ class DurableExecutionEngineBuilder:
         ``max_concurrent_nodes``, ``execution_timeout``, ``user_context``,
         etc.
         """
-        if not isinstance(kwargs, Mapping):
-            raise TypeError(
+        # Defensive runtime guard per rules/zero-tolerance.md Rule 3a.  The
+        # Mapping[str, Any] annotation is unenforced at runtime; a string
+        # ("max_concurrent=10") would hit the dict() copy below with a
+        # cryptic ValueError.  pyright sees the annotation and flags the
+        # negative branch as unreachable; the runtime guard is intentional.
+        if not isinstance(
+            kwargs, Mapping
+        ):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(  # pyright: ignore[reportUnreachable]
                 "DurableExecutionEngineBuilder.runtime_kwargs(): kwargs must "
                 f"be a Mapping, got {type(kwargs).__name__}"
             )

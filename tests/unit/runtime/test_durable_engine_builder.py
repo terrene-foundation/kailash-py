@@ -33,7 +33,6 @@ What IS covered here:
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pytest
@@ -159,17 +158,17 @@ class _FakeDispatcher:
     async def enqueue(self, task: Any) -> None:
         self.enqueued.append(task)
 
-    def poll(self, queue_name: str = "default"):  # pragma: no cover - unused
+    def poll(self, _queue_name: str = "default"):  # pragma: no cover - unused
         async def _empty():
             if False:  # pragma: no cover
                 yield None
 
         return _empty()
 
-    async def ack(self, task_id: str) -> None:  # pragma: no cover - unused
+    async def ack(self, _task_id: str) -> None:  # pragma: no cover - unused
         return None
 
-    async def nack(self, task_id: str, *, reason: str) -> None:
+    async def nack(self, _task_id: str, *, _reason: str) -> None:
         # pragma: no cover - unused
         return None
 
@@ -355,7 +354,7 @@ def test_runtime_factory_must_return_compatible_runtime():
     """A factory returning a non-runtime object raises a typed error."""
 
     class _BadRuntime:
-        def __init__(self, **kwargs: Any) -> None:
+        def __init__(self, **_kwargs: Any) -> None:
             pass
 
         # Intentionally lacks execute_workflow_async.
