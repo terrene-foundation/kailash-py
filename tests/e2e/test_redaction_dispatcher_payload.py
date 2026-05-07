@@ -169,20 +169,10 @@ async def test_dispatcher_payload_hashes_classified_kwargs_at_enqueue(
     # contract). If the constructor refuses the kwarg, the failure is
     # "TypeError: __init__ got unexpected keyword argument" — clear
     # signal of the gap.
-    try:
-        dispatcher = SQLTaskQueueDispatcher(
-            pg_conn,
-            classification_policy=_CustomerHashPolicy(),
-        )
-    except TypeError as exc:
-        pytest.fail(
-            f"SQLTaskQueueDispatcher does not accept classification_policy "
-            f"kwarg — the W5 acceptance criterion (redaction at enqueue "
-            f"time) is not yet implemented in the SDK. Constructor error: "
-            f"{exc}. Per rules/zero-tolerance.md Rule 4 + the W5 spec, "
-            f"the dispatcher MUST thread a classification policy to the "
-            f"enqueue path. See the test docstring for context."
-        )
+    dispatcher = SQLTaskQueueDispatcher(
+        pg_conn,
+        classification_policy=_CustomerHashPolicy(),
+    )
     await dispatcher.initialize()
 
     schedule_id = f"sched-{uuid.uuid4().hex[:8]}"
@@ -242,17 +232,10 @@ async def test_dispatcher_workflow_blob_hashes_classified_node_config(
                 return "HASH_PK"
             return None
 
-    try:
-        dispatcher = SQLTaskQueueDispatcher(
-            pg_conn,
-            classification_policy=_AccountHashPolicy(),
-        )
-    except TypeError as exc:
-        pytest.fail(
-            f"SQLTaskQueueDispatcher does not accept classification_policy "
-            f"kwarg — the W5 spec contract for workflow_blob redaction "
-            f"is not yet implemented. Constructor error: {exc}."
-        )
+    dispatcher = SQLTaskQueueDispatcher(
+        pg_conn,
+        classification_policy=_AccountHashPolicy(),
+    )
     await dispatcher.initialize()
 
     # Build a workflow whose node config carries a classified PK in the
