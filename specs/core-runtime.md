@@ -483,6 +483,21 @@ blob. The runtime-layer typed-error gate per
   `rules/observability.md` Rule 8) and `error_type` only. The blob's
   contents and the workflow's fingerprint are NEVER logged at WARN
   or higher.
+- **Write-time redaction** — when a `classification_policy` is
+  attached to the runtime (`runtime._classification_policy`), the
+  per-node outputs embedded in the checkpoint blob's
+  `tracker.node_outputs[<node_id>]` mapping are routed through
+  `redacted_tracker_state_for_checkpoint` (in
+  `kailash.runtime.durable`) before
+  `encode_checkpoint_payload` is called. This applies the same
+  `redact_event_for_persistence` semantics as the on_node_complete
+  subscriber surface so classified PKs are hashed and REDACT-tagged
+  field values are replaced with the `[REDACTED]` sentinel BEFORE
+  the bytes land in the `data` column. Both `LocalRuntime`
+  (`local.py:2731-2785`) and `AsyncLocalRuntime`
+  (`async_local.py:640-682`) share the helper, so the contract holds
+  on every runtime path. The default (no policy attached) is no-op
+  redaction — back-compat preserved.
 
 #### 4.6.9 DurableExecutionEngine — engine composing W1 + W2 + W3
 

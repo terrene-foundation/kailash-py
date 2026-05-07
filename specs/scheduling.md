@@ -684,6 +684,52 @@ dispatcher = SQLTaskQueueDispatcher(conn, soft_row_cap=500_000)
 # `task.queue.over_cap queue_name=… rows=… soft_row_cap=500000 remediation=call_purge_completed_or_raise_cap`
 ```
 
+### 9.7 Classification policy at enqueue time
+
+`SQLTaskQueueDispatcher` exposes an optional `classification_policy`
+constructor kwarg (keyword-only). When set, every `enqueue` routes
+`task.kwargs` AND the parsed `task.workflow_blob`'s per-node config
+dicts through `redact_event_for_persistence` (the same helper used by
+the runtime's checkpoint write-path and on_node_complete subscriber
+surface, in `kailash.runtime.durable`) before the row lands in the
+queue table's `payload` column. Default `None` preserves back-compat —
+existing callers that constructed `SQLTaskQueueDispatcher(conn)` see
+no behavior change.
+
+The kwargs path treats the kwargs dict as a synthetic event's outputs
+with `node_id=""` so the policy keys solely on field name. The
+workflow_blob path walks `Workflow.to_dict()`'s `nodes` map and routes
+each node's `config` dict through the helper per-node-per-field, so
+a policy that scopes by `node_id` sees the right scope. Other
+top-level workflow fields (`workflow_id`, `name`, `connections`,
+`metadata`) are NOT redacted — they carry no classified payload by
+contract.
+
+```python
+from kailash.db.connection import ConnectionManager
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+
+conn = ConnectionManager("postgresql://...")
+
+class _CustomerHashPolicy:
+    def get_classification(self, node_id, field_name):
+        if field_name == "customer_id":
+            return "HASH_PK"
+        return None
+
+dispatcher = SQLTaskQueueDispatcher(
+    conn,
+    classification_policy=_CustomerHashPolicy(),
+)
+# task.kwargs={"customer_id": "secret-A"} → payload carries pk:<digest>
+# workflow_blob node configs with classified fields → REDACT/HASH_PK sentinels
+```
+
+The policy surface is duck-typed per
+`kailash.runtime.durable._get_classification_tag` —
+`get_classification(node_id, field_name)` returning `"REDACT"`,
+`"HASH_PK"`, or `None`.
+
 ---
 
 ## 10. Constraints and Limitations
