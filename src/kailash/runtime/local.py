@@ -41,9 +41,9 @@ import logging
 import threading
 import time
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 if TYPE_CHECKING:
     # Type-only imports — runtime imports stay lazy inside __init__ to
@@ -84,16 +84,12 @@ from kailash.runtime.resource_manager import (
     CPULimitExceededError,
     MemoryLimitExceededError,
 )
-from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.runtime.signals import QueryRegistry, SignalChannel
 from kailash.runtime.tracing import get_workflow_tracer
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
 from kailash.runtime.validation.error_categorizer import ErrorCategorizer
-from kailash.runtime.validation.metrics import (
-    ValidationEventType,
-    get_metrics_collector,
-)
+from kailash.runtime.validation.metrics import get_metrics_collector
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
@@ -106,7 +102,6 @@ from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.utils.data_validation import DataTypeValidator
 from kailash.workflow import Workflow
-from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
