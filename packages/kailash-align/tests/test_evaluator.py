@@ -5,19 +5,16 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
-from kailash_align.config import EvalConfig, QUICK_TASKS, STANDARD_TASKS
+from kailash_align.config import QUICK_TASKS, STANDARD_TASKS, EvalConfig
 from kailash_align.evaluator import (
     AlignmentEvaluator,
     EvalResult,
     TaskResult,
     _resolve_tasks,
 )
-from kailash_align.exceptions import EvaluationError
-
 
 # --- TaskResult tests ---
 

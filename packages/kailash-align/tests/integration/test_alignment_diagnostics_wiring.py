@@ -16,9 +16,9 @@ import math
 
 import polars as pl
 import pytest
+from kailash_align.diagnostics import AlignmentDiagnostics
 
 from kailash.diagnostics.protocols import Diagnostic
-from kailash_align.diagnostics import AlignmentDiagnostics
 
 
 @pytest.mark.integration

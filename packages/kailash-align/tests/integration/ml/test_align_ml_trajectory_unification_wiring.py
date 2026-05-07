@@ -24,14 +24,13 @@ from __future__ import annotations
 
 import pytest
 
-
 pytestmark = pytest.mark.integration
 
 
 def test_trajectory_round_trips_via_w30_schema() -> None:
     """AlignmentResult → RLLineage → dict → RLLineage equality."""
-    from kailash_align.pipeline import AlignmentResult
     from kailash_align.ml import trajectory_from_alignment_run
+    from kailash_align.pipeline import AlignmentResult
     from kailash_ml.rl import RLLineage
 
     # Real AlignmentResult instance — uses the actual dataclass, not a mock
@@ -72,8 +71,8 @@ def test_trajectory_round_trips_via_w30_schema() -> None:
 
 def test_trajectory_preserves_tenant_when_supplied_via_hasattr() -> None:
     """When the caller attaches ``tenant_id`` to the run, it flows through."""
-    from kailash_align.pipeline import AlignmentResult
     from kailash_align.ml import trajectory_from_alignment_run
+    from kailash_align.pipeline import AlignmentResult
 
     result = AlignmentResult(
         adapter_name="multi-tenant-lora",
@@ -103,8 +102,8 @@ def test_trajectory_single_source_on_ml_side() -> None:
     silently violate spec §7 (single source in ml); this assertion is
     the structural defense.
     """
-    from kailash_align.pipeline import AlignmentResult
     from kailash_align.ml import trajectory_from_alignment_run
+    from kailash_align.pipeline import AlignmentResult
     from kailash_ml.rl import RLLineage
 
     result = AlignmentResult(

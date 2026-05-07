@@ -3,10 +3,7 @@
 """Tests for AlignmentConfig and sub-configs."""
 from __future__ import annotations
 
-import math
-
 import pytest
-
 from kailash_align.config import (
     AdapterSignature,
     AlignmentConfig,
@@ -16,7 +13,6 @@ from kailash_align.config import (
     _validate_finite,
     _validate_positive,
 )
-
 
 # --- Validation Utilities ---
 

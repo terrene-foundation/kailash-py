@@ -55,7 +55,9 @@ the 32b vocabulary while the return type is the actual W30 dataclass.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+
+from kailash_align.ml._lora_callback import LoRALightningCallback, lora_callback_for
+from kailash_align.ml._trajectory import trajectory_from_alignment_run
 
 # Eager re-exports from the W30 rl_bridge — orphan-detection.md §6
 # mandates every __all__ entry resolve at module scope. The rl_bridge
@@ -63,17 +65,10 @@ from typing import TYPE_CHECKING, Any, Optional
 # when ``kailash-ml[rl]>=1.1`` is missing (see
 # ``kailash_align.rl_bridge.__init__``), so the import chain either
 # succeeds cleanly or fails early with an actionable extra name.
-from kailash_align.rl_bridge import (
-    DPOAdapter as DPOTrainer,
-    OnlineDPOAdapter as OnlineDPOTrainer,
-    PPORLHFAdapter as PPOTrainer,
-    RLOOAdapter as RLOOTrainer,
-)
-from kailash_align.ml._lora_callback import (
-    LoRALightningCallback,
-    lora_callback_for,
-)
-from kailash_align.ml._trajectory import trajectory_from_alignment_run
+from kailash_align.rl_bridge import DPOAdapter as DPOTrainer
+from kailash_align.rl_bridge import OnlineDPOAdapter as OnlineDPOTrainer
+from kailash_align.rl_bridge import PPORLHFAdapter as PPOTrainer
+from kailash_align.rl_bridge import RLOOAdapter as RLOOTrainer
 
 # W6-016 — single-source-in-ml mandate (spec §7): TrajectorySchema is
 # the canonical bundle defined in kailash_ml.rl and re-exported here so
@@ -82,9 +77,6 @@ from kailash_align.ml._trajectory import trajectory_from_alignment_run
 # rules/orphan-detection.md §6 (every __all__ entry resolves at
 # module-scope import).
 from kailash_ml.rl import TrajectorySchema
-
-if TYPE_CHECKING:  # pragma: no cover — typing-only imports
-    from kailash_ml.rl import RLLineage  # re-exported via trajectory_from_alignment_run
 
 logger = logging.getLogger(__name__)
 

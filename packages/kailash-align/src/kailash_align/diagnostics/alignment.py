@@ -302,9 +302,7 @@ class AlignmentDiagnostics:
             raise ValueError("base_policy and tuned_policy must be same length")
         label = label or self._label
 
-        kls = [
-            self._kl_from_logprobs(b, t) for b, t in zip(base_policy, tuned_policy)
-        ]
+        kls = [self._kl_from_logprobs(b, t) for b, t in zip(base_policy, tuned_policy)]
         kl_mean = _mean(kls)
 
         if preferences:
@@ -417,9 +415,7 @@ class AlignmentDiagnostics:
                 if k not in {"step", "reward", "kl", "kl_divergence", "loss"}
             }
             self._training_log.append(
-                _TrainingStep(
-                    step=step, reward=reward, kl=kl, loss=loss, extras=extras
-                )
+                _TrainingStep(step=step, reward=reward, kl=kl, loss=loss, extras=extras)
             )
             rows.append({"step": step, "reward": reward, "kl": kl, "loss": loss})
         df = pl.DataFrame(rows) if rows else _empty_training_df()
@@ -916,12 +912,8 @@ class AlignmentDiagnostics:
             # Loss trend: compare first vs last quintile.
             if train_df.height >= 10:
                 quintile = max(1, train_df.height // 5)
-                early_loss = float(
-                    train_df["loss"].head(quintile).mean() or 0.0
-                )
-                late_loss = float(
-                    train_df["loss"].tail(quintile).mean() or 0.0
-                )
+                early_loss = float(train_df["loss"].head(quintile).mean() or 0.0)
+                late_loss = float(train_df["loss"].tail(quintile).mean() or 0.0)
                 if not math.isnan(early_loss) and not math.isnan(late_loss):
                     if late_loss > early_loss * 1.1:
                         severity = "WARNING"
@@ -1013,7 +1005,9 @@ class AlignmentDiagnostics:
         # Fast path: torch + trl available (both in kailash-align base deps).
         try:
             import torch  # noqa: PLC0415
-            from trl.trainer.utils import kl_divergence as trl_kl  # type: ignore[import-not-found]  # noqa: PLC0415
+            from trl.trainer.utils import (  # type: ignore[import-not-found]  # noqa: PLC0415
+                kl_divergence as trl_kl,
+            )
         except ImportError:
             return _kl_closed_form(p_logprobs, q_logprobs)
         except Exception:  # pragma: no cover — defensive for odd trl builds

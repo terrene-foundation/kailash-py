@@ -12,7 +12,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash_align.config import ServingConfig
 from kailash_align.exceptions import ServingError
 from kailash_align.serving import (

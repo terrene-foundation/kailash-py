@@ -21,10 +21,9 @@ import json
 from datetime import datetime, timezone
 
 import pytest
-
-from kailash_align.ml import TrajectorySchema as AlignTrajectorySchema
 from kailash_align.config import AlignmentConfig
 from kailash_align.exceptions import TrainingError
+from kailash_align.ml import TrajectorySchema as AlignTrajectorySchema
 from kailash_align.pipeline import AlignmentPipeline
 from kailash_ml.rl import (
     EpisodeRecord,
@@ -34,7 +33,6 @@ from kailash_ml.rl import (
     TrajectorySchema,
 )
 from kailash_ml.rl.trainer import RLTrainingResult
-
 
 # ----------------------------------------------------------------------
 # Fixtures

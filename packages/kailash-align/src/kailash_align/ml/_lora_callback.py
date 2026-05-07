@@ -58,7 +58,7 @@ import math
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
-    import pytorch_lightning as pl  # type: ignore[import-not-found]
+    pass  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 

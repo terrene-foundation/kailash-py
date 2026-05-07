@@ -8,10 +8,9 @@ lm-eval is an OPTIONAL dependency ([eval] extra).
 """
 from __future__ import annotations
 
-import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from kailash_align.config import QUICK_TASKS, STANDARD_TASKS, EvalConfig

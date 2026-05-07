@@ -19,8 +19,6 @@ the underlying TRL plumbing. This test file proves:
 """
 from __future__ import annotations
 
-import math
-
 import pytest
 
 pytestmark = pytest.mark.unit

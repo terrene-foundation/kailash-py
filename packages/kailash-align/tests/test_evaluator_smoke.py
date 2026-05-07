@@ -8,12 +8,7 @@ Runs without torch/transformers/lm_eval installed.
 """
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
-
 from kailash_align.config import QUICK_TASKS, STANDARD_TASKS, EvalConfig
 from kailash_align.evaluator import (
     AlignmentEvaluator,
@@ -21,7 +16,6 @@ from kailash_align.evaluator import (
     TaskResult,
     _resolve_tasks,
 )
-from kailash_align.exceptions import EvaluationError
 
 
 class TestQuickPresetContents:

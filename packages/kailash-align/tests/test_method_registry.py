@@ -6,11 +6,7 @@ Tier 1 unit tests -- no torch, TRL, or GPU dependencies required.
 """
 from __future__ import annotations
 
-import math
-import warnings
-
 import pytest
-
 from kailash_align.config import (
     AdapterSignature,
     AlignmentConfig,
@@ -29,7 +25,6 @@ from kailash_align.method_registry import (
     register_method,
     validate_method_name,
 )
-
 
 # =============================================================================
 # Section 1: Method Registry

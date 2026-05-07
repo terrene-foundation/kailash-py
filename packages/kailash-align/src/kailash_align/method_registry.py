@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from kailash_align.exceptions import AlignmentError, TrainingError
 

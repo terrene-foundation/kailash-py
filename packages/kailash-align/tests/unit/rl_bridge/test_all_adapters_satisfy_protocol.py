@@ -21,7 +21,6 @@ def test_every_registered_adapter_satisfies_protocol():
     """For each name in BRIDGE_ADAPTERS, __make_for_test__() → Protocol-conformant."""
     # Import side effect populates the registry.
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_ml.rl.align_adapter import BRIDGE_ADAPTERS
     from kailash_ml.rl.protocols import RLLifecycleProtocol
 
@@ -66,7 +65,6 @@ def test_every_registered_adapter_satisfies_protocol():
 def test_class_level_attrs_match_registration_name():
     """adapter_cls.name == the key it is registered under in BRIDGE_ADAPTERS."""
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_ml.rl.align_adapter import BRIDGE_ADAPTERS
 
     mismatches = [
@@ -84,7 +82,6 @@ def test_class_level_attrs_match_registration_name():
 def test_every_adapter_declares_rlhf_paradigm():
     """All v1-scope bridge adapters are paradigm='rlhf'."""
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_ml.rl.align_adapter import BRIDGE_ADAPTERS
 
     wrong = [
@@ -101,7 +98,6 @@ def test_every_adapter_declares_rlhf_paradigm():
 def test_buffer_kind_is_rollout_or_preference():
     """v1-scope bridge adapters use rollout or preference buffers (spec §9)."""
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_ml.rl.align_adapter import BRIDGE_ADAPTERS
 
     allowed = {"rollout", "preference"}

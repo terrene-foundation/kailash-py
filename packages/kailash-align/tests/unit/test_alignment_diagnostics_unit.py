@@ -10,9 +10,9 @@ from __future__ import annotations
 import math
 
 import pytest
+from kailash_align.diagnostics import AlignmentDiagnostics
 
 from kailash.diagnostics.protocols import Diagnostic
-from kailash_align.diagnostics import AlignmentDiagnostics
 
 
 def test_protocol_conformance() -> None:

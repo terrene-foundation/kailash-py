@@ -244,10 +244,9 @@ class AlignmentPipeline:
             reward_funcs: Resolved reward functions for online methods.
         """
         import torch
+        from kailash_align.method_registry import _lazy_import, get_method
         from peft import PeftModel, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        from kailash_align.method_registry import _lazy_import, get_method
 
         method = get_method(method_name)
 

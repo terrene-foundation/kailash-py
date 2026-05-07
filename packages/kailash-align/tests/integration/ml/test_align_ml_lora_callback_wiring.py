@@ -25,10 +25,8 @@ Lightning API shape.
 from __future__ import annotations
 
 import importlib
-import math
 
 import pytest
-
 
 try:
     importlib.import_module("pytorch_lightning")

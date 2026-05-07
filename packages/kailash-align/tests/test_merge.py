@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kailash_align.exceptions import MergeError
 from kailash_align.merge import AdapterMerger, merge_adapter
 

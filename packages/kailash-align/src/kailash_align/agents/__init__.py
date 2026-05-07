@@ -8,6 +8,9 @@ tools are dumb data endpoints.
 """
 from __future__ import annotations
 
+from kailash_align.agents.data_curation import DataCurationAgent
+from kailash_align.agents.eval_interpreter import EvalInterpreterAgent
+
 # Eager imports for CodeQL py/modification-of-default-value —
 # rules/orphan-detection.md §6 mandates that every __all__ entry resolve
 # to a module-scope import. Each sub-module lazy-imports kaizen at call
@@ -15,9 +18,7 @@ from __future__ import annotations
 # NOT pull in kailash-kaizen; the ImportError is still raised later when
 # the agent is instantiated without the [agents] extra.
 from kailash_align.agents.strategist import AlignmentStrategistAgent
-from kailash_align.agents.data_curation import DataCurationAgent
 from kailash_align.agents.training_config import TrainingConfigAgent
-from kailash_align.agents.eval_interpreter import EvalInterpreterAgent
 
 __all__ = [
     "AlignmentStrategistAgent",

@@ -47,8 +47,8 @@ async def alignment_workflow(
     Returns:
         Dict with strategy, curation, config, and optionally interpretation.
     """
-    from kailash_align.agents.strategist import AlignmentStrategistAgent
     from kailash_align.agents.data_curation import DataCurationAgent
+    from kailash_align.agents.strategist import AlignmentStrategistAgent
     from kailash_align.agents.training_config import TrainingConfigAgent
 
     # Step 1: Strategy

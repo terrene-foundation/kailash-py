@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kailash_align.config import AdapterSignature
 from kailash_align.registry import AdapterRegistry
 

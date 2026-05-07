@@ -11,7 +11,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash_align.config import OnPremConfig
 from kailash_align.exceptions import CacheNotFoundError
 from kailash_align.onprem import CachedModel, OnPremModelCache
@@ -90,7 +89,7 @@ class TestOnPremModelCacheInit:
     def test_creates_cache_directory(self, tmp_path):
         cache_dir = tmp_path / "new-cache"
         assert not cache_dir.exists()
-        cache = OnPremModelCache(cache_dir=str(cache_dir))
+        OnPremModelCache(cache_dir=str(cache_dir))
         assert cache_dir.exists()
 
     def test_cache_dir_property(self, tmp_path):

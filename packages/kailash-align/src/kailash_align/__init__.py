@@ -6,6 +6,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from kailash_align._version import __version__
+from kailash_align.bridge import BridgeConfig, KaizenModelBridge
+from kailash_align.config import OnPremConfig
 
 # Eager imports for symbols flagged by CodeQL
 # py/modification-of-default-value when declared in __all__ via lazy
@@ -15,9 +17,7 @@ from kailash_align._version import __version__
 # resolves it. These modules are cheap to import (no torch / no
 # transformers load) so eager-import is safe.
 from kailash_align.merge import AdapterMerger
-from kailash_align.bridge import BridgeConfig, KaizenModelBridge
 from kailash_align.onprem import OnPremModelCache
-from kailash_align.config import OnPremConfig
 
 # TYPE_CHECKING eager imports for symbols that wrap HEAVY dependencies
 # (torch / transformers / peft / vllm). These are lazily-resolved at
@@ -27,8 +27,6 @@ from kailash_align.config import OnPremConfig
 # to resolve the names declared in __all__, closing the
 # py/undefined-export finding without forcing eager runtime imports.
 if TYPE_CHECKING:  # pragma: no cover — static-analysis only
-    from kailash_align.registry import AdapterRegistry
-    from kailash_align.pipeline import AlignmentPipeline, AlignmentResult
     from kailash_align.config import (
         AdapterSignature,
         AlignmentConfig,
@@ -43,18 +41,13 @@ if TYPE_CHECKING:  # pragma: no cover — static-analysis only
         ServingConfig,
         SFTConfig,
     )
-    from kailash_align.evaluator import (
-        AlignmentEvaluator,
-        EvalResult,
-        TaskResult,
-    )
-    from kailash_align.serving import AlignmentServing
+    from kailash_align.evaluator import AlignmentEvaluator, EvalResult, TaskResult
+    from kailash_align.gpu_memory import GPUMemoryEstimate, estimate_training_memory
     from kailash_align.method_registry import METHOD_REGISTRY
+    from kailash_align.pipeline import AlignmentPipeline, AlignmentResult
+    from kailash_align.registry import AdapterRegistry
     from kailash_align.rewards import RewardRegistry, reward_registry
-    from kailash_align.gpu_memory import (
-        GPUMemoryEstimate,
-        estimate_training_memory,
-    )
+    from kailash_align.serving import AlignmentServing
     from kailash_align.vllm_backend import (
         GenerationBackend,
         HFGenerationBackend,
