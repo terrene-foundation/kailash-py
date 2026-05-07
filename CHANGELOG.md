@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.1] - 2026-05-07
+
+Patch release shipping the #871 SQLite job-store security hardening that landed on `main` (commit `597d4736`, PR #873) after v2.14.0 was cut earlier the same day. No other changes since v2.14.0.
+
+### Security
+
+- **HIGH:** SQLite job-store TOCTOU + WAL/SHM 0o600 hardening (#871, PR #873). The prior open-then-chmod sequence in `WorkflowScheduler` left a window where the job-store DB existed on disk with default 0o644 perms before chmod tightened it to 0o600 — observable to other local processes during scheduler init. The fix introduces `_secure_init_sqlite_jobstore()` (`src/kailash/runtime/scheduler.py`) which creates the file with `os.O_CREAT | os.O_WRONLY` + explicit `mode=0o600` via `os.open` BEFORE handing the path to APScheduler's `SQLAlchemyJobStore`, and applies the same 0o600 mode to the WAL/SHM sidecars on first commit. Six regression tests at `tests/regression/test_issue_871_sqlite_jobstore_security.py` cover all four #871 acceptance criteria. Closes #871.
+
 ## [2.14.0] - 2026-05-07
 
 Minor bump shipping two new public APIs on the runtime + scheduler surface — durable execution checkpoints and pluggable scheduler dispatch — plus a series of W1/W3 hardening fixes from the parallel implementation work.
