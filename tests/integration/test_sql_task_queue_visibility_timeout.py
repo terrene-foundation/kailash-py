@@ -36,11 +36,9 @@ Requires PostgreSQL at ``TEST_PG_URL``; skips when unreachable.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import socket
 import time
-import uuid
 from typing import AsyncGenerator
 from urllib.parse import urlparse
 

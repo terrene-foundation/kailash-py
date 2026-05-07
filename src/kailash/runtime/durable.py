@@ -716,7 +716,7 @@ class NodeCompletionHookRegistry:
             try:
                 self._callbacks.remove(callback)
             except ValueError:
-                pass
+                pass  # pyright: ignore[reportUnreachable]  # defensive: callback may be removed already
 
         return _unregister
 
