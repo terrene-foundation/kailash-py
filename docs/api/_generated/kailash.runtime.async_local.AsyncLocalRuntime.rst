@@ -1,19 +1,20 @@
 ﻿kailash.runtime.async\_local.AsyncLocalRuntime
-==============================================
+===============================================
 
 .. currentmodule:: kailash.runtime.async_local
 
 .. autoclass:: AsyncLocalRuntime
 
-   
+
    .. automethod:: __init__
 
-   
+
    .. rubric:: Methods
 
    .. autosummary::
-   
+
       ~AsyncLocalRuntime.__init__
+      ~AsyncLocalRuntime.acquire
       ~AsyncLocalRuntime.add_non_retriable_exception
       ~AsyncLocalRuntime.add_retriable_exception
       ~AsyncLocalRuntime.can_execute_workflow
@@ -45,11 +46,14 @@
       ~AsyncLocalRuntime.get_signal_channel
       ~AsyncLocalRuntime.get_strategy_effectiveness
       ~AsyncLocalRuntime.get_validation_metrics
+      ~AsyncLocalRuntime.mark_externally_managed
+      ~AsyncLocalRuntime.on_node_complete
       ~AsyncLocalRuntime.optimize_runtime_performance
       ~AsyncLocalRuntime.query
       ~AsyncLocalRuntime.record_execution_performance
       ~AsyncLocalRuntime.register_retry_strategy
       ~AsyncLocalRuntime.register_retry_strategy_for_exception
+      ~AsyncLocalRuntime.release
       ~AsyncLocalRuntime.reset_retry_metrics
       ~AsyncLocalRuntime.reset_validation_metrics
       ~AsyncLocalRuntime.set_automatic_mode_switching
@@ -59,18 +63,24 @@
       ~AsyncLocalRuntime.signal
       ~AsyncLocalRuntime.start_persistent_mode
       ~AsyncLocalRuntime.validate_workflow
-   
-   
 
-   
-   
+
+
+
+
    .. rubric:: Attributes
 
    .. autosummary::
-   
+
       ~AsyncLocalRuntime.connection_pool_manager
       ~AsyncLocalRuntime.enterprise_monitoring
       ~AsyncLocalRuntime.execution_semaphore
+      ~AsyncLocalRuntime.progress_registry
+      ~AsyncLocalRuntime.ref_count
       ~AsyncLocalRuntime.shutdown_coordinator
-   
-   
+      ~AsyncLocalRuntime.logger
+      ~AsyncLocalRuntime.debug
+      ~AsyncLocalRuntime.enable_cycles
+      ~AsyncLocalRuntime.cyclic_executor
+      ~AsyncLocalRuntime.enable_monitoring
+      ~AsyncLocalRuntime.conditional_execution

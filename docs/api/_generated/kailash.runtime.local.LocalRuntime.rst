@@ -1,19 +1,20 @@
 ﻿kailash.runtime.local.LocalRuntime
-==================================
+===================================
 
 .. currentmodule:: kailash.runtime.local
 
 .. autoclass:: LocalRuntime
 
-   
+
    .. automethod:: __init__
 
-   
+
    .. rubric:: Methods
 
    .. autosummary::
-   
+
       ~LocalRuntime.__init__
+      ~LocalRuntime.acquire
       ~LocalRuntime.add_non_retriable_exception
       ~LocalRuntime.add_retriable_exception
       ~LocalRuntime.can_execute_workflow
@@ -44,11 +45,14 @@
       ~LocalRuntime.get_signal_channel
       ~LocalRuntime.get_strategy_effectiveness
       ~LocalRuntime.get_validation_metrics
+      ~LocalRuntime.mark_externally_managed
+      ~LocalRuntime.on_node_complete
       ~LocalRuntime.optimize_runtime_performance
       ~LocalRuntime.query
       ~LocalRuntime.record_execution_performance
       ~LocalRuntime.register_retry_strategy
       ~LocalRuntime.register_retry_strategy_for_exception
+      ~LocalRuntime.release
       ~LocalRuntime.reset_retry_metrics
       ~LocalRuntime.reset_validation_metrics
       ~LocalRuntime.set_automatic_mode_switching
@@ -58,17 +62,23 @@
       ~LocalRuntime.signal
       ~LocalRuntime.start_persistent_mode
       ~LocalRuntime.validate_workflow
-   
-   
 
-   
-   
+
+
+
+
    .. rubric:: Attributes
 
    .. autosummary::
-   
+
       ~LocalRuntime.connection_pool_manager
       ~LocalRuntime.enterprise_monitoring
+      ~LocalRuntime.progress_registry
+      ~LocalRuntime.ref_count
       ~LocalRuntime.shutdown_coordinator
-   
-   
+      ~LocalRuntime.logger
+      ~LocalRuntime.debug
+      ~LocalRuntime.enable_cycles
+      ~LocalRuntime.cyclic_executor
+      ~LocalRuntime.enable_monitoring
+      ~LocalRuntime.conditional_execution

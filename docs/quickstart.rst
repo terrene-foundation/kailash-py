@@ -156,7 +156,7 @@ DataFlow -- Zero-Config Database
    ``created_at`` / ``updated_at`` -- they are auto-managed.
 
 CARE Trust -- Context, Action, Reasoning, Evidence
-==========================================
+==================================================
 
 Every workflow can carry a cryptographic trust chain from human to agent:
 

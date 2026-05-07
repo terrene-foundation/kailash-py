@@ -83,7 +83,7 @@ Every enterprise feature integrates with the CARE trust framework:
    # All workflow operations are now trust-verified and audited
 
 Getting Started
---------------
+---------------
 
 1. **Trust**: Start with :doc:`../core/trust` for the CARE framework foundation
 2. **Security**: Set up :doc:`security` with NexusAuthPlugin
