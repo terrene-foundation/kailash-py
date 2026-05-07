@@ -37,15 +37,20 @@ Version:
     Added in: v0.13.0
 """
 
+import json
 import logging
 import math
 import os
 import stat
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from kailash.runtime.dispatcher import Dispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +61,22 @@ __all__ = [
 ]
 
 # Lazy import check for APScheduler
+# Bound on the per-job fire-time map below. Schedulers that submit and never
+# clean up (cancelled mid-flight, EVENT_JOB_EXECUTED suppressed by listener
+# error, etc.) would otherwise grow `_fire_times` without bound. 10_000 is
+# the same default as `rules/infrastructure-sql.md` Rule 7 ("Bounded
+# In-Memory Stores"); active-schedule counts in production are O(100s).
+MAX_FIRE_TIMES = 10_000
+
+# Cap on the JSON-encoded workflow blob the queue path serializes. Worker
+# pools dequeue and `json.loads` the payload; without a cap, a workflow
+# whose `to_dict()` produces multi-megabyte output (e.g. a node config
+# carrying a large embedded model bundle) OOMs every dequeueing worker.
+# 8 MiB is generous for legitimate Workflow shapes and tight enough to
+# refuse a poisoned config before it reaches the queue. Documented in
+# `specs/scheduling.md` § "Queue dispatch — payload bounds".
+MAX_WORKFLOW_BLOB_BYTES = 8 * 1024 * 1024  # 8 MiB
+
 _apscheduler_available: Optional[bool] = None
 
 
@@ -119,6 +140,10 @@ class WorkflowScheduler:
         runtime_factory: Optional callable that returns a runtime instance.
             Defaults to creating a new LocalRuntime for each execution.
         timezone: Timezone for cron expressions. Defaults to UTC.
+        dispatch_via: Optional :class:`~kailash.runtime.dispatcher.Dispatcher`.
+            When provided, every fired trigger enqueues a Task to the
+            dispatcher instead of executing the workflow in-process.
+            Default ``None`` preserves the existing in-process behavior.
 
     Raises:
         ImportError: If APScheduler is not installed.
@@ -128,6 +153,14 @@ class WorkflowScheduler:
         >>> scheduler.start()
         >>> sid = scheduler.schedule_interval(my_workflow, seconds=60)
         >>> scheduler.shutdown()
+
+        # Multi-instance / worker-side resume:
+        >>> from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+        >>> from kailash.db.connection import ConnectionManager
+        >>> conn = ConnectionManager("postgresql://...")
+        >>> await conn.initialize()
+        >>> dispatcher = SQLTaskQueueDispatcher(conn)
+        >>> scheduler = WorkflowScheduler(dispatch_via=dispatcher)
     """
 
     def __init__(
@@ -135,6 +168,8 @@ class WorkflowScheduler:
         job_store_path: Optional[str] = "kailash_schedules.db",
         runtime_factory: Optional[Callable] = None,
         timezone: str = "UTC",
+        *,
+        dispatch_via: Optional["Dispatcher"] = None,
     ) -> None:
         if not _check_apscheduler():
             raise ImportError(
@@ -168,11 +203,38 @@ class WorkflowScheduler:
         self._runtime_factory = runtime_factory
         self._schedules: Dict[str, ScheduleInfo] = {}
         self._timezone = timezone
+        self._dispatcher: Optional["Dispatcher"] = dispatch_via
+
+        # Per-job fire-time capture: APScheduler's EVENT_JOB_SUBMITTED listener
+        # fires BEFORE the job callback with `event.scheduled_run_time`, the
+        # ACTUAL fire instant for the currently-firing job. We record it here
+        # keyed by job_id so `_planned_fire_time(schedule_id)` can return the
+        # current fire time -- NOT `job.next_run_time`, which APScheduler has
+        # already advanced to the NEXT scheduled fire by the time the callback
+        # runs (interval/cron schedules drift by one interval otherwise).
+        #
+        # `OrderedDict` + LRU eviction at MAX_FIRE_TIMES per
+        # `rules/infrastructure-sql.md` Rule 7. EVENT_JOB_EXECUTED |
+        # EVENT_JOB_ERROR pop entries on the happy path; LRU eviction is
+        # the safety net for jobs cancelled mid-flight where the cleanup
+        # listener never fires. `cancel()` also pops the entry explicitly.
+        self._fire_times: "OrderedDict[str, datetime]" = OrderedDict()
+        from apscheduler.events import (
+            EVENT_JOB_ERROR,
+            EVENT_JOB_EXECUTED,
+            EVENT_JOB_SUBMITTED,
+        )
+
+        self._scheduler.add_listener(self._on_job_submitted, EVENT_JOB_SUBMITTED)
+        self._scheduler.add_listener(
+            self._on_job_done, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
+        )
 
         logger.info(
-            "WorkflowScheduler initialized (job_store=%s, timezone=%s)",
+            "WorkflowScheduler initialized (job_store=%s, timezone=%s, dispatch=%s)",
             job_store_path or "memory",
             timezone,
+            "queue" if dispatch_via is not None else "in_process",
         )
 
     def start(self) -> None:
@@ -237,7 +299,7 @@ class WorkflowScheduler:
             self._execute_workflow,
             trigger=trigger,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -295,7 +357,7 @@ class WorkflowScheduler:
             trigger="interval",
             seconds=seconds,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -350,7 +412,7 @@ class WorkflowScheduler:
             trigger="date",
             run_date=run_at,
             id=schedule_id,
-            args=[workflow_builder],
+            args=[workflow_builder, schedule_id],
             kwargs=kwargs,
             replace_existing=True,
         )
@@ -387,6 +449,11 @@ class WorkflowScheduler:
 
         self._scheduler.remove_job(schedule_id)
         del self._schedules[schedule_id]
+        # Drop the per-job fire-time entry. Cancellation can race the
+        # EVENT_JOB_EXECUTED | EVENT_JOB_ERROR cleanup listener; explicit
+        # pop here closes the leak window for jobs cancelled while
+        # APScheduler considered them in-flight.
+        self._fire_times.pop(schedule_id, None)
 
         logger.info("Cancelled schedule: %s", schedule_id)
 
@@ -408,19 +475,47 @@ class WorkflowScheduler:
 
         return list(self._schedules.values())
 
-    async def _execute_workflow(self, workflow_builder: Any, **kwargs: Any) -> None:
+    async def _execute_workflow(
+        self, workflow_builder: Any, schedule_id: str = "", **kwargs: Any
+    ) -> None:
         """Execute a workflow from a scheduled trigger.
 
-        This is the callback invoked by APScheduler. It builds the workflow
-        from the builder and executes it using the configured runtime.
+        This is the callback invoked by APScheduler at fire time. The
+        behavior depends on whether the scheduler was constructed with
+        ``dispatch_via=``:
+
+        * **In-process (default, ``dispatch_via=None``):** builds the
+          workflow and executes it via the configured runtime in the
+          current process.
+        * **Queue dispatch (``dispatch_via=<Dispatcher>``):** serializes
+          the workflow into a :class:`~kailash.runtime.dispatcher.Task`
+          and enqueues it via the dispatcher; a worker pool polls the
+          queue and executes against its own runtime. ``task_id`` is
+          ``compute_task_id(schedule_id, planned_fire_time)`` so a
+          multi-instance scheduler that double-fires produces the same
+          task_id and the queue dedups.
 
         Args:
             workflow_builder: The WorkflowBuilder to build and execute.
-            **kwargs: Additional runtime execution parameters.
+            schedule_id: The scheduler-assigned schedule identifier.
+                Wired in by ``schedule_cron`` / ``schedule_interval`` /
+                ``schedule_once`` when registering the APScheduler job.
+            **kwargs: Additional runtime execution parameters (in-process
+                path) or task kwargs (queue dispatch path).
         """
         run_id = str(uuid.uuid4())
-        logger.info("Scheduled execution starting: run_id=%s", run_id)
 
+        if self._dispatcher is not None:
+            await self._dispatch_to_queue(
+                workflow_builder=workflow_builder,
+                schedule_id=schedule_id,
+                run_id=run_id,
+                **kwargs,
+            )
+            return
+
+        # In-process fallback (existing behavior).
+        logger.info("Scheduled execution starting: run_id=%s", run_id)
         try:
             workflow = workflow_builder.build()
             runtime = self._get_runtime()
@@ -433,6 +528,218 @@ class WorkflowScheduler:
         except Exception:
             logger.exception("Scheduled execution failed: run_id=%s", run_id)
             raise
+
+    async def _dispatch_to_queue(
+        self,
+        *,
+        workflow_builder: Any,
+        schedule_id: str,
+        run_id: str,
+        **kwargs: Any,
+    ) -> None:
+        """Serialize the workflow and enqueue a Task via the dispatcher.
+
+        Per architecture plan §3 invariant 1, ``task_id`` is the stable
+        SHA-256 hash of ``(schedule_id, planned_fire_time_iso)``. The
+        planned fire time is the trigger's intended fire instant -- not
+        wall-clock now() -- so multi-instance scheduler double-fires
+        produce the SAME task_id and the queue layer dedups.
+
+        Per architecture plan §3 invariant 3, every enqueue failure
+        logs at ERROR with grep-able schedule_id + task_id_hash before
+        propagating to APScheduler (which records the missed-fire
+        per its own retry/misfire policy).
+        """
+        # Lazy import to keep `from kailash.runtime.scheduler import ...`
+        # path free of dispatcher dependencies for in-process-only users.
+        import hashlib
+
+        from kailash.runtime.dispatcher import Task, compute_task_id
+
+        # APScheduler delivers the CURRENT fire time via the
+        # EVENT_JOB_SUBMITTED listener (`event.scheduled_run_time`); see
+        # ``_on_job_submitted`` for the capture point. Reading
+        # ``job.next_run_time`` here would be wrong — by the time this
+        # callback runs APScheduler has already advanced ``next_run_time``
+        # to the NEXT scheduled fire, so the recorded ``planned_fire_time``
+        # would drift by one interval on every cron/interval trigger.
+        planned_fire_time = self._planned_fire_time(schedule_id)
+        task_id = compute_task_id(schedule_id, planned_fire_time)
+        task_id_hash = hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8]
+
+        logger.info(
+            "scheduler.dispatch.start schedule_id=%s task_id_hash=%s run_id=%s",
+            schedule_id,
+            task_id_hash,
+            run_id,
+        )
+
+        try:
+            workflow = workflow_builder.build()
+            # JSON serialization (NOT pickle) per `rules/security.md`
+            # § "No arbitrary-code execution on user input": pickle.loads
+            # on a queue payload an attacker can INSERT into is remote
+            # code execution. The
+            # canonical workflow shape is `Workflow.to_dict()` from
+            # `kailash.workflow.graph`; workers reconstruct via
+            # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
+            #
+            # Discriminator dispatch on the canonical Workflow type per
+            # `rules/zero-tolerance.md` Rule 3d (dual-shape return +
+            # structural guard = silent fallback). Test stubs that
+            # satisfy the to_dict() protocol are accepted via the
+            # protocol-attribute branch — explicit, not duck-typed.
+            from kailash.workflow.graph import Workflow as _Workflow
+
+            if isinstance(workflow, _Workflow):
+                workflow_dict = workflow.to_dict()
+            elif hasattr(type(workflow), "to_dict") and callable(
+                getattr(type(workflow), "to_dict")
+            ):
+                # Class-level to_dict() — admits Tier-1 stubs that satisfy
+                # the protocol via class definition (NOT instance attr,
+                # which is too permissive and reintroduces the duck-type
+                # silent-fallback pattern).
+                workflow_dict = workflow.to_dict()
+            else:
+                raise TypeError(
+                    f"workflow_builder.build() returned {type(workflow).__name__} "
+                    f"which is not a kailash.workflow.graph.Workflow nor a class "
+                    f"defining to_dict() — queue dispatch requires JSON-"
+                    f"serializable workflow representation. Use Workflow or "
+                    f"a subclass that implements to_dict()."
+                )
+            workflow_blob = json.dumps(workflow_dict).encode("utf-8")
+            if len(workflow_blob) > MAX_WORKFLOW_BLOB_BYTES:
+                # Refuse the enqueue before it reaches the queue. Workers
+                # dequeueing this payload would `json.loads` it into
+                # memory; an unbounded blob OOMs every worker. The cap
+                # is enforced at the producer boundary (here) and again
+                # at the queue adapter (defense-in-depth) per
+                # `rules/security.md` § "Input Validation".
+                raise ValueError(
+                    f"workflow_blob size {len(workflow_blob)} bytes exceeds "
+                    f"MAX_WORKFLOW_BLOB_BYTES ({MAX_WORKFLOW_BLOB_BYTES} bytes / "
+                    f"{MAX_WORKFLOW_BLOB_BYTES // (1024 * 1024)} MiB). Workflow "
+                    f"is too large to dispatch through the queue path; reduce "
+                    f"the workflow surface (split into sub-workflows, externalize "
+                    f"large data) or use in-process dispatch (dispatch_via=None)."
+                )
+        except Exception:
+            logger.exception(
+                "scheduler.dispatch.serialize_failed schedule_id=%s task_id_hash=%s",
+                schedule_id,
+                task_id_hash,
+            )
+            raise
+
+        task = Task(
+            task_id=task_id,
+            schedule_id=schedule_id,
+            workflow_blob=workflow_blob,
+            planned_fire_time=planned_fire_time.isoformat(),
+            kwargs=dict(kwargs),
+        )
+
+        try:
+            await self._dispatcher.enqueue(task)  # type: ignore[union-attr]
+        except Exception as exc:
+            logger.error(
+                "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
+                schedule_id,
+                task_id_hash,
+                type(exc).__name__,
+            )
+            raise
+
+        logger.info(
+            "scheduler.dispatch.enqueued schedule_id=%s task_id_hash=%s",
+            schedule_id,
+            task_id_hash,
+        )
+
+    def _on_job_submitted(self, event: Any) -> None:
+        """APScheduler EVENT_JOB_SUBMITTED listener — record fire time.
+
+        Fires BEFORE the job callback with
+        ``event.scheduled_run_times: list[datetime]`` carrying the
+        CURRENT trigger fire instant(s). The list typically holds one
+        entry; under coalesce/misfire policies APScheduler may pass
+        multiple. We record the LAST element — the most recent fire
+        the trigger produced — so the dispatch callback can read the
+        correct fire time without relying on ``job.next_run_time``
+        (which APScheduler has already advanced to the next scheduled
+        fire by the time the callback runs).
+
+        We key by ``event.job_id`` (== ``schedule_id``).
+        """
+        run_times = event.scheduled_run_times
+        if not run_times:
+            # Empty list violates APScheduler's own dispatch contract;
+            # raise so the failure surfaces at the listener boundary
+            # instead of producing a silently-misrecorded fire time.
+            raise RuntimeError(
+                f"EVENT_JOB_SUBMITTED for job_id={event.job_id!r} carried "
+                f"empty scheduled_run_times list — APScheduler internal "
+                f"invariant violation"
+            )
+        # Move-to-end semantics: re-submitting the same job_id refreshes
+        # its LRU position so eviction targets truly stale entries.
+        if event.job_id in self._fire_times:
+            self._fire_times.move_to_end(event.job_id)
+        self._fire_times[event.job_id] = run_times[-1]
+        # LRU eviction safety net: bound at MAX_FIRE_TIMES per
+        # `rules/infrastructure-sql.md` Rule 7. EVENT_JOB_EXECUTED |
+        # EVENT_JOB_ERROR is the happy-path cleanup; this evicts when
+        # those listeners drop fires (jobs cancelled mid-flight, listener
+        # exceptions, etc.).
+        while len(self._fire_times) > MAX_FIRE_TIMES:
+            self._fire_times.popitem(last=False)
+
+    def _on_job_done(self, event: Any) -> None:
+        """Cleanup the recorded fire time after the job finishes.
+
+        Listens on ``EVENT_JOB_EXECUTED | EVENT_JOB_ERROR``. If the
+        scheduler ever drops a job mid-flight without firing either
+        event, the entry remains in ``_fire_times`` for the next
+        successful submission to overwrite — bounded by the number of
+        active schedules.
+        """
+        self._fire_times.pop(event.job_id, None)
+
+    def _planned_fire_time(self, schedule_id: str) -> datetime:
+        """Return the actual fire time of the currently-firing job.
+
+        Reads from ``_fire_times``, populated by the
+        ``EVENT_JOB_SUBMITTED`` listener (``_on_job_submitted``). This
+        is the SCHEDULED fire instant the trigger fired for, NOT
+        ``job.next_run_time`` — which APScheduler advances to the NEXT
+        scheduled fire as soon as the current job is submitted.
+
+        Stable across multi-instance schedulers: every instance receives
+        the same ``scheduled_run_time`` from APScheduler for the same
+        trigger fire, so ``compute_task_id(schedule_id, fire_time)``
+        produces the SAME ``task_id`` and the queue layer dedups via PK.
+
+        Raises:
+            RuntimeError: if invoked for a ``schedule_id`` whose
+                ``EVENT_JOB_SUBMITTED`` listener has not yet recorded a
+                fire time. Falling back to ``datetime.now(UTC)`` would
+                silently break the dedup invariant
+                (``rules/zero-tolerance.md`` Rule 3).
+        """
+        fire_time = self._fire_times.get(schedule_id)
+        if fire_time is None:
+            raise RuntimeError(
+                f"_planned_fire_time invoked for schedule_id={schedule_id!r} "
+                f"but EVENT_JOB_SUBMITTED listener has not recorded a fire "
+                f"time. Dispatch was called outside the APScheduler job-firing "
+                f"path, or the listener was not registered. Refusing to fall "
+                f"back to datetime.now(UTC) -- doing so would silently break "
+                f"multi-instance dedup (each scheduler instance would compute "
+                f"a different task_id for the same fire)."
+            )
+        return fire_time
 
     def _get_runtime(self) -> Any:
         """Get or create a runtime instance for execution.

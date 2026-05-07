@@ -17,24 +17,76 @@ the target dialect automatically.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
+
+from kailash.runtime.dispatcher import Dispatcher, Task
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "SQLTaskQueue",
     "SQLTaskMessage",
+    "SQLTaskQueueDispatcher",
 ]
 
+# Bounds on the queue's caller-controlled inputs. Defense-in-depth against
+# poisoning by parties with INSERT privilege on the queue table (the
+# multi-tenant queue isolation contract documented in
+# `specs/scheduling.md` § "Multi-tenant queue isolation" assumes the
+# operator gates writers; these bounds ensure even a permitted writer
+# cannot DoS the worker pool by enqueueing unbounded payloads).
+MAX_TASK_ID_LEN = 128  # uuid4 is 36 chars; W3 stable_hash is 32 chars
+_TASK_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
+MAX_PAYLOAD_BYTES = 8 * 1024 * 1024  # 8 MiB — matches MAX_WORKFLOW_BLOB_BYTES
 
-@dataclass
+
+def _validate_task_id(tid: Any) -> None:
+    """Validate a caller-supplied task_id.
+
+    Per ``rules/security.md`` § "Input Validation", any caller-controlled
+    string flowing into a primary-key column MUST be length- and charset-
+    validated. Although the column is bound as a parameter (no SQLi),
+    accepting unbounded keys lets a caller poison the dedup namespace
+    (the W3 dispatcher computes ``task_id = stable_hash(schedule_id,
+    fire_time)`` precisely so duplicate fires collapse — a caller who
+    bypasses that and submits a chosen ``task_id`` could shadow a
+    legitimate one).
+
+    Accepts ``Any`` rather than ``str`` so the runtime type-confusion
+    branch is reachable from external callers; static-typed callers see
+    no widening because internal call sites still pass a ``str``.
+
+    Raises
+    ------
+    ValueError
+        If ``tid`` is not a non-empty string ≤ ``MAX_TASK_ID_LEN`` chars
+        matching ``[a-zA-Z0-9_-]+``.
+    """
+    if not isinstance(tid, str):
+        raise ValueError(f"task_id must be str, got {type(tid).__name__}")
+    if len(tid) == 0 or len(tid) > MAX_TASK_ID_LEN:
+        raise ValueError(f"task_id length {len(tid)} outside [1, {MAX_TASK_ID_LEN}]")
+    if not _TASK_ID_RE.match(tid):
+        raise ValueError(
+            f"task_id must match {_TASK_ID_RE.pattern} "
+            "(alphanumeric, underscore, hyphen)"
+        )
+
+
+@dataclass(frozen=True)
 class SQLTaskMessage:
     """A task message stored in the SQL task queue.
+
+    Frozen per EATP P10 — message instances flow across the queue boundary
+    and MUST NOT be mutated after construction; the database row is the
+    canonical state.
 
     Attributes:
         task_id: Unique identifier for the task.
@@ -199,6 +251,27 @@ class SQLTaskQueue:
             The task ID.
         """
         tid = task_id or str(uuid.uuid4())
+        # Always validate, including the auto-generated UUID (defense-in-
+        # depth: if uuid.uuid4 ever drifts to a different shape, the cap
+        # still holds). Caller-supplied IDs are the actual attack surface
+        # — see _validate_task_id docstring.
+        _validate_task_id(tid)
+
+        # Cap payload size before writing to the queue. A worker that
+        # dequeues a multi-megabyte JSON blob will `json.loads` it into
+        # memory; an unbounded payload OOMs the dequeueing worker. The
+        # MAX_WORKFLOW_BLOB_BYTES cap on the producer (scheduler.py) is
+        # the primary gate; this cap is the consumer-boundary defense
+        # for callers that bypass the scheduler and enqueue directly.
+        payload_json = json.dumps(payload)
+        if len(payload_json.encode("utf-8")) > MAX_PAYLOAD_BYTES:
+            raise ValueError(
+                f"payload size {len(payload_json)} bytes exceeds "
+                f"MAX_PAYLOAD_BYTES ({MAX_PAYLOAD_BYTES} bytes / "
+                f"{MAX_PAYLOAD_BYTES // (1024 * 1024)} MiB). Reduce the "
+                f"task payload (split work, externalize large inputs)."
+            )
+
         now = time.time()
         vt = (
             visibility_timeout
@@ -213,7 +286,7 @@ class SQLTaskQueue:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             tid,
             queue_name,
-            json.dumps(payload),
+            payload_json,
             "pending",
             now,
             now,
@@ -439,3 +512,320 @@ class SQLTaskQueue:
         if count:
             logger.info("Purged %d completed tasks from queue '%s'", count, queue_name)
         return count
+
+
+# =====================================================================
+# Dispatcher adapter — `kailash.runtime.dispatcher.Dispatcher` conformer
+# =====================================================================
+
+
+def _task_id_hash(task_id: str) -> str:
+    """Return an 8-char hash of a task_id, safe for log fields.
+
+    Per ``rules/observability.md`` Rule 8, schema-revealing identifiers
+    in WARN/ERROR log lines MUST be hashed -- the raw ``task_id`` is
+    a concatenation of schedule_id + planned_fire_time and reveals
+    business-meaningful schedule names + cron timing.
+    """
+    import hashlib
+
+    return hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8]
+
+
+class SQLTaskQueueDispatcher(Dispatcher):
+    """SQL-backed :class:`Dispatcher` adapter for ``WorkflowScheduler``.
+
+    Adapts the lower-level :class:`SQLTaskQueue` to the
+    :class:`~kailash.runtime.dispatcher.Dispatcher` ABC so a scheduler
+    constructed with ``dispatch_via=SQLTaskQueueDispatcher(conn_mgr)``
+    enqueues tasks to a SQL queue instead of executing in-process.
+
+    Idempotency contract
+    --------------------
+    :meth:`enqueue` uses ``task.task_id`` as the queue's PRIMARY KEY.
+    A duplicate enqueue with the SAME ``task_id`` is treated as a
+    silent no-op -- the multi-instance-scheduler double-fire scenario
+    becomes "already enqueued, skip" without raising to the caller.
+    Non-PK failures (connectivity, serialization) propagate after a
+    structured ERROR log line is emitted.
+
+    Resume hint (informational)
+    ---------------------------
+    Workers polling this dispatcher SHOULD pass the ``task_id`` as
+    the ``idempotency_key`` to ``runtime.execute(...)`` when paired
+    with a checkpoint store. This gives resume-from-checkpoint
+    semantics on crash recovery -- see ``specs/scheduling.md``
+    § "Queue Dispatch".
+
+    Multi-tenant deployment contract
+    --------------------------------
+    Multi-tenant deployments MUST provision a per-tenant queue table
+    (e.g. ``table_name="kailash_task_queue_<tenant>"``). Cross-tenant
+    queue sharing is BLOCKED by deployment convention: any party with
+    ``INSERT INTO <queue_table>`` privilege can enqueue a workflow
+    that the worker pool will execute under its own runtime. Because
+    the worker is a single trust boundary, sharing one queue across
+    tenants effectively grants every tenant the privilege of every
+    other tenant. The defense is structural — each tenant gets its
+    own table; no application-level multi-tenancy is performed inside
+    the dispatcher.
+
+    Operator runbook — purge cadence
+    --------------------------------
+    The queue table grows monotonically with every fire. Operators MUST
+    schedule periodic :meth:`SQLTaskQueue.purge_completed` calls to
+    drop rows in terminal status; otherwise the table fills disk over
+    time. A soft cap is available via the ``soft_row_cap`` constructor
+    arg: when set, the dispatcher emits a structured WARN log every
+    time :meth:`enqueue` lands while the table holds more than
+    ``soft_row_cap`` rows for the target queue. The WARN is operational
+    signal — it does NOT refuse the enqueue (refusal would silently
+    drop scheduled work; a noisy log is the correct trade-off). See
+    ``specs/scheduling.md`` § "Queue dispatch — operator runbook".
+
+    Parameters
+    ----------
+    conn:
+        An initialized :class:`~kailash.db.connection.ConnectionManager`.
+    table_name:
+        Name of the task queue table (default: ``kailash_task_queue``).
+        Validated against ``[a-zA-Z_][a-zA-Z0-9_]*`` in the underlying
+        :class:`SQLTaskQueue`. For multi-tenant deployments use one
+        table per tenant (see "Multi-tenant deployment contract").
+    soft_row_cap:
+        Optional row-count threshold. When ``None`` (default), no cap
+        warning fires. When set to an integer, every :meth:`enqueue`
+        that lands while the queue table holds more than this many
+        rows for the target queue emits a WARN log. Recommended range:
+        100_000 - 1_000_000 depending on purge cadence.
+
+    See Also
+    --------
+    :class:`~kailash.runtime.dispatcher.Dispatcher` -- the abstract contract.
+    :func:`~kailash.runtime.dispatcher.compute_task_id` -- stable task_id helper.
+    :class:`~kailash.runtime.scheduler.WorkflowScheduler` -- the producer.
+    :meth:`SQLTaskQueue.purge_completed` -- the operator runbook step.
+    """
+
+    def __init__(
+        self,
+        conn: Any,
+        table_name: str = "kailash_task_queue",
+        *,
+        soft_row_cap: Optional[int] = None,
+    ) -> None:
+        if soft_row_cap is not None and soft_row_cap <= 0:
+            raise ValueError(
+                f"soft_row_cap must be positive or None, got {soft_row_cap}"
+            )
+        self._queue = SQLTaskQueue(conn, table_name=table_name)
+        self._initialized = False
+        self._soft_row_cap = soft_row_cap
+        # Suppress the WARN flood — fire at most once per minute per
+        # queue_name. The cap is operational signal, not per-row alert.
+        self._cap_warn_last: Dict[str, float] = {}
+
+    async def initialize(self) -> None:
+        """Create the underlying queue table if it does not exist.
+
+        Safe to call multiple times (idempotent). Most callers will
+        invoke this explicitly at startup so that the first
+        :meth:`enqueue` does not pay the DDL cost.
+        """
+        if self._initialized:
+            return
+        await self._queue.initialize()
+        self._initialized = True
+
+    async def enqueue(self, task: Task) -> None:
+        """Add a :class:`Task` to the queue.
+
+        Idempotent on ``task.task_id`` -- duplicate enqueue is a silent
+        no-op (DEBUG log; no exception). Non-duplicate failures log at
+        ERROR with grep-able ``schedule_id`` + ``task_id_hash`` and
+        propagate per the architecture plan §3 invariant 3.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        # workflow_blob is JSON-encoded UTF-8 bytes per
+        # `kailash.runtime.dispatcher.Task` (NOT pickle, by deliberate
+        # design — pickle on a queue payload is RCE per
+        # `rules/security.md`). Decode UTF-8 and embed the JSON string
+        # so the outer payload remains a pure JSON object.
+        payload = {
+            "schedule_id": task.schedule_id,
+            "workflow_blob_json": task.workflow_blob.decode("utf-8"),
+            "planned_fire_time": task.planned_fire_time,
+            "kwargs": task.kwargs,
+        }
+
+        try:
+            await self._queue.enqueue(
+                payload=payload,
+                queue_name=task.queue_name,
+                task_id=task.task_id,
+            )
+        except Exception as exc:
+            # Distinguish PK / unique-violation (silent skip) from genuine
+            # failure (ERROR log + re-raise). asyncpg raises
+            # UniqueViolationError; sqlite3 raises IntegrityError; aiomysql
+            # surfaces a generic error with sqlstate '23000'.
+            if _is_unique_violation(exc):
+                logger.debug(
+                    "task.enqueue.duplicate task_id_hash=%s schedule_id=%s",
+                    _task_id_hash(task.task_id),
+                    task.schedule_id,
+                )
+                return
+            logger.error(
+                "task.enqueue.failed task_id_hash=%s schedule_id=%s reason=%s",
+                _task_id_hash(task.task_id),
+                task.schedule_id,
+                type(exc).__name__,
+            )
+            raise
+
+        # Operator runbook signal: warn (rate-limited) when the queue
+        # has grown past the soft cap. Refusing the enqueue would
+        # silently drop scheduled work; the WARN is the operational
+        # cue to call purge_completed or raise the cap. See class
+        # docstring "Operator runbook — purge cadence".
+        if self._soft_row_cap is not None:
+            await self._maybe_warn_row_count(task.queue_name)
+
+    async def _maybe_warn_row_count(self, queue_name: str) -> None:
+        """Emit a rate-limited WARN if queue depth exceeds soft_row_cap.
+
+        Cheap COUNT query; only runs when ``soft_row_cap`` is set. Fires
+        at most once per minute per queue_name to bound log volume on
+        a sustained over-cap deployment (the operator sees the same
+        signal once per minute; not on every enqueue).
+        """
+        # soft_row_cap is None-checked at the call site; this method
+        # is only invoked when it is set. Rebind to a local int so
+        # static analyzers can narrow Optional[int] to int.
+        cap = self._soft_row_cap
+        if cap is None:
+            return  # pragma: no cover (defensive — caller already checked)
+        now = time.time()
+        last = self._cap_warn_last.get(queue_name, 0.0)
+        if now - last < 60.0:
+            return
+        try:
+            row = await self._queue._conn.fetchone(
+                f"SELECT COUNT(*) AS c FROM {self._queue._table} WHERE queue_name = ?",
+                queue_name,
+            )
+        except Exception:
+            # COUNT is operational signal; never let its failure
+            # propagate to the caller's enqueue success path.
+            logger.debug(
+                "task.queue.row_count_check_failed queue_name=%s",
+                queue_name,
+            )
+            return
+        count = (row or {}).get("c", 0) if isinstance(row, dict) else 0
+        if count > cap:
+            logger.warning(
+                "task.queue.over_cap queue_name=%s rows=%s soft_row_cap=%s "
+                "remediation=call_purge_completed_or_raise_cap",
+                queue_name,
+                count,
+                cap,
+            )
+            self._cap_warn_last[queue_name] = now
+
+    def poll(self, queue_name: str = "default") -> AsyncIterator[Task]:
+        """Yield tasks claimed from the queue, one at a time.
+
+        The async iterator dequeues atomically (via
+        :meth:`SQLTaskQueue.dequeue` which uses
+        ``FOR UPDATE SKIP LOCKED`` on PostgreSQL/MySQL and
+        ``BEGIN IMMEDIATE`` on SQLite). When the queue is empty the
+        iterator stops (it does NOT block waiting for new work);
+        callers wishing to long-poll should re-invoke ``poll()`` in a
+        loop with a sleep.
+
+        Returns
+        -------
+        AsyncIterator[Task]
+            Tasks reconstructed from the stored payload.
+        """
+        return self._poll_iter(queue_name)
+
+    async def _poll_iter(self, queue_name: str) -> AsyncIterator[Task]:
+        if not self._initialized:
+            await self.initialize()
+        while True:
+            msg = await self._queue.dequeue(
+                queue_name=queue_name, worker_id="dispatcher"
+            )
+            if msg is None:
+                return
+            yield Task(
+                task_id=msg.task_id,
+                schedule_id=msg.payload.get("schedule_id", ""),
+                workflow_blob=msg.payload.get("workflow_blob_json", "").encode("utf-8"),
+                planned_fire_time=msg.payload.get("planned_fire_time", ""),
+                queue_name=msg.queue_name,
+                kwargs=msg.payload.get("kwargs") or {},
+            )
+
+    async def ack(self, task_id: str) -> None:
+        """Mark a task as completed."""
+        if not self._initialized:
+            await self.initialize()
+        await self._queue.complete(task_id)
+
+    async def nack(self, task_id: str, *, reason: str) -> None:
+        """Mark a task as failed.
+
+        Logs a WARN line with grep-able ``task_id_hash`` per
+        ``rules/observability.md`` Rule 8 (raw task_id contains
+        schedule_id + fire-time and would reveal schedule timing
+        to log aggregators).
+        """
+        if not self._initialized:
+            await self.initialize()
+        logger.warning(
+            "task.nack task_id_hash=%s reason=%s",
+            _task_id_hash(task_id),
+            reason,
+        )
+        await self._queue.fail(task_id, error=reason)
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    """Detect a primary-key / unique-constraint violation across dialects.
+
+    PostgreSQL (asyncpg) raises ``asyncpg.exceptions.UniqueViolationError``
+    (subclass of ``IntegrityConstraintViolationError``).
+    SQLite raises ``sqlite3.IntegrityError`` whose ``args[0]`` contains
+    the substring ``"UNIQUE"``.
+    MySQL (aiomysql) raises with sqlstate ``'23000'`` and errno 1062;
+    we match on the exception's ``args`` for the duplicate-entry signal.
+
+    Per ``rules/zero-tolerance.md`` Rule 3 we MUST NOT swallow generic
+    exceptions; this function is narrowly scoped to PK / unique
+    constraint violations only and is the sole site that distinguishes
+    "already enqueued" from "real failure" in the dispatcher.
+    """
+    name = type(exc).__name__
+    if name in {"UniqueViolationError", "TransactionIntegrityConstraintViolationError"}:
+        return True
+    if name == "IntegrityError":
+        msg = str(exc).upper()
+        if "UNIQUE" in msg or "PRIMARY KEY" in msg or "DUPLICATE" in msg:
+            return True
+    # MySQL: aiomysql surfaces pymysql.err.IntegrityError; same heuristic.
+    if "INTEGRITY" in name.upper():
+        msg = str(exc).upper()
+        if (
+            "UNIQUE" in msg
+            or "PRIMARY KEY" in msg
+            or "DUPLICATE" in msg
+            or "1062" in msg
+        ):
+            return True
+    return False

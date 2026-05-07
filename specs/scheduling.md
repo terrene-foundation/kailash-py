@@ -1,9 +1,9 @@
 # Scheduling Specification
 
-Version: 2.8.5
+Version: 2.9.0
 Package: `kailash`
 Status: Authoritative domain truth document
-Scope: WorkflowScheduler, cron/interval/one-shot scheduling, APScheduler integration, SQLite job persistence, runtime integration
+Scope: WorkflowScheduler, cron/interval/one-shot scheduling, APScheduler integration, SQLite job persistence, runtime integration, queue dispatch
 
 This specification covers every public contract, parameter, return type, edge case, and constraint for the Kailash scheduling subsystem. It is the single source of truth for how workflows are scheduled for recurring and deferred execution.
 
@@ -82,16 +82,19 @@ WorkflowScheduler(
     job_store_path: Optional[str] = "kailash_schedules.db",
     runtime_factory: Optional[Callable] = None,
     timezone: str = "UTC",
+    *,
+    dispatch_via: Optional[Dispatcher] = None,
 )
 ```
 
 **Parameters**:
 
-| Parameter         | Type                 | Default                  | Description                                                                                  |
-| ----------------- | -------------------- | ------------------------ | -------------------------------------------------------------------------------------------- |
-| `job_store_path`  | `Optional[str]`      | `"kailash_schedules.db"` | Path to the SQLite database for APScheduler job persistence. `None` uses in-memory store.    |
-| `runtime_factory` | `Optional[Callable]` | `None`                   | Callable returning a runtime instance. Default creates a new `LocalRuntime()` per execution. |
-| `timezone`        | `str`                | `"UTC"`                  | Timezone string for cron expression evaluation.                                              |
+| Parameter         | Type                   | Default                  | Description                                                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `job_store_path`  | `Optional[str]`        | `"kailash_schedules.db"` | Path to the SQLite database for APScheduler job persistence. `None` uses in-memory store.                                                                                                                                                                                     |
+| `runtime_factory` | `Optional[Callable]`   | `None`                   | Callable returning a runtime instance. Default creates a new `LocalRuntime()` per execution.                                                                                                                                                                                  |
+| `timezone`        | `str`                  | `"UTC"`                  | Timezone string for cron expression evaluation.                                                                                                                                                                                                                               |
+| `dispatch_via`    | `Optional[Dispatcher]` | `None`                   | Optional `kailash.runtime.dispatcher.Dispatcher`. When provided, every fired trigger enqueues a `Task` to the dispatcher instead of executing in-process. Default `None` preserves the existing in-process behavior. Keyword-only. See §10 "Queue Dispatch" for the contract. |
 
 **Raises**:
 
@@ -105,8 +108,8 @@ WorkflowScheduler(
    - Creates a `SQLAlchemyJobStore` backed by `sqlite:///{job_store_path}`.
    - On POSIX systems, sets the SQLite file permissions to `0o600` (owner read/write only). Logs a warning if `chmod` fails (does not raise).
 4. Creates an `AsyncIOScheduler` with the configured job stores and timezone.
-5. Sets `self._runtime_factory`, `self._schedules` (empty dict), and `self._timezone`.
-6. Logs initialization at INFO level.
+5. Sets `self._runtime_factory`, `self._schedules` (empty dict), `self._timezone`, and `self._dispatcher` (the `dispatch_via` arg or `None`).
+6. Logs initialization at INFO level. Log line includes `dispatch=queue` when `dispatch_via` is provided, `dispatch=in_process` otherwise.
 
 **Security contract**: The SQLite job store file is created with `0o600` permissions on POSIX systems, preventing other users from reading scheduled workflow configurations. On non-POSIX systems (Windows), the file is created with default permissions.
 
@@ -512,12 +515,183 @@ scheduler = WorkflowScheduler(job_store_path=None)
 
 ---
 
-## 9. Constraints and Limitations
+## 9. Queue Dispatch
+
+**Module**: `kailash.runtime.dispatcher` (ABC + helpers) + `kailash.infrastructure.task_queue` (SQL adapter)
+**Added in**: v2.9.0
+
+When `WorkflowScheduler` is constructed with `dispatch_via=<Dispatcher>`, every fired trigger enqueues a `Task` to the dispatcher in lieu of executing the workflow in-process. A separate worker pool polls the dispatcher and runs the workflow against its own runtime. This enables (a) multi-instance scheduler deployments where two scheduler processes can fire the same trigger and the second is silently deduped at the queue layer, and (b) worker-side resume from checkpoint when paired with a checkpoint store.
+
+### 9.1 Dispatcher ABC
+
+**Module**: `kailash.runtime.dispatcher`
+
+```python
+class Dispatcher(ABC):
+    async def enqueue(self, task: Task) -> None: ...
+    def poll(self, queue_name: str = "default") -> AsyncIterator[Task]: ...
+    async def ack(self, task_id: str) -> None: ...
+    async def nack(self, task_id: str, *, reason: str) -> None: ...
+```
+
+**Public exports** of `kailash.runtime.dispatcher` (`__all__`): `Dispatcher`, `Task`, `compute_task_id`.
+
+The contract is intentionally minimal:
+
+| Method    | Contract                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enqueue` | Idempotent on `task.task_id`. A duplicate enqueue with the same `task_id` MUST be a silent no-op (no exception). Non-duplicate failures (connectivity, serialization) propagate after a structured ERROR log.                                    |
+| `poll`    | Returns an `AsyncIterator[Task]` that yields claimed tasks one at a time. Implementations atomically transition each task to `processing` status. When the queue is empty the iterator stops; long-polling callers re-invoke `poll()` in a loop. |
+| `ack`     | Marks a task as completed. Idempotent (acking a completed task is a no-op).                                                                                                                                                                      |
+| `nack`    | Marks a task as failed with a short reason. The dispatcher decides whether to requeue (transient failure) or dead-letter (max attempts exceeded) based on its own attempt counter. The reason MUST NOT contain secrets or PII.                   |
+
+A subclass missing any of the four methods raises `TypeError` on instantiation per Python's `ABC` contract.
+
+### 9.2 Task dataclass
+
+```python
+@dataclass(frozen=True)
+class Task:
+    task_id: str
+    schedule_id: str
+    workflow_blob: bytes
+    planned_fire_time: str            # ISO 8601 UTC
+    queue_name: str = "default"
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+```
+
+`Task` is frozen per EATP P10 — instances flow across the queue boundary and MUST NOT be mutated after construction; the queue payload is the canonical state. `SQLTaskMessage` (the queue-layer message dataclass in `kailash.infrastructure.task_queue`) is also frozen on the same principle.
+
+| Field               | Description                                                                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_id`           | Stable hash of `(schedule_id, planned_fire_time_iso)` produced by `compute_task_id`. 32-character lowercase hex (128 bits of collision resistance). Used as the queue's PRIMARY KEY for idempotent enqueue.          |
+| `schedule_id`       | The scheduler-assigned schedule identifier (e.g. `sched-abc123def456`).                                                                                                                                              |
+| `workflow_blob`     | JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(...).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))` — NOT `pickle.loads()`. See §9.4.1. |
+| `planned_fire_time` | The trigger's intended fire time as an ISO 8601 string. The scheduler-computed fire instant — NOT wall-clock now() — so multi-instance double-fires produce the same `task_id`.                                      |
+| `queue_name`        | Logical queue for routing (default `"default"`).                                                                                                                                                                     |
+| `kwargs`            | Additional keyword arguments forwarded to `runtime.execute(...)` on the worker side.                                                                                                                                 |
+
+### 9.3 compute_task_id helper
+
+```python
+def compute_task_id(schedule_id: str, planned_fire_time: datetime) -> str:
+    """Return SHA-256(schedule_id || planned_fire_time.isoformat())[:32]."""
+```
+
+Stability contract:
+
+- Same `(schedule_id, planned_fire_time)` ALWAYS produces the same hex string.
+- Changing either input flips the hash.
+- The ISO 8601 representation preserves microsecond precision when present. Naive datetimes (no tzinfo) and aware datetimes in different timezones produce different `task_id`s — callers MUST be consistent about timezone awareness within a single schedule.
+
+### 9.4 SQLTaskQueueDispatcher
+
+**Module**: `kailash.infrastructure.task_queue`
+
+Reference `Dispatcher` implementation backed by a SQL table managed by `kailash.db.connection.ConnectionManager`. PostgreSQL, MySQL 8.0+, and SQLite portable per `rules/infrastructure-sql.md` (uses `dialect.text_column`, `dialect.quote_identifier`, `for_update_skip_locked`, canonical `?` placeholders translated by `ConnectionManager.execute`).
+
+```python
+from kailash.db.connection import ConnectionManager
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+from kailash.runtime.scheduler import WorkflowScheduler
+
+conn = ConnectionManager("postgresql://...")
+await conn.initialize()
+
+dispatcher = SQLTaskQueueDispatcher(conn)
+await dispatcher.initialize()
+
+scheduler = WorkflowScheduler(dispatch_via=dispatcher)
+```
+
+Schema (managed by the underlying `SQLTaskQueue`): `task_id PK, queue_name, payload, status, created_at, updated_at, attempts, max_attempts, visibility_timeout, worker_id, error`. The Task fields are encoded into the `payload` JSON (`schedule_id`, `workflow_blob_json`, `planned_fire_time`, `kwargs`). `workflow_blob_json` carries the JSON-encoded workflow representation (UTF-8 string in the outer JSON) — see §9.4.1.
+
+#### 9.4.1 Workflow serialization (JSON, not pickle)
+
+`Task.workflow_blob` is JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(workflow_dict).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
+
+Pickle on a queue payload is BLOCKED. Any party with `INSERT INTO <queue_table>` privilege would otherwise execute arbitrary code on the next worker poll via `pickle.loads()` of the attacker-supplied bytes — same threat class as arbitrary-code execution on user input per `rules/security.md` § "No arbitrary-code execution on user input". The JSON contract structurally prevents that class: deserializing a JSON payload produces only Python primitives (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) — no callable, no class instance, no code path the attacker can pivot to.
+
+If a workflow representation cannot be expressed as JSON (callables, opaque binary state), the dispatcher refuses to serialize and raises `TypeError` per `rules/zero-tolerance.md` Rule 3 — silent fallback to an unsafe path (pickle) is BLOCKED.
+
+#### 9.4.2 Multi-tenant queue isolation
+
+Multi-tenant deployments MUST provision a per-tenant queue table (e.g. `table_name="kailash_task_queue_<tenant>"`). Cross-tenant queue sharing is BLOCKED by deployment convention because the worker pool that polls the queue is a single trust boundary: any party with `INSERT INTO <shared_queue>` privilege can enqueue a workflow that the worker executes under its own runtime credentials. Sharing one queue across tenants therefore grants every tenant the privilege of every other tenant.
+
+The defense is structural, not application-level: the dispatcher does not perform tenant-scoping internally. The operator's responsibility is to provision one `SQLTaskQueueDispatcher(conn, table_name="kailash_task_queue_<tenant>")` per tenant. The `_validate_identifier` regex on `table_name` (per `rules/dataflow-identifier-safety.md`) ensures the per-tenant suffix cannot inject SQL.
+
+### 9.5 Idempotent enqueue contract
+
+`SQLTaskQueueDispatcher.enqueue(task)` catches PRIMARY KEY / unique-constraint violations across asyncpg (`UniqueViolationError` / `TransactionIntegrityConstraintViolationError`), sqlite (`IntegrityError` whose message contains `UNIQUE` or `PRIMARY KEY`), and aiomysql (errno 1062) and treats them as silent no-ops with a DEBUG log line carrying the `task_id_hash` (8-char SHA-256 prefix). Multi-instance scheduler double-fire reduces to one row at the queue layer.
+
+Non-PK failures log at ERROR with grep-able `schedule_id` + `task_id_hash` + reason, then propagate to the caller (which surfaces to APScheduler's misfire / retry policy).
+
+### 9.6 Worker resume hint
+
+Workers polling a `Dispatcher` SHOULD pass the received `task.task_id` as the `idempotency_key` argument to `runtime.execute(...)` when paired with a checkpoint store. This gives resume-from-checkpoint semantics on crash recovery — the worker that picks up a previously-running task sees the existing checkpoint and resumes from the last completed node. This contract is informational; nothing in the dispatcher enforces it (the binding is between the worker and the checkpoint-aware runtime).
+
+### 9.7 In-process fallback semantics
+
+When `dispatch_via=None` (the default), `WorkflowScheduler._execute_workflow` runs the workflow inline via the configured runtime — the existing v0.13.0 behavior. The dispatcher branch is a strict superset: setting `dispatch_via=` does not change anything else about the scheduler's API or storage.
+
+### 9.8 Error log surface
+
+Every enqueue failure (whether silently-skipped duplicate or genuinely-failed) generates exactly one structured log line:
+
+| Outcome                   | Level | Fields                                                              |
+| ------------------------- | ----- | ------------------------------------------------------------------- |
+| Duplicate (silent skip)   | DEBUG | `task.enqueue.duplicate task_id_hash=… schedule_id=…`               |
+| Non-duplicate failure     | ERROR | `task.enqueue.failed task_id_hash=… schedule_id=… reason=<ExcName>` |
+| Successful enqueue        | INFO  | `scheduler.dispatch.enqueued schedule_id=… task_id_hash=…`          |
+| Serialization failure     | ERROR | `scheduler.dispatch.serialize_failed schedule_id=… task_id_hash=…`  |
+| Dispatch invocation start | INFO  | `scheduler.dispatch.start schedule_id=… task_id_hash=… run_id=…`    |
+
+`task_id_hash` is the first 8 hex chars of `sha256(task_id)` per `rules/observability.md` Rule 8 (raw `task_id` reveals the schedule identifier and fire-time, which is schema-revealing for log aggregators).
+
+### 9.9 planned_fire_time capture mechanism
+
+`planned_fire_time` is captured at job-submission time via APScheduler's `EVENT_JOB_SUBMITTED` listener — NOT read from `job.next_run_time` at callback entry. The submission event fires BEFORE the job callback runs and exposes `event.scheduled_run_times: list[datetime]`, the actual trigger fire instants for the currently-firing job. The scheduler records the LAST element (the most recent fire — typically the only one; coalesce/misfire policies may produce several) keyed by `event.job_id`.
+
+This mechanism is required because by the time the dispatch callback runs, APScheduler has already advanced `job.next_run_time` to the NEXT scheduled fire. Reading `job.next_run_time` from inside the callback would record a fire instant one interval ahead of truth on every cron/interval trigger.
+
+The capture is symmetric: `EVENT_JOB_EXECUTED | EVENT_JOB_ERROR` listener clears the recorded entry once the job finishes. If `_planned_fire_time(schedule_id)` is invoked without a prior submit-event recording, it raises `RuntimeError` rather than falling back to `datetime.now(UTC)` — silent fallback would silently break multi-instance dedup (each scheduler instance would compute a different `task_id` for the same fire).
+
+Stability across multi-instance schedulers: every instance receives the same `scheduled_run_times` from APScheduler for the same trigger fire, so `compute_task_id(schedule_id, fire_time)` produces the SAME `task_id` and the queue layer dedups via PRIMARY KEY.
+
+### 9.10 Payload bounds
+
+`WorkflowScheduler` enforces an 8 MiB cap on the JSON-serialized workflow_blob at the producer boundary. `MAX_WORKFLOW_BLOB_BYTES = 8 * 1024 * 1024` is defined at `src/kailash/runtime/scheduler.py`; if `len(json.dumps(workflow.to_dict()).encode("utf-8")) > MAX_WORKFLOW_BLOB_BYTES`, the dispatch callback raises `ValueError` BEFORE constructing a `Task` and BEFORE invoking the dispatcher's `enqueue`. The error message names the actual blob size, the cap, and the remediation paths (split sub-workflows, externalize large inputs, fall back to in-process dispatch via `dispatch_via=None`).
+
+`SQLTaskQueue.enqueue` enforces the same 8 MiB cap on the outer payload as defense-in-depth at the consumer boundary. `MAX_PAYLOAD_BYTES` is defined at `src/kailash/infrastructure/task_queue.py`; callers bypassing the scheduler and writing directly to the queue still encounter the cap. The duplicate enforcement is intentional — neither layer trusts the other to have validated.
+
+`SQLTaskQueue.enqueue` also validates caller-supplied `task_id`: length must be in `[1, 128]` characters and the value must match `[a-zA-Z0-9_-]+`. UUIDs (auto-generated default) and `compute_task_id()` outputs both pass. Validation is applied via `_validate_task_id()` in the same module. The validation closes the dedup-namespace-poisoning vector where a caller could choose a `task_id` that shadows a legitimate stable-hash output.
+
+### 9.11 Operator runbook — purge cadence
+
+The queue table grows monotonically with every successful enqueue. Operators MUST schedule periodic `SQLTaskQueue.purge_completed(queue_name, older_than=...)` calls to drop rows in terminal status (`completed`, `dead_lettered`); without periodic purge, the table fills disk over the deployment's lifetime.
+
+`SQLTaskQueueDispatcher` exposes an optional `soft_row_cap` constructor kwarg (keyword-only) that emits a structured WARN log when the queue table holds more than `soft_row_cap` rows for the target queue at enqueue time. The WARN is rate-limited to once per minute per `queue_name` to prevent log flooding under sustained over-cap conditions. When `soft_row_cap` is `None` (default), no row-count check fires and no warning emits.
+
+The cap is operational signal — it does NOT refuse the enqueue. Refusing would silently drop scheduled work; a noisy log is the correct trade-off because operator action (call `purge_completed` or raise the cap) restores headroom without losing fires. Recommended `soft_row_cap` range is 100,000 - 1,000,000 depending on purge cadence and average task lifetime.
+
+```python
+from kailash.db.connection import ConnectionManager
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+
+conn = ConnectionManager("postgresql://...")
+dispatcher = SQLTaskQueueDispatcher(conn, soft_row_cap=500_000)
+# every enqueue past 500k rows in the queue emits a WARN log
+# `task.queue.over_cap queue_name=… rows=… soft_row_cap=500000 remediation=call_purge_completed_or_raise_cap`
+```
+
+---
+
+## 10. Constraints and Limitations
 
 1. **No async-native execution**: The default `_execute_workflow` calls `runtime.execute()` synchronously inside an async callback. For fully async execution, provide a custom `runtime_factory` with `AsyncLocalRuntime`.
-2. **No distributed scheduling**: The scheduler is single-process. For distributed scheduling across multiple instances, use an external scheduler (Celery, Temporal) with Kailash workflows as tasks.
+2. **No built-in worker pool**: The scheduler enqueues to the dispatcher; the application is responsible for running worker processes that call `dispatcher.poll()` in a loop. The Kailash SDK supplies the dispatcher contract and the SQL-backed adapter; worker orchestration is left to the deploying application.
 3. **No schedule modification**: There is no `update_schedule()` method. To change a schedule's trigger, cancel it and create a new one.
 4. **No pause/resume**: Individual schedules cannot be paused. The entire scheduler can be shut down and restarted.
 5. **Schedule ID format**: IDs are `sched-{12_hex_chars}`. Not configurable.
-6. **No retry on failure**: If a scheduled execution fails, it is logged but not retried. The next trigger fires normally.
+6. **No retry on failure**: If a scheduled execution fails (in-process or enqueue-side), it is logged but the scheduler does not retry. The next trigger fires normally. Worker-side retry on `nack` is the dispatcher implementation's responsibility (`SQLTaskQueueDispatcher` requeues until `max_attempts`, then dead-letters).
 7. **APScheduler version**: Requires `apscheduler>=3.10`. APScheduler 4.x has a different API and is not supported.
