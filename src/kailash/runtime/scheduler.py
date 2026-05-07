@@ -93,6 +93,69 @@ def _check_apscheduler() -> bool:
     return _apscheduler_available
 
 
+def _secure_init_sqlite_jobstore(db_abs: str) -> None:
+    """Atomically create the SQLite job-store file with 0o600 + symlink refusal,
+    then pre-create WAL/SHM sidecars under the same restrictive mode.
+
+    Closes two HIGH findings (issue #871):
+
+    1. **TOCTOU on chmod.** ``os.open(..., O_RDWR|O_CREAT|O_NOFOLLOW, 0o600)``
+       creates the file with restrictive mode in one syscall and refuses to
+       follow a symlink. Replaces the prior ``open(...).close(); os.chmod(...)``
+       race window where a parent-directory-controlling attacker could swap
+       a target between the two calls.
+
+    2. **WAL/SHM sidecars world-readable.** SQLAlchemy + SQLite in WAL mode
+       creates ``<db>-wal`` and ``<db>-shm`` at first write with default
+       umask. We force WAL mode + a write transaction here, then chmod the
+       sidecars BEFORE APScheduler's engine ever opens the file — eliminating
+       the window where job-data bytes (including serialized callback +
+       kwargs) live world-readable on multi-user hosts.
+
+    Behavior on non-POSIX platforms: caller MUST gate via ``os.name == "posix"``;
+    this function assumes ``fchmod`` and ``O_NOFOLLOW`` are available.
+
+    Raises:
+        OSError: ``ELOOP`` if ``db_abs`` is a symlink (security: refuse).
+            Other ``OSError`` propagate from the secure-init path; callers
+            see the clear failure rather than a silently-degraded permission
+            state.
+    """
+    import sqlite3
+
+    fd = os.open(
+        db_abs,
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        # Tighten existing files (created with default umask before this fix
+        # was deployed) — new files are already 0o600 from os.open mode.
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+    finally:
+        os.close(fd)
+
+    # Force WAL mode + materialize sidecars now, while we own the connection
+    # and can chmod the resulting files before any other process opens them.
+    # SQLAlchemy will reuse the WAL configuration on subsequent connections
+    # (journal_mode is persistent in the SQLite database header).
+    with sqlite3.connect(db_abs) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        # A committed write is required to actually create -wal / -shm.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS _kailash_secure_init (k INTEGER PRIMARY KEY)"
+        )
+        conn.commit()
+
+    # Sidecars were created by sqlite3 under the process umask; tighten them
+    # to match the main DB. We just created these files ourselves so there
+    # is no symlink-swap race here — chmod is the right tool.
+    for suffix in ("-wal", "-shm"):
+        sidecar = f"{db_abs}{suffix}"
+        if os.path.exists(sidecar):
+            os.chmod(sidecar, stat.S_IRUSR | stat.S_IWUSR)
+
+
 class ScheduleType(str, Enum):
     """Type of schedule trigger."""
 
@@ -183,18 +246,14 @@ class WorkflowScheduler:
 
         jobstores = {}
         if job_store_path is not None:
-            jobstores["default"] = SQLAlchemyJobStore(url=f"sqlite:///{job_store_path}")
-            # Set owner-only permissions on the SQLite file (POSIX only)
             if os.name == "posix":
-                try:
-                    db_abs = os.path.abspath(job_store_path)
-                    # Touch to ensure the file exists before setting permissions
-                    open(db_abs, "a").close()  # noqa: WPS515
-                    os.chmod(db_abs, stat.S_IRUSR | stat.S_IWUSR)
-                except OSError:
-                    logger.warning(
-                        "Could not set scheduler job store file permissions to 0o600"
-                    )
+                # Atomically create the job-store file with restrictive mode AND refuse
+                # symlinks — closes the open-then-chmod TOCTOU window and pre-creates
+                # the WAL/SHM sidecars with 0o600 BEFORE APScheduler's SQLAlchemy engine
+                # ever opens the file. See `rules/security.md` § "Credential Decode
+                # Helpers" for the structural-defense pattern.
+                _secure_init_sqlite_jobstore(os.path.abspath(job_store_path))
+            jobstores["default"] = SQLAlchemyJobStore(url=f"sqlite:///{job_store_path}")
 
         self._scheduler = AsyncIOScheduler(
             jobstores=jobstores,
