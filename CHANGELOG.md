@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-05-08
+
+### Fixed
+
+- **`DurableExecutionEngine.execute()` enqueue/in-process race documented + caller-controlled (#882)** — the pre-fix engine always enqueued a fire-time `Task` BEFORE running the workflow in-process when both a dispatcher and a runtime were configured. The class docstring claimed "task_id idempotency prevents double-execution by the worker" — but `task_id` PRIMARY KEY idempotency only prevents duplicate ENQUEUE; it does not prevent two different actors (the in-process engine and a worker polling the queue) from each running the same enqueued task once. Between enqueue and the in-process path emitting its first checkpoint, a worker that picks up the task can start executing nodes that the in-process path will then re-execute. The in-tree `SQLTaskQueueDispatcher` worker + W1 checkpoint resume contain the blast radius (the second runner short-circuits via the checkpoint store), but the docstring misframed which defense was load-bearing and there was no caller-explicit way to opt out of the race. New `DurableExecutionEngineBuilder.execution_mode("in_process_only" | "dispatch_only" | "both")` setter is the explicit caller-intent surface. Default behaviour is preserved: omitting `.execution_mode(...)` auto-detects `"both"` when a dispatcher is configured and `"in_process_only"` otherwise, so every pre-2.16.1 call site continues to work without modification. New public read-only property `engine.execution_mode` surfaces the resolved mode. Explicit `"both"` and `"dispatch_only"` raise `ValueError` at `.build()` time when no dispatcher is configured (was previously a runtime surprise at the first `execute()` call). Class + `execute()` docstrings rewritten to correctly describe the layered defense (`task_id` PK idempotency = duplicate-enqueue prevention; W1 checkpoint resume = duplicate-execution short-circuit; race window between the two). 12 Tier-1 regression tests in `tests/regression/test_issue_882_durable_execution_mode.py`. Closes #882.
+
 ## [2.16.0] - 2026-05-07
 
 ### Fixed
