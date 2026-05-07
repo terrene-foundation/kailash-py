@@ -606,6 +606,8 @@ scheduler = WorkflowScheduler(dispatch_via=dispatcher)
 
 Schema (managed by the underlying `SQLTaskQueue`): `task_id PK, queue_name, payload, status, created_at, updated_at, attempts, max_attempts, visibility_timeout, worker_id, error`. The Task fields are encoded into the `payload` JSON (`schedule_id`, `workflow_blob_json`, `planned_fire_time`, `kwargs`). `workflow_blob_json` carries the JSON-encoded workflow representation (UTF-8 string in the outer JSON) — see §9.4.1.
 
+**Timestamp column types.** `created_at` and `updated_at` store `time.time()` Unix epoch values (8-byte IEEE 754 doubles in Python). The DDL routes through `dialect.double_precision_type()` so each backend gets the type that preserves full precision: PostgreSQL emits `DOUBLE PRECISION`, MySQL emits `DOUBLE`, SQLite emits `REAL` (which IS 8-byte in SQLite — distinct from PostgreSQL's 4-byte `REAL`). `requeue_stale` computes `now - updated_at` for visibility-timeout detection; using a single-precision type silently truncates current epoch values by ~50 seconds and produces negative `elapsed` values on every fresh row.
+
 #### 9.4.1 Workflow serialization (JSON, not pickle)
 
 `Task.workflow_blob` is JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(workflow_dict).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
@@ -683,6 +685,52 @@ dispatcher = SQLTaskQueueDispatcher(conn, soft_row_cap=500_000)
 # every enqueue past 500k rows in the queue emits a WARN log
 # `task.queue.over_cap queue_name=… rows=… soft_row_cap=500000 remediation=call_purge_completed_or_raise_cap`
 ```
+
+### 9.7 Classification policy at enqueue time
+
+`SQLTaskQueueDispatcher` exposes an optional `classification_policy`
+constructor kwarg (keyword-only). When set, every `enqueue` routes
+`task.kwargs` AND the parsed `task.workflow_blob`'s per-node config
+dicts through `redact_event_for_persistence` (the same helper used by
+the runtime's checkpoint write-path and on_node_complete subscriber
+surface, in `kailash.runtime.durable`) before the row lands in the
+queue table's `payload` column. Default `None` preserves back-compat —
+existing callers that constructed `SQLTaskQueueDispatcher(conn)` see
+no behavior change.
+
+The kwargs path treats the kwargs dict as a synthetic event's outputs
+with `node_id=""` so the policy keys solely on field name. The
+workflow_blob path walks `Workflow.to_dict()`'s `nodes` map and routes
+each node's `config` dict through the helper per-node-per-field, so
+a policy that scopes by `node_id` sees the right scope. Other
+top-level workflow fields (`workflow_id`, `name`, `connections`,
+`metadata`) are NOT redacted — they carry no classified payload by
+contract.
+
+```python
+from kailash.db.connection import ConnectionManager
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+
+conn = ConnectionManager("postgresql://...")
+
+class _CustomerHashPolicy:
+    def get_classification(self, node_id, field_name):
+        if field_name == "customer_id":
+            return "HASH_PK"
+        return None
+
+dispatcher = SQLTaskQueueDispatcher(
+    conn,
+    classification_policy=_CustomerHashPolicy(),
+)
+# task.kwargs={"customer_id": "secret-A"} → payload carries pk:<digest>
+# workflow_blob node configs with classified fields → REDACT/HASH_PK sentinels
+```
+
+The policy surface is duck-typed per
+`kailash.runtime.durable._get_classification_tag` —
+`get_classification(node_id, field_name)` returning `"REDACT"`,
+`"HASH_PK"`, or `None`.
 
 ---
 

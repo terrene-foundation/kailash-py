@@ -41,11 +41,15 @@ import logging
 import threading
 import time
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 if TYPE_CHECKING:
+    # Type-only imports — runtime imports stay lazy inside __init__ to
+    # avoid circular-import risk and to keep cold-import cost low.
+    # Pyright + Sphinx need the symbol to resolve at module scope.
+    from kailash.runtime.progress import ProgressRegistry
     from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
@@ -62,6 +66,7 @@ from kailash.runtime.durable import (
     decode_checkpoint_payload,
     encode_checkpoint_payload,
     redact_event_for_persistence,
+    redacted_tracker_state_for_checkpoint,
     resolve_tenant_id,
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
@@ -79,16 +84,12 @@ from kailash.runtime.resource_manager import (
     CPULimitExceededError,
     MemoryLimitExceededError,
 )
-from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.runtime.signals import QueryRegistry, SignalChannel
 from kailash.runtime.tracing import get_workflow_tracer
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
 from kailash.runtime.validation.error_categorizer import ErrorCategorizer
-from kailash.runtime.validation.metrics import (
-    ValidationEventType,
-    get_metrics_collector,
-)
+from kailash.runtime.validation.metrics import get_metrics_collector
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
@@ -101,7 +102,6 @@ from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.utils.data_validation import DataTypeValidator
 from kailash.workflow import Workflow
-from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
@@ -1497,7 +1497,7 @@ class LocalRuntime(
                 )
 
     @property
-    def progress_registry(self) -> "ProgressRegistry":  # noqa: F821
+    def progress_registry(self) -> "ProgressRegistry":
         """Registry for progress callbacks during workflow execution.
 
         Register callbacks to receive ProgressUpdate events from nodes:
@@ -2767,6 +2767,20 @@ class LocalRuntime(
                 # configured AND we have a checkpoint_key.  The lock
                 # serialises the per-run save against parallel-node
                 # paths in subclasses.
+                #
+                # W6 redaction discipline: the on_node_complete subscriber
+                # surface dispatches the REDACTED event above (line 2761),
+                # but the tracker_state passed to encode_checkpoint_payload
+                # is the RAW execution_tracker.to_dict() — which embeds
+                # raw classified node outputs in node_outputs[<node_id>].
+                # Route the tracker state through the same classification-
+                # aware redaction helper so the persisted checkpoint blob
+                # carries [REDACTED] / hashed-PK sentinels for every
+                # classified field, matching the hook contract documented
+                # in on_node_complete() above.  See
+                # rules/zero-tolerance.md Rule 2 ("fake redaction") and
+                # rules/dataflow-classification.md MUST Rule 1 ("every
+                # mutation return-path applies redaction").
                 if (
                     self._checkpoint_after_each_node
                     and self._checkpoint_store is not None
@@ -2776,9 +2790,17 @@ class LocalRuntime(
                     _lock_key = run_id or checkpoint_key
                     _lock = self._get_or_create_checkpoint_lock(_lock_key)
                     async with _lock:
+                        _redacted_tracker_state = redacted_tracker_state_for_checkpoint(
+                            execution_tracker.to_dict(),
+                            classification_policy=_classification_policy,
+                            workflow_id=getattr(workflow, "workflow_id", "") or "",
+                            workflow_fingerprint=workflow_fingerprint or "",
+                            tenant_id=tenant_id,
+                            idempotency_key=idempotency_key,
+                        )
                         _blob = encode_checkpoint_payload(
                             workflow_fingerprint=workflow_fingerprint or "",
-                            tracker_state=execution_tracker.to_dict(),
+                            tracker_state=_redacted_tracker_state,
                             tenant_id=tenant_id,
                             workflow_id=getattr(workflow, "workflow_id", "") or "",
                             idempotency_key=idempotency_key,
@@ -2854,11 +2876,16 @@ class LocalRuntime(
                     task_metrics_data = performance_metrics.to_task_metrics()
                     task_metrics = TaskMetrics(**task_metrics_data)
 
-                    # Update task with metrics
+                    # Update task with metrics.  `outputs` is typed as
+                    # Mapping[str, Any] (per the per-node execution
+                    # contract); update_task_status expects dict|None.
+                    # Coerce at the call site so pyright sees the
+                    # narrow type without changing behavior — an empty
+                    # mapping still produces an empty dict, never None.
                     task_manager.update_task_status(
                         task.task_id,
                         TaskStatus.COMPLETED,
-                        result=outputs,
+                        result=dict(outputs) if outputs else None,
                         ended_at=datetime.now(UTC),
                         metadata={"execution_time": performance_metrics.duration},
                     )
