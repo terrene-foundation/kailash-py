@@ -24,7 +24,7 @@ full durable-execution trio in three lines plus the engine builder:
     results, run_id = await engine.execute(
         workflow.build(), idempotency_key="user-42-prewarm",
     )
-    history = await engine.history.get_history(run_id)
+    history = await engine.history.get_run_events(run_id)
 
 The kailash-ml W33b "Fake integration via missing handoff field"
 incident (see ``rules/zero-tolerance.md`` Rule 2) showed why this test
@@ -169,7 +169,7 @@ async def test_durable_execution_quickstart_executes_end_to_end(
 
     1. ``engine.execute(...)`` returns ``(results, run_id)``.
     2. ``results`` contains the final node's output (``double`` -> 84).
-    3. ``engine.history.get_history(run_id)`` returns at least one row
+    3. ``engine.history.get_run_events(run_id)`` returns at least one row
        per node (the user-visible audit trail).
     """
     # Imports are repeated INSIDE the test body to mirror the README
@@ -184,10 +184,20 @@ async def test_durable_execution_quickstart_executes_end_to_end(
     history_store = PostgresHistoryStore(pg_conn)
     await history_store.initialize()
 
+    # tenant_id is mandatory at the history-store read surface (cross-tenant
+    # reads blocked at store layer per W2 defense-in-depth).  Pass via
+    # runtime_kwargs so the runtime carries it through resolve_tenant_id().
+    tenant_id = f"quickstart-tenant-{uuid.uuid4().hex[:6]}"
+
+    class _TenantContext:
+        def __init__(self, tid: str) -> None:
+            self.tenant_id = tid
+
     engine = (
         DurableExecutionEngine.builder()
         .checkpoint_store(checkpoint_store)
         .history_store(history_store)
+        .runtime_kwargs({"user_context": _TenantContext(tenant_id)})
         .build()
     )
 
@@ -211,7 +221,7 @@ async def test_durable_execution_quickstart_executes_end_to_end(
 
     # User-visible outcome 2: the history store has at least one row
     # per executed node — the audit trail the user expects.
-    history = await engine.history.get_history(run_id)
+    history = await engine.history.get_run_events(run_id, tenant_id=tenant_id)
     assert len(history) >= 2, (
         f"History store has {len(history)} rows for run_id={run_id}; "
         f"expected at least one row per executed node. The engine's "
