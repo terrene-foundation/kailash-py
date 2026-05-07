@@ -46,6 +46,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 if TYPE_CHECKING:
+    # Type-only imports — runtime imports stay lazy inside __init__ to
+    # avoid circular-import risk and to keep cold-import cost low.
+    # Pyright + Sphinx need the symbol to resolve at module scope.
+    from kailash.runtime.progress import ProgressRegistry
     from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
@@ -1498,7 +1502,7 @@ class LocalRuntime(
                 )
 
     @property
-    def progress_registry(self) -> "ProgressRegistry":  # noqa: F821
+    def progress_registry(self) -> "ProgressRegistry":
         """Registry for progress callbacks during workflow execution.
 
         Register callbacks to receive ProgressUpdate events from nodes:
@@ -2877,11 +2881,16 @@ class LocalRuntime(
                     task_metrics_data = performance_metrics.to_task_metrics()
                     task_metrics = TaskMetrics(**task_metrics_data)
 
-                    # Update task with metrics
+                    # Update task with metrics.  `outputs` is typed as
+                    # Mapping[str, Any] (per the per-node execution
+                    # contract); update_task_status expects dict|None.
+                    # Coerce at the call site so pyright sees the
+                    # narrow type without changing behavior — an empty
+                    # mapping still produces an empty dict, never None.
                     task_manager.update_task_status(
                         task.task_id,
                         TaskStatus.COMPLETED,
-                        result=outputs,
+                        result=dict(outputs) if outputs else None,
                         ended_at=datetime.now(UTC),
                         metadata={"execution_time": performance_metrics.duration},
                     )
