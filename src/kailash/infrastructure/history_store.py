@@ -73,14 +73,10 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from kailash.db.connection import ConnectionManager
-from kailash.db.dialect import _validate_identifier
-from kailash.runtime.durable import (
-    NodeCompletionEvent,
-    redact_event_for_persistence,
-)
+from kailash.runtime.durable import NodeCompletionEvent, redact_event_for_persistence
 
 logger = logging.getLogger(__name__)
 
@@ -555,8 +551,9 @@ class WorkflowHistoryStore(ABC):
         elif isinstance(since, str):
             since_iso = since
         else:
-            raise TypeError(
-                "list_failed: since must be a datetime, ISO-8601 string, " "or None"
+            raise TypeError(  # pyright: ignore[reportUnreachable]
+                f"list_failed: since must be a datetime, ISO-8601 string, or None "
+                f"— got {type(since).__name__!r}"
             )
         if since_iso is not None:
             rows = await self._conn.fetch(
@@ -618,9 +615,9 @@ class WorkflowHistoryStore(ABC):
         elif isinstance(timestamp, str):
             ts_iso = timestamp
         else:
-            raise TypeError(
-                "delete_runs_older_than: timestamp must be a datetime or "
-                "ISO-8601 string."
+            raise TypeError(  # pyright: ignore[reportUnreachable]
+                f"delete_runs_older_than: timestamp must be a datetime or "
+                f"ISO-8601 string — got {type(timestamp).__name__!r}"
             )
 
         async with self._conn.transaction() as tx:

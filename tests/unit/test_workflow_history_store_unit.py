@@ -16,7 +16,6 @@ Tier 2 + Tier 3 tests against real Postgres land in
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -49,7 +48,7 @@ class _DeterministicDialect:
     def quote_identifier(self, name: str) -> str:
         return f'"{name}"'
 
-    def text_column(self, indexed: bool = False) -> str:
+    def text_column(self, indexed: bool = False) -> str:  # noqa: ARG002
         return "TEXT"
 
     def blob_type(self) -> str:
@@ -85,14 +84,18 @@ class _RecordingConn:
         self.executes.append((query, args))
         return None
 
-    async def fetch(self, query: str, *args: Any) -> List[Dict[str, Any]]:
+    async def fetch(
+        self, query: str, *args: Any
+    ) -> List[Dict[str, Any]]:  # noqa: ARG002
         # Simple match by substring of query.
         for needle, rows in self._fetch_results.items():
             if needle in query:
                 return rows
         return []
 
-    async def fetchone(self, query: str, *args: Any) -> Optional[Dict[str, Any]]:
+    async def fetchone(
+        self, query: str, *args: Any
+    ) -> Optional[Dict[str, Any]]:  # noqa: ARG002
         if self._fetchone_queue:
             return self._fetchone_queue.pop(0)
         return None
@@ -117,10 +120,10 @@ class _RecordingConn:
         parent = self
 
         class _Cm:
-            async def __aenter__(self_inner):
+            async def __aenter__(self):
                 return parent._TxProxy(parent)
 
-            async def __aexit__(self_inner, exc_type, exc, tb):
+            async def __aexit__(self, exc_type, exc, tb):
                 return False
 
         return _Cm()
