@@ -1,18 +1,18 @@
 ﻿kailash.workflow.builder.WorkflowBuilder
-========================================
+=========================================
 
 .. currentmodule:: kailash.workflow.builder
 
 .. autoclass:: WorkflowBuilder
 
-   
+
    .. automethod:: __init__
 
-   
+
    .. rubric:: Methods
 
    .. autosummary::
-   
+
       ~WorkflowBuilder.__init__
       ~WorkflowBuilder.add_connection
       ~WorkflowBuilder.add_input_connection
@@ -33,9 +33,3 @@
       ~WorkflowBuilder.update_node
       ~WorkflowBuilder.validate_all_contracts
       ~WorkflowBuilder.validate_parameter_declarations
-   
-   
-
-   
-   
-   
