@@ -64,6 +64,12 @@ from kailash.infrastructure.execution_store import (
     InMemoryExecutionStore,
 )
 from kailash.infrastructure.factory import SCHEMA_VERSION, StoreFactory
+from kailash.infrastructure.history_store import (
+    DowngradeRefusedError,
+    PostgresHistoryStore,
+    SQLiteHistoryStore,
+    WorkflowHistoryStore,
+)
 from kailash.infrastructure.idempotency import IdempotentExecutor
 from kailash.infrastructure.idempotency_store import DBIdempotencyStore
 from kailash.infrastructure.queue_factory import create_task_queue
@@ -76,12 +82,16 @@ __all__ = [
     "DBEventStoreBackend",
     "DBExecutionStore",
     "DBIdempotencyStore",
+    "DowngradeRefusedError",
     "IdempotentExecutor",
     "InMemoryExecutionStore",
+    "PostgresHistoryStore",
     "SCHEMA_VERSION",
     "SQLTaskMessage",
     "SQLTaskQueue",
     "SQLWorkerRegistry",
+    "SQLiteHistoryStore",
     "StoreFactory",
+    "WorkflowHistoryStore",
     "create_task_queue",
 ]

@@ -813,15 +813,33 @@ class LocalRuntime(
         # === W1: Durable execution wiring ===
         # checkpoint_store + checkpoint_after_each_node drive per-node
         # checkpoint emission inside ``_execute_workflow_async``.
-        # history_store is the W2 placeholder kwarg — the W1 shard accepts
-        # it now so callers can pass it without breakage; the W2 shard
-        # wires the dispatch path. The hook registry serves both W1 (the
-        # runtime dispatches every NodeCompletionEvent) and downstream
-        # subscribers (W2 history store, metrics, audit).
+        # history_store is wired in W2 (this shard) — when non-None the
+        # runtime auto-registers ``history_store.record_event`` against
+        # the hook registry at construction time, so every node
+        # completion lands a row without any extra caller code. The
+        # hook registry serves both W1 (the runtime dispatches every
+        # NodeCompletionEvent) and downstream subscribers (W2 history
+        # store, metrics, audit).
         self._checkpoint_store = checkpoint_store
         self._checkpoint_after_each_node = bool(checkpoint_after_each_node)
         self._history_store = history_store
         self._hook_registry = NodeCompletionHookRegistry()
+        # W2 auto-subscribe: when a history store is provided, register
+        # its record_event coroutine as a hook subscriber so the runtime
+        # forwards every NodeCompletionEvent without the caller needing
+        # to call ``runtime.on_node_complete(history_store.record_event)``
+        # explicitly. Per ``orphan-detection.md`` MUST Rule 1 the
+        # facade ``history_store=`` kwarg lands its production call site
+        # in the same shard as the kwarg's wiring.
+        if history_store is not None:
+            record_event = getattr(history_store, "record_event", None)
+            if not callable(record_event):
+                raise TypeError(
+                    "LocalRuntime(history_store=...): the history_store "
+                    "must expose a callable 'record_event(event)' coroutine "
+                    "matching the WorkflowHistoryStore protocol."
+                )
+            self._hook_registry.register(record_event)
         # Per-run asyncio.Lock for parallel-node checkpoint atomicity.
         # LocalRuntime executes nodes sequentially in
         # ``_execute_workflow_async`` so the lock would normally be
