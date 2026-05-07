@@ -24,8 +24,10 @@ Requires PostgreSQL at ``TEST_PG_URL`` (defaults to
 
 from __future__ import annotations
 
+import json
 import os
 import socket
+import types
 import uuid
 from typing import AsyncGenerator
 from urllib.parse import urlparse
@@ -411,3 +413,57 @@ async def test_durable_engine_dispatch_idempotency_drops_duplicate_enqueue(
     schedule_ids = {_json.loads(r["payload"])["schedule_id"] for r in rows}
     # Same schedule_id for both attempts (deterministic from key + workflow).
     assert len(schedule_ids) == 1
+
+
+# ---------------------------------------------------------------------------
+# 7. Tenant-partition: same workflow + same key under DIFFERENT tenants land
+#    DISTINCT schedule_ids — the dispatcher's idempotency gate MUST NOT drop
+#    one tenant's task because another tenant happened to use the same key.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_engine_dispatcher_schedule_id_partitions_by_tenant(
+    pg_conn: ConnectionManager,
+    dispatcher: SQLTaskQueueDispatcher,
+):
+    """Cross-tenant idempotency-key reuse is a normal pattern (e.g. per-user
+    "user-42-prewarm").  Two tenants invoking the SAME workflow with the
+    SAME idempotency_key MUST receive distinct schedule_ids — otherwise
+    the dispatcher's idempotency gate (Dispatcher MUST Rule 1) silently
+    drops the second tenant's task.  Mirrors the partitioning already
+    enforced by build_checkpoint_key per rules/tenant-isolation.md MUST
+    Rule 5.
+
+    Tier-2 invariant: the assertion goes through the kailash_task_queue
+    rows in real Postgres — the schedule_id is decoded from the persisted
+    JSON payload, not the engine's in-memory state.
+    """
+    workflow = _build_two_node_workflow()
+    shared_key = f"shared_key_{uuid.uuid4().hex[:8]}"
+
+    engine = DurableExecutionEngine.builder().dispatch_via(dispatcher).build()
+
+    # Tenant A: set runtime.user_context.tenant_id = "tenant-a" and execute.
+    # SimpleNamespace satisfies the duck-typed contract resolve_tenant_id
+    # consults at durable.py:786 (getattr(user_ctx, "tenant_id", None)).
+    engine.runtime.user_context = types.SimpleNamespace(tenant_id="tenant-a")
+    await engine.execute(workflow, idempotency_key=shared_key, inputs={})
+
+    # Tenant B: same workflow, same key, different tenant.
+    engine.runtime.user_context = types.SimpleNamespace(tenant_id="tenant-b")
+    await engine.execute(workflow, idempotency_key=shared_key, inputs={})
+
+    # Direct DB observation: two queue rows with two DISTINCT schedule_ids.
+    rows = await pg_conn.fetch("SELECT task_id, payload FROM kailash_task_queue")
+    schedule_ids = sorted(json.loads(r["payload"])["schedule_id"] for r in rows)
+    assert (
+        len(rows) == 2
+    ), f"expected 2 queue rows (one per tenant), got {len(rows)}: {rows!r}"
+    assert (
+        len(set(schedule_ids)) == 2
+    ), f"schedule_ids MUST partition by tenant_id; got duplicates {schedule_ids!r}"
+    # Both schedule_ids carry the tenant prefix per the engine.{tenant}.{fp}.{key}
+    # format documented in specs/core-runtime.md §4.6.9.
+    assert any("tenant-a" in sid for sid in schedule_ids)
+    assert any("tenant-b" in sid for sid in schedule_ids)

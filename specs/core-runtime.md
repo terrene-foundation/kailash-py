@@ -547,10 +547,22 @@ messages (per `rules/zero-tolerance.md` Rule 3a).
 - **`dispatcher`** is consulted ONLY when configured. When set,
   `execute()` enqueues a fire-time `Task` via the dispatcher BEFORE
   in-process execution. The deterministic `schedule_id` is derived from
-  `compute_workflow_fingerprint(workflow)[:12]` + the idempotency_key,
-  so two `execute()` calls with the same key + same workflow produce
-  the same `schedule_id` and the dispatcher's idempotency gate
-  (`Dispatcher` MUST Rule 1) drops the duplicate.
+  `(tenant_id, compute_workflow_fingerprint(workflow)[:12], idempotency_key)`
+  in the format `engine.{tenant_id}.{fingerprint[:12]}.{idempotency_key}`,
+  so two `execute()` calls FROM THE SAME TENANT with the same key + same
+  workflow produce the same `schedule_id` and the dispatcher's idempotency
+  gate (`Dispatcher` MUST Rule 1) drops the duplicate. Two DIFFERENT
+  tenants invoking the same workflow with the same caller-supplied
+  `idempotency_key` (a normal pattern, e.g. per-user `"user-42-prewarm"`)
+  produce DIFFERENT `schedule_id`s — both tasks land cleanly. Tenant
+  scope is resolved via `resolve_tenant_id(self._runtime)` (consults
+  `runtime.user_context.tenant_id` then
+  `kailash.trust.auth.context.get_current_tenant_id()`); single-tenant
+  deployments collapse to `engine..{fingerprint}.{key}` with an empty
+  tenant segment. This partitioning mirrors `build_checkpoint_key`'s
+  tenant dimension per `rules/tenant-isolation.md` MUST Rule 5: cross-
+  tenant idempotency-key reuse MUST NOT cause one tenant's task to
+  silently drop another tenant's enqueue.
 - **Primitive setters override conflicting `runtime_kwargs` entries.**
   The setter is the explicit composition contract; `runtime_kwargs` is
   the escape hatch for non-conflicting kwargs.

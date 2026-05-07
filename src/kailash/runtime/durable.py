@@ -1133,13 +1133,29 @@ class DurableExecutionEngine:
         from kailash.runtime.dispatcher import Task, compute_task_id
 
         workflow_fingerprint = compute_workflow_fingerprint(workflow)
-        # Deterministic schedule_id — ties the queue row to the
-        # workflow's structural shape AND the caller's idempotency key.
-        # Two ``engine.execute`` calls with the same key + same workflow
+        # Resolve tenant scope from the runtime context BEFORE deriving the
+        # schedule_id.  Per rules/tenant-isolation.md MUST Rule 5, every
+        # idempotency-keyed identifier MUST partition on tenant — otherwise
+        # two tenants invoking the same workflow with the same caller-supplied
+        # idempotency_key (a perfectly normal pattern, e.g. per-user
+        # "user-42-prewarm") collide on schedule_id and the dispatcher's
+        # idempotency gate (Dispatcher MUST Rule 1) silently drops the
+        # second tenant's task.  Mirrors the partitioning already enforced
+        # by build_checkpoint_key (see § build_checkpoint_key above).
+        # Empty-string fallback is intentional for legacy single-tenant
+        # deployments — collapses to ``engine..{fingerprint}.{key}`` which
+        # is unchanged from a single-tenant perspective.
+        tenant_id = resolve_tenant_id(self._runtime) or ""
+        # Deterministic schedule_id — ties the queue row to (tenant,
+        # workflow shape, caller idempotency key).  Two ``engine.execute``
+        # calls from the SAME tenant with the same key + same workflow
         # produce the same schedule_id, so the dispatcher's idempotency
-        # gate (Dispatcher MUST Rule 1) drops the duplicate.
+        # gate (Dispatcher MUST Rule 1) drops the duplicate.  Two
+        # different tenants get DIFFERENT schedule_ids and both tasks
+        # land cleanly.
         schedule_id = (
-            f"engine.{workflow_fingerprint[:12]}." f"{(idempotency_key or 'noop')}"
+            f"engine.{tenant_id}.{workflow_fingerprint[:12]}."
+            f"{(idempotency_key or 'noop')}"
         )
         planned_fire_time = datetime.now(timezone.utc).isoformat()
         task_id = compute_task_id(schedule_id, datetime.now(timezone.utc))
