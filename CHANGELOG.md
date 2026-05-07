@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`kailash.runtime.durable.DurableExecutionEngine` (W4)** — first-party durable execution engine that composes the runtime-integration-trio primitives (W1 per-node checkpointing, W2 persistent workflow history, W3 task dispatch) into a single facade. Construct via the fluent `DurableExecutionEngine.builder().checkpoint_store(...).history_store(...).dispatch_via(...).idempotency_key_default(...).build()` chain; each primitive is opt-in. The composition contract encodes correct wiring once: `history_store` flows via the runtime constructor (which auto-subscribes `record_event`), `checkpoint_store` requires `checkpoint_after_each_node=True` (set by default when the store is configured), and `dispatcher.enqueue` runs BEFORE in-process execution so the queue row is the durable record of intent. `engine.history` exposes the underlying `WorkflowHistoryStore` directly for native `list_runs` / `get_run` / `get_run_events` queries (tenant_id mandatory). Deterministic `schedule_id` (derived from `compute_workflow_fingerprint(workflow)[:12]` + idempotency_key) lets the dispatcher's idempotency gate drop duplicates from repeated `engine.execute()` calls with the same key. ~510 LOC, 25 Tier-1 unit tests + 6 Tier-2 wiring tests against real Postgres. See `specs/core-runtime.md` §4.6.9 for the full surface.
+
 ## [2.15.0] - 2026-05-07
 
 Minor release shipping Wave 2 of the runtime-integration-trio: first-party persistent workflow history. Subscribes to v2.14.x's `runtime.on_node_complete` hook and persists per-node `NodeCompletionEvent` records to a queryable, tenant-isolated audit log. Closes #861.

@@ -317,8 +317,16 @@ LocalRuntime(
   `kailash_checkpoints`, dialect-portable via `ConnectionManager`).
 - `checkpoint_after_each_node` — when `True` AND `checkpoint_store` is
   set, the runtime persists a checkpoint blob after each node completes.
-- `history_store` — accepted as a placeholder; the runtime does not yet
-  invoke it. Reserved for the W2 history-store wave.
+- `history_store` — any object exposing the async `record_event(event)`
+  coroutine matching the `WorkflowHistoryStore` protocol. Reference
+  implementations: `kailash.infrastructure.history_store.PostgresHistoryStore`
+  and `SQLiteHistoryStore` (W2). The runtime auto-registers
+  `history_store.record_event` against the hook registry at construction
+  time, so every node completion lands a row without any extra caller
+  code. A history store lacking a callable `record_event` raises
+  `TypeError` at construction (per `rules/zero-tolerance.md` Rule 3a).
+  See §4.6.9 for the `DurableExecutionEngine` (W4) which composes this
+  with checkpoint + dispatch primitives.
 
 #### 4.6.2 execute() / execute_async() / execute_workflow_async() kwargs
 
@@ -476,21 +484,115 @@ blob. The runtime-layer typed-error gate per
   contents and the workflow's fingerprint are NEVER logged at WARN
   or higher.
 
-#### 4.6.9 Surfaces NOT YET shipped
+#### 4.6.9 DurableExecutionEngine — engine composing W1 + W2 + W3
 
-The W1 wave ships the runtime hook + checkpoint persistence. Sibling
-surfaces deferred to later waves:
+`DurableExecutionEngine` (`kailash.runtime.durable.DurableExecutionEngine`)
+is the W4 facade that composes the per-node checkpoint hook (W1), the
+persistent workflow history store (W2), and the pluggable task
+dispatcher (W3) into a single API. Each primitive is opt-in; an engine
+constructed with no primitives behaves like a plain `AsyncLocalRuntime`.
 
-- **History store** — `history_store=` kwarg is accepted but the runtime
-  does not yet invoke it. The W2 wave wires a history-store subscriber
-  through `runtime.on_node_complete(...)` so events flow without
-  changing the runtime hot path again.
-- **Dispatcher** — the W3 wave introduces a multi-runtime dispatcher
-  that fans events out to N subscribers across processes. The W1
-  registry is process-local.
-- **DurableExecutionEngine** — the W4 wave introduces a higher-level
-  engine that composes the W1 / W2 / W3 surfaces. Until then, callers
-  use `LocalRuntime(checkpoint_store=...)` directly.
+```python
+from kailash.runtime.durable import DurableExecutionEngine
+from kailash.infrastructure.checkpoint_store import DBCheckpointStore
+from kailash.infrastructure.history_store import PostgresHistoryStore
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+
+engine = (
+    DurableExecutionEngine.builder()
+        .checkpoint_store(DBCheckpointStore(conn))
+        .history_store(PostgresHistoryStore(conn))
+        .dispatch_via(SQLTaskQueueDispatcher(conn))
+        .idempotency_key_default("user-42-prewarm")
+        .build()
+)
+results, run_id = await engine.execute(workflow.build())
+runs = await engine.history.list_runs(filter={"tenant_id": "default"})
+events = await engine.history.get_run_events(run_id, tenant_id="default")
+```
+
+##### Builder API
+
+`DurableExecutionEngine.builder()` returns a fresh
+`DurableExecutionEngineBuilder`. Each setter returns the builder so the
+chain runs in one expression. Calling a setter twice OVERRIDES the prior
+value (no implicit fan-in).
+
+| Setter                              | Purpose                                                                      |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `.checkpoint_store(store)`          | Configure the W1 checkpoint store. ``None`` clears.                          |
+| `.history_store(store)`             | Configure the W2 history store. ``None`` clears.                             |
+| `.dispatch_via(dispatcher)`         | Configure the W3 dispatcher. ``None`` clears.                                |
+| `.idempotency_key_default(key)`     | Default key applied to ``execute()`` when the call omits the kwarg.          |
+| `.runtime(factory)`                 | Override the runtime factory (defaults to `AsyncLocalRuntime`).              |
+| `.runtime_kwargs(mapping)`          | Extra kwargs passed to the runtime factory (e.g. `max_concurrent_nodes`).    |
+| `.build()`                          | Construct the immutable `DurableExecutionEngine`.                            |
+
+Type validation: `idempotency_key_default(non-str)`, `runtime(non-callable)`,
+and `runtime_kwargs(non-Mapping)` raise `TypeError` with actionable
+messages (per `rules/zero-tolerance.md` Rule 3a).
+
+##### Composition contract
+
+- **`checkpoint_store`** is forwarded to the runtime constructor as
+  `AsyncLocalRuntime(checkpoint_store=..., checkpoint_after_each_node=True)`.
+  The W1 contract requires BOTH the store AND the opt-in flag.
+- **`history_store`** is forwarded to the runtime constructor as
+  `AsyncLocalRuntime(history_store=...)`. The runtime auto-subscribes
+  `history_store.record_event` against its hook registry at construction
+  time. The engine does NOT call
+  `runtime.on_node_complete(history_store.record_event)` separately —
+  doing so would double-register the subscriber and double-write every
+  event.
+- **`dispatcher`** is consulted ONLY when configured. When set,
+  `execute()` enqueues a fire-time `Task` via the dispatcher BEFORE
+  in-process execution. The deterministic `schedule_id` is derived from
+  `compute_workflow_fingerprint(workflow)[:12]` + the idempotency_key,
+  so two `execute()` calls with the same key + same workflow produce
+  the same `schedule_id` and the dispatcher's idempotency gate
+  (`Dispatcher` MUST Rule 1) drops the duplicate.
+- **Primitive setters override conflicting `runtime_kwargs` entries.**
+  The setter is the explicit composition contract; `runtime_kwargs` is
+  the escape hatch for non-conflicting kwargs.
+
+##### `engine.execute(workflow, *, idempotency_key, inputs, force_resume_with_drift, dispatch_kwargs, queue_name)`
+
+Delegate-only — forwards to `runtime.execute_workflow_async(...)` after
+optional dispatcher enqueue. Returns `(results, run_id)` from the
+wrapped runtime. The runtime's `run_id` is correlated with the
+dispatched task's `schedule_id` via an INFO log line at
+`durable.engine.execute.dispatched_and_executed`.
+
+`idempotency_key` falls back to `idempotency_key_default` when omitted.
+Explicit per-call values override the default.
+
+##### `engine.history`, `engine.checkpoint_store`, `engine.dispatcher`, `engine.runtime`
+
+Read-only properties exposing the composed primitives. `engine.history`
+returns the underlying `WorkflowHistoryStore` directly so callers use
+the native read API (`list_runs`, `get_run`, `get_run_events`,
+`list_failed`) — every read requires `tenant_id` per
+`rules/tenant-isolation.md` MUST Rule 5. `engine.runtime` returns the
+wrapped `AsyncLocalRuntime` for advanced subscribers.
+
+##### Immutability
+
+The engine has no public setters — composition cannot change after
+`build()`. Construct a new engine via the builder if the composition
+needs to change. Each `.build()` call produces a fresh engine and a
+fresh wrapped runtime.
+
+##### Surfaces NOT YET shipped
+
+- **Worker-pool variant** — a future variant that defers execution
+  entirely to the dispatcher (the worker pool runs the workflow,
+  in-process `execute()` returns immediately after enqueue). Today the
+  engine drives BOTH the in-process run AND the dispatcher enqueue;
+  the queue row is the durable record of intent.
+- **Workflow-blob serialiser** — today the dispatched `Task.workflow_blob`
+  is empty bytes; workers reconstruct workflows from the orchestrator's
+  local registry per project convention. A future wave MAY add a
+  workflow-blob serialiser without changing the engine surface.
 
 ---
 
