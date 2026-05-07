@@ -583,6 +583,22 @@ class SQLTaskQueueDispatcher(Dispatcher):
     drop scheduled work; a noisy log is the correct trade-off). See
     ``specs/scheduling.md`` § "Queue dispatch — operator runbook".
 
+    Classification-aware redaction (W6)
+    -----------------------------------
+    The W2 ``runtime.on_node_complete`` hook contract — "no subscriber
+    ever observes a classified PK or a redacted field's raw value" — is
+    extended here to the queue payload surface.  When
+    ``classification_policy`` is set, every enqueue routes the
+    ``kwargs`` dict AND the ``workflow_blob`` (a JSON-serialised
+    workflow whose node config may carry classified literal values)
+    through the same classification helper used by the runtime's
+    checkpoint write-path.  Default is ``None`` (no-op redaction =
+    back-compat).  Operators with a classification policy MUST pass it
+    here OR provision per-tenant queue tables (see "Multi-tenant
+    deployment contract" above) — without one of these, classified
+    field values land in the queue payload row in plaintext.  See
+    ``rules/zero-tolerance.md`` Rule 2 ("fake redaction").
+
     Parameters
     ----------
     conn:
@@ -598,6 +614,14 @@ class SQLTaskQueueDispatcher(Dispatcher):
         that lands while the queue table holds more than this many
         rows for the target queue emits a WARN log. Recommended range:
         100_000 - 1_000_000 depending on purge cadence.
+    classification_policy:
+        Optional classification policy object exposing the same duck-
+        typed surface consumed by
+        :func:`kailash.runtime.durable.redact_event_for_persistence`
+        (``get_classification`` / ``classify`` / ``is_classified``).
+        When set, ``kwargs`` and ``workflow_blob`` are redacted at
+        enqueue time.  When ``None`` (default), the dispatcher behaves
+        exactly as before (back-compat).
 
     See Also
     --------
@@ -613,6 +637,7 @@ class SQLTaskQueueDispatcher(Dispatcher):
         table_name: str = "kailash_task_queue",
         *,
         soft_row_cap: Optional[int] = None,
+        classification_policy: Optional[Any] = None,
     ) -> None:
         if soft_row_cap is not None and soft_row_cap <= 0:
             raise ValueError(
@@ -621,6 +646,12 @@ class SQLTaskQueueDispatcher(Dispatcher):
         self._queue = SQLTaskQueue(conn, table_name=table_name)
         self._initialized = False
         self._soft_row_cap = soft_row_cap
+        # W6 redaction discipline: the classification policy (if any) is
+        # consulted on every enqueue to redact classified fields in
+        # task.kwargs AND in the workflow_blob's node-config dicts.
+        # None = no-op redaction (back-compat default).  See class
+        # docstring "Classification-aware redaction (W6)".
+        self._classification_policy = classification_policy
         # Suppress the WARN flood — fire at most once per minute per
         # queue_name. The cap is operational signal, not per-row alert.
         self._cap_warn_last: Dict[str, float] = {}
@@ -644,6 +675,15 @@ class SQLTaskQueueDispatcher(Dispatcher):
         no-op (DEBUG log; no exception). Non-duplicate failures log at
         ERROR with grep-able ``schedule_id`` + ``task_id_hash`` and
         propagate per the architecture plan §3 invariant 3.
+
+        W6 redaction discipline (when ``classification_policy`` is set):
+        ``task.kwargs`` and ``task.workflow_blob`` are routed through
+        the same classification-aware redaction helper as the runtime's
+        on_node_complete subscriber surface and checkpoint write-path,
+        so classified field values are replaced with ``[REDACTED]`` /
+        hashed-PK sentinels BEFORE the row is inserted into the queue
+        table.  Without this, classified values land in the queue
+        payload row in plaintext on every enqueue.
         """
         if not self._initialized:
             await self.initialize()
@@ -653,11 +693,21 @@ class SQLTaskQueueDispatcher(Dispatcher):
         # design — pickle on a queue payload is RCE per
         # `rules/security.md`). Decode UTF-8 and embed the JSON string
         # so the outer payload remains a pure JSON object.
+        workflow_blob_json = task.workflow_blob.decode("utf-8")
+        kwargs = task.kwargs
+
+        # W6 — apply classification-aware redaction when a policy is set.
+        # Default (None) is no-op so existing callers see the same
+        # behavior they had before this kwarg was introduced.
+        if self._classification_policy is not None:
+            workflow_blob_json = self._redact_workflow_blob(workflow_blob_json)
+            kwargs = self._redact_kwargs(kwargs)
+
         payload = {
             "schedule_id": task.schedule_id,
-            "workflow_blob_json": task.workflow_blob.decode("utf-8"),
+            "workflow_blob_json": workflow_blob_json,
             "planned_fire_time": task.planned_fire_time,
-            "kwargs": task.kwargs,
+            "kwargs": kwargs,
         }
 
         try:
@@ -693,6 +743,112 @@ class SQLTaskQueueDispatcher(Dispatcher):
         # docstring "Operator runbook — purge cadence".
         if self._soft_row_cap is not None:
             await self._maybe_warn_row_count(task.queue_name)
+
+    def _redact_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Redact classified fields in a kwargs dict.
+
+        Routes through :func:`redact_event_for_persistence` by treating
+        the kwargs dict as a synthetic event's outputs.  The synthetic
+        event uses an empty ``node_id`` so the policy decides solely
+        on the field name — appropriate for kwargs which are not
+        scoped to any one workflow node.
+
+        Returns a NEW dict; the input is never mutated.
+        """
+        # Lazy import to avoid cycle with kailash.runtime.durable.
+        from datetime import datetime, timezone
+
+        from kailash.runtime.durable import (
+            NodeCompletionEvent,
+            redact_event_for_persistence,
+        )
+
+        ts = datetime.now(timezone.utc)
+        synthetic = NodeCompletionEvent(
+            run_id=None,
+            workflow_id="",
+            workflow_fingerprint="",
+            node_id="",
+            node_type="",
+            outputs=dict(kwargs),
+            started_at=ts,
+            ended_at=ts,
+            duration_ms=0,
+            tenant_id=None,
+            idempotency_key=None,
+            error=None,
+            metadata={},
+        )
+        redacted = redact_event_for_persistence(
+            synthetic, classification_policy=self._classification_policy
+        )
+        return dict(redacted.outputs)
+
+    def _redact_workflow_blob(self, workflow_blob_json: str) -> str:
+        """Redact classified fields in node-config dicts inside a workflow blob.
+
+        Walks the workflow's ``nodes`` map (per
+        :meth:`kailash.workflow.graph.Workflow.to_dict`) and routes each
+        node's ``config`` dict through
+        :func:`redact_event_for_persistence` with the node_id supplied
+        as scope, so the policy can decide per-node-per-field.  Other
+        top-level workflow fields (workflow_id, name, connections,
+        metadata, etc.) are NOT redacted — they carry no classified
+        payload by contract.
+
+        Returns the re-serialised JSON string.  When the blob is not
+        valid JSON OR has no ``nodes`` map, the original blob is
+        returned unchanged with a DEBUG log line — same permissive
+        posture as :func:`redacted_tracker_state_for_checkpoint`.
+        """
+        from datetime import datetime, timezone
+
+        from kailash.runtime.durable import (
+            NodeCompletionEvent,
+            redact_event_for_persistence,
+        )
+
+        try:
+            blob = json.loads(workflow_blob_json)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            logger.debug(
+                "task.queue.workflow_blob_unparseable error_type=%s",
+                type(exc).__name__,
+            )
+            return workflow_blob_json
+        if not isinstance(blob, dict) or "nodes" not in blob:
+            return workflow_blob_json
+        nodes = blob.get("nodes", {})
+        if not isinstance(nodes, dict):
+            return workflow_blob_json
+
+        ts = datetime.now(timezone.utc)
+        for node_id, node_data in nodes.items():
+            if not isinstance(node_data, dict):
+                continue
+            config = node_data.get("config")
+            if not isinstance(config, dict):
+                continue
+            synthetic = NodeCompletionEvent(
+                run_id=None,
+                workflow_id=blob.get("workflow_id", "") or "",
+                workflow_fingerprint="",
+                node_id=str(node_id),
+                node_type=node_data.get("node_type", "") or "",
+                outputs=dict(config),
+                started_at=ts,
+                ended_at=ts,
+                duration_ms=0,
+                tenant_id=None,
+                idempotency_key=None,
+                error=None,
+                metadata={},
+            )
+            redacted = redact_event_for_persistence(
+                synthetic, classification_policy=self._classification_policy
+            )
+            node_data["config"] = dict(redacted.outputs)
+        return json.dumps(blob, separators=(",", ":"))
 
     async def _maybe_warn_row_count(self, queue_name: str) -> None:
         """Emit a rate-limited WARN if queue depth exceeds soft_row_cap.
