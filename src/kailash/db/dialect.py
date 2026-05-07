@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import logging
 import re
-
-from kailash.utils.url_credentials import mask_url
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +339,26 @@ class QueryDialect(ABC):
         """
         return "BLOB"
 
+    def double_precision_type(self) -> str:
+        """Return the 8-byte (IEEE 754 double-precision) float column type.
+
+        Required for storing ``time.time()`` values without truncation:
+        Python's ``time.time()`` returns a 64-bit double, but PostgreSQL
+        ``REAL`` is a 4-byte single-precision float and silently truncates
+        current epoch values by ~50 seconds.  Anything storing a Unix
+        timestamp via ``time.time()`` MUST use this type.
+
+        - PostgreSQL: ``DOUBLE PRECISION`` (8 bytes)
+        - MySQL: ``DOUBLE`` (8 bytes)
+        - SQLite: ``REAL`` (8 bytes per SQLite docs — REAL IS double-
+          precision in SQLite, despite the name overlap with Postgres'
+          4-byte REAL)
+
+        See ``rules/infrastructure-sql.md`` § 4 ("dialect.blob_type() not
+        hardcoded BLOB") — same dialect-portability discipline.
+        """
+        return "DOUBLE PRECISION"
+
     @abstractmethod
     def json_column_type(self) -> str:
         """Return the native JSON column type.
@@ -522,6 +542,15 @@ class MySQLDialect(QueryDialect):
     def blob_type(self) -> str:
         return "LONGBLOB"
 
+    def double_precision_type(self) -> str:
+        """MySQL: ``DOUBLE`` (8-byte IEEE 754 float).
+
+        ``DOUBLE PRECISION`` is also valid in MySQL but is an alias for
+        ``DOUBLE``; we emit the canonical short form.  See base
+        :meth:`QueryDialect.double_precision_type` for the rationale.
+        """
+        return "DOUBLE"
+
     def create_index_prefix(self) -> str:
         """Return the CREATE INDEX statement prefix.
 
@@ -601,6 +630,17 @@ class SQLiteDialect(QueryDialect):
 
     def json_column_type(self) -> str:
         return "TEXT"
+
+    def double_precision_type(self) -> str:
+        """SQLite: ``REAL`` (8-byte IEEE 754 float per SQLite docs).
+
+        Note the dialect difference: SQLite's ``REAL`` IS double-precision
+        (8 bytes) per the SQLite type-affinity rules, while PostgreSQL's
+        ``REAL`` is single-precision (4 bytes) and would truncate
+        ``time.time()`` values.  This override emits the SQLite-native
+        spelling; PostgreSQL/MySQL use the base/MySQL overrides.
+        """
+        return "REAL"
 
     def json_extract(self, column: str, path: str) -> str:
         _validate_identifier(column)

@@ -188,6 +188,17 @@ class SQLTaskQueue:
             return
 
         _tc = self._conn.dialect.text_column(indexed=True)
+        # W6: timestamps store time.time() values which are 64-bit doubles.
+        # PostgreSQL REAL is single-precision (4 bytes) and silently
+        # truncates current epoch values by ~50 seconds, breaking
+        # requeue_stale's `now - updated_at` math (every fresh row
+        # appears stale-by-nothing or stale-by-negative, depending on
+        # the rounding).  Route through dialect.double_precision_type()
+        # so PostgreSQL gets DOUBLE PRECISION, MySQL gets DOUBLE, and
+        # SQLite gets REAL (which IS double in SQLite — see method
+        # docstring).  Per rules/infrastructure-sql.md § 4 ("use
+        # dialect helper, not hardcoded column declaration").
+        _ts = self._conn.dialect.double_precision_type()
         quoted_table = self._conn.dialect.quote_identifier(self._table)
         await self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {quoted_table} ("
@@ -195,8 +206,8 @@ class SQLTaskQueue:
             f"queue_name {_tc} NOT NULL DEFAULT 'default', "
             "payload TEXT NOT NULL, "
             f"status {_tc} NOT NULL DEFAULT 'pending', "
-            "created_at REAL NOT NULL, "
-            "updated_at REAL NOT NULL, "
+            f"created_at {_ts} NOT NULL, "
+            f"updated_at {_ts} NOT NULL, "
             "attempts INTEGER NOT NULL DEFAULT 0, "
             "max_attempts INTEGER NOT NULL DEFAULT 3, "
             "visibility_timeout INTEGER NOT NULL DEFAULT 300, "

@@ -606,6 +606,8 @@ scheduler = WorkflowScheduler(dispatch_via=dispatcher)
 
 Schema (managed by the underlying `SQLTaskQueue`): `task_id PK, queue_name, payload, status, created_at, updated_at, attempts, max_attempts, visibility_timeout, worker_id, error`. The Task fields are encoded into the `payload` JSON (`schedule_id`, `workflow_blob_json`, `planned_fire_time`, `kwargs`). `workflow_blob_json` carries the JSON-encoded workflow representation (UTF-8 string in the outer JSON) — see §9.4.1.
 
+**Timestamp column types.** `created_at` and `updated_at` store `time.time()` Unix epoch values (8-byte IEEE 754 doubles in Python). The DDL routes through `dialect.double_precision_type()` so each backend gets the type that preserves full precision: PostgreSQL emits `DOUBLE PRECISION`, MySQL emits `DOUBLE`, SQLite emits `REAL` (which IS 8-byte in SQLite — distinct from PostgreSQL's 4-byte `REAL`). `requeue_stale` computes `now - updated_at` for visibility-timeout detection; using a single-precision type silently truncates current epoch values by ~50 seconds and produces negative `elapsed` values on every fresh row.
+
 #### 9.4.1 Workflow serialization (JSON, not pickle)
 
 `Task.workflow_blob` is JSON-encoded UTF-8 bytes produced by `Workflow.to_dict()` then `json.dumps(workflow_dict).encode("utf-8")`. Workers reconstruct via `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
