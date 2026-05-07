@@ -175,9 +175,9 @@ async def test_redaction_at_write_time_in_checkpoint_store_redact(
         checkpoint_store=checkpoint_store,
         checkpoint_after_each_node=True,
     )
-    runtime._classification_policy = classification_policy  # noqa: SLF001
+    runtime._classification_policy = classification_policy  # type: ignore[attr-defined]  # noqa: SLF001
 
-    _, run_id = await runtime.execute_workflow_async(
+    _, _run_id = await runtime.execute_workflow_async(
         workflow,
         inputs={},
         idempotency_key=idempotency_key,
@@ -235,7 +235,7 @@ async def test_redaction_at_write_time_in_checkpoint_store_hash_pk(
         checkpoint_store=checkpoint_store,
         checkpoint_after_each_node=True,
     )
-    runtime._classification_policy = classification_policy  # noqa: SLF001
+    runtime._classification_policy = classification_policy  # type: ignore[attr-defined]  # noqa: SLF001
 
     _, _ = await runtime.execute_workflow_async(
         workflow,

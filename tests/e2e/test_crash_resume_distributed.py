@@ -288,15 +288,48 @@ async def test_sql_task_queue_redelivers_after_worker_sigkill(
         f"it without an ack."
     )
 
-    # 4. Wait past the visibility timeout, then sweep stale.
+    # 4. Wait past the visibility timeout, then sweep stale via a
+    # FRESH connection (avoids the same asyncpg type-info-caching
+    # hazard the sibling local-runtime crash-resume test guards).
     await asyncio.sleep(VISIBILITY_TIMEOUT_SEC + 1.0)
-    queue = SQLTaskQueue(pg_conn, default_visibility_timeout=VISIBILITY_TIMEOUT_SEC)
-    await queue.initialize()
-    requeued = await queue.requeue_stale(queue_name=queue_name)
+    sweep_conn = ConnectionManager(PG_URL)
+    await sweep_conn.initialize()
+    try:
+        # Probe row state for diagnostic context — surfaces the
+        # SDK's `REAL` column-type precision loss if it is the
+        # cause (single-precision floats cannot hold a Unix
+        # timestamp with second precision; current timestamps
+        # round-trip with ~48s drift, making
+        # `now - updated_at` go NEGATIVE).
+        diag_rows = await sweep_conn.fetch(
+            "SELECT updated_at, visibility_timeout, status "
+            "FROM kailash_task_queue WHERE task_id = ?",
+            task_id,
+        )
+        diag_msg = ""
+        if diag_rows:
+            elapsed = time.time() - float(diag_rows[0]["updated_at"])
+            diag_msg = (
+                f" Row state: updated_at-vs-now elapsed={elapsed:.2f}s, "
+                f"visibility_timeout={diag_rows[0]['visibility_timeout']}s, "
+                f"status={diag_rows[0]['status']!r}. "
+                f"NEGATIVE elapsed = SDK column-type precision bug "
+                f"(REAL truncates Unix timestamps by ~48s). "
+                f"See kailash.infrastructure.task_queue.SQLTaskQueue."
+                f"initialize() — created_at/updated_at MUST be "
+                f"DOUBLE PRECISION, not REAL."
+            )
+        queue = SQLTaskQueue(
+            sweep_conn, default_visibility_timeout=VISIBILITY_TIMEOUT_SEC
+        )
+        await queue.initialize()
+        requeued = await queue.requeue_stale(queue_name=queue_name)
+    finally:
+        await sweep_conn.close()
     assert requeued >= 1, (
         f"requeue_stale returned {requeued} — the orphaned task was "
         f"not detected as stale. The queue's visibility-timeout "
-        f"contract is broken."
+        f"contract is broken.{diag_msg}"
     )
 
     # Confirm row returned to 'pending'.

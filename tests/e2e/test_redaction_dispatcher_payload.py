@@ -153,11 +153,14 @@ async def test_dispatcher_payload_hashes_classified_kwargs_at_enqueue(
     raw_pk = "secret-customer-id-A1B2C3D4"
 
     class _CustomerHashPolicy:
-        def get_classification(self, node_id: str, field_name: str):
+        def get_classification(self, _node_id: str, field_name: str):
             # The dispatcher does not have a node_id/field_name shape
             # in the traditional sense; the duck-typed surface accepts
             # either ("kwargs", "<key>") or any equivalent the SDK
             # adopts. Default to HASH_PK for the classified key name.
+            # node_id is part of the duck-typed policy contract but
+            # this branch keys solely on field_name; underscore-
+            # prefixed to silence pyright's unused-parameter check.
             if field_name == "customer_id":
                 return "HASH_PK"
             return None
