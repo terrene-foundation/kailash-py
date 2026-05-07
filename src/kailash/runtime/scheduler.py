@@ -68,6 +68,15 @@ __all__ = [
 # In-Memory Stores"); active-schedule counts in production are O(100s).
 MAX_FIRE_TIMES = 10_000
 
+# Cap on the JSON-encoded workflow blob the queue path serializes. Worker
+# pools dequeue and `json.loads` the payload; without a cap, a workflow
+# whose `to_dict()` produces multi-megabyte output (e.g. a node config
+# carrying a large embedded model bundle) OOMs every dequeueing worker.
+# 8 MiB is generous for legitimate Workflow shapes and tight enough to
+# refuse a poisoned config before it reaches the queue. Documented in
+# `specs/scheduling.md` § "Queue dispatch — payload bounds".
+MAX_WORKFLOW_BLOB_BYTES = 8 * 1024 * 1024  # 8 MiB
+
 _apscheduler_available: Optional[bool] = None
 
 
@@ -575,21 +584,47 @@ class WorkflowScheduler:
             # `kailash.workflow.graph`; workers reconstruct via
             # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
             #
-            # Stub workflows used in unit tests provide their own
-            # `to_dict()` returning a JSON-serializable mapping; if
-            # neither method exists we refuse to serialize rather than
-            # fall back to pickle (`rules/zero-tolerance.md` Rule 3 —
-            # silent fallback to an unsafe path is BLOCKED).
-            if hasattr(workflow, "to_dict") and callable(workflow.to_dict):
+            # Discriminator dispatch on the canonical Workflow type per
+            # `rules/zero-tolerance.md` Rule 3d (dual-shape return +
+            # structural guard = silent fallback). Test stubs that
+            # satisfy the to_dict() protocol are accepted via the
+            # protocol-attribute branch — explicit, not duck-typed.
+            from kailash.workflow.graph import Workflow as _Workflow
+
+            if isinstance(workflow, _Workflow):
+                workflow_dict = workflow.to_dict()
+            elif hasattr(type(workflow), "to_dict") and callable(
+                getattr(type(workflow), "to_dict")
+            ):
+                # Class-level to_dict() — admits Tier-1 stubs that satisfy
+                # the protocol via class definition (NOT instance attr,
+                # which is too permissive and reintroduces the duck-type
+                # silent-fallback pattern).
                 workflow_dict = workflow.to_dict()
             else:
                 raise TypeError(
                     f"workflow_builder.build() returned {type(workflow).__name__} "
-                    f"which is missing to_dict() — queue dispatch requires JSON-"
-                    f"serializable workflow representation. Implement to_dict() "
-                    f"returning a mapping reconstructable via from_dict()."
+                    f"which is not a kailash.workflow.graph.Workflow nor a class "
+                    f"defining to_dict() — queue dispatch requires JSON-"
+                    f"serializable workflow representation. Use Workflow or "
+                    f"a subclass that implements to_dict()."
                 )
             workflow_blob = json.dumps(workflow_dict).encode("utf-8")
+            if len(workflow_blob) > MAX_WORKFLOW_BLOB_BYTES:
+                # Refuse the enqueue before it reaches the queue. Workers
+                # dequeueing this payload would `json.loads` it into
+                # memory; an unbounded blob OOMs every worker. The cap
+                # is enforced at the producer boundary (here) and again
+                # at the queue adapter (defense-in-depth) per
+                # `rules/security.md` § "Input Validation".
+                raise ValueError(
+                    f"workflow_blob size {len(workflow_blob)} bytes exceeds "
+                    f"MAX_WORKFLOW_BLOB_BYTES ({MAX_WORKFLOW_BLOB_BYTES} bytes / "
+                    f"{MAX_WORKFLOW_BLOB_BYTES // (1024 * 1024)} MiB). Workflow "
+                    f"is too large to dispatch through the queue path; reduce "
+                    f"the workflow surface (split into sub-workflows, externalize "
+                    f"large data) or use in-process dispatch (dispatch_via=None)."
+                )
         except Exception:
             logger.exception(
                 "scheduler.dispatch.serialize_failed schedule_id=%s task_id_hash=%s",

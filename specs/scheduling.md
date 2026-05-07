@@ -658,6 +658,32 @@ The capture is symmetric: `EVENT_JOB_EXECUTED | EVENT_JOB_ERROR` listener clears
 
 Stability across multi-instance schedulers: every instance receives the same `scheduled_run_times` from APScheduler for the same trigger fire, so `compute_task_id(schedule_id, fire_time)` produces the SAME `task_id` and the queue layer dedups via PRIMARY KEY.
 
+### 9.10 Payload bounds
+
+`WorkflowScheduler` enforces an 8 MiB cap on the JSON-serialized workflow_blob at the producer boundary. `MAX_WORKFLOW_BLOB_BYTES = 8 * 1024 * 1024` is defined at `src/kailash/runtime/scheduler.py`; if `len(json.dumps(workflow.to_dict()).encode("utf-8")) > MAX_WORKFLOW_BLOB_BYTES`, the dispatch callback raises `ValueError` BEFORE constructing a `Task` and BEFORE invoking the dispatcher's `enqueue`. The error message names the actual blob size, the cap, and the remediation paths (split sub-workflows, externalize large inputs, fall back to in-process dispatch via `dispatch_via=None`).
+
+`SQLTaskQueue.enqueue` enforces the same 8 MiB cap on the outer payload as defense-in-depth at the consumer boundary. `MAX_PAYLOAD_BYTES` is defined at `src/kailash/infrastructure/task_queue.py`; callers bypassing the scheduler and writing directly to the queue still encounter the cap. The duplicate enforcement is intentional — neither layer trusts the other to have validated.
+
+`SQLTaskQueue.enqueue` also validates caller-supplied `task_id`: length must be in `[1, 128]` characters and the value must match `[a-zA-Z0-9_-]+`. UUIDs (auto-generated default) and `compute_task_id()` outputs both pass. Validation is applied via `_validate_task_id()` in the same module. The validation closes the dedup-namespace-poisoning vector where a caller could choose a `task_id` that shadows a legitimate stable-hash output.
+
+### 9.11 Operator runbook — purge cadence
+
+The queue table grows monotonically with every successful enqueue. Operators MUST schedule periodic `SQLTaskQueue.purge_completed(queue_name, older_than=...)` calls to drop rows in terminal status (`completed`, `dead_lettered`); without periodic purge, the table fills disk over the deployment's lifetime.
+
+`SQLTaskQueueDispatcher` exposes an optional `soft_row_cap` constructor kwarg (keyword-only) that emits a structured WARN log when the queue table holds more than `soft_row_cap` rows for the target queue at enqueue time. The WARN is rate-limited to once per minute per `queue_name` to prevent log flooding under sustained over-cap conditions. When `soft_row_cap` is `None` (default), no row-count check fires and no warning emits.
+
+The cap is operational signal — it does NOT refuse the enqueue. Refusing would silently drop scheduled work; a noisy log is the correct trade-off because operator action (call `purge_completed` or raise the cap) restores headroom without losing fires. Recommended `soft_row_cap` range is 100,000 - 1,000,000 depending on purge cadence and average task lifetime.
+
+```python
+from kailash.db.connection import ConnectionManager
+from kailash.infrastructure.task_queue import SQLTaskQueueDispatcher
+
+conn = ConnectionManager("postgresql://...")
+dispatcher = SQLTaskQueueDispatcher(conn, soft_row_cap=500_000)
+# every enqueue past 500k rows in the queue emits a WARN log
+# `task.queue.over_cap queue_name=… rows=… soft_row_cap=500000 remediation=call_purge_completed_or_raise_cap`
+```
+
 ---
 
 ## 10. Constraints and Limitations
