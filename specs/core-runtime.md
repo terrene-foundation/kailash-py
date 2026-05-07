@@ -1,9 +1,9 @@
 # Kailash Core SDK — Runtime Execution, Cycles, Resilience, Errors
 
-Version: 2.8.5
+Version: 2.8.6
 Status: Authoritative domain truth document
 Parent domain: Core SDK (split from `core-sdk.md` per specs-authority Rule 8)
-Scope: LocalRuntime, AsyncLocalRuntime, DistributedRuntime, runtime factory, return contract, cycle/loop support, resilience patterns (retry/circuit breaker/DLQ/fallback), error handling, usage patterns, key invariants
+Scope: LocalRuntime, AsyncLocalRuntime, DistributedRuntime, runtime factory, return contract, cycle/loop support, resilience patterns (retry/circuit breaker/DLQ/fallback), error handling, usage patterns, key invariants, durable execution (checkpoint + on_node_complete hooks)
 
 Sibling files: `core-nodes.md` (node architecture), `core-workflows.md` (builder + workflow + validation), `core-servers.md` (server variants + gateway)
 
@@ -289,6 +289,208 @@ ALL runtime `execute()` methods return `tuple[dict[str, Any], str | None]`:
 - **Element 1**: Run ID string or `None`. Format is typically `f"run_{int(time.time() * 1000)}"`.
 
 This contract is invariant across `LocalRuntime.execute()`, `LocalRuntime.execute_async()`, `AsyncLocalRuntime.execute()`, `AsyncLocalRuntime.execute_async()`, and `AsyncLocalRuntime.execute_workflow_async()`.
+
+### 4.6 Durable Execution
+
+Per-node checkpointing + a multi-subscriber node-completion hook are wired
+into both `LocalRuntime` and `AsyncLocalRuntime`. The wiring is opt-in —
+callers that do not pass `checkpoint_store=` AND do not register a
+subscriber via `runtime.on_node_complete(...)` see no behavior change.
+
+#### 4.6.1 Constructor kwargs
+
+`LocalRuntime` and `AsyncLocalRuntime` (the latter via inheritance) accept
+three additional kwargs:
+
+```python
+LocalRuntime(
+    ...,
+    checkpoint_store: Any | None = None,
+    checkpoint_after_each_node: bool = False,
+    history_store: Any | None = None,
+)
+```
+
+- `checkpoint_store` — any object exposing the async `save(key, data)` /
+  `load(key)` protocol. The reference implementation is
+  `kailash.infrastructure.checkpoint_store.DBCheckpointStore` (table
+  `kailash_checkpoints`, dialect-portable via `ConnectionManager`).
+- `checkpoint_after_each_node` — when `True` AND `checkpoint_store` is
+  set, the runtime persists a checkpoint blob after each node completes.
+- `history_store` — accepted as a placeholder; the runtime does not yet
+  invoke it. Reserved for the W2 history-store wave.
+
+#### 4.6.2 execute() / execute_async() / execute_workflow_async() kwargs
+
+```python
+runtime.execute(
+    workflow,
+    *,
+    idempotency_key: str | None = None,
+    force_resume_with_drift: bool = False,
+    ...,
+)
+```
+
+Both `LocalRuntime.execute()` / `LocalRuntime.execute_async()` and
+`AsyncLocalRuntime.execute_workflow_async()` accept these keyword-only
+kwargs. Behavior:
+
+- `idempotency_key` — caller-supplied string. When set AND a checkpoint
+  store is configured, the runtime computes a stable checkpoint key
+  via `build_checkpoint_key(workflow_fingerprint, idempotency_key,
+  parameters, tenant_id=...)` and looks for a prior blob.
+  - If a prior blob exists AND its persisted `workflow_fingerprint`
+    equals the current workflow's fingerprint, the blob's
+    `ExecutionTracker` is restored — already-completed nodes are
+    skipped and their cached outputs replayed.
+  - If a prior blob exists AND fingerprints differ, the runtime
+    raises `WorkflowShapeDriftError` (see §4.6.4).
+- `force_resume_with_drift` — when `True`, suppresses the
+  `WorkflowShapeDriftError` and proceeds against the new shape. The
+  prior checkpoint's cached outputs remain in the tracker but are
+  invalidated for nodes whose shape has changed.
+
+#### 4.6.3 runtime.on_node_complete(callback)
+
+```python
+unsubscribe = runtime.on_node_complete(callback)
+# ...
+unsubscribe()  # remove the subscriber
+```
+
+`callback` is a callable that takes one
+`kailash.runtime.durable.NodeCompletionEvent`. Both sync and async
+callbacks are supported — the registry detects coroutine returns and
+awaits them. The registry supports multiple subscribers; subscribers
+fire in registration order. Subscriber exceptions are caught and logged
+at WARN level — a misbehaving subscriber MUST NOT take down workflow
+execution.
+
+The event passed to subscribers is **post-redaction** — classified PKs
+are hashed via `pk:` prefix and classified field names are partitioned
+into a `metadata["classification_summary"]` summary
+(`unclassified_fields` list + `classified_field_count` int). See
+`rules/event-payload-classification.md` MUST Rules 1–3.
+
+#### 4.6.4 WorkflowShapeDriftError
+
+```python
+from kailash.runtime.durable import WorkflowShapeDriftError
+```
+
+Raised by `execute()` / `execute_async()` /
+`execute_workflow_async()` when an `idempotency_key` resume targets a
+workflow whose structural fingerprint differs from the persisted
+checkpoint's. Carries `idempotency_key`, `stored_fingerprint`, and
+`current_fingerprint` attributes for forensic diagnosis.
+
+The default disposition is to refuse — same structural-confirmation
+pattern as `git reset --hard` (must verify clean tree),
+`MigrationManager.apply_downgrade(force_downgrade=True)`,
+and DataFlow's identifier safety `force_drop=True`. Callers who explicitly
+want to discard the prior checkpoint pass `force_resume_with_drift=True`.
+
+#### 4.6.5 NodeCompletionEvent
+
+```python
+@dataclass(frozen=True)
+class NodeCompletionEvent:
+    run_id: str | None
+    workflow_id: str
+    workflow_fingerprint: str
+    node_id: str
+    node_type: str
+    outputs: Mapping[str, Any]
+    started_at: datetime
+    ended_at: datetime
+    duration_ms: int
+    tenant_id: str | None = None
+    idempotency_key: str | None = None
+    error: str | None = None
+    metadata: Mapping[str, Any] = ...
+```
+
+Frozen dataclass — subscribers MUST NOT mutate. `to_dict()` /
+`from_dict()` provide JSON-friendly round-trip. The `outputs` dict and
+`metadata` dict received by subscribers have already been routed through
+`redact_event_for_persistence`.
+
+#### 4.6.6 Checkpoint table
+
+`DBCheckpointStore` writes to table `kailash_checkpoints`:
+
+| Column           | Type                                                        |
+| ---------------- | ----------------------------------------------------------- |
+| `checkpoint_key` | TEXT PRIMARY KEY (namespace `kailash.runtime.checkpoint.*`) |
+| `data`           | BLOB / BYTEA — UTF-8 JSON (see §4.6.7)                      |
+| `size_bytes`     | INTEGER                                                     |
+| `compressed`     | BOOLEAN                                                     |
+| `created_at`     | TEXT (ISO-8601 UTC)                                         |
+| `accessed_at`    | TEXT (ISO-8601 UTC)                                         |
+
+Saves are upserts (atomic). Reads update `accessed_at`.
+
+#### 4.6.7 Checkpoint blob format
+
+`encode_checkpoint_payload` produces UTF-8 JSON:
+
+```json
+{
+  "version": 1,
+  "workflow_fingerprint": "<sha256-hex>",
+  "tenant_id": "<tenant-or-null>",
+  "workflow_id": "<workflow-id>",
+  "idempotency_key": "<caller-supplied-or-null>",
+  "saved_at": "<iso-8601-utc>",
+  "tracker": {
+    "completed_nodes": ["node_a", "node_b"],
+    "node_outputs": { "node_a": { ... }, "node_b": { ... } }
+  }
+}
+```
+
+`decode_checkpoint_payload` raises `ValueError` on missing required
+fields (`workflow_fingerprint`, `tracker`) or on a non-UTF-8 / non-JSON
+blob. The runtime-layer typed-error gate per
+`rules/zero-tolerance.md` Rule 3a.
+
+#### 4.6.8 Atomicity, tenant isolation, observability
+
+- **Atomicity** — `LocalRuntime` and `AsyncLocalRuntime` keep an
+  `asyncio.Lock` per `run_id` (or per checkpoint key when `run_id` is
+  absent). The lock serialises the `store.save()` against the per-node
+  hot path's tracker mutations. `LocalRuntime` is sequential so the
+  lock is uncontended; `AsyncLocalRuntime`'s parallel-branch path
+  contends and the lock is mandatory.
+- **Tenant isolation** — `resolve_tenant_id(self)` consults
+  `runtime.user_context.tenant_id` then
+  `kailash.trust.auth.context.get_current_tenant_id()`; returns
+  `None` for single-tenant deployments. The `tenant_id` is one
+  partition dimension of `build_checkpoint_key` so a tenant cannot
+  read another tenant's checkpoint by guessing or replaying the same
+  `idempotency_key`.
+- **Observability** — checkpoint save failures emit a WARN log with
+  `node_id_hash` (first 8 hex of sha256, NOT the raw schema name per
+  `rules/observability.md` Rule 8) and `error_type` only. The blob's
+  contents and the workflow's fingerprint are NEVER logged at WARN
+  or higher.
+
+#### 4.6.9 Surfaces NOT YET shipped
+
+The W1 wave ships the runtime hook + checkpoint persistence. Sibling
+surfaces deferred to later waves:
+
+- **History store** — `history_store=` kwarg is accepted but the runtime
+  does not yet invoke it. The W2 wave wires a history-store subscriber
+  through `runtime.on_node_complete(...)` so events flow without
+  changing the runtime hot path again.
+- **Dispatcher** — the W3 wave introduces a multi-runtime dispatcher
+  that fans events out to N subscribers across processes. The W1
+  registry is process-local.
+- **DurableExecutionEngine** — the W4 wave introduces a higher-level
+  engine that composes the W1 / W2 / W3 surfaces. Until then, callers
+  use `LocalRuntime(checkpoint_store=...)` directly.
 
 ---
 

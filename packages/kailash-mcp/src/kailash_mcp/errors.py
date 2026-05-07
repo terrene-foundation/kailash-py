@@ -613,7 +613,14 @@ class ErrorAggregator:
         buckets = []
         bucket_start = oldest_error
 
-        while bucket_start < now:
+        # Use ``do-while`` semantics so a single fresh error (oldest_error
+        # ≈ now, common in unit tests and fast services) still emits one
+        # bucket containing it.  Without this guard, the ``while bucket_start
+        # < now`` loop never executes when wall-clock skew is sub-second,
+        # and the caller sees an empty trends list despite having recorded
+        # errors — surfaced as a flaky test under pre-commit's full-suite
+        # run order.
+        while True:
             bucket_end = bucket_start + bucket_size
             bucket_errors = [
                 e for e in self.errors if bucket_start <= e.timestamp < bucket_end
@@ -629,6 +636,8 @@ class ErrorAggregator:
             )
 
             bucket_start = bucket_end
+            if bucket_start >= now:
+                break
 
         return buckets
 
