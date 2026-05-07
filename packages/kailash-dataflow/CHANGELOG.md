@@ -1,5 +1,18 @@
 # DataFlow Changelog
 
+## [2.8.1] — 2026-05-07 — append-only enforcement orphan polish
+
+Patch bump shipping defense-in-depth around the append-only model contract from 2.8.0. No public API change.
+
+### Fixed
+
+- **#857 — `AppendOnlyForbiddenNode` `__new__` bypass closure (PR #868)** — `AppendOnlyForbiddenNode.run()` now raises `AppendOnlyViolationError` from the runtime path so callers that bypass `__init__` (via `__new__` or pickle round-trip) still get the typed exception when the node attempts to execute. Closes a structural gap where the `__init__`-only guard could be sidestepped.
+- **#857 — `bulk_upsert` defense-in-depth comment (PR #868)** — clarifies that the inner-coroutine append-only guard is intentional defense-in-depth alongside the outer-body guard. The outer-body guard fires on the synchronous validation path; the inner-coroutine guard catches any future refactor that bypasses outer validation.
+
+### Tests
+
+- 1 Tier-2 regression test confirms `AppendOnlyForbiddenNode().run()` raises `AppendOnlyViolationError` even when `__init__` is bypassed.
+
 ## [2.8.0] — 2026-05-06 — append-only models + asyncpg DSN normalization
 
 Minor bump shipping a new public API (`@db.model(append_only=True)` + `AppendOnlyViolationError`) plus an asyncpg DSN normalization fix and the orphan-fix that wires the append-only enforcement into every express mutation method.

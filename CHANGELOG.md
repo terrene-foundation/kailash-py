@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-05-07
+
+Minor bump shipping two new public APIs on the runtime + scheduler surface — durable execution checkpoints and pluggable scheduler dispatch — plus a series of W1/W3 hardening fixes from the parallel implementation work.
+
+### Added
+
+- **`LocalRuntime` / `AsyncLocalRuntime` checkpoint hook (#860, PR #869)** — both runtimes now expose `runtime.on_node_complete` (callable) and route every node completion through the durable-execution wiring at `src/kailash/runtime/durable.py`. Workflows can opt into per-node checkpoint persistence by configuring an `ExecutionTracker`; sync workflows route through the same hook path as async, so checkpoint behavior is identical across both runtimes. 33 new Tier-2 integration tests cover the wiring end-to-end.
+- **`WorkflowScheduler` dispatch_via= parameter (#859, PR #870)** — `WorkflowScheduler` accepts an optional `dispatch_via=Dispatcher` parameter to route scheduled workflow firings through a pluggable dispatcher. Ships `Dispatcher` ABC + `Task` frozen dataclass + `compute_task_id` helper at `src/kailash/runtime/dispatcher.py`, and a built-in `SQLTaskQueueDispatcher` adapter that bridges to `src/kailash/infrastructure/task_queue.py` for distributed dispatch. APScheduler integration uses `scheduled_run_times[-1]` (real event API) + `EVENT_JOB_SUBMITTED` listener for accurate `planned_fire_time`. 47 new Tier-2 integration tests (32 baseline + 15 security-hardening regressions).
+
+### Fixed
+
+- **W1 — `_checkpoint_locks` bounded LRU (PR #869)** — replaced unbounded dict with `OrderedDict` LRU eviction so long-lived runtimes do not leak lock objects per workflow_id.
+- **W1 — narrowed `resolve_tenant_id` exception handling (PR #869)** — now catches only `ImportError` and `AttributeError` (the legitimate optional-dependency failure modes) and emits a WARN-once on first miss, instead of swallowing all exceptions.
+- **W1 — `_hash_pk` handles unhashable `__str__` (PR #869)** — sentinel-based fallback for objects whose `__str__` raises, avoiding crashes on poisoned primary keys.
+- **W1 — fail-CLOSED in `redact_event_for_persistence` on policy lookup errors (PR #869)** — security-relevant path now refuses to persist when the classification policy cannot be resolved, rather than persisting unredacted.
+- **W3 — security hardening (PR #870, commits `66e76106`, `ff63504d`)** — JSON workflow_blob serialization, bounded `_fire_times` queue, frozen dataclasses on Task, multi-tenant queue isolation documented, payload size bounds, dispatcher discriminator validation.
+
+### Tests
+
+- 33 Tier-2 integration tests for durable execution wiring (sync + async runtimes).
+- 47 Tier-2 integration tests for scheduler dispatch (32 baseline + 15 Round 2 security regressions).
+
 ## [2.13.5] - 2026-05-06
 
 ### Security
