@@ -44,7 +44,28 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+)
+
+# ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
+# Default is None (auto-detect at build time: "both" with dispatcher,
+# "in_process_only" without). See DurableExecutionEngineBuilder.execution_mode.
+ExecutionMode = Literal["in_process_only", "dispatch_only", "both"]
+_VALID_EXECUTION_MODES: Tuple[ExecutionMode, ...] = (
+    "in_process_only",
+    "dispatch_only",
+    "both",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1126,13 +1147,18 @@ class DurableExecutionEngine:
       hook registry at construction time. The engine does NOT call
       ``runtime.on_node_complete(history_store.record_event)`` separately
       — doing so would double-register the subscriber.
-    * ``dispatcher`` is consulted ONLY when configured. When set,
-      :meth:`execute` enqueues a fire-time :class:`Task` via the
-      dispatcher in addition to running the workflow in-process. The
-      enqueue is best-effort observability of the run; dispatcher
-      failures emit a WARN log and do NOT abort the in-process
-      execution. Future: a worker-pool variant that defers execution
-      entirely to the dispatcher would override :meth:`execute`.
+    * ``dispatcher`` is consulted only when configured AND
+      :attr:`execution_mode` selects a dispatching path
+      (``"both"`` or ``"dispatch_only"``). When set under ``"both"``,
+      :meth:`execute` enqueues a fire-time :class:`Task` BEFORE running
+      the workflow in-process; the enqueue and the in-process run race,
+      and the structural defense is layered (dispatcher PRIMARY KEY
+      idempotency on ``task_id`` prevents duplicate enqueue; W1
+      checkpoint resume short-circuits the second runner). Callers
+      who need to eliminate the race entirely set
+      ``execution_mode="in_process_only"`` (skip enqueue) or
+      ``"dispatch_only"`` (skip the in-process runtime call). See
+      :meth:`execute` Routing notes (issue #882).
 
     Immutability
     ------------
@@ -1151,6 +1177,7 @@ class DurableExecutionEngine:
         idempotency_key_default: Optional[str],
         runtime_factory: Callable[..., Any],
         runtime_kwargs: Optional[Mapping[str, Any]],
+        execution_mode: ExecutionMode,
     ) -> None:
         """Construct an engine. Use :meth:`builder` for the public path."""
         # Build the wrapped runtime via the caller-supplied factory,
@@ -1190,6 +1217,7 @@ class DurableExecutionEngine:
         self._history_store = history_store
         self._dispatcher = dispatcher
         self._idempotency_key_default = idempotency_key_default
+        self._execution_mode: ExecutionMode = execution_mode
 
     # -- Public properties ---------------------------------------------
 
@@ -1229,6 +1257,17 @@ class DurableExecutionEngine:
     def idempotency_key_default(self) -> Optional[str]:
         """The default idempotency key applied when ``execute`` omits it."""
         return self._idempotency_key_default
+
+    @property
+    def execution_mode(self) -> ExecutionMode:
+        """The resolved execution mode for ``execute()`` calls.
+
+        One of ``"in_process_only"``, ``"dispatch_only"``, or ``"both"``.
+        Set explicitly via :meth:`DurableExecutionEngineBuilder.execution_mode`,
+        or auto-detected at build time (``"both"`` when a dispatcher is
+        configured, ``"in_process_only"`` otherwise).
+        """
+        return self._execution_mode
 
     # -- Builder factory -----------------------------------------------
 
@@ -1292,6 +1331,44 @@ class DurableExecutionEngine:
         who want best-effort dispatch should construct a custom
         :class:`~kailash.runtime.dispatcher.Dispatcher` whose ``enqueue``
         catches its own failures.
+
+        Routing — execution_mode contract (issue #882)
+        ----------------------------------------------
+        The branch taken is determined by :attr:`execution_mode`:
+
+        * ``"in_process_only"`` — runs in-process; skips enqueue even if
+          a dispatcher is configured. Returns ``(results, run_id)`` from
+          the wrapped runtime.
+        * ``"dispatch_only"`` — enqueues only; the wrapped runtime is
+          NOT invoked. Returns ``({}, schedule_id)`` so callers can
+          correlate downstream worker output via
+          ``engine.history.get_run(schedule_id, ...)``. The empty
+          ``results`` dict is the explicit "no in-process completion"
+          sentinel.
+        * ``"both"`` — enqueues AND runs in-process. The two paths race;
+          structural defenses below contain the blast radius.
+
+        When ``"both"`` is configured, two actors (the in-process engine
+        and a worker polling the queue) hold claims to the same task at
+        once. The structural defenses are layered:
+
+        * Dispatcher ``task_id`` PRIMARY KEY idempotency (``Dispatcher``
+          MUST Rule 1) prevents duplicate ENQUEUE — but does NOT prevent
+          two different runners from each executing the same enqueued
+          task once.
+        * W1 checkpoint resume short-circuits the second runner: when
+          the in-process path completes a node and emits a checkpoint
+          under the same ``idempotency_key``, the worker's subsequent
+          ``runtime.execute_workflow_async(idempotency_key=...)`` resolves
+          to the checkpoint and skips the already-completed nodes.
+        * Race window: between enqueue and the in-process path emitting
+          its first checkpoint, a worker that picks up the task can
+          start executing nodes that the in-process path will then
+          re-execute. The in-tree :class:`SQLTaskQueueDispatcher` worker
+          + W1 checkpoint resume contain this; custom Dispatchers MUST
+          honor the same ``idempotency_key`` resume contract or callers
+          MUST switch to ``"in_process_only"`` / ``"dispatch_only"`` to
+          eliminate the race entirely.
         """
         effective_inputs: Dict[str, Any] = (
             dict(inputs) if isinstance(inputs, Mapping) else {}
@@ -1302,16 +1379,20 @@ class DurableExecutionEngine:
             else self._idempotency_key_default
         )
 
+        do_dispatch = self._execution_mode in ("dispatch_only", "both")
+        do_in_process = self._execution_mode in ("in_process_only", "both")
+
         # Dispatch happens BEFORE in-process execution when configured —
         # the W3 contract treats enqueue as the durable record of intent.
         # If the dispatcher rejects the enqueue, in-process execution does
-        # NOT proceed (the operator surfaced a real error). Workers polling
-        # the queue will pick up the same task; idempotency on the
-        # dispatcher's ``task_id`` (Dispatcher MUST Rule 1) prevents
-        # double-execution by the worker if the in-process engine already
-        # ran the workflow.
+        # NOT proceed (the operator surfaced a real error). See the
+        # docstring "Routing" section for the full layered-defense story
+        # against the enqueue/in-process race window.
         run_id_hint: Optional[str] = None
-        if self._dispatcher is not None:
+        if do_dispatch:
+            # Builder.build() guarantees self._dispatcher is not None for
+            # any mode where do_dispatch is True; the typed delegate guard
+            # in _enqueue_for_run carries the actionable error message.
             run_id_hint = await self._enqueue_for_run(
                 workflow=workflow,
                 inputs=effective_inputs,
@@ -1320,30 +1401,51 @@ class DurableExecutionEngine:
                 queue_name=queue_name,
             )
 
-        # In-process execution. The runtime drives W1 (checkpoint emit)
-        # and W2 (history record) via its own hook registry.
-        results, run_id = await self._runtime.execute_workflow_async(
-            workflow,
-            inputs=effective_inputs,
-            idempotency_key=effective_key,
-            force_resume_with_drift=force_resume_with_drift,
-        )
-        # If the dispatcher returned a hint, the schedule_id and the
-        # in-process run_id are correlated via the engine's WARN log line
-        # so operators reading queue rows can find the matching history
-        # row without spelunking.
-        if run_id_hint is not None:
-            logger.info(
-                "durable.engine.execute.dispatched_and_executed",
-                extra={
-                    "schedule_id": run_id_hint,
-                    "run_id": run_id,
-                    "queue_name": queue_name,
-                    "has_history_store": self._history_store is not None,
-                    "has_checkpoint_store": self._checkpoint_store is not None,
-                },
+        if do_in_process:
+            # In-process execution. The runtime drives W1 (checkpoint emit)
+            # and W2 (history record) via its own hook registry.
+            results, run_id = await self._runtime.execute_workflow_async(
+                workflow,
+                inputs=effective_inputs,
+                idempotency_key=effective_key,
+                force_resume_with_drift=force_resume_with_drift,
             )
-        return results, run_id
+            # If the dispatcher returned a hint, the schedule_id and the
+            # in-process run_id are correlated via the engine's INFO log
+            # line so operators reading queue rows can find the matching
+            # history row without spelunking.
+            if run_id_hint is not None:
+                logger.info(
+                    "durable.engine.execute.dispatched_and_executed",
+                    extra={
+                        "schedule_id": run_id_hint,
+                        "run_id": run_id,
+                        "queue_name": queue_name,
+                        "has_history_store": self._history_store is not None,
+                        "has_checkpoint_store": self._checkpoint_store is not None,
+                    },
+                )
+            return results, run_id
+
+        # dispatch_only — return the schedule_id as the run identifier so
+        # callers can correlate worker output via the history store. The
+        # empty ``results`` dict is the explicit "no in-process completion"
+        # sentinel; callers SHOULD branch on execution_mode rather than on
+        # results-emptiness to distinguish dispatch-only from a real run
+        # that produced no node outputs.
+        logger.info(
+            "durable.engine.execute.dispatched_only",
+            extra={
+                "schedule_id": run_id_hint,
+                "queue_name": queue_name,
+                "has_history_store": self._history_store is not None,
+                "has_checkpoint_store": self._checkpoint_store is not None,
+            },
+        )
+        # run_id_hint is non-None here because do_dispatch was True;
+        # cast for the typed return contract.
+        assert run_id_hint is not None  # noqa: S101 — invariant from do_dispatch
+        return {}, run_id_hint
 
     # -- Internals -----------------------------------------------------
 
@@ -1462,6 +1564,9 @@ class DurableExecutionEngineBuilder:
         self._idempotency_key_default: Optional[str] = None
         self._runtime_factory: Optional[Callable[..., Any]] = None
         self._runtime_kwargs: Dict[str, Any] = {}
+        # None = auto-detect at build() (preserves pre-issue-882 behaviour:
+        # "both" with dispatcher, "in_process_only" without).
+        self._execution_mode: Optional[ExecutionMode] = None
 
     # -- Setters --------------------------------------------------------
 
@@ -1524,6 +1629,44 @@ class DurableExecutionEngineBuilder:
         self._runtime_factory = runtime_factory
         return self
 
+    def execution_mode(self, mode: ExecutionMode) -> "DurableExecutionEngineBuilder":
+        """Set the execution-routing contract for ``execute()`` (issue #882).
+
+        ``"in_process_only"``
+            Run the workflow in-process; skip the dispatcher even if
+            :meth:`dispatch_via` is also set. Eliminates the
+            enqueue/in-process race entirely. The dispatcher (if
+            configured) is retained on the engine for inspection
+            (``engine.dispatcher``) but ``execute()`` does not enqueue.
+
+        ``"dispatch_only"``
+            Enqueue the task; do NOT invoke the wrapped runtime.
+            ``execute()`` returns ``({}, schedule_id)``. Requires a
+            dispatcher — :meth:`build` raises ``ValueError`` if no
+            dispatcher is configured.
+
+        ``"both"``
+            Enqueue AND run in-process. The two paths race; W1
+            checkpoint resume + dispatcher PRIMARY KEY idempotency
+            contain the blast radius for the in-tree
+            :class:`SQLTaskQueueDispatcher`. Custom Dispatchers MUST
+            honor the same ``idempotency_key`` resume contract.
+            Requires a dispatcher — :meth:`build` raises if absent.
+
+        Calling ``.execution_mode(None)`` (or omitting the call) defers
+        to the auto-detect at :meth:`build` time:
+        ``"both"`` when a dispatcher is configured, ``"in_process_only"``
+        otherwise. This is the pre-issue-882 default and matches
+        existing call-site behaviour.
+        """
+        if mode is not None and mode not in _VALID_EXECUTION_MODES:
+            raise ValueError(
+                f"DurableExecutionEngineBuilder.execution_mode(): mode must "
+                f"be one of {_VALID_EXECUTION_MODES} or None, got {mode!r}"
+            )
+        self._execution_mode = mode
+        return self
+
     def runtime_kwargs(
         self, kwargs: Mapping[str, Any]
     ) -> "DurableExecutionEngineBuilder":
@@ -1573,6 +1716,26 @@ class DurableExecutionEngineBuilder:
         else:
             factory = self._runtime_factory
 
+        # Resolve execution_mode. None = auto-detect (issue #882): "both"
+        # when a dispatcher is configured, "in_process_only" otherwise.
+        # Explicit "both" / "dispatch_only" REQUIRE a dispatcher; raise
+        # ValueError to surface the misconfiguration at build time rather
+        # than at the first execute() call.
+        if self._execution_mode is None:
+            effective_mode: ExecutionMode = (
+                "both" if self._dispatcher is not None else "in_process_only"
+            )
+        else:
+            effective_mode = self._execution_mode
+            if effective_mode in ("both", "dispatch_only") and self._dispatcher is None:
+                raise ValueError(
+                    "DurableExecutionEngineBuilder.build(): execution_mode="
+                    f"{effective_mode!r} requires a dispatcher; call "
+                    ".dispatch_via(<Dispatcher>) before .build(), or use "
+                    'execution_mode="in_process_only" for runtime-only '
+                    "execution."
+                )
+
         return DurableExecutionEngine(
             checkpoint_store=self._checkpoint_store,
             history_store=self._history_store,
@@ -1580,4 +1743,5 @@ class DurableExecutionEngineBuilder:
             idempotency_key_default=self._idempotency_key_default,
             runtime_factory=factory,
             runtime_kwargs=self._runtime_kwargs,
+            execution_mode=effective_mode,
         )
