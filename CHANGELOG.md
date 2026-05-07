@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-05-07
+
+Minor release shipping Wave 2 of the runtime-integration-trio: first-party persistent workflow history. Subscribes to v2.14.x's `runtime.on_node_complete` hook and persists per-node `NodeCompletionEvent` records to a queryable, tenant-isolated audit log. Closes #861.
+
+### Added
+
+- **`kailash.infrastructure.history_store` (PR #875)** — new public module exporting `WorkflowHistoryStore` (ABC) + `PostgresHistoryStore` + `SQLiteHistoryStore` + `DowngradeRefusedError`. Dialect-portable schema (`workflow_runs` + `workflow_run_events`), write-time redaction via `redact_event_for_persistence`, 30-day retention TTL on `terminal_at` (NOT `started_at`), per-tenant cap (default 10,000) with WARN log on oldest-row eviction, and `delete_runs_older_than(*, force_downgrade=True)` destructive-confirmation gate per `rules/schema-migration.md` Rule 7. ~895 LOC, 29 Tier-1 unit tests + 6 Tier-2 wiring tests (real Postgres) + 1 Tier-3 redaction E2E.
+- **`LocalRuntime(history_store=...)` auto-subscribe (PR #875)** — `LocalRuntime.__init__` accepts a non-None `history_store=` and registers `history_store.record_event` against the W1 hook registry at construction time. `AsyncLocalRuntime` inherits the wiring via `super().__init__(**kwargs)`. A history store lacking a callable `record_event` raises a typed `TypeError` at construction (per `rules/zero-tolerance.md` Rule 3a).
+
+### Security
+
+- **Tenant isolation, defense-in-depth (PR #875)** — `get_run_events` events fetch JOINs `workflow_runs` with `WHERE r.tenant_id = ?` predicate at the data-fetch level (not just an existence pre-check). Cross-tenant reads are BLOCKED at the store layer.
+- **Concurrent record_event serialisation (PR #875)** — per-run `asyncio.Lock` LRU cache (mirroring W1's `_checkpoint_locks` pattern at `kailash/runtime/local.py:843-909`) serialises concurrent writers per `run_id`. Closes the `MAX(event_seq) + 1` race under READ COMMITTED isolation that would otherwise collide with the `UNIQUE(run_id, event_seq)` constraint under future parallel-branch dispatch surfaces or shared-store deployments. Bound `_MAX_RUN_LOCKS = 10_000` per `rules/infrastructure-sql.md` Rule 7.
+
+### Notes
+
+- Six lower-severity audit findings (M-2 sample_run_id hashing, M-3 None run_id disposition, L-1 cross-tenant retention scope, L-2 batch DELETEs, L-3 sweep throttling, L-4 json.dumps coercion) are tracked in #876 — none are blockers per security-reviewer agreement.
+- All 7 framework packages (kailash-dataflow, kailash-kaizen, kailash-nexus, kailash-mcp, kailash-pact, kailash-ml, kailash-align) bump their `kailash>=` dependency-pin floor from `2.14.0` to `2.15.0` even though their own source is unchanged this cycle, per the SDK-dependency-pin-update rule in `deploy/deployment-config.md`. No sibling drift — all 7 framework packages were AT-PARITY with PyPI at release-time enumeration.
+
 ## [2.14.1] - 2026-05-07
 
 Patch release shipping the #871 SQLite job-store security hardening that landed on `main` (commit `597d4736`, PR #873) after v2.14.0 was cut earlier the same day. No other changes since v2.14.0.
