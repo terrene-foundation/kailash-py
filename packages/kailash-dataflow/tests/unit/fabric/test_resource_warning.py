@@ -175,7 +175,16 @@ class TestPipelineExecutorResourceWarning:
 
 
 class TestConnectionManagerResourceWarning:
-    """ConnectionManager.__del__ must warn when the pool is still initialized."""
+    """ConnectionManager.__del__ is a no-op since #835.
+
+    Pre-#835, ConnectionManager retained ``self._adapter`` owning an asyncpg
+    pool, and ``__del__`` emitted ``ResourceWarning`` when the manager was
+    GC'd while still initialized. Post-#835 (PR #856), ``initialize_pool`` is
+    a transient reachability check; long-lived pools are owned by
+    ``AsyncSQLDatabaseNode._get_adapter()`` and reaped via
+    ``WeakValueDictionary`` on loop close. The leak surface this finalizer
+    used to guard does not exist on ConnectionManager anymore.
+    """
 
     def _make_manager(self, initialized: bool):
         from dataflow.utils.connection import ConnectionManager
@@ -185,8 +194,13 @@ class TestConnectionManagerResourceWarning:
         manager._adapter = MagicMock() if initialized else None
         return manager
 
-    def test_warns_when_initialized(self):
-        """An initialized ConnectionManager that is GC'd leaks DB connections."""
+    def test_no_op_when_initialized(self):
+        """Post-#835: __del__ is a no-op even when initialized=True.
+
+        ConnectionManager no longer owns the pool, so there is no leak surface
+        for the finalizer to warn about. The leak coverage moved to
+        AsyncSQLDatabaseNode + the registry reaper.
+        """
         manager = self._make_manager(initialized=True)
 
         with warnings.catch_warnings(record=True) as caught:
@@ -194,10 +208,7 @@ class TestConnectionManagerResourceWarning:
             manager.__del__()
 
             resource = [w for w in caught if issubclass(w.category, ResourceWarning)]
-            assert len(resource) == 1
-            message = str(resource[0].message)
-            assert "Unclosed ConnectionManager" in message
-            assert "close_all_connections" in message
+            assert resource == []
 
     def test_silent_when_not_initialized(self):
         """A never-initialized ConnectionManager must NOT warn."""
