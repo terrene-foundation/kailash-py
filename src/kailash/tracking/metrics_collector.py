@@ -101,27 +101,33 @@ class MetricsCollector:
     def __init__(
         self,
         sampling_interval: float = 0.1,
-        enable_resource_monitoring: bool = True,
+        enable_resource_monitoring: bool | None = None,
     ):
         """Initialize metrics collector.
 
         Args:
             sampling_interval: How often to sample metrics (seconds)
             enable_resource_monitoring: Whether to enable psutil-based resource monitoring.
-                When False, only duration is tracked (no background threads spawned).
-                P0D-001: Dramatically reduces per-node overhead by avoiding thread
-                creation/join when resource monitoring is not needed.
+                ``None`` (default) auto-detects: enabled iff psutil is installed.
+                ``True`` explicitly opts in (warns if psutil is missing).
+                ``False`` disables; only duration is tracked. P0D-001: Dramatically
+                reduces per-node overhead by avoiding thread creation/join.
         """
         self.sampling_interval = sampling_interval
+        # Auto-detect when caller didn't specify; explicit opt-in still warns.
+        explicit_opt_in = enable_resource_monitoring is True
+        if enable_resource_monitoring is None:
+            enable_resource_monitoring = PSUTIL_AVAILABLE
         # P0D-001: Only enable psutil monitoring when both available AND requested
         self._monitoring_enabled = PSUTIL_AVAILABLE and enable_resource_monitoring
 
-        if not PSUTIL_AVAILABLE and enable_resource_monitoring:
+        if not PSUTIL_AVAILABLE and explicit_opt_in:
             import warnings
 
             warnings.warn(
-                "psutil not available. Performance metrics will be limited to duration only. "
-                "Install psutil for comprehensive metrics: pip install psutil"
+                "psutil not available — resource monitoring requested but disabled. "
+                "Install with: pip install 'kailash[monitoring]'",
+                stacklevel=2,
             )
 
     @contextmanager

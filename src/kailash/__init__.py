@@ -71,11 +71,12 @@ def __getattr__(name):
                 from kailash.servers import gateway
 
                 return getattr(gateway, name)
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
-                f"{name} requires server dependencies. "
-                f"Install with: pip install kailash"
-            ) from None
+                f"{name} requires server dependencies (fastapi, uvicorn, "
+                f"aiohttp, httpx, aiofiles). Install with: "
+                f"pip install 'kailash[server]'"
+            ) from exc
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 

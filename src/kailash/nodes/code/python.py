@@ -381,7 +381,11 @@ class CodeExecutor:
                     module = importlib.import_module(module_name)
                     namespace[module_name] = module  # type: ignore[reportArgumentType]
                 except ImportError:
-                    logger.warning(f"Module {module_name} not available")
+                    # DEBUG, not WARNING: the allowed_modules list is the union
+                    # of supported user-code imports; missing entries are normal
+                    # on slim installs and the lazy fallback below handles the
+                    # case where user code actually references them.
+                    logger.debug(f"Module {module_name} not available")
 
             # Add lazy loader for problematic modules
             class LazyModuleLoader:
@@ -410,7 +414,9 @@ class CodeExecutor:
                     module = importlib.import_module(module_name)
                     namespace[module_name] = module  # type: ignore[reportArgumentType]
                 except ImportError:
-                    logger.warning(f"Module {module_name} not available")
+                    # DEBUG, not WARNING: see comment above — allowed_modules is
+                    # a superset; missing entries are expected on slim installs.
+                    logger.debug(f"Module {module_name} not available")
 
         # Add global utility functions to namespace
         try:

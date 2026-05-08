@@ -105,10 +105,18 @@ from kailash.nodes.data.readers import (
 # Redis
 from kailash.nodes.data.redis import RedisNode
 from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
-from kailash.nodes.data.sharepoint_graph import (
-    SharePointGraphReader,
-    SharePointGraphWriter,
-)
+
+# SharePoint Graph nodes require `requests` (kailash[http-client] / kailash[auth-azure]).
+# Skip at import time when the optional dep is missing; raise at use time.
+try:
+    from kailash.nodes.data.sharepoint_graph import (
+        SharePointGraphReader,
+        SharePointGraphWriter,
+    )
+except ImportError:  # pragma: no cover — optional extra
+    SharePointGraphReader = None  # type: ignore[assignment,misc]
+    SharePointGraphWriter = None  # type: ignore[assignment,misc]
+
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.nodes.data.streaming import (

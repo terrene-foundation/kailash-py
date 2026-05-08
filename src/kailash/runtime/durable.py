@@ -1051,10 +1051,10 @@ def resolve_tenant_id(runtime: Any) -> Optional[str]:
                 extra={
                     "hint": (
                         "kailash.trust.auth.context.get_current_tenant_id "
-                        "is not importable; tenant_id will be None.  "
-                        "Multi-tenant safety is reduced — verify the "
-                        "trust extras are installed if multi-tenancy is "
-                        "expected."
+                        "is not importable; tenant_id will be None. "
+                        "Multi-tenant safety is reduced. If multi-tenancy is "
+                        "expected, install the trust subsystem: "
+                        "pip install 'kailash[trust]'"
                     ),
                 },
             )
