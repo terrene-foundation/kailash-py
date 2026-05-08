@@ -209,12 +209,16 @@ docs = [
 all = [
     # Core capabilities (was the default install pre-#890)
     "kailash[server,http-client,db-postgres,db-mysql,db-sqlite,redis,trust,auth,auth-azure,monitoring,telemetry,scheduler,mcp,data]",
-    # Sub-package BASE installs — heavy ML / fine-tuning stacks remain opt-in.
-    "kailash-dataflow>=2.0.12",
+    # Sub-package installs — pull each sibling's [security]-equivalent extras
+    # so [all] preserves pre-#890 cryptographic posture (Fernet multi-tenancy
+    # encryption, Ed25519 audit signing, FastAPI gateway, etc.). Heavy ML /
+    # fine-tuning stacks (torch, vllm, transformers training extras) remain
+    # opt-in via kailash-ml[<extra>] / kailash-align[<extra>].
+    "kailash-dataflow[security,monitoring,api]>=2.0.12",
     "kailash-nexus>=2.1.1",
-    "kailash-kaizen>=2.7.5",
+    "kailash-kaizen[providers-azure,providers-google,observability,db,cache,rag]>=2.7.5",
     "kaizen-agents>=0.9.3",
-    "kailash-pact>=0.8.2",
+    "kailash-pact[api,execution]>=0.8.2",
     "kailash-ml>=1.1.0",
     "kailash-align>=0.3.2",
 ]

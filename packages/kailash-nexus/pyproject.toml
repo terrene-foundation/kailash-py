@@ -25,12 +25,30 @@ classifiers = [
 dependencies = [
     # nexus is the canonical Kailash API server wrapper. `import nexus`
     # eagerly pulls `kailash.servers.gateway` (lazy-loaded from root kailash
-    # via __getattr__) which transitively requires the full server stack:
-    # middleware, admin nodes, gateway security. So we depend on
-    # `kailash[server]` rather than the slim `kailash` core.
-    "kailash[server]>=2.16.0",
-    "starlette>=0.36.0",
+    # via __getattr__) which transitively requires the full server middleware
+    # stack: admin/user_management (bcrypt), middleware/auth/jwt (PyJWT),
+    # middleware/database (sqlalchemy), gateway/security (cryptography).
+    #
+    # Per `deployment.md` MUST rule "Optional Dependencies Pin to
+    # PyPI-Resolvable Versions", we DECLARE these deps directly rather than
+    # pinning `kailash[server]>=2.16.0` — the [server] extra does not exist
+    # on PyPI for kailash 2.16.0 / 2.17.0 (it lands with #890 in 2.18.0+).
+    # Tag-push CI installs `kailash` from PyPI before the new release is
+    # published, so `kailash[server]` would silently drop the extra.
+    # Direct declaration is dialect-stable across the release boundary.
+    "kailash>=2.16.0",
+    # Server middleware stack (matches kailash[server] contents).
     "fastapi>=0.104.0",
+    "starlette>=0.36.0",
+    "uvicorn[standard]>=0.24.0",
+    "aiohttp>=3.12.4",
+    "aiohttp-cors>=0.7.0",
+    "httpx>=0.25.0",
+    "aiofiles>=24.1.0",
+    "bcrypt>=4.3.0",
+    "PyJWT>=2.8",
+    "sqlalchemy>=2.0.0",
+    "cryptography>=41.0",
     # Directly imported by nexus/transports/websocket.py — per
     # dependencies.md "Declared = Imported", declare even though
     # uvicorn[standard] pulls it transitively.

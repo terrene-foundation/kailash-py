@@ -16,7 +16,8 @@ Layers:
   scoped trust environments with persistent stores, constraint enforcement,
   delegation, and enterprise features (RBAC, OIDC, SIEM, dashboard).
 - **Signing layer** (``kailash.trust.signing.*``): Ed25519 cryptographic
-  operations. Requires ``pynacl`` (included in the base ``pip install kailash``).
+  operations. Requires ``pynacl`` (install via ``pip install 'kailash[trust]'``
+  per #890 slim-core layout).
 - **Agents layer** (``kailash.trust.agents.*``): Trust-enhanced agent wrappers
   (TrustedAgent, PseudoAgent) for the trust sandwich pattern.
 
@@ -254,7 +255,7 @@ if TYPE_CHECKING:
 # `kailash.trust` lets `from kailash.trust import AlgorithmIdentifier` work.
 # These have no heavy deps (pure-Python dataclass + helper) so the import is
 # eager rather than lazy via __getattr__.
-from kailash.trust.signing.algorithm_id import (
+from kailash.trust.signing.algorithm_id import (  # noqa: E402  # late-import after TYPE_CHECKING block
     ALGORITHM_DEFAULT,
     AlgorithmIdentifier,
     coerce_algorithm_id,

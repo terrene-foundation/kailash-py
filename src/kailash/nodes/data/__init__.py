@@ -106,16 +106,34 @@ from kailash.nodes.data.readers import (
 from kailash.nodes.data.redis import RedisNode
 from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
 
-# SharePoint Graph nodes require `requests` (kailash[http-client] / kailash[auth-azure]).
-# Skip at import time when the optional dep is missing; raise at use time.
+# SharePoint Graph nodes require `requests` (kailash[http-client]) and
+# `msal` (kailash[auth-azure]). Per dependencies.md "loud failure at call
+# site" pattern: when the optional extras are missing, replace the public
+# symbols with a stub class that raises ImportError on construction —
+# NOT a `None` fallback (that would surface as opaque
+# `TypeError: 'NoneType' object is not callable`).
 try:
     from kailash.nodes.data.sharepoint_graph import (
         SharePointGraphReader,
         SharePointGraphWriter,
     )
-except ImportError:  # pragma: no cover — optional extra
-    SharePointGraphReader = None  # type: ignore[assignment,misc]
-    SharePointGraphWriter = None  # type: ignore[assignment,misc]
+except ImportError as _exc:  # pragma: no cover — optional extra
+    # Bind the exception to a module-level name so the closure below can
+    # reference it after the `except` block clears the `as` binding.
+    _sharepoint_import_error = _exc
+    _SHAREPOINT_INSTALL_HINT = (
+        "SharePoint Graph nodes require `requests` and `msal`. "
+        "Install with: pip install 'kailash[http-client,auth-azure]'"
+    )
+
+    class _MissingSharePointGraph:
+        """Loud-failure stub for missing SharePoint extras."""
+
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            raise ImportError(_SHAREPOINT_INSTALL_HINT) from _sharepoint_import_error
+
+    SharePointGraphReader = _MissingSharePointGraph  # type: ignore[assignment,misc]
+    SharePointGraphWriter = _MissingSharePointGraph  # type: ignore[assignment,misc]
 
 from kailash.nodes.data.sources import DocumentSourceNode, QuerySourceNode
 from kailash.nodes.data.sql import SQLDatabaseNode
