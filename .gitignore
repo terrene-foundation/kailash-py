@@ -198,7 +198,11 @@ examples/output/
 .env.production.local
 .env.test
 docs/build_output.txt
+docs/build_warnings.txt
 output.txt
+
+# Pending journal entries (session-local; promoted to journal/ on /wrapup)
+**/journal/.pending/
 
 # Build/release artifacts
 test-release/

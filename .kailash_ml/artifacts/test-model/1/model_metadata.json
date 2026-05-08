@@ -1,8 +1,0 @@
-{
-  "name": "test-model",
-  "version": 1,
-  "signature": null,
-  "metrics": [],
-  "onnx_status": "not_applicable",
-  "model_uuid": "8b5b9bcb-3d0b-401f-a58f-4817afd9ccec"
-}
