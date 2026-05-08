@@ -348,10 +348,16 @@ async def test_workflow_blob_size_cap_rejects_oversized() -> None:
     Why the regression: an unbounded workflow_blob OOMs every dequeueing
     worker on json.loads. The cap is the structural defense.
     """
+    from kailash.runtime import _workflow_blob as wb_mod
     from kailash.runtime import scheduler as scheduler_mod
 
-    original_cap = scheduler_mod.MAX_WORKFLOW_BLOB_BYTES
-    scheduler_mod.MAX_WORKFLOW_BLOB_BYTES = 1024  # 1 KiB for fast test
+    # Patch the helper module — the size-cap check now lives in
+    # `serialize_workflow_to_blob`, which reads its own module-scope
+    # binding. Patching `scheduler_mod.MAX_WORKFLOW_BLOB_BYTES` would
+    # only mutate the re-export alias and leave the helper's view
+    # unchanged, silently passing the test (a Rule 3d failure mode).
+    original_cap = wb_mod.MAX_WORKFLOW_BLOB_BYTES
+    wb_mod.MAX_WORKFLOW_BLOB_BYTES = 1024  # 1 KiB for fast test
     try:
         builder = _OversizedBuilder(payload_bytes=2000)
         sched = scheduler_mod.WorkflowScheduler(job_store_path=None)
@@ -369,7 +375,7 @@ async def test_workflow_blob_size_cap_rejects_oversized() -> None:
         finally:
             sched.shutdown(wait=False)
     finally:
-        scheduler_mod.MAX_WORKFLOW_BLOB_BYTES = original_cap
+        wb_mod.MAX_WORKFLOW_BLOB_BYTES = original_cap
 
 
 @pytest.mark.regression

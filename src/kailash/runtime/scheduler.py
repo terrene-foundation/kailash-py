@@ -37,7 +37,6 @@ Version:
     Added in: v0.13.0
 """
 
-import json
 import logging
 import math
 import os
@@ -72,10 +71,19 @@ MAX_FIRE_TIMES = 10_000
 # pools dequeue and `json.loads` the payload; without a cap, a workflow
 # whose `to_dict()` produces multi-megabyte output (e.g. a node config
 # carrying a large embedded model bundle) OOMs every dequeueing worker.
-# 8 MiB is generous for legitimate Workflow shapes and tight enough to
-# refuse a poisoned config before it reaches the queue. Documented in
-# `specs/scheduling.md` § "Queue dispatch — payload bounds".
-MAX_WORKFLOW_BLOB_BYTES = 8 * 1024 * 1024  # 8 MiB
+# Re-exported from `runtime/_workflow_blob.py` — that module is the
+# canonical home so both scheduler.py AND durable.py route their
+# workflow_blob serialization through `serialize_workflow_to_blob` and
+# emit byte-identical output. The local re-export preserves callers
+# that import `MAX_WORKFLOW_BLOB_BYTES` from `kailash.runtime.scheduler`.
+# Note: the size-cap check now lives in the helper, so tests that need
+# a smaller cap to exercise the size-cap path MUST patch
+# `kailash.runtime._workflow_blob.MAX_WORKFLOW_BLOB_BYTES` (the helper
+# reads its own module-scope binding), not this re-exported alias.
+from kailash.runtime._workflow_blob import (  # noqa: E402
+    MAX_WORKFLOW_BLOB_BYTES,
+    serialize_workflow_to_blob,
+)
 
 _apscheduler_available: Optional[bool] = None
 
@@ -635,55 +643,14 @@ class WorkflowScheduler:
 
         try:
             workflow = workflow_builder.build()
-            # JSON serialization (NOT pickle) per `rules/security.md`
-            # § "No arbitrary-code execution on user input": pickle.loads
-            # on a queue payload an attacker can INSERT into is remote
-            # code execution. The
-            # canonical workflow shape is `Workflow.to_dict()` from
-            # `kailash.workflow.graph`; workers reconstruct via
-            # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`.
-            #
-            # Discriminator dispatch on the canonical Workflow type per
-            # `rules/zero-tolerance.md` Rule 3d (dual-shape return +
-            # structural guard = silent fallback). Test stubs that
-            # satisfy the to_dict() protocol are accepted via the
-            # protocol-attribute branch — explicit, not duck-typed.
-            from kailash.workflow.graph import Workflow as _Workflow
-
-            if isinstance(workflow, _Workflow):
-                workflow_dict = workflow.to_dict()
-            elif hasattr(type(workflow), "to_dict") and callable(
-                getattr(type(workflow), "to_dict")
-            ):
-                # Class-level to_dict() — admits Tier-1 stubs that satisfy
-                # the protocol via class definition (NOT instance attr,
-                # which is too permissive and reintroduces the duck-type
-                # silent-fallback pattern).
-                workflow_dict = workflow.to_dict()
-            else:
-                raise TypeError(
-                    f"workflow_builder.build() returned {type(workflow).__name__} "
-                    f"which is not a kailash.workflow.graph.Workflow nor a class "
-                    f"defining to_dict() — queue dispatch requires JSON-"
-                    f"serializable workflow representation. Use Workflow or "
-                    f"a subclass that implements to_dict()."
-                )
-            workflow_blob = json.dumps(workflow_dict).encode("utf-8")
-            if len(workflow_blob) > MAX_WORKFLOW_BLOB_BYTES:
-                # Refuse the enqueue before it reaches the queue. Workers
-                # dequeueing this payload would `json.loads` it into
-                # memory; an unbounded blob OOMs every worker. The cap
-                # is enforced at the producer boundary (here) and again
-                # at the queue adapter (defense-in-depth) per
-                # `rules/security.md` § "Input Validation".
-                raise ValueError(
-                    f"workflow_blob size {len(workflow_blob)} bytes exceeds "
-                    f"MAX_WORKFLOW_BLOB_BYTES ({MAX_WORKFLOW_BLOB_BYTES} bytes / "
-                    f"{MAX_WORKFLOW_BLOB_BYTES // (1024 * 1024)} MiB). Workflow "
-                    f"is too large to dispatch through the queue path; reduce "
-                    f"the workflow surface (split into sub-workflows, externalize "
-                    f"large data) or use in-process dispatch (dispatch_via=None)."
-                )
+            # Canonical JSON serialization via shared helper —
+            # byte-identical output across scheduler.py and durable.py
+            # producer paths, which is the contract worker-side
+            # `Workflow.from_dict(json.loads(blob.decode("utf-8")))`
+            # depends on. See `runtime/_workflow_blob.py` for the full
+            # rationale (no pickle / discriminator dispatch /
+            # producer-boundary size cap).
+            workflow_blob = serialize_workflow_to_blob(workflow)
         except Exception:
             logger.exception(
                 "scheduler.dispatch.serialize_failed schedule_id=%s task_id_hash=%s",
