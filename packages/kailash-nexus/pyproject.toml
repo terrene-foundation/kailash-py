@@ -23,7 +23,12 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kailash>=2.16.0",
+    # nexus is the canonical Kailash API server wrapper. `import nexus`
+    # eagerly pulls `kailash.servers.gateway` (lazy-loaded from root kailash
+    # via __getattr__) which transitively requires the full server stack:
+    # middleware, admin nodes, gateway security. So we depend on
+    # `kailash[server]` rather than the slim `kailash` core.
+    "kailash[server]>=2.16.0",
     "starlette>=0.36.0",
     "fastapi>=0.104.0",
     # Directly imported by nexus/transports/websocket.py — per
