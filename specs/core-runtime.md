@@ -347,7 +347,7 @@ kwargs. Behavior:
 - `idempotency_key` — caller-supplied string. When set AND a checkpoint
   store is configured, the runtime computes a stable checkpoint key
   via `build_checkpoint_key(workflow_fingerprint, idempotency_key,
-  parameters, tenant_id=...)` and looks for a prior blob.
+parameters, tenant_id=...)` and looks for a prior blob.
   - If a prior blob exists AND its persisted `workflow_fingerprint`
     equals the current workflow's fingerprint, the blob's
     `ExecutionTracker` is restored — already-completed nodes are
@@ -533,15 +533,15 @@ events = await engine.history.get_run_events(run_id, tenant_id="default")
 chain runs in one expression. Calling a setter twice OVERRIDES the prior
 value (no implicit fan-in).
 
-| Setter                              | Purpose                                                                      |
-| ----------------------------------- | ---------------------------------------------------------------------------- |
-| `.checkpoint_store(store)`          | Configure the W1 checkpoint store. ``None`` clears.                          |
-| `.history_store(store)`             | Configure the W2 history store. ``None`` clears.                             |
-| `.dispatch_via(dispatcher)`         | Configure the W3 dispatcher. ``None`` clears.                                |
-| `.idempotency_key_default(key)`     | Default key applied to ``execute()`` when the call omits the kwarg.          |
-| `.runtime(factory)`                 | Override the runtime factory (defaults to `AsyncLocalRuntime`).              |
-| `.runtime_kwargs(mapping)`          | Extra kwargs passed to the runtime factory (e.g. `max_concurrent_nodes`).    |
-| `.build()`                          | Construct the immutable `DurableExecutionEngine`.                            |
+| Setter                          | Purpose                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `.checkpoint_store(store)`      | Configure the W1 checkpoint store. `None` clears.                         |
+| `.history_store(store)`         | Configure the W2 history store. `None` clears.                            |
+| `.dispatch_via(dispatcher)`     | Configure the W3 dispatcher. `None` clears.                               |
+| `.idempotency_key_default(key)` | Default key applied to `execute()` when the call omits the kwarg.         |
+| `.runtime(factory)`             | Override the runtime factory (defaults to `AsyncLocalRuntime`).           |
+| `.runtime_kwargs(mapping)`      | Extra kwargs passed to the runtime factory (e.g. `max_concurrent_nodes`). |
+| `.build()`                      | Construct the immutable `DurableExecutionEngine`.                         |
 
 Type validation: `idempotency_key_default(non-str)`, `runtime(non-callable)`,
 and `runtime_kwargs(non-Mapping)` raise `TypeError` with actionable
@@ -616,10 +616,20 @@ fresh wrapped runtime.
   in-process `execute()` returns immediately after enqueue). Today the
   engine drives BOTH the in-process run AND the dispatcher enqueue;
   the queue row is the durable record of intent.
-- **Workflow-blob serialiser** — today the dispatched `Task.workflow_blob`
-  is empty bytes; workers reconstruct workflows from the orchestrator's
-  local registry per project convention. A future wave MAY add a
-  workflow-blob serialiser without changing the engine surface.
+- **Workflow-blob serialiser** — `_enqueue_for_run` populates
+  `Task.workflow_blob` via the canonical helper at
+  `src/kailash/runtime/_workflow_blob.py::serialize_workflow_to_blob`,
+  the same helper :class:`WorkflowScheduler` uses, so both producer
+  surfaces emit byte-identical JSON-encoded UTF-8 bytes for the same
+  workflow. Workers on a separate host reconstruct via
+  `Workflow.from_dict(json.loads(blob.decode("utf-8")))` without
+  out-of-band registry access. Producer-boundary 8 MiB cap
+  (:data:`MAX_WORKFLOW_BLOB_BYTES` in `_workflow_blob.py`) refuses
+  oversized payloads before reaching the queue. See
+  `specs/scheduling.md` §9 (Queue Dispatch) — particularly §9.2
+  (Task dataclass), §9.4 (SQLTaskQueueDispatcher), and §9.10
+  (Payload bounds) — for the full JSON contract and the no-pickle
+  security rationale.
 
 ---
 
