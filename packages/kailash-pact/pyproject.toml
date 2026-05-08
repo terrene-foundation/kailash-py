@@ -60,6 +60,11 @@ dev = [
     "httpx>=0.27",
     "mypy>=1.8",
     "ruff>=0.3",
+    # tests/unit/governance/test_api_*.py module-scope import fastapi/slowapi
+    # (testing the [api]-extra surfaces). Per #890 these moved out of core;
+    # tests still need them at collection time.
+    "fastapi>=0.109",
+    "slowapi>=0.1.9",
 ]
 
 # Backwards-compatibility umbrella.
