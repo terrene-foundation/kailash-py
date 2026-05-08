@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-05-08
+
 ### Changed — BREAKING (slim core, #890)
 
 `pip install kailash` now ships a slim default of **13 packages** (down from
