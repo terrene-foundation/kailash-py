@@ -24,46 +24,82 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    # ─────────────────────────────────────────────────────────────
+    # Kaizen core. Down from 29 → 9 deps. See issue #890 audit.
+    # All other deps (provider SDKs, observability, DBs, RAG numerics)
+    # are either lazy-loaded or scoped to optional subsystems and now
+    # live behind extras.
+    # ─────────────────────────────────────────────────────────────
     "kailash>=2.16.0",
-    "kailash-mcp>=0.2.4",
-    "pydantic>=2.0.0",
-    "typing-extensions>=4.5.0",
-    "PyJWT>=2.8.0",
-    "bcrypt>=4.0.0",
-    "redis>=5.0.0",
-    "anyio>=4.0.0",
-    "packaging>=23.0",
-    # AI providers
-    "azure-ai-inference>=1.0.0b9",
-    "azure-identity>=1.15.0",
-    "azure-core>=1.38.0",
-    "google-genai>=1.21.0",
-    "tiktoken>=0.5.0",
-    # Server + HTTP client (httpx powers kaizen.llm.http_client.LlmHttpClient)
-    "aiohttp>=3.13.3",
-    "requests>=2.32",
-    "httpx>=0.25.0",
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "prometheus-client>=0.19.0",
-    # Database
-    "aiosqlite>=0.19.0",
-    "asyncpg>=0.28.0",
-    # RAG / data
-    "numpy>=1.24.0",
-    "Pillow>=10.0.0",
-    # Research
-    "GitPython>=3.1.0",
-    # Observability
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
-    "structlog>=23.0.0",
-    # Security
-    "cryptography>=41.0.0",
+    "kailash-mcp>=0.2.4",       # core/base_agent.py:32 module-scope MCPClient
+    "pydantic>=2.0.0",          # llm/deployment.py + auth modules
+    "typing-extensions>=4.5.0", # core/schema_factory.py
+    "anyio>=4.0.0",             # autonomy observability/hooks/interrupts
+    "httpx>=0.25.0",            # llm/http_client.py + llm/client.py module-scope
+    "aiohttp>=3.13.3",          # autonomy/control/transports/http + nodes/ai/semantic_memory
+    "PyJWT>=2.8.0",             # security/authentication.py module-scope
+    "cryptography>=41.0.0",     # security/encryption.py (AESGCM, PBKDF2HMAC, hashes)
 ]
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
+# ─────────────────────────────────────────────────────────────────
+# LLM provider SDKs — opt-in per provider. All imports are
+# function-local in providers/llm/{azure,google}.py and friends.
+# ─────────────────────────────────────────────────────────────────
+providers-azure = [
+    "azure-ai-inference>=1.0.0b9",
+    "azure-identity>=1.15.0",
+    "azure-core>=1.38.0",
+]
+providers-google = [
+    "google-genai>=1.21.0",
+]
+providers-tokens = [
+    "tiktoken>=0.5.0",
+]
+providers-http = [
+    "requests>=2.32",   # signatures/multi_modal + huggingface embedder fallbacks
+]
+
+# Server endpoints — autonomy hook metrics + monitoring/dashboard. Per
+# framework-first.md, kailash-nexus is the canonical API surface; the
+# in-tree FastAPI surfaces here are auxiliary and behind this extra.
+server = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+]
+
+# Observability — Prometheus metrics + OpenTelemetry tracing + structlog.
+observability = [
+    "prometheus-client>=0.19.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "structlog>=23.0.0",
+]
+
+# Database extras — multi-tier memory (aiosqlite) + trust migration (asyncpg).
+db = [
+    "aiosqlite>=0.19.0",
+    "asyncpg>=0.28.0",
+]
+
+# Distributed cache — governance/rate_limiter.
+cache = [
+    "redis>=5.0.0",
+]
+
+# RAG / multimodal — numpy + Pillow for similarity, vision, hybrid search.
+rag = [
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
+]
+
+# Research validator — GitPython for repo introspection.
+research-validator = [
+    "GitPython>=3.1.0",
+]
+
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -126,6 +162,11 @@ research = [
 web-search = [
     "duckduckgo-search>=6.0",
     "beautifulsoup4>=4.12",
+]
+
+# Backwards-compatibility umbrella — preserves the pre-#890 default install.
+all = [
+    "kailash-kaizen[providers-azure,providers-google,providers-tokens,providers-http,server,observability,db,cache,rag,research-validator]",
 ]
 
 [project.urls]

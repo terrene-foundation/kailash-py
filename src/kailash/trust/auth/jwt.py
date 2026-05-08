@@ -25,7 +25,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import jwt
+try:
+    import jwt
+except ImportError as _jwt_import_error:  # pragma: no cover — optional extra
+    raise ImportError(
+        "kailash.trust.auth.jwt requires PyJWT. "
+        "Install with: pip install 'kailash[trust]'"
+    ) from _jwt_import_error
 
 from kailash.trust.auth.exceptions import ExpiredTokenError, InvalidTokenError
 from kailash.trust.auth.models import AuthenticatedUser

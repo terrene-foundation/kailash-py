@@ -117,7 +117,11 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv .venv
-          uv pip install -e ".[dev,server,cli,database,postgres,mysql,files,distributed,monitoring,http,auth,mfa,mcp,scheduler,otel]" --python .venv/bin/python
+          # Per #890 slim-core refactor: extras renamed.
+          # OLD: cli/database/postgres/mysql/files/distributed/http/mfa/otel
+          # NEW: db-postgres/db-mysql/db-sqlite/http-client/auth-azure/telemetry/redis/trust
+          # `cli` and `files` were folded into core/server respectively.
+          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data]" --python .venv/bin/python
           uv pip install -e packages/kailash-mcp --python .venv/bin/python
           uv pip install numpy --python .venv/bin/python
 

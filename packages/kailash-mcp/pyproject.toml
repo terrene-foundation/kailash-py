@@ -23,9 +23,15 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
+    # ─────────────────────────────────────────────────────────────
+    # MCP wrapper core. Audit (#890):
+    # - kailash + mcp[cli] required.
+    # - pydantic was an ORPHAN (zero imports in src/kailash_mcp/);
+    #   `mcp[cli]` already declares pydantic as its own dep so it
+    #   remains transitively available. DELETED.
+    # ─────────────────────────────────────────────────────────────
     "kailash>=2.16.0",
     "mcp[cli]>=1.23.0",
-    "pydantic>=2.6",
 ]
 requires-python = ">=3.11"
 

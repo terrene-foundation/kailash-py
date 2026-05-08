@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — BREAKING (slim core, #890)
+
+`pip install kailash` now ships a slim default of **13 packages** (down from
+~89). The full pre-#890 install experience is preserved via
+`pip install kailash[all]` (back-compat umbrella).
+
+#### Migration table — extras renamed
+
+| Old extra       | New extra                                        |
+| --------------- | ------------------------------------------------ |
+| `[postgres]`    | `[db-postgres]`                                  |
+| `[mysql]`       | `[db-mysql]`                                     |
+| `[database]`    | `[db-postgres,db-mysql,db-sqlite]`               |
+| `[http]`        | `[http-client]`                                  |
+| `[mfa]`         | `[auth]` (folded — bcrypt/pyotp/qrcode together) |
+| `[otel]`        | `[telemetry]`                                    |
+| `[distributed]` | `[redis]`                                        |
+| `[cli]`         | (removed — `click` is now core)                  |
+| `[files]`       | (folded into `[server]`)                         |
+
+#### New extras
+
+`[server]` (fastapi+uvicorn+aiohttp+bcrypt+PyJWT+sqlalchemy+cryptography for
+the full WorkflowServer stack), `[trust]` (cryptography+PyJWT+pynacl+filelock
+for the EATP signing layer), `[auth-azure]` (msal for SharePoint Graph),
+`[scheduler]` (apscheduler), `[mcp]` (mcp[cli]), `[data]` (numpy+pandas).
+
+#### Loud-failure behavior
+
+Lazy-loaded server surfaces (`from kailash import WorkflowServer`,
+`create_gateway`, `EnterpriseWorkflowServer`) raise `ImportError` with the
+specific install hint when the `[server]` extra is missing. Trust
+(`kailash.trust.auth.jwt`) raises with `pip install 'kailash[trust]'`.
+SharePoint nodes raise on construction with
+`pip install 'kailash[http-client,auth-azure]'`.
+
+#### Sub-package cleanup
+
+13 hard orphans deleted across sub-package manifests (zero source imports
+anywhere):
+
+- `kailash-dataflow`: `alembic`, `dnspython`, `passlib[bcrypt]`, `flask`,
+  `flask-jwt-extended`, `uvicorn[standard]`. Core 22 → 5 deps. Per-DB
+  drivers behind `[postgres-sync]`/`[mysql]`/`[sqlite]`/`[mongo]`/`[redis]`;
+  `cryptography` → `[security]`; `PyJWT[crypto]` + `pydantic` →
+  `[templates]` (SaaS / API gateway scaffolds).
+- `kailash-kaizen`: `bcrypt`, `packaging`. Core 29 → 9 deps. Provider
+  SDKs behind `[providers-azure]`/`[providers-google]`/`[providers-tokens]`;
+  prometheus+opentelemetry+structlog → `[observability]`; aiosqlite+asyncpg
+  → `[db]`; numpy+Pillow → `[rag]`; GitPython → `[research-validator]`.
+- `kailash-mcp`: `pydantic` (mcp[cli] declares it transitively).
+- `kailash-pact`: `psycopg[binary]`, `psycopg_pool`. Core 7 → 2 deps.
+  `fastapi`+`slowapi` → `[api]`; `kailash-kaizen` → `[execution]`.
+- `kaizen-agents`: `kailash-pact` (semantics reach via `kailash.trust.pact.*`
+  in core), `python-dotenv`, `structlog`. Core 7 → 4 deps.
+
+`kailash-nexus` declares the server middleware stack directly so
+`pip install kailash-nexus` continues to work against PyPI's pre-#890
+`kailash` releases without relying on the new `[server]` extra.
+
+#### Migration cheatsheet
+
+```bash
+# Before #890
+pip install kailash
+
+# After #890 — equivalent (back-compat)
+pip install kailash[all]
+
+# After #890 — slim (recommended; install only what you use)
+pip install kailash[server]                   # Web API / gateway
+pip install kailash[server,db-postgres,redis] # Web app on Postgres + Redis
+pip install kailash[trust]                    # EATP / signing
+pip install kailash[mcp]                      # MCP-only consumers
+```
+
+Closes #890.
+
 ## [2.17.0] - 2026-05-08
 
 ### Added

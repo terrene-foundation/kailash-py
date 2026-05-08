@@ -350,7 +350,17 @@ class DataFlowAuditStore:
             from cryptography.hazmat.primitives.asymmetric.ed25519 import (
                 Ed25519PrivateKey,
             )
+        except ImportError as e:
+            # Per #890 audit: cryptography moved to `kailash-dataflow[security]`
+            # extra. A configured signing key with the dep missing is a
+            # configuration bug, not a runtime degradation — fail loud per
+            # zero-tolerance.md Rule 3 (no silent fallback on security paths).
+            raise ImportError(
+                "Audit record signing requires the `cryptography` package. "
+                "Install with: pip install 'kailash-dataflow[security]'"
+            ) from e
 
+        try:
             # Load private key from raw bytes
             private_key = Ed25519PrivateKey.from_private_bytes(self._signing_key)
 
