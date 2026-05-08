@@ -1467,6 +1467,7 @@ class DurableExecutionEngine:
         Returns the synthesised ``schedule_id`` so callers can correlate
         the enqueued row with the in-process run.
         """
+        from kailash.runtime._workflow_blob import serialize_workflow_to_blob
         from kailash.runtime.dispatcher import Task, compute_task_id
 
         workflow_fingerprint = compute_workflow_fingerprint(workflow)
@@ -1497,16 +1498,26 @@ class DurableExecutionEngine:
         planned_fire_time = datetime.now(timezone.utc).isoformat()
         task_id = compute_task_id(schedule_id, datetime.now(timezone.utc))
 
-        # The W3 contract serialises the workflow blob as the dispatcher's
-        # responsibility — but the engine has no built-in serialiser for
-        # arbitrary workflow objects (the SDK does not pickle workflows by
-        # default, see ``Task.workflow_blob`` JSON contract). We pass an
-        # empty bytes blob; the worker side reconstructs the workflow from
-        # the orchestrator's local registry per project convention. Future
-        # waves MAY add a workflow-blob serialiser, but the engine's job
-        # here is to surface the dispatcher invocation, not to define the
-        # serialisation format.
-        workflow_blob = b""
+        # Canonical JSON serialization via the shared
+        # ``runtime/_workflow_blob.py`` helper — same byte output as
+        # :class:`WorkflowScheduler`'s queue-dispatch path so workers
+        # subscribed to the underlying :class:`SQLTaskQueue` reconstruct
+        # uniformly via
+        # ``Workflow.from_dict(json.loads(blob.decode("utf-8")))``
+        # regardless of which producer enqueued the task. Producer-
+        # boundary size cap (:data:`MAX_WORKFLOW_BLOB_BYTES`, default
+        # 8 MiB) raises :class:`ValueError` on oversized payloads
+        # before reaching the queue, preventing worker OOM on
+        # ``json.loads``. See `runtime/_workflow_blob.py` for the no-
+        # pickle / discriminator-dispatch rationale.
+        #
+        # Additive contract: the prior behaviour was ``b""`` with the
+        # convention that workers reconstruct from a local registry.
+        # That convention still works (workers that ignore
+        # ``workflow_blob`` keep working); workers that need to
+        # reconstruct without out-of-band knowledge now have JSON to
+        # parse.
+        workflow_blob = serialize_workflow_to_blob(workflow)
         kwargs_payload: Dict[str, Any] = {
             "inputs": dict(inputs),
             "idempotency_key": idempotency_key,
