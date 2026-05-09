@@ -331,6 +331,7 @@ def test_task_message_has_execution_limits_field():
     field deserialize correctly.
     """
     import dataclasses
+
     from kailash.runtime.distributed import TaskMessage
 
     fields = {f.name: f for f in dataclasses.fields(TaskMessage)}
