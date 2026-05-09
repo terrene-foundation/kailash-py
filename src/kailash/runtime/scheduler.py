@@ -39,6 +39,7 @@ Version:
 
 import asyncio
 import builtins
+import contextlib
 import logging
 import math
 import os
@@ -493,14 +494,18 @@ class WorkflowScheduler:
                 that raises a retryable exception is retried up to
                 ``spec.max_retries`` times with backoff before bubbling to
                 APScheduler's job-error listener. ``None`` (default) preserves
-                the original single-attempt behavior.
+                the original single-attempt behavior. Raises ``ValueError``
+                when set on a scheduler constructed with
+                ``dispatch_via=<Dispatcher>`` (queue-dispatch path) — worker-
+                side retry semantics are the dispatcher's contract.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
             A unique schedule_id that can be used to cancel or query this schedule.
 
         Raises:
-            ValueError: If the cron expression is invalid.
+            ValueError: If the cron expression is invalid OR ``retry`` is
+                supplied alongside ``dispatch_via=`` on this scheduler.
 
         Example:
             >>> sid = scheduler.schedule_cron(workflow, "0 */6 * * *")  # Every 6 hours
@@ -811,8 +816,24 @@ class WorkflowScheduler:
         for attempt in range(1, max_attempts + 1):
             try:
                 workflow = workflow_builder.build()
-                runtime = self._get_runtime()
-                results, actual_run_id = runtime.execute(workflow, **kwargs)
+                # Context-manager form ensures the runtime is closed after each
+                # attempt — silences the `DeprecationWarning: LocalRuntime.execute()
+                # without context manager` the retry loop would otherwise
+                # multiply by `max_attempts` per fire. Falls back to
+                # ``nullcontext`` for runtime stand-ins (deterministic
+                # adapters, custom `runtime_factory` returns) that satisfy
+                # the runtime protocol but not the context-manager protocol —
+                # tightening the contract to require ``__enter__`` would break
+                # every non-LocalRuntime caller per
+                # `framework-first.md` § "Drive The Data, Not The Dispatch".
+                _runtime = self._get_runtime()
+                _runtime_cm = (
+                    _runtime
+                    if hasattr(_runtime, "__enter__")
+                    else contextlib.nullcontext(_runtime)
+                )
+                with _runtime_cm as runtime:
+                    results, actual_run_id = runtime.execute(workflow, **kwargs)
                 # LocalRuntime swallows leaf-node failures into a result entry
                 # of shape ``{"failed": True, "error": str, "error_type": str}``
                 # rather than raising. For #910 the retry primitive MUST observe
@@ -824,6 +845,22 @@ class WorkflowScheduler:
                 node_failure = self._extract_node_failure(results)
                 if node_failure is not None:
                     raise node_failure
+                # Successful-retry observability: when a job succeeds on
+                # attempt > 1, the success path is structurally a "degraded
+                # but recovered" outcome — operators want to dashboard this
+                # separately from first-attempt successes. Emit a symmetric
+                # WARN to the exhausted-retries WARN below so alerting
+                # pipelines see retry recoveries (per `observability.md`
+                # Rule 7's bulk-op summary-WARN pattern).
+                if attempt > 1:
+                    logger.warning(
+                        "Scheduled execution recovered after retries: "
+                        "run_id=%s schedule_id=%s attempts=%d/%d",
+                        actual_run_id,
+                        schedule_id,
+                        attempt,
+                        max_attempts,
+                    )
                 logger.info(
                     "Scheduled execution completed: run_id=%s, results_count=%d, attempt=%d/%d",
                     actual_run_id,

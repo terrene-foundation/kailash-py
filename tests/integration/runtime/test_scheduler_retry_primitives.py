@@ -123,14 +123,20 @@ class TestSchedulerRetryPrimitives:
         assert lin.compute_backoff_seconds(1) == 2.0
         assert lin.compute_backoff_seconds(3) == 6.0
 
-    async def test_workflow_retries_then_succeeds(self, tmp_path):
-        """A workflow that fails attempt 1, succeeds attempt 2 — runs twice."""
+    async def test_workflow_retries_then_succeeds(self, tmp_path, caplog):
+        """A workflow that fails attempt 1, succeeds attempt 2 — runs twice.
+
+        Also asserts the symmetric "recovered after retries" WARN log fires
+        — operators dashboard successful-retry recoveries separately from
+        first-attempt successes (`observability.md` Rule 7 pattern).
+        """
         from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
 
         counter = str(tmp_path / "retry_then_succeed.cnt")
 
         scheduler = WorkflowScheduler(job_store_path=None)
         scheduler.start()
+        caplog.set_level(logging.WARNING)
         try:
             schedule_id = scheduler.schedule_interval(
                 _attempts_state_workflow(fail_first_n=1, counter_path=counter),
@@ -154,6 +160,18 @@ class TestSchedulerRetryPrimitives:
             assert (
                 attempts == 2
             ), f"expected exactly 2 attempts (1 fail + 1 retry-success); got {attempts}"
+
+            recovery_warns = [
+                r
+                for r in caplog.records
+                if r.levelno == logging.WARNING
+                and "recovered after retries" in r.getMessage().lower()
+            ]
+            assert len(recovery_warns) >= 1, (
+                f"expected >= 1 'recovered after retries' WARN; "
+                f"got {len(recovery_warns)}: "
+                f"{[r.getMessage() for r in recovery_warns]}"
+            )
         finally:
             scheduler.shutdown(wait=False)
 
