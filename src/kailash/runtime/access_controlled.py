@@ -39,6 +39,7 @@ from kailash.access_control import (
     get_access_control_manager,
 )
 from kailash.nodes.base import Node
+from kailash.runtime._time_limits import _validate_limits
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
 
@@ -127,14 +128,34 @@ class AccessControlledRuntime:
         self._node_outputs: dict[str, Any] = {}
 
     def execute(
-        self, workflow: Workflow, parameters: dict[str, Any] | None = None
+        self,
+        workflow: Workflow,
+        parameters: dict[str, Any] | None = None,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
+        **kwargs: Any,
     ) -> tuple[Any, str | None]:
         """
         Execute workflow with access control.
 
         This method has the exact same signature as the standard runtime,
         ensuring complete compatibility.
+
+        Args:
+            workflow: Workflow to execute.
+            parameters: Optional parameter overrides per node.
+            soft_time_limit: Optional advisory deadline in seconds (#912
+                Shard 1 slot, forwarded to inner runtime).
+            time_limit: Optional unconditional kill deadline in seconds.
+            **kwargs: Forward-compatibility kwargs forwarded to inner runtime.
         """
+        # #912 Shard 1: validate the typed kwargs at this entry point too —
+        # the inner runtime will re-validate, but raising here keeps the
+        # traceback rooted at the user-facing AccessControlledRuntime call
+        # site rather than dipping into the wrapped runtime first.
+        _validate_limits(soft_time_limit, time_limit)
+
         # Only check access control if it's enabled
         if self.acm.enabled:
             # Check workflow-level access
@@ -147,7 +168,15 @@ class AccessControlledRuntime:
 
         # Execute with base runtime - it's managed via context manager
         # The base runtime's context manager is entered in __enter__ if we own it
-        return self.base_runtime.execute(workflow, parameters=parameters)
+        # Forward typed kwargs by name so the inner runtime sees them
+        # in the typed slot, not absorbed into its **kwargs.
+        return self.base_runtime.execute(
+            workflow,
+            parameters=parameters,
+            soft_time_limit=soft_time_limit,
+            time_limit=time_limit,
+            **kwargs,
+        )
 
     def close(self) -> None:
         """Close the runtime and clean up resources.

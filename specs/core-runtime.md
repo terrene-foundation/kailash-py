@@ -79,6 +79,11 @@ def execute(
     parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     cancellation_token: CancellationToken | None = None,
     search_attributes: dict[str, Any] | None = None,
+    *,
+    idempotency_key: str | None = None,
+    force_resume_with_drift: bool = False,
+    soft_time_limit: float | None = None,
+    time_limit: float | None = None,
     **kwargs: Any,
 ) -> tuple[dict[str, Any], str | None]
 ```
@@ -92,6 +97,8 @@ Execute a workflow synchronously.
 - `parameters` -- Optional parameter overrides. Can be `dict[str, dict[str, Any]]` (per-node: `{"node_id": {"param": value}}`) or `dict[str, Any]` (flat, injected into root nodes)
 - `cancellation_token` -- Optional token to request mid-execution cancellation
 - `search_attributes` -- Optional typed key-value pairs for indexing/querying workflow runs
+- `soft_time_limit` -- Optional advisory deadline in seconds. Validated at the entry point: `<= 0` raises `ValueError`; when both `soft_time_limit` and `time_limit` are set, `soft_time_limit` MUST be strictly less than `time_limit`.
+- `time_limit` -- Optional unconditional kill deadline in seconds. Same validation contract.
 
 **Returns**: `tuple[dict[str, Any], str | None]`
 
@@ -169,9 +176,14 @@ def execute(
     parameters=None,
     cancellation_token=None,
     search_attributes=None,
+    *,
+    soft_time_limit: float | None = None,
+    time_limit: float | None = None,
     **kwargs,
 ) -> tuple[dict[str, Any], str | None]
 ```
+
+The typed `soft_time_limit` and `time_limit` keyword-only parameters share the validation contract documented in §4.1.2. They are accepted on every concrete `BaseRuntime` subclass; deadline enforcement is handled by the runtime-internal time-limit wrapper that consumes the validated values.
 
 **Docker-safe override**: Prevents the parent's threading-based execution that causes Docker file descriptor issues. Uses `asyncio.run()` for pure async execution.
 

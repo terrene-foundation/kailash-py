@@ -974,6 +974,15 @@ class WorkflowScheduler:
         # ignored on the queue dispatch path with a documented rationale above.
         retry_spec: Optional[RetrySpec] = kwargs.pop(_RETRY_SPEC_KWARG, None)
 
+        # Pop the typed time-limit kwargs before forwarding so we can pass
+        # them by NAME to runtime.execute(...) — landing them in the typed
+        # signature slot rather than being absorbed by the runtime's
+        # **kwargs. Per #912 Shard 1: slots accepted now, deadline
+        # enforcement lands in Shards 2–3 (in-process wrapper +
+        # scheduler-side timer arming around the retry loop).
+        soft_time_limit: float | None = kwargs.pop("soft_time_limit", None)
+        time_limit: float | None = kwargs.pop("time_limit", None)
+
         if self._dispatcher is not None:
             await self._dispatch_to_queue(
                 workflow_builder=workflow_builder,
@@ -1007,7 +1016,14 @@ class WorkflowScheduler:
                     else contextlib.nullcontext(_runtime)
                 )
                 with _runtime_cm as runtime:
-                    results, actual_run_id = runtime.execute(workflow, **kwargs)
+                    # Pass typed time-limit kwargs by NAME so they land in
+                    # the runtime's typed signature slot (#912 Shard 1).
+                    results, actual_run_id = runtime.execute(
+                        workflow,
+                        soft_time_limit=soft_time_limit,
+                        time_limit=time_limit,
+                        **kwargs,
+                    )
                 # LocalRuntime swallows leaf-node failures into a result entry
                 # of shape ``{"failed": True, "error": str, "error_type": str}``
                 # rather than raising. For #910 the retry primitive MUST observe

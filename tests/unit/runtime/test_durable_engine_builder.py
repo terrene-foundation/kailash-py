@@ -89,15 +89,22 @@ class _FakeRuntime:
         *,
         idempotency_key: Optional[str] = None,
         force_resume_with_drift: bool = False,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
     ) -> Tuple[Dict[str, Any], str]:
         # Record what the engine forwarded so the tests can assert
         # delegate-only behaviour (no parallel state machine).
+        # soft_time_limit / time_limit recorded per #912 Shard 1 contract;
+        # the fake mirrors the AsyncLocalRuntime.execute_workflow_async
+        # Protocol surface that engine forwards through.
         self.execute_calls.append(
             {
                 "workflow": workflow,
                 "inputs": dict(inputs),
                 "idempotency_key": idempotency_key,
                 "force_resume_with_drift": force_resume_with_drift,
+                "soft_time_limit": soft_time_limit,
+                "time_limit": time_limit,
             }
         )
         return self._next_results, self._next_run_id
@@ -479,12 +486,16 @@ async def test_execute_without_dispatcher_does_not_enqueue():
     engine = DurableExecutionEngine.builder().runtime(_FakeRuntime).build()
     await engine.execute(object())
     # No dispatcher means the in-process path is the only one.
+    # soft_time_limit / time_limit are None when caller does not pass them
+    # (#912 Shard 1 additive contract — slot accepted, default None).
     assert engine.runtime.execute_calls == [
         {
             "workflow": engine.runtime.execute_calls[0]["workflow"],
             "inputs": {},
             "idempotency_key": None,
             "force_resume_with_drift": False,
+            "soft_time_limit": None,
+            "time_limit": None,
         }
     ]
 

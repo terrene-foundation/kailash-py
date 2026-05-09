@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from kailash.nodes.base import Node
+from kailash.runtime._time_limits import _validate_limits
 
 # BaseRuntime doesn't exist - we'll implement task tracking methods directly
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
@@ -567,6 +568,10 @@ class DockerRuntime:
         workflow: Workflow,
         inputs: dict[str, dict[str, Any]] | None = None,
         node_resource_limits: dict[str, dict[str, str]] | None = None,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
+        **kwargs: Any,
     ) -> tuple[dict[str, dict[str, Any]], str | None]:
         """
         Execute a workflow using Docker containers.
@@ -575,10 +580,18 @@ class DockerRuntime:
             workflow: The workflow to execute.
             inputs: The inputs for each node.
             node_resource_limits: Resource limits for specific nodes.
+            soft_time_limit: Optional advisory deadline in seconds (#912
+                Shard 1 slot; out-of-process timer enforcement lands later).
+            time_limit: Optional unconditional kill deadline in seconds.
+            **kwargs: Forward-compatibility kwargs for additive #912 Shard 1
+                contract.
 
         Returns:
             Tuple of (execution_results, run_id).
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         # Create task run
         run_id = self._create_task_run(workflow)
 

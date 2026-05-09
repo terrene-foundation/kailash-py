@@ -46,6 +46,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+from kailash.runtime._time_limits import _validate_limits
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.lifecycle_events import TaskEvent, TaskEventHandler
 from kailash.workflow import Workflow
@@ -503,6 +504,9 @@ class DistributedRuntime(BaseRuntime):
         self,
         workflow: Workflow,
         parameters: Optional[Dict[str, Any]] = None,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
         **kwargs,
     ) -> Tuple[Dict[str, Any], str]:
         """Submit a workflow to the distributed task queue.
@@ -513,12 +517,21 @@ class DistributedRuntime(BaseRuntime):
         Args:
             workflow: The workflow to execute.
             parameters: Optional execution parameters.
+            soft_time_limit: Optional advisory deadline in seconds. Per
+                #912 Shard 1, the slot is accepted; serialisation onto
+                the ``TaskMessage`` wire format lands in Shard 4.
+            time_limit: Optional unconditional kill deadline in seconds.
+                Per #912 Shard 1, the slot is accepted; worker-side
+                enforcement lands in Shard 4.
             **kwargs: Additional execution options.
 
         Returns:
             Tuple of (status_dict, run_id) where status_dict contains
             ``{"status": "queued", "run_id": run_id, "queue_length": N}``.
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         run_id = self._generate_run_id()
         metadata = self._initialize_execution_metadata(workflow, run_id)
         self._execution_metadata[run_id] = metadata
