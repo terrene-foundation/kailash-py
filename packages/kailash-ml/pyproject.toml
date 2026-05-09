@@ -173,6 +173,15 @@ dev = [
     "hypothesis>=6.98",
     "mypy>=1.8",
     "ruff>=0.3",
+    # tests/unit/test_interop.py::TestPandasRoundTrip and
+    # tests/unit/test_data_explorer.py exercise the polars↔pandas conversion
+    # surface and the visualization renderer (both gated by the [interop]
+    # extra in production: `interop = ["pandas>=2.0"]`). pandas is required
+    # at test-collection time for these modules. Pre-#890 it was pulled
+    # transitively by kailash core; the slim-deps refactor moved pandas to
+    # kailash's [data] extra, breaking the transitive chain — declared
+    # explicitly here per `rules/dependencies.md` § "Declared = Imported".
+    "pandas>=2.0",
 ]
 
 [project.scripts]
