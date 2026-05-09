@@ -569,6 +569,20 @@ class DistributedRuntime(BaseRuntime):
         Returns:
             Tuple of (status_dict, run_id) where status_dict contains
             ``{"status": "queued", "run_id": run_id, "queue_length": N}``.
+
+        Time-Limit Example (per-task limits travel through the queue)::
+
+            from kailash.runtime.distributed import DistributedRuntime
+
+            runtime = DistributedRuntime(redis_url="redis://localhost:6379/0")
+            status, run_id = runtime.execute(
+                workflow,
+                soft_time_limit=2.0,   # advisory; raises SoftTimeLimitExceeded
+                time_limit=5.0,         # hard kill (after grace); requeue path
+            )
+            # The Worker arms the timers at DEQUEUE (not enqueue) so queue
+            # wait time does NOT consume the task's budget. Per-task limits
+            # ALWAYS win over Worker(default_*_time_limit) defaults.
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
@@ -689,6 +703,18 @@ class Worker:
         ...     concurrency=4,
         ... )
         >>> await worker.start()  # Runs until stopped
+
+        # With operator-set defaults (#912 Shard 4) — per-task
+        # ``DistributedRuntime.execute(soft_time_limit=, time_limit=)``
+        # ALWAYS wins over these defaults; defaults apply only when the
+        # task did not set its own:
+        >>> worker = Worker(
+        ...     redis_url="redis://localhost:6379/0",
+        ...     concurrency=4,
+        ...     default_soft_time_limit=30.0,
+        ...     default_time_limit=60.0,
+        ...     hard_time_limit_grace_seconds=2.0,
+        ... )
     """
 
     def __init__(

@@ -275,6 +275,58 @@ worker = Worker(redis_url="redis://localhost:6379/0", concurrency=4)
 await worker.start()  # Blocks, processing tasks
 ```
 
+#### 4.3.2 Per-Task Time Limits Through The Queue (#912)
+
+`DistributedRuntime.execute(soft_time_limit=, time_limit=)` validates and
+serializes per-task limits onto `TaskMessage.execution_limits`, an optional
+`Dict[str, float]` with shape `{"soft": <seconds>, "hard": <seconds>}`
+(either key omitted when its limit is `None`). The wire format is one
+optional dict so workers running pre-#912 SDK silently ignore the unknown
+payload key (forward-compatible). Workers running 2.19 or newer read the
+field and arm timers at DEQUEUE (not enqueue) so queue wait time does NOT
+consume the task's budget.
+
+`Worker.__init__` accepts operator-level defaults that apply only when a
+task does not specify its own:
+
+```python
+worker = Worker(
+    redis_url="redis://localhost:6379/0",
+    concurrency=4,
+    default_soft_time_limit=30.0,           # applied only if task has no soft
+    default_time_limit=60.0,                 # applied only if task has no hard
+    hard_time_limit_grace_seconds=2.0,       # wind-down before unconditional kill
+)
+```
+
+Per-task limits ALWAYS win over `Worker` defaults. `HardTimeLimitExceeded`
+on the worker triggers requeue (NOT immediate dead-letter) when
+`attempts < max_attempts`; dead-letter only after the attempt budget is
+exhausted.
+
+#### 4.3.3 WorkflowScheduler Per-Fire Time Limits (#912)
+
+`WorkflowScheduler.__init__` accepts operator-level defaults
+`default_soft_time_limit` / `default_time_limit` that fall through when a
+per-fire value is unset. Each `schedule_cron` / `schedule_interval` /
+`schedule_once` call accepts per-fire `soft_time_limit` / `time_limit`
+KEYWORD_ONLY kwargs that ALWAYS win over the scheduler defaults. Typed
+`SoftTimeLimitExceeded` / `HardTimeLimitExceeded` exceptions flow through
+`RetrySpec` (#910) classification so retryable timeouts re-fire with
+backoff and non-retryable ones bubble to APScheduler's job-error listener.
+
+```python
+scheduler = WorkflowScheduler(
+    job_store_path="schedules.db",
+    default_soft_time_limit=10.0,           # default for every fire
+    default_time_limit=30.0,
+)
+sid = scheduler.schedule_cron(
+    workflow, "*/5 * * * *",
+    soft_time_limit=2.0, time_limit=5.0,    # per-fire override
+)
+```
+
 ### 4.4 get_runtime Factory
 
 **Module**: `kailash.runtime`

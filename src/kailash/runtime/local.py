@@ -955,6 +955,16 @@ class LocalRuntime(
             workflow: Workflow to execute.
             task_manager: Optional task manager for tracking.
             parameters: Optional parameter overrides per node.
+            soft_time_limit: Optional advisory deadline in seconds (#912).
+                When reached, the running workflow is signalled via the
+                cancellation token; user code MAY catch
+                :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded`,
+                finish in-flight work, and exit cleanly before the hard
+                limit fires.
+            time_limit: Optional unconditional kill deadline in seconds
+                (#912). When ``time_limit + grace`` elapses, the wrapper
+                raises :class:`~kailash.sdk_exceptions.HardTimeLimitExceeded`
+                regardless of soft-limit acknowledgement.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -963,6 +973,34 @@ class LocalRuntime(
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
             PermissionError: If access control denies execution.
+            SoftTimeLimitExceeded: If ``soft_time_limit`` elapses and the
+                workflow does not exit before the hard deadline. Catch to
+                save partial work / write a checkpoint / exit cleanly.
+            HardTimeLimitExceeded: If ``time_limit + grace`` elapses
+                regardless of soft-limit acknowledgement. Operators rely on
+                this path to bound runaway resource consumption.
+
+        Time-Limit Example (celery-style soft-then-hard contract)::
+
+            from kailash.runtime.local import LocalRuntime
+            from kailash.sdk_exceptions import (
+                SoftTimeLimitExceeded,
+                HardTimeLimitExceeded,
+            )
+
+            runtime = LocalRuntime()
+            try:
+                results, run_id = runtime.execute(
+                    workflow.build(),
+                    soft_time_limit=2.0,   # warn-and-raise (catchable)
+                    time_limit=5.0,         # hard kill after grace
+                )
+            except SoftTimeLimitExceeded:
+                # Save partial work, write a checkpoint, return early.
+                ...
+            except HardTimeLimitExceeded:
+                # Operator-facing: task exceeded the hard kill deadline.
+                ...
 
         Resource Management:
             For proper resource cleanup in long-running applications, use

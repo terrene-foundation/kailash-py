@@ -1319,6 +1319,16 @@ class DurableExecutionEngine:
         queue_name:
             Target queue when a dispatcher is configured. Defaults to
             ``"default"``.
+        soft_time_limit:
+            Optional advisory deadline in seconds (#912). Forwarded to the
+            wrapped runtime. Raises
+            :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded` when reached;
+            user code MAY catch and exit cleanly before the hard kill fires.
+        time_limit:
+            Optional unconditional kill deadline in seconds (#912). Forwarded
+            to the wrapped runtime. Raises
+            :class:`~kailash.sdk_exceptions.HardTimeLimitExceeded` after
+            ``time_limit + grace`` regardless of soft-limit acknowledgement.
 
         Returns
         -------

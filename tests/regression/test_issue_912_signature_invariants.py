@@ -139,3 +139,211 @@ def test_kwargs_still_present_per_additive_contract(mod_path, cls_name, attr):
         f"current signature: {sig}. Removing **kwargs without a deprecation cycle "
         f"violates zero-tolerance.md Rule 6a."
     )
+
+
+# ---------------------------------------------------------------------------
+# Shard 3 — WorkflowScheduler signature pins
+# ---------------------------------------------------------------------------
+# Shard 3 wired ``default_soft_time_limit`` / ``default_time_limit`` onto
+# ``WorkflowScheduler.__init__`` AND ``soft_time_limit`` / ``time_limit`` onto
+# every public ``schedule_*`` entry-point. Per-task limits MUST win over
+# scheduler defaults; pins below structurally guarantee BOTH layers stay
+# wired so a future refactor that drops either layer fails loudly.
+_SCHEDULER_PER_FIRE_TARGETS: tuple[tuple[str, str, str], ...] = (
+    ("kailash.runtime.scheduler", "WorkflowScheduler", "schedule_cron"),
+    ("kailash.runtime.scheduler", "WorkflowScheduler", "schedule_interval"),
+    ("kailash.runtime.scheduler", "WorkflowScheduler", "schedule_once"),
+)
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("mod_path,cls_name,attr", _SCHEDULER_PER_FIRE_TARGETS)
+def test_scheduler_method_exposes_soft_time_limit_kwarg(mod_path, cls_name, attr):
+    """Each ``WorkflowScheduler.schedule_*`` MUST accept ``soft_time_limit`` kw-only."""
+    method = _resolve_method(mod_path, cls_name, attr)
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "soft_time_limit" in params, (
+        f"{cls_name}.{attr} MUST accept 'soft_time_limit' kwarg per #912 Shard 3; "
+        f"current signature: {sig}"
+    )
+    p = params["soft_time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"{cls_name}.{attr}::soft_time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"{cls_name}.{attr}::soft_time_limit MUST default to None (got {p.default!r})"
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("mod_path,cls_name,attr", _SCHEDULER_PER_FIRE_TARGETS)
+def test_scheduler_method_exposes_time_limit_kwarg(mod_path, cls_name, attr):
+    """Each ``WorkflowScheduler.schedule_*`` MUST accept ``time_limit`` kw-only."""
+    method = _resolve_method(mod_path, cls_name, attr)
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "time_limit" in params, (
+        f"{cls_name}.{attr} MUST accept 'time_limit' kwarg per #912 Shard 3; "
+        f"current signature: {sig}"
+    )
+    p = params["time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"{cls_name}.{attr}::time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"{cls_name}.{attr}::time_limit MUST default to None (got {p.default!r})"
+
+
+@pytest.mark.regression
+def test_scheduler_init_exposes_default_soft_time_limit():
+    """``WorkflowScheduler.__init__`` MUST accept ``default_soft_time_limit`` kw-only.
+
+    Per #912 Shard 3 Q1: scheduler-default falls through to per-task value;
+    per-task value wins; final fallthrough is None (no limit).
+    """
+    method = _resolve_method(
+        "kailash.runtime.scheduler", "WorkflowScheduler", "__init__"
+    )
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "default_soft_time_limit" in params, (
+        f"WorkflowScheduler.__init__ MUST accept 'default_soft_time_limit' "
+        f"per #912 Shard 3; current signature: {sig}"
+    )
+    p = params["default_soft_time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"default_soft_time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"default_soft_time_limit MUST default to None (got {p.default!r})"
+
+
+@pytest.mark.regression
+def test_scheduler_init_exposes_default_time_limit():
+    """``WorkflowScheduler.__init__`` MUST accept ``default_time_limit`` kw-only."""
+    method = _resolve_method(
+        "kailash.runtime.scheduler", "WorkflowScheduler", "__init__"
+    )
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "default_time_limit" in params, (
+        f"WorkflowScheduler.__init__ MUST accept 'default_time_limit' "
+        f"per #912 Shard 3; current signature: {sig}"
+    )
+    p = params["default_time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"default_time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"default_time_limit MUST default to None (got {p.default!r})"
+
+
+# ---------------------------------------------------------------------------
+# Shard 4 — Worker signature + TaskMessage wire-format pins
+# ---------------------------------------------------------------------------
+# Shard 4 wired ``default_soft_time_limit`` / ``default_time_limit`` /
+# ``hard_time_limit_grace_seconds`` onto ``Worker.__init__`` AND added the
+# ``execution_limits`` field to ``TaskMessage``. Per-task limits ALWAYS win
+# over Worker defaults; the wire field is OPTIONAL so older workers running
+# pre-Shard-4 SDK silently ignore it (forward-compat).
+
+
+@pytest.mark.regression
+def test_worker_init_exposes_default_soft_time_limit():
+    """``Worker.__init__`` MUST accept ``default_soft_time_limit`` kw-only."""
+    method = _resolve_method("kailash.runtime.distributed", "Worker", "__init__")
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "default_soft_time_limit" in params, (
+        f"Worker.__init__ MUST accept 'default_soft_time_limit' "
+        f"per #912 Shard 4; current signature: {sig}"
+    )
+    p = params["default_soft_time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"default_soft_time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"default_soft_time_limit MUST default to None (got {p.default!r})"
+
+
+@pytest.mark.regression
+def test_worker_init_exposes_default_time_limit():
+    """``Worker.__init__`` MUST accept ``default_time_limit`` kw-only."""
+    method = _resolve_method("kailash.runtime.distributed", "Worker", "__init__")
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "default_time_limit" in params, (
+        f"Worker.__init__ MUST accept 'default_time_limit' "
+        f"per #912 Shard 4; current signature: {sig}"
+    )
+    p = params["default_time_limit"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"default_time_limit MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default is None
+    ), f"default_time_limit MUST default to None (got {p.default!r})"
+
+
+@pytest.mark.regression
+def test_worker_init_exposes_hard_time_limit_grace_seconds():
+    """``Worker.__init__`` MUST accept ``hard_time_limit_grace_seconds`` kw-only.
+
+    Wind-down window between hard-deadline fire and unconditional kill;
+    default 1.0s; MUST be >= 0 (per #912 Shard 2 ``arm_time_limits`` contract).
+    """
+    method = _resolve_method("kailash.runtime.distributed", "Worker", "__init__")
+    sig = inspect.signature(method)
+    params = sig.parameters
+
+    assert "hard_time_limit_grace_seconds" in params, (
+        f"Worker.__init__ MUST accept 'hard_time_limit_grace_seconds' "
+        f"per #912 Shard 4; current signature: {sig}"
+    )
+    p = params["hard_time_limit_grace_seconds"]
+    assert (
+        p.kind == inspect.Parameter.KEYWORD_ONLY
+    ), f"hard_time_limit_grace_seconds MUST be KEYWORD_ONLY (got {p.kind.name})"
+    assert (
+        p.default == 1.0
+    ), f"hard_time_limit_grace_seconds MUST default to 1.0 (got {p.default!r})"
+
+
+@pytest.mark.regression
+def test_task_message_has_execution_limits_field():
+    """``TaskMessage`` dataclass MUST expose ``execution_limits`` for forward-compat.
+
+    Per #912 Shard 4: optional ``Dict[str, float]`` carrying per-task soft/hard
+    deadlines through the queue boundary. Shape is ONE optional dict (NOT two
+    separate fields) so older workers silently ignore the new field. Default
+    MUST be None so older-SDK ``TaskMessage.from_json()`` calls without the
+    field deserialize correctly.
+    """
+    import dataclasses
+
+    from kailash.runtime.distributed import TaskMessage
+
+    fields = {f.name: f for f in dataclasses.fields(TaskMessage)}
+    assert "execution_limits" in fields, (
+        f"TaskMessage MUST expose 'execution_limits' field per #912 Shard 4; "
+        f"current fields: {sorted(fields)}"
+    )
+    f = fields["execution_limits"]
+    # Default MUST be None so the wire format omits the field on the common
+    # no-limit path AND older workers running pre-Shard-4 SDK silently ignore
+    # the unknown payload key.
+    assert f.default is None, (
+        f"TaskMessage.execution_limits MUST default to None (got {f.default!r}) "
+        f"so the no-limit path stays compact and older workers ignore the field"
+    )

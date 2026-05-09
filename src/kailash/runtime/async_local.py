@@ -728,12 +728,35 @@ class AsyncLocalRuntime(LocalRuntime):
             workflow: Workflow to execute
             task_manager: Optional task manager for tracking
             parameters: Input parameters for the workflow
+            soft_time_limit: Optional advisory deadline in seconds (#912).
+                Raises :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded`
+                when reached; user code MAY catch and exit cleanly.
+            time_limit: Optional unconditional kill deadline in seconds (#912).
+                Raises :class:`~kailash.sdk_exceptions.HardTimeLimitExceeded`
+                after ``time_limit + grace`` regardless of acknowledgement.
 
         Returns:
             Tuple of (results dict, run_id)
 
         Raises:
             RuntimeError: If called from async context (use execute_workflow_async instead)
+            SoftTimeLimitExceeded: If ``soft_time_limit`` elapses.
+            HardTimeLimitExceeded: If ``time_limit + grace`` elapses.
+
+        Time-Limit Example::
+
+            from kailash.runtime.async_local import AsyncLocalRuntime
+            from kailash.sdk_exceptions import SoftTimeLimitExceeded
+
+            runtime = AsyncLocalRuntime()
+            try:
+                results, run_id = runtime.execute(
+                    workflow.build(),
+                    soft_time_limit=2.0,
+                    time_limit=5.0,
+                )
+            except SoftTimeLimitExceeded:
+                ...  # save partial work, exit cleanly
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
@@ -840,6 +863,12 @@ class AsyncLocalRuntime(LocalRuntime):
             workflow: Workflow to execute
             inputs: Input data for the workflow
             context: Optional execution context
+            soft_time_limit: Optional advisory deadline in seconds (#912).
+                Raises :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded`
+                when reached; user code MAY catch and exit cleanly.
+            time_limit: Optional unconditional kill deadline in seconds (#912).
+                Raises :class:`~kailash.sdk_exceptions.HardTimeLimitExceeded`
+                after ``time_limit + grace``.
 
         Returns:
             Tuple of (results dict, run_id) - For compatibility with tests
@@ -853,6 +882,24 @@ class AsyncLocalRuntime(LocalRuntime):
         Raises:
             asyncio.TimeoutError: If execution exceeds configured timeout
             WorkflowExecutionError: If execution fails
+            SoftTimeLimitExceeded: If ``soft_time_limit`` elapses.
+            HardTimeLimitExceeded: If ``time_limit + grace`` elapses.
+
+        Time-Limit Example (async)::
+
+            from kailash.runtime.async_local import AsyncLocalRuntime
+            from kailash.sdk_exceptions import SoftTimeLimitExceeded
+
+            runtime = AsyncLocalRuntime()
+            try:
+                results, run_id = await runtime.execute_workflow_async(
+                    workflow.build(),
+                    inputs={},
+                    soft_time_limit=2.0,
+                    time_limit=5.0,
+                )
+            except SoftTimeLimitExceeded:
+                ...  # save partial work, exit cleanly
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
