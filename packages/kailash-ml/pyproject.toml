@@ -182,6 +182,19 @@ dev = [
     # kailash's [data] extra, breaking the transitive chain — declared
     # explicitly here per `rules/dependencies.md` § "Declared = Imported".
     "pandas>=2.0",
+    # onnxruntime test-only upper-bound: skl2onnx 1.20.0 + onnxruntime
+    # 1.26.0 produce a structural output-shape regression for ZipMap-
+    # wrapped RandomForestClassifier — `output_probability` is emitted as
+    # `[-P(class=1), P(class=1)]` (decision-score-like) instead of
+    # `[P(class=0), P(class=1)]` (ZipMap probabilities). Confirmed by
+    # local repro on Python 3.12 + onnxruntime 1.25.1 (passes) vs CI on
+    # Python 3.12 + onnxruntime 1.26.0 (fails with max_diff=1.0).
+    # Production runtime declares `onnxruntime>=1.17` unconstrained per
+    # `dependencies.md` § "Latest Versions Always" — only the test
+    # environment caps to <1.26 until skl2onnx ships a 1.20+ release with
+    # 1.26 compat OR onnxruntime ships 1.26.x with the regression fixed.
+    # Tracked as follow-up; see PR #909 commit message.
+    "onnxruntime>=1.17,<1.26",
 ]
 
 [project.scripts]

@@ -113,20 +113,7 @@ async def test_register_sklearn_onnx_roundtrip() -> None:
         assert Path(reg.artifact_uris["onnx"]).exists()
         onnx_labels = _onnx_inference_labels(reg.artifact_uris["onnx"], X[:20])
         native_labels = model.predict(X[:20])
-        # Cross-runtime label parity: require ≥90% label agreement to absorb
-        # near-decision-boundary float-precision differences between
-        # onnxruntime's float32 inference path and sklearn's native float64
-        # tree traversal (Python 3.12 + onnxruntime ≥1.17 surface a
-        # consistent 1-2 label drift on this 20-sample slice). The looser
-        # threshold matches the cross-runtime parity convention used by
-        # CoreML / TFLite / OpenVINO test suites — strict equality is
-        # structurally too tight for tree-ensemble exports.
-        n_match = int(np.sum(np.asarray(onnx_labels) == np.asarray(native_labels)))
-        n_total = len(native_labels)
-        assert n_match >= int(n_total * 0.9), (
-            f"ONNX label parity drift > 10%: onnx={onnx_labels} "
-            f"native={native_labels} (matched {n_match}/{n_total})"
-        )
+        assert np.array_equal(onnx_labels, native_labels)
         # Version monotonicity (§5.1 MUST 4 scope)
         assert reg.version == 1
 

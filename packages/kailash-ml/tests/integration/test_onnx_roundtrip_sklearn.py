@@ -70,20 +70,10 @@ def test_sklearn_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     onnx_outputs = session.run(None, {input_name: X_test})
     onnx_labels = np.asarray(onnx_outputs[0]).flatten()
 
-    # Label parity — require ≥90% agreement to absorb near-decision-boundary
-    # float-precision differences between onnxruntime's float32 inference path
-    # and sklearn's native float64 tree traversal. Probability parity (the
-    # `np.allclose(..., rtol=1e-3)` check below) is the load-bearing fidelity
-    # gate; label disagreement is downstream of probabilities crossing 0.5
-    # by ε. Strict `np.array_equal` is structurally too tight for tree-
-    # ensemble exports across runtimes (CoreML / TFLite / OpenVINO test
-    # suites use the same looser threshold for the same reason).
-    n_match = int(np.sum(np.asarray(onnx_labels) == np.asarray(native_preds)))
-    n_total = len(native_preds)
-    assert n_match >= int(n_total * 0.9), (
-        f"ONNX label parity drift > 10%: onnx={onnx_labels} "
-        f"native={native_preds} (matched {n_match}/{n_total})"
-    )
+    # Label parity — must match exactly
+    assert np.array_equal(
+        onnx_labels, native_preds
+    ), f"label mismatch: onnx={onnx_labels} native={native_preds}"
 
     # Probability parity — skl2onnx emits a list of dicts OR a 2D array
     # depending on the estimator; coerce to a 2D array and check allclose
