@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "1.7.3"
+version = "1.7.4"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -31,6 +31,15 @@ dependencies = [
     "kailash>=2.16.0",
     "kailash-dataflow>=2.0.11",
     "kailash-nexus>=2.1.0",
+    # aiosqlite is module-scope in kailash_ml.tracking.storage.sqlite via
+    # kailash.core.pool.sqlite_pool (eager re-export from kailash.core.pool
+    # __init__.py). `import kailash_ml` therefore unconditionally requires
+    # aiosqlite. kailash 2.18.0+ scopes aiosqlite to its [db-sqlite] extra
+    # — kailash-ml MUST declare it directly. (kailash-dataflow's [sqlite]
+    # extra also covers it but kailash-ml does not depend on the [sqlite]
+    # variant of dataflow.) Origin: 1.7.3 clean-venv install verification
+    # surfaced ModuleNotFoundError: aiosqlite at module-import time.
+    "aiosqlite>=0.19.0",
     "polars>=1.0",
     "pyarrow>=14.0",
     "numpy>=1.24",
@@ -164,6 +173,28 @@ dev = [
     "hypothesis>=6.98",
     "mypy>=1.8",
     "ruff>=0.3",
+    # tests/unit/test_interop.py::TestPandasRoundTrip and
+    # tests/unit/test_data_explorer.py exercise the polars↔pandas conversion
+    # surface and the visualization renderer (both gated by the [interop]
+    # extra in production: `interop = ["pandas>=2.0"]`). pandas is required
+    # at test-collection time for these modules. Pre-#890 it was pulled
+    # transitively by kailash core; the slim-deps refactor moved pandas to
+    # kailash's [data] extra, breaking the transitive chain — declared
+    # explicitly here per `rules/dependencies.md` § "Declared = Imported".
+    "pandas>=2.0",
+    # onnxruntime test-only upper-bound: skl2onnx 1.20.0 + onnxruntime
+    # 1.26.0 produce a structural output-shape regression for ZipMap-
+    # wrapped RandomForestClassifier — `output_probability` is emitted as
+    # `[-P(class=1), P(class=1)]` (decision-score-like) instead of
+    # `[P(class=0), P(class=1)]` (ZipMap probabilities). Confirmed by
+    # local repro on Python 3.12 + onnxruntime 1.25.1 (passes) vs CI on
+    # Python 3.12 + onnxruntime 1.26.0 (fails with max_diff=1.0).
+    # Production runtime declares `onnxruntime>=1.17` unconstrained per
+    # `dependencies.md` § "Latest Versions Always" — only the test
+    # environment caps to <1.26 until skl2onnx ships a 1.20+ release with
+    # 1.26 compat OR onnxruntime ships 1.26.x with the regression fixed.
+    # Tracked as follow-up; see PR #909 commit message.
+    "onnxruntime>=1.17,<1.26",
 ]
 
 [project.scripts]

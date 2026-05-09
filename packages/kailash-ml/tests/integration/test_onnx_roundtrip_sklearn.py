@@ -27,12 +27,10 @@ pytest.importorskip("onnxruntime")
 def test_sklearn_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     """Train a small sklearn classifier, export to ONNX, assert parity."""
     import onnxruntime as ort
+    from kailash_ml.bridge.onnx_bridge import OnnxBridge
     from sklearn.datasets import make_classification
     from sklearn.ensemble import RandomForestClassifier
 
-    from kailash_ml.bridge.onnx_bridge import OnnxBridge
-
-    rng = np.random.default_rng(seed=42)
     X, y = make_classification(
         n_samples=200,
         n_features=8,

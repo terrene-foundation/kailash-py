@@ -1,5 +1,20 @@
 # kailash-ml Changelog
 
+## [1.7.4] — 2026-05-09 — hotfix: aiosqlite restored to core deps
+
+Hotfix release closing a pre-existing latent dependency gap exposed by the 1.7.3 clean-venv install verification (`pip install kailash-ml==1.7.3` → `ModuleNotFoundError: No module named 'aiosqlite'` at module-import time).
+
+The bug existed in 1.7.2 as well — anyone who installed kailash-ml against a venv without aiosqlite transitively present would have hit the same import failure. Most users were unaffected because they install kailash-dataflow with the `[sqlite]` extra or kailash with `[db-sqlite]` first.
+
+### Fixed
+
+- **`pip install kailash-ml` now imports cleanly** — `aiosqlite>=0.19.0` is now a **core** dependency. `kailash_ml.tracking.storage.__init__` imports `SqliteTrackerStore` at module-scope, which transitively chains through `kailash.core.pool.sqlite_pool` to a bare `import aiosqlite`. The chain is unconditional from `import kailash_ml`, so aiosqlite is effectively required. The kailash 2.18.0 `[db-sqlite]` extra and the kailash-dataflow 2.9.0 `[sqlite]` extra both declare aiosqlite, but kailash-ml does not consume those variants — it must declare aiosqlite directly per `dependencies.md` § "Declared = Imported".
+
+### Notes
+
+- **1.7.3 superseded.** `pip install kailash-ml` now resolves to 1.7.4 by default.
+- **Follow-up tracked**: kailash core's `core/pool/__init__.py` eagerly re-exports `sqlite_pool` symbols (forcing aiosqlite at module-import time for any consumer touching `kailash.core.pool.*`). Migrating that to a lazy `__getattr__` pattern per `orphan-detection.md` Rule 6b would let consumers import `kailash.core.pool` without paying the aiosqlite tax. Out of hotfix scope; kailash core 2.18.x patch concern.
+
 ## [1.7.3] — 2026-05-09 — kailash floor bump for #890 slim-core alignment
 
 Patch release pairing kailash-ml with the kailash 2.18.0 / #890 slim-core layout. **No source changes** — diff is strictly `pyproject.toml` floor bump + `__version__` anchor + this CHANGELOG entry.
