@@ -2,6 +2,19 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.2.13] — 2026-05-09 — slim core: orphan pydantic delete + kailash 2.16 floor (#890)
+
+Patch release shipping kailash-mcp's slice of the kailash 2.18.0 / #890 slim-core decoupling. **No install-shape change for users** — `pydantic` was a declared core dep but had zero import sites in `src/kailash_mcp/`; it remains transitively available through `mcp[cli]` (which declares pydantic as its own runtime dependency). Users see no behavior change.
+
+### Changed
+
+- **Removed orphan dependency `pydantic>=2.6`** — verified zero imports in `src/kailash_mcp/` source tree. The package's runtime needs are entirely covered by `kailash` + `mcp[cli]`. `mcp[cli]` continues to declare pydantic as a transitive dep, so `import pydantic` still works for any kailash-mcp consumer that needs it directly.
+- **`kailash` floor: 2.16.0** (was `2.14.0`) — aligns with the kailash 2.18.0 slim-core layout.
+
+### Notes
+
+- This is a **packaging cleanup release** — no public-API additions, removals, or behavior changes. Wheel content is identical to 0.2.12 except for the `__version__` constant; only the install manifest changed (one fewer declared core dep).
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
