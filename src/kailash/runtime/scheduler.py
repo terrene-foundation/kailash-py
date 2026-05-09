@@ -1099,6 +1099,11 @@ class WorkflowScheduler:
             "cancellation_token", None
         )
         for attempt in range(1, max_attempts + 1):
+            # Bind cancellable=None at the TOP of every attempt so the
+            # `except Exception as exc:` block below can safely reference it
+            # even when an early-attempt failure (workflow.build() / runtime
+            # acquisition) skips the later `cancellable = None` assignment.
+            cancellable = None
             try:
                 workflow = workflow_builder.build()
                 # Context-manager form ensures the runtime is closed after each
@@ -1130,7 +1135,8 @@ class WorkflowScheduler:
                     )
                     else CancellationToken()
                 )
-                cancellable = None
+                # cancellable initialized at top of loop body; arm only if
+                # caller supplied at least one limit.
                 if soft_time_limit is not None or time_limit is not None:
                     # Arm threading.Timer deadlines around this attempt.
                     # Pass the user's token into runtime.execute(...) ONLY
