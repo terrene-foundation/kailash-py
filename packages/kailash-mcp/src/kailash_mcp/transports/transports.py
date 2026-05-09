@@ -63,16 +63,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import urljoin, urlparse
 
-try:
-    import aiohttp
-except ImportError:
-    aiohttp = None  # type: ignore[assignment]  # Included in base install
-
-try:
-    import websockets
-except ImportError:
-    websockets = None  # type: ignore[assignment]  # Included in base install
-
+import aiohttp
+import websockets
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager

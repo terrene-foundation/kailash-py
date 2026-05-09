@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-mcp"
-version = "0.2.13"
+version = "0.2.14"
 description = "Production-ready Model Context Protocol (MCP) client, server, and platform for Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -28,10 +28,22 @@ dependencies = [
     # - kailash + mcp[cli] required.
     # - pydantic was an ORPHAN (zero imports in src/kailash_mcp/);
     #   `mcp[cli]` already declares pydantic as its own dep so it
-    #   remains transitively available. DELETED.
+    #   remains transitively available. DELETED in 0.2.13.
+    # - aiohttp + websockets are referenced UNCONDITIONALLY at
+    #   module-scope class-body type annotations in
+    #   transports.py:902 (StreamableHTTPTransport) +
+    #   transports.py:954 (WebSocket transport). They are NOT
+    #   optional — `import kailash_mcp` fails on a clean install
+    #   without them (NoneType.ClientResponse / NoneType
+    #   .WebSocketServerProtocol at class-definition time). 0.2.14
+    #   restores them to core deps. The `[http]` / `[sse]` /
+    #   `[websocket]` extras retain their declarations as harmless
+    #   redundancy (already-installed entries are no-ops).
     # ─────────────────────────────────────────────────────────────
     "kailash>=2.16.0",
     "mcp[cli]>=1.23.0",
+    "aiohttp>=3.12.4",
+    "websockets>=12.0",
 ]
 requires-python = ">=3.11"
 
