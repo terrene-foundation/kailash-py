@@ -2,6 +2,44 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.21.0] — 2026-05-09 — slim-core decoupling: 9 core deps + provider/observability/db/cache/rag extras (#890)
+
+Minor release shipping the kailash-kaizen side of the kailash 2.18.0 / #890 slim-core decoupling. **Install-shape breaking change** — kaizen drops from 29 → 9 core dependencies. Provider SDKs (Azure, Google, token counters), observability (Prometheus/OpenTelemetry/structlog), database (aiosqlite/asyncpg), cache (Redis), RAG (numpy/Pillow), research-validator (GitPython), and HTTP server (FastAPI/uvicorn) all move to opt-in extras. The new `[all]` umbrella preserves the pre-2.21.0 default install for users who do not want to enumerate which subsystem they consume.
+
+### Migration table
+
+| Surface used                                           | Pre-2.21.0 install           | 2.21.0+ install                                      |
+| ------------------------------------------------------ | ---------------------------- | ---------------------------------------------------- |
+| Core agent / `BaseAgent` / `Signature` / `Pipeline`    | `pip install kailash-kaizen` | `pip install kailash-kaizen` (unchanged — slim core) |
+| Azure OpenAI provider (`providers.llm.azure`)          | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[providers-azure]'`      |
+| Google Gemini provider (`providers.llm.google`)        | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[providers-google]'`     |
+| Token-counter providers (tiktoken / anthropic counter) | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[providers-tokens]'`     |
+| HTTP transports (FastAPI / uvicorn)                    | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[server]'`               |
+| Observability (Prometheus / OTEL / structlog)          | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[observability]'`        |
+| Database (aiosqlite + asyncpg)                         | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[db]'`                   |
+| Distributed cache (Redis)                              | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[cache]'`                |
+| RAG / vision (numpy + Pillow)                          | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[rag]'`                  |
+| Research validator (GitPython)                         | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[research-validator]'`   |
+| Pre-2.21.0 default install (back-compat — everything)  | `pip install kailash-kaizen` | `pip install 'kailash-kaizen[all]'`                  |
+
+### Changed
+
+- **Slim core dependencies** — `pip install kailash-kaizen` now installs 9 deps (down from 29): `kailash`, `kailash-mcp`, `pydantic`, `typing-extensions`, `anyio`, `httpx`, `aiohttp`, `PyJWT`, `cryptography`. Audit per #890:
+  - **Provider SDKs (azure-ai-inference, azure-identity, azure-core, google-genai, tiktoken-style counters)** — all imports are function-local in `providers/llm/{azure,google}.py`. Moved to per-provider extras (`[providers-azure]`, `[providers-google]`, `[providers-tokens]`).
+  - **HTTP server (fastapi, uvicorn[standard])** — only used by `kaizen.server.*`. Moved to `[server]` extra.
+  - **Observability (prometheus-client, opentelemetry-api, opentelemetry-sdk, structlog)** — only used by `kaizen.observability.*`. Moved to `[observability]` extra.
+  - **Database (aiosqlite, asyncpg)** — only used by multi-tier memory + trust migration paths. Moved to `[db]` extra.
+  - **Distributed cache (redis)** — only used by `governance/rate_limiter.py`. Moved to `[cache]` extra.
+  - **RAG numerics (numpy, Pillow)** — only used by similarity / vision / hybrid search nodes. Moved to `[rag]` extra.
+  - **Research validator (GitPython)** — only used by repo-introspection validator. Moved to `[research-validator]` extra.
+- **`[all]` umbrella extra** — `pip install 'kailash-kaizen[all]'` resolves to `kailash-kaizen[providers-azure,providers-google,providers-tokens,providers-http,server,observability,db,cache,rag,research-validator]`, preserving the pre-2.21.0 default install experience.
+- **`kailash` floor: 2.16.0** (was `2.13.4`) — aligns with the kailash 2.18.0 slim-core layout.
+
+### Notes
+
+- **Bare imports of moved subsystems on a slim install raise raw `ModuleNotFoundError`** — e.g. `from kaizen.observability import ...` requires `[observability]`. The migration table above is the authoritative recovery path.
+- This is a **packaging / install-shape change only** — every Python public-API symbol that existed in 2.20.0 still exists in 2.21.0 with the same signature and semantics. Users on `pip install 'kailash-kaizen[all]'` see no behavior change.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
