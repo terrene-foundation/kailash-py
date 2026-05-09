@@ -1,5 +1,17 @@
 # kailash-align Changelog
 
+## [0.7.1] — 2026-05-09 — kailash floor bump for #890 slim-core alignment
+
+Patch release pairing kailash-align with the kailash 2.18.0 / #890 slim-core layout. **No source changes** — diff is strictly `pyproject.toml` floor bump + `__version__` anchor + this CHANGELOG entry.
+
+### Changed
+
+- **`kailash` floor: 2.16.0** (was `2.11.0`) — aligns with the kailash 2.18.0 slim-core layout. The pre-bump floor still resolved against PyPI, but ≥2.16.0 is the canonical floor for any package depending on the post-#890 surfaces.
+
+### Notes
+
+- No public-API changes; no behavior changes; wheel content is identical to 0.7.0 except for the `__version__` constant. Only the install manifest changed.
+
 ## [0.7.0] - 2026-04-27 — W6-016: shared trajectory schema bridge (F-E1-50)
 
 Cross-SDK companion of `kailash-ml 1.3.0`. Closes W5-E1 finding F-E1-50
