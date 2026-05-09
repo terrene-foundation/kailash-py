@@ -384,6 +384,14 @@ class WorkflowScheduler:
             When provided, every fired trigger enqueues a Task to the
             dispatcher instead of executing the workflow in-process.
             Default ``None`` preserves the existing in-process behavior.
+        default_soft_time_limit: Optional advisory deadline in seconds (#912)
+            applied when a schedule's per-fire ``soft_time_limit=`` is None.
+            Per-fire value ALWAYS wins; final fallthrough is None (no limit).
+            Validated at construction (negative / soft >= hard raises here,
+            not later from a timer thread).
+        default_time_limit: Optional unconditional kill deadline in seconds
+            (#912) applied when per-fire ``time_limit=`` is None. Per-fire
+            value ALWAYS wins; final fallthrough is None.
 
     Raises:
         ImportError: If APScheduler is not installed.
@@ -555,6 +563,16 @@ class WorkflowScheduler:
                 when set on a scheduler constructed with
                 ``dispatch_via=<Dispatcher>`` (queue-dispatch path) — worker-
                 side retry semantics are the dispatcher's contract.
+            soft_time_limit: Optional advisory deadline in seconds (#912).
+                Per-fire value wins over ``WorkflowScheduler(default_soft_time_limit=)``;
+                final fallthrough is None (no limit). Raises
+                :class:`~kailash.sdk_exceptions.SoftTimeLimitExceeded` when
+                reached; flows through ``RetrySpec`` retry classifier.
+            time_limit: Optional unconditional kill deadline in seconds (#912).
+                Per-fire value wins over ``WorkflowScheduler(default_time_limit=)``;
+                final fallthrough is None. Raises
+                :class:`~kailash.sdk_exceptions.HardTimeLimitExceeded` after
+                ``time_limit + grace``.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
@@ -562,13 +580,20 @@ class WorkflowScheduler:
 
         Raises:
             ValueError: If the cron expression is invalid OR ``retry`` is
-                supplied alongside ``dispatch_via=`` on this scheduler.
+                supplied alongside ``dispatch_via=`` on this scheduler, OR
+                if ``soft_time_limit`` / ``time_limit`` are negative or
+                inconsistent (soft >= hard).
 
         Example:
             >>> sid = scheduler.schedule_cron(workflow, "0 */6 * * *")  # Every 6 hours
             >>> sid = scheduler.schedule_cron(
             ...     workflow, "30 2 * * 1",
             ...     retry=RetrySpec(max_retries=3, retry_on=(ConnectionError,)),
+            ... )
+            >>> # Per-fire time limits (#912):
+            >>> sid = scheduler.schedule_cron(
+            ...     workflow, "*/5 * * * *",
+            ...     soft_time_limit=2.0, time_limit=5.0,
             ... )
         """
         from apscheduler.triggers.cron import CronTrigger
@@ -631,16 +656,27 @@ class WorkflowScheduler:
             seconds: Interval in seconds between executions.
             name: Optional human-readable name for this schedule.
             retry: Optional :class:`RetrySpec` (#910); see :meth:`schedule_cron`.
+            soft_time_limit: Optional advisory deadline in seconds (#912);
+                see :meth:`schedule_cron` for the per-fire vs default
+                fallthrough contract.
+            time_limit: Optional unconditional kill deadline in seconds (#912);
+                see :meth:`schedule_cron`.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
             A unique schedule_id.
 
         Raises:
-            ValueError: If seconds is not positive.
+            ValueError: If seconds is not positive OR if ``soft_time_limit`` /
+                ``time_limit`` are negative or inconsistent (soft >= hard).
 
         Example:
             >>> sid = scheduler.schedule_interval(workflow, seconds=300)  # Every 5 min
+            >>> # Per-fire time limits (#912):
+            >>> sid = scheduler.schedule_interval(
+            ...     workflow, seconds=60,
+            ...     soft_time_limit=2.0, time_limit=5.0,
+            ... )
         """
         if not math.isfinite(seconds) or seconds <= 0:
             raise ValueError(
@@ -698,18 +734,29 @@ class WorkflowScheduler:
             run_at: The datetime at which to execute the workflow.
             name: Optional human-readable name for this schedule.
             retry: Optional :class:`RetrySpec` (#910); see :meth:`schedule_cron`.
+            soft_time_limit: Optional advisory deadline in seconds (#912);
+                see :meth:`schedule_cron` for the per-fire vs default
+                fallthrough contract.
+            time_limit: Optional unconditional kill deadline in seconds (#912);
+                see :meth:`schedule_cron`.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
             A unique schedule_id.
 
         Raises:
-            ValueError: If run_at is in the past.
+            ValueError: If run_at is in the past OR if ``soft_time_limit`` /
+                ``time_limit`` are negative or inconsistent (soft >= hard).
 
         Example:
             >>> from datetime import datetime, UTC
             >>> run_at = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
             >>> sid = scheduler.schedule_once(workflow, run_at=run_at)
+            >>> # Per-fire time limits (#912):
+            >>> sid = scheduler.schedule_once(
+            ...     workflow, run_at=run_at,
+            ...     soft_time_limit=2.0, time_limit=5.0,
+            ... )
         """
         schedule_id = self._generate_schedule_id()
 
