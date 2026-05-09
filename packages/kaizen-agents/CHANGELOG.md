@@ -5,6 +5,23 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.7] — 2026-05-09 — slim core: orphan deletes + httpx/openai consolidation (#890)
+
+Patch release shipping kaizen-agents' slice of the kailash 2.18.0 / #890 slim-core decoupling. **No public-API behavior change** — three deps audited as orphans (zero imports across `src/kaizen_agents/`) are deleted, and the dep ordering is cleaned up. Users see no difference in installed packages from the `kailash-kaizen` + `openai` transitive set.
+
+### Changed
+
+- **Removed orphan dependencies** — verified via grep across `src/kaizen_agents/`:
+  - **`kailash-pact>=0.8.1`** — zero imports. PACT semantics are reached via `kailash.trust.pact.*` (in `kailash` core), not the separate `kailash-pact` package. DELETED.
+  - **`python-dotenv>=1.0.0`** — zero imports. DELETED.
+  - **`structlog>=23.1.0`** — zero imports. DELETED.
+- **Re-ordered remaining deps** — `kailash`, `kailash-kaizen`, `openai`, `httpx`. `httpx` is function-local but small enough to keep in core for ergonomics (no extras gating).
+- **`kailash` floor: 2.14.0** (unchanged) — kaizen-agents does not require the 2.16+ slim-core surface; kailash-kaizen floor handles the chain.
+
+### Notes
+
+- This is a **dependency-cleanup release** — no `__init__.py` exports change, no `__all__` change, no behavior change. Test suite verifies all symbols still resolve.
+
 ## [0.9.6] — 2026-05-06 — black + ruff modernization sweep (#815, PR #850)
 
 1222 unit tests pass (PR #850 CI). No public API change: `__init__.py` exports + `__all__`
