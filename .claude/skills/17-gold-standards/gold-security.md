@@ -13,7 +13,6 @@ description: "Gold standard for security practices. Use when asking 'security st
 ## Security Principles
 
 ### 1. Secrets Management
-
 ```python
 # ✅ GOOD: Environment variables
 import os
@@ -30,7 +29,6 @@ workflow.add_node("HTTPRequestNode", "api", {
 ```
 
 ### 2. SQL Injection Prevention
-
 ```python
 # ✅ GOOD: Parameterized queries
 workflow.add_node("DatabaseQueryNode", "query", {
@@ -43,7 +41,6 @@ workflow.add_node("DatabaseQueryNode", "query", {
 ```
 
 ### 3. Input Validation
-
 ```python
 # ✅ GOOD: Validate all inputs
 workflow.add_node("CodeValidationNode", "validate", {
@@ -58,7 +55,6 @@ workflow.add_node("CodeValidationNode", "validate", {
 ```
 
 ### 4. Authentication & Authorization
-
 ```python
 # ✅ GOOD: Check permissions
 workflow.add_node("DatabaseQueryNode", "check_auth", {
@@ -74,7 +70,6 @@ workflow.add_node("SwitchNode", "authorize", {
 ```
 
 ### 5. Audit Logging
-
 ```python
 # ✅ GOOD: Log all sensitive operations
 workflow.add_node("SQLDatabaseNode", "audit_log", {

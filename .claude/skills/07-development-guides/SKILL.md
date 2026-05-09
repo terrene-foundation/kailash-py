@@ -1,6 +1,6 @@
 ---
 name: development-guides
-description: "Kailash dev guides: custom nodes, MCP, async, testing, deployment, RAG, security, monitoring, SDK internals."
+description: "Kailash dev guides — custom nodes, MCP, async, testing, deployment, RAG, internals."
 ---
 
 # Kailash Patterns - Development Guides

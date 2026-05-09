@@ -1,6 +1,6 @@
 ---
 name: value-audit
-description: "Value-critical QA for enterprise demos: skeptical-buyer evaluation of value props, value flow, data credibility, narrative coherence."
+description: "Demo value audit — skeptical-buyer evaluation of props, flow, credibility, narrative."
 ---
 
 # Value Audit Skills
@@ -9,11 +9,11 @@ Enterprise demo QA methodology that goes beyond functional testing to evaluate w
 
 ## Quick Reference
 
-| Skill File                                                 | Purpose                                                                     | When to Use                                     |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------- |
-| [value-audit-methodology.md](value-audit-methodology.md)   | Full audit methodology, Five Questions framework, 3-level evaluation        | Running a complete value audit                  |
-| [demo-readiness-checklist.md](demo-readiness-checklist.md) | Pre-demo verification with pass/fail criteria                               | Quick readiness check before a demo             |
-| [value-flow-patterns.md](value-flow-patterns.md)           | Common value flow patterns for enterprise AI platforms, anti-patterns       | Analyzing or designing value flows              |
+| Skill File                                                 | Purpose                                                                             | When to Use                                     |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------- |
+| [value-audit-methodology.md](value-audit-methodology.md)   | Full audit methodology, Five Questions framework, 3-level evaluation                | Running a complete value audit                  |
+| [demo-readiness-checklist.md](demo-readiness-checklist.md) | Pre-demo verification with pass/fail criteria                                       | Quick readiness check before a demo             |
+| [value-flow-patterns.md](value-flow-patterns.md)           | Common value flow patterns for enterprise AI platforms, anti-patterns               | Analyzing or designing value flows              |
 | [full-demo-audit.md](full-demo-audit.md)                   | Combined technical + value audit orchestration (testing-specialist + value-auditor) | Running both technical and value QA in sequence |
 
 ## Core Concept

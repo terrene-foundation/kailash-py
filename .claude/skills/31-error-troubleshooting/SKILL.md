@@ -1,6 +1,6 @@
 ---
 name: error-troubleshooting
-description: "Kailash errors: Nexus hangs, connection errors, runtime errors, cycles, missing .build(), validation, template syntax."
+description: "Kailash errors — Nexus hangs, connection, runtime, cycles, missing .build(), validation."
 ---
 
 # Kailash Error Troubleshooting

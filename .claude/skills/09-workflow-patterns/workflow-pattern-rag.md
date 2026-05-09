@@ -11,13 +11,12 @@ Retrieval Augmented Generation patterns for AI-powered document search and Q&A.
 > Category: `workflow-patterns`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`04-kaizen`](../../04-kaizen/SKILL.md), [`workflow-pattern-ai-document`](workflow-pattern-ai-document.md)
+> Related Skills: [`nodes-ai-reference`](../08-nodes-reference/nodes-ai-reference.md), [`workflow-pattern-ai-document`](workflow-pattern-ai-document.md)
 > Related Subagents: `pattern-expert` (RAG workflows), `kaizen-specialist` (AI agents)
 
 ## Quick Reference
 
 RAG workflow components:
-
 - **Document ingestion** - Load and chunk documents
 - **Embedding generation** - Convert text to vectors
 - **Vector storage** - Store in vector database
@@ -251,4 +250,3 @@ Relevant Documents:
 {{search.results}}
 
 User: {{input.query}}
-```

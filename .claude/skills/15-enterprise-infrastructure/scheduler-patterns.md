@@ -164,7 +164,7 @@ scheduler.schedule_cron(enqueue_job, "0 22 * * *", workflow_id="etl")
 
 **Why:** APScheduler's jobstore stores trigger metadata, not exclusion locks. Two schedulers reading the same jobstore each compute "next trigger" identically and each fire the job. Single-leader OR queue-dispatch are the two correct dedup strategies; "everyone runs the scheduler and we hope" is BLOCKED.
 
-In-flight integration work for kailash-py multi-instance scheduling is tracked at issue #859 (single-leader election + jobstore lock).
+In-flight integration work for multi-instance scheduling is tracked at the SDK's open multi-instance scheduler issue (single-leader election + jobstore lock).
 
 ## Test Tier Recommendation
 

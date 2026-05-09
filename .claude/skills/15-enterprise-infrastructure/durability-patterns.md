@@ -73,7 +73,7 @@ req = DurableRequest()  # checkpoint_manager=None → checkpoints are in-memory 
 
 **Why:** A `DurableRequest` without a wired `CheckpointManager` is a state machine with no persistence — the journal lives in process memory and dies with the process. The wiring is what makes the request actually durable. The advertised resume contract holds only when both the request_id and the checkpoint backing store survive the crash.
 
-In-flight integration work tying `DurableRequest` resume into the LocalRuntime hot path is tracked at issue #860.
+In-flight integration work tying `DurableRequest` resume into the LocalRuntime hot path is tracked at the SDK's open LocalRuntime-resume integration issue.
 
 ## CheckpointManager + DBCheckpointStore — Persistence Tiers
 
@@ -157,7 +157,7 @@ Kailash describes durable execution on its own terms. The primitives above are d
 
 Tier 2 (real PostgreSQL + real `DBCheckpointStore` + real `DurableRequest`) is the only tier that proves the resume contract. Tier 1 tests against `ExecutionTracker.to_dict() / from_dict()` prove the helper round-trips JSON; they do not prove that the runtime calls the tracker on every node completion or that `CheckpointManager.save_checkpoint` actually persists to the wired backend.
 
-In-flight integration work tying durable execution into the LocalRuntime resume path is tracked at issue #861.
+In-flight integration work tying durable execution into the LocalRuntime resume path is tracked at the SDK's open durable-execution integration issue.
 
 ## Related
 

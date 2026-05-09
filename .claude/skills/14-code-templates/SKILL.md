@@ -1,6 +1,6 @@
 ---
 name: code-templates
-description: "Kailash code templates: workflows (basic + cyclic), custom nodes, MCP servers, all 3 test tiers (unit/integration/E2E)."
+description: "Kailash templates — workflows, cyclic, custom nodes, MCP servers, 3 test tiers."
 ---
 
 # Kailash Code Templates

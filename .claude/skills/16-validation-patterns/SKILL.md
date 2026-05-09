@@ -1,6 +1,6 @@
 ---
 name: validation-patterns
-description: "Kailash validation: parameter, DataFlow, connection, import, workflow structure, security, codebase-hygiene marker scrubbing."
+description: "Kailash validation — parameter, DataFlow, connection, workflow, security, marker scrubbing."
 ---
 
 # Kailash Validation Patterns

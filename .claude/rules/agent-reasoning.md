@@ -5,6 +5,12 @@ paths:
   - "**/kaizen/**"
   - "**/*agent*"
   - "**/agents/**"
+  - "**/*classifier*"
+  - "**/*extractor*"
+  - "**/*delegate*"
+  - "**/*router*"
+  - "**/*dispatcher*"
+  - "**/*intent*"
 ---
 
 # Agent Reasoning Architecture — LLM-First Rule

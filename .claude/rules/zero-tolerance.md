@@ -44,6 +44,8 @@ A warning is not "less broken" than an error. It is an error the framework chose
 
 **Exceptions:** User explicitly says "skip this"; OR upstream third-party deprecation unresolvable in this session → pinned version + documented reason OR upstream issue link OR todo with explicit owner. Silent dismissal still BLOCKED.
 
+**See also**: `rules/time-pressure-discipline.md` — Rule 1's most common bypass is user time-pressure framing ("speed up", "deadline looming"). User authorization under pressure is NOT sufficient to skip a fix — the time-pressure rule names that pattern explicitly and BLOCKS procedure drops even when the user authorizes them. The throughput response is parallelization, not deferral.
+
 ### Rule 1a: Scanner-Surface Symmetry
 
 Findings reported by a security scanner on a PR scan MUST be treated identically to findings on a main scan. "This also exists on main, therefore not introduced here" is BLOCKED.

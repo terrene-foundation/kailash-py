@@ -25,7 +25,7 @@ workflow.add_connection("source", "output", "processor", "input_data")
 runtime = LocalRuntime()  # For CLI/scripts
 results, run_id = runtime.execute(workflow.build())
 
-# For Docker/async (async)
+# For Docker/async production
 # from kailash.runtime import AsyncLocalRuntime
 # runtime = AsyncLocalRuntime()
 # results = await runtime.execute_workflow_async(workflow.build(), inputs={})
@@ -79,13 +79,13 @@ workflow.add_connection("api_call", "response", "transform", "response")
 
 ### 4. Quick AI Integration
 
-For LLM integration, use **Kaizen agents** (see `skills/04-kaizen/`). For quick prototyping in workflows:
-
 ```python
 workflow = WorkflowBuilder()
 
-workflow.add_node("PythonCodeNode", "ai", {
-    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ.get('LLM_MODEL', 'gpt-4'), messages=[{'role': 'user', 'content': 'Summarize this data'}]); result = {'response': resp.choices[0].message.content}"
+workflow.add_node("LLMAgentNode", "ai", {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "messages": [{"role": "user", "content": "Summarize this data"}]
 })
 
 workflow.add_node("PythonCodeNode", "format", {
@@ -103,7 +103,7 @@ from kailash.runtime import LocalRuntime
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
-# For Docker/async (async)
+# For Docker/async production
 from kailash.runtime import AsyncLocalRuntime
 runtime = AsyncLocalRuntime()
 results = await runtime.execute_workflow_async(workflow.build(), inputs={})

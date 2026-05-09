@@ -1,6 +1,6 @@
 ---
 name: conversation-ux
-description: "Conversation UX for AI apps: multi-conversation management, thread branching, context switching, chat history organization."
+description: "Conversation UX — multi-conversation management, thread branching, chat history."
 ---
 
 # Conversation UX Patterns
@@ -10,6 +10,7 @@ Production-ready UX patterns for managing complex conversational interfaces incl
 ## Overview
 
 Conversation UX patterns for:
+
 - Multi-conversation management
 - Thread branching and navigation
 - Context switching strategies
@@ -19,6 +20,7 @@ Conversation UX patterns for:
 ## Reference Documentation
 
 ### Multi-Conversation Patterns
+
 - **[multi-conversation-patterns](multi-conversation-patterns.md)** - Lark-style conversation UX
   - Research insights
   - Design patterns
@@ -28,6 +30,7 @@ Conversation UX patterns for:
 ## Quick Patterns
 
 ### Conversation List Structure
+
 ```dart
 class ConversationList extends StatelessWidget {
   @override
@@ -49,6 +52,7 @@ class ConversationList extends StatelessWidget {
 ```
 
 ### Branching Conversation Model
+
 ```dart
 class Conversation {
   final String id;
@@ -70,6 +74,7 @@ class Conversation {
 ```
 
 ### Context Switching Pattern
+
 ```dart
 class ConversationProvider extends ChangeNotifier {
   Conversation? _active;
@@ -95,6 +100,7 @@ class ConversationProvider extends ChangeNotifier {
 ```
 
 ### Navigation Layout (Lark-Style)
+
 ```
 ┌───────────────┬─────────────────────────────────────────────┐
 │               │                                             │
@@ -122,6 +128,7 @@ class ConversationProvider extends ChangeNotifier {
 ```
 
 ### Thread Branch Indicator
+
 ```dart
 class BranchIndicator extends StatelessWidget {
   final int branchCount;
@@ -155,26 +162,27 @@ class BranchIndicator extends StatelessWidget {
 
 ## Conversation States
 
-| State | Description | Visual Indicator |
-|-------|-------------|------------------|
-| `active` | Currently selected | Highlighted background |
-| `recent` | Used in last 24h | Normal styling |
-| `archived` | Older conversations | Muted styling |
-| `pinned` | User-marked important | Pin icon + top section |
-| `branched` | Has child threads | Branch icon |
+| State      | Description           | Visual Indicator       |
+| ---------- | --------------------- | ---------------------- |
+| `active`   | Currently selected    | Highlighted background |
+| `recent`   | Used in last 24h      | Normal styling         |
+| `archived` | Older conversations   | Muted styling          |
+| `pinned`   | User-marked important | Pin icon + top section |
+| `branched` | Has child threads     | Branch icon            |
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
-| ❌ NEVER lose conversation context | User frustration |
-| ✅ ALWAYS auto-save drafts | Prevent message loss |
-| ❌ NEVER force linear navigation | Allow quick switching |
-| ✅ ALWAYS show branch points | Navigation clarity |
+| Rule                               | Why                   |
+| ---------------------------------- | --------------------- |
+| ❌ NEVER lose conversation context | User frustration      |
+| ✅ ALWAYS auto-save drafts         | Prevent message loss  |
+| ❌ NEVER force linear navigation   | Allow quick switching |
+| ✅ ALWAYS show branch points       | Navigation clarity    |
 
 ## When to Use This Skill
 
 Use this skill when:
+
 - Building multi-conversation chat apps
 - Implementing conversation branching
 - Designing chat history management
@@ -190,6 +198,7 @@ Use this skill when:
 ## Support
 
 For conversation UX questions, invoke:
+
 - `uiux-designer` - UX decisions
 - `flutter-specialist` - Flutter implementation
 - `react-specialist` - React/web implementation

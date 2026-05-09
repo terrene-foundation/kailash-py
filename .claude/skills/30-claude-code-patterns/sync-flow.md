@@ -47,12 +47,17 @@ Pull latest artifacts from the USE template repo. No target needed — reads tem
    - Top-level `scripts/migrate.py` and other items declared in the manifest's `variant_only:` block
    - **NOT** `scripts/hooks/` or `.claude/scripts/` — obsoleted in v2.9.1, MUST NOT be re-emitted.
 
-   **BLOCKED rationalizations:** "hooks/ are not codegen artifacts so the diff skips them" / "the manifest tiers section doesn't list hooks/\*\*" / "settings.json paths are normalized in step 7, scripts arriving on disk is separate". The `.claude/hooks/` directory MUST physically exist on disk for normalized settings.json paths to resolve at runtime.
+   **Multi-CLI consumers ALSO diff top-level CLI overlays** (Loom-C, 2026-05-06): when consumer's `.claude/.coc-sync-marker.template_type == "multi-cli"` OR `clis:` contains `codex`/`gemini`, the diff set extends with the manifest's `multi_cli_overlays.multi-cli.paths` (currently `.codex/**`, `.codex-mcp-guard/**`, `.gemini/**`, `AGENTS.md`, `GEMINI.md`). This closes the historical gap where multi-CLI top-level scaffolds landed only at `/migrate` time and never refreshed on subsequent `/sync` cycles. The `multi_cli_overlays.multi-cli.preserved` list is the consumer-customizable subset that sync MUST NOT overwrite (analogous to the "NEVER overwritten" set in step 5).
+
+   For `template_type: cc-only-legacy` (kailash-coc-claude-{py,rs,rb}) the multi-CLI top-level set is empty — only `CLAUDE.md` is the baseline, declared in `repos.<target>.templates[].baseline_files`.
+
+   **BLOCKED rationalizations:** "hooks/ are not codegen artifacts so the diff skips them" / "the manifest tiers section doesn't list hooks/\*\*" / "settings.json paths are normalized in step 7, scripts arriving on disk is separate" / "multi-CLI overlays are a /migrate-time concern, not /sync-time" / "consumers can re-run /migrate to refresh top-level overlays". The `.claude/hooks/` directory MUST physically exist on disk for normalized settings.json paths to resolve at runtime. Multi-CLI top-level overlays are sync-time concerns: every loom cycle that touches `.claude/rules/` re-emits `AGENTS.md`/`GEMINI.md` via `emit.mjs`; a consumer that doesn't pull these on `/sync` ships stale baselines for Codex/Gemini.
 
 5. **Additive merge** (same semantics as Gate 2 step 4):
    - Template files overwrite matching local files
    - Local-only files preserved (never deleted) **except** paths in obsoleted list (handled in step 3 above)
    - **NEVER overwritten** (downstream-owned): `CLAUDE.md`, `.claude/VERSION`, `.claude/settings.local.json`, `.env`, `.git/`, `.claude/.proposals/`, `.claude/learning/`
+   - **NEVER overwritten** (multi-CLI consumer-customizable): every path in `multi_cli_overlays.multi-cli.preserved` from the manifest. Currently `.codex/local-config.toml`, `.gemini/local-settings.json` — reserved for future per-project overrides without sync conflict.
 
 6. **Present merge plan** with per-file decisions before applying — include obsoleted-path deletions from step 3 in the plan output.
 

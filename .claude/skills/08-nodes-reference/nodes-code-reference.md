@@ -19,15 +19,14 @@ Complete reference for code execution nodes.
 ```python
 from kailash.nodes.code import (
     PythonCodeNode,  # Use sparingly!
+    MCPToolNode,
+    ScriptRunnerNode
 )
-# MCPToolNode: use via kailash.nodes.mixins.mcp (MCP mixin)
-# For LLM + MCP tool integration, use Kaizen agents (see skills/04-kaizen/)
 ```
 
 ## PythonCode Node
 
 ### PythonCodeNode
-
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
@@ -54,7 +53,6 @@ workflow.add_node("PythonCodeNode", "code", {
 ## MCP Tool Node
 
 ### MCPToolNode
-
 ```python
 workflow.add_node("MCPToolNode", "mcp_tool", {
     "mcp_server": "weather",
@@ -66,13 +64,11 @@ workflow.add_node("MCPToolNode", "mcp_tool", {
 ## When to Use PythonCodeNode
 
 **✅ Appropriate uses:**
-
 - Ollama/local LLM integration
 - Complex custom business logic
 - Temporary prototyping
 
 **❌ Avoid for:**
-
 - File I/O (use CSVReaderNode, etc.)
 - HTTP requests (use HTTPRequestNode)
 - Database queries (use AsyncSQLDatabaseNode)
@@ -84,5 +80,6 @@ workflow.add_node("MCPToolNode", "mcp_tool", {
 - **Node Index**: [`nodes-quick-index`](nodes-quick-index.md)
 
 ## Documentation
+
 
 <!-- Trigger Keywords: PythonCode, code node, Shell node, execute code, script execution, PythonCodeNode -->

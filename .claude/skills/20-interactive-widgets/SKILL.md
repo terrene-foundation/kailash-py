@@ -1,6 +1,6 @@
 ---
 name: interactive-widgets
-description: "Interactive widget systems for AI apps: LLM-driven widget generation, dynamic UI, form builders, streaming response widgets."
+description: "AI app widgets — LLM-driven generation, dynamic UI, form builders, streaming widgets."
 ---
 
 # Interactive Widget System
@@ -10,6 +10,7 @@ Production-ready patterns for building interactive widget systems that integrate
 ## Overview
 
 Interactive widget patterns for:
+
 - LLM-driven widget generation
 - Streaming response with structured components
 - Dynamic form builders
@@ -19,12 +20,14 @@ Interactive widget patterns for:
 ## Reference Documentation
 
 ### System Overview
+
 - **[overview](overview.md)** - Widget system architecture and navigation
   - System components
   - Documentation structure
   - Quick reference
 
 ### Technical Specification
+
 - **[technical-spec](technical-spec.md)** - Complete technical specification
   - Widget protocol design
   - Backend integration
@@ -33,6 +36,7 @@ Interactive widget patterns for:
   - Error handling
 
 ### Implementation Guide
+
 - **[implementation-guide](implementation-guide.md)** - Step-by-step implementation
   - Backend widget generation
   - Frontend widget rendering
@@ -42,6 +46,7 @@ Interactive widget patterns for:
 ## Quick Patterns
 
 ### Widget Protocol (JSON)
+
 ```json
 {
   "type": "form",
@@ -67,6 +72,7 @@ Interactive widget patterns for:
 ```
 
 ### Backend Widget Generation (Python)
+
 ```python
 def generate_widget_response(user_query: str) -> dict:
     """Generate structured widget response from LLM."""
@@ -82,6 +88,7 @@ def generate_widget_response(user_query: str) -> dict:
 ```
 
 ### Frontend Widget Renderer (Dart)
+
 ```dart
 Widget buildWidget(Map<String, dynamic> widgetData) {
   switch (widgetData['type']) {
@@ -99,28 +106,29 @@ Widget buildWidget(Map<String, dynamic> widgetData) {
 
 ## Widget Types
 
-| Type | Purpose | Use Case |
-|------|---------|----------|
-| `text` | Plain text response | Simple answers |
-| `card` | Structured information | Entity displays |
-| `form` | User input collection | Queries, settings |
-| `table` | Tabular data | Lists, comparisons |
-| `chart` | Data visualization | Analytics, metrics |
-| `action` | Clickable actions | Workflows, confirmations |
-| `progress` | Progress indication | Long-running tasks |
+| Type       | Purpose                | Use Case                 |
+| ---------- | ---------------------- | ------------------------ |
+| `text`     | Plain text response    | Simple answers           |
+| `card`     | Structured information | Entity displays          |
+| `form`     | User input collection  | Queries, settings        |
+| `table`    | Tabular data           | Lists, comparisons       |
+| `chart`    | Data visualization     | Analytics, metrics       |
+| `action`   | Clickable actions      | Workflows, confirmations |
+| `progress` | Progress indication    | Long-running tasks       |
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
-| ❌ NEVER trust widget IDs from client | Security - validate server-side |
-| ✅ ALWAYS validate widget schemas | Prevent malformed rendering |
+| Rule                                   | Why                              |
+| -------------------------------------- | -------------------------------- |
+| ❌ NEVER trust widget IDs from client  | Security - validate server-side  |
+| ✅ ALWAYS validate widget schemas      | Prevent malformed rendering      |
 | ❌ NEVER block UI on widget generation | Use streaming for responsiveness |
-| ✅ ALWAYS handle unknown widget types | Graceful degradation |
+| ✅ ALWAYS handle unknown widget types  | Graceful degradation             |
 
 ## When to Use This Skill
 
 Use this skill when:
+
 - Building AI chat interfaces with structured responses
 - Creating dynamic form systems
 - Implementing streaming UI components
@@ -136,6 +144,7 @@ Use this skill when:
 ## Support
 
 For widget system questions, invoke:
+
 - `kaizen-specialist` - LLM integration patterns
 - `flutter-specialist` - Widget rendering
 - `pattern-expert` - Protocol design

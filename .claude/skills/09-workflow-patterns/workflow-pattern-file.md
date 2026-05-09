@@ -11,13 +11,12 @@ Patterns for automated file processing, transformation, and batch operations.
 > Category: `workflow-patterns`
 > Priority: `MEDIUM`
 > SDK Version: `0.9.25+`
-> Related Skills: [`nodes-data-reference`](../nodes/nodes-data-reference.md), [`workflow-pattern-etl`](workflow-pattern-etl.md)
+> Related Skills: [`nodes-data-reference`](../08-nodes-reference/nodes-data-reference.md), [`workflow-pattern-etl`](workflow-pattern-etl.md)
 > Related Subagents: `pattern-expert` (file workflows)
 
 ## Quick Reference
 
 File processing patterns:
-
 - **Batch file processing** - Process multiple files
 - **File transformation** - Convert formats
 - **Document extraction** - PDF, DOCX to text
@@ -137,9 +136,8 @@ workflow.add_node("JSONReaderNode", "read_json", {
     "file_path": "{{input.file_path}}"
 })
 
-workflow.add_node("PythonCodeNode", "read_excel", {
-    "code": "import openpyxl; wb = openpyxl.load_workbook(file_path); ws = wb.active; result = {'data': [dict(zip([c.value for c in ws[1]], [c.value for c in row])) for row in ws.iter_rows(min_row=2)]}",
-    "input_variables": ["file_path"]
+workflow.add_node("ExcelReaderNode", "read_excel", {
+    "file_path": "{{input.file_path}}"
 })
 
 # 3. Normalize to common format
@@ -225,9 +223,10 @@ workflow.add_error_handler("process", "move_failed")
 
 ## Related Skills
 
-- **Data Nodes**: [`nodes-data-reference`](../nodes/nodes-data-reference.md)
+- **Data Nodes**: [`nodes-data-reference`](../08-nodes-reference/nodes-data-reference.md)
 - **ETL Patterns**: [`workflow-pattern-etl`](workflow-pattern-etl.md)
 
 ## Documentation
+
 
 <!-- Trigger Keywords: file processing, batch file, document workflow, file automation, CSV processing, PDF extraction -->

@@ -1,51 +1,79 @@
 ---
 name: cc-audit
-description: "Audit project artifacts for quality, completeness, effectiveness, and template alignment"
+description: "Audit CC artifacts for quality, completeness, effectiveness, token efficiency, and sync integrity"
 ---
 
-# CC Artifact Audit (Project)
+# CC Artifact Audit (COC Source)
 
-Reviews your repo's artifacts for quality and template alignment. Scope depends on repo type.
+Reviews all artifacts for quality AND sync correctness. This is the **COC source** version — it audits loom/'s variant system, manifest integrity, and USE template distribution.
 
-## BUILD vs USE Repo Distinction
+For project-level audits in downstream repos, see the USE template version.
 
-- **BUILD repos** (kailash-py, kailash-rs, kailash-prism): no `agents/project/` or `skills/project/` directories. Every artifact lives in a canonical location (`agents/frameworks/`, `skills/01-core-sdk/`, etc.) and is subject to the same fidelity checks as loom/. The Phase 1 inventory in a BUILD repo walks ALL artifact directories, not just `project/`.
-- **Downstream USE repos** (consumer projects): project-specific artifacts live in `agents/project/` and `skills/project/`. The Phase 1 inventory focuses on these, since shared artifacts are owned by the upstream template and audited at loom/.
-
-If this repo is a BUILD repo, skip the `project/`-only inventory below and audit all canonical artifact directories.
+**Repo type scope**: loom/ has no `agents/project/` or `skills/project/` subdirectories — it is the authority, not a project. This audit never expects `project/` subdirectories. (BUILD repos also never have `project/` — those are a downstream-USE-only convention. See `rules/artifact-flow.md`.)
 
 ## Your Role
 
-Specify scope: `all`, `fidelity` (quality only), `sync` (template alignment only), or a specific file/type.
+Specify scope: `all`, `fidelity`, `sync`, or a specific file/type.
 
 ## Phase 1: Fidelity Audit
 
-1. **Inventory**:
-   - **USE repos**: list project-specific artifacts (`agents/project/`, `skills/project/`) with line counts.
-   - **BUILD repos**: list all canonical artifacts (`agents/**/*.md`, `skills/**/*`, `rules/*.md`, `commands/*.md`) with line counts; `agents/project/` and `skills/project/` should not exist.
+1. **Inventory**: List all artifacts with file paths and line counts.
 
 2. **Four-dimension audit** per artifact:
    - **Competency**: Precise instructions? Knows its domain?
    - **Completeness**: Edge cases? Missing handoffs?
    - **Effectiveness**: Reliable behavior? Output format specified?
-   - **Token Efficiency**: Lean? No redundancy?
+   - **Token Efficiency**: Lean? Path-scoped? No redundancy?
 
 3. **Hard limits** (cc-artifacts rules):
    - Agent descriptions under 120 chars with trigger phrases
    - Agents under 400 lines, commands under 150 lines
-   - CLAUDE.md under 200 lines
+   - CLAUDE.md under 200 lines, no restated rules
    - Rules have DO/DO NOT examples and Why rationale
 
 4. **Cross-reference check**: Every referenced artifact exists on disk.
 
-## Phase 2: Template Alignment
+5. **Token budget**: Estimate per-turn cost.
 
-5. **Freshness**: Check `.coc-sync-marker` — when was the last sync from the upstream template? If stale, recommend running `/sync`.
+6. **Probe-coverage** (`rules/probe-driven-verification.md` MUST-4): every test harness assertion verifying a SEMANTIC property (refusal, recommendation, compliance, quality, outcome framing) MUST have a probe definition (schema + scoring rule). Mechanical sweep:
 
-6. **Shared artifact integrity**: Are shared artifacts (from template) still intact, or have they been locally modified? Local modifications to shared files will be overwritten on next `/sync`.
+   ```bash
+   grep -rEn 'def (verify|score|assert|check|probe)_[A-Za-z_]*(recommend|refus|complian|respons|intent|semantic|quality|outcome|narrative|reasoning)' \
+     .claude/test-harness/ tests/ 2>/dev/null \
+     | xargs -I {} grep -lE 'kind:\s*"contains"|re\.(search|match|findall)|str\.contains' {} 2>/dev/null
+   ```
 
-7. **Hook integrity**: Every hook in settings.json has a script on disk.
+   Each hit MUST cite a probe schema. Regex-on-semantic = HIGH. Structural assertions (file existence, exit code, marker presence) keep regex per MUST-3.
+
+## Phase 2: Sync Integrity Audit (COC-specific)
+
+6. **Manifest validation** (`sync-manifest.yaml`):
+   - Every `variants:` entry has global + variant files on disk
+   - Every `variant_only:` entry exists on disk
+   - No orphan files in `variants/` undeclared in manifest
+   - Every syncable file in a tier (cc/co/coc) or explicitly excluded
+   - No contradictions (tier + exclude, or variants + variant_only)
+
+7. **Exclusion verification**:
+   - Management agents (sync-reviewer, coc-sync, repo-ops, repo-ops, settings-manager) excluded
+   - Management commands (repos, inspect, settings) excluded
+   - Meta files (\_README, \_subagent-guide) excluded
+   - Per-repo data (learning/) excluded
+
+8. **Authority chain**:
+   - `artifact-flow.md` Rule 1 says atelier/ owns CC+CO, loom/ owns COC
+   - Consistent with atelier/'s artifact-flow.md? No contradictions?
+
+9. **USE template contamination** (scan every USE template under loom/):
+   - Production-import patterns: `grep -rEl "(^|[^_a-zA-Z])(from kailash|import kailash)" .claude/agents/ .claude/rules/` → must be 0 (legitimate doc-citation strings like `Origin: src/kailash/...` are NOT contamination — flag only actual import statements)
+   - Management agents must NOT be present (sync-reviewer, coc-sync, repo-ops, settings-manager, todo-manager, gh-manager, posture-auditor)
+   - Management commands must NOT be present (repos, inspect, settings, sync, sync-to-build)
+   - BUILD-only commands flagged (/release lives in BUILD-only emission scope)
+
+10. **Hook integrity**:
+    - Every hook in settings.json has a script on disk
+    - Source and template settings.json are consistent
 
 ## Phase 3: Report + Convergence
 
-Report findings as CRITICAL/HIGH/NOTE. Run iteratively until zero CRITICAL and zero HIGH.
+Report findings as CRITICAL/HIGH/NOTE. Run iteratively until zero CRITICAL and zero HIGH remain.

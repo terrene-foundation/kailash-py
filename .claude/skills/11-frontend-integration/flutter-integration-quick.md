@@ -13,9 +13,8 @@ description: "Flutter + Kailash integration. Use when asking 'flutter integratio
 ## Quick Setup
 
 ### 1. Backend API (Python)
-
 ```python
-from nexus import Nexus
+from kailash.api.workflow_api import WorkflowAPI
 from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
@@ -25,13 +24,11 @@ workflow.add_node("LLMNode", "chat", {
     "prompt": "{{input.message}}"
 })
 
-app = Nexus()
-app.register("chat", workflow.build())
-app.start(port=8000)
+api = WorkflowAPI(workflow.build())
+api.run(port=8000)
 ```
 
 ### 2. Flutter Frontend
-
 ```dart
 // lib/services/workflow_service.dart
 import 'package:http/http.dart' as http;

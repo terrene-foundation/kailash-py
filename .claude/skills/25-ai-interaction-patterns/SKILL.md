@@ -1,6 +1,6 @@
 ---
 name: ai-interaction-patterns
-description: "AI UX patterns. Use for prompt UX, wayfinding, HITL, trust, disclosure, AI identity, memory UX, generative UI."
+description: "AI UX patterns — prompt UX, wayfinding, HITL, trust, disclosure, memory, generative UI."
 ---
 
 # AI Interaction Patterns

@@ -24,6 +24,12 @@ During `/implement`, tests run ONCE per code change, not once per phase. Full su
 
 **Why:** Running full suite every phase wastes 2-5 minutes per cycle.
 
+## Probe-Driven Verification (MUST)
+
+Semantic verification of assistant output (recommendations, refusals, compliance, response quality) MUST be probe-driven per `rules/probe-driven-verification.md`. Regex/keyword/substring matching against semantic claims is BLOCKED. Structural assertions (file existence, exit code, fixture-marker presence) keep regex per `probe-driven-verification.md` Rule 3.
+
+See `skills/12-testing-strategies/probe-driven-verification.md` for the operational runbook.
+
 ## Audit Mode (/redteam)
 
 In audit mode, MUST (1) re-derive coverage from scratch via `pytest --collect-only -q tests/` (NOT `cat .test-results` — BLOCKED); (2) for every NEW module, grep test directory for import — empty = HIGH; (3) for every spec § Security Threats subsection, grep `test_<threat>` — missing = HIGH.

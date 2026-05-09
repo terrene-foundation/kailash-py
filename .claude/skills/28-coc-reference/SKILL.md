@@ -1,6 +1,6 @@
 ---
 name: coc-reference
-description: "COC template reference — five-layer implementation in Kailash COC (agents, skills, rules, hooks, commands). Use for template structure (not concepts — use co-reference)."
+description: "COC template — five-layer (agents, skills, rules, hooks, commands) structure."
 tools:
   - Read
   - Glob

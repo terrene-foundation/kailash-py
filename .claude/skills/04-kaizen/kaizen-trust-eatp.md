@@ -1,627 +1,247 @@
-# Enterprise Agent Trust Protocol (EATP) — Kaizen Integration
+# EATP — Kaizen Trust Integration
 
-**Cryptographically verifiable trust chains for AI agents**, enabling enterprise-grade accountability, authorization, and secure multi-agent communication.
+Cryptographically verifiable trust chains for AI agents. As of v0.1.0, EATP is a standalone SDK (included in `pip install kailash`). `kaizen.trust` is a shim layer re-exporting from the standalone package. For standalone docs, see `skills/26-eatp-reference/`.
 
-> **Architecture Note**: EATP is included in the base install (`pip install kailash`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in the trust module. For standalone SDK documentation, see `skills/26-eatp-reference/`.
-
-## Overview
-
-EATP provides complete trust infrastructure for AI agents:
-
-- **Trust Lineage Chains**: Cryptographically linked chain of genesis, capabilities, delegations, and audit anchors
-- **TrustedAgent**: BaseAgent extension with built-in trust verification
-- **Agent Registry**: Capability-based discovery with health monitoring
-- **Secure Messaging**: End-to-end encrypted, replay-protected agent communication
-- **Trust-Aware Orchestration**: Workflow runtime with trust context propagation
-- **Enterprise System Agent (ESA)**: Proxy agents for legacy systems
-- **A2A HTTP Service**: REST/JSON-RPC API for trust operations
-- **RFC 3161 Timestamping** (v1.1.0): Cryptographic timestamping for audit records with TSA integration
-
-**Location**: `kaizen.trust` module (shims to `eatp` package)
-**Canonical Source**: the trust module
-
-## Quick Start
-
-### Basic Trust Establishment
+## Trust Establishment
 
 ```python
 from kaizen.trust import (
-    TrustOperations,
-    PostgresTrustStore,
-    OrganizationalAuthorityRegistry,
-    TrustKeyManager,
-    CapabilityRequest,
-    CapabilityType,
+    TrustOperations, PostgresTrustStore, OrganizationalAuthorityRegistry,
+    TrustKeyManager, CapabilityRequest, CapabilityType,
 )
 
-# Initialize trust components
 store = PostgresTrustStore(connection_string=os.environ["TRUST_DATABASE_URL"])
 registry = OrganizationalAuthorityRegistry()
 key_manager = TrustKeyManager()
 trust_ops = TrustOperations(registry, key_manager, store)
 await trust_ops.initialize()
 
-# Establish trust for an agent
 chain = await trust_ops.establish(
-    agent_id="agent-001",
-    authority_id="org-acme",
-    capabilities=[
-        CapabilityRequest(
-            capability="analyze_data",
-            capability_type=CapabilityType.ACCESS,
-        )
-    ],
+    agent_id="agent-001", authority_id="org-acme",
+    capabilities=[CapabilityRequest(capability="analyze_data", capability_type=CapabilityType.ACCESS)],
 )
 
-# Verify trust before action
-result = await trust_ops.verify(
-    agent_id="agent-001",
-    action="analyze_data",
-)
-
-if result.valid:
-    # Proceed with action
-    print(f"Verification level: {result.level}")
+result = await trust_ops.verify(agent_id="agent-001", action="analyze_data")
 ```
 
-### Human Traceability (v0.8.0)
+## Human Traceability (v0.8.0)
 
-Every action MUST be traceable to a human. PseudoAgents bridge human authentication to the agentic world.
+Every action MUST be traceable to a human. PseudoAgents bridge human auth to the agentic world.
 
 ```python
-from kaizen.trust.execution_context import HumanOrigin, ExecutionContext
 from kaizen.trust.pseudo_agent import PseudoAgent, PseudoAgentFactory, PseudoAgentConfig
-from datetime import datetime
 
-# Factory creates PseudoAgents from auth sources
 factory = PseudoAgentFactory(
     trust_operations=trust_ops,
     default_config=PseudoAgentConfig(
-        session_timeout_minutes=60,
-        require_mfa=True,
+        session_timeout_minutes=60, require_mfa=True,
         allowed_capabilities=["read_data", "process_data"],
     ),
 )
-
-# Create from session/JWT/HTTP headers
 pseudo = factory.from_session(
-    user_id="user-123",
-    email="alice@corp.com",
-    display_name="Alice Chen",
-    session_id="sess-456",
-    auth_provider="okta",
+    user_id="user-123", email="alice@corp.com",
+    display_name="Alice Chen", session_id="sess-456", auth_provider="okta",
 )
 
 # Delegate to agent (ONLY way trust enters the system)
 delegation, agent_ctx = await pseudo.delegate_to(
-    agent_id="invoice-processor",
-    task_id="november-invoices",
+    agent_id="invoice-processor", task_id="november-invoices",
     capabilities=["read_invoices", "process_invoices"],
     constraints={"cost_limit": 1000},
 )
-
-# Agent executes with delegated context
 result = await agent.execute_async(inputs, context=agent_ctx)
-
-# Access human origin in context
-print(f"Authorized by: {agent_ctx.human_origin.display_name}")
-print(f"Delegation depth: {agent_ctx.delegation_depth}")
-
-# Revoke when human logs out
-await pseudo.revoke_all_delegations()
+await pseudo.revoke_all_delegations()  # On logout
 ```
 
-**Key Components**:
+**Key**: HumanOrigin (immutable record), ExecutionContext (async ContextVar), PseudoAgent (ONLY entity initiating trust), ConstraintValidator (can only REDUCE permissions).
 
-- **HumanOrigin**: Immutable (frozen=True) record of the authorizing human
-- **ExecutionContext**: Context propagation via ContextVar for async operations
-- **PseudoAgent**: Human facade - ONLY entity that can initiate trust chains
-- **ConstraintValidator**: Validates constraint tightening (can only REDUCE permissions)
-
-### TrustedAgent Usage
+## TrustedAgent
 
 ```python
-from kaizen.trust import (
-    TrustedAgent,
-    TrustedAgentConfig,
-    TrustOperations,
-)
-from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.trust import TrustedAgent, TrustedAgentConfig
 
-class AnalyzeSignature(Signature):
-    data: str = InputField(description="Data to analyze")
-    result: str = OutputField(description="Analysis result")
-
-# Create TrustedAgent (inherits from BaseAgent)
 config = TrustedAgentConfig(
-    agent_id="analyzer-001",
-    authority_id="org-acme",
+    agent_id="analyzer-001", authority_id="org-acme",
     capabilities=["analyze_data", "generate_reports"],
 )
-
-agent = TrustedAgent(
-    config=config,
-    trust_operations=trust_ops,
-    signature=AnalyzeSignature(),
-)
-
-# Trust establishment happens automatically
+agent = TrustedAgent(config=config, trust_operations=trust_ops, signature=AnalyzeSignature())
 await agent.establish_trust()
-
-# Run with trust verification
 result = await agent.run(data="sales data...")
-# Trust context automatically propagated
 ```
 
-### TrustedSupervisorAgent for Delegation
+## TrustedSupervisorAgent
 
 ```python
-from kaizen.trust import TrustedSupervisorAgent, TrustedAgent
+from kaizen.trust import TrustedSupervisorAgent
 
-# Supervisor delegates to workers
-supervisor = TrustedSupervisorAgent(
-    config=supervisor_config,
-    trust_operations=trust_ops,
-)
-
-# Delegate capability to worker
+supervisor = TrustedSupervisorAgent(config=supervisor_config, trust_operations=trust_ops)
 await supervisor.delegate_to_worker(
-    worker_agent=worker,
-    capability="process_data",
-    constraints={"max_records": 1000},
-    duration_hours=24,
-)
-
-# Worker now has delegated capability
-result = await worker.run(data=input_data)
-```
-
-## Core Concepts
-
-### Trust Lineage Chain
-
-A complete trust chain for an agent containing:
-
-```python
-from kaizen.trust import TrustLineageChain, GenesisRecord, CapabilityAttestation
-
-# TrustLineageChain structure
-chain = TrustLineageChain(
-    agent_id="agent-001",
-    genesis=GenesisRecord(
-        agent_id="agent-001",
-        authority_id="org-acme",
-        authority_type=AuthorityType.ORGANIZATION,
-        timestamp=datetime.utcnow(),
-        public_key=public_key,
-        signature=signature,
-    ),
-    capabilities=[
-        CapabilityAttestation(
-            capability="analyze_data",
-            capability_type=CapabilityType.ACCESS,
-            attestor_id="org-acme",
-            timestamp=datetime.utcnow(),
-            signature=signature,
-        )
-    ],
-    delegations=[],  # DelegationRecord list
-    audit_anchors=[],  # AuditAnchor list
+    worker_agent=worker, capability="process_data",
+    constraints={"max_records": 1000}, duration_hours=24,
 )
 ```
 
-**Key Components**:
-
-- **GenesisRecord**: Initial trust establishment (who created this agent)
-- **CapabilityAttestation**: Attested capabilities (what can it do)
-- **DelegationRecord**: Delegated capabilities from other agents
-- **AuditAnchor**: Cryptographic proof of actions taken
-
-### Trust Operations
-
-Four core operations: ESTABLISH, DELEGATE, VERIFY, AUDIT
+## Core Operations
 
 ```python
-from kaizen.trust import TrustOperations
+# ESTABLISH, DELEGATE, VERIFY, AUDIT
+chain = await trust_ops.establish(agent_id="agent-001", authority_id="org-acme",
+    capabilities=[CapabilityRequest(capability="analyze", capability_type=CapabilityType.ACCESS)])
 
-# ESTABLISH - Create trust chain for new agent
-chain = await trust_ops.establish(
-    agent_id="agent-001",
-    authority_id="org-acme",
-    capabilities=[CapabilityRequest(capability="analyze", capability_type=CapabilityType.ACCESS)],
-)
-
-# DELEGATE - Grant capability from one agent to another
 delegation = await trust_ops.delegate(
-    delegator_id="supervisor-001",
-    delegatee_id="worker-001",
-    task_id="data-processing-q4",
-    capabilities=["process_data"],
-    additional_constraints=["max_records:100"],
-)
+    delegator_id="supervisor-001", delegatee_id="worker-001",
+    task_id="data-processing-q4", capabilities=["process_data"],
+    additional_constraints=["max_records:100"])
 
-# VERIFY - Check if agent can perform action
-result = await trust_ops.verify(
-    agent_id="agent-001",
-    action="analyze_data",
-)
+result = await trust_ops.verify(agent_id="agent-001", action="analyze_data")
 
-# AUDIT - Record action for compliance
-await trust_ops.audit(
-    agent_id="agent-001",
-    action="analyze_data",
-    result=ActionResult.SUCCESS,
-    context_data={"records_processed": 500},
-)
+await trust_ops.audit(agent_id="agent-001", action="analyze_data",
+    result=ActionResult.SUCCESS, context_data={"records_processed": 500})
 ```
 
-### Agent Registry
-
-Capability-based discovery with health monitoring:
+## Agent Registry
 
 ```python
-from kaizen.trust import (
-    AgentRegistry,
-    AgentHealthMonitor,
-    DiscoveryQuery,
-    AgentStatus,
-    PostgresAgentRegistryStore,
-)
+from kaizen.trust import AgentRegistry, AgentHealthMonitor, DiscoveryQuery, AgentStatus, PostgresAgentRegistryStore
 
-# Initialize registry
 store = PostgresAgentRegistryStore(connection_string=os.environ["REGISTRY_DATABASE_URL"])
 registry = AgentRegistry(store=store)
+await registry.register(agent_id="analyzer-001", capabilities=["analyze_data"],
+    metadata={"version": "1.0"})
+agents = await registry.discover(DiscoveryQuery(capability="analyze_data", status=AgentStatus.ACTIVE))
 
-# Register agents
-await registry.register(
-    agent_id="analyzer-001",
-    capabilities=["analyze_data", "generate_reports"],
-    metadata={"version": "1.0", "owner": "data-team"},
-)
-
-# Discover agents by capability
-agents = await registry.discover(
-    DiscoveryQuery(
-        capability="analyze_data",
-        status=AgentStatus.ACTIVE,
-    )
-)
-
-# Health monitoring
 monitor = AgentHealthMonitor(registry=registry)
 await monitor.start()
-
-# Update agent health
-await registry.update_status("analyzer-001", AgentStatus.ACTIVE)
-await registry.heartbeat("analyzer-001")
 ```
 
-### Secure Messaging
-
-End-to-end encrypted, replay-protected communication:
+## Secure Messaging
 
 ```python
-from kaizen.trust import (
-    SecureChannel,
-    MessageSigner,
-    MessageVerifier,
-    InMemoryReplayProtection,
-)
+from kaizen.trust import SecureChannel, MessageSigner, MessageVerifier, InMemoryReplayProtection
 
-# Create secure channel between agents
 channel = SecureChannel(
-    sender_id="agent-001",
-    receiver_id="agent-002",
+    sender_id="agent-001", receiver_id="agent-002",
     signer=MessageSigner(private_key=sender_private_key),
     verifier=MessageVerifier(public_keys={"agent-001": sender_public_key}),
     replay_protection=InMemoryReplayProtection(),
 )
-
-# Send encrypted message
-envelope = await channel.send(
-    payload={"task": "analyze", "data": "..."},
-)
-
-# Receive and verify message
+envelope = await channel.send(payload={"task": "analyze", "data": "..."})
 result = await channel.receive(envelope)
-if result.valid:
-    payload = result.payload
 ```
 
-**SecureMessageEnvelope Structure**:
-
-- HMAC-based message authentication
-- Nonce-based replay protection
-- Timestamp validation
-- Sender/receiver verification
-
-### Trust-Aware Orchestration
-
-Workflow runtime with trust context propagation:
+## Trust-Aware Orchestration
 
 ```python
 from kaizen.trust import (
-    TrustAwareOrchestrationRuntime,
-    TrustAwareRuntimeConfig,
-    TrustExecutionContext,
-    TrustPolicyEngine,
-    TrustPolicy,
-    PolicyType,
+    TrustAwareOrchestrationRuntime, TrustAwareRuntimeConfig,
+    TrustExecutionContext, TrustPolicyEngine, TrustPolicy, PolicyType,
 )
 
-# Configure trust-aware runtime
-config = TrustAwareRuntimeConfig(
-    verify_on_execute=True,  # Verify trust before each execution
-    propagate_context=True,  # Propagate trust context through workflow
-    enforce_policies=True,   # Enforce trust policies
-)
-
-# Create policy engine
+config = TrustAwareRuntimeConfig(verify_on_execute=True, propagate_context=True, enforce_policies=True)
 policy_engine = TrustPolicyEngine()
 policy_engine.add_policy(TrustPolicy(
-    name="require-active-agents",
-    policy_type=PolicyType.CAPABILITY,
+    name="require-active-agents", policy_type=PolicyType.CAPABILITY,
     rule=lambda ctx: ctx.agent_status == AgentStatus.ACTIVE,
 ))
-
-# Create trust-aware runtime
-runtime = TrustAwareOrchestrationRuntime(
-    trust_operations=trust_ops,
-    policy_engine=policy_engine,
-    config=config,
-)
-
-# Execute with trust context
-context = TrustExecutionContext(
-    agent_id="agent-001",
-    capabilities=["analyze_data"],
-    delegation_chain=[],
-)
-
-result = await runtime.execute(
-    workflow=my_workflow,
-    context=context,
-)
+runtime = TrustAwareOrchestrationRuntime(trust_operations=trust_ops, policy_engine=policy_engine, config=config)
+result = await runtime.execute(workflow=my_workflow,
+    context=TrustExecutionContext(agent_id="agent-001", capabilities=["analyze_data"], delegation_chain=[]))
 ```
 
-### Enterprise System Agent (ESA)
-
-Proxy agents for legacy systems:
+## Enterprise System Agent (ESA)
 
 ```python
-from kaizen.trust import (
-    EnterpriseSystemAgent,
-    ESAConfig,
-    SystemMetadata,
-    SystemConnectionInfo,
-    CapabilityMetadata,
-)
+from kaizen.trust import EnterpriseSystemAgent, ESAConfig, SystemMetadata, SystemConnectionInfo, CapabilityMetadata
 
-# Configure ESA for legacy system
-config = ESAConfig(
-    system_id="erp-system",
-    system_metadata=SystemMetadata(
-        name="Enterprise ERP",
-        version="5.2",
-        vendor="SAP",
-    ),
-    connection_info=SystemConnectionInfo(
-        protocol="https",
-        host="erp.example.com",
-        port=443,
-    ),
-    capabilities=[
-        CapabilityMetadata(
-            name="get_inventory",
-            description="Retrieve inventory levels",
-            parameters={"warehouse_id": "string"},
-        ),
-    ],
-)
-
-# Create ESA
 esa = EnterpriseSystemAgent(
-    config=config,
+    config=ESAConfig(
+        system_id="erp-system",
+        system_metadata=SystemMetadata(name="Enterprise ERP", version="5.2", vendor="SAP"),
+        connection_info=SystemConnectionInfo(protocol="https", host="erp.example.com", port=443),
+        capabilities=[CapabilityMetadata(name="get_inventory", description="Retrieve inventory",
+            parameters={"warehouse_id": "string"})],
+    ),
     trust_operations=trust_ops,
 )
-
-# Establish trust for ESA
 await esa.establish_trust(authority_id="org-acme")
-
-# Execute operation through ESA
-result = await esa.execute(
-    operation="get_inventory",
-    parameters={"warehouse_id": "WH-001"},
-)
+result = await esa.execute(operation="get_inventory", parameters={"warehouse_id": "WH-001"})
 ```
 
-**ESA Use Cases**:
-
-- Wrap legacy APIs with trust verification
-- Bridge non-AI systems into agent ecosystem
-- Provide accountability for external system calls
-
-### A2A HTTP Service
-
-REST/JSON-RPC API for trust operations:
+## A2A HTTP Service
 
 ```python
 from kaizen.trust import create_a2a_app, A2AService, AgentCardGenerator
 
-# Create A2A service
-service = A2AService(
-    trust_operations=trust_ops,
-    agent_registry=registry,
-)
-
-# Generate agent cards
-card_generator = AgentCardGenerator(trust_operations=trust_ops)
-card = await card_generator.generate("agent-001")
-
-# Create app
+service = A2AService(trust_operations=trust_ops, agent_registry=registry)
 app = create_a2a_app(service)
-
-# Run server
-# uvicorn app:app --host 127.0.0.1 --port 8000
-# WARNING: Use 0.0.0.0 only behind a reverse proxy with authentication
 ```
 
-**Available Endpoints**:
-
-- `POST /a2a/verify` - Verify agent trust
-- `POST /a2a/delegate` - Delegate capability
-- `GET /a2a/card/{agent_id}` - Get agent card
-- `POST /a2a/audit/query` - Query audit trail
-
-**JSON-RPC Methods**:
-
-- `trust.verify` - Verify trust
-- `trust.delegate` - Delegate capability
-- `trust.audit` - Record audit event
-- `agent.card` - Get agent card
+Endpoints: `POST /a2a/verify`, `POST /a2a/delegate`, `GET /a2a/card/{agent_id}`, `POST /a2a/audit/query`
+JSON-RPC: `trust.verify`, `trust.delegate`, `trust.audit`, `agent.card`
 
 ## Security Features
 
-### Credential Rotation
-
 ```python
-from kaizen.trust import CredentialRotationManager, RotationStatus
+# Credential rotation
+from kaizen.trust import CredentialRotationManager
+rotation_manager = CredentialRotationManager(key_manager=key_manager, trust_store=store)
+await rotation_manager.schedule_rotation(agent_id="agent-001", interval_days=30)
 
-# Configure rotation manager
-rotation_manager = CredentialRotationManager(
-    key_manager=key_manager,
-    trust_store=store,
-)
+# Rate limiting
+from kaizen.trust import TrustRateLimiter
+rate_limiter = TrustRateLimiter(max_verifications_per_minute=100, max_delegations_per_hour=10)
 
-# Schedule automatic rotation
-await rotation_manager.schedule_rotation(
-    agent_id="agent-001",
-    interval_days=30,
-)
-
-# Manual rotation
-result = await rotation_manager.rotate("agent-001")
-if result.status == RotationStatus.SUCCESS:
-    print(f"New key fingerprint: {result.new_key_fingerprint}")
-```
-
-### Rate Limiting
-
-```python
-from kaizen.trust import TrustRateLimiter, RateLimitExceededError
-
-# Configure rate limiter
-rate_limiter = TrustRateLimiter(
-    max_verifications_per_minute=100,
-    max_delegations_per_hour=10,
-)
-
-# Check rate limit
-try:
-    await rate_limiter.check("verify", agent_id="agent-001")
-except RateLimitExceededError:
-    print("Rate limit exceeded")
-```
-
-### Security Audit Logging
-
-```python
-from kaizen.trust import (
-    SecurityAuditLogger,
-    SecurityEvent,
-    SecurityEventType,
-    SecurityEventSeverity,
-)
-
-# Configure audit logger
+# Audit logging
+from kaizen.trust import SecurityAuditLogger, SecurityEvent, SecurityEventType, SecurityEventSeverity
 audit_logger = SecurityAuditLogger(output="security.log")
-
-# Log security events
-await audit_logger.log(SecurityEvent(
-    event_type=SecurityEventType.VERIFICATION_FAILED,
-    severity=SecurityEventSeverity.WARNING,
-    agent_id="agent-001",
-    details={"reason": "capability not found"},
-))
 ```
 
 ## Component Reference
 
-| Component                        | Purpose                             | Location                            |
-| -------------------------------- | ----------------------------------- | ----------------------------------- |
-| `TrustLineageChain`              | Complete trust chain                | `kaizen.trust.chain`                |
-| `TrustOperations`                | Core trust operations               | `kaizen.trust.operations`           |
-| `TrustedAgent`                   | BaseAgent with trust                | `kaizen.trust.trusted_agent`        |
-| `TrustedSupervisorAgent`         | Delegation support                  | `kaizen.trust.trusted_agent`        |
-| `AgentRegistry`                  | Agent discovery                     | `kaizen.trust.registry`             |
-| `AgentHealthMonitor`             | Health monitoring                   | `kaizen.trust.registry`             |
-| `SecureChannel`                  | Encrypted messaging                 | `kaizen.trust.messaging`            |
-| `MessageSigner/Verifier`         | Message auth                        | `kaizen.trust.messaging`            |
-| `TrustExecutionContext`          | Context propagation                 | `kaizen.trust.orchestration`        |
-| `TrustPolicyEngine`              | Policy enforcement                  | `kaizen.trust.orchestration`        |
-| `TrustAwareOrchestrationRuntime` | Trust-aware runtime                 | `kaizen.trust.orchestration`        |
-| `EnterpriseSystemAgent`          | Legacy system proxy                 | `kaizen.trust.esa`                  |
-| `A2AService`                     | HTTP API                            | `kaizen.trust.a2a`                  |
-| `CredentialRotationManager`      | Key rotation                        | `kaizen.trust.rotation`             |
-| `TrustRateLimiter`               | Rate limiting                       | `kaizen.trust.security`             |
-| `SecurityAuditLogger`            | Audit logging                       | `kaizen.trust.security`             |
-| `PostgresTrustStore`             | Persistent storage                  | `kaizen.trust.store`                |
-| `TrustChainCache`                | Performance caching                 | `kaizen.trust.cache`                |
-| `HumanOrigin`                    | Immutable human record (v0.8.0)     | `kaizen.trust.execution_context`    |
-| `ExecutionContext`               | Human traceability context (v0.8.0) | `kaizen.trust.execution_context`    |
-| `PseudoAgent`                    | Human facade (v0.8.0)               | `kaizen.trust.pseudo_agent`         |
-| `PseudoAgentFactory`             | Create PseudoAgents (v0.8.0)        | `kaizen.trust.pseudo_agent`         |
-| `ConstraintValidator`            | Constraint tightening (v0.8.0)      | `kaizen.trust.constraint_validator` |
-| `EATPMigration`                  | DB migration for v0.8.0             | `kaizen.trust.migrations`           |
+| Component                                              | Purpose                                    | Location                              |
+| ------------------------------------------------------ | ------------------------------------------ | ------------------------------------- |
+| `TrustOperations`                                      | Core ops (establish/delegate/verify/audit) | `kaizen.trust.operations`             |
+| `TrustedAgent` / `TrustedSupervisorAgent`              | BaseAgent with trust / delegation          | `kaizen.trust.trusted_agent`          |
+| `AgentRegistry` / `AgentHealthMonitor`                 | Discovery + health                         | `kaizen.trust.registry`               |
+| `SecureChannel` / `MessageSigner` / `MessageVerifier`  | Encrypted messaging                        | `kaizen.trust.messaging`              |
+| `TrustAwareOrchestrationRuntime` / `TrustPolicyEngine` | Trust-aware runtime                        | `kaizen.trust.orchestration`          |
+| `EnterpriseSystemAgent`                                | Legacy system proxy                        | `kaizen.trust.esa`                    |
+| `A2AService`                                           | HTTP API                                   | `kaizen.trust.a2a`                    |
+| `PseudoAgent` / `PseudoAgentFactory`                   | Human facade (v0.8.0)                      | `kaizen.trust.pseudo_agent`           |
+| `PostgresTrustStore` / `TrustChainCache`               | Storage + caching                          | `kaizen.trust.store` / `.cache`       |
+| `CredentialRotationManager` / `TrustRateLimiter`       | Security ops                               | `kaizen.trust.rotation` / `.security` |
+
+## Shim Architecture
+
+After extraction, `kaizen.trust` files are thin shims: `from kailash.trust.chain import *`.
+Kaizen adds `PostgresTrustStore` (DataFlow-backed) not in standalone SDK.
+
+| Kaizen Import                                      | Canonical Import                                            |
+| -------------------------------------------------- | ----------------------------------------------------------- |
+| `from kaizen.trust import TrustOperations`         | `from kailash.trust import TrustOperations`                 |
+| `from kaizen.trust.crypto import generate_keypair` | `from kailash.trust.signing.crypto import generate_keypair` |
 
 ## When to Use EATP
 
-**Use EATP when you need**:
+**Use when**: Enterprise accountability, regulatory compliance (audit trails, provenance), cross-org agent coordination, secure agent-to-agent messaging, capability-based access control, trust delegation with constraints.
 
-- Enterprise-grade accountability for AI agents
-- Regulatory compliance (audit trails, provenance)
-- Cross-organization agent coordination
-- Secure agent-to-agent communication
-- Capability-based access control
-- Trust delegation with constraints
-
-**Don't use EATP when**:
-
-- Simple single-agent applications
-- Internal-only prototypes
-- No compliance requirements
-- Performance-critical paths without trust needs
+**Don't use when**: Simple single-agent apps, internal-only prototypes, no compliance requirements, performance-critical paths without trust needs.
 
 ## Best Practices
 
-### Trust Establishment
+**Trust**: Establish trust before first agent action. Use specific capability types (ACCESS, EXECUTE, DELEGATE). Set constraints. MUST NOT skip verification in production.
 
-- ✅ Establish trust before first agent action
-- ✅ Use specific capability types (ACCESS, EXECUTE, DELEGATE)
-- ✅ Set appropriate constraints on capabilities
-- ❌ Never skip trust verification in production
+**Delegation**: Time-limited. Least privilege. Record chain for audit. MUST NOT delegate more capabilities than needed.
 
-### Delegation
+**Messaging**: Always use SecureChannel for inter-agent comms. Enable replay protection. Verify signatures. MUST NOT send sensitive data unencrypted.
 
-- ✅ Use time-limited delegations
-- ✅ Apply principle of least privilege
-- ✅ Record delegation chain for audit
-- ❌ Never delegate more capabilities than needed
+**Production**: Use PostgresTrustStore. Enable TrustChainCache. Configure credential rotation. Enable SecurityAuditLogger. MUST NOT disable trust verification.
 
-### Secure Messaging
+## Security Testing
 
-- ✅ Always use SecureChannel for inter-agent communication
-- ✅ Enable replay protection
-- ✅ Verify message signatures
-- ❌ Never send sensitive data without encryption
-
-### Production Deployment
-
-- ✅ Use PostgresTrustStore for persistence
-- ✅ Enable TrustChainCache for performance
-- ✅ Configure credential rotation
-- ✅ Enable security audit logging
-- ❌ Never disable trust verification in production
+- **127 adversarial tests** (CARE-040): `python -m pytest tests/security/ -v --timeout=120`
+- **Node-level trust verification** (CARE-039): High-risk nodes (`BashCommand`, `FileWrite`, `HttpRequest`, `DatabaseQuery`, `CodeExecution`, `SystemCommand`) get full verification (no caching)
+- CI: `.github/workflows/trust-tests.yml` (Monday), `.github/workflows/security-tests.yml` (Wednesday)
 
 ## Related Skills
 
@@ -629,59 +249,3 @@ await audit_logger.log(SecurityEvent(
 - **[kaizen-a2a-protocol](kaizen-a2a-protocol.md)** - Basic A2A capability cards
 - **[kaizen-supervisor-worker](kaizen-supervisor-worker.md)** - Supervisor-worker patterns
 - **[kaizen-observability-audit](kaizen-observability-audit.md)** - Compliance audit trails
-
-## Security Testing
-
-### Adversarial Security Tests (CARE-040)
-
-127 adversarial tests verify trust security under active attack:
-
-```bash
-# Run full adversarial security suite
-python -m pytest tests/security/ -v --timeout=120
-```
-
-**Categories**: Key extraction resistance (26), delegation manipulation (23), constraint gaming (42), revocation races (10), cross-org boundaries (13), audit integrity (13).
-
-### Node-Level Trust Verification (CARE-039)
-
-All runtime execution paths verify trust BEFORE each node executes. High-risk nodes (`BashCommand`, `FileWrite`, `HttpRequest`, `DatabaseQuery`, `CodeExecution`, `SystemCommand`) receive full verification (no caching).
-
-```bash
-# Run node trust verification tests
-python -m pytest tests/unit/runtime/trust/test_node_trust_verification.py -v
-```
-
-### CI/CD
-
-- **Trust tests**: `.github/workflows/trust-tests.yml` (Monday schedule + PR triggers)
-- **Security tests**: `.github/workflows/security-tests.yml` (Wednesday schedule + PR triggers)
-
-## Shim Architecture (Post-Extraction)
-
-After EATP SDK extraction, `kaizen.trust` files are thin shims:
-
-```python
-# kaizen/trust/chain.py
-from kailash.trust.chain import *  # noqa: F401,F403
-```
-
-**Import Mapping**:
-| Kaizen Shim Import | Canonical Import |
-|---|---|
-| `from kaizen.trust import TrustOperations` | `from kailash.trust import TrustOperations` |
-| `from kaizen.trust.crypto import generate_keypair` | `from kailash.trust.signing.crypto import generate_keypair` |
-| `from kaizen.trust.authority import OrganizationalAuthority` | `from kailash.trust.authority import OrganizationalAuthority` |
-
-Kaizen adds `PostgresTrustStore` (DataFlow-backed) which is NOT in the standalone SDK. For lightweight storage, the standalone SDK provides `InMemoryTrustStore` and `FilesystemStore`.
-
-**For standalone SDK details**: See `skills/26-eatp-reference/eatp-sdk-quickstart.md`
-
-## Support
-
-- **Canonical Source**: the trust module (standalone SDK)
-- **Kaizen Shims**: `kaizen/trust/`
-- **EATP Tests**: `kailash/trust/tests/` (1324 tests)
-- **Kaizen Trust Tests**: `tests/unit/trust/` (1623 tests, exercises same code via shims)
-- **Security Tests**: `tests/security/`
-- **Examples**: `kailash/trust/examples/` (standalone), `examples/trust/` (Kaizen integration)

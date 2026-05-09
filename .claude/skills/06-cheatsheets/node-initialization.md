@@ -63,7 +63,7 @@ class MyNode(Node):
 
 - **Custom Node Development**: Building specialized nodes with proper parameter validation and initialization order
 - **LLM/Embedding Integration**: Correctly handling provider-specific formats and required parameters (provider, model, messages)
-- **Fixing AttributeError Bugs**: Resolving "object has no attribute" errors by setting attributes before super().**init**()
+- **Fixing AttributeError Bugs**: Resolving "object has no attribute" errors by setting attributes before super().__init__()
 - **Parameter Type Validation**: Using NodeParameter for proper type checking instead of returning raw values
 - **Provider-Specific Formats**: Handling different response formats from Ollama, OpenAI, etc. (embeddings as dicts vs lists)
 
@@ -76,9 +76,7 @@ class MyNode(Node):
 ## When to Escalate to Subagent
 
 Use specialized subagents when:
-
 - **pattern-expert**: Complex patterns, multi-node workflows
-- **sdk-navigator**: Error resolution, parameter issues
 - **testing-specialist**: Comprehensive testing strategies
 
 ## Documentation References
@@ -87,10 +85,10 @@ Use specialized subagents when:
 
 ## Quick Tips
 
-- 💡 **Attributes Before super().**init**()**: Most common error - ALWAYS set all self.attributes BEFORE calling super().**init**() or Kailash validation will fail
+- 💡 **Attributes Before super().__init__()**: Most common error - ALWAYS set all self.attributes BEFORE calling super().__init__() or Kailash validation will fail
 - 💡 **Return NodeParameter Objects**: get_parameters() must return Dict[str, NodeParameter], not raw values like int/str/float
 - 💡 **Implement Required Methods**: All custom nodes need get_parameters() and run() methods - missing either causes "Can't instantiate abstract class" error
-- 💡 **No Built-In LLM Node**: `LLMAgentNode` does not exist — use Kaizen agents (see skills/04-kaizen/) or PythonCodeNode with direct API calls for LLM integration
+- 💡 **Provider Parameter Required**: LLMAgentNode and embedding nodes require provider="ollama" (or "openai" etc.) parameter in execute() calls
 - 💡 **Check Provider Response Format**: Ollama embeddings return dicts with "embedding" key, not lists - use embedding_dict["embedding"] to extract vector
 - 💡 **Use .run() Not .process()**: Call node.run() for execution, not .process() or .execute() directly
 - 💡 **Test with Real Providers**: Mock data hides provider-specific format issues - always test with actual Ollama/OpenAI/etc.

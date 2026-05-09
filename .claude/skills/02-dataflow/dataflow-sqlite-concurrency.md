@@ -123,15 +123,15 @@ When creating a new database adapter, ensure:
 
 ```python
 # NEVER: bare aiosqlite.connect() in adapter code
-conn = await aiosqlite.connect(db_path)  # Bypasses pool
+conn = await aiosqlite.connect(db_path)  # ❌ Bypasses pool
 
 # NEVER: direct :memory: without URI shared-cache
-conn = await aiosqlite.connect(":memory:")  # Isolated database
+conn = await aiosqlite.connect(":memory:")  # ❌ Isolated database
 
 # NEVER: asyncio in __del__
 def __del__(self):
-    asyncio.get_event_loop().run_until_complete(self.close())  # Unreliable
+    asyncio.get_event_loop().run_until_complete(self.close())  # ❌ Unreliable
 
 # NEVER: unbounded connection pool
-pool = []  # No max size, no health checks, no recycling
+pool = []  # ❌ No max size, no health checks, no recycling
 ```

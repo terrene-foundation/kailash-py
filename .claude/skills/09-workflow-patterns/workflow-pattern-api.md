@@ -11,7 +11,7 @@ Patterns for integrating and orchestrating APIs in workflows.
 > Category: `workflow-patterns`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`nodes-api-reference`](../nodes/nodes-api-reference.md), [`nexus-specialist`](../../03-nexus/nexus-specialist.md)
+> Related Skills: [`nodes-api-reference`](../08-nodes-reference/nodes-api-reference.md), [`nexus-specialist`](../../03-nexus/nexus-specialist.md)
 > Related Subagents: `nexus-specialist` (API platform), `pattern-expert` (API workflows)
 
 ## Quick Reference
@@ -333,7 +333,7 @@ api.run(port=8000)  # POST /execute receives webhooks
 
 ## Related Skills
 
-- **API Nodes**: [`nodes-api-reference`](../nodes/nodes-api-reference.md)
+- **API Nodes**: [`nodes-api-reference`](../08-nodes-reference/nodes-api-reference.md)
 - **Nexus Platform**: [`nexus-specialist`](../../03-nexus/nexus-specialist.md)
 - **Error Handling**: [`gold-error-handling`](../../17-gold-standards/gold-error-handling.md)
 

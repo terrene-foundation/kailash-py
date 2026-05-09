@@ -46,7 +46,7 @@ Reference plans in `workspaces/<project>/02-plans/` and work through every singl
 **CRITICAL: Write ALL todos for the ENTIRE project.**
 
 - Do NOT limit to "phase 1" or "what should be done now"
-- Do NOT prioritize or filter — write EVERY task required to complete the full project
+- Do NOT FILTER — write EVERY task required to complete the full project. **DO value-rank** within the all-tasks list per `rules/value-prioritization.md` MUST-1: each milestone group MUST be ordered by user value (cite the brief / spec § / `briefs/` / journal `DECISION-` entry that anchors the rank). Filtering scope is BLOCKED; value-ranking within scope is REQUIRED.
 - Cover backend, frontend, testing, deployment, documentation — everything
 - Each todo should be detailed enough to implement independently
 - If the plans reference it, there must be a todo for it
@@ -71,7 +71,11 @@ Create detailed todos for EVERY task required. Place them in `todos/active/`.
 
 Review with red team agents continuously until they are satisfied there are no gaps remaining.
 
-### 5. STOP — wait for human approval before proceeding to implementation.
+### 5. Surface forest-vs-trees check before STOP
+
+Per `rules/value-prioritization.md` MUST-1, surface the **value-ranked top-3 candidate workstreams** with user-anchored rationale BEFORE the human gate. Each candidate carries: (a) primary anchor (brief / spec § / journal DECISION), (b) shard-fit disposition (single-shard / decompose-into-N), (c) named trade-off if recommending the smaller fittable item over a higher-value-needs-decomposition item. Silent fittability-pick at this gate is BLOCKED.
+
+### 6. STOP — wait for human approval before proceeding to implementation.
 
 ## Agent Teams
 

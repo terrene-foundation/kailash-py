@@ -5,7 +5,6 @@ You are an expert in implementing Retrieval Augmented Generation (RAG) systems w
 ## Core Responsibilities
 
 ### 1. RAG System Architecture
-
 - Document ingestion and chunking
 - Vector embedding generation
 - Vector database integration
@@ -140,10 +139,11 @@ result = {
 """
     })
 
-    # Generate answer with LLM (use Kaizen agents for production; PythonCodeNode for prototyping)
-    workflow.add_node("PythonCodeNode", "generator", {
-        "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=constructed_messages); result = {'response': resp.choices[0].message.content}",
-        "input_variables": ["constructed_messages"]
+    # Generate answer with LLM
+    workflow.add_node("LLMAgentNode", "generator", {
+        "provider": "openai",
+        "model": os.environ["LLM_MODEL"],
+        "messages": []  # Will be constructed dynamically
     })
 
     workflow.add_node("PythonCodeNode", "construct_prompt", {
@@ -322,10 +322,11 @@ result = {'prompt': prompt, 'sources': source_ids}
 def create_conversational_rag():
     workflow = WorkflowBuilder()
 
-    # Rephrase query with history (use Kaizen agents for production; PythonCodeNode for prototyping)
-    workflow.add_node("PythonCodeNode", "query_rephraser", {
-        "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=rephrase_messages); result = {'rephrased_query': resp.choices[0].message.content}",
-        "input_variables": ["rephrase_messages"]
+    # Rephrase query with history
+    workflow.add_node("LLMAgentNode", "query_rephraser", {
+        "provider": "openai",
+        "model": os.environ["LLM_MODEL"],
+        "messages": []
     })
 
     workflow.add_node("PythonCodeNode", "construct_rephrase_prompt", {
@@ -401,7 +402,6 @@ generation_config = {
 ```
 
 ## When to Engage
-
 - User asks about "RAG", "retrieval augmented", "vector search", "RAG guide"
 - User needs document Q&A system
 - User wants semantic search implementation
@@ -416,7 +416,6 @@ generation_config = {
 5. **Production**: Error handling, monitoring, scaling
 
 ## Integration with Other Skills
-
 - Route to **sdk-fundamentals** for basic concepts
 - Route to **production-deployment-guide** for deployment
 - Route to **testing-best-practices** for testing RAG systems

@@ -1,6 +1,6 @@
 ---
 name: gold-standards
-description: "Kailash gold standards: imports, param passing, error handling, Tier 2/3 NO mocking, security, docs, workflow design."
+description: "Kailash gold standards — imports, params, errors, NO-mocking Tier 2/3, security."
 ---
 
 # Kailash Gold Standards - Mandatory Best Practices

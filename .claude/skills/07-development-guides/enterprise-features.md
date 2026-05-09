@@ -45,11 +45,10 @@ Built-in MCP client via the MCP mixin (`kailash.nodes.mixins.mcp`) for tool disc
 ```python
 import os
 
-# For MCP tool integration with LLM, use Kaizen agents with MCP tools
-# See skills/04-kaizen/ and skills/05-kailash-mcp/ for patterns
-workflow.add_node("PythonCodeNode", "smart_agent", {
-    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ.get('LLM_MODEL', ''), messages=messages); result = {'response': resp.choices[0].message.content}",
-    "input_variables": ["messages"]
+# Agent node with MCP tool access
+workflow.add_node("LLMAgentNode", "smart_agent", {
+    "model": os.environ.get("LLM_MODEL", "gpt-4"),
+    "max_tool_calls": 10
 })
 ```
 

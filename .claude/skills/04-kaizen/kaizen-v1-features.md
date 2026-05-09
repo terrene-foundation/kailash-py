@@ -113,7 +113,7 @@ router = LLMRouter(strategy=RoutingStrategy.BALANCED)
 ```python
 # Provider auto-handles GPT-5 temperature requirement
 config = AgentConfig(
-    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    llm_provider="openai",
     model="gpt-5-nano-2025-08-07",  # or gpt-5-2025-08-07
     temperature=1.0,  # REQUIRED for GPT-5 - auto-enforced
     max_tokens=8000,  # Increased for GPT-5 reasoning tokens

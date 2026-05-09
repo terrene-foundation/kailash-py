@@ -1,6 +1,6 @@
 ---
 name: cheatsheets
-description: "Kailash cheatsheets: patterns, nodes, workflows, cycles, performance, security, multi-tenancy, saga, custom nodes."
+description: "Kailash cheatsheets — patterns, nodes, workflows, cycles, perf, security, saga."
 ---
 
 # Kailash Patterns - Quick Reference Cheatsheets

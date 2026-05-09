@@ -132,7 +132,11 @@ function logAndEmit(payload, event, finding, what_happened) {
       const cmd = input.command || "";
       let f =
         P.detectRepoScopeDriftBash(cmd, payload.cwd) ||
-        P.detectCommitClaim(cmd);
+        P.detectCommitClaim(cmd) ||
+        // value-prioritization/MUST-4 (F-3): bash-time detection of
+        // `gh issue close --reason not_planned/wontfix` — agent must
+        // surface user-gate prose justification in the next response.
+        P.detectGhIssueCloseAsNotPlanned(cmd);
       if (f)
         return logAndEmit(
           payload,
@@ -150,6 +154,24 @@ function logAndEmit(payload, event, finding, what_happened) {
           f,
           `Edit/Write to ${fp.slice(0, 80)}`,
         );
+      // probe-driven-verification/MUST-1 — advisory lexical sweep on
+      // test/harness file edits. Pairs with the Stop-event sweep on the
+      // assistant's final report.
+      const newSource =
+        input.content || input.new_string || input.new_str || "";
+      if (
+        newSource &&
+        /(\.test|tests?\/|test-harness|suites|audit-fixture)/.test(fp)
+      ) {
+        const probeFinding = P.detectRegexForSemanticAssertion(newSource, fp);
+        if (probeFinding)
+          return logAndEmit(
+            payload,
+            event,
+            probeFinding,
+            `probe-driven sweep on ${fp.slice(0, 80)}`,
+          );
+      }
     }
     return passthrough();
   }
@@ -203,6 +225,26 @@ function logAndEmit(payload, event, finding, what_happened) {
       P.detectSweepSubstitution(finalText),
       P.detectSelfConfession(finalText),
       P.detectRepoScopeDriftText(finalText),
+      P.detectMenuWithoutPick(finalText),
+      // probe-driven-verification/MUST-1 advisory: scan the final report for
+      // test/harness code blocks the agent authored that pair regex APIs with
+      // semantic-verification function names. Path argument is "Stop" (no
+      // filesystem path); the detector's path filter is bypassed by passing
+      // a synthetic test-shaped path so the in-prose snippets are still
+      // reachable. Findings stay advisory per hook-output-discipline.md MUST-2.
+      P.detectRegexForSemanticAssertion(finalText, "tests/inline-prose"),
+      // time-pressure-discipline/MUST-2 advisory: scan agent's final report
+      // for procedure-drop language NOT paired with a parallelization or
+      // prioritization anchor. Cancels the finding when the response surfaces
+      // the structural alternative the rule requires.
+      P.detectTimePressureShortcut(finalText, { mode: "response" }),
+      // value-prioritization/MUST-3 advisory (F-2): scan agent's final
+      // report for deferred-item pickup language not paired with a
+      // re-validation surface. Companion to detectStreetlightSelection
+      // (MUST-1) and detectDeferralWithoutValueAnchor (MUST-2); closes the
+      // silent-inheritance loophole the rule's prose-only enforcement
+      // leaves open.
+      P.detectDeferredItemPickupWithoutRevalidation(finalText),
       ...ackFindings,
     ].filter(Boolean);
 
@@ -246,6 +288,27 @@ function logAndEmit(payload, event, finding, what_happened) {
             hookEventName: "UserPromptSubmit",
             additionalContext:
               "USER REGRESSION SIGNAL DETECTED — before re-running, audit which test tiers actually ran in the last invocation and enumerate them explicitly in your response.",
+          },
+        }) + "\n",
+      );
+      process.exit(0);
+    }
+    // time-pressure-discipline/MUST-1: framing detection in user input.
+    // PRIME-only (no violation log) per the rule's two-mode design — framing
+    // is the trigger; the violation is the agent's procedure-drop response,
+    // which is caught by the Stop-event detector with mode:"response".
+    const pressureFinding = P.detectTimePressureShortcut(prompt, {
+      mode: "input",
+    });
+    if (pressureFinding) {
+      clearTimeout(fallback);
+      process.stdout.write(
+        JSON.stringify({
+          continue: true,
+          hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext:
+              "USER TIME-PRESSURE FRAMING DETECTED (rules/time-pressure-discipline.md MUST-1) — your next response MUST: (a) acknowledge the framing in plain language, (b) propose a parallelization or prioritization-surfacing path (parallel worktree wave, parallel specialist delegation, prioritized list for human gate), NOT a procedure drop. Skipping /redteam, omitting Tier-2 regression tests, deferring in-shard same-class fixes, --no-verify, or any equivalent corner-cut is BLOCKED — even when the user explicitly authorizes the shortcut. The user's intent under pressure is throughput, not corner-cutting; satisfy it through structural means.",
           },
         }) + "\n",
       );

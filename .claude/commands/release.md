@@ -1,8 +1,8 @@
 # /release - SDK Release Command
 
-Standalone SDK release command for the BUILD repo. Not a workspace phase — runs independently after any number of implement/redteam cycles. Handles PyPI publishing, documentation deployment, and CI management for the `kailash` Python SDK and its framework packages.
+Standalone SDK release command for the BUILD repo. Not a workspace phase -- runs independently after any number of implement/redteam cycles. Handles PyPI publishing, documentation deployment, and CI management for the `kailash` Python SDK and its framework packages.
 
-**IMPORTANT**: This is `/release` (BUILD repo command). `/deploy` is for USE repos only. See `rules/zero-tolerance.md` for the BUILD vs USE boundary.
+**IMPORTANT**: This is `/release` (BUILD repo command). `/deploy` is for USE repos only.
 
 ## Deployment Config
 
@@ -10,113 +10,87 @@ Read `deploy/deployment-config.md` at the project root. This is the single sourc
 
 ## Mode Detection
 
-### If `deploy/deployment-config.md` does NOT exist → Onboard Mode
+### If `deploy/deployment-config.md` does NOT exist -> Onboard Mode
 
 Run the SDK release onboarding process:
 
-1. **Analyze the codebase**
-   - What packages exist? (main `kailash` package + sub-packages like `kailash-dataflow`, `kailash-nexus`, `kailash-kaizen`)
-   - What build system? (`pyproject.toml` — setuptools, hatch, maturin, etc.)
-   - Existing CI workflows? (`.github/workflows/`)
-   - Documentation setup? (sphinx `conf.py`, mkdocs.yml, docs/ directory)
-   - Test infrastructure? (pytest config, tox, nox)
-   - Multi-package structure? (monorepo vs separate packages)
+1. **Analyze the codebase** -- packages, build system, CI workflows, docs setup, test infrastructure, multi-package structure
+2. **Ask the human** -- PyPI strategy, token setup, docs hosting, CI system, versioning strategy, changelog format, release cadence
+3. **Research current best practices** -- web search for current PyPI/CI/build tool guidance. Do NOT rely on encoded knowledge.
+4. **Create `deploy/deployment-config.md`** -- document all decisions with rationale, step-by-step runbook, rollback procedure, release checklist
+5. **STOP -- present to human for review**
 
-2. **Ask the human**
-   - PyPI publishing strategy: TestPyPI first? Wheel-only (proprietary)?
-   - API token setup: `~/.pypirc` or CI secrets?
-   - Documentation hosting: ReadTheDocs, GitHub Pages, or other?
-   - CI system: GitHub Actions? Self-hosted runners?
-   - Multi-package versioning strategy: lockstep or independent?
-   - Changelog format: Keep a Changelog, conventional-changelog, or custom?
-   - Release cadence: on-demand, scheduled, or tag-triggered?
+### If `deploy/deployment-config.md` EXISTS -> Execute Mode
 
-3. **Research current best practices**
-   - Use web search for current PyPI publishing guidance
-   - Use web search for current CI/CD patterns for Python packages
-   - Check current `build`, `twine`, `maturin` tool versions and syntax
-   - Do NOT rely on encoded knowledge — tools and best practices change
-
-4. **Create `deploy/deployment-config.md`**
-   - Document all decisions with rationale
-   - Include step-by-step SDK release runbook
-   - Include rollback procedure (PyPI yank + corrective release)
-   - Include release checklist
-
-5. **STOP — present to human for review**
-
-### If `deploy/deployment-config.md` EXISTS → Execute Mode
-
-Read the config and execute the appropriate track:
+Read the config and execute:
 
 #### Step 0: Release Scope Detection
 
-Before any release work, determine WHAT needs releasing by analyzing unreleased changes:
-
-1. **Diff analysis** — Compare `main` against the last release tag for each package:
-
+1. **Diff analysis** -- compare `main` against last release tag per package:
    ```
-   git log <last-tag>..HEAD -- src/kailash/           → Core SDK changes?
-   git log <last-tag>..HEAD -- packages/kailash-dataflow/  → DataFlow changes?
-   git log <last-tag>..HEAD -- packages/kailash-kaizen/    → Kaizen changes?
-   git log <last-tag>..HEAD -- packages/kailash-nexus/     → Nexus changes?
+   git log <last-tag>..HEAD -- kailash/           # Core SDK changes?
+   git log <last-tag>..HEAD -- kailash-dataflow/   # DataFlow changes?
+   git log <last-tag>..HEAD -- kailash-kaizen/     # Kaizen changes?
+   git log <last-tag>..HEAD -- kailash-nexus/      # Nexus changes?
    ```
+2. **Present release plan** -- which packages, version bump type, dependency updates. **STOP and wait for human approval.**
 
-2. **Present release plan to human** — Show which packages have unreleased changes and propose:
-   - Which packages to release
-   - Version bump type for each (major/minor/patch)
-   - Whether framework packages need SDK dependency updates
-   - **STOP and wait for human approval before proceeding**
+#### Step 1: Version Bump
 
-#### Step 1: Version Bump (All Affected Packages)
+Update version in BOTH `pyproject.toml` AND `__init__.py` for each package. The `__version__` MUST match `pyproject.toml` -- this is the #1 source of "my package didn't update" complaints.
 
-For each package being released, update version in BOTH locations. Missing either causes install/import mismatches that break users.
-
-**CRITICAL**: The `__version__` in `__init__.py` MUST match `pyproject.toml`. This is the #1 source of "my package didn't update" complaints. The session-start hook verifies this automatically.
-
-##### Core SDK (`kailash`)
-
-| File                      | Field                   | Example                 |
-| ------------------------- | ----------------------- | ----------------------- |
-| `pyproject.toml`          | `version = "X.Y.Z"`     | `version = "1.0.0"`     |
-| `src/kailash/__init__.py` | `__version__ = "X.Y.Z"` | `__version__ = "1.0.0"` |
-
-##### Framework Packages
-
-Each framework has 2 version locations PLUS the SDK dependency pin:
-
-**kailash-dataflow:**
-
-| File                                                 | Field                          |
-| ---------------------------------------------------- | ------------------------------ |
-| `packages/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`            |
-| `packages/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`        |
-| `packages/kailash-dataflow/pyproject.toml`           | `dependencies: kailash>=A.B.C` |
-
-**kailash-kaizen:**
-
-| File                                             | Field                          |
-| ------------------------------------------------ | ------------------------------ |
-| `packages/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`            |
-| `packages/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`        |
-| `packages/kailash-kaizen/pyproject.toml`         | `dependencies: kailash>=A.B.C` |
-
-**kailash-nexus:**
-
-| File                                           | Field                          |
-| ---------------------------------------------- | ------------------------------ |
-| `packages/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`            |
-| `packages/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`        |
-| `packages/kailash-nexus/pyproject.toml`        | `dependencies: kailash>=A.B.C` |
-
-##### SDK Dependency Pin Update Rule
-
-When the core SDK version is bumped, ALL framework packages MUST update their `kailash>=` dependency pin to the new SDK version — even if the framework itself is not being released. This ensures `pip install kailash-dataflow` always pulls the correct minimum SDK.
-
-Also update the main SDK's optional extras in `pyproject.toml` to reference the latest framework versions.
+For detailed version locations, dependency pin rules, and verification commands, see `skills/10-deployment-git/release-runbook.md`.
 
 #### Step 2: Version Consistency Verification
 
-After bumping, verify ALL versions are consistent:
+Run the verification script from the release runbook. **BLOCK release if any mismatch.**
 
-**Full reference**: `.claude/skills/management/release-checklist.md`
+#### Step 3: Pre-Release Prep
+
+Run tests, linting, CHANGELOG, security review, README update (MANDATORY for minor/major), Sphinx docs build verification. See release runbook for full checklist.
+
+#### Step 4: Build and Validate
+
+Build wheels, upload to TestPyPI, verify install in clean venv. See release runbook.
+
+#### Step 5: Git Workflow
+
+Create release branch, PR, merge, tag on main. Tags trigger publish-pypi.yml. See release runbook.
+
+#### Step 6: Publish to Production PyPI
+
+Publish in dependency order: core first, then frameworks. See release runbook.
+
+#### Step 7: Post-Release
+
+Update COC template repo pins, verify docs deployed, document release. See release runbook.
+
+## Agent Teams
+
+- **release-specialist** -- Analyze codebase, run onboarding, guide SDK release
+- **release-specialist** -- Git workflow, PR creation, version management
+- **security-reviewer** -- Pre-release security audit (MANDATORY)
+- **testing-specialist** -- Verify test coverage before release
+- **reviewer** -- Verify documentation builds and code examples
+
+## Critical Rules
+
+- NEVER publish without full test suite passing
+- NEVER skip TestPyPI for major/minor releases
+- NEVER commit PyPI tokens -- use `~/.pypirc` or CI secrets
+- NEVER skip security review before publishing
+- NEVER release a framework without updating its `kailash>=` dependency
+- ALWAYS update version in BOTH locations (pyproject.toml AND __init__.py)
+- ALWAYS verify published package installs in clean venv
+- ALWAYS publish in dependency order: core SDK first, then frameworks
+- ALWAYS document releases in `deploy/deployments/`
+- ALWAYS update COC template repo dependency pins after publishing
+- Research current tool syntax -- do not assume stale knowledge is correct
+
+**Automated enforcement**: `validate-deployment.js` hook blocks commits containing credentials in deployment files.
+
+## Skill References
+
+- `skills/10-deployment-git/release-runbook.md` -- Version tables, step-by-step procedures, verification commands
+- `skills/10-deployment-git/deployment-packages.md` -- Package release patterns
+- `skills/10-deployment-git/deployment-ci.md` -- CI/CD infrastructure
