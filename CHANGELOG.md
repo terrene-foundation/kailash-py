@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Per-Task Soft / Hard Time Limits (#912)
+
+`runtime.execute(workflow.build(), soft_time_limit=2.0, time_limit=5.0)`
+now bounds every workflow with a celery-style two-stage deadline contract:
+the soft limit raises a catchable exception so user code can save partial
+work and exit cleanly; the hard limit unconditionally aborts after a
+short grace window so operators can bound runaway resource consumption.
+
+#### New typed kwargs (additive — `**kwargs` retained one deprecation cycle)
+
+- **Every `BaseRuntime` subclass** — `LocalRuntime.execute`,
+  `AsyncLocalRuntime.execute` / `.execute_workflow_async`,
+  `DistributedRuntime.execute`, `DockerRuntime.execute`,
+  `ParallelRuntime.execute`, `ParallelCyclicRuntime.execute`,
+  `AccessControlledRuntime.execute`, `DurableExecutionEngine.execute` —
+  accept `soft_time_limit: float | None = None` and
+  `time_limit: float | None = None` as KEYWORD_ONLY parameters. Validated
+  at the entry point: negative values, non-finite values, and `soft >= hard`
+  raise `ValueError` immediately rather than later from a timer thread.
+- **`WorkflowScheduler.__init__`** — operator-level
+  `default_soft_time_limit: Optional[float] = None` and
+  `default_time_limit: Optional[float] = None` apply when a per-fire value
+  is unset. Per-fire value ALWAYS wins.
+- **`WorkflowScheduler.schedule_cron` / `.schedule_interval` / `.schedule_once`** —
+  per-fire `soft_time_limit` / `time_limit` KEYWORD_ONLY kwargs flow
+  through `RetrySpec` integration so retryable typed exceptions
+  re-classify correctly.
+- **`Worker.__init__`** — operator-level
+  `default_soft_time_limit: float | None = None`,
+  `default_time_limit: float | None = None`, and
+  `hard_time_limit_grace_seconds: float = 1.0` apply when a task's
+  `TaskMessage.execution_limits` does NOT specify the corresponding
+  limit. Per-task value ALWAYS wins. The `Worker` arms timers at
+  DEQUEUE (not enqueue) so queue wait time does NOT consume the task's
+  budget.
+
+#### New typed exceptions
+
+- `kailash.sdk_exceptions.SoftTimeLimitExceeded` — subclass of
+  `RuntimeException`. Catch to save partial work / write a checkpoint /
+  exit cleanly before the hard deadline fires.
+- `kailash.sdk_exceptions.HardTimeLimitExceeded` — subclass of
+  `RuntimeException`. Operator-facing path for runaway-task abort.
+  On the distributed worker path, triggers requeue (NOT immediate
+  dead-letter) when `attempts < max_attempts`; dead-letters only after
+  the attempt budget is exhausted.
+
+Both are exported from `kailash.sdk_exceptions` and importable as:
+
+```python
+from kailash.sdk_exceptions import SoftTimeLimitExceeded, HardTimeLimitExceeded
+```
+
+#### Distributed wire format — forward-compat
+
+`TaskMessage` (in `kailash.runtime.distributed`) gained an optional
+`execution_limits: Optional[Dict[str, float]] = None` field with shape
+`{"soft": <float>, "hard": <float>}` (either key may be omitted when the
+corresponding limit is None). Wire format is ONE optional field — workers
+running pre-2.19 SDK silently ignore the unknown payload key (forward
+compatible). Workers running 2.19 or newer read the field and arm timers
+at dequeue.
+
+#### `RetrySpec` integration
+
+`SoftTimeLimitExceeded` and `HardTimeLimitExceeded` flow through the
+`RetrySpec` retry classifier so a scheduled job that exceeds its soft
+limit can be retried with backoff per the spec, while a hard-limit kill
+goes to dead-letter (or requeue, on the distributed worker path).
+
+#### Migration
+
+Pure-additive scope — no breaking changes. Existing callers continue to
+work without passing the new kwargs. The wrapper layer is OFF by default
+(both kwargs default to None) so no implicit deadlines apply unless the
+caller explicitly opts in. The semantics are celery-style: soft limit
+warns and raises a catchable exception; hard limit is an unconditional
+abort after a short grace window.
+
+```python
+# Quickstart — opt-in per call:
+from kailash.runtime.local import LocalRuntime
+from kailash.sdk_exceptions import SoftTimeLimitExceeded
+
+runtime = LocalRuntime()
+try:
+    results, run_id = runtime.execute(
+        workflow.build(),
+        soft_time_limit=2.0,   # advisory; raises catchable exception
+        time_limit=5.0,         # hard kill (after grace)
+    )
+except SoftTimeLimitExceeded:
+    # Save partial work, write a checkpoint, return early.
+    ...
+```
+
 ## [2.18.0] - 2026-05-08
 
 ### Changed — BREAKING (slim core, #890)

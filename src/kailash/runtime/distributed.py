@@ -703,6 +703,18 @@ class Worker:
         ...     concurrency=4,
         ... )
         >>> await worker.start()  # Runs until stopped
+
+        # With operator-set defaults (#912 Shard 4) — per-task
+        # ``DistributedRuntime.execute(soft_time_limit=, time_limit=)``
+        # ALWAYS wins over these defaults; defaults apply only when the
+        # task did not set its own:
+        >>> worker = Worker(
+        ...     redis_url="redis://localhost:6379/0",
+        ...     concurrency=4,
+        ...     default_soft_time_limit=30.0,
+        ...     default_time_limit=60.0,
+        ...     hard_time_limit_grace_seconds=2.0,
+        ... )
     """
 
     def __init__(

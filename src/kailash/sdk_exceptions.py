@@ -236,7 +236,7 @@ class SoftTimeLimitExceeded(RuntimeException):
     :class:`ResourceLimitExceededError` — time-limit exhaustion is
     a different domain than resource-pool exhaustion.
 
-    Added in: v0.13.0 (issue #912 — per-task soft/hard time limits).
+    Added in: v2.19.0 (issue #912 — per-task soft/hard time limits).
     """
 
 
@@ -261,7 +261,7 @@ class HardTimeLimitExceeded(RuntimeException):
     Sibling of :class:`SoftTimeLimitExceeded`. NOT a subclass of
     :class:`ResourceLimitExceededError`.
 
-    Added in: v0.13.0 (issue #912 — per-task soft/hard time limits).
+    Added in: v2.19.0 (issue #912 — per-task soft/hard time limits).
     """
 
 
