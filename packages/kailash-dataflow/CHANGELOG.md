@@ -1,5 +1,50 @@
 # DataFlow Changelog
 
+## [2.9.0] — 2026-05-09 — slim install + audit-store loud failure
+
+Minor bump aligning kailash-dataflow with the kailash 2.18.0 slim-core
+refactor (#890). Default install drops 17 transitive packages; database
+drivers move behind per-DB extras. `kailash-dataflow[all]` preserves the
+pre-2.9.0 install verbatim.
+
+### Changed
+
+- **Slim default install** — `pip install kailash-dataflow` now installs
+  only `kailash>=2.18.0`, sqlalchemy, asyncpg, click, sqlparse. asyncpg
+  stays core because the migrations module imports it at module scope;
+  every other driver is opt-in.
+- **Database driver extras** — `[postgres-sync]` (psycopg2-binary),
+  `[mysql]` (aiomysql), `[sqlite]` (aiosqlite), `[mongo]` (motor +
+  pymongo[srv]), `[redis]`. Pick what your app uses.
+- **Functional extras** — `[api]` (fastapi), `[security]` (cryptography),
+  `[monitoring]` (psutil), `[templates]` (PyJWT + pydantic + fastapi for
+  SaaS / API gateway starter scaffolds).
+- **Backwards-compat umbrella** — `pip install 'kailash-dataflow[all]'`
+  preserves the full pre-2.9.0 install for users not ready to migrate.
+- **Floor bump** — `kailash>=2.16.0` → `kailash>=2.18.0` to match the
+  slim-core release surface.
+
+### Fixed
+
+- **fix(security): audit-store signing fails loudly when cryptography is
+  missing** (`src/dataflow/trust/audit.py:350-360`) — a configured signing
+  key with the `[security]` extra uninstalled now raises `ImportError`
+  with the install hint instead of silently degrading the audit path.
+  Per `zero-tolerance.md` Rule 3 — no silent fallback on security paths.
+
+### Migration
+
+If your app uses MySQL / SQLite / MongoDB / Redis drivers OR audit-record
+signing OR the SaaS template, install the appropriate extras:
+
+| Old install                                   | New install                                |
+| --------------------------------------------- | ------------------------------------------ |
+| `pip install kailash-dataflow` (with MySQL)   | `pip install 'kailash-dataflow[mysql]'`    |
+| `pip install kailash-dataflow` (with SQLite)  | `pip install 'kailash-dataflow[sqlite]'`   |
+| `pip install kailash-dataflow` (with MongoDB) | `pip install 'kailash-dataflow[mongo]'`    |
+| `pip install kailash-dataflow` (signing keys) | `pip install 'kailash-dataflow[security]'` |
+| (any of the above; full preserve)             | `pip install 'kailash-dataflow[all]'`      |
+
 ## [2.8.1] — 2026-05-07 — append-only enforcement orphan polish
 
 Patch bump shipping defense-in-depth around the append-only model contract from 2.8.0. No public API change.
