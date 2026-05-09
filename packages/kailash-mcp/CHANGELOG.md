@@ -2,6 +2,22 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.2.14] — 2026-05-09 — hotfix: aiohttp + websockets restored to core deps
+
+Hotfix release closing a pre-existing latent silent-None ImportError fallback in `transports/transports.py` that was masked by editable installs and exposed by the 0.2.13 clean-venv install verification (`pip install kailash-mcp==0.2.13` → `AttributeError: 'NoneType' object has no attribute 'ClientResponse'` at module-import time).
+
+The bug existed in 0.2.12 as well — anyone who installed `pip install kailash-mcp==0.2.12` against a venv without aiohttp/websockets transitively present would have hit the same import failure. Most users were unaffected because they install `kailash-kaizen` or `kailash-dataflow` first, both of which transitively pull aiohttp.
+
+### Fixed
+
+- **`pip install kailash-mcp` now imports cleanly** — `aiohttp>=3.12.4` and `websockets>=12.0` are restored to **core** dependencies. `transports/transports.py:902` declares `class StreamableHTTPTransport` with a method signature `response: aiohttp.ClientResponse` (module-scope class-body type annotation, evaluated at class-definition time); `transports/transports.py:954` declares `self.websocket: Optional[websockets.WebSocketServerProtocol]`. Both references are unconditional — making aiohttp / websockets effectively required for `import kailash_mcp` to succeed. The `[http]` / `[sse]` / `[websocket]` extras retain their declarations as harmless redundancy (already-installed entries are no-ops).
+- **Removed BLOCKED silent-None ImportError fallback** — `transports/transports.py:67-74` previously had `try: import aiohttp; except ImportError: aiohttp = None` (and same for websockets). Per `dependencies.md` BLOCKED Anti-Patterns, the silent-None fallback "converts a loud, fixable failure into a silent, cascading one." Replaced with bare `import aiohttp; import websockets` since these are now core deps. `auth/oauth.py` retains its guarded imports because it correctly uses the optional-extras-with-loud-failure pattern via `_require_oauth_extras()` (typed ImportError raised at call sites, not silent-None propagation).
+
+### Notes
+
+- **0.2.13 superseded.** `pip install kailash-mcp` now resolves to 0.2.14 by default. Users on 0.2.13 should upgrade.
+- **Follow-up tracked**: the websockets ≥12.0 API deprecates `websockets.WebSocketServerProtocol` / `WebSocketServer` (moved to `websockets.legacy.server`). Current code still works via backwards-compat aliases but emits `DeprecationWarning`s. Migration to the new API is a separate workstream — out of hotfix scope.
+
 ## [0.2.13] — 2026-05-09 — slim core: orphan pydantic delete + kailash 2.16 floor (#890)
 
 Patch release shipping kailash-mcp's slice of the kailash 2.18.0 / #890 slim-core decoupling. **No install-shape change for users** — `pydantic` was a declared core dep but had zero import sites in `src/kailash_mcp/`; it remains transitively available through `mcp[cli]` (which declares pydantic as its own runtime dependency). Users see no behavior change.
