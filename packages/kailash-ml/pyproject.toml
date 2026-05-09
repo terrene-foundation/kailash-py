@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "1.7.3"
+version = "1.7.4"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -31,6 +31,15 @@ dependencies = [
     "kailash>=2.16.0",
     "kailash-dataflow>=2.0.11",
     "kailash-nexus>=2.1.0",
+    # aiosqlite is module-scope in kailash_ml.tracking.storage.sqlite via
+    # kailash.core.pool.sqlite_pool (eager re-export from kailash.core.pool
+    # __init__.py). `import kailash_ml` therefore unconditionally requires
+    # aiosqlite. kailash 2.18.0+ scopes aiosqlite to its [db-sqlite] extra
+    # — kailash-ml MUST declare it directly. (kailash-dataflow's [sqlite]
+    # extra also covers it but kailash-ml does not depend on the [sqlite]
+    # variant of dataflow.) Origin: 1.7.3 clean-venv install verification
+    # surfaced ModuleNotFoundError: aiosqlite at module-import time.
+    "aiosqlite>=0.19.0",
     "polars>=1.0",
     "pyarrow>=14.0",
     "numpy>=1.24",
