@@ -58,7 +58,13 @@ def test_arm_returns_cancellable():
     limits set, breaking every caller's ``finally: cancellable.disarm()``).
     """
     token = CancellationToken()
-    cancellable = arm_time_limits(token, soft_time_limit=10.0, time_limit=20.0)
+    # Use far-future deadlines (>> CI test budget) so timers never fire
+    # during the assertion — the test's contract is the RETURN TYPE,
+    # not timer behavior. Pinning the type at line scale prevents a
+    # refactor from changing the shape (e.g. returning None when no
+    # limits set, breaking every caller's `finally: cancellable.disarm()`).
+    # Timer behavior is covered by the Tier-2 wrapper suite.
+    cancellable = arm_time_limits(token, soft_time_limit=600.0, time_limit=900.0)
     try:
         assert isinstance(cancellable, _Cancellable)
     finally:
