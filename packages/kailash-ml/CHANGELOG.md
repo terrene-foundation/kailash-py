@@ -1,5 +1,17 @@
 # kailash-ml Changelog
 
+## [1.7.3] — 2026-05-09 — kailash floor bump for #890 slim-core alignment
+
+Patch release pairing kailash-ml with the kailash 2.18.0 / #890 slim-core layout. **No source changes** — diff is strictly `pyproject.toml` floor bump + `__version__` anchor + this CHANGELOG entry.
+
+### Changed
+
+- **`kailash` floor: 2.16.0** (was `2.13.4`) — aligns with the kailash 2.18.0 slim-core layout.
+
+### Notes
+
+- No public-API changes; no behavior changes; wheel content is identical to 1.7.2 except for the `__version__` constant.
+
 ## [1.7.2] — 2026-05-06 — FeatureStore deprecation-warning bridge (#643)
 
 Per `rules/zero-tolerance.md` Rule 6a (Public-API Removal Requires Deprecation
