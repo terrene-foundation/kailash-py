@@ -207,6 +207,64 @@ class ResourceLimitExceededError(RuntimeException):
     """
 
 
+class SoftTimeLimitExceeded(RuntimeException):
+    """Raised when a workflow exceeds its configured ``soft_time_limit``.
+
+    Soft time limits are advisory deadlines: when reached, the running
+    workflow is signalled via the cancellation token so user code MAY
+    catch this exception, finish the in-flight work, and exit cleanly
+    before the hard limit fires. The exception is a normal Python
+    exception and IS subject to the scheduler's retry primitive (see
+    issue #910 ``RetrySpec``) when raised inside a scheduled job.
+
+    Attributes:
+        message: Human-readable description of the deadline event.
+
+    Example::
+
+        from kailash.runtime.local import LocalRuntime
+        from kailash.sdk_exceptions import SoftTimeLimitExceeded
+
+        runtime = LocalRuntime()
+        try:
+            runtime.execute(workflow.build(), soft_time_limit=2.0, time_limit=10.0)
+        except SoftTimeLimitExceeded:
+            # Save partial work, write a checkpoint, return early.
+            ...
+
+    Sibling of :class:`HardTimeLimitExceeded`. NOT a subclass of
+    :class:`ResourceLimitExceededError` — time-limit exhaustion is
+    a different domain than resource-pool exhaustion.
+
+    Added in: v0.13.0 (issue #912 — per-task soft/hard time limits).
+    """
+
+
+class HardTimeLimitExceeded(RuntimeException):
+    """Raised when a workflow exceeds its configured ``time_limit`` plus grace.
+
+    Hard time limits are unconditional kills: when ``time_limit +
+    grace_seconds`` elapses, the wrapper raises ``HardTimeLimitExceeded``
+    regardless of whether the workflow has acknowledged the prior
+    ``SoftTimeLimitExceeded`` signal. This is the "task is dead" path
+    — operators rely on it to bound resource consumption from misbehaving
+    or runaway workflows.
+
+    On the distributed worker path (Shard 4), ``HardTimeLimitExceeded``
+    triggers a requeue (NOT immediate dead-letter) when the task has
+    remaining ``max_attempts``; dead-letter happens only after the
+    attempt budget is exhausted.
+
+    Attributes:
+        message: Human-readable description of the deadline event.
+
+    Sibling of :class:`SoftTimeLimitExceeded`. NOT a subclass of
+    :class:`ResourceLimitExceededError`.
+
+    Added in: v0.13.0 (issue #912 — per-task soft/hard time limits).
+    """
+
+
 class CircuitBreakerOpenError(RuntimeException):
     """Raised when circuit breaker is open.
 
@@ -453,3 +511,61 @@ class WorkflowCancelledError(WorkflowExecutionError):
 # Legacy exception name compatibility for tests and backwards compatibility
 KailashRuntimeError = RuntimeExecutionError
 KailashValidationError = NodeValidationError
+
+
+# Public exception API surface (per orphan-detection.md Rule 6).
+# `__all__` lists every public exception class + legacy alias so that
+# `from kailash.sdk_exceptions import *`, Sphinx autodoc, and static
+# analyzers (mypy --strict, CodeQL py/undefined-export) all resolve the
+# same set of public names. New exceptions MUST be added here in the
+# same PR that introduces them.
+__all__ = [
+    # Base
+    "KailashException",
+    # Node hierarchy
+    "NodeException",
+    "NodeValidationError",
+    "NodeExecutionError",
+    "NodeConfigurationError",
+    "SafetyViolationError",
+    "CodeExecutionError",
+    # Workflow hierarchy
+    "WorkflowException",
+    "WorkflowValidationError",
+    "WorkflowExecutionError",
+    "CyclicDependencyError",
+    "ConnectionError",
+    "CycleConfigurationError",
+    "WorkflowCancelledError",
+    "KailashWorkflowException",
+    # Runtime hierarchy
+    "RuntimeException",
+    "RuntimeExecutionError",
+    "ResourceLimitExceededError",
+    "SoftTimeLimitExceeded",
+    "HardTimeLimitExceeded",
+    "CircuitBreakerOpenError",
+    "ScheduleNotFound",
+    "RetryExhaustedException",
+    # Task hierarchy
+    "TaskException",
+    "TaskStateError",
+    # Storage hierarchy
+    "StorageException",
+    "KailashStorageError",
+    # Export / Import
+    "ExportException",
+    "ImportException",
+    # Configuration
+    "ConfigurationException",
+    "KailashConfigError",
+    # Other
+    "ManifestError",
+    "CLIException",
+    "VisualizationError",
+    "TemplateError",
+    "KailashNotFoundException",
+    # Legacy aliases
+    "KailashRuntimeError",
+    "KailashValidationError",
+]
