@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.6.3] — 2026-05-09 — slim-core decoupling + PyPI install resolvability (#890)
+
+Patch release shipping the kailash-nexus side of the kailash 2.18.0 slim-core decoupling. No behavior change to the Nexus public API; only the dependency manifest is updated so `pip install kailash-nexus` resolves cleanly against the published kailash 2.18.0 wheel.
+
+### Fixed
+
+- **`pip install kailash-nexus` now resolves against PyPI** — pre-2.6.3 declared `kailash[server]>=2.16.0` which did not resolve because the `[server]` extra did not exist on PyPI for kailash 2.16.x / 2.17.x (the extras layout landed with kailash 2.18.0 / #890). The dependency declaration is now an explicit list of the server middleware stack (PyJWT, bcrypt, sqlalchemy, cryptography, etc.) rather than an extras-resolution that PyPI could not satisfy. Result: clean-venv `pip install kailash-nexus` succeeds against the currently-published kailash wheel.
+
+### Dependencies
+
+- Declares the server middleware stack directly (PyJWT, bcrypt, sqlalchemy, cryptography, structlog, prometheus_client, opentelemetry-api/sdk, requests, redis) rather than relying on `kailash[server]`. The set matches the contents of `kailash[server]` as of kailash 2.18.0; downstream consumers see no change in installed packages.
+- `kailash>=2.16.0` (was `kailash[server]>=2.16.0`).
+
+### Notes
+
+- Nexus 2.6.3 ships no Python source changes — diff is strictly `pyproject.toml`, `__init__.py::__version__`, and this CHANGELOG entry. The release pairs with the kailash 2.18.0 slim-core layout so `pip install kailash-nexus` works cleanly on a fresh environment.
+
 ## [2.6.2] — 2026-05-06 — fix MCP WebSocket transport binding (#816)
 
 Wires the MCP WebSocket transport so AI agents can actually connect to a Nexus instance over `ws://host:mcp_port`. Prior to this fix the MCP server was constructed in stdio mode and never bound a TCP listener — every WebSocket connect attempt failed with a connection-refused error.
