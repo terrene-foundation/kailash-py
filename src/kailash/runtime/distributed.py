@@ -75,6 +75,17 @@ class TaskMessage:
             eligible for re-delivery.
         attempts: Number of times this task has been attempted.
         max_attempts: Maximum delivery attempts before dead-lettering.
+        execution_limits: Optional per-task time-limit dict produced by
+            ``DistributedRuntime.execute(soft_time_limit=, time_limit=)``
+            (issue #912 Shard 4). Shape:
+            ``{"soft": <float seconds>, "hard": <float seconds>}``;
+            either key may be omitted when the corresponding limit is
+            ``None`` (so an old worker or a producer that only set the
+            hard limit serializes a partial dict). The wire format is
+            ONE optional field so older workers running pre-Shard-4 SDK
+            silently ignore it (forward-compat). The worker arms the
+            timers at dequeue (NOT enqueue) so queue wait time does
+            NOT consume the task's budget. Default ``None`` (no limit).
     """
 
     task_id: str = ""
@@ -84,24 +95,38 @@ class TaskMessage:
     visibility_timeout: int = 300  # 5 minutes default
     attempts: int = 0
     max_attempts: int = 3
+    execution_limits: Optional[Dict[str, float]] = None
 
     def to_json(self) -> str:
-        """Serialize to JSON string for Redis storage."""
-        return json.dumps(
-            {
-                "task_id": self.task_id,
-                "workflow_data": self.workflow_data,
-                "parameters": self.parameters,
-                "submitted_at": self.submitted_at,
-                "visibility_timeout": self.visibility_timeout,
-                "attempts": self.attempts,
-                "max_attempts": self.max_attempts,
-            }
-        )
+        """Serialize to JSON string for Redis storage.
+
+        ``execution_limits`` is included only when set so the wire format
+        stays compact for the common no-limit case AND so older workers
+        running a pre-Shard-4 SDK do not have to pattern-match a new
+        field name on every dequeue. Workers running this SDK or newer
+        read the field; workers running an older SDK ignore it.
+        """
+        payload: Dict[str, Any] = {
+            "task_id": self.task_id,
+            "workflow_data": self.workflow_data,
+            "parameters": self.parameters,
+            "submitted_at": self.submitted_at,
+            "visibility_timeout": self.visibility_timeout,
+            "attempts": self.attempts,
+            "max_attempts": self.max_attempts,
+        }
+        if self.execution_limits is not None:
+            payload["execution_limits"] = self.execution_limits
+        return json.dumps(payload)
 
     @classmethod
     def from_json(cls, data: str) -> "TaskMessage":
-        """Deserialize from JSON string."""
+        """Deserialize from JSON string.
+
+        Older-SDK ``TaskMessage`` JSON without ``execution_limits``
+        deserializes as ``execution_limits=None`` (the dataclass
+        default), preserving the forward-compat invariant.
+        """
         parsed = json.loads(data)
         known = {k: v for k, v in parsed.items() if k in cls.__dataclass_fields__}
         return cls(**known)
@@ -518,11 +543,17 @@ class DistributedRuntime(BaseRuntime):
             workflow: The workflow to execute.
             parameters: Optional execution parameters.
             soft_time_limit: Optional advisory deadline in seconds. Per
-                #912 Shard 1, the slot is accepted; serialisation onto
-                the ``TaskMessage`` wire format lands in Shard 4.
+                #912 Shard 4, this serializes onto
+                ``TaskMessage.execution_limits["soft"]`` and the worker
+                arms the timer at dequeue (NOT enqueue) so queue wait
+                does NOT burn the task's budget.
             time_limit: Optional unconditional kill deadline in seconds.
-                Per #912 Shard 1, the slot is accepted; worker-side
-                enforcement lands in Shard 4.
+                Per #912 Shard 4, this serializes onto
+                ``TaskMessage.execution_limits["hard"]`` and the worker
+                arms the hard-deadline timer at dequeue. When the hard
+                deadline fires, the task is requeued (NOT dead-lettered)
+                if ``attempts < max_attempts``; dead-lettered only after
+                exhaustion.
             **kwargs: Additional execution options.
 
         Returns:
@@ -539,11 +570,25 @@ class DistributedRuntime(BaseRuntime):
         # Serialize the workflow for queue transport
         workflow_data = self._serialize_workflow(workflow)
 
+        # #912 Shard 4: build the optional execution_limits dict from the
+        # validated kwargs. Shape is ONE optional dict (NOT two separate
+        # fields) so older workers silently ignore the new field. Keys
+        # are omitted when their corresponding limit is None so the wire
+        # form stays compact.
+        execution_limits: Optional[Dict[str, float]] = None
+        if soft_time_limit is not None or time_limit is not None:
+            execution_limits = {}
+            if soft_time_limit is not None:
+                execution_limits["soft"] = float(soft_time_limit)
+            if time_limit is not None:
+                execution_limits["hard"] = float(time_limit)
+
         task = TaskMessage(
             task_id=run_id,
             workflow_data=workflow_data,
             parameters=parameters or {},
             visibility_timeout=self._visibility_timeout,
+            execution_limits=execution_limits,
         )
 
         self._queue.enqueue(task)
