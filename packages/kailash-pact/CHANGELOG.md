@@ -1,5 +1,33 @@
 # PACT Changelog
 
+## [0.12.0] — 2026-05-09 — slim-core decoupling: `[api]` + `[execution]` extras (#890)
+
+Minor release shipping the kailash-pact side of the kailash 2.18.0 / #890 slim-core decoupling. **Install-shape breaking change** — fastapi, slowapi, kailash-kaizen, and psycopg are no longer pulled by the bare `pip install kailash-pact`. Users hitting the governance HTTP API or kaizen-driven supervisor surfaces MUST install the matching extra (or `[all]` for the pre-0.12.0 install shape).
+
+### Migration table
+
+| Surface used                                                | Pre-0.12.0 install         | 0.12.0+ install                                    |
+| ----------------------------------------------------------- | -------------------------- | -------------------------------------------------- |
+| `import pact` (core: D/T/R, envelopes, clearance, registry) | `pip install kailash-pact` | `pip install kailash-pact` (unchanged — slim core) |
+| `from pact.governance.api import ...` (HTTP / FastAPI)      | `pip install kailash-pact` | `pip install 'kailash-pact[api]'`                  |
+| Kaizen-driven supervisors (`engine.py` lazy import path)    | `pip install kailash-pact` | `pip install 'kailash-pact[execution]'`            |
+| Pre-0.12.0 default install (back-compat — everything)       | `pip install kailash-pact` | `pip install 'kailash-pact[all]'`                  |
+
+### Changed
+
+- **Slim core dependencies** — `pip install kailash-pact` now installs `kailash>=2.16.0` + `click>=8.0` only. Previously also pulled `fastapi`, `slowapi`, `kailash-kaizen`, `psycopg[binary]`, `psycopg_pool`. Audit per #890:
+  - **`fastapi` + `slowapi`** — only reachable via `from pact.governance.api`, NOT from `import pact`. Moved to `[api]` extra.
+  - **`kailash-kaizen`** — only used via `from kaizen_agents.supervisor`, lazy-loaded inside `engine.py:1216` (governance-engine method body, not module-scope). Moved to `[execution]` extra.
+  - **`psycopg` + `psycopg_pool`** — verified ORPHANS (zero import sites across the package source tree). DELETED.
+- **`[all]` umbrella extra** — `pip install 'kailash-pact[all]'` resolves to `kailash-pact[api,execution]`, preserving the pre-0.12.0 default install experience for users who do not want to enumerate which surface they consume.
+- **`kailash` floor: 2.16.0** (was `2.11.0`) — aligns with the kailash 2.18.0 slim-core layout and the test-deps-fix commit's manifest.
+- **Test `[dev]` extras add `fastapi` + `slowapi`** — `tests/unit/governance/test_api_*.py` module-scope imports fastapi/slowapi to test the `[api]` surface; declared explicitly so `pip install kailash-pact[dev]` still collects the API test suite without needing `[api]` separately.
+
+### Notes
+
+- **Bare `from pact.governance.api import ...` raises `ModuleNotFoundError: fastapi` on a slim install.** Users see the standard Python import error, not a typed install hint. The migration table above is the authoritative recovery path; CHANGELOG is the discovery surface.
+- This is a **packaging / install-shape change only** — every Python public-API symbol that existed in 0.11.0 still exists in 0.12.0 with the same signature and semantics. Users on `pip install 'kailash-pact[all]'` see no behavior change.
+
 ## [0.11.0] — 2026-04-25 — PACT N4/N5 conformance runner (#605)
 
 Cross-SDK parity with `kailash-rs#317`. Minor bump — new public surface; closes Envoy Phase 02 BET-6 gate (cross-SDK contract parity for Python is now falsifiable).
