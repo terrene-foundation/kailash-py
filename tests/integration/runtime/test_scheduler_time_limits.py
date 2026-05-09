@@ -300,7 +300,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _sleeping_workflow(sleep_seconds=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 soft_time_limit=1.0,
             )
             # Wait up to ~3s for the soft deadline to fire and the workflow
@@ -350,7 +350,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _soft_catching_workflow(total_sleep=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 time_limit=1.0,
             )
             # Allow up to ~5s for the hard deadline + grace to elapse and the
@@ -387,7 +387,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _sleeping_workflow(sleep_seconds=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 soft_time_limit=1.0,
                 retry=RetrySpec(
                     max_retries=2,
@@ -426,7 +426,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _sleeping_workflow(sleep_seconds=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 soft_time_limit=1.0,
                 retry=RetrySpec(
                     max_retries=5,
@@ -505,7 +505,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 builder,
-                seconds=60,
+                seconds=1,
                 soft_time_limit=1.0,
                 retry=RetrySpec(
                     max_retries=2,
@@ -578,7 +578,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _soft_catching_workflow(total_sleep=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 time_limit=1.0,  # per-task overrides default 10.0
             )
             # Per-task wins: hard fires at ~1s + 1s grace = 2s.
@@ -625,7 +625,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _soft_catching_workflow(total_sleep=5.0, counter_path=counter),
-                seconds=60,
+                seconds=1,
                 # NO per-task time_limit — default MUST apply.
             )
             for _ in range(40):
@@ -655,7 +655,7 @@ class TestSchedulerTimeLimits:
         try:
             scheduler.schedule_interval(
                 _sleeping_workflow(sleep_seconds=0.2, counter_path=counter),
-                seconds=60,
+                seconds=1,
             )
             # Wait for one fire to complete fully.
             for _ in range(40):
