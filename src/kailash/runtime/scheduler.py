@@ -37,6 +37,7 @@ Version:
     Added in: v0.13.0
 """
 
+import asyncio
 import logging
 import math
 import os
@@ -46,7 +47,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type
 
 if TYPE_CHECKING:
     from kailash.runtime.dispatcher import Dispatcher
@@ -57,7 +58,134 @@ __all__ = [
     "WorkflowScheduler",
     "ScheduleInfo",
     "ScheduleType",
+    "RetrySpec",
 ]
+
+# Internal kwargs key used to thread the per-job RetrySpec through APScheduler's
+# `kwargs=` dict to ``_execute_workflow`` at fire time. Popped before the
+# remaining kwargs are forwarded to the runtime so user code never sees it.
+_RETRY_SPEC_KWARG = "_kailash_retry_spec"
+
+
+@dataclass(frozen=True)
+class RetrySpec:
+    """Declarative per-job retry primitive (issue #910).
+
+    Equivalent to celery's ``@shared_task(bind=True, autoretry_for=(...),
+    retry_backoff=True, max_retries=N)`` directive: when a scheduled
+    workflow raises a retryable exception, the scheduler re-runs it up to
+    ``max_retries`` more times with a backoff delay between attempts.
+
+    Attributes:
+        max_retries: Maximum number of retry attempts AFTER the initial
+            attempt fails. ``max_retries=0`` is the no-retry case
+            (single attempt, original behavior). Total attempts =
+            ``1 + max_retries``.
+        backoff: ``"exponential"`` (default) doubles the delay each
+            attempt: ``base * 2 ** (attempt - 1)``. ``"linear"`` adds the
+            base each attempt: ``base * attempt``.
+        backoff_base_seconds: Initial delay before the FIRST retry.
+            Subsequent retries follow the ``backoff`` curve. Must be > 0.
+        backoff_max_seconds: Upper bound on any single backoff delay.
+            Prevents exponential backoff from blocking the scheduler for
+            unbounded periods on long-lived schedules.
+        retry_on: Tuple of exception types that ARE retryable. Defaults
+            to ``(Exception,)`` — retry on any non-system exception.
+            ``BaseException`` subclasses NOT in :class:`Exception` (e.g.
+            ``KeyboardInterrupt``, ``SystemExit``) are never retried;
+            this is intentional safety, not configurability.
+        dont_retry_on: Tuple of exception types that are NEVER retried,
+            even if they would match ``retry_on``. Checked first; useful
+            for "retry transient failures but not validation errors".
+
+    Examples:
+        >>> # Retry up to 3 times, exponential backoff (1s, 2s, 4s)
+        >>> spec = RetrySpec(max_retries=3)
+        >>> # Retry only on transient network errors
+        >>> spec = RetrySpec(max_retries=5, retry_on=(ConnectionError, TimeoutError))
+        >>> # Retry on Exception except ValueError
+        >>> spec = RetrySpec(max_retries=2, dont_retry_on=(ValueError,))
+    """
+
+    max_retries: int = 0
+    backoff: str = "exponential"
+    backoff_base_seconds: float = 1.0
+    backoff_max_seconds: float = 60.0
+    retry_on: Tuple[Type[BaseException], ...] = (Exception,)
+    dont_retry_on: Tuple[Type[BaseException], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.max_retries, int) or self.max_retries < 0:
+            raise ValueError(
+                f"RetrySpec.max_retries must be a non-negative integer, "
+                f"got {self.max_retries!r}"
+            )
+        if self.backoff not in ("linear", "exponential"):
+            raise ValueError(
+                f"RetrySpec.backoff must be 'linear' or 'exponential', "
+                f"got {self.backoff!r}"
+            )
+        if (
+            not isinstance(self.backoff_base_seconds, (int, float))
+            or not math.isfinite(self.backoff_base_seconds)
+            or self.backoff_base_seconds <= 0
+        ):
+            raise ValueError(
+                f"RetrySpec.backoff_base_seconds must be a positive finite "
+                f"number, got {self.backoff_base_seconds!r}"
+            )
+        if (
+            not isinstance(self.backoff_max_seconds, (int, float))
+            or not math.isfinite(self.backoff_max_seconds)
+            or self.backoff_max_seconds < self.backoff_base_seconds
+        ):
+            raise ValueError(
+                f"RetrySpec.backoff_max_seconds must be a finite number "
+                f">= backoff_base_seconds ({self.backoff_base_seconds}), "
+                f"got {self.backoff_max_seconds!r}"
+            )
+        for label, types in (
+            ("retry_on", self.retry_on),
+            ("dont_retry_on", self.dont_retry_on),
+        ):
+            if not isinstance(types, tuple) or not all(
+                isinstance(t, type) and issubclass(t, BaseException) for t in types
+            ):
+                raise ValueError(
+                    f"RetrySpec.{label} must be a tuple of BaseException "
+                    f"subclasses, got {types!r}"
+                )
+
+    def is_retryable(self, exc: BaseException) -> bool:
+        """Return True iff ``exc`` should trigger a retry under this spec.
+
+        ``dont_retry_on`` is checked first; an exception matching it is
+        NEVER retried even if it also matches ``retry_on``. ``BaseException``
+        subclasses outside ``Exception`` (KeyboardInterrupt, SystemExit) are
+        unconditionally non-retryable for safety — operators expect Ctrl+C
+        and process-termination signals to halt the scheduler immediately.
+        """
+        if not isinstance(exc, Exception):
+            return False
+        if self.dont_retry_on and isinstance(exc, self.dont_retry_on):
+            return False
+        return isinstance(exc, self.retry_on)
+
+    def compute_backoff_seconds(self, attempt: int) -> float:
+        """Return the delay before retry attempt ``attempt`` (1-indexed).
+
+        ``attempt=1`` is the first retry (after the initial run failed);
+        ``attempt=2`` is the second retry; etc. The result is clamped at
+        :attr:`backoff_max_seconds` to bound long exponential delays.
+        """
+        if attempt < 1:
+            raise ValueError(f"attempt must be >= 1, got {attempt}")
+        if self.backoff == "exponential":
+            delay = self.backoff_base_seconds * (2 ** (attempt - 1))
+        else:  # linear
+            delay = self.backoff_base_seconds * attempt
+        return min(delay, self.backoff_max_seconds)
+
 
 # Lazy import check for APScheduler
 # Bound on the per-job fire-time map below. Schedulers that submit and never
@@ -195,6 +323,7 @@ class ScheduleInfo:
     next_run_time: Optional[datetime] = None
     enabled: bool = True
     kwargs: Dict[str, Any] = field(default_factory=dict)
+    retry_spec: Optional[RetrySpec] = None
 
 
 class WorkflowScheduler:
@@ -329,6 +458,8 @@ class WorkflowScheduler:
         workflow_builder: Any,
         cron_expression: str,
         name: str = "",
+        *,
+        retry: Optional[RetrySpec] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run on a cron schedule.
@@ -338,6 +469,11 @@ class WorkflowScheduler:
             cron_expression: A cron expression string with 5 fields
                 (minute hour day_of_month month day_of_week).
             name: Optional human-readable name for this schedule.
+            retry: Optional :class:`RetrySpec` (#910). When supplied, a fire
+                that raises a retryable exception is retried up to
+                ``spec.max_retries`` times with backoff before bubbling to
+                APScheduler's job-error listener. ``None`` (default) preserves
+                the original single-attempt behavior.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
@@ -348,7 +484,10 @@ class WorkflowScheduler:
 
         Example:
             >>> sid = scheduler.schedule_cron(workflow, "0 */6 * * *")  # Every 6 hours
-            >>> sid = scheduler.schedule_cron(workflow, "30 2 * * 1")   # Mon 2:30 AM
+            >>> sid = scheduler.schedule_cron(
+            ...     workflow, "30 2 * * 1",
+            ...     retry=RetrySpec(max_retries=3, retry_on=(ConnectionError,)),
+            ... )
         """
         from apscheduler.triggers.cron import CronTrigger
 
@@ -362,12 +501,13 @@ class WorkflowScheduler:
 
         trigger = CronTrigger.from_crontab(cron_expression, timezone=self._timezone)
 
+        job_kwargs = self._compose_job_kwargs(kwargs, retry)
         self._scheduler.add_job(
             self._execute_workflow,
             trigger=trigger,
             id=schedule_id,
             args=[workflow_builder, schedule_id],
-            kwargs=kwargs,
+            kwargs=job_kwargs,
             replace_existing=True,
         )
 
@@ -377,6 +517,7 @@ class WorkflowScheduler:
             workflow_name=name,
             trigger_args={"cron_expression": cron_expression},
             kwargs=kwargs,
+            retry_spec=retry,
         )
         self._schedules[schedule_id] = info
 
@@ -393,6 +534,8 @@ class WorkflowScheduler:
         workflow_builder: Any,
         seconds: float,
         name: str = "",
+        *,
+        retry: Optional[RetrySpec] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run at a fixed interval.
@@ -401,6 +544,7 @@ class WorkflowScheduler:
             workflow_builder: A WorkflowBuilder instance to execute on each trigger.
             seconds: Interval in seconds between executions.
             name: Optional human-readable name for this schedule.
+            retry: Optional :class:`RetrySpec` (#910); see :meth:`schedule_cron`.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
@@ -419,13 +563,14 @@ class WorkflowScheduler:
 
         schedule_id = self._generate_schedule_id()
 
+        job_kwargs = self._compose_job_kwargs(kwargs, retry)
         self._scheduler.add_job(
             self._execute_workflow,
             trigger="interval",
             seconds=seconds,
             id=schedule_id,
             args=[workflow_builder, schedule_id],
-            kwargs=kwargs,
+            kwargs=job_kwargs,
             replace_existing=True,
         )
 
@@ -435,6 +580,7 @@ class WorkflowScheduler:
             workflow_name=name,
             trigger_args={"seconds": seconds},
             kwargs=kwargs,
+            retry_spec=retry,
         )
         self._schedules[schedule_id] = info
 
@@ -451,6 +597,8 @@ class WorkflowScheduler:
         workflow_builder: Any,
         run_at: datetime,
         name: str = "",
+        *,
+        retry: Optional[RetrySpec] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run once at a specific time.
@@ -459,6 +607,7 @@ class WorkflowScheduler:
             workflow_builder: A WorkflowBuilder instance to execute.
             run_at: The datetime at which to execute the workflow.
             name: Optional human-readable name for this schedule.
+            retry: Optional :class:`RetrySpec` (#910); see :meth:`schedule_cron`.
             **kwargs: Additional keyword arguments passed to the runtime on execution.
 
         Returns:
@@ -474,13 +623,14 @@ class WorkflowScheduler:
         """
         schedule_id = self._generate_schedule_id()
 
+        job_kwargs = self._compose_job_kwargs(kwargs, retry)
         self._scheduler.add_job(
             self._execute_workflow,
             trigger="date",
             run_date=run_at,
             id=schedule_id,
             args=[workflow_builder, schedule_id],
-            kwargs=kwargs,
+            kwargs=job_kwargs,
             replace_existing=True,
         )
 
@@ -491,6 +641,7 @@ class WorkflowScheduler:
             trigger_args={"run_at": run_at.isoformat()},
             next_run_time=run_at,
             kwargs=kwargs,
+            retry_spec=retry,
         )
         self._schedules[schedule_id] = info
 
@@ -542,6 +693,30 @@ class WorkflowScheduler:
 
         return list(self._schedules.values())
 
+    @staticmethod
+    def _compose_job_kwargs(
+        user_kwargs: Dict[str, Any], retry: Optional[RetrySpec]
+    ) -> Dict[str, Any]:
+        """Merge a user-supplied kwargs dict with the internal retry spec key.
+
+        Returns a NEW dict — does NOT mutate ``user_kwargs`` so the caller's
+        ScheduleInfo.kwargs reflects only the user-visible kwargs (the
+        ``_kailash_retry_spec`` key is internal and MUST NOT leak into
+        :class:`ScheduleInfo` view).
+
+        Refuses to silently overwrite a user-supplied key with the same name
+        — this would be ``zero-tolerance.md`` Rule 3 silent fallback class.
+        """
+        if _RETRY_SPEC_KWARG in user_kwargs:
+            raise ValueError(
+                f"kwarg name {_RETRY_SPEC_KWARG!r} is reserved for internal "
+                f"use; rename your runtime kwarg to avoid the collision"
+            )
+        merged = dict(user_kwargs)
+        if retry is not None:
+            merged[_RETRY_SPEC_KWARG] = retry
+        return merged
+
     async def _execute_workflow(
         self, workflow_builder: Any, schedule_id: str = "", **kwargs: Any
     ) -> None:
@@ -553,14 +728,20 @@ class WorkflowScheduler:
 
         * **In-process (default, ``dispatch_via=None``):** builds the
           workflow and executes it via the configured runtime in the
-          current process.
+          current process. When a :class:`RetrySpec` was supplied at
+          schedule time (issue #910), the in-process path retries the
+          workflow up to ``spec.max_retries`` times with backoff before
+          re-raising the final exception to APScheduler's job-error
+          listener.
         * **Queue dispatch (``dispatch_via=<Dispatcher>``):** serializes
           the workflow into a :class:`~kailash.runtime.dispatcher.Task`
           and enqueues it via the dispatcher; a worker pool polls the
           queue and executes against its own runtime. ``task_id`` is
           ``compute_task_id(schedule_id, planned_fire_time)`` so a
           multi-instance scheduler that double-fires produces the same
-          task_id and the queue dedups.
+          task_id and the queue dedups. ``RetrySpec`` is NOT applied on
+          the queue dispatch path — worker-side retry semantics are
+          owned by the dispatcher contract, not the scheduler callback.
 
         Args:
             workflow_builder: The WorkflowBuilder to build and execute.
@@ -568,9 +749,18 @@ class WorkflowScheduler:
                 Wired in by ``schedule_cron`` / ``schedule_interval`` /
                 ``schedule_once`` when registering the APScheduler job.
             **kwargs: Additional runtime execution parameters (in-process
-                path) or task kwargs (queue dispatch path).
+                path) or task kwargs (queue dispatch path). The internal
+                ``_kailash_retry_spec`` key is popped here and never
+                forwarded to user code.
         """
         run_id = str(uuid.uuid4())
+
+        # Pop the internal retry spec before forwarding kwargs anywhere — keeps
+        # `runtime.execute(**kwargs)` and the dispatcher Task kwargs free of
+        # the internal threading key. Per `zero-tolerance.md` Rule 3c, this
+        # kwarg is consumed: either by the retry loop below, or explicitly
+        # ignored on the queue dispatch path with a documented rationale above.
+        retry_spec: Optional[RetrySpec] = kwargs.pop(_RETRY_SPEC_KWARG, None)
 
         if self._dispatcher is not None:
             await self._dispatch_to_queue(
@@ -581,20 +771,100 @@ class WorkflowScheduler:
             )
             return
 
-        # In-process fallback (existing behavior).
+        # In-process fallback (existing behavior + retry primitive #910).
         logger.info("Scheduled execution starting: run_id=%s", run_id)
-        try:
-            workflow = workflow_builder.build()
-            runtime = self._get_runtime()
-            results, actual_run_id = runtime.execute(workflow, **kwargs)
-            logger.info(
-                "Scheduled execution completed: run_id=%s, results_count=%d",
-                actual_run_id,
-                len(results) if results else 0,
-            )
-        except Exception:
-            logger.exception("Scheduled execution failed: run_id=%s", run_id)
-            raise
+        max_attempts = 1 + (retry_spec.max_retries if retry_spec else 0)
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                workflow = workflow_builder.build()
+                runtime = self._get_runtime()
+                results, actual_run_id = runtime.execute(workflow, **kwargs)
+                # LocalRuntime swallows leaf-node failures into a result entry
+                # of shape ``{"failed": True, "error": str, "error_type": str}``
+                # rather than raising. For #910 the retry primitive MUST observe
+                # that recorded failure as if it were a propagated exception —
+                # otherwise a node-level raise on a scheduled job is invisible
+                # to retry semantics. Synthesize a typed exception from the
+                # first recorded failure so the retryable-classifier sees the
+                # correct exception type.
+                node_failure = self._extract_node_failure(results)
+                if node_failure is not None:
+                    raise node_failure
+                logger.info(
+                    "Scheduled execution completed: run_id=%s, results_count=%d, attempt=%d/%d",
+                    actual_run_id,
+                    len(results) if results else 0,
+                    attempt,
+                    max_attempts,
+                )
+                return
+            except Exception as exc:
+                last_exc = exc
+                # Non-retryable: skip ahead to the bubble-up below.
+                if retry_spec is None or not retry_spec.is_retryable(exc):
+                    break
+                # Retryable AND budget remaining: WARN, sleep, retry.
+                if attempt < max_attempts:
+                    backoff_seconds = retry_spec.compute_backoff_seconds(attempt)
+                    logger.warning(
+                        "Scheduled execution failed (attempt %d/%d): "
+                        "run_id=%s schedule_id=%s exc_type=%s; retrying in %.2fs",
+                        attempt,
+                        max_attempts,
+                        run_id,
+                        schedule_id,
+                        type(exc).__name__,
+                        backoff_seconds,
+                    )
+                    await asyncio.sleep(backoff_seconds)
+                    continue
+                # Retryable but budget exhausted: fall through to bubble-up.
+                break
+
+        # Bubble the last exception so APScheduler's job-error listener fires
+        # for the FINAL attempt only — intermediate retries do not surface as
+        # job-error events, matching celery's autoretry semantics.
+        assert last_exc is not None  # loop exited via except
+        logger.exception(
+            "Scheduled execution failed (final): run_id=%s schedule_id=%s",
+            run_id,
+            schedule_id,
+        )
+        raise last_exc
+
+    @staticmethod
+    def _extract_node_failure(results: Optional[Dict[str, Any]]) -> Optional[Exception]:
+        """Synthesize a typed exception from a LocalRuntime ``failed: True`` entry.
+
+        ``LocalRuntime`` records leaf-node failures as a result-dict entry of
+        shape ``{"failed": True, "error": str, "error_type": str}`` instead of
+        raising. The retry primitive observes that recording and reconstitutes
+        a Python exception of the same class (when importable from ``builtins``)
+        so :meth:`RetrySpec.is_retryable` can filter on the original error
+        type. Falls back to :class:`RuntimeError` carrying the recorded type
+        name for user-defined exceptions whose class is not in builtins.
+        """
+        if not results:
+            return None
+        for node_id, value in results.items():
+            if not isinstance(value, dict) or not value.get("failed"):
+                continue
+            error_type_name = value.get("error_type") or "RuntimeError"
+            error_message = value.get("error") or f"node {node_id!r} failed"
+            exc_cls = getattr(__builtins__, error_type_name, None)
+            if not (isinstance(exc_cls, type) and issubclass(exc_cls, Exception)):
+                # __builtins__ may be a dict (when scheduler.py runs under exec);
+                # try import-style lookup as a fallback.
+                exc_cls = (
+                    __builtins__.get(error_type_name)  # type: ignore[union-attr]
+                    if isinstance(__builtins__, dict)
+                    else None
+                )
+            if not (isinstance(exc_cls, type) and issubclass(exc_cls, Exception)):
+                exc_cls = RuntimeError
+            return exc_cls(f"node {node_id!r}: {error_message}")
+        return None
 
     async def _dispatch_to_queue(
         self,
