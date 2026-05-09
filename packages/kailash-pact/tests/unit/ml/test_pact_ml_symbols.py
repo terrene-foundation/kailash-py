@@ -55,11 +55,34 @@ def test_symbols_re_exported_at_top_level_pact() -> None:
         ), f"pact.__all__ missing {name} (orphan-detection.md Rule 6)"
 
 
-def test_version_bumped_to_0_11_0() -> None:
-    """Version consistency -- zero-tolerance.md Rule 5."""
+def test_version_consistency() -> None:
+    """Version consistency between pyproject.toml and pact.__version__ — zero-tolerance.md Rule 5.
+
+    Reads both anchors dynamically rather than pinning a literal, so the test
+    survives every release without needing a same-PR test-update sweep
+    (the failure mode that hand-pinned `assert pact.__version__ == "0.11.0"`
+    introduced when pact bumped to 0.12.0 in PR #902).
+    """
+    import re
+    from pathlib import Path
+
     import pact
 
-    assert pact.__version__ == "0.11.0"
+    pyproject = Path(__file__).resolve().parents[3] / "pyproject.toml"
+    pyproject_match = re.search(
+        r'^version\s*=\s*"([^"]+)"', pyproject.read_text(), re.MULTILINE
+    )
+    assert pyproject_match, f"could not parse version anchor in {pyproject}"
+    pyproject_version = pyproject_match.group(1)
+
+    assert pact.__version__ == pyproject_version, (
+        f"version anchor drift: pyproject.toml={pyproject_version!r} "
+        f"vs pact.__version__={pact.__version__!r}"
+    )
+    # Sanity: the version is a non-empty semver-shaped string.
+    assert re.fullmatch(
+        r"\d+\.\d+\.\d+(?:[.-]\S+)?", pact.__version__
+    ), f"pact.__version__ does not match semver shape: {pact.__version__!r}"
 
 
 def test_admission_decision_is_frozen_dataclass() -> None:
