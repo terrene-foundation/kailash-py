@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.runtime._time_limits import _Cancellable, arm_time_limits
+from kailash.runtime._time_limits import arm_time_limits
 from kailash.runtime.cancellation import CancellationToken
 
 
@@ -47,28 +47,12 @@ def test_cancellable_initial_state():
         cancellable.disarm()
 
 
-@pytest.mark.unit
-def test_arm_returns_cancellable():
-    """``arm_time_limits`` returns a ``_Cancellable`` instance.
-
-    The public return-type contract: callers use the returned object to
-    poll ``hard_deadline_reached`` and call ``disarm()`` in a finally
-    block. Asserting the type pins the contract so a future refactor
-    cannot silently change the shape (e.g. return ``None`` when no
-    limits set, breaking every caller's ``finally: cancellable.disarm()``).
-    """
-    token = CancellationToken()
-    # Use far-future deadlines (>> CI test budget) so timers never fire
-    # during the assertion — the test's contract is the RETURN TYPE,
-    # not timer behavior. Pinning the type at line scale prevents a
-    # refactor from changing the shape (e.g. returning None when no
-    # limits set, breaking every caller's `finally: cancellable.disarm()`).
-    # Timer behavior is covered by the Tier-2 wrapper suite.
-    cancellable = arm_time_limits(token, soft_time_limit=600.0, time_limit=900.0)
-    try:
-        assert isinstance(cancellable, _Cancellable)
-    finally:
-        cancellable.disarm()
+# test_arm_returns_cancellable removed — armed-path return type is pinned
+# by tests/integration/test_time_limits_wrapper.py::test_arm_returns_cancellable_type
+# (Tier 2). The Tier 1 invocation hung intermittently on CI runners because
+# threading.Timer.start() blocks on self._started.wait() under thread-creation
+# contention after ~3700 prior tests. The no-limits path is still pinned by
+# test_arm_with_no_limits_returns_noop_cancellable below (no thread spawned).
 
 
 @pytest.mark.unit
