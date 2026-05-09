@@ -46,9 +46,19 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits,
+)
 from kailash.runtime.base import BaseRuntime
+from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import TaskEvent, TaskEventHandler
+from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
+    SoftTimeLimitExceeded,
+    WorkflowCancelledError,
+)
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -75,6 +85,17 @@ class TaskMessage:
             eligible for re-delivery.
         attempts: Number of times this task has been attempted.
         max_attempts: Maximum delivery attempts before dead-lettering.
+        execution_limits: Optional per-task time-limit dict produced by
+            ``DistributedRuntime.execute(soft_time_limit=, time_limit=)``
+            (issue #912 Shard 4). Shape:
+            ``{"soft": <float seconds>, "hard": <float seconds>}``;
+            either key may be omitted when the corresponding limit is
+            ``None`` (so an old worker or a producer that only set the
+            hard limit serializes a partial dict). The wire format is
+            ONE optional field so older workers running pre-Shard-4 SDK
+            silently ignore it (forward-compat). The worker arms the
+            timers at dequeue (NOT enqueue) so queue wait time does
+            NOT consume the task's budget. Default ``None`` (no limit).
     """
 
     task_id: str = ""
@@ -84,24 +105,38 @@ class TaskMessage:
     visibility_timeout: int = 300  # 5 minutes default
     attempts: int = 0
     max_attempts: int = 3
+    execution_limits: Optional[Dict[str, float]] = None
 
     def to_json(self) -> str:
-        """Serialize to JSON string for Redis storage."""
-        return json.dumps(
-            {
-                "task_id": self.task_id,
-                "workflow_data": self.workflow_data,
-                "parameters": self.parameters,
-                "submitted_at": self.submitted_at,
-                "visibility_timeout": self.visibility_timeout,
-                "attempts": self.attempts,
-                "max_attempts": self.max_attempts,
-            }
-        )
+        """Serialize to JSON string for Redis storage.
+
+        ``execution_limits`` is included only when set so the wire format
+        stays compact for the common no-limit case AND so older workers
+        running a pre-Shard-4 SDK do not have to pattern-match a new
+        field name on every dequeue. Workers running this SDK or newer
+        read the field; workers running an older SDK ignore it.
+        """
+        payload: Dict[str, Any] = {
+            "task_id": self.task_id,
+            "workflow_data": self.workflow_data,
+            "parameters": self.parameters,
+            "submitted_at": self.submitted_at,
+            "visibility_timeout": self.visibility_timeout,
+            "attempts": self.attempts,
+            "max_attempts": self.max_attempts,
+        }
+        if self.execution_limits is not None:
+            payload["execution_limits"] = self.execution_limits
+        return json.dumps(payload)
 
     @classmethod
     def from_json(cls, data: str) -> "TaskMessage":
-        """Deserialize from JSON string."""
+        """Deserialize from JSON string.
+
+        Older-SDK ``TaskMessage`` JSON without ``execution_limits``
+        deserializes as ``execution_limits=None`` (the dataclass
+        default), preserving the forward-compat invariant.
+        """
         parsed = json.loads(data)
         known = {k: v for k, v in parsed.items() if k in cls.__dataclass_fields__}
         return cls(**known)
@@ -518,11 +553,17 @@ class DistributedRuntime(BaseRuntime):
             workflow: The workflow to execute.
             parameters: Optional execution parameters.
             soft_time_limit: Optional advisory deadline in seconds. Per
-                #912 Shard 1, the slot is accepted; serialisation onto
-                the ``TaskMessage`` wire format lands in Shard 4.
+                #912 Shard 4, this serializes onto
+                ``TaskMessage.execution_limits["soft"]`` and the worker
+                arms the timer at dequeue (NOT enqueue) so queue wait
+                does NOT burn the task's budget.
             time_limit: Optional unconditional kill deadline in seconds.
-                Per #912 Shard 1, the slot is accepted; worker-side
-                enforcement lands in Shard 4.
+                Per #912 Shard 4, this serializes onto
+                ``TaskMessage.execution_limits["hard"]`` and the worker
+                arms the hard-deadline timer at dequeue. When the hard
+                deadline fires, the task is requeued (NOT dead-lettered)
+                if ``attempts < max_attempts``; dead-lettered only after
+                exhaustion.
             **kwargs: Additional execution options.
 
         Returns:
@@ -539,11 +580,25 @@ class DistributedRuntime(BaseRuntime):
         # Serialize the workflow for queue transport
         workflow_data = self._serialize_workflow(workflow)
 
+        # #912 Shard 4: build the optional execution_limits dict from the
+        # validated kwargs. Shape is ONE optional dict (NOT two separate
+        # fields) so older workers silently ignore the new field. Keys
+        # are omitted when their corresponding limit is None so the wire
+        # form stays compact.
+        execution_limits: Optional[Dict[str, float]] = None
+        if soft_time_limit is not None or time_limit is not None:
+            execution_limits = {}
+            if soft_time_limit is not None:
+                execution_limits["soft"] = float(soft_time_limit)
+            if time_limit is not None:
+                execution_limits["hard"] = float(time_limit)
+
         task = TaskMessage(
             task_id=run_id,
             workflow_data=workflow_data,
             parameters=parameters or {},
             visibility_timeout=self._visibility_timeout,
+            execution_limits=execution_limits,
         )
 
         self._queue.enqueue(task)
@@ -615,6 +670,18 @@ class Worker:
         worker_id: Unique worker identifier. Auto-generated if not provided.
         runtime_factory: Optional callable that returns a runtime instance for
             executing tasks. Defaults to creating a LocalRuntime.
+        default_soft_time_limit: Default advisory deadline in seconds applied to
+            tasks whose ``TaskMessage.execution_limits`` does NOT specify a soft
+            limit (#912 Shard 4). Per-task limits ALWAYS win over this default.
+            ``None`` (default) = no soft deadline applied when the task has none.
+        default_time_limit: Default unconditional kill deadline in seconds applied
+            to tasks whose ``TaskMessage.execution_limits`` does NOT specify a
+            hard limit (#912 Shard 4). Per-task limits ALWAYS win over this
+            default. ``None`` (default) = no hard deadline applied when the task
+            has none.
+        hard_time_limit_grace_seconds: Wind-down window between the hard deadline
+            firing and the unconditional kill (#912 Shard 2). Default 1.0s; MUST
+            be >= 0.
 
     Example:
         >>> worker = Worker(
@@ -633,7 +700,17 @@ class Worker:
         dead_worker_timeout: int = 90,
         worker_id: Optional[str] = None,
         runtime_factory: Optional[Callable] = None,
+        *,
+        default_soft_time_limit: float | None = None,
+        default_time_limit: float | None = None,
+        hard_time_limit_grace_seconds: float = 1.0,
     ):
+        # #912 Shard 4: validate Worker-default time limits at construction so
+        # bad configuration surfaces here, NOT later from a timer thread on
+        # the first dequeue. Reuses the Shard 1 validator so the contract
+        # stays single-sourced (per security.md § Multi-Site Kwarg Plumbing).
+        _validate_limits(default_soft_time_limit, default_time_limit)
+
         self._redis_url = redis_url or os.environ.get("KAILASH_REDIS_URL", "")
         self._queue = queue or TaskQueue(redis_url=self._redis_url)
         self._concurrency = max(1, concurrency)
@@ -641,6 +718,9 @@ class Worker:
         self._dead_worker_timeout = dead_worker_timeout
         self._worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
         self._runtime_factory = runtime_factory
+        self._default_soft_time_limit = default_soft_time_limit
+        self._default_time_limit = default_time_limit
+        self._hard_time_limit_grace_seconds = hard_time_limit_grace_seconds
         self._running = False
         self._tasks: set[asyncio.Task] = set()
         self._semaphore: Optional[asyncio.Semaphore] = None
@@ -768,6 +848,24 @@ class Worker:
         name = wf_data.get("name")
         return name if isinstance(name, str) and name else None
 
+    def _effective_time_limits(
+        self, task: TaskMessage
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Compute the (soft, hard) effective time limits for a task.
+
+        Per #912 Shard 4 invariant 3: per-task value (from
+        ``TaskMessage.execution_limits``) wins over ``Worker(default_*)``;
+        falls through to ``None`` (no limit) when neither is set.
+
+        Returns:
+            ``(effective_soft, effective_hard)`` — either may be ``None``
+            when neither the per-task dict nor the Worker default sets it.
+        """
+        per_task = task.execution_limits or {}
+        soft = per_task.get("soft", self._default_soft_time_limit)
+        hard = per_task.get("hard", self._default_time_limit)
+        return soft, hard
+
     async def start(self):
         """Start the worker loop.
 
@@ -885,13 +983,54 @@ class Worker:
         outcome_exc: Optional[BaseException] = None
         try:
             runtime = self._get_runtime()
-            # Reconstruct and execute the workflow
-            # For now, we pass the workflow data to the runtime
-            # In production, this would deserialize and re-build the workflow
-            result_data = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._execute_workflow_sync(runtime, task),
+            # #912 Shard 4: compute effective time limits (per-task wins over
+            # Worker defaults; both default to None = no limit). Arm timers
+            # AT DEQUEUE (here), NOT at enqueue, so queue wait time does NOT
+            # consume the task's budget (Shard 4 invariant 1).
+            soft_limit, hard_limit = self._effective_time_limits(task)
+            cancellation_token = (
+                CancellationToken()
+                if (soft_limit is not None or hard_limit is not None)
+                else None
             )
+            cancellable = arm_time_limits(
+                cancellation_token or CancellationToken(),
+                soft_time_limit=soft_limit,
+                time_limit=hard_limit,
+                grace_seconds=self._hard_time_limit_grace_seconds,
+            )
+
+            try:
+                # Reconstruct and execute the workflow inside the time-limit
+                # window. WorkflowCancelledError raised by the runtime when it
+                # observes the cancelled token gets classified into the typed
+                # SoftTimeLimitExceeded / HardTimeLimitExceeded subclass below.
+                try:
+                    result_data = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self._execute_workflow_sync(
+                            runtime, task, cancellation_token=cancellation_token
+                        ),
+                    )
+                except WorkflowCancelledError as cancel_exc:
+                    # Convert to the typed deadline exception. The classifier
+                    # inspects which deadline was reached on the _Cancellable
+                    # handle and returns the matching subclass.
+                    classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                    raise classified from cancel_exc
+            finally:
+                # Always disarm the timers AND check the hard-deadline flag.
+                # The hard timer may have fired AFTER the workflow returned
+                # successfully (race between executor completion and timer
+                # callback). Per Shard 2 contract: HardTimeLimitExceeded is
+                # raised UNCONDITIONALLY when the flag is set.
+                cancellable.disarm()
+                if cancellable.hard_deadline_reached:
+                    raise HardTimeLimitExceeded(
+                        f"workflow exceeded hard time limit "
+                        f"(time_limit={cancellable.time_limit}s + "
+                        f"grace_seconds={cancellable.grace_seconds}s)"
+                    )
 
             execution_time = time.time() - start_time
             result = TaskResult(
@@ -987,7 +1126,13 @@ class Worker:
                     ),
                 )
 
-    def _execute_workflow_sync(self, runtime, task: TaskMessage) -> Dict[str, Any]:
+    def _execute_workflow_sync(
+        self,
+        runtime,
+        task: TaskMessage,
+        *,
+        cancellation_token: Optional[CancellationToken] = None,
+    ) -> Dict[str, Any]:
         """Synchronously execute a workflow from task data.
 
         Deserializes the workflow from the task's JSON payload using
@@ -996,6 +1141,11 @@ class Worker:
         Args:
             runtime: The local runtime to use for execution.
             task: The task containing workflow data and parameters.
+            cancellation_token: Optional token forwarded to the runtime so the
+                Shard 4 timer-arming pipeline can cancel a long-running
+                workflow at the soft / hard deadline. ``None`` when the task
+                has no effective time limits (the no-limits path stays
+                allocation-free).
 
         Returns:
             The workflow execution results.
@@ -1005,7 +1155,12 @@ class Worker:
         workflow = Workflow.from_dict(task.workflow_data)
         _build = getattr(workflow, "build", None)
         built = _build() if _build is not None else workflow
-        results, run_id = runtime.execute(built, parameters=task.parameters)
+        # Forward cancellation_token to the runtime ONLY when one is set —
+        # runtimes accept the kwarg but the no-limit path stays opt-in.
+        kwargs: Dict[str, Any] = {"parameters": task.parameters}
+        if cancellation_token is not None:
+            kwargs["cancellation_token"] = cancellation_token
+        results, run_id = runtime.execute(built, **kwargs)
         return results
 
     # -- Heartbeat --
