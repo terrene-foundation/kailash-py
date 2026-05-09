@@ -54,6 +54,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 if TYPE_CHECKING:
     from kailash.runtime.dispatcher import Dispatcher
 
+from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -439,6 +441,7 @@ class WorkflowScheduler:
         from apscheduler.events import (
             EVENT_JOB_ERROR,
             EVENT_JOB_EXECUTED,
+            EVENT_JOB_MISSED,
             EVENT_JOB_SUBMITTED,
         )
 
@@ -446,6 +449,25 @@ class WorkflowScheduler:
         self._scheduler.add_listener(
             self._on_job_done, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
         )
+
+        # Issue #914: lifecycle event hooks. Chain a SECOND listener alongside
+        # the private bookkeeping listener `_on_job_done`. APScheduler invokes
+        # listeners in registration order; the bookkeeping listener cleans up
+        # `_fire_times` first, then the lifecycle dispatcher fires user
+        # handlers. EVENT_JOB_MISSED is registered separately because it does
+        # NOT carry an exception field on every APScheduler build.
+        self._hooks_job_success: List["JobEventHandler"] = []
+        self._hooks_job_error: List["JobEventHandler"] = []
+        self._hooks_job_missed: List["JobEventHandler"] = []
+        self._scheduler.add_listener(
+            self._on_job_lifecycle_event,
+            EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+        )
+        self._lifecycle_event_codes = {
+            EVENT_JOB_EXECUTED: "success",
+            EVENT_JOB_ERROR: "error",
+            EVENT_JOB_MISSED: "missed",
+        }
 
         logger.info(
             "WorkflowScheduler initialized (job_store=%s, timezone=%s, dispatch=%s)",
@@ -1129,6 +1151,101 @@ class WorkflowScheduler:
         active schedules.
         """
         self._fire_times.pop(event.job_id, None)
+
+    # ------------------------------------------------------------------
+    # Lifecycle hook registration (issue #914)
+    # ------------------------------------------------------------------
+
+    def on_job_success(self, handler: JobEventHandler) -> JobEventHandler:
+        """Register a handler invoked AFTER a job runs to completion.
+
+        Fires on APScheduler ``EVENT_JOB_EXECUTED``. The handler receives
+        a :class:`JobEvent` with ``exception=None``.
+
+        Returns the handler unchanged so it can be used as a decorator.
+        """
+        self._hooks_job_success.append(handler)
+        return handler
+
+    def on_job_error(self, handler: JobEventHandler) -> JobEventHandler:
+        """Register a handler invoked when a job raises an exception.
+
+        Fires on APScheduler ``EVENT_JOB_ERROR``. The handler receives a
+        :class:`JobEvent` with ``exception`` populated.
+        """
+        self._hooks_job_error.append(handler)
+        return handler
+
+    def on_job_missed(self, handler: JobEventHandler) -> JobEventHandler:
+        """Register a handler invoked when a scheduled fire is missed.
+
+        Fires on APScheduler ``EVENT_JOB_MISSED`` — the scheduler was
+        offline, or coalesce/misfire policy dropped the fire. The handler
+        receives a :class:`JobEvent` with ``exception=None``.
+        """
+        self._hooks_job_missed.append(handler)
+        return handler
+
+    def _dispatch_job_event(
+        self,
+        handlers: List[JobEventHandler],
+        event: JobEvent,
+    ) -> None:
+        """Dispatch ``event`` to every handler in ``handlers``.
+
+        Per ``observability.md`` Rule 3a: handler exceptions are caught
+        and logged at WARN — handler failure MUST NOT block scheduler
+        operation. APScheduler's listener context is synchronous; async
+        handlers are not supported on this path (see :data:`JobEventHandler`).
+        """
+        for handler in handlers:
+            try:
+                handler(event)
+            except Exception as exc:
+                logger.warning(
+                    "WorkflowScheduler lifecycle handler %r raised %s for "
+                    "schedule %s; continuing",
+                    getattr(handler, "__name__", repr(handler)),
+                    type(exc).__name__,
+                    event.schedule_id,
+                    exc_info=True,
+                )
+
+    def _on_job_lifecycle_event(self, event: Any) -> None:
+        """APScheduler listener that translates events into :class:`JobEvent`.
+
+        Registered alongside ``_on_job_done``; APScheduler invokes listeners
+        in registration order, so the bookkeeping cleanup runs FIRST and
+        the lifecycle dispatcher fires user handlers SECOND. This means a
+        user handler can call :meth:`_planned_fire_time` and observe the
+        post-cleanup state, which matches the documented contract.
+        """
+        code = self._lifecycle_event_codes.get(event.code)
+        if code is None:
+            return  # listener registered for an unrecognized event mask
+
+        schedule_id = event.job_id
+        info = self._schedules.get(schedule_id)
+        schedule_name = info.workflow_name if info and info.workflow_name else None
+
+        # `event.scheduled_run_time` is set on EVENT_JOB_EXECUTED / EVENT_JOB_ERROR;
+        # EVENT_JOB_MISSED carries it on most APScheduler builds but not all.
+        scheduled_run_time = getattr(event, "scheduled_run_time", None)
+        exception = getattr(event, "exception", None) if code == "error" else None
+
+        payload = JobEvent(
+            schedule_id=schedule_id,
+            schedule_name=schedule_name,
+            scheduled_run_time=scheduled_run_time,
+            exception=exception,
+        )
+
+        if code == "success":
+            self._dispatch_job_event(self._hooks_job_success, payload)
+        elif code == "error":
+            self._dispatch_job_event(self._hooks_job_error, payload)
+        elif code == "missed":
+            self._dispatch_job_event(self._hooks_job_missed, payload)
 
     def _planned_fire_time(self, schedule_id: str) -> datetime:
         """Return the actual fire time of the currently-firing job.

@@ -36,6 +36,7 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -46,6 +47,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from kailash.runtime.base import BaseRuntime
+from kailash.runtime.lifecycle_events import TaskEvent, TaskEventHandler
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -631,6 +633,16 @@ class Worker:
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._redis_client = None
 
+        # Lifecycle hook registries (issue #914). Each list holds zero or more
+        # handlers, dispatched in registration order. Handler exceptions are
+        # caught + logged at WARN per `observability.md` Rule 3a — handler
+        # failure MUST NOT block task lifecycle.
+        self._hooks_prerun: List[TaskEventHandler] = []
+        self._hooks_postrun: List[TaskEventHandler] = []
+        self._hooks_success: List[TaskEventHandler] = []
+        self._hooks_retry: List[TaskEventHandler] = []
+        self._hooks_failure: List[TaskEventHandler] = []
+
     def _get_redis_client(self):
         """Get the Redis client for heartbeat operations."""
         if self._redis_client is None:
@@ -659,6 +671,89 @@ class Worker:
         from kailash.runtime.local import LocalRuntime
 
         return LocalRuntime()
+
+    # ------------------------------------------------------------------
+    # Lifecycle hook registration (issue #914)
+    # ------------------------------------------------------------------
+
+    def on_task_prerun(self, handler: TaskEventHandler) -> TaskEventHandler:
+        """Register a handler invoked BEFORE each task executes.
+
+        The handler receives a :class:`TaskEvent` with ``elapsed_ms=None``
+        and ``exception=None``. Sync and async handlers are both supported;
+        async handlers are awaited inline.
+
+        Returns the handler unchanged so it can be used as a decorator.
+        """
+        self._hooks_prerun.append(handler)
+        return handler
+
+    def on_task_postrun(self, handler: TaskEventHandler) -> TaskEventHandler:
+        """Register a handler invoked AFTER each task, regardless of outcome.
+
+        The handler receives a :class:`TaskEvent` with ``elapsed_ms`` populated
+        and ``exception`` set iff the task raised.
+        """
+        self._hooks_postrun.append(handler)
+        return handler
+
+    def on_task_success(self, handler: TaskEventHandler) -> TaskEventHandler:
+        """Register a handler invoked AFTER successful task completion."""
+        self._hooks_success.append(handler)
+        return handler
+
+    def on_task_retry(self, handler: TaskEventHandler) -> TaskEventHandler:
+        """Register a handler invoked when a failed task will be retried.
+
+        Fires when ``task.attempts < task.max_attempts`` after a failure;
+        the next ``nack`` re-queues the task. NOT invoked when the failure
+        will dead-letter (use ``on_task_failure`` for that).
+        """
+        self._hooks_retry.append(handler)
+        return handler
+
+    def on_task_failure(self, handler: TaskEventHandler) -> TaskEventHandler:
+        """Register a handler invoked on FINAL task failure (will dead-letter).
+
+        Fires when ``task.attempts >= task.max_attempts`` after a failure;
+        ``nack`` will dead-letter the task. NOT invoked on retryable failures
+        (use ``on_task_retry`` for those).
+        """
+        self._hooks_failure.append(handler)
+        return handler
+
+    async def _dispatch_task_event(
+        self,
+        handlers: List[TaskEventHandler],
+        event: TaskEvent,
+    ) -> None:
+        """Dispatch ``event`` to every handler in ``handlers``.
+
+        Per ``observability.md`` Rule 3a: handler exceptions are caught and
+        logged at WARN — handler failure MUST NOT block task lifecycle.
+        Async handlers are awaited; sync handlers run inline.
+        """
+        for handler in handlers:
+            try:
+                result = handler(event)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as exc:
+                logger.warning(
+                    "Worker '%s' lifecycle handler %r raised %s for task %s; continuing",
+                    self._worker_id,
+                    getattr(handler, "__name__", repr(handler)),
+                    type(exc).__name__,
+                    event.task_id,
+                    exc_info=True,
+                )
+
+    @staticmethod
+    def _workflow_name_from_task(task: TaskMessage) -> Optional[str]:
+        """Extract ``workflow.name`` from the task's serialized workflow blob."""
+        wf_data = task.workflow_data or {}
+        name = wf_data.get("name")
+        return name if isinstance(name, str) and name else None
 
     async def start(self):
         """Start the worker loop.
@@ -756,6 +851,25 @@ class Worker:
             task.max_attempts,
         )
 
+        workflow_name = self._workflow_name_from_task(task)
+
+        # Issue #914: prerun lifecycle hook — handler sees the task BEFORE
+        # the runtime executes. elapsed_ms is None because the task has not
+        # yet run; exception is None.
+        if self._hooks_prerun:
+            await self._dispatch_task_event(
+                self._hooks_prerun,
+                TaskEvent(
+                    task_id=task.task_id,
+                    workflow_name=workflow_name,
+                    attempt=task.attempts,
+                    max_attempts=task.max_attempts,
+                    worker_id=self._worker_id,
+                ),
+            )
+
+        execution_time: float = 0.0
+        outcome_exc: Optional[BaseException] = None
         try:
             runtime = self._get_runtime()
             # Reconstruct and execute the workflow
@@ -785,8 +899,24 @@ class Worker:
                 self._worker_id,
             )
 
+            # Issue #914: success lifecycle hook — fire AFTER ack so the
+            # handler observes committed-success state.
+            if self._hooks_success:
+                await self._dispatch_task_event(
+                    self._hooks_success,
+                    TaskEvent(
+                        task_id=task.task_id,
+                        workflow_name=workflow_name,
+                        attempt=task.attempts,
+                        max_attempts=task.max_attempts,
+                        worker_id=self._worker_id,
+                        elapsed_ms=execution_time * 1000.0,
+                    ),
+                )
+
         except Exception as exc:
             execution_time = time.time() - start_time
+            outcome_exc = exc
             logger.error(
                 "Task %s failed after %.2fs: %s",
                 task.task_id,
@@ -804,7 +934,45 @@ class Worker:
                 execution_time=execution_time,
             )
             self._queue.store_result(result)
+
+            # Issue #914: classify retry vs final failure BEFORE nack so the
+            # handler sees the disposition that nack will apply. TaskQueue.nack
+            # re-queues when ``task.attempts < task.max_attempts`` and
+            # dead-letters otherwise (see TaskQueue.nack:300).
+            failure_event = TaskEvent(
+                task_id=task.task_id,
+                workflow_name=workflow_name,
+                attempt=task.attempts,
+                max_attempts=task.max_attempts,
+                worker_id=self._worker_id,
+                elapsed_ms=execution_time * 1000.0,
+                exception=exc,
+            )
+            if task.attempts < task.max_attempts:
+                if self._hooks_retry:
+                    await self._dispatch_task_event(self._hooks_retry, failure_event)
+            else:
+                if self._hooks_failure:
+                    await self._dispatch_task_event(self._hooks_failure, failure_event)
+
             self._queue.nack(task)
+
+        finally:
+            # Issue #914: postrun lifecycle hook — fires for both success and
+            # failure paths. Equivalent to Celery's `task_postrun` signal.
+            if self._hooks_postrun:
+                await self._dispatch_task_event(
+                    self._hooks_postrun,
+                    TaskEvent(
+                        task_id=task.task_id,
+                        workflow_name=workflow_name,
+                        attempt=task.attempts,
+                        max_attempts=task.max_attempts,
+                        worker_id=self._worker_id,
+                        elapsed_ms=execution_time * 1000.0,
+                        exception=outcome_exc,
+                    ),
+                )
 
     def _execute_workflow_sync(self, runtime, task: TaskMessage) -> Dict[str, Any]:
         """Synchronously execute a workflow from task data.
