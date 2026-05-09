@@ -54,7 +54,14 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 if TYPE_CHECKING:
     from kailash.runtime.dispatcher import Dispatcher
 
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits,
+)
+from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
+from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +76,16 @@ __all__ = [
 # `kwargs=` dict to ``_execute_workflow`` at fire time. Popped before the
 # remaining kwargs are forwarded to the runtime so user code never sees it.
 _RETRY_SPEC_KWARG = "_kailash_retry_spec"
+
+# Internal kwargs key used to thread the per-job (soft, hard) time-limit pair
+# through APScheduler's `kwargs=` dict to ``_execute_workflow`` at fire time.
+# Stored as a tuple ``(soft_time_limit, time_limit)`` so the wrapper helper
+# (issue #912 Shard 2) can arm both deadlines from one persisted value.
+# Popped before the remaining kwargs are forwarded to the runtime so user
+# code never sees it. Persistence in the kwargs dict (vs a sidecar) means
+# the values survive APScheduler jobstore reload after process restart —
+# brief AC #1 invariant 6 (issue #912).
+_TIME_LIMIT_KWARG = "_kailash_time_limits"
 
 
 @dataclass(frozen=True)
@@ -393,7 +410,19 @@ class WorkflowScheduler:
         timezone: str = "UTC",
         *,
         dispatch_via: Optional["Dispatcher"] = None,
+        default_soft_time_limit: Optional[float] = None,
+        default_time_limit: Optional[float] = None,
     ) -> None:
+        # Issue #912 Open Question Q1 (resolved): include default time-limit
+        # kwargs symmetric to a future Worker.__init__. Operators running the
+        # in-process scheduler often run a Worker pool too; asymmetric
+        # defaults are a sharp edge ("why does my cron job time out at 600s
+        # but my queued job at 300s?"). Per-task value wins; default
+        # fallthrough; final fallthrough is None (no limit).
+        # Validate at construction time so caller bugs (negative values,
+        # soft >= hard) raise loudly here rather than at every fire.
+        _validate_limits(default_soft_time_limit, default_time_limit)
+
         if not _check_apscheduler():
             raise ImportError(
                 "APScheduler is required for WorkflowScheduler. "
@@ -423,6 +452,10 @@ class WorkflowScheduler:
         self._schedules: Dict[str, ScheduleInfo] = {}
         self._timezone = timezone
         self._dispatcher: Optional["Dispatcher"] = dispatch_via
+        # Issue #912 Q1: store defaults for fallthrough at fire time. Per-task
+        # value wins over default; default falls through to None (no limit).
+        self._default_soft_time_limit: Optional[float] = default_soft_time_limit
+        self._default_time_limit: Optional[float] = default_time_limit
 
         # Per-job fire-time capture: APScheduler's EVENT_JOB_SUBMITTED listener
         # fires BEFORE the job callback with `event.scheduled_run_time`, the
@@ -503,6 +536,8 @@ class WorkflowScheduler:
         name: str = "",
         *,
         retry: Optional[RetrySpec] = None,
+        soft_time_limit: Optional[float] = None,
+        time_limit: Optional[float] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run on a cron schedule.
@@ -548,7 +583,9 @@ class WorkflowScheduler:
 
         trigger = CronTrigger.from_crontab(cron_expression, timezone=self._timezone)
 
-        job_kwargs = self._compose_job_kwargs(kwargs, retry)
+        job_kwargs = self._compose_job_kwargs(
+            kwargs, retry, soft_time_limit, time_limit
+        )
         self._scheduler.add_job(
             self._execute_workflow,
             trigger=trigger,
@@ -583,6 +620,8 @@ class WorkflowScheduler:
         name: str = "",
         *,
         retry: Optional[RetrySpec] = None,
+        soft_time_limit: Optional[float] = None,
+        time_limit: Optional[float] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run at a fixed interval.
@@ -610,7 +649,9 @@ class WorkflowScheduler:
 
         schedule_id = self._generate_schedule_id()
 
-        job_kwargs = self._compose_job_kwargs(kwargs, retry)
+        job_kwargs = self._compose_job_kwargs(
+            kwargs, retry, soft_time_limit, time_limit
+        )
         self._scheduler.add_job(
             self._execute_workflow,
             trigger="interval",
@@ -646,6 +687,8 @@ class WorkflowScheduler:
         name: str = "",
         *,
         retry: Optional[RetrySpec] = None,
+        soft_time_limit: Optional[float] = None,
+        time_limit: Optional[float] = None,
         **kwargs: Any,
     ) -> str:
         """Schedule a workflow to run once at a specific time.
@@ -670,7 +713,9 @@ class WorkflowScheduler:
         """
         schedule_id = self._generate_schedule_id()
 
-        job_kwargs = self._compose_job_kwargs(kwargs, retry)
+        job_kwargs = self._compose_job_kwargs(
+            kwargs, retry, soft_time_limit, time_limit
+        )
         self._scheduler.add_job(
             self._execute_workflow,
             trigger="date",
@@ -893,14 +938,18 @@ class WorkflowScheduler:
         return list(self._schedules.values())
 
     def _compose_job_kwargs(
-        self, user_kwargs: Dict[str, Any], retry: Optional[RetrySpec]
+        self,
+        user_kwargs: Dict[str, Any],
+        retry: Optional[RetrySpec],
+        soft_time_limit: Optional[float] = None,
+        time_limit: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Merge a user-supplied kwargs dict with the internal retry spec key.
+        """Merge a user-supplied kwargs dict with the internal retry + time-limit keys.
 
         Returns a NEW dict — does NOT mutate ``user_kwargs`` so the caller's
         ScheduleInfo.kwargs reflects only the user-visible kwargs (the
-        ``_kailash_retry_spec`` key is internal and MUST NOT leak into
-        :class:`ScheduleInfo` view).
+        ``_kailash_retry_spec`` and ``_kailash_time_limits`` keys are
+        internal and MUST NOT leak into :class:`ScheduleInfo` view).
 
         Refuses to silently overwrite a user-supplied key with the same name
         — this would be ``zero-tolerance.md`` Rule 3 silent fallback class.
@@ -911,10 +960,30 @@ class WorkflowScheduler:
         dispatcher's domain (worker-side retry semantics owned by #911 /
         #912). Silently dropping the spec would be a ``zero-tolerance.md``
         Rule 3c violation (documented kwarg accepted but unused).
+
+        Time-limit resolution (#912 Shard 3):
+
+        * Per-task ``soft_time_limit`` / ``time_limit`` win over the
+          ``WorkflowScheduler(default_*=)`` defaults.
+        * Defaults fall through to None (no limit).
+        * Validates the EFFECTIVE pair via ``_validate_limits`` so per-task
+          values that combine illegally with defaults raise here, not from
+          the timer thread at fire time. (Validation at registration time,
+          not at fire time — brief AC #1 invariant 4.)
+        * The effective ``(soft, hard)`` tuple is threaded under
+          ``_TIME_LIMIT_KWARG`` only when at least one bound is set; a
+          fully-None pair is skipped to keep the persisted kwargs dict
+          minimal and the no-limits path indistinguishable from the
+          legacy (pre-#912) jobstore entries.
         """
         if _RETRY_SPEC_KWARG in user_kwargs:
             raise ValueError(
                 f"kwarg name {_RETRY_SPEC_KWARG!r} is reserved for internal "
+                f"use; rename your runtime kwarg to avoid the collision"
+            )
+        if _TIME_LIMIT_KWARG in user_kwargs:
+            raise ValueError(
+                f"kwarg name {_TIME_LIMIT_KWARG!r} is reserved for internal "
                 f"use; rename your runtime kwarg to avoid the collision"
             )
         if retry is not None and self._dispatcher is not None:
@@ -924,9 +993,25 @@ class WorkflowScheduler:
                 "the dispatcher's contract; pass retry=None and configure "
                 "retries on the worker / dispatcher layer instead."
             )
+
+        # Per-task value wins; default fallthrough; final fallthrough is None.
+        # Resolution happens HERE (registration time) so the validation below
+        # catches "per-task soft=10 + default hard=5" before the job runs.
+        effective_soft = (
+            soft_time_limit
+            if soft_time_limit is not None
+            else self._default_soft_time_limit
+        )
+        effective_hard = (
+            time_limit if time_limit is not None else self._default_time_limit
+        )
+        _validate_limits(effective_soft, effective_hard)
+
         merged = dict(user_kwargs)
         if retry is not None:
             merged[_RETRY_SPEC_KWARG] = retry
+        if effective_soft is not None or effective_hard is not None:
+            merged[_TIME_LIMIT_KWARG] = (effective_soft, effective_hard)
         return merged
 
     async def _execute_workflow(
@@ -974,14 +1059,22 @@ class WorkflowScheduler:
         # ignored on the queue dispatch path with a documented rationale above.
         retry_spec: Optional[RetrySpec] = kwargs.pop(_RETRY_SPEC_KWARG, None)
 
-        # Pop the typed time-limit kwargs before forwarding so we can pass
-        # them by NAME to runtime.execute(...) — landing them in the typed
-        # signature slot rather than being absorbed by the runtime's
-        # **kwargs. Per #912 Shard 1: slots accepted now, deadline
-        # enforcement lands in Shards 2–3 (in-process wrapper +
-        # scheduler-side timer arming around the retry loop).
-        soft_time_limit: float | None = kwargs.pop("soft_time_limit", None)
-        time_limit: float | None = kwargs.pop("time_limit", None)
+        # Pop the internal time-limit pair before forwarding kwargs anywhere.
+        # The pair is the EFFECTIVE (per-task or default) value resolved at
+        # _compose_job_kwargs time; the wrapper helper consumes it to arm
+        # threading.Timer deadlines around the runtime call below.
+        # Per #912 Shard 3: this is the consumer of the internal kwarg key
+        # added in this shard. Earlier shards (1) accepted typed kwargs at
+        # every runtime.execute(...) and (2) wrote arm_time_limits + the
+        # _TimeLimitClassifier; this shard wires arming around the retry
+        # loop so each attempt re-arms a fresh timer (invariant 3).
+        _time_limit_pair: Optional[Tuple[Optional[float], Optional[float]]] = (
+            kwargs.pop(_TIME_LIMIT_KWARG, None)
+        )
+        if _time_limit_pair is not None:
+            soft_time_limit, time_limit = _time_limit_pair
+        else:
+            soft_time_limit, time_limit = None, None
 
         if self._dispatcher is not None:
             await self._dispatch_to_queue(
@@ -992,11 +1085,25 @@ class WorkflowScheduler:
             )
             return
 
-        # In-process fallback (existing behavior + retry primitive #910).
+        # In-process fallback (existing behavior + retry primitive #910 +
+        # time-limit enforcement #912 Shard 3).
         logger.info("Scheduled execution starting: run_id=%s", run_id)
         max_attempts = 1 + (retry_spec.max_retries if retry_spec else 0)
         last_exc: Optional[BaseException] = None
+        # If the user passed their own cancellation_token in kwargs, honor it
+        # — but the time-limit timers MUST get their own token to cancel,
+        # otherwise the scheduler would corrupt user-side cancellation
+        # semantics by setting reasons on the user's token. Pop user's token
+        # so we can layer ours on top per-attempt without conflicting.
+        _user_cancellation_token: Optional[CancellationToken] = kwargs.pop(
+            "cancellation_token", None
+        )
         for attempt in range(1, max_attempts + 1):
+            # Bind cancellable=None at the TOP of every attempt so the
+            # `except Exception as exc:` block below can safely reference it
+            # even when an early-attempt failure (workflow.build() / runtime
+            # acquisition) skips the later `cancellable = None` assignment.
+            cancellable = None
             try:
                 workflow = workflow_builder.build()
                 # Context-manager form ensures the runtime is closed after each
@@ -1015,50 +1122,114 @@ class WorkflowScheduler:
                     if hasattr(_runtime, "__enter__")
                     else contextlib.nullcontext(_runtime)
                 )
-                with _runtime_cm as runtime:
-                    # Pass typed time-limit kwargs by NAME so they land in
-                    # the runtime's typed signature slot (#912 Shard 1).
-                    results, actual_run_id = runtime.execute(
-                        workflow,
+                # FRESH cancellation token per attempt — invariant 3
+                # (each retry re-arms a fresh timer with full budget). Re-using
+                # the prior attempt's token would carry over its `cancelled`
+                # state and cause the new attempt to abort instantly.
+                _attempt_token: Optional[CancellationToken] = (
+                    _user_cancellation_token
+                    if (
+                        _user_cancellation_token is not None
+                        and soft_time_limit is None
+                        and time_limit is None
+                    )
+                    else CancellationToken()
+                )
+                # cancellable initialized at top of loop body; arm only if
+                # caller supplied at least one limit.
+                if soft_time_limit is not None or time_limit is not None:
+                    # Arm threading.Timer deadlines around this attempt.
+                    # Pass the user's token into runtime.execute(...) ONLY
+                    # when no time-limit timers are armed (above branch);
+                    # otherwise the scheduler-side token is the one the
+                    # timers cancel.
+                    cancellable = arm_time_limits(
+                        _attempt_token,
                         soft_time_limit=soft_time_limit,
                         time_limit=time_limit,
-                        **kwargs,
                     )
-                # LocalRuntime swallows leaf-node failures into a result entry
-                # of shape ``{"failed": True, "error": str, "error_type": str}``
-                # rather than raising. For #910 the retry primitive MUST observe
-                # that recorded failure as if it were a propagated exception —
-                # otherwise a node-level raise on a scheduled job is invisible
-                # to retry semantics. Synthesize a typed exception from the
-                # first recorded failure so the retryable-classifier sees the
-                # correct exception type.
-                node_failure = self._extract_node_failure(results)
-                if node_failure is not None:
-                    raise node_failure
-                # Successful-retry observability: when a job succeeds on
-                # attempt > 1, the success path is structurally a "degraded
-                # but recovered" outcome — operators want to dashboard this
-                # separately from first-attempt successes. Emit a symmetric
-                # WARN to the exhausted-retries WARN below so alerting
-                # pipelines see retry recoveries (per `observability.md`
-                # Rule 7's bulk-op summary-WARN pattern).
-                if attempt > 1:
-                    logger.warning(
-                        "Scheduled execution recovered after retries: "
-                        "run_id=%s schedule_id=%s attempts=%d/%d",
+                try:
+                    with _runtime_cm as runtime:
+                        # Pass typed time-limit kwargs by NAME so they land in
+                        # the runtime's typed signature slot (#912 Shard 1).
+                        # Pass the cancellation_token so the runtime's inter-
+                        # node check observes the soft-timer's cancel and
+                        # raises WorkflowCancelledError, which the classifier
+                        # below converts to SoftTimeLimitExceeded.
+                        results, actual_run_id = runtime.execute(
+                            workflow,
+                            cancellation_token=_attempt_token,
+                            soft_time_limit=soft_time_limit,
+                            time_limit=time_limit,
+                            **kwargs,
+                        )
+                    # LocalRuntime swallows leaf-node failures into a result entry
+                    # of shape ``{"failed": True, "error": str, "error_type": str}``
+                    # rather than raising. For #910 the retry primitive MUST observe
+                    # that recorded failure as if it were a propagated exception —
+                    # otherwise a node-level raise on a scheduled job is invisible
+                    # to retry semantics. Synthesize a typed exception from the
+                    # first recorded failure so the retryable-classifier sees the
+                    # correct exception type.
+                    node_failure = self._extract_node_failure(results)
+                    if node_failure is not None:
+                        raise node_failure
+                    # Successful-retry observability: when a job succeeds on
+                    # attempt > 1, the success path is structurally a "degraded
+                    # but recovered" outcome — operators want to dashboard this
+                    # separately from first-attempt successes. Emit a symmetric
+                    # WARN to the exhausted-retries WARN below so alerting
+                    # pipelines see retry recoveries (per `observability.md`
+                    # Rule 7's bulk-op summary-WARN pattern).
+                    if attempt > 1:
+                        logger.warning(
+                            "Scheduled execution recovered after retries: "
+                            "run_id=%s schedule_id=%s attempts=%d/%d",
+                            actual_run_id,
+                            schedule_id,
+                            attempt,
+                            max_attempts,
+                        )
+                    logger.info(
+                        "Scheduled execution completed: "
+                        "run_id=%s, results_count=%d, attempt=%d/%d",
                         actual_run_id,
-                        schedule_id,
+                        len(results) if results else 0,
                         attempt,
                         max_attempts,
                     )
-                logger.info(
-                    "Scheduled execution completed: run_id=%s, results_count=%d, attempt=%d/%d",
-                    actual_run_id,
-                    len(results) if results else 0,
-                    attempt,
-                    max_attempts,
-                )
-                return
+                    # Per Shard 2 invariant 5: even if the workflow returned
+                    # cleanly (because no node poll observed the cancel),
+                    # the timers may have fired. Promote to typed exception.
+                    # Hard wins over soft when both fired (more severe).
+                    if cancellable is not None:
+                        if cancellable.hard_deadline_reached:
+                            raise HardTimeLimitExceeded(
+                                f"workflow exceeded hard time limit "
+                                f"(time_limit={cancellable.time_limit}s + "
+                                f"grace_seconds={cancellable.grace_seconds}s)"
+                            )
+                        # Soft fired (token.is_cancelled set) but the workflow
+                        # ran to completion without polling between nodes —
+                        # this happens for single-node workflows whose node
+                        # blocks past the soft deadline. Promote so the user
+                        # still observes the celery-style soft signal.
+                        if (
+                            _attempt_token is not None
+                            and _attempt_token.is_cancelled
+                            and cancellable.soft_time_limit is not None
+                        ):
+                            from kailash.sdk_exceptions import SoftTimeLimitExceeded
+
+                            raise SoftTimeLimitExceeded(
+                                f"workflow exceeded soft time limit "
+                                f"(soft_time_limit="
+                                f"{cancellable.soft_time_limit}s)"
+                            )
+                    return
+                finally:
+                    if cancellable is not None:
+                        cancellable.disarm()
             except asyncio.CancelledError:
                 # Scheduler shutdown / job cancellation MUST propagate cleanly —
                 # the `except Exception` below would catch CancelledError on
@@ -1066,9 +1237,28 @@ class WorkflowScheduler:
                 # retry loop swallow shutdown. Re-raise BEFORE the broad except.
                 raise
             except Exception as exc:
-                last_exc = exc
-                # Non-retryable: skip ahead to the bubble-up below.
-                if retry_spec is None or not retry_spec.is_retryable(exc):
+                # The runtime observed the cancellation token's set-state OR
+                # a generic exception bubbled. For WorkflowCancelledError,
+                # the classifier converts our time-limit-armed cancel into
+                # SoftTimeLimitExceeded / HardTimeLimitExceeded so RetrySpec
+                # filters can match the typed subclass. Generic exceptions
+                # pass through unchanged. After classification, all paths
+                # share the same retry-decision + backoff logic so retries
+                # of time-limit-exceeded attempts apply the same sleep
+                # discipline as retries of any other exception.
+                if isinstance(exc, WorkflowCancelledError) and cancellable is not None:
+                    classifier = _TimeLimitClassifier(cancellable)
+                    last_exc = classifier.classify(exc)
+                    # Preserve cause chain (Shard 2 invariant 4): when the
+                    # classifier returned a typed subclass, attach the
+                    # original WorkflowCancelledError as __cause__ so
+                    # operators see both in the traceback.
+                    if last_exc is not exc:
+                        last_exc.__cause__ = exc
+                else:
+                    last_exc = exc
+                # Non-retryable: skip ahead to bubble-up below.
+                if retry_spec is None or not retry_spec.is_retryable(last_exc):
                     break
                 # Retryable AND budget remaining: DEBUG-level per-attempt log
                 # (per `observability.md` MUST NOT § log-spam-in-hot-loops —
@@ -1084,7 +1274,7 @@ class WorkflowScheduler:
                         max_attempts,
                         run_id,
                         schedule_id,
-                        type(exc).__name__,
+                        type(last_exc).__name__,
                         backoff_seconds,
                     )
                     await asyncio.sleep(backoff_seconds)
