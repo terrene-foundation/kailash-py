@@ -217,6 +217,29 @@ class CircuitBreakerOpenError(RuntimeException):
     """
 
 
+class ScheduleNotFound(RuntimeException):
+    """Raised when a schedule control operation references an unknown schedule_id.
+
+    Issued by ``WorkflowScheduler`` admin methods (``pause`` / ``resume`` /
+    ``update_cron``) when the supplied ``schedule_id`` does not match any
+    registered schedule. The typed exception lets ops surfaces (Nexus admin
+    handlers, CLI tools) distinguish "schedule never existed / already
+    cancelled" from generic runtime failures so they can return HTTP 404 vs
+    500 cleanly.
+
+    Sibling of ``KeyError`` raised by ``WorkflowScheduler.cancel`` for
+    backwards compatibility — new admin surfaces SHOULD prefer
+    ``ScheduleNotFound`` for stable semantics across SDK versions.
+
+    Attributes:
+        schedule_id: The unknown schedule identifier the caller supplied.
+    """
+
+    def __init__(self, schedule_id: str, message: str | None = None) -> None:
+        self.schedule_id = schedule_id
+        super().__init__(message or f"Schedule {schedule_id!r} not found")
+
+
 class RetryExhaustedException(RuntimeException):
     """Raised when all retry attempts are exhausted for an operation.
 
