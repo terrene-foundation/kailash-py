@@ -722,6 +722,158 @@ class WorkflowScheduler:
 
         logger.info("Cancelled schedule: %s", schedule_id)
 
+    def pause(self, schedule_id: str) -> None:
+        """Pause a scheduled workflow without removing it.
+
+        Sets the underlying APScheduler job's ``next_run_time`` to ``None``
+        so no further fires occur until :meth:`resume` is called. The schedule
+        remains registered in :attr:`_schedules` and recoverable via
+        :meth:`list_schedules` (with ``enabled=False``). Idempotent — calling
+        ``pause`` twice on an already-paused schedule succeeds with no-op.
+
+        Args:
+            schedule_id: The ID returned by ``schedule_cron`` /
+                ``schedule_interval`` / ``schedule_once``.
+
+        Raises:
+            ScheduleNotFound: If ``schedule_id`` is not registered with this
+                scheduler. Typed exception (``RuntimeException`` subclass) so
+                admin surfaces (Nexus handlers, CLIs) can map cleanly to
+                HTTP 404 / exit code 4 etc.
+
+        Example:
+            >>> sid = scheduler.schedule_cron(workflow, "0 6 * * *")
+            >>> scheduler.pause(sid)         # halt fires
+            >>> scheduler.pause(sid)         # idempotent — no-op
+            >>> scheduler.resume(sid)        # resume from now
+        """
+        from kailash.sdk_exceptions import ScheduleNotFound
+
+        if schedule_id not in self._schedules:
+            raise ScheduleNotFound(schedule_id)
+
+        # APScheduler's `pause_job` is naturally idempotent: a second call on
+        # an already-paused job is a no-op (next_run_time stays None). We
+        # still reflect the state on our cached ScheduleInfo for callers
+        # that don't immediately list_schedules() afterwards.
+        self._scheduler.pause_job(schedule_id)
+        info = self._schedules[schedule_id]
+        info.enabled = False
+        info.next_run_time = None
+
+        logger.info("Paused schedule: %s", schedule_id)
+
+    def resume(self, schedule_id: str) -> None:
+        """Resume a paused schedule, recomputing the next fire from current cron/interval.
+
+        On resume, APScheduler recomputes ``next_run_time`` from the trigger
+        (cron / interval / date) — so the next fire is "now" forward, NOT
+        the paused-at timestamp. Idempotent — calling ``resume`` twice on an
+        already-running schedule succeeds with no-op.
+
+        Args:
+            schedule_id: The ID returned by ``schedule_cron`` /
+                ``schedule_interval`` / ``schedule_once``.
+
+        Raises:
+            ScheduleNotFound: If ``schedule_id`` is not registered.
+
+        Example:
+            >>> scheduler.resume(sid)        # recomputes next_run_time
+            >>> scheduler.resume(sid)        # idempotent — no-op
+        """
+        from kailash.sdk_exceptions import ScheduleNotFound
+
+        if schedule_id not in self._schedules:
+            raise ScheduleNotFound(schedule_id)
+
+        # APScheduler's `resume_job` recomputes next_run_time from the
+        # trigger; second call on an already-running job is a no-op
+        # (next_run_time already advanced via the trigger). The recomputed
+        # fire time reflects "now forward" — interval triggers MOVE the
+        # next fire to roughly now+interval, NOT the paused-at instant.
+        self._scheduler.resume_job(schedule_id)
+        job = self._scheduler.get_job(schedule_id)
+        info = self._schedules[schedule_id]
+        if job is not None and job.next_run_time is not None:
+            info.enabled = True
+            info.next_run_time = job.next_run_time
+        else:
+            # Once-schedules whose run_at has passed return a job with
+            # next_run_time=None even after resume — the trigger has
+            # nothing left to fire. Reflect that honestly.
+            info.enabled = False
+            info.next_run_time = None
+
+        logger.info("Resumed schedule: %s", schedule_id)
+
+    def update_cron(self, schedule_id: str, cron_expression: str) -> None:
+        """Replace a cron schedule's expression and recompute next-fire.
+
+        Validates the new cron expression with the same 5-field check used
+        by :meth:`schedule_cron`, then atomically swaps the trigger via
+        APScheduler's ``reschedule_job`` so subsequent fires use the new
+        cron. ``ScheduleInfo.trigger_args`` is updated to reflect the new
+        expression so :meth:`list_schedules` returns the current state.
+
+        Args:
+            schedule_id: The ID returned by ``schedule_cron``.
+            cron_expression: A cron expression string with 5 fields
+                (minute hour day_of_month month day_of_week).
+
+        Raises:
+            ScheduleNotFound: If ``schedule_id`` is not registered.
+            ValueError: If ``cron_expression`` is not a valid 5-field cron
+                expression. Message starts with ``"invalid cron"`` for
+                grep-able matching by admin surfaces.
+
+        Example:
+            >>> sid = scheduler.schedule_cron(workflow, "0 6 * * *")
+            >>> scheduler.update_cron(sid, "0 */2 * * *")  # every 2 hours
+        """
+        from apscheduler.triggers.cron import CronTrigger
+
+        from kailash.sdk_exceptions import ScheduleNotFound
+
+        if schedule_id not in self._schedules:
+            raise ScheduleNotFound(schedule_id)
+
+        # Validate field count BEFORE handing to APScheduler so the error
+        # message stays uniform with `schedule_cron`'s validator. Bare
+        # `CronTrigger.from_crontab` accepts some variants we'd rather
+        # reject up-front for consistency.
+        parts = cron_expression.strip().split()
+        if len(parts) != 5:
+            raise ValueError(
+                f"invalid cron: expression must have exactly 5 fields "
+                f"(minute hour day month weekday), got {len(parts)}: "
+                f"'{cron_expression}'"
+            )
+        try:
+            trigger = CronTrigger.from_crontab(cron_expression, timezone=self._timezone)
+        except ValueError as exc:
+            # Re-raise with the canonical `invalid cron` prefix so admin
+            # callers can pattern-match on the message.
+            raise ValueError(f"invalid cron: {exc}") from exc
+
+        # `reschedule_job` swaps the trigger atomically AND recomputes
+        # next_run_time from the new trigger — exactly the semantic an
+        # operator expects when editing the cron at runtime.
+        self._scheduler.reschedule_job(schedule_id, trigger=trigger)
+
+        info = self._schedules[schedule_id]
+        info.trigger_args = {"cron_expression": cron_expression}
+        job = self._scheduler.get_job(schedule_id)
+        if job is not None:
+            info.next_run_time = job.next_run_time
+            info.enabled = job.next_run_time is not None
+
+        logger.info(
+            "Updated schedule cron: id=%s, cron='%s'",
+            schedule_id,
+            cron_expression,
+        )
+
     def list_schedules(self) -> List[ScheduleInfo]:
         """List all active schedules.
 
