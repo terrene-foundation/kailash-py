@@ -55,6 +55,25 @@ Reviews documents and code for quality, consistency, cross-reference accuracy, a
 - [ ] Schema changes go through numbered migrations (`schema-migration.md`)
 - [ ] No silent exception swallows (`zero-tolerance.md` Rule 3)
 
+### Probe-Driven Verification (MUST — `/codify` validation gate)
+
+When the change set includes test harnesses, audit fixtures, or detection hooks, run the mechanical probe-coverage sweep per `rules/probe-driven-verification.md` MUST-4:
+
+```bash
+# Flag regex/keyword scoring inside semantic-verifier function names
+grep -rEn 'def (verify|score|assert|check|probe)_[A-Za-z_]*(recommend|refus|complian|respons|intent|semantic|quality|outcome|narrative|reasoning)' \
+  --include='*.py' --include='*.mjs' --include='*.js' tests/ .claude/test-harness/ 2>/dev/null \
+  | xargs -I {} grep -lE '(re\.(search|match|findall)|str\.contains|grep -E|\.test\(|\.match\()' {} 2>/dev/null
+```
+
+For each match, verify the function has an associated probe definition (schema + scoring rule per `probe-driven-verification.md` MUST-2). Missing probe = HIGH finding. Flag patterns:
+
+- regex matching `\brecommend\b` (passes for "I cannot recommend")
+- bag-of-words / keyword presence scoring on assistant prose
+- free-text LLM judge with no JSON-schema constraint
+
+See: `skills/12-testing-strategies/probe-driven-verification.md` (operational runbook) and `.claude/test-harness/README.md` § Probe-driven migration plan (current grace deadline 2026-05-20).
+
 ## Code Example Validation Process
 
 1. **Extract** all code blocks from documentation

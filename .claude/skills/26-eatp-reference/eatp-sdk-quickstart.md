@@ -186,13 +186,13 @@ elif verdict == Verdict.FLAGGED:
 ## Trust Postures
 
 ```python
-from kailash.trust.posture.postures import TrustPosture, PostureStateMachine
+from kailash.trust.postures import TrustPosture, PostureStateMachine
 
 # Create state machine
 sm = PostureStateMachine(default_posture=TrustPosture.SUPERVISED)
 
-# Posture hierarchy: PSEUDO_AGENT < SUPERVISED < SHARED_PLANNING < CONTINUOUS_INSIGHT < DELEGATED
-print(TrustPosture.SUPERVISED < TrustPosture.DELEGATED)  # True
+# Posture hierarchy: BLOCKED < HUMAN_DECIDES < SUPERVISED < ASSISTED < FULL_AUTONOMY
+print(TrustPosture.SUPERVISED < TrustPosture.FULL_AUTONOMY)  # True
 ```
 
 ## Secure Messaging

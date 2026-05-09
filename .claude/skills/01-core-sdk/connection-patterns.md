@@ -51,7 +51,6 @@ results, run_id = runtime.execute(workflow.build())
 ## Connection Types
 
 ### Type 1: Direct Mapping (Most Common)
-
 ```python
 workflow = WorkflowBuilder()
 
@@ -65,7 +64,6 @@ workflow.add_connection("processor", "result", "writer", "data")
 ```
 
 ### Type 2: Port Name Mapping
-
 ```python
 # Different port names - explicit mapping
 workflow.add_node("HTTPRequestNode", "api", {"url": "https://api.example.com"})
@@ -76,7 +74,6 @@ workflow.add_connection("api", "response", "process", "data")
 ```
 
 ### Type 3: Dot Notation for Nested Data
-
 ```python
 # Extract nested fields from complex outputs
 workflow.add_node("PythonCodeNode", "analyzer", {
@@ -104,7 +101,6 @@ workflow.add_connection("analyzer", "result.metrics.accuracy", "reporter", "accu
 ```
 
 ### Type 4: Fan-Out (One-to-Many)
-
 ```python
 # Send same data to multiple processors
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
@@ -121,7 +117,6 @@ workflow.add_connection("reader", "data", "analyzer", "data")
 ```
 
 ### Type 5: Fan-In with MergeNode
-
 ```python
 # Combine multiple data sources
 workflow.add_node("CSVReaderNode", "source1", {"file_path": "data1.csv"})
@@ -141,7 +136,6 @@ workflow.add_connection("merger", "result", "processor", "data")
 ```
 
 ### Type 6: Multi-Input Processing
-
 ```python
 # Custom multi-input node
 workflow.add_node("CSVReaderNode", "customers", {"file_path": "customers.csv"})
@@ -167,11 +161,10 @@ workflow.add_connection("orders", "data", "join", "orders")
 ```
 
 ### Type 7: Complex Nested Extraction
-
 ```python
-workflow.add_node("PythonCodeNode", "llm", {
-    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=[{'role': 'user', 'content': f'Analyze this data: {data}'}]); result = {'response': resp.choices[0].message.content}",
-    "input_variables": ["data"]
+workflow.add_node("LLMAgentNode", "llm", {
+    "model": os.environ["LLM_MODEL"],
+    "system_prompt": "Analyze data"
 })
 
 workflow.add_node("PythonCodeNode", "metrics_reporter", {
@@ -194,49 +187,42 @@ workflow.add_connection("llm", "result.confidence", "metrics_reporter", "confide
 ## Common Mistakes
 
 ### ❌ Mistake 1: Using 3-Parameter Syntax (Deprecated)
-
 ```python
 # Wrong - Old 3-parameter syntax
 workflow.add_connection("reader", "processor", "data")  # DEPRECATED
 ```
 
 ### ✅ Fix: Use 4-Parameter Syntax
-
 ```python
 # Correct - Modern 4-parameter syntax
 workflow.add_connection("reader", "data", "processor", "data")
 ```
 
 ### ❌ Mistake 2: Wrong Port Names
-
 ```python
 # Wrong - Using non-existent ports
 workflow.add_connection("csv_reader", "output", "processor", "input")  # Error
 ```
 
 ### ✅ Fix: Use Correct Port Names
-
 ```python
 # Correct - CSVReaderNode outputs to 'data' port
 workflow.add_connection("csv_reader", "data", "processor", "data")
 ```
 
 ### ❌ Mistake 3: Missing Dot Notation for Nested Data
-
 ```python
 # Wrong - Trying to pass entire result when you need one field
 workflow.add_connection("analyzer", "result", "reporter", "accuracy")  # Gets dict, not number
 ```
 
 ### ✅ Fix: Use Dot Notation
-
 ```python
 # Correct - Extract specific field
 workflow.add_connection("analyzer", "result.accuracy", "reporter", "accuracy")
 ```
 
 ### ❌ Mistake 4: Incorrect Node IDs
-
 ```python
 # Wrong - Node ID mismatch
 workflow.add_node("CSVReaderNode", "csv_reader", {})
@@ -244,7 +230,6 @@ workflow.add_connection("reader", "data", "processor", "data")  # Error: 'reader
 ```
 
 ### ✅ Fix: Match Node IDs Exactly
-
 ```python
 # Correct - Consistent node IDs
 workflow.add_node("CSVReaderNode", "csv_reader", {})
@@ -261,13 +246,10 @@ workflow.add_connection("csv_reader", "data", "processor", "data")
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
-
 - Designing complex connection patterns
 - Implementing advanced data flow
 - Debugging connection issues
 - Optimizing workflow architecture
-
-Use `sdk-navigator` subagent when:
 
 - Finding node port names
 - Understanding node input/output structure

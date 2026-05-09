@@ -9,7 +9,7 @@ description: "Extend DataFlow with custom nodes beyond the auto-generated 11. Us
 > Category: `dataflow`
 > Priority: `MEDIUM`
 > SDK Version: `0.9.25+`
-> Related Skills: [`dataflow-specialist`](dataflow-specialist.md)
+> Related Skills: `dataflow-specialist`
 
 ## Add Custom Workflow Nodes
 

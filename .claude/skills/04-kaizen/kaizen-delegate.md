@@ -92,57 +92,6 @@ delegate = Delegate(model=os.environ["LLM_MODEL"], budget_usd=5.0)
 # Yields BudgetExhausted event when limit reached
 ```
 
-## SPEC-05 Composition Facade
-
-Since SPEC-05, Delegate is a **composition facade** that wraps a wrapper stack internally:
-
-```
-AgentLoop (via _LoopAgent) -> [L3GovernedAgent] -> [MonitoredAgent]
-```
-
-Only wrappers whose parameters are supplied are stacked. The user-facing API is unchanged.
-
-### Constructor IO Ban
-
-The `Delegate.__init__` MUST be synchronous and free of any network, filesystem, or subprocess calls. Violating this raises `ConstructorIOError`:
-
-```python
-from kaizen_agents.delegate.delegate import ConstructorIOError
-
-# MCP discovery is deferred -- no IO in constructor
-delegate = Delegate(
-    model=os.environ["LLM_MODEL"],
-    mcp_servers=[{"command": "npx", "args": ["-y", "@my/server"]}],
-)
-# MCP servers connect on first run(), not during construction
-```
-
-### Tool Registry Collision Detection
-
-Registering two tools with the same name raises `ToolRegistryCollisionError`:
-
-```python
-from kaizen_agents.delegate.delegate import ToolRegistryCollisionError
-
-# Raises ToolRegistryCollisionError if "search" is registered twice
-```
-
-### run_sync() Event Loop Guard
-
-`run_sync()` refuses to run when an event loop is already active (Jupyter, FastAPI, Nexus channel, async tests). It raises `RuntimeError` with an actionable message directing the caller to use `async for event in delegate.run(...)` instead.
-
-### Deferred MCP
-
-MCP server configs passed via `mcp_servers=` are stored during construction. The actual connection and tool discovery happens on the first `run()` call, keeping the constructor side-effect-free.
-
-### Introspection Properties
-
-```python
-delegate.core_agent   # BaseAgent -- the innermost agent in the wrapper stack
-delegate.signature     # type[Signature] | None -- the Signature class passed to constructor
-delegate.model         # str -- the resolved model name
-```
-
 ## Source Files
 
 - `packages/kaizen-agents/src/kaizen_agents/delegate/delegate.py`

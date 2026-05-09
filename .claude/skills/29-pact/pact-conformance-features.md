@@ -1,14 +1,14 @@
 # PACT Conformance Features (N1-N6)
 
-PACT specification Normative Requirements N1-N6 add pre-retrieval filtering, envelope caching, plan re-entry, tiered audit, monitoring observations, and cross-SDK conformance. All six are implemented in `kailash.trust.pact.engine.GovernanceEngine`.
+PACT specification Normative Requirements N1-N6 add pre-retrieval filtering, envelope caching, plan re-entry, tiered audit, monitoring observations, and cross-SDK conformance. All six are implemented in `pact.governance.engine.GovernanceEngine`.
 
 ## N1 -- KnowledgeFilter (Pre-Retrieval Gate)
 
 A pre-retrieval lifecycle gate that evaluates BEFORE the 5-step access enforcement algorithm. Fail-closed: filter exceptions return DENY.
 
 ```python
-from kailash.trust.pact.knowledge import KnowledgeFilter, FilterDecision, KnowledgeQuery
-from kailash.trust.pact.engine import GovernanceEngine
+from pact.governance.knowledge import KnowledgeFilter, FilterDecision, KnowledgeQuery
+from pact.governance.engine import GovernanceEngine
 
 class MyFilter:
     def filter_before_retrieval(
@@ -56,7 +56,7 @@ Invariants:
 Suspends a plan on budget/temporal/posture/envelope triggers, blocks `verify_action()` calls with that plan_id until resume conditions are met.
 
 ```python
-from kailash.trust.pact.suspension import SuspensionTrigger
+from pact.governance.suspension import SuspensionTrigger
 
 suspension = engine.suspend_plan(
     role_address="D1-R1-D2-R2",
@@ -88,7 +88,7 @@ Triggers: `BUDGET`, `TEMPORAL`, `POSTURE`, `ENVELOPE`. Each has a default resume
 `TieredAuditDispatcher` routes audit anchors to different persistence tiers based on `VerificationLevel`. Gradient-aligned: more critical verdicts get more durable storage.
 
 ```python
-from kailash.trust.pact.audit import TieredAuditDispatcher
+from pact.governance.audit import TieredAuditDispatcher
 
 dispatcher = TieredAuditDispatcher(
     auto_approved_sink=memory_sink,
@@ -110,7 +110,7 @@ engine = GovernanceEngine(
 Structured monitoring events distinct from EATP audit chain. Emits on `verify_action` verdict, clearance changes, bridge events, and envelope changes.
 
 ```python
-from kailash.trust.pact.observation import ObservationSink, Observation
+from pact.governance.observation import ObservationSink, Observation
 
 class MetricsSink:
     def emit(self, obs: Observation) -> None:

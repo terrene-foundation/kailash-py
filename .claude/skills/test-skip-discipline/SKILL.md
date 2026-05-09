@@ -1,5 +1,5 @@
 ---
-description: "Distinguishes acceptable test.skip (cannot execute) from BLOCKED test.skip (system is broken). Use at /redteam, test authoring, when reviewing Playwright/pytest/jest/Rust test gates."
+description: "test.skip discipline — distinguish acceptable (cannot execute) from BLOCKED (system broken)."
 ---
 
 # Test-Skip Discipline

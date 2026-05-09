@@ -64,7 +64,7 @@ agent = Agent(
 When working with Kaizen, deploy:
 
 - **kaizen-specialist** — Signatures, multi-agent coordination, BaseAgent architecture
-- **testing-specialist** — Agent testing patterns (NO MOCKING)
+- **testing-specialist** — Agent testing patterns (Real infrastructure recommended)
 
 ## Related Commands
 

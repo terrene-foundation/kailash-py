@@ -264,7 +264,7 @@ workflow.add_connection("increment", "result", "generate", "iteration")  # Loop!
 
 - **ETL Patterns**: [`workflow-pattern-etl`](workflow-pattern-etl.md)
 - **Error Handling**: [`gold-error-handling`](../../17-gold-standards/gold-error-handling.md)
-- **Conditional Logic**: [`nodes-logic-reference`](../nodes/nodes-logic-reference.md)
+- **Conditional Logic**: [`nodes-logic-reference`](../08-nodes-reference/nodes-logic-reference.md)
 
 ## Documentation
 

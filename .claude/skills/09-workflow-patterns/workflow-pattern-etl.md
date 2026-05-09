@@ -11,7 +11,7 @@ Comprehensive patterns for Extract, Transform, Load workflows.
 > Category: `workflow-patterns`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`workflow-pattern-data`](workflow-pattern-data.md), [`dataflow-specialist`](../../02-dataflow/dataflow-specialist.md)
+> Related Skills: [`workflow-pattern-data`](workflow-pattern-data.md), `dataflow-specialist`
 > Related Subagents: `dataflow-specialist` (database ETL), `pattern-expert` (ETL workflows)
 
 ## Quick Reference
@@ -315,9 +315,9 @@ workflow.add_connection("load_metrics", "result", "ack_messages", "message_ids")
 
 ## Related Skills
 
-- **DataFlow Framework**: [`dataflow-specialist`](../../02-dataflow/dataflow-specialist.md)
+- **DataFlow Framework**: `dataflow-specialist` agent
 - **Data Patterns**: [`workflow-pattern-data`](workflow-pattern-data.md)
-- **Database Nodes**: [`nodes-database-reference`](../nodes/nodes-database-reference.md)
+- **Database Nodes**: [`nodes-database-reference`](../08-nodes-reference/nodes-database-reference.md)
 
 ## Documentation
 

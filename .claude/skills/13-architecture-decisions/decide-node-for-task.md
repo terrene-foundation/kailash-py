@@ -1,13 +1,72 @@
 ---
 name: decide-node-for-task
-description: "Node selection guide. Use when asking 'which node', 'node for task', 'choose node', 'node selection', or 'node recommendation'."
-globs: ["**/*.py"]
+description: "Select appropriate nodes from 110+ options for specific tasks and use cases. Use when asking 'which node', 'node for task', 'choose node', 'node selection', 'what node', or 'node recommendation'."
 ---
 
 # Decision: Node Selection
 
-For node selection guidance, see:
+Decision: Node Selection guide with patterns, examples, and best practices.
 
-- `skills/13-architecture-decisions/SKILL.md` — node selection flow chart
-- `skills/08-nodes-reference/SKILL.md` — complete node reference by category
-- `skills/08-nodes-reference/nodes-quick-index.md` — quick node lookup index
+> **Skill Metadata**
+> Category: `cross-cutting`
+> Priority: `CRITICAL`
+> SDK Version: `0.9.25+`
+
+## Quick Reference
+
+- **Primary Use**: Decision: Node Selection
+- **Category**: cross-cutting
+- **Priority**: CRITICAL
+- **Trigger Keywords**: which node, node for task, choose node, node selection, what node
+
+## Core Pattern
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Decide Node For Task implementation
+workflow = WorkflowBuilder()
+
+# See source documentation for specific node types and parameters
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+
+## Common Use Cases
+
+- **Decide-Node-For-Task Core Functionality**: Primary operations and common patterns
+- **Integration Patterns**: Connect with other nodes, workflows, external systems
+- **Error Handling**: Robust error handling with retries, fallbacks, and logging
+- **Performance**: Optimization techniques, caching, batch operations, async execution
+- **Production Use**: Enterprise-grade patterns with monitoring, security, and reliability
+
+## Related Patterns
+
+- **For fundamentals**: See [`workflow-quickstart`](#)
+- **For connections**: See [`connection-patterns`](#)
+- **For parameters**: See [`param-passing-quick`](#)
+
+## When to Escalate to Subagent
+
+Use specialized subagents when:
+- Complex implementation needed
+- Production deployment required
+- Deep analysis necessary
+- Enterprise patterns needed
+
+## Documentation References
+
+### Primary Sources
+
+## Quick Tips
+
+- 💡 **Tip 1**: Always follow Decision: Node Selection best practices
+- 💡 **Tip 2**: Test patterns incrementally
+- 💡 **Tip 3**: Reference documentation for details
+
+## Keywords for Auto-Trigger
+
+<!-- Trigger Keywords: which node, node for task, choose node, node selection, what node -->

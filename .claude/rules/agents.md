@@ -34,6 +34,8 @@ When multiple independent operations are needed, launch agents in parallel via t
 
 **Why:** Sequential execution of independent operations wastes the autonomous execution multiplier, turning a 1-session task into a multi-session bottleneck.
 
+**See also**: `rules/time-pressure-discipline.md` — when the user signals time pressure ("speed up", "deadline looming"), parallelization (parallel specialist delegation, parallel worktree waves of 3) IS the throughput response. Procedure drops are BLOCKED even when the user authorizes them; the structural alternative is more parallel work, not fewer steps.
+
 ### MUST: Parallel Brief-Claim Verification When Issue Count ≥ 3
 
 When `/analyze` runs against a brief covering ≥ 3 distinct issues / failure modes / workstreams, the orchestrator MUST launch parallel deep-dive verification agents — one per claim cluster — to independently re-grep / re-read every factual claim in the brief tagged with file:line citations. Inaccuracies surfaced by the deep-dive sweep MUST be recorded in the workspace journal AND in the architecture plan's "Brief corrections" section AS THE GATE before `/todos`. Single-agent analysis on a ≥3-issue brief is BLOCKED — the framing inherited from the brief is the failure mode this rule prevents.
@@ -139,7 +141,31 @@ Agent(subagent_type="analyst", prompt="Verify W5→W6 closure parity...")
 
 **BLOCKED rationalizations:** "Analyst is the audit specialist; closure parity IS audit" / "The reviewer round can pick up the FORWARDED rows" / "I'll instruct the analyst to skip rows it can't verify" / "Read+Grep+Glob covers most verification" / "Analyst can write a recommendation; verification can be done by the next reviewer".
 
-**Why:** Tool-inventory mismatch costs one full audit round. Verifying pre-launch is O(1); re-launch is O(N) on row count. Origin: 2026-04-27 /redteam Round 3 — analyst FORWARDED 16 of 22 verification rows; a Bash-equipped specialist re-ran Round 3 and converted all 16 to VERIFIED in one shard. Compiled-language audit toolkits substitute their own introspection commands for the Python introspection set.
+**Delegation-time detection signals (orchestrator self-check before launch).** Before delegating, the orchestrator MUST scan the prompt-being-drafted for closure-parity mission markers. Presence of ANY of the following in the prompt obligates a Bash+Read specialist (general-purpose, pact-specialist, or framework specialist with full tool inventory) — selecting analyst with these markers present is BLOCKED:
+
+- Verification verbs: "verify closure", "closure parity", "FORWARDED → VERIFIED", "convert FORWARDED rows", "map findings to delivered code"
+- Bash-required commands named in mission: `gh pr view`, `gh pr diff`, `gh issue view`, `pytest --collect-only`, `ast.parse(`, `cargo nextest`, `find -type f`, `grep -c`
+- Closure-parity nouns: "Round N closure parity", "post-merge verification", "wave-N → wave-N+1 audit", "redteam round N convergence check"
+
+The orchestrator MUST run this scan as a pre-flight before EVERY closure-parity-class delegation; surfacing the mismatch at delegation-time is O(1), re-launching after the agent FORWARDS rows is O(N) on row count and burns the round.
+
+```python
+# DO — orchestrator detects closure-parity markers in draft prompt, picks Bash+Read specialist
+draft_prompt = "Verify W5→W6 closure parity. Run gh pr view, ast.parse() for __all__..."
+# scan: contains "closure parity" + "gh pr view" + "ast.parse(" → MUST use Bash+Read
+Agent(subagent_type="pact-specialist", prompt=draft_prompt)
+
+# DO NOT — orchestrator drafts a closure-parity prompt and delegates to read-only analyst
+draft_prompt = "Verify W5→W6 closure parity. Run gh pr view, ast.parse() for __all__..."
+Agent(subagent_type="analyst", prompt=draft_prompt)
+# (analyst lacks Bash; will FORWARD the gh-pr-view rows; round burned)
+```
+
+**BLOCKED auto-promotion rationalizations:** "I'll let the agent figure out it lacks the tool" / "Analyst handles audit by name, the markers don't override" / "Execution-time error is fine; the agent will surface it" / "Skipping the scan saves the orchestrator one step".
+
+**Why:** Tool-inventory mismatch costs one full audit round; verifying pre-launch is O(1) while re-launch is O(N) on row count. The delegation-time scan converts the Bash+Read specialist mandate from a recall-it-yourself principle into a draft-time check the orchestrator runs every cycle.
+
+Origin: 2026-04-27 /redteam Round 3 — analyst FORWARDED 16 of 22 verification rows; Bash-equipped specialist re-ran Round 3 and converted all 16 to VERIFIED in one shard. Reproduction: 2026-05-09 stale-workspace disposition Round 3 — analyst (Read/Grep/Glob) FORWARDED 5 rows on phantom-citation chain; re-launched as general-purpose caught the HIGH-class phantom in `.session-notes:20`. Per `journal/.pending/0003` § "Tool-inventory matters for closure-parity verification" + `journal/.pending/0004:87`. Compiled-language audit toolkits substitute their own introspection commands (`cargo nextest`, `cargo doc`, `grep` on Rust source) for the Python introspection set.
 
 ## MUST: Worktree Isolation for Compiling Agents
 

@@ -1,361 +1,187 @@
 ---
 skill: nexus-auth-plugin
-description: NexusAuthPlugin unified authentication with JWT, RBAC, tenant isolation, rate limiting, and audit logging
+description: Unified authentication architecture with JWT, RBAC, tenant isolation, rate limiting, and audit logging
 priority: HIGH
 tags: [nexus, auth, jwt, rbac, tenant, rate-limit, audit, sso]
 ---
 
-# NexusAuthPlugin - Unified Authentication
+# Nexus Auth Architecture
 
-Complete auth package combining JWT, RBAC, rate limiting, tenant isolation, and audit logging into a single plugin.
+## Overview
 
-**Security Defaults (v1.3.0)**:
+Nexus authentication is built as a unified plugin that assembles JWT verification, RBAC, tenant isolation, rate limiting, and audit logging into a single composable unit. The plugin manages middleware ordering automatically, preventing common security misconfigurations.
 
-- JWTConfig enforces **32-char minimum** for HS\* secrets (`ValueError` if shorter)
-- RBAC errors return generic "Forbidden" (no role/permission leakage)
-- SSO errors are sanitized (status-only to client, details logged server-side)
-- `create_access_token()` filters reserved claims from `extra_claims`
+## When to Use
 
-## Quick Reference
+- Any production Nexus deployment requiring authentication
+- SaaS applications with multi-tenant data isolation
+- APIs with role-based or permission-based access control
+- Applications integrating with SSO providers (Auth0, Okta, Azure AD, Google)
+- Compliance-sensitive deployments requiring audit trails
 
-```python
-import os
-from nexus import Nexus
-from nexus.auth.plugin import NexusAuthPlugin
-from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
+## Architecture
+
+### Component Assembly
+
+The auth plugin assembles independent security components into a correctly-ordered middleware stack:
+
+```
+Auth Plugin
+    |
+    +-- JWT Component (token verification, user resolution)
+    +-- RBAC Component (role-to-permission mapping)
+    +-- Tenant Component (tenant isolation enforcement)
+    +-- Rate Limit Component (request throttling)
+    +-- Audit Component (request/response logging)
 ```
 
-## Factory Methods (Recommended)
+### Middleware Execution Order
 
-### Basic Auth (JWT + Audit)
+The plugin installs middleware in a fixed, security-correct order:
 
-```python
-auth = NexusAuthPlugin.basic_auth(
-    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),  # Must be >= 32 chars for HS256
-    audit=AuditConfig(backend="logging"),  # Optional, defaults to logging
-)
-app = Nexus()
-app.add_plugin(auth)
+```
+Request -> Audit -> Rate Limit -> JWT -> Tenant -> RBAC -> Handler
+Response <- Audit <- Rate Limit <- JWT <- Tenant <- RBAC <- Handler
 ```
 
-### SaaS App (JWT + RBAC + Tenant + Audit)
+1. **Audit** (outermost) -- logs all requests including rejected ones
+2. **Rate Limit** -- blocks abuse before incurring authentication overhead
+3. **JWT** -- authenticates and populates user context
+4. **Tenant** -- resolves tenant from authenticated user's claims
+5. **RBAC** (innermost) -- checks permissions against resolved roles
 
-```python
-auth = NexusAuthPlugin.saas_app(
-    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
-    rbac={
-        "admin": ["*"],
-        "user": ["read:*", "write:own"],
-    },
-    tenant_isolation=TenantConfig(
-        jwt_claim="tenant_id",
-        admin_role="super_admin",
-    ),
-    rbac_default_role="user",
-)
-```
+## Configuration Tiers
 
-### Enterprise (All Features)
+Three factory methods provide escalating feature sets:
 
-```python
-auth = NexusAuthPlugin.enterprise(
-    jwt=JWTConfig(
-        secret=os.environ["JWT_SECRET"],  # >= 32 chars
-        issuer="https://your-domain.com",
-        audience="your-api",
-    ),
-    rbac={
-        "super_admin": ["*"],
-        "admin": {"permissions": ["admin:*"], "inherits": ["editor"]},
-        "editor": ["read:*", "write:*"],
-        "viewer": ["read:*"],
-    },
-    rate_limit=RateLimitConfig(
-        requests_per_minute=100,
-        burst_size=20,
-        backend="redis",
-        redis_url="redis://localhost:6379",
-    ),
-    tenant_isolation=TenantConfig(),
-    audit=AuditConfig(backend="logging", log_request_body=True),
-)
-```
+| Factory    | JWT | RBAC | Tenant | Rate Limit | Audit         |
+| ---------- | --- | ---- | ------ | ---------- | ------------- |
+| Basic auth | Yes | No   | No     | No         | Yes (default) |
+| SaaS app   | Yes | Yes  | Yes    | No         | Yes (default) |
+| Enterprise | Yes | Yes  | Yes    | Yes        | Yes           |
 
-## Component Configurations
+## JWT Configuration
 
-### JWTConfig
+### Signing Algorithms
 
-```python
-from nexus.auth import JWTConfig
+| Algorithm          | Use Case                        | Key Material                                   |
+| ------------------ | ------------------------------- | ---------------------------------------------- |
+| HS256 (symmetric)  | Development, simple deployments | Shared secret (minimum 32 characters enforced) |
+| RS256 (asymmetric) | Production, SSO integration     | Public/private key pair or JWKS URL            |
 
-# Symmetric (HS256) - secret MUST be >= 32 chars
-jwt = JWTConfig(
-    secret=os.environ["JWT_SECRET"],   # REQUIRED for HS*; >= 32 chars or ValueError
-    algorithm="HS256",                  # Default
-    exempt_paths=["/health", "/docs", "/auth/login"],
-    verify_exp=True,
-    leeway=0,                           # Seconds tolerance for exp/nbf
-)
-
-# Asymmetric (RS256) - Production
-jwt = JWTConfig(
-    algorithm="RS256",
-    public_key="-----BEGIN PUBLIC KEY-----...",
-    private_key="-----BEGIN PRIVATE KEY-----...",  # For token creation
-    issuer="https://auth.example.com",
-    audience="https://api.example.com",
-)
-
-# JWKS (SSO providers - Auth0, Okta, Azure AD)
-jwt = JWTConfig(
-    algorithm="RS256",
-    jwks_url="https://your-tenant.auth0.com/.well-known/jwks.json",
-    jwks_cache_ttl=3600,
-    issuer="https://your-tenant.auth0.com/",
-)
-```
-
-**Token Extraction Priority:**
+### Token Extraction Priority
 
 1. `Authorization: Bearer <token>` header
-2. Cookie (if `token_cookie` configured)
-3. Query parameter (if `token_query_param` configured)
+2. Cookie (if configured)
+3. Query parameter (if configured)
 
-### RBAC Roles
+### SSO Integration
 
-```python
-# Simple format: role -> list of permissions
-rbac = {
-    "admin": ["*"],
-    "editor": ["read:*", "write:articles", "write:comments"],
-    "viewer": ["read:*"],
-}
+JWKS (JSON Web Key Set) support enables automatic key rotation with SSO providers. The JWKS response is cached with a configurable TTL. Compatible with:
 
-# Full format with inheritance
-rbac = {
-    "super_admin": {"permissions": ["*"], "description": "Full access"},
-    "admin": {
-        "permissions": ["admin:*"],
-        "inherits": ["editor"],  # Gets all editor permissions too
-    },
-    "editor": {
-        "permissions": ["write:*"],
-        "inherits": ["viewer"],
-    },
-    "viewer": {"permissions": ["read:*"]},
-}
-```
+- Auth0
+- Azure AD
+- Google
+- Okta
+- Any provider publishing a `.well-known/jwks.json` endpoint
 
-**Permission Wildcards:**
+### Path Exemption
 
-- `"*"` - matches everything
-- `"read:*"` - matches `read:users`, `read:articles`, etc.
-- `"*:users"` - matches `read:users`, `write:users`, etc.
+Certain paths (health checks, documentation, login endpoints) can be exempted from JWT verification.
 
-### TenantConfig
+## RBAC Configuration
 
-```python
-from nexus.auth.tenant.config import TenantConfig
+### Role Definitions
 
-tenant = TenantConfig(
-    tenant_id_header="X-Tenant-ID",      # Header for explicit tenant
-    jwt_claim="tenant_id",               # JWT claim name
-    fallback_to_user_org=True,           # Look up from user record
-    allow_admin_override=True,           # Super admins access any tenant
-    admin_role="super_admin",            # SINGULAR string, not list
-    exclude_paths=["/health", "/docs"],
-)
-```
+Roles map to permission lists. Two formats are supported:
 
-### RateLimitConfig
+**Simple format**: Role name maps to a list of permission strings.
 
-```python
-from nexus.auth.rate_limit.config import RateLimitConfig
+**Full format**: Role name maps to an object with permissions and optional inheritance.
 
-rate_limit = RateLimitConfig(
-    requests_per_minute=100,
-    burst_size=20,
-    backend="memory",                    # or "redis"
-    redis_url="redis://localhost:6379",  # Required if backend="redis"
-    route_limits={
-        "/api/chat/*": {"requests_per_minute": 30},
-        "/api/auth/login": {"requests_per_minute": 10, "burst_size": 5},
-        "/health": None,                 # Disable for this route
-    },
-    include_headers=True,                # Add X-RateLimit-* headers
-    fail_open=True,                      # Allow when backend fails
-)
-```
+### Permission Wildcards
 
-### AuditConfig
+| Pattern     | Matches                                           |
+| ----------- | ------------------------------------------------- |
+| `"*"`       | Everything                                        |
+| `"read:*"`  | `read:users`, `read:articles`, etc.               |
+| `"*:users"` | `read:users`, `write:users`, `delete:users`, etc. |
 
-```python
-from nexus.auth.audit.config import AuditConfig
+### Role Inheritance
 
-audit = AuditConfig(
-    backend="logging",                   # or "dataflow"
-    log_level="INFO",
-    log_request_body=False,
-    log_response_body=False,
-    max_body_log_size=10 * 1024,         # 10KB
-    exclude_paths=["/health", "/metrics"],
-    exclude_methods=["OPTIONS"],
-    redact_headers=["Authorization", "Cookie", "X-API-Key"],
-    redact_fields=["password", "token", "secret", "api_key"],
-)
-```
+Roles can inherit permissions from other roles, creating a permission hierarchy without duplication.
 
-## Nexus Dependencies
+### Per-Handler Authorization
 
-```python
-from nexus.http import Depends
-from nexus.auth.dependencies import (
-    get_current_user,
-    get_optional_user,
-    RequireRole,
-    RequirePermission,
-)
+Individual handlers can require specific roles or permissions. The auth system checks both:
 
-# Get authenticated user (401 if not authenticated)
-@app.get("/profile")
-async def profile(user=Depends(get_current_user)):
-    return {"user_id": user.user_id}
+1. Direct permissions from the JWT `permissions` claim
+2. RBAC-resolved permissions from the user's roles
 
-# Optional user (None if not authenticated)
-@app.get("/public")
-async def public(user=Depends(get_optional_user)):
-    return {"authenticated": user is not None}
+## Tenant Isolation
 
-# Require specific role
-@app.get("/admin")
-async def admin(user=Depends(RequireRole("admin", "super_admin"))):
-    return {"admin": True}
+### Tenant Resolution
 
-# Require specific permission
-@app.delete("/articles/{id}")
-async def delete(user=Depends(RequirePermission("delete:articles"))):
-    return {"deleted": True}
-```
+Tenant ID is resolved from multiple sources in priority order:
 
-## Middleware Execution Order
+1. JWT claim (e.g., `tenant_id` in the token payload)
+2. HTTP header (e.g., `X-Tenant-ID`)
+3. User organization lookup (fallback)
 
-NexusAuthPlugin installs middleware in the correct order automatically:
+### Admin Override
 
-```
-Request -> Audit -> RateLimit -> JWT -> Tenant -> RBAC -> Handler
-Response <- Audit <- RateLimit <- JWT <- Tenant <- RBAC <- Handler
-```
+A designated admin role can access data across all tenants, bypassing isolation checks.
 
-1. **Audit** (outermost) - Logs all requests/responses
-2. **RateLimit** - Blocks before authentication overhead
-3. **JWT** - Authenticates and populates `request.state.user`
-4. **Tenant** - Resolves tenant from JWT claims
-5. **RBAC** (innermost) - Resolves permissions from roles
+## Rate Limiting
 
-## Common Gotchas
+### Configuration Options
 
-### Parameter Name Mismatches
+| Setting             | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| Requests per minute | Sustained rate limit                               |
+| Burst size          | Short-term allowance above sustained rate          |
+| Backend             | In-memory (single instance) or Redis (distributed) |
+| Per-route limits    | Different rates for different endpoints            |
+| Response headers    | Standard `X-RateLimit-*` headers                   |
+| Fail-open           | Allow requests when backend is unavailable         |
 
-| Wrong           | Correct        | Component    |
-| --------------- | -------------- | ------------ |
-| `secret_key`    | `secret`       | JWTConfig    |
-| `exclude_paths` | `exempt_paths` | JWTConfig    |
-| `admin_roles`   | `admin_role`   | TenantConfig |
+Specific routes can have rate limiting disabled entirely (e.g., health endpoints).
 
-### PEP 563 Breaks Nexus Injection
+## Audit Logging
 
-```python
-# NEVER do this in files with Nexus dependencies:
-from __future__ import annotations  # BREAKS INJECTION
+### Configuration Options
 
-# Nexus cannot inject Request when annotations are strings
-```
+| Setting          | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| Backend          | Structured logging or DataFlow persistence         |
+| Body logging     | Optionally log request/response bodies (PII risk)  |
+| Path exclusion   | Skip high-frequency endpoints                      |
+| Header redaction | Strip sensitive headers (Authorization, Cookie)    |
+| Field redaction  | Remove sensitive fields (password, token, api_key) |
 
-### RBAC Requires JWT
+## Security Defaults
 
-```python
-# This will raise ValueError:
-auth = NexusAuthPlugin(
-    rbac={"admin": ["*"]},  # Error: RBAC requires JWT
-)
+- HS256 secrets must be at least 32 characters (enforced with validation error)
+- RBAC errors return generic "Forbidden" responses (no role or permission leakage)
+- SSO errors are sanitized (status-only to client, details logged server-side)
+- Token creation filters reserved JWT claims from extra claims
+- CORS credentials default to disabled (safe with wildcard origins)
 
-# Correct:
-auth = NexusAuthPlugin(
-    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),  # >= 32 chars
-    rbac={"admin": ["*"]},
-)
-```
+## Common Pitfalls
 
-### RequirePermission Checks Both Sources
+| Issue                          | Root Cause                                | Resolution                                           |
+| ------------------------------ | ----------------------------------------- | ---------------------------------------------------- |
+| Wrong secret parameter name    | Configuration uses `secret_key`           | Use `secret`                                         |
+| Wrong path exemption parameter | Configuration uses `exclude_paths`        | Use `exempt_paths`                                   |
+| Wrong admin role parameter     | Configuration uses `admin_roles` (plural) | Use `admin_role` (singular string)                   |
+| Dependency injection fails     | PEP 563 future annotations enabled        | Remove `from __future__ import annotations`          |
+| RBAC without JWT               | RBAC requires JWT for user context        | Always configure JWT when using RBAC                 |
+| Permission check incomplete    | Only checking JWT direct permissions      | Use permission dependency (checks both JWT and RBAC) |
 
-`RequirePermission` checks:
-
-1. User's direct permissions (from JWT `permissions` claim)
-2. RBAC-resolved permissions (from roles via RBACMiddleware)
-
-If using RBAC, ensure RBACMiddleware is installed (NexusAuthPlugin does this automatically).
-
-## Token Creation
-
-```python
-# Get JWTMiddleware instance
-jwt_middleware = ...
-
-# Create access token
-access_token = jwt_middleware.create_access_token(
-    user_id="user123",
-    email="user@example.com",
-    roles=["editor"],
-    permissions=["write:articles"],
-    tenant_id="tenant456",
-    expires_minutes=30,
-)
-
-# Create refresh token
-refresh_token = jwt_middleware.create_refresh_token(
-    user_id="user123",
-    tenant_id="tenant456",
-    expires_days=7,
-)
-```
-
-## SSO Provider Examples
-
-### Auth0
-
-```python
-jwt = JWTConfig(
-    algorithm="RS256",
-    jwks_url="https://YOUR_DOMAIN.auth0.com/.well-known/jwks.json",
-    issuer="https://YOUR_DOMAIN.auth0.com/",
-    audience="YOUR_API_IDENTIFIER",
-)
-```
-
-### Azure AD
-
-```python
-jwt = JWTConfig(
-    algorithm="RS256",
-    jwks_url="https://login.microsoftonline.com/TENANT_ID/discovery/v2.0/keys",
-    issuer="https://login.microsoftonline.com/TENANT_ID/v2.0",
-    audience="YOUR_CLIENT_ID",
-)
-```
-
-### Google
-
-```python
-jwt = JWTConfig(
-    algorithm="RS256",
-    jwks_url="https://www.googleapis.com/oauth2/v3/certs",
-    issuer="https://accounts.google.com",
-    audience="YOUR_CLIENT_ID",
-)
-```
+See language-specific variant for implementation details and code examples.
 
 ## Related Skills
 
 - [nexus-enterprise-features](nexus-enterprise-features.md) - Enterprise deployment patterns
-- [nexus-security-best-practices](nexus-security-best-practices.md) - Security hardening
-- [nexus-production-deployment](nexus-production-deployment.md) - Production setup
+- [nexus-k8s-probes](nexus-k8s-probes.md) - Security middleware and probes
+- [nexus-quickstart](nexus-quickstart.md) - Basic setup

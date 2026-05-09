@@ -1,6 +1,6 @@
 ---
 name: deployment-git
-description: "Kailash deployment + Git: PyPI publish, CI/CD, docs deployment, TestPyPI, wheels, version bump, branching, multi-package coordination."
+description: "Kailash deployment + Git — PyPI publish, CI/CD, wheels, version bumps, multi-package."
 ---
 
 # SDK Release & Git Workflows

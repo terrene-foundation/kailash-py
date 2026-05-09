@@ -12,7 +12,7 @@ Extracted reference material for cc-artifacts compliance.
 
 - **pattern-expert**: Core SDK workflow patterns for Kaizen integration
 - **testing-specialist**: 3-tier testing strategy for agent validation
-- **framework-advisor**: Choose between Core/DataFlow/Nexus/Kaizen
+- **`decide-framework` skill**: Choose between Core/DataFlow/Nexus/Kaizen
 - **mcp-specialist**: MCP integration and tool calling patterns
 - **nexus-specialist**: Deploy Kaizen agents via multi-channel platform
 

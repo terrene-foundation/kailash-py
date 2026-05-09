@@ -32,7 +32,7 @@ from kailash.runtime import LocalRuntime
 workflow = WorkflowBuilder()
 
 # STDIO: Launch MCP server as subprocess
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get weather for NYC"}],
@@ -50,7 +50,6 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 **When to Use STDIO:**
-
 - Local development and testing
 - Desktop applications
 - CLI tools
@@ -60,7 +59,7 @@ results, run_id = runtime.execute(workflow.build())
 ### HTTP Transport (Production Deployments)
 
 ```python
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search documents"}],
@@ -79,7 +78,6 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```
 
 **When to Use HTTP:**
-
 - Production deployments
 - Microservices architecture
 - Cloud-hosted MCP servers
@@ -89,7 +87,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 ### WebSocket Transport (Real-Time Communication)
 
 ```python
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Monitor system metrics"}],
@@ -108,7 +106,6 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```
 
 **When to Use WebSocket:**
-
 - Real-time streaming data
 - Long-running operations with progress updates
 - Bidirectional communication
@@ -119,7 +116,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 ### Multiple Transports in One Workflow
 
 ```python
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Analyze weather and documents"}],
@@ -150,7 +147,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 
 ```python
 # HTTP with retry logic
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search"}],
@@ -189,7 +186,7 @@ transport_config = {
 
 env = os.getenv("ENV", "development")
 
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Process data"}],
@@ -202,15 +199,15 @@ workflow.add_node("PythonCodeNode", "agent", {
 
 ## Transport Comparison
 
-| Feature            | STDIO           | HTTP        | WebSocket  |
-| ------------------ | --------------- | ----------- | ---------- |
-| **Latency**        | Lowest          | Medium      | Low-Medium |
-| **Scalability**    | Single machine  | High        | Medium     |
-| **State**          | Process-bound   | Stateless   | Stateful   |
-| **Best For**       | Local dev       | Production  | Real-time  |
-| **Complexity**     | Low             | Medium      | High       |
-| **Load Balancing** | No              | Yes         | Limited    |
-| **Reconnection**   | Process restart | Per-request | Automatic  |
+| Feature | STDIO | HTTP | WebSocket |
+|---------|-------|------|-----------|
+| **Latency** | Lowest | Medium | Low-Medium |
+| **Scalability** | Single machine | High | Medium |
+| **State** | Process-bound | Stateless | Stateful |
+| **Best For** | Local dev | Production | Real-time |
+| **Complexity** | Low | Medium | High |
+| **Load Balancing** | No | Yes | Limited |
+| **Reconnection** | Process restart | Per-request | Automatic |
 
 ## Common Patterns
 
@@ -238,7 +235,7 @@ config = prod_config if os.getenv("ENV") == "production" else dev_config
 ### Pattern 2: Graceful Fallback
 
 ```python
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get data"}],
@@ -257,7 +254,7 @@ workflow.add_node("PythonCodeNode", "agent", {
         }
     ]
 })
-# PythonCodeNode automatically tries fallback if primary fails
+# IterativeLLMAgentNode automatically tries fallback if primary fails
 ```
 
 ## Troubleshooting
@@ -267,7 +264,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```python
 # Issue: Process not found
 # Solution: Use absolute paths
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "mcp_servers": [{
         "name": "server",
         "transport": "stdio",
@@ -283,7 +280,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```python
 # Issue: Connection timeout
 # Solution: Increase timeout and add retry
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "mcp_servers": [{
         "name": "server",
         "transport": "http",
@@ -302,7 +299,7 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```python
 # Issue: Connection drops
 # Solution: Configure reconnection
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "mcp_servers": [{
         "name": "server",
         "transport": "websocket",
@@ -336,7 +333,6 @@ workflow.add_node("PythonCodeNode", "agent", {
 ## When to Escalate to Subagent
 
 Use `mcp-specialist` subagent when:
-
 - Implementing custom MCP server with multiple transports
 - Troubleshooting transport-specific connection issues
 - Configuring production load balancing and failover
@@ -357,7 +353,7 @@ Use `mcp-specialist` subagent when:
 
 ## Version Notes
 
-- **v0.9.25+**: Real MCP tool execution in PythonCodeNode
+- **v0.9.25+**: Real MCP tool execution in IterativeLLMAgentNode
 - **v0.6.5+**: Enhanced MCP transport support
 
 <!-- Trigger Keywords: MCP transport, stdio, websocket, HTTP transport, mcp connection, mcp server setup, mcp stdio, mcp http, mcp websocket, transport configuration, mcp deployment -->

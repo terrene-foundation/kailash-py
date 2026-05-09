@@ -1,6 +1,6 @@
 ---
 name: kailash-align
-description: "Kailash Align — MANDATORY for LLM fine-tuning/alignment/serving. 12 methods (DPO, RLHF, LoRA, GRPO, SFT), GGUF, Ollama/vLLM. Raw TRL/PEFT BLOCKED."
+description: "Kailash Align — MANDATORY for LLM fine-tuning/alignment/serving. Raw TRL/PEFT BLOCKED."
 ---
 
 # Kailash Align - LLM Fine-Tuning & Alignment

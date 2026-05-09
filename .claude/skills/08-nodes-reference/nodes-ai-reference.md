@@ -1,14 +1,106 @@
 ---
 name: nodes-ai-reference
-description: "REMOVED — referenced nonexistent kailash.nodes.ai module and phantom node types. See 08-nodes-reference/SKILL.md for actual node categories."
+description: "AI/LLM nodes reference (OpenAI, Anthropic, Ollama, Cohere). Use when asking 'LLM node', 'AI nodes', 'OpenAI', 'Anthropic', 'embeddings', or 'iterative agent'."
 ---
 
-# AI Nodes Reference — REMOVED
+# AI & LLM Nodes Reference
 
-This file previously referenced `kailash.nodes.ai` which does not exist, along with phantom node types (LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, etc.). It has been emptied to prevent ImportError in generated code.
+Complete reference for AI and machine learning nodes.
 
-For AI/LLM integration, see:
+> **Skill Metadata**
+> Category: `nodes`
+> Priority: `HIGH`
+> SDK Version: `0.9.25+`
+> Related Skills: [`nodes-quick-index`](nodes-quick-index.md)
+> Related Subagents: `pattern-expert` (AI workflows)
 
-- `skills/08-nodes-reference/SKILL.md` — actual node reference by category
-- `skills/04-kaizen/SKILL.md` — Kaizen agent framework (the correct way to use LLMs)
-- `skills/08-nodes-reference/nodes-quick-index.md` — node lookup index
+## Quick Reference
+
+```python
+from kailash.nodes.ai import (
+    LLMAgentNode,
+    IterativeLLMAgentNode,  # ⭐ Real MCP execution
+    EmbeddingGeneratorNode,
+    A2AAgentNode,
+    SelfOrganizingAgentNode
+)
+```
+
+## Core LLM Nodes
+
+### LLMAgentNode
+```python
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": os.environ["LLM_MODEL"],
+    "prompt": "Explain quantum computing",
+    "temperature": 0.7,
+    "max_tokens": 1000
+})
+```
+
+### IterativeLLMAgentNode ⭐
+```python
+# Advanced agent with real MCP tool execution
+workflow.add_node("IterativeLLMAgentNode", "iterative_agent", {
+    "provider": "openai",
+    "model": os.environ["LLM_MODEL"],
+    "messages": [{"role": "user", "content": "Get weather and analyze trends"}],
+    "mcp_servers": [{
+        "name": "weather",
+        "transport": "stdio",
+        "command": "python",
+        "args": ["-m", "weather_mcp_server"]
+    }],
+    "max_iterations": 5,
+    "auto_discover_tools": True,
+    "auto_execute_tools": True
+})
+```
+
+## Embeddings
+
+### EmbeddingGeneratorNode
+```python
+workflow.add_node("EmbeddingGeneratorNode", "embedder", {
+    "provider": "openai",
+    "model": "text-embedding-3-large",
+    "input_text": "This is a sample document",
+    "operation": "embed_text"
+})
+```
+
+## Multi-Agent Nodes
+
+### A2AAgentNode
+```python
+workflow.add_node("A2AAgentNode", "agent", {
+    "agent_id": "researcher_001",
+    "provider": "openai",
+    "model": os.environ["LLM_MODEL"],
+    "messages": [{"role": "user", "content": "Analyze data"}],
+    "memory_pool": "memory_pool_ref"
+})
+```
+
+### SelfOrganizingAgentNode
+```python
+workflow.add_node("SelfOrganizingAgentNode", "agent", {
+    "agent_id": "adaptive_agent_001",
+    "capabilities": ["data_analysis", "machine_learning"],
+    "team_context": {"team_id": "research_team_1"}
+})
+```
+
+## Related Skills
+
+- **Node Index**: [`nodes-quick-index`](nodes-quick-index.md)
+- **MCP Integration**: [`mcp-integration-guide`](../../01-core-sdk/mcp-integration-guide.md)
+
+## Documentation
+
+
+<!-- Trigger Keywords: LLM node, AI nodes, OpenAI, Anthropic, embeddings, iterative agent, LLMAgentNode, IterativeLLMAgentNode -->

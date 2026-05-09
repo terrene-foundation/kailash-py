@@ -20,7 +20,7 @@ Complete reference for file I/O and data processing nodes.
 from kailash.nodes.data import (
     CSVReaderNode, CSVWriterNode,
     JSONReaderNode, JSONWriterNode,
-    TextReaderNode,
+    TextReaderNode, ExcelReaderNode,
     DocumentProcessorNode  # ⭐ Multi-format support
 )
 ```
@@ -28,7 +28,6 @@ from kailash.nodes.data import (
 ## CSV Nodes
 
 ### CSVReaderNode
-
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -41,7 +40,6 @@ workflow.add_node("CSVReaderNode", "reader", {
 ```
 
 ### CSVWriterNode
-
 ```python
 workflow.add_node("CSVWriterNode", "writer", {
     "file_path": "output/results.csv",
@@ -53,7 +51,6 @@ workflow.add_node("CSVWriterNode", "writer", {
 ## JSON Nodes
 
 ### JSONReaderNode
-
 ```python
 workflow.add_node("JSONReaderNode", "json_reader", {
     "file_path": "config/settings.json",
@@ -62,7 +59,6 @@ workflow.add_node("JSONReaderNode", "json_reader", {
 ```
 
 ### JSONWriterNode
-
 ```python
 workflow.add_node("JSONWriterNode", "json_writer", {
     "file_path": "output/data.json",
@@ -74,7 +70,6 @@ workflow.add_node("JSONWriterNode", "json_writer", {
 ## Document Processing
 
 ### DocumentProcessorNode ⭐
-
 ```python
 # Multi-format document processing (PDF, DOCX, MD, HTML, RTF, TXT)
 workflow.add_node("DocumentProcessorNode", "doc_processor", {
@@ -90,7 +85,6 @@ workflow.add_node("DocumentProcessorNode", "doc_processor", {
 ## Text Nodes
 
 ### TextReaderNode
-
 ```python
 workflow.add_node("TextReaderNode", "text_reader", {
     "file_path": "data/content.txt",
@@ -98,8 +92,14 @@ workflow.add_node("TextReaderNode", "text_reader", {
 })
 ```
 
-<!-- ExcelReaderNode removed — phantom node, does not exist in SDK. Use PythonCodeNode with openpyxl for Excel reading. -->
+## Excel Nodes
 
+### ExcelReaderNode
+```python
+workflow.add_node("ExcelReaderNode", "excel_reader", {
+    "file_path": "data/sales.xlsx",
+    "sheet_name": "Q4_2024"
+})
 ```
 
 ## Related Skills
@@ -110,5 +110,5 @@ workflow.add_node("TextReaderNode", "text_reader", {
 
 ## Documentation
 
+
 <!-- Trigger Keywords: CSV node, JSON node, Excel, data nodes, file reader, data I/O, CSVReaderNode, JSONReaderNode -->
-```

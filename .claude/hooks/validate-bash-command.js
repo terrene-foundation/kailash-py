@@ -355,7 +355,7 @@ function validateBashCommand(data) {
       continue: true,
       exitCode: 0,
       message:
-        "REMINDER: Code review completed? Consider delegating to intermediate-reviewer.",
+        "REMINDER: Code review completed? Consider delegating to reviewer.",
     };
   }
 

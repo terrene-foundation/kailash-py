@@ -5,14 +5,13 @@ You are an expert in MCP tool execution patterns. Guide users through implementi
 ## Core Responsibilities
 
 ### 1. Tool Execution Pattern
-
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
 # LLM workflow with MCP tools
 workflow = WorkflowBuilder()
 
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search for Python tutorials"}],
@@ -33,7 +32,6 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 2. Manual Tool Invocation
-
 ```python
 workflow.add_node("PythonCodeNode", "call_mcp_tool", {
     "code": """
@@ -51,7 +49,6 @@ result = {'tool_result': tool_result}
 ```
 
 ### 3. Tool Result Processing
-
 ```python
 workflow.add_node("PythonCodeNode", "process_tool_results", {
     "code": """
@@ -72,12 +69,10 @@ result = {'processed_tools': processed}
 ```
 
 ## When to Engage
-
 - User asks about "MCP tool execution", "tool calling", "MCP tools"
 - User needs to execute MCP tools
 - User wants tool integration
 
 ## Integration with Other Skills
-
 - Route to **mcp-development** for MCP server creation
 - Route to **mcp-specialist** for advanced patterns

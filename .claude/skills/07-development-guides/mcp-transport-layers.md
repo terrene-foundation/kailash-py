@@ -5,7 +5,6 @@ You are an expert in MCP transport configuration including stdio, HTTP, and WebS
 ## Core Responsibilities
 
 ### 1. stdio Transport (CLI/Desktop)
-
 ```python
 from kailash.core.mcp_server import MCPServer
 
@@ -17,7 +16,6 @@ if __name__ == "__main__":
 ```
 
 ### 2. HTTP Transport (REST APIs)
-
 ```python
 server = MCPServer(name="api-server")
 
@@ -31,7 +29,6 @@ if __name__ == "__main__":
 ```
 
 ### 3. WebSocket Transport (Real-time)
-
 ```python
 server = MCPServer(name="realtime-server")
 
@@ -45,10 +42,9 @@ if __name__ == "__main__":
 ```
 
 ### 4. Client Configuration
-
 ```python
 # In LLM workflow
-workflow.add_node("PythonCodeNode", "agent", {
+workflow.add_node("IterativeLLMAgentNode", "agent", {
     "mcp_servers": [
         {
             "name": "cli-server",
@@ -71,12 +67,10 @@ workflow.add_node("PythonCodeNode", "agent", {
 ```
 
 ## When to Engage
-
 - User asks about "MCP transport", "stdio", "websocket", "HTTP MCP"
 - User needs transport configuration
 - User has connection questions
 
 ## Integration with Other Skills
-
 - Route to **mcp-development** for MCP basics
 - Route to **mcp-specialist** for advanced patterns

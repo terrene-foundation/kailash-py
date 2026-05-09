@@ -31,13 +31,13 @@ Each verb is independently invocable. Each stays ≤ 10 invariants per `rules/au
 
 - **What**: single artifact validation sweep when `/codify` proposes new rules / skills / agents
 - **When**: `/codify` emission step
-- **Invariants (≤ 4)**: priority-scope pair consistency (`rules/rule-authoring.md` Rule 7), slot-marker discipline (`rules/rule-authoring.md` Rule 8), tool-name translation (CC `Read` ↔ Codex filesystem ↔ Gemini native), cross-CLI parity contract satisfiable
+- **Invariants (≤ 5)**: priority-scope pair consistency (`rules/rule-authoring.md` Rule 7), slot-marker discipline (`rules/rule-authoring.md` Rule 8), tool-name translation (CC `Read` ↔ Codex filesystem ↔ Gemini native), cross-CLI parity contract satisfiable, probe-coverage on harness/fixture changes (`rules/probe-driven-verification.md` MUST-4 — semantic assertions probe-driven, structural keep regex)
 
 ### `cli-orchestrator.audits` — parallel architect dispatch
 
 - **What**: dispatch `cc-architect`, `codex-architect`, `gemini-architect` in the SAME TURN via the Task tool with `run_in_background: true`. Aggregate outputs at turn end
 - **When**: `/cli-audit` (Phase E5) — the dispatch entry point
-- **Invariants (≤ 3 per architect)**: architect receives full parity context; architect receives the subset of `cli_emit_exclusions` that applies to its CLI; architect reports back in structured JSON for aggregation
+- **Invariants (≤ 4 per architect)**: architect receives full parity context; architect receives the subset of `cli_emit_exclusions` that applies to its CLI; architect reports back in structured JSON for aggregation; architect brief includes probe-coverage check requirement on its CLI's harness/fixture surfaces (`rules/probe-driven-verification.md` MUST-4)
 - **Dispatch contract (spec v4 §6.2)**: sequential dispatch is BLOCKED. Launch all three architects with `run_in_background: true` in a single parent turn per `rules/agents.md` § Parallel Execution
 
 ### `cli-orchestrator.orchestrates` — matrix emission

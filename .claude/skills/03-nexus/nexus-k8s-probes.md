@@ -1,78 +1,119 @@
-# Nexus K8s Probes + OpenAPI + Security Middleware
+---
+skill: nexus-k8s-probes
+description: Kubernetes probes, OpenAPI generation, security middleware, and deployment presets
+priority: MEDIUM
+tags: [nexus, kubernetes, probes, openapi, security, middleware, csrf]
+---
 
-## K8s Probe Endpoints
+# Nexus Kubernetes Probes, OpenAPI, and Security Middleware
 
-```python
-from nexus import ProbeManager, ProbeState
+## Overview
 
-probe_mgr = ProbeManager()
-probe_mgr.install(app)  # registers GET /healthz, /readyz, /startup
+Nexus provides Kubernetes-native health probes, automatic OpenAPI specification generation from handler type information, security header middleware, CSRF protection, and deployment presets that bundle middleware configurations for common scenarios.
 
-# State management (thread-safe, atomic)
-probe_mgr.mark_ready()             # STARTING -> READY
-probe_mgr.mark_draining()          # READY -> DRAINING
-probe_mgr.mark_failed("db down")   # any -> FAILED
+## When to Use
+
+- Deploying Nexus in Kubernetes with readiness/liveness/startup probes
+- Generating OpenAPI documentation from registered handlers
+- Hardening HTTP responses with security headers
+- Protecting against CSRF attacks in browser-facing deployments
+- Selecting a pre-configured middleware stack for a deployment scenario
+
+## Kubernetes Probes
+
+### Probe Endpoints
+
+| Endpoint   | Purpose                                    | Kubernetes Probe Type |
+| ---------- | ------------------------------------------ | --------------------- |
+| `/healthz` | Is the application alive?                  | Liveness probe        |
+| `/readyz`  | Is the application ready to serve traffic? | Readiness probe       |
+| `/startup` | Has the application finished starting?     | Startup probe         |
+
+### Probe State Machine
+
+Probes follow a state machine with thread-safe, atomic transitions:
+
 ```
+STARTING --> READY --> DRAINING
+    |          |          |
+    +----------+----------+
+               |
+               v
+            FAILED
+```
+
+| State    | Liveness | Readiness | Startup |
+| -------- | -------- | --------- | ------- |
+| Starting | 200      | 503       | 503     |
+| Ready    | 200      | 200       | 200     |
+| Draining | 200      | 503       | 200     |
+| Failed   | 503      | 503       | 503     |
 
 ### Readiness Callbacks
 
-```python
-probe_mgr.add_readiness_check(lambda: db.is_connected())
-```
+Custom readiness checks can be registered to verify that dependencies (databases, caches, external services) are available before the application accepts traffic.
 
 ## OpenAPI Generation
 
-```python
-from nexus import OpenApiGenerator
+Nexus can automatically generate an OpenAPI 3.0.3 specification from registered handlers:
 
-gen = OpenApiGenerator(title="My API", version="1.0.0")
-gen.add_handler("/process", handler_fn)  # auto-derives schema from type hints
-spec = gen.generate()  # OpenAPI 3.0.3 dict
-# Auto-endpoint: GET /openapi.json
-```
+- Schema derived from handler parameter type annotations
+- Endpoint exposed at `/openapi.json`
+- Includes handler descriptions, parameter types, and defaults
+- Title and version configurable
 
-## Security Headers Middleware
+## Security Middleware
 
-```python
-from nexus.middleware.security_headers import SecurityHeadersMiddleware, SecurityHeadersConfig
+### Security Headers
 
-config = SecurityHeadersConfig(
-    csp="default-src 'self'",
-    hsts_max_age=31536000,
-    x_frame_options="DENY",
-)
-# Applies: CSP, HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy
-```
+Applies standard security headers to all HTTP responses:
 
-## CSRF Middleware
+| Header                           | Purpose                       |
+| -------------------------------- | ----------------------------- |
+| Content-Security-Policy (CSP)    | Restricts content sources     |
+| Strict-Transport-Security (HSTS) | Forces HTTPS                  |
+| X-Content-Type-Options           | Prevents MIME sniffing        |
+| X-Frame-Options                  | Prevents clickjacking         |
+| X-XSS-Protection                 | Enables browser XSS filter    |
+| Referrer-Policy                  | Controls referrer information |
 
-```python
-from nexus.middleware.csrf import CSRFMiddleware
+Configuration options include CSP directives, HSTS max-age, and frame options.
 
-csrf = CSRFMiddleware(
-    allowed_origins=["https://app.example.com"],
-    exempt_paths=["/api/webhooks"],
-)
-# Validates Origin/Referer on POST/PUT/DELETE/PATCH. GET/HEAD/OPTIONS bypass.
-```
+### CSRF Protection
+
+Origin-based CSRF protection for state-changing requests:
+
+- Validates `Origin` and `Referer` headers on POST, PUT, DELETE, PATCH
+- GET, HEAD, and OPTIONS requests bypass validation
+- Configurable allowed origins
+- Path exemptions for webhooks and API callbacks
 
 ## Middleware Presets
 
-```python
-from nexus import Nexus
+Pre-assembled middleware stacks for common deployment scenarios:
 
-app = Nexus([workflow], preset="standard")
-# "none": no middleware
-# "lightweight": security headers
-# "standard": + CSRF + CORS + rate limiting
-# "saas": + tenant isolation
-# "enterprise": + audit logging
-```
+| Preset        | Middleware Included                            |
+| ------------- | ---------------------------------------------- |
+| `none`        | No middleware                                  |
+| `lightweight` | Security headers                               |
+| `standard`    | Security headers + CSRF + CORS + rate limiting |
+| `saas`        | Standard + tenant isolation                    |
+| `enterprise`  | SaaS + audit logging                           |
 
-## Source Files
+Presets are selected at Nexus construction time and can be overridden with individual middleware configuration.
 
-- `packages/kailash-nexus/src/nexus/probes.py`
-- `packages/kailash-nexus/src/nexus/openapi.py`
-- `packages/kailash-nexus/src/nexus/middleware/security_headers.py`
-- `packages/kailash-nexus/src/nexus/middleware/csrf.py`
-- `packages/kailash-nexus/src/nexus/presets.py`
+## Best Practices
+
+1. **Always configure probes in Kubernetes** -- without them, the orchestrator cannot manage application lifecycle
+2. **Use startup probes for slow-starting applications** -- prevents premature liveness failures
+3. **Set readiness to false during shutdown** -- allows graceful connection draining
+4. **Register readiness callbacks for all dependencies** -- prevents serving traffic before dependencies are ready
+5. **Use the `standard` preset as a baseline** -- add or remove middleware as needed
+
+See language-specific variant for implementation details and code examples.
+
+## Related Skills
+
+- [nexus-health-monitoring](nexus-health-monitoring.md) - Application-level health monitoring
+- [nexus-enterprise-features](nexus-enterprise-features.md) - Enterprise middleware stack
+- [nexus-transport-architecture](nexus-transport-architecture.md) - HTTP transport layer

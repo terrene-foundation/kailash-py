@@ -25,7 +25,7 @@ Run all 7 sweeps. Aggregate findings into a single report at the end with severi
 find workspaces/*/todos/active/ -name "*.md" -not -name "*-milestone-tracker.md" 2>/dev/null
 ```
 
-Read frontmatter (`status`, `priority`, `wave`). Group by workspace. Surface stale (>7d) workspaces' todos with explicit "is this still relevant?" flag.
+Read frontmatter (`status`, `priority`, `wave`). Group by workspace. Per `rules/value-prioritization.md` MUST-3+4, classify each stale (>7d) item into one of THREE dispositions — never `Stale` alone, never auto-close: **(a) still-wanted** (re-validate value-anchor, re-queue with explicit value-rank citing brief / spec § / journal DECISION); **(b) abandon-with-user-gate** (recommend closure with value-decay rationale, surface to user — auto-close as `not_planned` is BLOCKED); **(c) queued-with-value-rank** (alive but lower-priority; explicit anchor required). Items lacking value-anchors entirely surface as a separate finding: "value-anchor absent — request from user before re-queuing."
 
 ### Sweep 2: Pending journal entries (auto-generated, awaiting promotion)
 
@@ -43,7 +43,7 @@ gh issue list --repo "$REPO" --state open --limit 50 \
   --json number,title,labels,createdAt,updatedAt,comments
 ```
 
-Categorize: **Stale** (no activity ≥30d), **`deferred` label** (verify Rule 1b 4-condition body per `rules/zero-tolerance.md`), **Closeable** (delivered code per `rules/git.md` § Issue Closure Discipline), **Genuinely actionable**.
+Categorize: **`deferred` label** (verify Rule 1b 4-condition body per `rules/zero-tolerance.md`), **Closeable** (delivered code per `rules/git.md` § Issue Closure Discipline), **Genuinely actionable**. Per `rules/value-prioritization.md` MUST-4, `Stale` is NOT a closure category — auto-closing stale issues as `not_planned` because of age is BLOCKED. Stale issues route through the same three-disposition classification as Sweep 1 (still-wanted re-validate / abandon-with-user-gate / queued-with-value-rank).
 
 ### Sweep 4: Open PRs and stale feature branches
 

@@ -11,7 +11,7 @@ Patterns for data cleaning, transformation, and aggregation workflows.
 > Category: `workflow-patterns`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`workflow-pattern-etl`](workflow-pattern-etl.md), [`nodes-transform-reference`](../nodes/nodes-transform-reference.md)
+> Related Skills: [`workflow-pattern-etl`](workflow-pattern-etl.md), [`nodes-transform-reference`](../08-nodes-reference/nodes-transform-reference.md)
 
 ## Pattern: Data Quality Pipeline
 
@@ -58,5 +58,6 @@ workflow.add_connection("clean", "data", "aggregate", "input")
 ```
 
 ## Documentation
+
 
 <!-- Trigger Keywords: data pipeline, data processing, data transformation, data cleaning, data quality -->

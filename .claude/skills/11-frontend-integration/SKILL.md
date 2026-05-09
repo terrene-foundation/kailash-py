@@ -1,6 +1,6 @@
 ---
 name: frontend-integration
-description: "Kailash frontend integration: React + Flutter — setup, API integration, state management, best practices."
+description: "Kailash frontend — React + Flutter setup, API integration, state management."
 ---
 
 # Kailash Frontend Integration
@@ -40,7 +40,7 @@ Frontend integration patterns for:
 
 ### General Frontend
 
-- **[frontend-developer](frontend-developer.md)** - Frontend development guide
+- **[frontend-patterns](frontend-patterns.md)** - General frontend development patterns
   - Architecture patterns
   - API integration
   - Authentication

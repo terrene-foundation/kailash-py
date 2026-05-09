@@ -1,6 +1,6 @@
 ---
 name: flutter-patterns
-description: "Flutter development: design systems, responsive layouts, state management, cross-platform best practices."
+description: "Flutter — design systems, responsive layouts, state management, cross-platform."
 ---
 
 # Flutter Development Patterns
@@ -10,6 +10,7 @@ Production-ready patterns for Flutter application development including design s
 ## Overview
 
 Flutter patterns for:
+
 - Design system creation and management
 - Responsive layout strategies
 - Component library architecture
@@ -19,6 +20,7 @@ Flutter patterns for:
 ## Reference Documentation
 
 ### Design System Creation
+
 - **[creating-design-system](creating-design-system.md)** - Complete guide to creating Flutter design systems
   - Phase-based implementation approach
   - Token systems (colors, typography, spacing)
@@ -28,6 +30,7 @@ Flutter patterns for:
   - Documentation standards
 
 ### Design System Usage
+
 - **[flutter-design-system](flutter-design-system.md)** - Institutionalized design system usage directive
   - Design system location and structure
   - Single import pattern
@@ -35,6 +38,7 @@ Flutter patterns for:
   - Mandatory usage rules
 
 ### Testing Patterns
+
 - **[flutter-testing-patterns](flutter-testing-patterns.md)** - Flutter testing strategies
   - Widget testing patterns
   - Integration testing
@@ -44,6 +48,7 @@ Flutter patterns for:
 ## Quick Patterns
 
 ### Design Token System
+
 ```dart
 abstract class AppColors {
   // Primary palette
@@ -67,6 +72,7 @@ abstract class AppSpacing {
 ```
 
 ### Responsive Breakpoints
+
 ```dart
 class Breakpoints {
   static const mobile = 600.0;
@@ -79,6 +85,7 @@ class Breakpoints {
 ```
 
 ### Component Base Pattern
+
 ```dart
 class AppButton extends StatelessWidget {
   final String label;
@@ -104,16 +111,17 @@ class AppButton extends StatelessWidget {
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
-| ❌ NEVER hardcode colors | Use design tokens |
-| ✅ ALWAYS use const constructors | Performance optimization |
-| ❌ NEVER use magic numbers | Use spacing tokens |
-| ✅ ALWAYS test on multiple screen sizes | Responsive verification |
+| Rule                                    | Why                      |
+| --------------------------------------- | ------------------------ |
+| ❌ NEVER hardcode colors                | Use design tokens        |
+| ✅ ALWAYS use const constructors        | Performance optimization |
+| ❌ NEVER use magic numbers              | Use spacing tokens       |
+| ✅ ALWAYS test on multiple screen sizes | Responsive verification  |
 
 ## When to Use This Skill
 
 Use this skill when:
+
 - Creating a new Flutter design system
 - Building reusable component libraries
 - Implementing responsive layouts
@@ -130,6 +138,7 @@ Use this skill when:
 ## Support
 
 For Flutter pattern questions, invoke:
+
 - `flutter-specialist` - Flutter-specific implementation
 - `uiux-designer` - Design system decisions
 - `pattern-expert` - Architecture patterns

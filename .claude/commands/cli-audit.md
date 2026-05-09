@@ -65,12 +65,36 @@ Independent of the architects (which each see only their own CLI), run the `sees
 
 Drift in `neutral-body`, `frontmatter.priority`, or `frontmatter.scope` HARD BLOCKS sync. Drift in `examples` is expected per-CLI divergence (scrubbed via `scrub_tokens: ["Agent(", "codex_agent(", "@specialist", "subagent_type", "run_in_background"]`).
 
-## Phase 4: Aggregate + report
+## Phase 4: Project-artifact content sweep
 
-Combine architect findings + drift-audit result into a single report with severity taxonomy:
+Per `rules/cross-cli-artifact-hygiene.md`, workspace artifacts (`workspaces/**/*.md`, `briefs/**/*.md`) MUST stay CLI-neutral — no CC-native delegation syntax (`Agent(subagent_type=...)`, `run_in_background`, `isolation: "worktree"`, `TaskCreate`, `TaskUpdate`, `ExitPlanMode`), no CC tool nouns (`Read tool`, `Write tool`, `Edit tool`, `Bash tool`, `Grep tool`, `Glob tool`), no CC PascalCase hook event names (`SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PreCompact`), and no CLI baseline-file authority leaks (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/(agents|skills|commands)`) in prescriptive prose.
+
+Run the lint:
+
+```bash
+node tools/lint-workspaces.js workspaces/ briefs/
+```
+
+Output is one line per finding: `<file>:<line>: <pattern> — <snippet>`. Exit 1 indicates findings (advisory severity per the rule's Trust Posture Wiring); exit 0 indicates clean. Lines containing `(historical)`, `(historical citation)`, or `<!-- cli-portable-exception -->` are skipped per MUST 5 (qualified-historical mentions are acceptable). Fixtures at `.claude/audit-fixtures/cross-cli-artifact-hygiene/` exercise every flagged pattern (3 flag files) plus 2 clean files.
+
+## Phase 4.5: Probe-coverage sweep (`rules/probe-driven-verification.md` MUST-4)
+
+Independent of per-CLI architect findings, run the probe-coverage sweep against any harness or fixture surface touched by the multi-CLI emission set. Per `probe-driven-verification.md` MUST-1, semantic assertions in test harnesses MUST be probe-driven; regex-on-semantic-claim is BLOCKED.
+
+```bash
+grep -rEn 'def (verify|score|assert|check|probe)_[A-Za-z_]*(recommend|refus|complian|respons|intent|semantic|quality|outcome|narrative|reasoning)' \
+  .claude/test-harness/ .claude/audit-fixtures/ 2>/dev/null \
+  | xargs -I {} grep -lE 'kind:\s*"contains"|re\.(search|match|findall)|str\.contains' {} 2>/dev/null
+```
+
+Each hit MUST cite a probe schema. Regex-on-semantic = HIGH per Phase 5 severity taxonomy. Structural assertions (canary token presence, marker grep, exit code, file existence) are exempt and keep regex per MUST-3.
+
+## Phase 5: Aggregate + report
+
+Combine architect findings + drift-audit result + probe-coverage findings into a single report with severity taxonomy:
 
 - **CRITICAL** — V12 slot round-trip failure, V13 MCP bijection failure, `block_cap_bytes` exceeded, `neutral-body` drift, `frontmatter.priority|scope` drift, overlay introduces a slot not in global.
-- **HIGH** — V13 POLICIES bijection spurious/missing entry, per-rule budget exceeds `+30%` tolerance, `warn_cap_bytes` exceeded, `emit-telemetry.json` shows any per-CLI `headroom_pct < 10%` (Risk-0004 early-warning band).
+- **HIGH** — V13 POLICIES bijection spurious/missing entry, per-rule budget exceeds `+30%` tolerance, `warn_cap_bytes` exceeded, `emit-telemetry.json` shows any per-CLI `headroom_pct < 10%` (Risk-0004 early-warning band), regex-on-semantic-claim in any harness assertion (Phase 4.5).
 - **NOTE** — expected `examples` slot drift, per-rule budget within tolerance but trending up, orchestrator filter applied (e.g. `main` in `validate-prod-deploy.js`).
 
 ### Headroom trend (baseline_emission_bytes)

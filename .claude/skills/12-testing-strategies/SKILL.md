@@ -1,6 +1,6 @@
 ---
 name: testing-strategies
-description: "Kailash testing: 3-tier, Tier 2/3 real infra (NO mocking per rules/testing.md), regression, coverage."
+description: "Kailash testing — 3-tier, Tier 2/3 real infra (NO mocking), regression, coverage."
 ---
 
 # Kailash Testing Strategies
@@ -14,6 +14,7 @@ Use when asking about testing, test strategy, 3-tier testing, unit tests, integr
 ## Sub-File Index
 
 - **[test-3tier-strategy](test-3tier-strategy.md)** - Complete 3-tier guide: tier definitions, fixture patterns, CI/CD integration
+- **[probe-driven-verification](probe-driven-verification.md)** - Probe-driven verification runbook (regex/keyword for semantic claims is BLOCKED). Per `rules/probe-driven-verification.md`.
 
 ## 3-Tier Strategy
 

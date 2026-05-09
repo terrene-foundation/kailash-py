@@ -65,7 +65,7 @@ For every spec promise found in these sources:
 - `def run_stream / async def stream_*` methods with only one `yield` (fake stream)
 - Consumer files still importing from OLD path after a "migrate to Y" task
 
-**Specs-to-code verification** — for every file in `specs/`, extract assertions at FIELD level (not just endpoint/class level) and verify against code via grep/AST. Code diverging from spec without a logged deviation = HIGH. **Cross-spec consistency** — grep all specs for shared terms (TTLs, limits, field names, endpoint paths); contradictory values across specs = HIGH. **Brief-to-spec coverage** — for each requirement in `briefs/`, verify it maps to at least one spec section; unmapped requirements = HIGH.
+**Specs-to-code verification** — for every file in `specs/`, extract assertions at FIELD level (not just endpoint/class level) and verify against code via grep/AST. Code diverging from spec without a logged deviation = HIGH. **Cross-spec consistency** — grep all specs for shared terms (TTLs, limits, field names, endpoint paths); contradictory values across specs = HIGH. **Brief-to-spec coverage** — for each requirement in `briefs/`, verify it maps to at least one spec section; unmapped requirements = HIGH. **Probe-coverage** — for every semantic harness assertion (refusal/recommendation/compliance/quality), verify a probe definition (schema + scoring rule) exists per `rules/probe-driven-verification.md` MUST-4; regex-on-semantic-claim = HIGH.
 
 ### 2. End-to-end validation
 

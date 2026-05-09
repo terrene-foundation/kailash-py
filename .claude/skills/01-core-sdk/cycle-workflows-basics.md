@@ -1,83 +1,82 @@
 ---
 name: cycle-workflows-basics
-description: "Cyclic workflow patterns using CycleBuilder API with convergence checking, timeouts, and nested cycles. Use when asking 'cyclic workflow', 'cycles', 'loops', 'iteration', 'convergence', 'max_iterations', 'CycleBuilder', 'workflow loops', or 'iterative processing'."
-globs: ["**/*.py"]
+description: "⚠️ PLANNED - NOT IMPLEMENTED. Cyclic workflows are a planned feature for future release. Use when asking 'cyclic workflow', 'cycles', 'loops', 'iteration', 'convergence', 'max_iterations', 'cyclic patterns', 'workflow loops', or 'iterative processing'."
 ---
 
-# Cyclic Workflows
+# Cyclic Workflows Basics
 
-Cyclic workflows are fully implemented. Use the `CycleBuilder` fluent API (v1.0+).
+⚠️ **PLANNED FEATURE - NOT YET IMPLEMENTED**
 
-## CycleBuilder API
+> **Skill Metadata**
+> Category: `core-sdk`
+> Priority: `HIGH`
+> SDK Version: `PLANNED - NOT AVAILABLE`
+> Status: `NOT IMPLEMENTED`
 
-```python
-from kailash.workflow.graph import Workflow
+## Important Notice
 
-workflow = Workflow("optimization", "Optimization Loop")
-workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
-workflow.add_node("PythonCodeNode", "evaluator", {"code": "..."})
+**Cyclic workflows are NOT yet implemented in the Kailash SDK.** This is a planned feature for a future release.
 
-# Fluent cycle creation (the only supported API)
-workflow.create_cycle("quality_improvement") \
-    .connect("evaluator", "processor", {"result": "input_data"}) \
-    .max_iterations(50) \
-    .converge_when("quality > 0.9") \
-    .timeout(300) \
-    .build()
-```
+- **Current Status**: Planned but not implemented
+- **Target Release**: TBD
+- **Recommendation**: Use alternative patterns (retry logic, manual loops) until feature is available
 
-**Note**: Direct `cycle=True` in `workflow.connect()` was removed in v1.0. Use `create_cycle()`.
+## Quick Reference
 
-## CycleBuilder Methods
+- **Primary Use**: Cyclic Workflows (PLANNED)
+- **Category**: core-sdk
+- **Priority**: HIGH
+- **Status**: NOT IMPLEMENTED
+- **Trigger Keywords**: cyclic workflow, cycles, loops, iteration, convergence, max_iterations
 
-| Method                               | Purpose                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| `.connect(source, target, mapping?)` | Set cycle connection (required)                                           |
-| `.max_iterations(n)`                 | Safety limit on iterations (required unless converge_when or timeout set) |
-| `.converge_when(expr)`               | Early termination condition (e.g. `"error < 0.01"`)                       |
-| `.timeout(seconds)`                  | Time-based safety limit                                                   |
-| `.memory_limit(mb)`                  | Memory usage limit                                                        |
-| `.when(condition)`                   | Conditional cycle execution                                               |
-| `.nested_in(parent_id)`              | Nest inside another cycle                                                 |
-| `.build()`                           | Finalize and add cycle to workflow                                        |
-
-At least one termination condition (`max_iterations`, `converge_when`, or `timeout`) is required.
-
-## CycleConfig Templates
+## Core Pattern
 
 ```python
-from kailash.workflow.cycle_config import CycleConfig, CycleTemplates
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Pre-built templates
-config = CycleTemplates.optimization_loop(max_iterations=200, convergence_threshold=0.001)
-config = CycleTemplates.retry_cycle(max_retries=3, timeout_per_retry=30.0)
-config = CycleTemplates.data_quality_cycle(quality_threshold=0.95)
-config = CycleTemplates.training_loop(max_epochs=100, early_stopping_patience=10)
+# Cycle Workflows Basics implementation
+workflow = WorkflowBuilder()
 
-# Apply template to builder
-from kailash.workflow.cycle_builder import CycleBuilder
-builder = CycleBuilder.from_config(workflow, config)
-builder.connect("optimizer", "evaluator").build()
+# See source documentation for specific node types and parameters
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
-## ConvergenceCheckerNode
 
-```python
-from kailash.nodes.logic.convergence import ConvergenceCheckerNode
+## Common Use Cases
 
-# Declarative convergence detection node
-workflow.add_node("ConvergenceCheckerNode", "checker", {
-    "threshold": 0.8,
-    "mode": "threshold"  # checks if value meets threshold
-})
-```
+- **Cycle-Workflows-Basics Workflows**: Pre-built patterns for common use cases with best practices built-in
+- **Composition Patterns**: Combine multiple workflows, create reusable sub-workflows, build complex orchestrations
+- **Error Handling**: Built-in retry logic, fallback paths, compensation actions for resilient workflows
+- **Performance Optimization**: Parallel execution, batch operations, async patterns for high-throughput processing
+- **Production Readiness**: Health checks, monitoring, logging, metrics collection for enterprise deployments
 
-## Runtime Configuration
+## Related Patterns
 
-Cycles are enabled by default (`enable_cycles=True` in BaseRuntime). Execution uses `CyclicWorkflowExecutor` internally.
+- **For fundamentals**: See [`workflow-quickstart`](#)
+- **For connections**: See [`connection-patterns`](#)
+- **For parameters**: See [`param-passing-quick`](#)
 
-## Related
+## When to Escalate to Subagent
 
-- `skills/06-cheatsheets/cyclic-patterns-advanced.md` — advanced patterns
-- `skills/06-cheatsheets/cycle-debugging.md` — debugging cycles
-- `skills/14-code-templates/template-cyclic-workflow.md` — starter template
+Use specialized subagents when:
+- Complex implementation needed
+- Production deployment required
+- Deep analysis necessary
+- Enterprise patterns needed
+
+## Documentation References
+
+### Primary Sources
+
+## Quick Tips
+
+- 💡 **Tip 1**: Always follow Cyclic Workflows Basics best practices
+- 💡 **Tip 2**: Test patterns incrementally
+- 💡 **Tip 3**: Reference documentation for details
+
+## Keywords for Auto-Trigger
+
+<!-- Trigger Keywords: cyclic workflow, cycles, loops, iteration, convergence, max_iterations -->

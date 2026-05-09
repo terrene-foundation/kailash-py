@@ -1,6 +1,6 @@
 ---
 name: workflow-patterns
-description: "Workflow templates: finance, healthcare, logistics, manufacturing, retail, ETL, RAG, document processing, API."
+description: "Workflow templates — finance, healthcare, logistics, ETL, RAG, document processing."
 ---
 
 # Kailash Workflows - Industry Patterns & Templates

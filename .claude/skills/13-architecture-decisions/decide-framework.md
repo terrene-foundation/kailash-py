@@ -12,7 +12,7 @@ Quick decision tree to choose the right Kailash framework: Core SDK, DataFlow, N
 > Priority: `CRITICAL`
 > SDK Version: `0.9.25+`
 > Related Skills: [`dataflow-quickstart`](../../02-dataflow/dataflow-quickstart.md), [`nexus-quickstart`](../../03-nexus/nexus-quickstart.md), [`kaizen-baseagent-template`](../../04-kaizen/kaizen-baseagent-template.md)
-> Related Subagents: `framework-advisor` (complex architecture), `dataflow-specialist`, `nexus-specialist`, `kaizen-specialist`
+> Related Subagents: `analyst` (complex architecture), `dataflow-specialist`, `nexus-specialist`, `kaizen-specialist`
 
 ## Quick Decision Matrix
 
@@ -272,7 +272,7 @@ START: What's your primary use case?
 
 ## When to Escalate to Subagent
 
-Use `framework-advisor` subagent when:
+Use `analyst` subagent when:
 
 - Complex multi-framework architecture needed
 - Evaluating migration paths between frameworks
@@ -310,7 +310,7 @@ After choosing your framework, choose your abstraction layer. See `rules/framewo
 
 ### Detailed Guides
 
-- **Framework Advisor**: [`.claude/agents/framework-advisor.md`](../../../../.claude/agents/framework-advisor.md)
+- **Framework Advisor**: [`.claude/agents/implementation/pattern-expert.md`](../../../../.claude/agents/implementation/pattern-expert.md)
 
 ## Quick Tips
 

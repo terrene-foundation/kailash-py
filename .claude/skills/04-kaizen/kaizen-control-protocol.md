@@ -170,7 +170,7 @@ class InteractiveSignature(Signature):
 
 @dataclass
 class InteractiveConfig:
-    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    llm_provider: str = "openai"
     model: str = os.environ.get("LLM_MODEL", "")
 
 class InteractiveAgent(BaseAgent):

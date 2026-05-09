@@ -1,15 +1,60 @@
 ---
 skill: nexus-production-deployment
-description: Production deployment patterns, Docker, Kubernetes, scaling, and security
+description: Production deployment patterns, Docker, Kubernetes, scaling, and health checks
 priority: MEDIUM
 tags: [nexus, production, deployment, docker, kubernetes, scaling]
 ---
 
 # Nexus Production Deployment
 
+## Shared Production Configuration
+
+These settings apply across all SDKs:
+
+```
+app = Nexus(
+    api_port=8000,          # Or from PORT env var
+    auto_discovery=False,   # Manual registration only
+    preset="enterprise",    # Or configure individually
+)
+
+# Register workflows explicitly
+app.register("workflow-name", workflow.build())
+
+# Add auth plugin
+app.add_plugin(auth_plugin)
+
+# Start
+app.start()
+```
+
+## Production Checklist
+
+| Setting          | Value            | Why                                     |
+| ---------------- | ---------------- | --------------------------------------- |
+| `auto_discovery` | `False`          | Prevents blocking with DataFlow         |
+| Authentication   | Enabled          | Use NEXUS_ENV=production or auth plugin |
+| Rate limiting    | 100-5000 req/min | DoS protection                          |
+| Session backend  | Redis            | Multi-replica session sharing           |
+| Monitoring       | Enabled          | Health and performance metrics          |
+| Log format       | JSON             | Machine-parseable logs                  |
+
+## Health Checks
+
+```
+health = app.health_check()
+```
+
+```bash
+curl http://localhost:8000/health
+# {"status": "healthy", "version": "...", "uptime": 3600, "workflows": 5}
+```
+
 ## Docker
 
 ### Dockerfile
+
+Adapt base image and build steps for your SDK language.
 
 ```dockerfile
 FROM python:3.11-slim
@@ -53,43 +98,6 @@ volumes:
   redis_data:
 ```
 
-### Production App Configuration
-
-```python
-import os
-from nexus import Nexus
-
-app = Nexus(
-    api_port=int(os.getenv("PORT", "8000")),
-    api_host="0.0.0.0",
-    enable_auth=True,           # Or set NEXUS_ENV=production for auto-enable
-    rate_limit=1000,            # Default 100 req/min
-    auto_discovery=False,       # Manual registration only
-    max_concurrent_workflows=200,
-    enable_caching=True,
-    enable_monitoring=True,
-    monitoring_backend="prometheus",
-    session_backend="redis",
-    redis_url=os.getenv("REDIS_URL"),
-    log_level="INFO",
-    log_format="json",
-)
-```
-
-## Security (v1.1.1+)
-
-Set `NEXUS_ENV=production` to auto-enable auth and rate limiting.
-
-**Input validation** (automatic, all channels): dangerous keys blocked, 10MB input limit, path traversal prevention, 256-char key limit.
-
-### MUST NOT
-
-```python
-app = Nexus(enable_auth=False)     # CRITICAL WARNING in production
-app = Nexus(rate_limit=None)       # DoS vulnerability
-app = Nexus(auto_discovery=True)   # 5-10s blocking delay
-```
-
 ## Kubernetes
 
 ### Deployment + Service
@@ -108,36 +116,26 @@ spec:
         - name: nexus
           image: nexus-app:latest
           ports:
-            [
-              { containerPort: 8000, name: api },
-              { containerPort: 3001, name: mcp },
-            ]
+            - { containerPort: 8000, name: api }
+            - { containerPort: 3001, name: mcp }
           env:
-            - {
-                name: DATABASE_URL,
-                valueFrom:
-                  { secretKeyRef: { name: nexus-secrets, key: database-url } },
-              }
-            - {
-                name: REDIS_URL,
-                valueFrom:
-                  { secretKeyRef: { name: nexus-secrets, key: redis-url } },
-              }
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: database-url }
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: redis-url }
           resources:
             requests: { memory: "512Mi", cpu: "500m" }
             limits: { memory: "2Gi", cpu: "2000m" }
           livenessProbe:
-            {
-              httpGet: { path: /health, port: 8000 },
-              initialDelaySeconds: 30,
-              periodSeconds: 10,
-            }
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
           readinessProbe:
-            {
-              httpGet: { path: /health, port: 8000 },
-              initialDelaySeconds: 5,
-              periodSeconds: 5,
-            }
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service
@@ -161,28 +159,16 @@ spec:
   metrics:
     - type: Resource
       resource:
-        { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
 ```
 
-### Deploy Commands
+## MUST NOT in Production
 
-```bash
-kubectl create namespace nexus
-kubectl apply -f k8s/ -n nexus
-kubectl get pods -n nexus
-kubectl scale deployment/nexus --replicas=5 -n nexus
-```
-
-## Production Checklist
-
-| Setting                   | Value       | Why                             |
-| ------------------------- | ----------- | ------------------------------- |
-| `auto_discovery=False`    | Always      | Prevents blocking with DataFlow |
-| `enable_auth=True`        | Production  | Or use NEXUS_ENV=production     |
-| `rate_limit=N`            | 100-5000    | DoS protection                  |
-| `session_backend="redis"` | Distributed | Multi-replica session sharing   |
-| `enable_monitoring=True`  | Always      | Prometheus metrics at /metrics  |
-| `log_format="json"`       | Production  | Machine-parseable logs          |
+- Disable auth without API gateway protection
+- Disable rate limiting
+- Enable auto-discovery (causes blocking delay)
+- Hardcode secrets in source code
 
 ## CI/CD (GitHub Actions)
 
@@ -198,3 +184,5 @@ jobs:
       - run: docker push registry.example.com/nexus-app:${{ github.sha }}
       - run: kubectl set image deployment/nexus nexus=registry.example.com/nexus-app:${{ github.sha }} -n nexus
 ```
+
+See language-specific variant for full constructor parameter lists and SDK-specific production configuration.

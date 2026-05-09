@@ -1,5 +1,5 @@
 ---
-description: "Spec compliance verification protocol — verify code matches plan via AST/grep, not file existence. Use for /redteam Step 1, /codify validation, plan auditing."
+description: "Spec compliance — verify code matches plan via AST/grep, not file existence. /redteam Step 1."
 ---
 
 # Spec Compliance Audit

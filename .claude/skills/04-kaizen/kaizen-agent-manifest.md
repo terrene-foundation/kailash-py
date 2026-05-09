@@ -14,6 +14,7 @@ The Agent Manifest system provides:
 
 **Source modules**:
 
+
 ---
 
 ## TOML Manifest Format
@@ -29,7 +30,7 @@ class_name = "MarketAnalyzer"
 description = "Analyzes market trends and produces investment insights"
 capabilities = ["market-analysis", "financial-data"]
 tools = ["http_get", "read_file"]
-supported_models = [os.environ.get("LLM_MODEL", "")]
+supported_models = ["gpt-4", "claude-3-opus"]
 
 [governance]
 purpose = "Automated market trend analysis for investment reports"
@@ -115,7 +116,7 @@ manifest = AgentManifest(
     description="Analyzes market trends",
     capabilities=["market-analysis", "financial-data"],
     tools=["http_get"],
-    supported_models=[os.environ.get("LLM_MODEL", "")],
+    supported_models=["gpt-4"],
     governance=governance,
 )
 ```

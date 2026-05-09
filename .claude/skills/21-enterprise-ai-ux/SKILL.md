@@ -1,6 +1,6 @@
 ---
 name: enterprise-ai-ux
-description: "Enterprise AI UX: conversational interfaces, context management, challenge resolution, professional design systems."
+description: "Enterprise AI UX — conversational interfaces, context management, design systems."
 ---
 
 # Enterprise AI Application UX
@@ -10,6 +10,7 @@ Production-ready UX patterns for building enterprise-grade AI applications with 
 ## Overview
 
 Enterprise AI UX patterns for:
+
 - Professional conversational interfaces
 - Context and challenge taxonomy
 - Design system implementation
@@ -19,6 +20,7 @@ Enterprise AI UX patterns for:
 ## Reference Documentation
 
 ### Enterprise Design
+
 - **[enterprise-design](enterprise-design.md)** - Complete enterprise AI UX guide
   - Challenge taxonomy (7 categories)
   - Design patterns and layouts
@@ -28,6 +30,7 @@ Enterprise AI UX patterns for:
 ## Quick Patterns
 
 ### Challenge Taxonomy
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     CHALLENGE TAXONOMY                       │
@@ -56,6 +59,7 @@ Enterprise AI UX patterns for:
 ```
 
 ### Context Indicator Pattern
+
 ```dart
 class ContextIndicator extends StatelessWidget {
   final List<ContextItem> contexts;
@@ -75,6 +79,7 @@ class ContextIndicator extends StatelessWidget {
 ```
 
 ### Professional Color Palette
+
 ```dart
 // Enterprise AI color scheme
 abstract class EnterpriseColors {
@@ -99,6 +104,7 @@ abstract class EnterpriseColors {
 ```
 
 ### Conversation Layout
+
 ```
 ┌────────────────────────────────────────────────────────────┐
 │ [Context Bar: Project | Session | Agent Status]            │
@@ -123,16 +129,17 @@ abstract class EnterpriseColors {
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
+| Rule                               | Why                               |
+| ---------------------------------- | --------------------------------- |
 | ❌ NEVER use consumer-style colors | Enterprise = professional palette |
-| ✅ ALWAYS show context indicators | Users need orientation |
-| ❌ NEVER hide AI thinking process | Transparency builds trust |
-| ✅ ALWAYS provide action feedback | Professional responsiveness |
+| ✅ ALWAYS show context indicators  | Users need orientation            |
+| ❌ NEVER hide AI thinking process  | Transparency builds trust         |
+| ✅ ALWAYS provide action feedback  | Professional responsiveness       |
 
 ## When to Use This Skill
 
 Use this skill when:
+
 - Building enterprise AI chat applications
 - Designing professional AI interfaces
 - Implementing context management systems
@@ -148,6 +155,7 @@ Use this skill when:
 ## Support
 
 For enterprise AI UX questions, invoke:
+
 - `uiux-designer` - Design decisions
 - `flutter-specialist` - Implementation
 - `kaizen-specialist` - AI patterns
