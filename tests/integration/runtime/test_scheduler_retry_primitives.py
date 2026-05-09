@@ -194,15 +194,19 @@ class TestSchedulerRetryPrimitives:
             assert (
                 attempts >= 3
             ), f"expected at least 3 attempts (1 + max_retries=2); got {attempts}"
-            # WARN-level retry log fired at least twice (after attempts 1 and 2).
-            retry_warns = [
+            # Per-fire summary WARN fires once when retries are exhausted —
+            # per-attempt logs are at DEBUG to avoid log-spam in hot loops
+            # (`observability.md` MUST NOT § log-spam-in-hot-loops).
+            summary_warns = [
                 r
                 for r in caplog.records
-                if r.levelno == logging.WARNING and "retrying" in r.getMessage().lower()
+                if r.levelno == logging.WARNING
+                and "exhausted retries" in r.getMessage().lower()
             ]
-            assert len(retry_warns) >= 2, (
-                f"expected >= 2 retry WARN logs; got {len(retry_warns)}: "
-                f"{[r.getMessage() for r in retry_warns]}"
+            assert len(summary_warns) >= 1, (
+                f"expected >= 1 'exhausted retries' summary WARN; "
+                f"got {len(summary_warns)}: "
+                f"{[r.getMessage() for r in summary_warns]}"
             )
         finally:
             scheduler.shutdown(wait=False)
@@ -258,3 +262,242 @@ class TestSchedulerRetryPrimitives:
                 scheduler.schedule_interval(wf, seconds=60, _kailash_retry_spec="x")
         finally:
             scheduler.shutdown(wait=False)
+
+    async def test_dispatcher_path_rejects_retry_spec(self, tmp_path):
+        """retry= MUST raise on a queue-dispatch scheduler (Rule 3c silent-drop)."""
+        from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
+
+        # Construct a stand-in dispatcher (deterministic, satisfies the truthy
+        # `dispatch_via=` branch). The error is raised at schedule_* time
+        # BEFORE any dispatcher method is called, so any truthy object works.
+        sentinel_dispatcher = object()
+        scheduler = WorkflowScheduler(
+            job_store_path=None,
+            dispatch_via=sentinel_dispatcher,  # type: ignore[arg-type]
+        )
+        try:
+            wf = _attempts_state_workflow(
+                fail_first_n=0, counter_path=str(tmp_path / "never.cnt")
+            )
+            for method, args in (
+                ("schedule_interval", (wf, 60)),
+                ("schedule_cron", (wf, "0 0 * * *")),
+            ):
+                with pytest.raises(ValueError, match="dispatch_via"):
+                    getattr(scheduler, method)(*args, retry=RetrySpec(max_retries=1))
+        finally:
+            # Don't actually start; sentinel_dispatcher cannot serve fires.
+            pass
+
+    async def test_extract_node_failure_deterministic_ordering(self):
+        """Multiple failed nodes — _extract_node_failure picks deterministically."""
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        # Out-of-order keys: insertion-order would surface "z_node" first.
+        # Sorted-key order surfaces "a_node" first — deterministic across runs.
+        results = {
+            "z_node": {"failed": True, "error_type": "ValueError", "error": "later"},
+            "a_node": {
+                "failed": True,
+                "error_type": "ConnectionError",
+                "error": "earlier",
+            },
+            "m_node": {"failed": True, "error_type": "KeyError", "error": "middle"},
+        }
+        exc = WorkflowScheduler._extract_node_failure(results)
+        assert exc is not None
+        assert isinstance(exc, ConnectionError), (
+            f"expected ConnectionError (a_node, sorted-first); got "
+            f"{type(exc).__name__}"
+        )
+        assert "a_node" in str(exc)
+
+    async def test_extract_node_failure_multiarg_ctor_fallback(self):
+        """Multi-arg-ctor types fall back to RuntimeError gracefully.
+
+        ``UnicodeDecodeError`` requires 5 args (encoding, object, start, end,
+        reason); single-string invocation raises ``TypeError``. The fallback
+        MUST yield a ``RuntimeError`` carrying the original type name in the
+        message so the original failure surfaces in downstream triage.
+        """
+        from kailash.runtime.scheduler import WorkflowScheduler
+
+        results = {
+            "node_x": {
+                "failed": True,
+                "error_type": "UnicodeDecodeError",
+                "error": "invalid start byte at position 0",
+            }
+        }
+        exc = WorkflowScheduler._extract_node_failure(results)
+        assert exc is not None
+        assert isinstance(exc, RuntimeError)
+        assert "UnicodeDecodeError" in str(exc)
+        assert "invalid start byte" in str(exc)
+
+    async def test_linear_backoff_end_to_end(self, tmp_path, caplog):
+        """Linear backoff exercises the schedule_*->_execute_workflow path."""
+        from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
+
+        counter = str(tmp_path / "linear.cnt")
+        scheduler = WorkflowScheduler(job_store_path=None)
+        scheduler.start()
+        caplog.set_level(logging.WARNING)
+        try:
+            schedule_id = scheduler.schedule_interval(
+                _attempts_state_workflow(fail_first_n=2, counter_path=counter),
+                seconds=1,
+                name="linear-backoff",
+                retry=RetrySpec(
+                    max_retries=2,
+                    backoff="linear",
+                    backoff_base_seconds=0.05,
+                    backoff_max_seconds=1.0,
+                ),
+            )
+            for _ in range(50):
+                if _read_counter(counter) >= 3:
+                    break
+                await asyncio.sleep(0.1)
+            scheduler.cancel(schedule_id)
+            assert _read_counter(counter) == 3, (
+                f"expected exactly 3 attempts (1 fail + 2 retries succeed on the "
+                f"3rd); got {_read_counter(counter)}"
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+
+    async def test_dont_retry_on_overrides_retry_on_end_to_end(self, tmp_path):
+        """dont_retry_on takes precedence end-to-end (not just unit-level)."""
+        from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
+
+        counter = str(tmp_path / "dont_retry.cnt")
+        scheduler = WorkflowScheduler(job_store_path=None)
+        scheduler.start()
+        try:
+            # Workflow raises RuntimeError; retry_on includes it BUT
+            # dont_retry_on excludes it. dont_retry_on MUST win → no retry.
+            schedule_id = scheduler.schedule_interval(
+                _attempts_state_workflow(fail_first_n=10, counter_path=counter),
+                seconds=1,
+                name="dont-retry-overrides",
+                retry=RetrySpec(
+                    max_retries=5,
+                    retry_on=(Exception,),  # would retry RuntimeError
+                    dont_retry_on=(RuntimeError,),  # but this overrides
+                    backoff_base_seconds=0.05,
+                ),
+            )
+            await asyncio.sleep(2.0)
+            scheduler.cancel(schedule_id)
+            attempts = _read_counter(counter)
+            # Single-attempt fires only — retry filter blocks the retry path.
+            # ≤ 3 fires possible in 2s (at 0s, 1s, 2s).
+            assert 1 <= attempts <= 3, (
+                f"expected 1..3 single-attempt fires (dont_retry_on overrides "
+                f"retry_on); got {attempts}"
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+
+    @pytest.mark.parametrize(
+        "method_name",
+        ["schedule_cron", "schedule_interval", "schedule_once"],
+    )
+    async def test_retry_threading_across_all_schedule_methods(
+        self, tmp_path, method_name
+    ):
+        """retry= MUST land on ScheduleInfo for every schedule_* variant."""
+        from datetime import UTC, datetime, timedelta
+
+        from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
+
+        scheduler = WorkflowScheduler(job_store_path=None)
+        scheduler.start()
+        try:
+            spec = RetrySpec(max_retries=4, backoff_base_seconds=0.1)
+            wf = _attempts_state_workflow(
+                fail_first_n=0, counter_path=str(tmp_path / "never.cnt")
+            )
+            method = getattr(scheduler, method_name)
+            if method_name == "schedule_cron":
+                schedule_id = method(wf, "0 0 1 1 *", retry=spec)
+            elif method_name == "schedule_interval":
+                schedule_id = method(wf, 3600, retry=spec)
+            else:  # schedule_once
+                schedule_id = method(
+                    wf, datetime.now(UTC) + timedelta(hours=1), retry=spec
+                )
+            info = scheduler._schedules[schedule_id]
+            assert info.retry_spec is spec, (
+                f"{method_name} did not persist retry_spec on ScheduleInfo "
+                f"(structural threading drift)"
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+
+
+@pytest.mark.regression
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_issue_910_quickstart_executes_end_to_end(tmp_path):
+    """Tier-2 regression: the brief's minimal-repro pipeline runs end-to-end.
+
+    Per ``rules/testing.md`` § "End-to-End Pipeline Regression Above Unit +
+    Integration", the canonical brief example MUST have a docstring-exact
+    test exercising the public composition. Pure-primitive tests cannot
+    catch handoff-shape regressions between :class:`RetrySpec`,
+    :meth:`schedule_*`, and :meth:`_execute_workflow`.
+    """
+    from kailash.runtime.scheduler import RetrySpec, WorkflowScheduler
+    from kailash.workflow.builder import WorkflowBuilder
+
+    counter = str(tmp_path / "quickstart.cnt")
+
+    # Brief #910's minimal repro shape, adapted to a 2-attempt success path
+    # so the test asserts the user-visible outcome (workflow ran twice
+    # before scheduler considered the fire complete).
+    code = (
+        "import os\n"
+        f"_p = {counter!r}\n"
+        f"_n = 0\n"
+        f"if os.path.exists(_p):\n"
+        f"    with open(_p) as _f: _n = int(_f.read().strip() or '0')\n"
+        f"_n += 1\n"
+        f"with open(_p, 'w') as _f: _f.write(str(_n))\n"
+        f"if _n <= 1:\n"
+        f"    raise RuntimeError('transient')\n"
+        f"result = {{'attempts': _n}}\n"
+    )
+    wf = WorkflowBuilder()
+    wf.add_node("PythonCodeNode", "fail", {"code": code})
+
+    scheduler = WorkflowScheduler(job_store_path=None)
+    scheduler.start()
+    try:
+        # Brief uses cron; we use interval=1s for fast test execution
+        # — the threading path through schedule_cron is covered by the
+        # parametrized test_retry_threading_across_all_schedule_methods.
+        schedule_id = scheduler.schedule_interval(
+            wf,
+            seconds=1,
+            retry=RetrySpec(
+                max_retries=3,
+                backoff="exponential",
+                retry_on=(RuntimeError,),
+                backoff_base_seconds=0.1,
+                backoff_max_seconds=0.5,
+            ),
+        )
+        for _ in range(50):
+            if _read_counter(counter) >= 2:
+                break
+            await asyncio.sleep(0.1)
+        scheduler.cancel(schedule_id)
+        attempts = _read_counter(counter)
+        # Exactly the brief's promise: workflow ran twice (1 fail + 1 retry-success).
+        assert (
+            attempts == 2
+        ), f"quickstart pipeline failed: expected 2 attempts (1 fail + 1 retry); got {attempts}"
+    finally:
+        scheduler.shutdown(wait=False)

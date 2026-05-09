@@ -38,6 +38,7 @@ Version:
 """
 
 import asyncio
+import builtins
 import logging
 import math
 import os
@@ -105,6 +106,25 @@ class RetrySpec:
         >>> spec = RetrySpec(max_retries=5, retry_on=(ConnectionError, TimeoutError))
         >>> # Retry on Exception except ValueError
         >>> spec = RetrySpec(max_retries=2, dont_retry_on=(ValueError,))
+
+    Notes:
+        **Cron-fire interaction**: a retry-bearing schedule with
+        ``max_retries × backoff_max_seconds`` exceeding the schedule
+        interval will block the next scheduled fire (APScheduler's
+        ``max_instances=1`` default), triggering the misfire policy.
+        Operators MUST size ``max_retries`` and ``backoff_max_seconds`` so
+        the total worst-case retry budget fits within the interval, OR
+        configure ``max_instances`` and ``misfire_grace_time`` on the job
+        explicitly (these are forwarded as APScheduler kwargs).
+
+        **Persistence stability**: when a scheduler is constructed with a
+        SQLAlchemy job-store path (the default), APScheduler pickles the
+        job kwargs — including the ``RetrySpec`` instance — to disk. This
+        dataclass is frozen (``@dataclass(frozen=True)``) and its field
+        set is part of the SDK's persistence contract: removing or
+        renaming fields would break job-store reload across SDK versions.
+        Field additions MUST default to backward-compatible values (the
+        existing constructor signatures preserve unpickle behavior).
     """
 
     max_retries: int = 0
@@ -693,9 +713,8 @@ class WorkflowScheduler:
 
         return list(self._schedules.values())
 
-    @staticmethod
     def _compose_job_kwargs(
-        user_kwargs: Dict[str, Any], retry: Optional[RetrySpec]
+        self, user_kwargs: Dict[str, Any], retry: Optional[RetrySpec]
     ) -> Dict[str, Any]:
         """Merge a user-supplied kwargs dict with the internal retry spec key.
 
@@ -706,11 +725,25 @@ class WorkflowScheduler:
 
         Refuses to silently overwrite a user-supplied key with the same name
         — this would be ``zero-tolerance.md`` Rule 3 silent fallback class.
+
+        Raises ``ValueError`` when ``retry`` is supplied alongside
+        ``dispatch_via=`` (queue-dispatch path): RetrySpec applies only to
+        the in-process fire path; the queue-dispatch path is the
+        dispatcher's domain (worker-side retry semantics owned by #911 /
+        #912). Silently dropping the spec would be a ``zero-tolerance.md``
+        Rule 3c violation (documented kwarg accepted but unused).
         """
         if _RETRY_SPEC_KWARG in user_kwargs:
             raise ValueError(
                 f"kwarg name {_RETRY_SPEC_KWARG!r} is reserved for internal "
                 f"use; rename your runtime kwarg to avoid the collision"
+            )
+        if retry is not None and self._dispatcher is not None:
+            raise ValueError(
+                "retry= is not supported when WorkflowScheduler was constructed "
+                "with dispatch_via=<Dispatcher>. Worker-side retry semantics are "
+                "the dispatcher's contract; pass retry=None and configure "
+                "retries on the worker / dispatcher layer instead."
             )
         merged = dict(user_kwargs)
         if retry is not None:
@@ -799,15 +832,25 @@ class WorkflowScheduler:
                     max_attempts,
                 )
                 return
+            except asyncio.CancelledError:
+                # Scheduler shutdown / job cancellation MUST propagate cleanly —
+                # the `except Exception` below would catch CancelledError on
+                # Python 3.8+ (where it's an Exception subclass), letting the
+                # retry loop swallow shutdown. Re-raise BEFORE the broad except.
+                raise
             except Exception as exc:
                 last_exc = exc
                 # Non-retryable: skip ahead to the bubble-up below.
                 if retry_spec is None or not retry_spec.is_retryable(exc):
                     break
-                # Retryable AND budget remaining: WARN, sleep, retry.
+                # Retryable AND budget remaining: DEBUG-level per-attempt log
+                # (per `observability.md` MUST NOT § log-spam-in-hot-loops —
+                # operators with `max_retries=10` would otherwise see 10 WARN
+                # records per fire). Final-attempt summary WARN below covers
+                # the operator-alert axis.
                 if attempt < max_attempts:
                     backoff_seconds = retry_spec.compute_backoff_seconds(attempt)
-                    logger.warning(
+                    logger.debug(
                         "Scheduled execution failed (attempt %d/%d): "
                         "run_id=%s schedule_id=%s exc_type=%s; retrying in %.2fs",
                         attempt,
@@ -824,8 +867,29 @@ class WorkflowScheduler:
 
         # Bubble the last exception so APScheduler's job-error listener fires
         # for the FINAL attempt only — intermediate retries do not surface as
-        # job-error events, matching celery's autoretry semantics.
-        assert last_exc is not None  # loop exited via except
+        # job-error events, matching celery's autoretry semantics. Use an
+        # explicit raise instead of `assert last_exc is not None` because
+        # `python -O` strips asserts and would turn the loop-invariant
+        # violation into `raise None` -> opaque TypeError.
+        if last_exc is None:
+            raise RuntimeError(
+                "scheduler retry loop exited without an exception — "
+                "internal invariant violated"
+            )
+        # Summary WARN at bubble-up time (per `observability.md` Rule 7
+        # bulk-op pattern — one summary record per fire so aggregators see
+        # the failure count, not N individual retry records). Matches the
+        # original retry-attempt WARN content but emits exactly once.
+        if retry_spec is not None and max_attempts > 1:
+            logger.warning(
+                "Scheduled execution exhausted retries: "
+                "run_id=%s schedule_id=%s attempts=%d/%d final_exc=%s",
+                run_id,
+                schedule_id,
+                max_attempts,
+                max_attempts,
+                type(last_exc).__name__,
+            )
         logger.exception(
             "Scheduled execution failed (final): run_id=%s schedule_id=%s",
             run_id,
@@ -843,27 +907,53 @@ class WorkflowScheduler:
         a Python exception of the same class (when importable from ``builtins``)
         so :meth:`RetrySpec.is_retryable` can filter on the original error
         type. Falls back to :class:`RuntimeError` carrying the recorded type
-        name for user-defined exceptions whose class is not in builtins.
+        name for user-defined exceptions whose class is not in builtins OR
+        whose ``__init__`` rejects a single-string argument (e.g. ``OSError``
+        which expects ``(errno, strerror, filename)``, or
+        ``UnicodeDecodeError`` which requires 5-arg construction). Per
+        ``zero-tolerance.md`` Rule 3, the constructor-failure fallback logs
+        at WARN so the synthesis-divergence surfaces in operator dashboards
+        instead of silently masking the original failure.
         """
         if not results:
             return None
-        for node_id, value in results.items():
+        # Deterministic ordering: parallel-branch failures arrive in
+        # node-execution order, which is non-deterministic across runs.
+        # Sort by node_id so the retry-classifier sees the same failure on
+        # every attempt of the same workflow shape — otherwise a transient
+        # ConnectionError in branch A and a permanent ValueError in branch B
+        # could flip the retry decision between attempts.
+        for node_id in sorted(results.keys()):
+            value = results[node_id]
             if not isinstance(value, dict) or not value.get("failed"):
                 continue
             error_type_name = value.get("error_type") or "RuntimeError"
             error_message = value.get("error") or f"node {node_id!r} failed"
-            exc_cls = getattr(__builtins__, error_type_name, None)
-            if not (isinstance(exc_cls, type) and issubclass(exc_cls, Exception)):
-                # __builtins__ may be a dict (when scheduler.py runs under exec);
-                # try import-style lookup as a fallback.
-                exc_cls = (
-                    __builtins__.get(error_type_name)  # type: ignore[union-attr]
-                    if isinstance(__builtins__, dict)
-                    else None
-                )
+            # `builtins` is the canonical idiom; `__builtins__` is a
+            # dual-shape attribute (module under module-import, dict under
+            # exec) that triggers `zero-tolerance.md` Rule 3d (structural
+            # guard on union return type). Importing `builtins` directly
+            # eliminates the dual-shape branch.
+            exc_cls = getattr(builtins, error_type_name, None)
             if not (isinstance(exc_cls, type) and issubclass(exc_cls, Exception)):
                 exc_cls = RuntimeError
-            return exc_cls(f"node {node_id!r}: {error_message}")
+            payload = f"node {node_id!r}: {error_message}"
+            try:
+                return exc_cls(payload)
+            except TypeError:
+                # Builtin exceptions like OSError / UnicodeDecodeError require
+                # multi-arg constructors and raise TypeError on single-string
+                # invocation. Fall back to RuntimeError preserving the
+                # original type name in the message for downstream triage.
+                logger.warning(
+                    "scheduler retry: failed to synthesize %s for node %r — "
+                    "ctor rejected single-string arg; falling back to RuntimeError. "
+                    "is_retryable filter will see RuntimeError, not %s.",
+                    error_type_name,
+                    node_id,
+                    error_type_name,
+                )
+                return RuntimeError(f"[{error_type_name}] {payload}")
         return None
 
     async def _dispatch_to_queue(
