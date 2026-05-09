@@ -57,6 +57,8 @@ from typing import (
     Union,
 )
 
+from kailash.runtime._time_limits import _validate_limits
+
 # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
 # Default is None (auto-detect at build time: "both" with dispatcher,
 # "in_process_only" without). See DurableExecutionEngineBuilder.execution_mode.
@@ -1287,6 +1289,9 @@ class DurableExecutionEngine:
         force_resume_with_drift: bool = False,
         dispatch_kwargs: Optional[Mapping[str, Any]] = None,
         queue_name: str = "default",
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, Any], str]:
         """Execute *workflow* through the wrapped runtime and (optionally) dispatch.
 
@@ -1370,6 +1375,9 @@ class DurableExecutionEngine:
           MUST switch to ``"in_process_only"`` / ``"dispatch_only"`` to
           eliminate the race entirely.
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         effective_inputs: Dict[str, Any] = (
             dict(inputs) if isinstance(inputs, Mapping) else {}
         )
@@ -1404,11 +1412,15 @@ class DurableExecutionEngine:
         if do_in_process:
             # In-process execution. The runtime drives W1 (checkpoint emit)
             # and W2 (history record) via its own hook registry.
+            # Forward typed time-limit kwargs by name so the inner runtime
+            # honors them (#912 Shard 1).
             results, run_id = await self._runtime.execute_workflow_async(
                 workflow,
                 inputs=effective_inputs,
                 idempotency_key=effective_key,
                 force_resume_with_drift=force_resume_with_drift,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
             )
             # If the dispatcher returned a hint, the schedule_id and the
             # in-process run_id are correlated via the engine's INFO log

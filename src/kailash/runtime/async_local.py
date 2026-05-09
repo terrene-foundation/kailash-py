@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
+from kailash.runtime._time_limits import _validate_limits
 from kailash.runtime.durable import (
     NodeCompletionEvent,
     build_checkpoint_key,
@@ -711,6 +712,9 @@ class AsyncLocalRuntime(LocalRuntime):
         parameters: Optional[Dict[str, Any]] = None,
         cancellation_token: Any = None,
         search_attributes: Optional[Dict[str, Any]] = None,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
         **kwargs: Any,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
@@ -731,6 +735,9 @@ class AsyncLocalRuntime(LocalRuntime):
         Raises:
             RuntimeError: If called from async context (use execute_workflow_async instead)
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         # Check if we're already in an event loop
         try:
             loop = asyncio.get_running_loop()
@@ -811,6 +818,8 @@ class AsyncLocalRuntime(LocalRuntime):
         *,
         idempotency_key: Optional[str] = None,
         force_resume_with_drift: bool = False,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
     ) -> Tuple[Dict[str, Any], str]:
         """
         Execute workflow with native async support and production safeguards.
@@ -845,6 +854,9 @@ class AsyncLocalRuntime(LocalRuntime):
             asyncio.TimeoutError: If execution exceeds configured timeout
             WorkflowExecutionError: If execution fails
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         start_time = time.time()
 
         # Generate run_id for tracking (consistent with LocalRuntime)

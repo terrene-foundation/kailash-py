@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from kailash.nodes.base import Node
-from kailash.workflow.dag import CycleDetectedError
+from kailash.runtime._time_limits import _validate_limits
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
 from kailash.tracking import TaskManager, TaskStatus
@@ -15,6 +15,7 @@ from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
 from kailash.workflow import Workflow
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
+from kailash.workflow.dag import CycleDetectedError
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,10 @@ class ParallelCyclicRuntime:
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | None = None,
         parallel_nodes: set[str] | None = None,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
+        **kwargs: Any,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow with parallel and cyclic support.
 
@@ -73,6 +78,11 @@ class ParallelCyclicRuntime:
             task_manager: Optional task manager for tracking
             parameters: Optional parameter overrides per node
             parallel_nodes: Set of node IDs that can be executed in parallel
+            soft_time_limit: Optional advisory deadline in seconds (#912
+                Shard 1 slot; enforcement lands Shard 2).
+            time_limit: Optional unconditional kill deadline in seconds.
+            **kwargs: Forward-compatibility kwargs for additive #912 Shard 1
+                contract.
 
         Returns:
             Tuple of (results dict, run_id)
@@ -81,6 +91,9 @@ class ParallelCyclicRuntime:
             RuntimeExecutionError: If execution fails
             WorkflowValidationError: If workflow is invalid
         """
+        # #912 Shard 1: validate typed time-limit kwargs at the entry point.
+        _validate_limits(soft_time_limit, time_limit)
+
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
 

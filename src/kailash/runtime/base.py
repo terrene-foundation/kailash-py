@@ -840,7 +840,14 @@ class BaseRuntime(ABC):
         self.close()
 
     @abstractmethod
-    def execute(self, workflow: Workflow, **kwargs):
+    def execute(
+        self,
+        workflow: Workflow,
+        *,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
+        **kwargs,
+    ):
         """
         Execute workflow (runtime-specific implementation).
 
@@ -852,7 +859,10 @@ class BaseRuntime(ABC):
                 self,
                 workflow: Workflow,
                 parameters: Optional[Dict] = None,
-                **kwargs
+                *,
+                soft_time_limit: float | None = None,
+                time_limit: float | None = None,
+                **kwargs,
             ) -> Tuple[Dict[str, Any], str]:
                 '''Execute workflow synchronously.'''
                 # Implementation
@@ -863,7 +873,10 @@ class BaseRuntime(ABC):
                 self,
                 workflow: Workflow,
                 parameters: Optional[Dict] = None,
-                **kwargs
+                *,
+                soft_time_limit: float | None = None,
+                time_limit: float | None = None,
+                **kwargs,
             ) -> Tuple[Dict[str, Any], str]:
                 '''Execute workflow asynchronously.'''
                 # Implementation
@@ -871,7 +884,19 @@ class BaseRuntime(ABC):
 
         Args:
             workflow: The workflow to execute
-            **kwargs: Additional execution parameters (runtime-specific)
+            soft_time_limit: Optional advisory deadline in seconds. When
+                reached, the running workflow is signalled via the
+                cancellation token; user code MAY catch
+                :class:`SoftTimeLimitExceeded`, finish in-flight work,
+                and exit cleanly before the hard limit fires.
+                Enforcement lands in #912 Shard 2.
+            time_limit: Optional unconditional kill deadline in seconds.
+                When ``time_limit + grace`` elapses, the wrapper raises
+                :class:`HardTimeLimitExceeded` regardless of
+                acknowledgement. Enforcement lands in #912 Shard 2.
+            **kwargs: Additional execution parameters (runtime-specific).
+                Retained per the additive #912 Shard 1 contract; a
+                future shard MAY tighten via a Rule 6a deprecation cycle.
 
         Returns:
             Tuple of (results_dict, run_id)

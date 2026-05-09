@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
+from kailash.runtime._time_limits import _validate_limits
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
@@ -934,6 +935,8 @@ class LocalRuntime(
         *,
         idempotency_key: Optional[str] = None,
         force_resume_with_drift: bool = False,
+        soft_time_limit: float | None = None,
+        time_limit: float | None = None,
         **kwargs: Any,
     ) -> tuple[dict[str, Any], str | None]:
         """
@@ -1008,6 +1011,11 @@ class LocalRuntime(
             - __enter__, __exit__: Context manager support
             - execute_async(): Async variant
         """
+        # Validate the typed time-limit kwargs at the entry point so caller
+        # bugs (negative values, soft >= hard) raise loudly here, not later
+        # from a timer thread (per #912 Shard 1; enforcement lands Shard 2).
+        _validate_limits(soft_time_limit, time_limit)
+
         # Emit deprecation warning for non-context-managed usage.
         # Externally-managed runtimes (frameworks that call close() at
         # their own shutdown) opt out via mark_externally_managed().
