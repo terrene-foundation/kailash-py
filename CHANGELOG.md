@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — issue #911 Shard 1: multi-queue routing producer surface
+
+`DistributedRuntime.execute(queue=...)` now accepts an optional logical
+queue name and routes the task to the corresponding Redis list. The
+canonical queue-name → Redis-list-key mapping lives in a new shared
+helper module (`src/kailash/runtime/_queue_keys.py`) so the producer
+and (Shard 2) consumer cannot drift out of byte-shape agreement.
+
+- `DistributedRuntime(default_queue="...")` sets the runtime's default
+  queue (defaults to `"default"`).
+- `runtime.execute(workflow, queue="fast")` enqueues to
+  `kailash:tasks:pending:fast`.
+- `runtime.execute(workflow)` enqueues to the legacy single-queue key
+  `kailash:tasks:pending` — byte-identical to pre-#911 deployments.
+- `TaskMessage.queue_name` round-trips through JSON; older-SDK messages
+  without the field deserialize as `"default"`. The default-queue wire
+  format omits `queue_name` so a worker on a pre-#911 SDK reads the
+  message unchanged.
+- `validate_queue_name` rejects empty / > 64-char / colon / slash /
+  whitespace / control-char / null-byte / non-str inputs at the entry
+  point, not deep in the dispatch path.
+
+Worker-side multi-queue dequeue is Shard 2; this Shard 1 only delivers
+the producer + helper module + JSON wire format.
+
 ## [2.18.1] - 2026-05-10
 
 ### Fixed — issue #917 LocalRuntime cleanup-path coroutine leak

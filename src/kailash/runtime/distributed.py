@@ -46,6 +46,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+from kailash.runtime._queue_keys import (
+    DEFAULT_QUEUE_NAME,
+    make_queue_key,
+    validate_queue_name,
+)
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
     _validate_limits,
@@ -96,6 +101,12 @@ class TaskMessage:
             silently ignore it (forward-compat). The worker arms the
             timers at dequeue (NOT enqueue) so queue wait time does
             NOT consume the task's budget. Default ``None`` (no limit).
+        queue_name: Logical queue this task targets. Defaults to
+            ``"default"`` so legacy single-queue producers and workers
+            interoperate byte-for-byte (the default queue resolves to
+            the legacy Redis list key ``kailash:tasks:pending``).
+            Older-SDK ``TaskMessage`` JSON without ``queue_name``
+            deserializes as ``"default"``. Issue #911 Shard 1.
     """
 
     task_id: str = ""
@@ -106,6 +117,7 @@ class TaskMessage:
     attempts: int = 0
     max_attempts: int = 3
     execution_limits: Optional[Dict[str, float]] = None
+    queue_name: str = DEFAULT_QUEUE_NAME
 
     def to_json(self) -> str:
         """Serialize to JSON string for Redis storage.
@@ -127,6 +139,12 @@ class TaskMessage:
         }
         if self.execution_limits is not None:
             payload["execution_limits"] = self.execution_limits
+        # #911 Shard 1: emit queue_name only when non-default so the
+        # default-queue wire format stays byte-identical to pre-#911
+        # JSON. Older workers that don't know the field continue to
+        # parse default-queue messages unchanged.
+        if self.queue_name != DEFAULT_QUEUE_NAME:
+            payload["queue_name"] = self.queue_name
         return json.dumps(payload)
 
     @classmethod
@@ -513,27 +531,49 @@ class DistributedRuntime(BaseRuntime):
         queue: Optional[TaskQueue] = None,
         visibility_timeout: int = 300,
         result_ttl: int = 3600,
+        default_queue: str = DEFAULT_QUEUE_NAME,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._redis_url = redis_url or os.environ.get("KAILASH_REDIS_URL", "")
+        # Producer-side default queue. Validated at construction so an
+        # invalid name fails loud instead of silently stranding tasks
+        # at first execute() call. Issue #911 Shard 1.
+        validate_queue_name(default_queue)
+        self._default_queue = default_queue
         self._queue = queue or TaskQueue(
             redis_url=self._redis_url,
+            queue_key=make_queue_key(default_queue),
             default_visibility_timeout=visibility_timeout,
             result_ttl=result_ttl,
         )
         self._visibility_timeout = visibility_timeout
         self._result_ttl = result_ttl
+        # Per-queue TaskQueue cache so every `execute(queue=...)` call
+        # routes through ONE TaskQueue instance per queue name (sharing
+        # the same Redis client, with the canonical Redis-list-key from
+        # ``make_queue_key``). The default-queue entry mirrors
+        # ``self._queue`` so legacy callers see no behavior change.
+        self._queues: Dict[str, TaskQueue] = {default_queue: self._queue}
 
     def close(self) -> None:
         """Release distributed runtime resources.
 
         Cleans up the task queue connection and any execution metadata.
+        Closes every per-queue TaskQueue instance the runtime created
+        through ``execute(queue=...)`` (#911 Shard 1) so multi-queue
+        runtimes do not leak Redis clients on shutdown.
         """
         self._execution_metadata.clear()
-        _close = getattr(self._queue, "close", None)
-        if _close is not None:
-            _close()
+        # Close every cached per-queue TaskQueue. ``self._queue`` is
+        # always present in ``self._queues`` under the default-queue
+        # name (seeded at __init__) so closing the cache covers both
+        # the legacy single-queue path and any new per-queue routes.
+        for tq in list(self._queues.values()):
+            _close = getattr(tq, "close", None)
+            if _close is not None:
+                _close()
+        self._queues.clear()
 
     def execute(
         self,
@@ -542,6 +582,7 @@ class DistributedRuntime(BaseRuntime):
         *,
         soft_time_limit: float | None = None,
         time_limit: float | None = None,
+        queue: Optional[str] = None,
         **kwargs,
     ) -> Tuple[Dict[str, Any], str]:
         """Submit a workflow to the distributed task queue.
@@ -564,7 +605,13 @@ class DistributedRuntime(BaseRuntime):
                 deadline fires, the task is requeued (NOT dead-lettered)
                 if ``attempts < max_attempts``; dead-lettered only after
                 exhaustion.
-            **kwargs: Additional execution options.
+            queue: Optional logical queue name for routing. Defaults to
+                this runtime's ``default_queue`` (constructor kwarg,
+                itself defaulting to ``"default"``). The
+                ``"default"`` queue resolves to the legacy Redis list
+                key ``kailash:tasks:pending`` for byte-identical
+                back-compat with single-queue deployments. Non-default
+                names get the suffix ``:<name>`` (issue #911 Shard 1).
 
         Returns:
             Tuple of (status_dict, run_id) where status_dict contains
@@ -586,6 +633,14 @@ class DistributedRuntime(BaseRuntime):
         """
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
+
+        # #911 Shard 1: resolve and validate the queue name BEFORE
+        # building any task or run-id metadata so an invalid queue
+        # raises ValueError from the public API surface, not from a
+        # half-constructed task.
+        queue_name = queue if queue is not None else self._default_queue
+        validate_queue_name(queue_name)
+        target_queue = self._queue_for(queue_name)
 
         run_id = self._generate_run_id()
         metadata = self._initialize_execution_metadata(workflow, run_id)
@@ -613,17 +668,40 @@ class DistributedRuntime(BaseRuntime):
             parameters=parameters or {},
             visibility_timeout=self._visibility_timeout,
             execution_limits=execution_limits,
+            queue_name=queue_name,
         )
 
-        self._queue.enqueue(task)
+        target_queue.enqueue(task)
 
         self._update_execution_metadata(run_id, {"status": "queued"})
 
         return {
             "status": "queued",
             "run_id": run_id,
-            "queue_length": self._queue.queue_length(),
+            "queue_length": target_queue.queue_length(),
+            "queue_name": queue_name,
         }, run_id
+
+    def _queue_for(self, queue_name: str) -> TaskQueue:
+        """Return (memoized) the TaskQueue routing to ``queue_name``.
+
+        Each named queue gets its own TaskQueue instance with a queue_key
+        derived through ``make_queue_key`` — guaranteeing producer +
+        worker share the canonical key. The default-queue entry is
+        seeded in ``__init__`` to alias ``self._queue`` so legacy
+        callers see no behavior change. Issue #911 Shard 1.
+        """
+        cached = self._queues.get(queue_name)
+        if cached is not None:
+            return cached
+        new_queue = TaskQueue(
+            redis_url=self._redis_url,
+            queue_key=make_queue_key(queue_name),
+            default_visibility_timeout=self._visibility_timeout,
+            result_ttl=self._result_ttl,
+        )
+        self._queues[queue_name] = new_queue
+        return new_queue
 
     def get_result(self, run_id: str) -> Optional[TaskResult]:
         """Poll for a task result by run_id.
