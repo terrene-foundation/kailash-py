@@ -73,9 +73,9 @@ def _make_sleeping_runtime_factory(sleep_seconds: float):
 
     Per ``rules/testing.md`` § "Protocol Adapters" — a class satisfying
     the runtime's execute(workflow, parameters=, cancellation_token=)
-    shape with deterministic output is NOT a mock. Sidesteps the
-    pre-existing PythonCodeNode round-trip bug (#929) so the test
-    exercises only the multi-queue dispatch contract.
+    shape with deterministic output is NOT a mock. Used to control
+    per-task duration deterministically (e.g., slow vs fast queues)
+    without relying on real PythonCodeNode execution timing.
     """
     import time as _time
 
@@ -106,34 +106,6 @@ def _build_minimal_workflow():
     b = WorkflowBuilder()
     b.add_node("PythonCodeNode", "noop", {"code": "result = 1"})
     return b.build()
-
-
-def _patch_worker_execute_skip_roundtrip(worker, sleep_seconds: float = 0.05):
-    """Replace ``Worker._execute_workflow_sync`` with a no-op that calls
-    the runtime adapter directly.
-
-    Sidesteps the pre-existing PythonCodeNode round-trip bug (#929)
-    so the test exercises only the multi-queue dispatch contract.
-    Same Protocol-Satisfying-Deterministic-Adapter pattern as the
-    #912 Tier-2 suite uses; here we extend the adapter all the way
-    to skip the ``Workflow.from_dict()`` call too.
-    """
-    import time as _time
-
-    def _fake_execute(self, runtime, task, *, cancellation_token=None):
-        deadline = _time.monotonic() + sleep_seconds
-        while _time.monotonic() < deadline:
-            if cancellation_token is not None and cancellation_token.is_cancelled:
-                from kailash.sdk_exceptions import WorkflowCancelledError
-
-                raise WorkflowCancelledError("cancelled")
-            _time.sleep(0.01)
-        return {"node": {"result": "done"}}
-
-    # Bind on the instance.
-    import types
-
-    worker._execute_workflow_sync = types.MethodType(_fake_execute, worker)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +216,6 @@ class TestWorkerMultiQueueWiring:
             dead_worker_timeout=600,
             runtime_factory=_make_sleeping_runtime_factory(0.05),
         )
-        _patch_worker_execute_skip_roundtrip(worker, sleep_seconds=0.05)
 
         worker_task = asyncio.create_task(worker.start())
         await asyncio.sleep(2.0)
@@ -309,7 +280,6 @@ class TestWorkerMultiQueueWiring:
             runtime_factory=_make_sleeping_runtime_factory(8.0),
             worker_id="slow-worker",
         )
-        _patch_worker_execute_skip_roundtrip(slow_worker, sleep_seconds=8.0)
 
         fast_worker = Worker(
             redis_url=REDIS_URL,
@@ -319,7 +289,6 @@ class TestWorkerMultiQueueWiring:
             runtime_factory=_make_sleeping_runtime_factory(0.05),
             worker_id="fast-worker",
         )
-        _patch_worker_execute_skip_roundtrip(fast_worker, sleep_seconds=0.05)
 
         slow_task = asyncio.create_task(slow_worker.start())
         fast_task = asyncio.create_task(fast_worker.start())
@@ -402,7 +371,6 @@ async def test_lifecycle_event_carries_queue_name(_flush_redis) -> None:
         dead_worker_timeout=600,
         runtime_factory=_make_sleeping_runtime_factory(0.05),
     )
-    _patch_worker_execute_skip_roundtrip(worker, sleep_seconds=0.05)
 
     @worker.on_task_success
     def _capture(event):
