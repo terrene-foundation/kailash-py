@@ -50,6 +50,10 @@ class TaskEvent:
         exception: The exception that caused the task to fail or retry.
             ``None`` for success / prerun / postrun events that did not
             observe a failure.
+        queue_name: Logical queue the task was dequeued from (issue #911
+            Shard 2). Populated from ``TaskMessage.queue_name``; defaults
+            to ``"default"`` for back-compat with single-queue Workers
+            and pre-#911 producers whose messages omit the field.
         timestamp: Unix timestamp the event was constructed.
     """
 
@@ -60,6 +64,7 @@ class TaskEvent:
     worker_id: str
     elapsed_ms: Optional[float] = None
     exception: Optional[BaseException] = None
+    queue_name: str = "default"
     timestamp: float = field(default_factory=time.time)
 
 
