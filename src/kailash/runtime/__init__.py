@@ -15,9 +15,15 @@ from kailash.runtime.progress import (
     report_progress,
 )
 from kailash.runtime.runner import WorkflowRunner
+from kailash.runtime.scheduler_admin import (
+    DEFAULT_TENANT_SCOPE,
+    ScheduleAdminView,
+    SchedulerAdminAPI,
+)
 from kailash.runtime.shutdown import ShutdownCoordinator
 from kailash.runtime.signals import QueryRegistry, SignalChannel
 from kailash.runtime.watchdog import EventLoopWatchdog, StallReport
+from kailash.sdk_exceptions import ScheduleNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +43,11 @@ __all__ = [
     "QueryRegistry",
     "EventLoopWatchdog",
     "StallReport",
+    # Issue #913 — scheduler admin surface re-exported for facade discoverability
+    "SchedulerAdminAPI",
+    "ScheduleAdminView",
+    "ScheduleNotFound",
+    "DEFAULT_TENANT_SCOPE",
     "get_runtime",
     "report_progress",
 ]
