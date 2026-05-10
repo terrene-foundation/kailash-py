@@ -18,8 +18,25 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
-from kailash.trust.audit_store import (
+# Skip the entire module if aiosqlite is unavailable. `AsyncSQLitePool` imports
+# aiosqlite at module scope (now guarded with an actionable ImportError per
+# rules/dependencies.md § Declared = Imported); this test cannot run without it,
+# so `pytest.importorskip` is the canonical skip pattern. The trust-plane CI
+# workflow installs `kailash[trust,...]` only — the `db-sqlite` extra is NOT
+# pulled, and recent kailash-mcp / kailash-pact PyPI versions no longer
+# transitively include aiosqlite. Skipping cleanly here is the test-side
+# equivalent of the production-side guard.
+pytest.importorskip(
+    "aiosqlite",
+    reason="aiosqlite required for AsyncSQLitePool-backed audit store tests; "
+    "install via kailash[db-sqlite] extra",
+)
+
+from kailash.core.pool.sqlite_pool import (
+    AsyncSQLitePool,
+    SQLitePoolConfig,
+)  # noqa: E402
+from kailash.trust.audit_store import (  # noqa: E402
     _GENESIS_HASH,
     AuditEvent,
     AuditFilter,
