@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — issue #876: hashing-symmetry across history_store.* log emissions + metric counters
+
+Every `history_store.*` log emission at WARN level or higher now hashes
+record-level identifiers (`run_id`, `workflow_id`, `node_id`,
+`sample_run_id`) via the 8-char SHA-256 prefix helper `_hash_short`,
+and pairs the emission with a metric counter increment on the
+`MetricsBridge` singleton (`kailash.runtime.metrics::get_metrics_bridge`).
+Four sites covered: `record_event.dropped` (the
+`MissingRunIdError`-observed WARN line),
+`get_run_events.payload_decode_failed`, `per_tenant_cap.evicted`,
+`retention.swept`. Closes the asymmetry where `run_id` /
+`sample_run_id` shipped raw while siblings (`tenant_id_hash`,
+`node_id_hash`) were already hashed. Log aggregators
+(Datadog / Splunk / CloudWatch) typically carry broader read access than
+the audit database; the hashing-symmetry contract closes that
+information-leak gradient per `rules/observability.md` Rule 8.
+
+### Added — issue #876: typed MissingRunIdError + tenant-scoped delete_runs_older_than
+
+`kailash.sdk_exceptions::MissingRunIdError` is now raised by
+`WorkflowHistoryStore.record_event` when the incoming event has no
+`run_id`. The runtime subscriber-error handler
+(`durable.NodeCompletionSubscribers.dispatch_async`) observes the typed
+cause specifically — before the generic `Exception` fallback —
+converts it into a WARN log line
+(`history_store.record_event.dropped`, `mode="missing_run_id"`)
+plus a metric counter (`record_history_store_dropped`), and preserves
+the forward-progress invariant.
+
+`WorkflowHistoryStore.delete_runs_older_than` accepts a new
+keyword-only `tenant_id: Optional[str] = None` kwarg. When set, the
+sweep is scoped to one tenant via `_tenant_partition(tenant_id)`. When
+`None` (default), the cross-tenant default is preserved — no behaviour
+change for existing callers.
+
+The sweep is now statement-count-bounded: one transaction containing
+exactly two batched `DELETE` statements (events first, runs second) for
+both `delete_runs_older_than` AND `_enforce_per_tenant_cap`. Was
+previously `1 SELECT + 2N DELETEs` per expired/excess run; the new
+shape is constant in `N`.
+
+### Changed — issue #876: audit-log payload type whitelist (replaces default=str)
+
+`WorkflowHistoryStore.record_event` now serializes payloads via the
+explicit-type whitelist `_audit_safe_default` (`history_store.py`).
+`default=str` is gone.
+
+Supported types: `dict`, `list`, native JSON scalars (`str` / `int` /
+`float` / `bool` / `None`), `datetime` / `date` / `time` (ISO-8601),
+`Decimal` (string via `str(obj)`; reader applies `Decimal(value)`),
+`UUID` (canonical hyphenated form).
+
+**Migration — behaviour change for downstream consumers:** nodes that
+previously returned `set` / `frozenset` / `bytes` / `bytearray` /
+`memoryview` / custom-class instances in their `outputs` or
+`metadata` and silently round-tripped as Python's `str()` repr now
+raise `TypeError` at audit-write time. Fix at the node boundary:
+
+```python
+# Before — silently round-tripped as repr
+return {"items": my_set}
+
+# After — explicit conversion at node boundary
+return {"items": list(my_set)}
+```
+
+The `TypeError` propagates to the subscriber-error handler, which
+logs `durable.on_node_complete.subscriber_failed` with the callback
+name and error type. See `specs/core-runtime.md` §4.7.5 for the full
+type contract table.
+
+### Changed — issue #876: retention sweep throttle (30s default; sweep_interval_seconds=0.0 restores per-event behavior)
+
+`WorkflowHistoryStore.__init__` accepts a new keyword-only
+`sweep_interval_seconds: float = 30.0` kwarg. The retention sweep +
+per-tenant-cap check (triggered by every `record_event` call) are now
+throttled: consecutive invocations within the interval short-circuit
+BEFORE any SQL round-trip. The retention sweep is throttled globally;
+the per-tenant-cap check is throttled per-tenant (a busy tenant does
+NOT starve another tenant's cap check).
+
+`time.monotonic()` is used (NOT wall-clock) so system-clock changes
+cannot skew the throttle.
+
+**Migration — back-compat escape hatch:** users who require strict
+retention semantics (every `record_event` sweeps immediately) MUST
+pass `sweep_interval_seconds=0.0` at construction time:
+
+```python
+store = PostgresHistoryStore(
+    conn,
+    retention_days=30,
+    sweep_interval_seconds=0.0,  # per-event sweep (pre-#876 behaviour)
+)
+```
+
+Trade-off: events that expire BETWEEN sweeps remain in the DB up to
+`sweep_interval_seconds` longer. The retention sweep is "best-effort"
+per the docstring contract — 30s slack is within the spirit of that
+contract.
+
 ## [2.20.1] - 2026-05-10
 
 ### Fixed — issue #941: retry/final lifecycle hooks on leaf-node failures

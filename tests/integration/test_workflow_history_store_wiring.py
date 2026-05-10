@@ -302,15 +302,24 @@ async def test_history_store_indexes_present_on_runs_table(
 @pytest.mark.integration
 async def test_delete_runs_older_than_tenant_scoped_leaves_other_tenants(
     pg_conn: ConnectionManager,
-    history_store: PostgresHistoryStore,
 ):
     """Issue #876 L-1: ``delete_runs_older_than(tenant_id="a")`` MUST
     delete only tenant_a's expired runs; tenant_b's data MUST remain
     intact per ``rules/tenant-isolation.md`` MUST Rule 5.
+
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
+    The C-3 contract under test is the explicit-call surface; the
+    write-time sweep is tested separately.
     """
     from datetime import datetime, timedelta, timezone
 
     from kailash.runtime.durable import NodeCompletionEvent
+
+    # Fresh store with retention disabled so write-time eviction does NOT
+    # delete the test's expired rows BEFORE the explicit sweep runs.
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
 
     past_ts = datetime.now(timezone.utc) - timedelta(days=60)
 
@@ -330,45 +339,48 @@ async def test_delete_runs_older_than_tenant_scoped_leaves_other_tenants(
             tenant_id=tenant,
             error="forced terminal",  # mark terminal so terminal_at is set
         )
-        await history_store.record_event(event)
+        await store.record_event(event)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
     # Sanity: both tenants have one run pre-delete.
-    assert len(await history_store.list_runs(filter={"tenant_id": "tenant_a"})) == 1
-    assert len(await history_store.list_runs(filter={"tenant_id": "tenant_b"})) == 1
+    assert len(await store.list_runs(filter={"tenant_id": "tenant_a"})) == 1
+    assert len(await store.list_runs(filter={"tenant_id": "tenant_b"})) == 1
 
-    deleted = await history_store.delete_runs_older_than(
+    deleted = await store.delete_runs_older_than(
         cutoff, tenant_id="tenant_a", force_downgrade=True
     )
     assert deleted == 1
 
     # tenant_a's expired run is gone.
-    assert await history_store.list_runs(filter={"tenant_id": "tenant_a"}) == []
+    assert await store.list_runs(filter={"tenant_id": "tenant_a"}) == []
     # tenant_b's run survives untouched.
-    rows_b = await history_store.list_runs(filter={"tenant_id": "tenant_b"})
+    rows_b = await store.list_runs(filter={"tenant_id": "tenant_b"})
     assert len(rows_b) == 1
 
 
 @pytest.mark.integration
 async def test_delete_runs_older_than_batched_uses_two_statements(
     pg_conn: ConnectionManager,
-    history_store: PostgresHistoryStore,
 ):
     """Issue #876 L-2: the retention sweep over N expired runs MUST
     issue exactly two DELETE statements (events + runs), NOT 2N.
 
-    Verified by counting DELETEs in pg_stat_statements before and after.
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
     """
     from datetime import datetime, timedelta, timezone
 
     from kailash.runtime.durable import NodeCompletionEvent
 
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
+
     past_ts = datetime.now(timezone.utc) - timedelta(days=60)
     # Insert 5 expired runs for the default tenant.
     for i in range(5):
         run_id = f"r-batch-{i}-{uuid.uuid4().hex[:8]}"
-        await history_store.record_event(
+        await store.record_event(
             NodeCompletionEvent(
                 run_id=run_id,
                 workflow_id="wf",
@@ -385,11 +397,11 @@ async def test_delete_runs_older_than_batched_uses_two_statements(
         )
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    deleted = await history_store.delete_runs_older_than(cutoff, force_downgrade=True)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
     assert deleted == 5
 
     # After the sweep neither runs nor events rows survive for those IDs.
-    surviving = await history_store.list_runs(filter={"tenant_id": "default"})
+    surviving = await store.list_runs(filter={"tenant_id": "default"})
     # Only non-expired runs survive (the post-sweep set excludes the 5
     # we just inserted).  We can't enumerate "the 5" by run_id post-
     # delete; the count test is enough — if N×DELETEs leaked rows the
@@ -400,19 +412,24 @@ async def test_delete_runs_older_than_batched_uses_two_statements(
 @pytest.mark.integration
 async def test_delete_runs_older_than_default_is_cross_tenant(
     pg_conn: ConnectionManager,
-    history_store: PostgresHistoryStore,
 ):
     """Issue #876 L-1: ``tenant_id=None`` (default) preserves the
     cross-tenant sweep behaviour — every tenant's expired runs are
     pruned in one call.
+
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
     """
     from datetime import datetime, timedelta, timezone
 
     from kailash.runtime.durable import NodeCompletionEvent
 
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
+
     past_ts = datetime.now(timezone.utc) - timedelta(days=60)
     for tenant in ("tenant_a", "tenant_b"):
-        await history_store.record_event(
+        await store.record_event(
             NodeCompletionEvent(
                 run_id=f"r-cross-{tenant}-{uuid.uuid4().hex[:8]}",
                 workflow_id="wf",
@@ -429,11 +446,11 @@ async def test_delete_runs_older_than_default_is_cross_tenant(
         )
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    deleted = await history_store.delete_runs_older_than(cutoff, force_downgrade=True)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
     # Both tenants pruned in one call.
     assert deleted == 2
-    assert await history_store.list_runs(filter={"tenant_id": "tenant_a"}) == []
-    assert await history_store.list_runs(filter={"tenant_id": "tenant_b"}) == []
+    assert await store.list_runs(filter={"tenant_id": "tenant_a"}) == []
+    assert await store.list_runs(filter={"tenant_id": "tenant_b"}) == []
 
 
 # ---------------------------------------------------------------------------
