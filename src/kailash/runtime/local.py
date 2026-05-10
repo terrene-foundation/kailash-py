@@ -1560,37 +1560,104 @@ class LocalRuntime(
                                 f"(runtime {self._runtime_id})"
                             )
 
-                    # Dispose connection pools before closing the loop
+                    # Dispose connection pools before closing the loop.
                     if not loop.is_closed():
+                        # If another event loop is currently running (e.g.,
+                        # ``with LocalRuntime()`` inside an ``async def``
+                        # pytest-asyncio test, a Nexus handler, or any caller
+                        # holding an active asyncio loop), we cannot drive
+                        # ``loop.run_until_complete`` on our persistent loop
+                        # without raising ``RuntimeError: Cannot run the event
+                        # loop while another loop is running``. Worse, AsyncSQL
+                        # pools were created against the OUTER loop; disposing
+                        # them on our loop trips ``Task got Future attached to
+                        # a different loop`` and leaks the unawaited
+                        # ``wait_for`` coroutine that wraps the disconnect.
+                        # The outer loop owns the pool lifecycle in that path;
+                        # skip async cleanup here and let it close its pools
+                        # on its own teardown. Sync SQL cleanup still runs.
+                        #
+                        # Residual constraint: ``AsyncSQLDatabaseNode._shared_pools``
+                        # is process-wide, not partitioned by loop. If a caller
+                        # used this same ``LocalRuntime`` instance synchronously
+                        # FIRST (creating pools whose reaper tasks bind to the
+                        # persistent loop), then re-entered ``__exit__`` from
+                        # inside an outer async loop, those persistent-loop-
+                        # owned pools will not be disposed by either path. The
+                        # outer loop's teardown won't reach them (different
+                        # loop); we skip them here. This is an unusual mixed-
+                        # mode pattern; the canonical fix (track which pools
+                        # this runtime created + WARN-log the leak signal)
+                        # is tracked separately so the wait_for warning fix
+                        # can ship now without expanding scope.
                         try:
-                            from kailash.nodes.data.async_sql import (
-                                AsyncSQLDatabaseNode,
+                            outer_running_loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            outer_running_loop = None
+
+                        if outer_running_loop is None:
+                            try:
+                                from kailash.nodes.data.async_sql import (
+                                    AsyncSQLDatabaseNode,
+                                )
+
+                                _clear_pools = getattr(
+                                    AsyncSQLDatabaseNode, "clear_shared_pools", None
+                                )
+                                if _clear_pools is not None:
+                                    # Wrap in an inner ``async def`` so only
+                                    # one coroutine escapes scope. Closing
+                                    # the wrapper cancels the inner
+                                    # ``wait_for`` cleanly if
+                                    # ``run_until_complete`` raises before
+                                    # consuming it — preventing the
+                                    # ``coroutine 'wait_for' was never
+                                    # awaited`` warning that surfaced when
+                                    # users adopted the
+                                    # ``with LocalRuntime()`` pattern.
+                                    async def _dispose_async_sql_pools() -> None:
+                                        try:
+                                            await asyncio.wait_for(
+                                                _clear_pools(graceful=True),
+                                                timeout=5.0,
+                                            )
+                                        except asyncio.TimeoutError:
+                                            logger.warning(
+                                                "Timeout disposing AsyncSQL "
+                                                "pools during shutdown for "
+                                                f"runtime {self._runtime_id}"
+                                            )
+
+                                    _dispose_coro = _dispose_async_sql_pools()
+                                    try:
+                                        loop.run_until_complete(_dispose_coro)
+                                    finally:
+                                        # No-op if the wrapper already ran to
+                                        # completion. Closes both the wrapper
+                                        # and any orphaned inner ``wait_for``
+                                        # if ``run_until_complete`` raised
+                                        # before driving the wrapper.
+                                        _close = getattr(_dispose_coro, "close", None)
+                                        if _close is not None:
+                                            try:
+                                                _close()
+                                            except Exception:
+                                                pass
+                            except Exception as e:
+                                logger.warning(
+                                    f"Error disposing AsyncSQL pools during shutdown: {e}"
+                                )
+                        else:
+                            # Outer loop owns the pools; we cannot dispose
+                            # safely from here. DEBUG (not WARN) because the
+                            # outer loop's teardown handles this.
+                            logger.debug(
+                                f"Skipping AsyncSQL pool cleanup for runtime "
+                                f"{self._runtime_id}: outer event loop is "
+                                f"running (loop_id={id(outer_running_loop)}); "
+                                "outer loop owns pool lifecycle"
                             )
 
-                            _clear_pools = getattr(
-                                AsyncSQLDatabaseNode, "clear_shared_pools", None
-                            )
-                            if _clear_pools is not None:
-                                _coro = _clear_pools(graceful=True)
-                                try:
-                                    loop.run_until_complete(
-                                        asyncio.wait_for(_coro, timeout=5.0)
-                                    )
-                                finally:
-                                    # Defensive: close the coroutine if it
-                                    # never started running (e.g., wait_for
-                                    # cancel/timeout race during shutdown).
-                                    # No-op if already awaited or exhausted.
-                                    _close = getattr(_coro, "close", None)
-                                    if _close is not None:
-                                        try:
-                                            _close()
-                                        except Exception:
-                                            pass
-                        except Exception as e:
-                            logger.warning(
-                                f"Error disposing AsyncSQL pools during shutdown: {e}"
-                            )
                         try:
                             from kailash.nodes.data.sql import SQLDatabaseNode
 
