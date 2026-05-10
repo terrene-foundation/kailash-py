@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — issue #917 LocalRuntime cleanup-path coroutine leak
+
+`LocalRuntime._cleanup_event_loop` (also reached via `__exit__` and
+`close()`) constructed `AsyncSQLDatabaseNode.clear_shared_pools(graceful=True)`
+inline as the first argument to `asyncio.wait_for(...)`. Under any path
+where `wait_for` raises before its body awaits the inner coroutine
+(timeout, cancel-before-start race during shutdown), the coroutine was
+GC'd un-awaited and Python emitted::
+
+    RuntimeWarning: coroutine 'AsyncSQLDatabaseNode.clear_shared_pools'
+    was never awaited
+
+Fixed by capturing the coroutine in a local variable and adding a
+`finally` block that explicitly closes it — a no-op when `wait_for`
+ran the coroutine to completion or cancellation, but a structural
+guarantee that cancel-before-start cannot leak.
+
+Tier-2 regression at
+`tests/integration/runtime/test_local_runtime_exit_cleanup.py` runs
+under `python -W error::RuntimeWarning` and includes a deterministic
+repro of the cancel-before-start race that pre-fix flips a
+`RuntimeWarning` into a typed test failure.
+
 ### Hardened — issue #912 corrective gate (Shard 6)
 
 The /redteam Round 1 audit on the merged #912 wave (PRs #921-#925) caught
@@ -88,7 +111,7 @@ Three security findings were paired with the in-process gap:
 #### Tests
 
 - `tests/unit/test_time_limits_validation.py` — 12 new finite-check
-  + grace_seconds cases.
+  - grace_seconds cases.
 - `tests/integration/runtime/test_local_runtime_time_limits.py` (new)
   — 8 Tier-2 cases covering soft/hard enforcement on real
   `LocalRuntime` plus all entry-point validation paths.
