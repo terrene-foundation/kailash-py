@@ -18,7 +18,15 @@ class TestMockNode:
 
         assert node.node_id == "test_node"
         assert node.name == "test_node"
-        assert node.config == {"param1": "value1", "param2": "value2"}
+        # Issue #929: bound init params (node_id, name) are captured into
+        # self.config for round-trip serialization; "name" defaults to None
+        # because the user did not pass it explicitly.
+        assert node.config == {
+            "param1": "value1",
+            "param2": "value2",
+            "node_id": "test_node",
+            "name": None,
+        }
 
     def test_init_with_name(self):
         """Test MockNode initialization with name."""
@@ -26,7 +34,11 @@ class TestMockNode:
 
         assert node.node_id == "test_node"
         assert node.name == "Test Node"
-        assert node.config == {"param": "value"}
+        assert node.config == {
+            "param": "value",
+            "node_id": "test_node",
+            "name": "Test Node",
+        }
 
     def test_init_without_node_id(self):
         """Test MockNode initialization without node_id."""
@@ -34,7 +46,11 @@ class TestMockNode:
 
         assert node.node_id is None
         assert node.name == "Test Node"
-        assert node.config == {"param": "value"}
+        assert node.config == {
+            "param": "value",
+            "node_id": None,
+            "name": "Test Node",
+        }
 
     def test_process_method(self):
         """Test MockNode process method."""
@@ -168,8 +184,9 @@ class TestMockNodeUsage:
 
         assert node1.node_id == "node1"
         assert node2.node_id == "node2"
-        assert node1.config == {"config_value": "a"}
-        assert node2.config == {"config_value": "b"}
+        # Issue #929: node_id + name are captured into config for round-trip.
+        assert node1.config == {"config_value": "a", "node_id": "node1", "name": None}
+        assert node2.config == {"config_value": "b", "node_id": "node2", "name": None}
 
         # Process different values
         result1 = node1.process({"value": 3})
@@ -188,4 +205,9 @@ class TestMockNodeUsage:
 
         assert isinstance(node, MockNode)
         assert node.node_id == "reader1"
-        assert node.config == {"file_path": "/tmp/data.csv"}
+        # Issue #929: node_id + name captured for round-trip.
+        assert node.config == {
+            "file_path": "/tmp/data.csv",
+            "node_id": "reader1",
+            "name": None,
+        }

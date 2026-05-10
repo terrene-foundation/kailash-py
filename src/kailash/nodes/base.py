@@ -193,6 +193,133 @@ class Node(ABC):
     _strict_unknown_params = False  # Subclasses can set True to error on unknown params
     _env_cache: dict[str, str | None] = {}
 
+    # Init-capture machinery — see __init_subclass__ below.
+    # Names here are NEVER captured into self.config from a subclass __init__'s
+    # bound parameters. They are either internal-routing keys (`_node_id`),
+    # NodeMetadata-derived (`name`, `description`, `version`, `author`, `tags`,
+    # `metadata`), or framework-private (`config` itself, `*args`, `**kwargs`).
+    # `name` IS captured separately via NodeMetadata; `description` likewise.
+    _INIT_CAPTURE_EXCLUDE: frozenset[str] = frozenset(
+        {
+            "self",
+            "_node_id",
+            "args",
+            "kwargs",
+            "metadata",
+        }
+    )
+
+    def __init_subclass__(cls, **subclass_kwargs):
+        """Install a per-subclass __init__ wrapper that captures bound init params.
+
+        Issue #929: ``Workflow.to_dict() → Workflow.from_dict()`` silently strips
+        every named/positional argument that a subclass ``__init__`` consumes
+        WITHOUT re-injecting into ``self.config``. ``PythonCodeNode.__init__``
+        consumes ``code``, ``input_types``, ``output_type``, etc. as named args;
+        none of them flow into ``super().__init__(**kwargs)`` because they were
+        peeled off the kwargs dict before the super call.
+
+        The fix is applied here ONCE per subclass: wrap ``cls.__init__`` so that
+        AFTER the original init runs (and ``self.config`` is populated by
+        ``Node.__init__``), the bound init parameters are merged into
+        ``self.config`` for every name that:
+
+        1. is not in ``_INIT_CAPTURE_EXCLUDE``,
+        2. is not already present in ``self.config`` (subclass may have set it
+           directly via ``**kwargs`` forwarding),
+        3. has a non-sentinel value (positional defaults pass through; the
+           sentinel for "user passed this" is "binding succeeded" — we keep
+           the bound value verbatim, including ``None``, so round-trip is
+           faithful).
+
+        The wrapper is installed exactly once per subclass tree leaf via the
+        ``_init_capture_installed`` marker, so re-imports / multiple subclass
+        definitions of the same class do not re-wrap.
+
+        Round-trip contract: ``cls(**self.config)`` after ``to_dict``/``from_dict``
+        reconstructs an equivalent node, EXCEPT for params whose values are
+        non-JSON-serializable runtime objects (callables, classes, file
+        handles). Those are still captured into ``self.config`` (so the dict
+        carries them in-memory), but ``Workflow.to_json()`` will skip or fail
+        on them — that is a separate concern and matches existing behavior.
+        """
+        super().__init_subclass__(**subclass_kwargs)
+
+        # Skip if this class did not redefine __init__.
+        # (Subclasses inheriting Node.__init__ unchanged need no wrapping.)
+        if "__init__" not in cls.__dict__:
+            return
+
+        original_init = cls.__dict__["__init__"]
+
+        # Avoid double-wrapping if a class is re-imported or its init is
+        # already a capture-wrapper from a previous installation.
+        if getattr(original_init, "_init_capture_installed", False):
+            return
+
+        # Pre-compute the signature once at class-definition time.
+        try:
+            sig = inspect.signature(original_init)
+        except (TypeError, ValueError):
+            # Some C-extension / built-in inits have no signature. Skip.
+            return
+
+        param_names_to_capture = [
+            name
+            for name in sig.parameters
+            if name not in cls._INIT_CAPTURE_EXCLUDE
+            and sig.parameters[name].kind
+            not in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            )
+        ]
+
+        # Nothing to capture beyond what Node.__init__ already records.
+        if not param_names_to_capture:
+            return
+
+        def __init_with_capture(self, *args, **kwargs):
+            # Bind args before calling original; falls back gracefully if the
+            # call would TypeError (we let the real init raise the real error).
+            try:
+                bound = sig.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+            except TypeError:
+                bound = None
+
+            original_init(self, *args, **kwargs)
+
+            # After original_init returns, self.config is populated by
+            # Node.__init__. Merge bound init params for round-trip faithfulness.
+            if bound is None:
+                return
+            if not hasattr(self, "config") or self.config is None:
+                # Defensive: original_init failed to populate config but didn't
+                # raise. Don't mask the bug; just skip capture.
+                return
+
+            for name in param_names_to_capture:
+                if name in self.config:
+                    # Subclass already forwarded this via **kwargs; preserve.
+                    continue
+                if name in bound.arguments:
+                    self.config[name] = bound.arguments[name]
+
+        __init_with_capture.__wrapped__ = original_init
+        __init_with_capture._init_capture_installed = True
+        # Preserve the original signature for inspect.signature(cls.__init__)
+        # callers (e.g., graph._create_node_instance).
+        __init_with_capture.__signature__ = sig
+        try:
+            __init_with_capture.__doc__ = original_init.__doc__
+            __init_with_capture.__name__ = original_init.__name__
+            __init_with_capture.__qualname__ = original_init.__qualname__
+        except (AttributeError, TypeError):
+            pass
+
+        cls.__init__ = __init_with_capture
+
     @classmethod
     def _get_env(cls, key: str, default: str | None = None) -> str | None:
         """Get environment variable with class-level caching.
