@@ -513,6 +513,196 @@ def test_get_or_create_run_lock_lru_eviction_bounds_memory() -> None:
         hs_mod._MAX_RUN_LOCKS = original_bound
 
 
+# ---------------------------------------------------------------------------
+# C-1: hashing-symmetry across history_store.* log emissions (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_run_events_payload_decode_failed_hashes_run_id(
+    caplog,
+) -> None:
+    """Issue #876 C-1: ``get_run_events.payload_decode_failed`` MUST hash
+    the record-level ``run_id`` identifier.  Per
+    ``rules/observability.md`` Rule 8 raw record-level IDs at WARN+
+    leak schema-adjacent information to log aggregators with broader
+    access than the audit database.
+    """
+    import logging
+    import hashlib
+
+    from kailash.infrastructure.history_store import _hash_short
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    # The connection adapter returns one events row whose ``payload_json``
+    # is malformed JSON.  We also need a non-None first fetchone() call
+    # for the runs-table tenant-scope check that gates the events query.
+    raw_run_id = "wf_run_secret_888"
+    conn = _RecordingConn(fetchone_results=[{"run_id": raw_run_id}])
+    conn._fetch_results = {
+        "FROM workflow_run_events": [
+            {
+                "id": 1,
+                "run_id": raw_run_id,
+                "event_seq": 7,
+                "node_id_hash": "abcd1234",
+                "event_type": "node.completed",
+                "payload_json": "{not valid json",
+                "classified_field_count": 0,
+                "ts": "2026-05-11T00:00:00",
+            }
+        ],
+    }
+    store = SQLiteHistoryStore(conn)
+    store._initialized = True
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count(
+        "kailash_history_store_payload_decode_failed_total"
+    )
+
+    caplog.set_level(logging.WARNING)
+    rows = await store.get_run_events(raw_run_id, tenant_id="t1")
+    # The malformed row still surfaces (with empty payload) — the WARN log
+    # signals the drop; the read API does not raise.
+    assert len(rows) == 1
+    assert rows[0]["payload"] == {}
+
+    # The raw run_id MUST NOT appear in any log record (message or extra).
+    for record in caplog.records:
+        assert (
+            raw_run_id not in record.getMessage()
+        ), f"raw run_id leaked into log message: {record.getMessage()!r}"
+        assert raw_run_id not in repr(
+            record.__dict__
+        ), f"raw run_id leaked into log extra: {record.__dict__!r}"
+
+    # The hashed identifier MUST be present in at least one WARN record.
+    decode_records = [
+        r for r in caplog.records if "payload_decode_failed" in r.getMessage()
+    ]
+    assert decode_records, "expected payload_decode_failed WARN line"
+    expected_hash = _hash_short(raw_run_id)
+    assert any(
+        getattr(r, "run_id_hash", None) == expected_hash for r in decode_records
+    ), f"expected run_id_hash={expected_hash!r} in WARN records"
+
+    # The metric counter MUST have incremented for the same WARN line.
+    after = bridge.cumulative_count("kailash_history_store_payload_decode_failed_total")
+    assert after - before == 1
+
+
+@pytest.mark.asyncio
+async def test_per_tenant_cap_evicted_hashes_sample_run_id(
+    caplog,
+) -> None:
+    """Issue #876 C-1: ``per_tenant_cap.evicted`` MUST hash the
+    record-level ``sample_run_id`` field so the WARN line is symmetric
+    with the already-hashed ``tenant_id_hash`` sibling.
+    """
+    import logging
+
+    from kailash.infrastructure.history_store import _hash_short
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    raw_sample_run_id = "oldest_run_xyz_777"
+
+    # The internal eviction path performs: COUNT(*), then SELECT oldest,
+    # then DELETE inside a transaction.  The deterministic adapter
+    # returns COUNT > cap so excess > 0, then the SELECT returns one
+    # oldest row that becomes the sample.
+    conn = _RecordingConn(
+        fetchone_results=[
+            {"cnt": 5},  # COUNT(*) — cap is 1 below, so excess=4
+        ]
+    )
+    conn._fetch_results = {
+        "ORDER BY started_at ASC": [
+            {"run_id": raw_sample_run_id, "started_at": "2026-05-01T00:00:00"},
+            {"run_id": "run_2", "started_at": "2026-05-02T00:00:00"},
+            {"run_id": "run_3", "started_at": "2026-05-03T00:00:00"},
+            {"run_id": "run_4", "started_at": "2026-05-04T00:00:00"},
+        ],
+    }
+    store = SQLiteHistoryStore(conn, per_tenant_cap=1)
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count(
+        "kailash_history_store_per_tenant_cap_evicted_total"
+    )
+
+    caplog.set_level(logging.WARNING)
+    await store._enforce_per_tenant_cap("tenant_a")
+
+    # Raw sample_run_id MUST NOT appear in any log record.
+    for record in caplog.records:
+        assert raw_sample_run_id not in record.getMessage()
+        assert raw_sample_run_id not in repr(record.__dict__)
+
+    # Hashed identifier MUST be present.
+    cap_records = [
+        r for r in caplog.records if "per_tenant_cap.evicted" in r.getMessage()
+    ]
+    assert cap_records, "expected per_tenant_cap.evicted WARN line"
+    expected_hash = _hash_short(raw_sample_run_id)
+    assert any(
+        getattr(r, "sample_run_id_hash", None) == expected_hash for r in cap_records
+    ), f"expected sample_run_id_hash={expected_hash!r} in WARN records"
+    # The legacy raw-field name MUST be gone (no drift).
+    for r in cap_records:
+        assert not hasattr(
+            r, "sample_run_id"
+        ), "raw sample_run_id field MUST NOT appear in extra"
+
+    # Metric counter MUST have incremented by ``excess`` rows.
+    after = bridge.cumulative_count(
+        "kailash_history_store_per_tenant_cap_evicted_total"
+    )
+    assert after - before == 4  # 5 rows present, cap=1, excess=4
+
+
+@pytest.mark.asyncio
+async def test_retention_swept_emits_metric_counter(caplog) -> None:
+    """Issue #876 C-1: ``retention.swept`` MUST emit a metric counter
+    pairing the INFO log line.  No record-level identifiers in this
+    emission — the test verifies the counter increments by ``deleted``.
+    """
+    import logging
+
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    # The deterministic adapter's expired-runs SELECT returns 3 rows.
+    conn = _RecordingConn()
+    conn._fetch_results = {
+        "WHERE terminal_at IS NOT NULL": [
+            {"run_id": "expired_1"},
+            {"run_id": "expired_2"},
+            {"run_id": "expired_3"},
+        ],
+    }
+    store = SQLiteHistoryStore(conn)
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count("kailash_history_store_retention_swept_total")
+
+    caplog.set_level(logging.INFO)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
+    assert deleted == 3
+
+    after = bridge.cumulative_count("kailash_history_store_retention_swept_total")
+    assert after - before == 3
+
+    # The INFO line MUST NOT carry record-level identifiers.
+    swept_records = [r for r in caplog.records if "retention.swept" in r.getMessage()]
+    assert swept_records, "expected retention.swept INFO line"
+    for r in swept_records:
+        # Confirm no run_id / workflow_id field has leaked.
+        assert not hasattr(r, "run_id")
+        assert not hasattr(r, "sample_run_id")
+        assert not hasattr(r, "workflow_id")
+
+
 def test_get_or_create_run_lock_promotes_on_access() -> None:
     """Accessing an existing entry promotes it to most-recently-used so
     an active long-lived run is never evicted under bound pressure.

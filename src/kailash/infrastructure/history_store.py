@@ -79,6 +79,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 
 from kailash.db.connection import ConnectionManager
 from kailash.runtime.durable import NodeCompletionEvent, redact_event_for_persistence
+from kailash.runtime.metrics import get_metrics_bridge
 from kailash.sdk_exceptions import MissingRunIdError
 
 logger = logging.getLogger(__name__)
@@ -604,14 +605,22 @@ class WorkflowHistoryStore(ABC):
             try:
                 event_dict["payload"] = json.loads(raw) if raw else {}
             except (TypeError, json.JSONDecodeError) as exc:
+                # Per issue #876 C-1 + ``rules/observability.md`` Rule 8 —
+                # hash the record-level ``run_id`` identifier (sibling
+                # ``tenant_id_hash`` is already hashed at the
+                # per-tenant-cap emission; this WARN line now matches).
+                # ``event_seq`` is a numeric sequence number (not an
+                # identifier) so it stays raw.  Metric counter pairs the
+                # WARN per Rule 8.
                 logger.warning(
                     "history_store.get_run_events.payload_decode_failed",
                     extra={
-                        "run_id": run_id,
+                        "run_id_hash": _hash_short(run_id),
                         "event_seq": event_dict.get("event_seq"),
                         "error_type": type(exc).__name__,
                     },
                 )
+                get_metrics_bridge().record_history_store_payload_decode_failed()
                 event_dict["payload"] = {}
             result.append(event_dict)
         return result
@@ -726,6 +735,10 @@ class WorkflowHistoryStore(ABC):
                 )
 
         if deleted > 0:
+            # Per issue #876 C-1 — emission already verified clean of
+            # record-level identifiers (counts + cutoff-ts only).  Metric
+            # counter pairs the INFO line per ``rules/observability.md``
+            # Rule 8 so operators can detect drift without grepping logs.
             logger.info(
                 "history_store.retention.swept",
                 extra={
@@ -734,6 +747,7 @@ class WorkflowHistoryStore(ABC):
                     "before_ts": ts_iso,
                 },
             )
+            get_metrics_bridge().record_history_store_retention_swept(deleted)
         return deleted
 
     # ------------------------------------------------------------------
@@ -795,16 +809,22 @@ class WorkflowHistoryStore(ABC):
                     tenant_id,
                 )
 
+        # Per issue #876 C-1 + ``rules/observability.md`` Rule 8 — hash
+        # the record-level ``sample_run_id`` identifier so the WARN line
+        # is symmetric with the already-hashed ``tenant_id_hash`` sibling
+        # field.  Counts (``attempted`` / ``failed`` / ``cap``) and the
+        # metric-counter increment do NOT carry record-level identifiers.
         logger.warning(
             "history_store.per_tenant_cap.evicted",
             extra={
                 "attempted": excess,
                 "failed": 0,
                 "tenant_id_hash": _hash_short(tenant_id),
-                "sample_run_id": sample_run_id,
+                "sample_run_id_hash": _hash_short(sample_run_id),
                 "cap": self._per_tenant_cap,
             },
         )
+        get_metrics_bridge().record_history_store_per_tenant_cap_evicted(excess)
 
 
 # ---------------------------------------------------------------------------

@@ -292,3 +292,60 @@ async def test_history_store_indexes_present_on_runs_table(
     assert "idx_workflow_runs_tenant_run_id" in names
     assert "idx_workflow_runs_tenant_status_started" in names
     assert "idx_workflow_run_events_run_seq" in names
+
+
+# ---------------------------------------------------------------------------
+# 5. C-1 hashing-symmetry — no raw record-level IDs at WARN+ (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_history_store_warn_logs_no_raw_record_identifiers(
+    pg_conn: ConnectionManager,
+    history_store: PostgresHistoryStore,
+    caplog,
+):
+    """Issue #876 C-1 (Tier-2): execute a workflow against real Postgres
+    and force the ``payload_decode_failed`` WARN path by writing an
+    invalid JSON payload directly; assert no raw record-level
+    identifier (run_id / workflow_id) appears in any history_store.*
+    log record per ``rules/observability.md`` Rule 8.
+    """
+    import logging
+
+    workflow = _build_two_node_workflow()
+    runtime = AsyncLocalRuntime(history_store=history_store)
+    _, run_id = await runtime.execute_workflow_async(
+        workflow,
+        inputs={},
+        idempotency_key=f"test_warn_hash_{uuid.uuid4().hex[:8]}",
+    )
+
+    # Corrupt one event's payload_json so the next get_run_events read
+    # triggers the WARN path.
+    await pg_conn.execute(
+        "UPDATE workflow_run_events SET payload_json = ? WHERE run_id = ?",
+        "{not valid json",
+        run_id,
+    )
+
+    caplog.clear()
+    caplog.set_level(logging.WARNING)
+    events = await history_store.get_run_events(run_id, tenant_id="default")
+    # Corrupted row surfaces with empty payload (WARN-and-continue per Rule 8).
+    assert any(ev["payload"] == {} for ev in events)
+
+    history_records = [
+        r
+        for r in caplog.records
+        if r.name.startswith("kailash.infrastructure.history_store")
+    ]
+    assert history_records, "expected history_store.* WARN line"
+    for record in history_records:
+        msg = record.getMessage()
+        extra_repr = repr(record.__dict__)
+        # Raw run_id MUST NOT appear in any history_store WARN record.
+        assert run_id not in msg, f"raw run_id leaked into log message: {msg!r}"
+        assert (
+            run_id not in extra_repr
+        ), f"raw run_id leaked into log extra: {extra_repr!r}"
