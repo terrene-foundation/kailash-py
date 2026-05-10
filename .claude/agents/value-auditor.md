@@ -129,7 +129,3 @@ Use `browser_navigate` → `browser_snapshot` (read accessibility tree for subst
 
 - **analyst**: Escalate when value gaps require architectural investigation
 - **reviewer**: Hand off specific UI/UX issues found during audit
-
-## Related Skills
-
-- `skills/24-value-audit/` — Full audit methodology, demo readiness checklist, value flow patterns

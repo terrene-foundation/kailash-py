@@ -108,11 +108,4 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 
 ## Skill References
 
-- `skills/11-frontend-integration/flutter-patterns.md` — implementation patterns and code examples
-- `skills/11-frontend-integration/flutter-integration-quick.md` — quick API setup
-- `skills/11-frontend-integration/frontend-patterns.md` — general frontend patterns
-- `skills/19-flutter-patterns/SKILL.md` — Flutter patterns and design systems
-- `skills/19-flutter-patterns/flutter-design-system.md` — design system guide
-- `skills/19-flutter-patterns/creating-design-system.md` — creating design systems
-- `skills/19-flutter-patterns/flutter-testing-patterns.md` — testing strategies
 - `skills/23-uiux-design-principles/SKILL.md` — UI/UX design principles (CRITICAL)

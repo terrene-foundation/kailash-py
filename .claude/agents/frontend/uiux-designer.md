@@ -109,6 +109,3 @@ Verdict: PASS (0-2) / MARGINAL (3-4) / FAIL (5+). See `/i-audit`.
 
 - `skills/23-uiux-design-principles/SKILL.md` — design principles (CRITICAL)
 - `skills/25-ai-interaction-patterns/SKILL.md` — AI pattern catalog
-- `skills/21-enterprise-ai-ux/SKILL.md` — enterprise AI design
-- `skills/22-conversation-ux/SKILL.md` — conversation patterns
-- `skills/20-interactive-widgets/SKILL.md` — widget patterns

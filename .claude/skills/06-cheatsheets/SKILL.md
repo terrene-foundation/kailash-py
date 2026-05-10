@@ -154,9 +154,7 @@ Use this skill when you need:
 ## Related Skills
 
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core SDK fundamentals
-- **[07-development-guides](../development-guides/SKILL.md)** - Detailed development guides
 - **[08-nodes-reference](../nodes/SKILL.md)** - Node reference documentation
-- **[09-workflow-patterns](../workflows/SKILL.md)** - Industry workflow patterns
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Mandatory best practices
 
 ## Support

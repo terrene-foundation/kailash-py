@@ -15,3 +15,17 @@ scripts/resolve-template.js
 .claude/projects/
 .claude/scheduled_tasks.lock
 .claude/test-harness/
+.claude/skills/07-development-guides/
+.claude/skills/09-workflow-patterns/
+.claude/skills/11-frontend-integration/
+.claude/skills/13-architecture-decisions/
+.claude/skills/14-code-templates/
+.claude/skills/19-flutter-patterns/
+.claude/skills/20-interactive-widgets/
+.claude/skills/21-enterprise-ai-ux/
+.claude/skills/22-conversation-ux/
+.claude/skills/24-value-audit/
+.claude/skills/28-coc-reference/
+.claude/skills/30-claude-code-patterns/anti-patterns.md
+.claude/skills/30-claude-code-patterns/artifact-design.md
+.claude/skills/30-claude-code-patterns/token-budget.md

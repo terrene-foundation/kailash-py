@@ -18,9 +18,6 @@ Use these patterns when asking about AI UX, AI interaction, prompt UX, AI trust,
 | Skill                                 | Focus                                                                             |
 | ------------------------------------- | --------------------------------------------------------------------------------- |
 | **23-uiux-design-principles**         | Layout, hierarchy, responsive design (framework-agnostic)                         |
-| **21-enterprise-ai-ux**               | Enterprise context: challenge taxonomy, professional palettes, RBAC               |
-| **22-conversation-ux**                | Thread management, branching data model, context switching                        |
-| **20-interactive-widgets**            | Widget protocols, rendering pipeline, state management                            |
 | **25-ai-interaction-patterns** (this) | AI-SPECIFIC interaction logic: how users prompt, control, trust, and relate to AI |
 
 ## Reference Documentation
@@ -107,10 +104,7 @@ Avatar, Personality, Name, Color, Iconography
 
 ## Related Skills
 
-- **[21-enterprise-ai-ux](../21-enterprise-ai-ux/SKILL.md)** - Enterprise-specific AI design
-- **[22-conversation-ux](../22-conversation-ux/SKILL.md)** - Thread management and conversation data models
 - **[23-uiux-design-principles](../23-uiux-design-principles/SKILL.md)** - General design principles
-- **[20-interactive-widgets](../20-interactive-widgets/SKILL.md)** - Widget rendering and state management
 
 ## Support
 
