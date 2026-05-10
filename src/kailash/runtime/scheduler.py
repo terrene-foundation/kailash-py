@@ -54,6 +54,15 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 if TYPE_CHECKING:
     from kailash.runtime.dispatcher import Dispatcher
 
+# NOTE: SchedulerAdminAPI is intentionally NOT imported under TYPE_CHECKING.
+# scheduler_admin.py imports scheduler symbols (RetrySpec, ScheduleInfo,
+# ScheduleType, WorkflowScheduler) for typing — adding a TYPE_CHECKING
+# import here would form a module-level cyclic import that CodeQL flags
+# as `py/unsafe-cyclic-import`. The runtime resolution is the lazy import
+# inside the `admin_api` property body (search this file for
+# `from kailash.runtime.scheduler_admin import SchedulerAdminAPI`).
+# Type annotations referencing the class use `Any` to avoid the cycle.
+
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
     _validate_limits,
@@ -465,6 +474,13 @@ class WorkflowScheduler:
         self._default_soft_time_limit: Optional[float] = default_soft_time_limit
         self._default_time_limit: Optional[float] = default_time_limit
 
+        # Issue #913: lazy-built admin facade. Constructed on first
+        # `scheduler.admin_api` access so the SchedulerAdminAPI module's
+        # `from kailash.runtime.scheduler import ...` TYPE_CHECKING import
+        # cannot create a circular-import hazard at scheduler import time.
+        # Typed `Any` to avoid cyclic-import (see module-level NOTE).
+        self._admin_api: Optional[Any] = None
+
         # Per-job fire-time capture: APScheduler's EVENT_JOB_SUBMITTED listener
         # fires BEFORE the job callback with `event.scheduled_run_time`, the
         # ACTUAL fire instant for the currently-firing job. We record it here
@@ -536,6 +552,43 @@ class WorkflowScheduler:
         if self._scheduler.running:
             self._scheduler.shutdown(wait=wait)
             logger.info("WorkflowScheduler shut down (wait=%s)", wait)
+
+    @property
+    def admin_api(self) -> Any:
+        """Runtime admin surface for this scheduler (#913).
+
+        Production users edit schedules at runtime through this property —
+        list active schedules, pause/resume, update cron expressions, delete
+        schedules — without restarting the process or shipping a code change.
+
+        The returned :class:`SchedulerAdminAPI` is bound to THIS scheduler
+        instance (no parallel state) and is memoized: repeated property
+        access returns the SAME admin object. Mutating calls on the admin
+        write a structured audit log line naming the supplied ``actor`` so
+        post-incident triage can reconstruct who edited what.
+
+        Example:
+            >>> scheduler = WorkflowScheduler(job_store_path=None)
+            >>> scheduler.start()
+            >>> for view in scheduler.admin_api.list_schedules():
+            ...     print(view["schedule_id"], view["next_run_time"])
+            >>> scheduler.admin_api.update_cron(
+            ...     "sched-abc123", "0 7 * * *", actor="ops@example.com"
+            ... )
+
+        See Also:
+            :class:`kailash.runtime.scheduler_admin.SchedulerAdminAPI` —
+            the admin facade itself; the HTTP / CLI / RPC layers MUST be
+            thin wrappers over its methods.
+        """
+        # Lazy import: scheduler_admin uses `if TYPE_CHECKING:` to import
+        # this module's types, so a top-level import here would create a
+        # cycle. The deferred import resolves the cycle at first access.
+        from kailash.runtime.scheduler_admin import SchedulerAdminAPI
+
+        if self._admin_api is None:
+            self._admin_api = SchedulerAdminAPI(self)
+        return self._admin_api
 
     def schedule_cron(
         self,
