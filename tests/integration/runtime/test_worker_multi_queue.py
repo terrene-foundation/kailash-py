@@ -426,7 +426,6 @@ async def test_per_queue_processing_isolation(_flush_redis) -> None:
         dead_worker_timeout=600,
         runtime_factory=_make_sleeping_runtime_factory(3.0),
     )
-    _patch_worker_execute_skip_roundtrip(worker, sleep_seconds=3.0)
 
     worker_task = asyncio.create_task(worker.start())
     try:
