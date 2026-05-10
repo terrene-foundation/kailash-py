@@ -104,9 +104,16 @@ def test_local_runtime_soft_time_limit_raises_on_sleeping_workflow():
     # blocking sleep means we wait the full 2s, but the typed
     # exception MUST be raised (NOT the unstubbed quickstart success).
     assert exc_info.type in (SoftTimeLimitExceeded, HardTimeLimitExceeded)
-    # Bound elapsed below 4s so we know we didn't hang waiting on a
-    # never-firing timer (the no-wiring failure mode).
-    assert elapsed < 4.0, (
+    # Bound elapsed below 10s so we know we didn't hang waiting on a
+    # never-firing timer (the no-wiring failure mode would hit pytest's
+    # 30s timeout). The bound is loose enough to absorb cold-start
+    # overhead — PythonCodeNode subprocess + import-cache warm-up can
+    # add several seconds beyond the 2s workflow sleep on a fresh
+    # interpreter. The test's purpose is "did the timer fire at all",
+    # which the typed exception assertion already proves; the elapsed
+    # bound only guards against the no-wiring "completes successfully"
+    # path masquerading as a typed-exception raise.
+    assert elapsed < 10.0, (
         f"raise MUST happen by post-completion poll, not hang; "
         f"elapsed={elapsed:.2f}s, exc={type(exc_info.value).__name__}"
     )
@@ -132,7 +139,10 @@ def test_local_runtime_hard_time_limit_raises_after_grace():
 
     # Hard kill at 0.5s + 1.0s grace = 1.5s; the blocking sleep
     # finishes at 2.0s, so the post-completion poll fires at ~2s.
-    assert elapsed < 4.0, (
+    # 10s upper bound absorbs cold-start overhead (see soft-limit test
+    # above for rationale); the no-wiring failure mode hits pytest's
+    # 30s timeout, not this bound.
+    assert elapsed < 10.0, (
         f"hard kill MUST raise by post-completion poll; " f"elapsed={elapsed:.2f}s"
     )
 
