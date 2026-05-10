@@ -1571,12 +1571,22 @@ class LocalRuntime(
                                 AsyncSQLDatabaseNode, "clear_shared_pools", None
                             )
                             if _clear_pools is not None:
-                                loop.run_until_complete(
-                                    asyncio.wait_for(
-                                        _clear_pools(graceful=True),
-                                        timeout=5.0,
+                                _coro = _clear_pools(graceful=True)
+                                try:
+                                    loop.run_until_complete(
+                                        asyncio.wait_for(_coro, timeout=5.0)
                                     )
-                                )
+                                finally:
+                                    # Defensive: close the coroutine if it
+                                    # never started running (e.g., wait_for
+                                    # cancel/timeout race during shutdown).
+                                    # No-op if already awaited or exhausted.
+                                    _close = getattr(_coro, "close", None)
+                                    if _close is not None:
+                                        try:
+                                            _close()
+                                        except Exception:
+                                            pass
                         except Exception as e:
                             logger.warning(
                                 f"Error disposing AsyncSQL pools during shutdown: {e}"
