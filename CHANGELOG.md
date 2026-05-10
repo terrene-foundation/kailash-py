@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.20.0] - 2026-05-10
 
 ### Added — issue #913: WorkflowScheduler runtime admin API
 
@@ -71,6 +71,32 @@ the scheduler-dispatcher boundary.
   scheduler-dispatcher path now uses the same canonical validator as the
   distributed-runtime path, closing the silent bypass a
   scheduler→dispatcher→distributed-runtime bridge could carry. (R1-006)
+
+### Fixed — issue #929: workflow round-trip serialization
+
+`Workflow.to_dict() → Workflow.from_dict()` previously stripped any
+constructor parameter consumed as a named arg by a Node subclass
+(`code` on `PythonCodeNode`, plus 43 other subclasses with the same
+gap). The reconstructed workflow had the node but its parameters were
+gone — silent data loss on cluster checkpoint/resume, distributed task
+replay, and `WorkflowScheduler` snapshots.
+
+- **Base-class fix at `Node.__init_subclass__`** — every Node subclass
+  now installs an `__init__` wrapper that captures bound parameters into
+  `self.config` after the subclass's own init runs, so `to_dict()`
+  serializes the full set of constructor inputs.
+- Audited 44 Node subclasses; all had the gap pre-fix; all are
+  protected by the base-class wrapper post-fix. Future Node subclasses
+  inherit the protection automatically.
+- 7 new regression tests in
+  `tests/integration/workflow/test_workflow_round_trip_serialization.py`
+  exercise round-trip + reconstruction + execution against real Redis
+  / DataFlow surfaces.
+- 3 of 4 pre-existing lifecycle-hooks tests now pass; the 4th surfaces
+  a separate retry-event classification gap tracked as #941.
+- Removes the `_patch_worker_execute_skip_roundtrip` workaround from
+  `tests/integration/runtime/test_worker_multi_queue.py` (the multi-queue
+  Tier-2 tests now exercise real round-trip).
 
 ## [2.19.0] - 2026-05-10
 
