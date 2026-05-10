@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.1] - 2026-05-10
+
 ### Fixed — issue #917 LocalRuntime cleanup-path coroutine leak
 
 `LocalRuntime._cleanup_event_loop` (also reached via `__exit__` and
