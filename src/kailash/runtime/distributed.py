@@ -36,6 +36,7 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import builtins
 import inspect
 import json
 import logging
@@ -861,6 +862,43 @@ def _parse_queue_spec(raw: Any) -> Tuple[int, int]:
     return concurrency_raw, vt_raw
 
 
+# Wrappers the SDK adds around user / node errors. When recovering the
+# user-meaningful root cause from a recorded node failure we walk past these
+# so retry-classification consumers see ZeroDivisionError, ValueError, etc.
+# instead of the SDK's bookkeeping exception.
+_SDK_WRAPPER_EXC_NAMES = frozenset({"NodeExecutionError", "WorkflowExecutionError"})
+
+
+def _unwrap_node_failure(payload: Dict[str, Any], node_id: str) -> BaseException:
+    """Return the user-meaningful exception for a recorded node failure.
+
+    LocalRuntime stores the actual exception object under ``_exception`` when
+    a leaf node fails (see ``runtime.local`` issue #941 fix). This helper
+    walks ``__cause__`` then ``__context__`` past SDK wrapper exceptions to
+    surface the user's original error type. Falls back to reconstructing
+    by name if ``_exception`` is missing (defensive — older callers, JSON
+    round-trip, etc.) and finally to ``RuntimeError`` if nothing else fits.
+    """
+
+    exc = payload.get("_exception")
+    if isinstance(exc, BaseException):
+        seen: set[int] = set()
+        current: Optional[BaseException] = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if type(current).__name__ not in _SDK_WRAPPER_EXC_NAMES:
+                return current
+            current = current.__cause__ or current.__context__
+        return exc
+
+    error_type_name = payload.get("error_type") or "RuntimeError"
+    error_msg = payload.get("error") or f"node '{node_id}' failed"
+    exc_cls = getattr(builtins, error_type_name, None)
+    if not (isinstance(exc_cls, type) and issubclass(exc_cls, BaseException)):
+        exc_cls = RuntimeError
+    return exc_cls(error_msg)
+
+
 class Worker:
     """Task queue worker that dequeues and executes workflows.
 
@@ -1610,6 +1648,21 @@ class Worker:
         if cancellation_token is not None:
             kwargs["cancellation_token"] = cancellation_token
         results, run_id = runtime.execute(built, **kwargs)
+
+        # Issue #941: LocalRuntime._should_stop_on_error returns False when a
+        # failed node has no downstream dependents, so the node-level failure
+        # is recorded in results (`failed: True, error_type, error, _exception`)
+        # and the runtime returns NORMALLY. The worker's retry/final
+        # classification at _execute_task only fires on raised exceptions; a
+        # silently-recorded failure looks like success and the lifecycle-hooks
+        # contract breaks (retry/failure events never fire). Re-raise the
+        # user-meaningful root exception so the classifier sees the disposition
+        # the user sees in the runtime logs.
+        for node_id, payload in results.items():
+            if not (isinstance(payload, dict) and payload.get("failed") is True):
+                continue
+            raise _unwrap_node_failure(payload, node_id)
+
         return results
 
     # -- Heartbeat --
