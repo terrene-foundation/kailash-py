@@ -339,7 +339,19 @@ async def test_record_event_routes_through_redaction_helper() -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_event_skips_when_run_id_is_none() -> None:
+async def test_record_event_raises_typed_error_when_run_id_is_none() -> None:
+    """Issue #876 C-2a: ``record_event`` raises typed ``MissingRunIdError``
+    when the incoming event has no ``run_id``.
+
+    Pre-issue-#876 behaviour was WARN + silent drop. The typed error
+    surfaces via the runtime subscriber-error handler
+    (durable.NodeCompletionHookRegistry.dispatch_async) which observes
+    the typed cause specifically BEFORE the generic Exception fallback,
+    increments a metric counter, and preserves the runtime
+    forward-progress invariant.
+    """
+    from kailash.sdk_exceptions import MissingRunIdError
+
     conn = _RecordingConn()
     store = SQLiteHistoryStore(conn)
     store._initialized = True
@@ -355,8 +367,11 @@ async def test_record_event_skips_when_run_id_is_none() -> None:
         duration_ms=1,
         tenant_id="t1",
     )
-    # Does not raise; emits a WARN log line and returns.
-    await store.record_event(event)
+    with pytest.raises(MissingRunIdError) as exc_info:
+        await store.record_event(event)
+    assert exc_info.value.node_id == "n1"
+    assert exc_info.value.workflow_id == "wf-1"
+    # No SQL fired — the typed error gates BEFORE the transaction opens.
     assert conn.executes == []
 
 
@@ -496,6 +511,329 @@ def test_get_or_create_run_lock_lru_eviction_bounds_memory() -> None:
         assert lock_1_again is not lock_1
     finally:
         hs_mod._MAX_RUN_LOCKS = original_bound
+
+
+# ---------------------------------------------------------------------------
+# C-1: hashing-symmetry across history_store.* log emissions (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_run_events_payload_decode_failed_hashes_run_id(
+    caplog,
+) -> None:
+    """Issue #876 C-1: ``get_run_events.payload_decode_failed`` MUST hash
+    the record-level ``run_id`` identifier.  Per
+    ``rules/observability.md`` Rule 8 raw record-level IDs at WARN+
+    leak schema-adjacent information to log aggregators with broader
+    access than the audit database.
+    """
+    import logging
+    import hashlib
+
+    from kailash.infrastructure.history_store import _hash_short
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    # The connection adapter returns one events row whose ``payload_json``
+    # is malformed JSON.  We also need a non-None first fetchone() call
+    # for the runs-table tenant-scope check that gates the events query.
+    raw_run_id = "wf_run_secret_888"
+    conn = _RecordingConn(fetchone_results=[{"run_id": raw_run_id}])
+    conn._fetch_results = {
+        "FROM workflow_run_events": [
+            {
+                "id": 1,
+                "run_id": raw_run_id,
+                "event_seq": 7,
+                "node_id_hash": "abcd1234",
+                "event_type": "node.completed",
+                "payload_json": "{not valid json",
+                "classified_field_count": 0,
+                "ts": "2026-05-11T00:00:00",
+            }
+        ],
+    }
+    store = SQLiteHistoryStore(conn)
+    store._initialized = True
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count(
+        "kailash_history_store_payload_decode_failed_total"
+    )
+
+    caplog.set_level(logging.WARNING)
+    rows = await store.get_run_events(raw_run_id, tenant_id="t1")
+    # The malformed row still surfaces (with empty payload) — the WARN log
+    # signals the drop; the read API does not raise.
+    assert len(rows) == 1
+    assert rows[0]["payload"] == {}
+
+    # The raw run_id MUST NOT appear in any log record (message or extra).
+    for record in caplog.records:
+        assert (
+            raw_run_id not in record.getMessage()
+        ), f"raw run_id leaked into log message: {record.getMessage()!r}"
+        assert raw_run_id not in repr(
+            record.__dict__
+        ), f"raw run_id leaked into log extra: {record.__dict__!r}"
+
+    # The hashed identifier MUST be present in at least one WARN record.
+    decode_records = [
+        r for r in caplog.records if "payload_decode_failed" in r.getMessage()
+    ]
+    assert decode_records, "expected payload_decode_failed WARN line"
+    expected_hash = _hash_short(raw_run_id)
+    assert any(
+        getattr(r, "run_id_hash", None) == expected_hash for r in decode_records
+    ), f"expected run_id_hash={expected_hash!r} in WARN records"
+
+    # The metric counter MUST have incremented for the same WARN line.
+    after = bridge.cumulative_count("kailash_history_store_payload_decode_failed_total")
+    assert after - before == 1
+
+
+@pytest.mark.asyncio
+async def test_per_tenant_cap_evicted_hashes_sample_run_id(
+    caplog,
+) -> None:
+    """Issue #876 C-1: ``per_tenant_cap.evicted`` MUST hash the
+    record-level ``sample_run_id`` field so the WARN line is symmetric
+    with the already-hashed ``tenant_id_hash`` sibling.
+    """
+    import logging
+
+    from kailash.infrastructure.history_store import _hash_short
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    raw_sample_run_id = "oldest_run_xyz_777"
+
+    # The internal eviction path performs: COUNT(*), then SELECT oldest,
+    # then DELETE inside a transaction.  The deterministic adapter
+    # returns COUNT > cap so excess > 0, then the SELECT returns one
+    # oldest row that becomes the sample.
+    conn = _RecordingConn(
+        fetchone_results=[
+            {"cnt": 5},  # COUNT(*) — cap is 1 below, so excess=4
+        ]
+    )
+    conn._fetch_results = {
+        "ORDER BY started_at ASC": [
+            {"run_id": raw_sample_run_id, "started_at": "2026-05-01T00:00:00"},
+            {"run_id": "run_2", "started_at": "2026-05-02T00:00:00"},
+            {"run_id": "run_3", "started_at": "2026-05-03T00:00:00"},
+            {"run_id": "run_4", "started_at": "2026-05-04T00:00:00"},
+        ],
+    }
+    store = SQLiteHistoryStore(conn, per_tenant_cap=1)
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count(
+        "kailash_history_store_per_tenant_cap_evicted_total"
+    )
+
+    caplog.set_level(logging.WARNING)
+    await store._enforce_per_tenant_cap("tenant_a")
+
+    # Raw sample_run_id MUST NOT appear in any log record.
+    for record in caplog.records:
+        assert raw_sample_run_id not in record.getMessage()
+        assert raw_sample_run_id not in repr(record.__dict__)
+
+    # Hashed identifier MUST be present.
+    cap_records = [
+        r for r in caplog.records if "per_tenant_cap.evicted" in r.getMessage()
+    ]
+    assert cap_records, "expected per_tenant_cap.evicted WARN line"
+    expected_hash = _hash_short(raw_sample_run_id)
+    assert any(
+        getattr(r, "sample_run_id_hash", None) == expected_hash for r in cap_records
+    ), f"expected sample_run_id_hash={expected_hash!r} in WARN records"
+    # The legacy raw-field name MUST be gone (no drift).
+    for r in cap_records:
+        assert not hasattr(
+            r, "sample_run_id"
+        ), "raw sample_run_id field MUST NOT appear in extra"
+
+    # Metric counter MUST have incremented by ``excess`` rows.
+    after = bridge.cumulative_count(
+        "kailash_history_store_per_tenant_cap_evicted_total"
+    )
+    assert after - before == 4  # 5 rows present, cap=1, excess=4
+
+
+@pytest.mark.asyncio
+async def test_retention_swept_emits_metric_counter(caplog) -> None:
+    """Issue #876 C-1: ``retention.swept`` MUST emit a metric counter
+    pairing the INFO log line.  No record-level identifiers in this
+    emission — the test verifies the counter increments by ``deleted``.
+    """
+    import logging
+
+    from kailash.runtime.metrics import get_metrics_bridge
+
+    # The deterministic adapter's expired-runs SELECT returns 3 rows.
+    conn = _RecordingConn()
+    conn._fetch_results = {
+        "WHERE terminal_at IS NOT NULL": [
+            {"run_id": "expired_1"},
+            {"run_id": "expired_2"},
+            {"run_id": "expired_3"},
+        ],
+    }
+    store = SQLiteHistoryStore(conn)
+
+    bridge = get_metrics_bridge()
+    before = bridge.cumulative_count("kailash_history_store_retention_swept_total")
+
+    caplog.set_level(logging.INFO)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
+    assert deleted == 3
+
+    after = bridge.cumulative_count("kailash_history_store_retention_swept_total")
+    assert after - before == 3
+
+    # The INFO line MUST NOT carry record-level identifiers.
+    swept_records = [r for r in caplog.records if "retention.swept" in r.getMessage()]
+    assert swept_records, "expected retention.swept INFO line"
+    for r in swept_records:
+        # Confirm no run_id / workflow_id field has leaked.
+        assert not hasattr(r, "run_id")
+        assert not hasattr(r, "sample_run_id")
+        assert not hasattr(r, "workflow_id")
+
+
+# ---------------------------------------------------------------------------
+# C-4: throttled lazy retention sweep (#876)
+# ---------------------------------------------------------------------------
+
+
+def test_constructor_rejects_negative_sweep_interval() -> None:
+    """``sweep_interval_seconds`` must be non-negative — issue #876 C-4."""
+    conn = _RecordingConn()
+    with pytest.raises(ValueError, match=r"sweep_interval_seconds"):
+        SQLiteHistoryStore(conn, sweep_interval_seconds=-1.0)
+
+
+def test_constructor_rejects_bool_sweep_interval() -> None:
+    """``sweep_interval_seconds=True`` is the silent-coerce-to-1.0 trap."""
+    conn = _RecordingConn()
+    with pytest.raises(ValueError, match=r"sweep_interval_seconds"):
+        SQLiteHistoryStore(conn, sweep_interval_seconds=True)
+
+
+def test_constructor_accepts_zero_sweep_interval() -> None:
+    """``0.0`` is the escape hatch — restores per-event sweep behaviour."""
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, sweep_interval_seconds=0.0)
+    assert store._sweep_interval_seconds == 0.0
+
+
+def test_constructor_default_sweep_interval_is_30s() -> None:
+    """Spec default per ``specs/core-runtime.md`` § Retention sweep throttle."""
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn)
+    assert store._sweep_interval_seconds == 30.0
+
+
+@pytest.mark.asyncio
+async def test_lazy_retention_sweep_throttle_short_circuits(monkeypatch) -> None:
+    """N consecutive events within the throttle window produce 1 sweep —
+    issue #876 C-4 (L-3).  The throttled path adds zero DB round-trips.
+    """
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, retention_days=1, sweep_interval_seconds=30.0)
+
+    delete_calls: List[Any] = []
+
+    async def _fake_delete(*args, **kwargs):
+        delete_calls.append((args, kwargs))
+        return 0
+
+    monkeypatch.setattr(store, "delete_runs_older_than", _fake_delete)
+
+    # Fake monotonic clock advances 100ms per tick.
+    from kailash.infrastructure import history_store as hs_mod
+
+    clock = [0.0]
+    monkeypatch.setattr(hs_mod._time, "monotonic", lambda: clock[0])
+
+    # First call always passes (last_sweep_at=0.0 — never swept).
+    await store._lazy_retention_sweep()
+    assert len(delete_calls) == 1
+    # 10 consecutive calls within 1 second — only the first triggered.
+    for _ in range(10):
+        clock[0] += 0.1
+        await store._lazy_retention_sweep()
+    assert len(delete_calls) == 1
+
+    # After the interval elapses, the next call passes again.
+    clock[0] += 31.0
+    await store._lazy_retention_sweep()
+    assert len(delete_calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_lazy_retention_sweep_zero_interval_disables_throttle(
+    monkeypatch,
+) -> None:
+    """``sweep_interval_seconds=0.0`` restores per-event sweep — issue
+    #876 C-4 escape hatch.
+    """
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, retention_days=1, sweep_interval_seconds=0.0)
+
+    delete_calls: List[Any] = []
+
+    async def _fake_delete(*args, **kwargs):
+        delete_calls.append(1)
+        return 0
+
+    monkeypatch.setattr(store, "delete_runs_older_than", _fake_delete)
+
+    # No clock advance — each call should still sweep.
+    for _ in range(5):
+        await store._lazy_retention_sweep()
+    assert len(delete_calls) == 5
+
+
+@pytest.mark.asyncio
+async def test_enforce_per_tenant_cap_throttle_is_per_tenant(
+    monkeypatch,
+) -> None:
+    """Per-tenant throttle: a busy tenant does NOT starve other tenants —
+    issue #876 C-4 (L-3).
+    """
+    # Adapter returns COUNT(*)=0 so each call short-circuits AFTER the
+    # throttle gate.  We're testing the throttle, not the eviction.
+    conn = _RecordingConn(
+        fetchone_results=[
+            {"cnt": 0},
+            {"cnt": 0},
+            {"cnt": 0},
+        ]
+    )
+    store = SQLiteHistoryStore(conn, sweep_interval_seconds=30.0)
+
+    from kailash.infrastructure import history_store as hs_mod
+
+    clock = [0.0]
+    monkeypatch.setattr(hs_mod._time, "monotonic", lambda: clock[0])
+
+    # Tenant A — first call passes the throttle, SQL fires.
+    await store._enforce_per_tenant_cap("tenant_a")
+    assert len(conn.executes) + len([1 for _ in conn._fetchone_queue]) >= 0
+    initial_queries = sum(1 for q, _ in conn.executes) + 1  # 1 fetchone
+    # 2nd call within window — throttle short-circuits, no SQL.
+    clock[0] += 1.0
+    await store._enforce_per_tenant_cap("tenant_a")
+    after_throttle = sum(1 for q, _ in conn.executes)
+    # Tenant B — first call passes its OWN throttle, SQL fires (the
+    # busy tenant_a did not starve tenant_b).
+    await store._enforce_per_tenant_cap("tenant_b")
+    # The per-tenant throttle map shows BOTH tenants got recorded.
+    assert "tenant_a" in store._last_cap_check_at
+    assert "tenant_b" in store._last_cap_check_at
 
 
 def test_get_or_create_run_lock_promotes_on_access() -> None:

@@ -695,6 +695,153 @@ fresh wrapped runtime.
   (Payload bounds) — for the full JSON contract and the no-pickle
   security rationale.
 
+### 4.7 History-store audit contract
+
+`WorkflowHistoryStore` (`kailash.infrastructure.history_store`) is the W2
+audit-log backend. Its public surface — including log-emission shape,
+metric-counter parity, payload-type whitelist, retention API, and
+throttle knob — is the audit contract for every runtime that subscribes
+its `record_event` callback. Each subsection below describes behaviour
+that ships today on `main` (no scaffolds, no deferred wiring).
+
+#### 4.7.1 Audit-log emission hashing-symmetry contract
+
+All `history_store.*` log emissions at WARN level or higher MUST hash
+record-level identifiers (`run_id`, `workflow_id`, `node_id`,
+`sample_run_id`) via the module-level `_hash_short` helper
+(`history_store.py::_hash_short`, 8-char SHA-256 prefix). The field
+name signals the hashing: `<thing>_hash` (e.g. `workflow_id_hash`,
+`sample_run_id_hash`). Counts (`attempted`, `failed`, `cap`),
+numeric sequence numbers (`event_seq`), and cutoff timestamps
+(`before_ts`) remain raw — they are not record-level identifiers.
+
+Every WARN+ emission is paired with a metric-counter increment on the
+`MetricsBridge` singleton (`kailash.runtime.metrics::get_metrics_bridge`).
+The counter pairing lets operators detect drift without grepping
+log aggregators, which typically carry broader read access than the
+audit database (per `rules/observability.md` Rule 8).
+
+Implementations ship at four sites:
+
+| Site                                       | Level | Hashed fields                            | Metric counter                                            |
+| ------------------------------------------ | ----- | ---------------------------------------- | --------------------------------------------------------- |
+| `record_event.dropped` (subscriber-error)  | WARN  | `node_id_hash`, `workflow_id_hash`       | `kailash_history_store_record_event_dropped_total`        |
+| `get_run_events.payload_decode_failed`     | WARN  | `run_id_hash`                            | `kailash_history_store_payload_decode_failed_total`       |
+| `per_tenant_cap.evicted`                   | WARN  | `tenant_id_hash`, `sample_run_id_hash`   | `kailash_history_store_per_tenant_cap_evicted_total`      |
+| `retention.swept`                          | INFO  | (none — counts + cutoff-ts only)         | `kailash_history_store_retention_swept_total`             |
+
+The `record_event.dropped` emission is fired from the runtime's
+subscriber-error handler (`durable.NodeCompletionSubscribers.dispatch_async`)
+when it observes a typed `MissingRunIdError` from `record_event` —
+see §4.7.2 below.
+
+#### 4.7.2 `record_event` missing run_id contract
+
+When `record_event` receives a `NodeCompletionEvent` whose `run_id` is
+`None`, the call raises a typed `MissingRunIdError`
+(`kailash.sdk_exceptions::MissingRunIdError`) BEFORE any database
+transaction opens. The error carries the offending `node_id` and
+`workflow_id` for the subscriber-error handler to hash and log.
+
+The runtime's subscriber-error handler observes the typed cause
+specifically — before the generic `Exception` fallback — and converts
+it into a WARN log line (`history_store.record_event.dropped`,
+`mode="missing_run_id"`) plus a metric counter increment
+(`record_history_store_dropped`). The handler does NOT re-raise; the
+audit-log gap is signalled via the metric, and the runtime
+forward-progress invariant is preserved (next subscriber + next node
+run as normal).
+
+#### 4.7.3 `delete_runs_older_than(timestamp, *, tenant_id=None, force_downgrade=False)`
+
+Delete all runs whose `terminal_at` is older than `timestamp`.
+In-flight runs (`terminal_at IS NULL`) are NEVER affected.
+
+Parameters:
+
+- `timestamp` — cutoff (`datetime` or ISO-8601 string).
+- `tenant_id` — Optional. When set, scope deletion to one tenant via
+  `_tenant_partition(tenant_id)`. When `None` (default), cross-tenant —
+  every tenant's expired runs are pruned in one call.
+- `force_downgrade` — Required for the destructive operation per
+  `rules/schema-migration.md` MUST Rule 7. Defaults to `False`; raises
+  `DowngradeRefusedError` if absent AND no internal-eviction
+  contextvar is set.
+
+Implementation: one transaction containing exactly two batched
+`DELETE` statements:
+
+1. `DELETE FROM <events_table> WHERE run_id IN (SELECT run_id FROM <runs_table> WHERE terminal_at < ? [AND tenant_id = ?])`
+2. `DELETE FROM <runs_table> WHERE terminal_at < ? [AND tenant_id = ?]`
+
+Events DELETE runs BEFORE runs DELETE (FK / referential-ordering
+invariant). Statement count is constant in `N` expired runs; was
+previously `1 SELECT + 2N DELETEs`. SQLite + Postgres both support the
+subquery form.
+
+Returns: count of `workflow_runs` rows that matched the cutoff.
+
+#### 4.7.4 Retention sweep throttle
+
+`_lazy_retention_sweep` + `_enforce_per_tenant_cap` are triggered by
+every `record_event` call (the W1 hook subscriber chain dispatches
+synchronously). To bound DB round-trip overhead in high-volume
+workflows, both gates are throttled.
+
+Constructor kwarg: `sweep_interval_seconds: float = 30.0` (keyword-only).
+
+Behaviour:
+
+- Default 30s.
+- Retention sweep is throttled globally (one `_last_sweep_at` monotonic
+  timestamp).
+- Per-tenant-cap check is throttled PER-TENANT
+  (`_last_cap_check_at: Dict[str, float]`) — a busy tenant does NOT
+  starve another tenant's cap check.
+- `time.monotonic()` (imported as `_time` in `history_store.py` to
+  avoid the `datetime.time` name collision) — system-clock changes
+  cannot skew the throttle.
+- `sweep_interval_seconds=0.0` restores per-event sweep behaviour
+  (every `record_event` call triggers both gates).
+- The throttle short-circuits BEFORE any SQL round-trip so the
+  throttled path adds zero DB cost.
+- A `None` (not `0.0`) sentinel for "never swept" disambiguates the
+  faked-clock case in tests.
+
+Trade-off: events that expire BETWEEN sweeps remain in the DB up to
+`sweep_interval_seconds` longer. The retention sweep is "best-effort"
+per the docstring contract — the throttle window is well within the
+spirit of that contract.
+
+#### 4.7.5 Audit-log payload supported types
+
+`record_event` serializes `event.outputs` and `event.metadata` to JSON
+via the module-level `_audit_safe_default` helper
+(`history_store.py::_audit_safe_default`). The helper REPLACES the
+historical `json.dumps(payload, default=str)` so audit-log readers
+can distinguish a value stored AS a number from a value stored AS a
+repr of a number.
+
+| Python type                        | JSON serialization               | Reader contract                                      |
+| ---------------------------------- | -------------------------------- | ---------------------------------------------------- |
+| `dict`, `list`                     | native JSON object/array         | structural                                           |
+| `str`, `int`, `float`, `bool`, `None` | native JSON                   | typed                                                |
+| `datetime`, `date`, `time`         | ISO-8601 string (RFC 3339 if tz) | string-typed                                         |
+| `Decimal`                          | string via `str(obj)`            | precision-preserving; reader applies `Decimal(value)`|
+| `UUID`                             | string via `str(obj)`            | canonical hyphenated form                            |
+
+Unsupported types (`set`, `frozenset`, `bytes`, `bytearray`,
+`memoryview`, custom classes) raise `TypeError` at audit-write time.
+The error message names the unsupported type AND points to this
+section. Nodes emitting unsupported types MUST convert at the node
+boundary (e.g. `return {"items": list(my_set)}`).
+
+The `TypeError` propagates back to the subscriber chain; the runtime's
+subscriber-error handler catches it via the generic `Exception`
+branch (not the `MissingRunIdError` branch) and logs
+`durable.on_node_complete.subscriber_failed` with the callback name
+and error type.
+
 ---
 
 ## 5. Cycle / Loop Support

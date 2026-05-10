@@ -882,6 +882,10 @@ class NodeCompletionHookRegistry:
         callbacks = list(self._callbacks)
         failed: List[Tuple[str, str]] = []
 
+        # Import here to avoid an import cycle (sdk_exceptions sits below
+        # runtime in the import tree).  Issue #876 C-2b.
+        from kailash.sdk_exceptions import MissingRunIdError
+
         for cb in callbacks:
             try:
                 result = cb(event)
@@ -889,15 +893,63 @@ class NodeCompletionHookRegistry:
                     await result
             except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
                 raise
+            except MissingRunIdError as exc:
+                # Issue #876 C-2b — typed handler precedence.  An audit-log
+                # write skipped because the event had no run_id is NOT a
+                # subscriber failure in the operational sense: the runtime
+                # produced an event the audit-log surface cannot persist,
+                # and operators need a dedicated metric counter to detect
+                # drift (a generic ``subscriber.error`` line buries the
+                # signal).  Forward-progress invariant is preserved: the
+                # handler does NOT re-raise; the next subscriber and the
+                # next node run as normal.
+                wf_hash = (
+                    _hash_short(exc.workflow_id)
+                    if exc.workflow_id is not None
+                    else "None"
+                )
+                logger.warning(
+                    "history_store.record_event.dropped",
+                    extra={
+                        "mode": "missing_run_id",
+                        "callback": _callback_name(cb),
+                        "node_id_hash": _hash_short(exc.node_id),
+                        "workflow_id_hash": wf_hash,
+                    },
+                )
+                try:
+                    # The metrics bridge is the project's existing
+                    # observability surface per rules/framework-first.md
+                    # (do NOT introduce a new metrics framework).  Lazy
+                    # import to avoid the metrics module loading at every
+                    # runtime construction even when no subscriber raises.
+                    from kailash.runtime.metrics import get_metrics_bridge
+
+                    get_metrics_bridge().record_history_store_dropped()
+                except Exception:  # noqa: BLE001 — metrics MUST NOT mask
+                    # Metric-bridge failure MUST NOT mask the actual
+                    # subscriber-error observation.  The WARN log above
+                    # is the durable signal.
+                    pass
             except Exception as exc:  # noqa: BLE001 — see WARN below
+                # Issue #876 same-class follow-on (review-surfaced LOW-2/MEDIUM):
+                # the bare-Exception branch lives in the same function the C-1
+                # hashing-symmetry sweep just touched.  Per autonomous-execution.md
+                # MUST Rule 4 (fix-immediately, same-class gap, ≤3 lines), the
+                # raw run_id is hashed via _hash_short to match every other WARN
+                # emission in this file (see specs/core-runtime.md §4.7.1
+                # hashing-symmetry contract).
                 failed.append((_callback_name(cb), type(exc).__name__))
+                run_id_hash = (
+                    _hash_short(event.run_id) if event.run_id is not None else "None"
+                )
                 logger.warning(
                     "durable.on_node_complete.subscriber_failed",
                     extra={
                         "callback": _callback_name(cb),
                         "error_type": type(exc).__name__,
                         "node_id_hash": _hash_short(event.node_id),
-                        "run_id": event.run_id,
+                        "run_id_hash": run_id_hash,
                     },
                 )
 

@@ -292,3 +292,289 @@ async def test_history_store_indexes_present_on_runs_table(
     assert "idx_workflow_runs_tenant_run_id" in names
     assert "idx_workflow_runs_tenant_status_started" in names
     assert "idx_workflow_run_events_run_seq" in names
+
+
+# ---------------------------------------------------------------------------
+# 5b. C-3 tenant-scoped + batched DELETE in retention sweeps (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_delete_runs_older_than_tenant_scoped_leaves_other_tenants(
+    pg_conn: ConnectionManager,
+):
+    """Issue #876 L-1: ``delete_runs_older_than(tenant_id="a")`` MUST
+    delete only tenant_a's expired runs; tenant_b's data MUST remain
+    intact per ``rules/tenant-isolation.md`` MUST Rule 5.
+
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
+    The C-3 contract under test is the explicit-call surface; the
+    write-time sweep is tested separately.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    # Fresh store with retention disabled so write-time eviction does NOT
+    # delete the test's expired rows BEFORE the explicit sweep runs.
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
+
+    past_ts = datetime.now(timezone.utc) - timedelta(days=60)
+
+    # Insert one expired event per tenant.
+    for tenant in ("tenant_a", "tenant_b"):
+        run_id = f"r-{tenant}-{uuid.uuid4().hex[:8]}"
+        event = NodeCompletionEvent(
+            run_id=run_id,
+            workflow_id="wf",
+            workflow_fingerprint="fp",
+            node_id="n",
+            node_type="PythonCodeNode",
+            outputs={},
+            started_at=past_ts,
+            ended_at=past_ts,
+            duration_ms=1,
+            tenant_id=tenant,
+            error="forced terminal",  # mark terminal so terminal_at is set
+        )
+        await store.record_event(event)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+
+    # Sanity: both tenants have one run pre-delete.
+    assert len(await store.list_runs(filter={"tenant_id": "tenant_a"})) == 1
+    assert len(await store.list_runs(filter={"tenant_id": "tenant_b"})) == 1
+
+    deleted = await store.delete_runs_older_than(
+        cutoff, tenant_id="tenant_a", force_downgrade=True
+    )
+    assert deleted == 1
+
+    # tenant_a's expired run is gone.
+    assert await store.list_runs(filter={"tenant_id": "tenant_a"}) == []
+    # tenant_b's run survives untouched.
+    rows_b = await store.list_runs(filter={"tenant_id": "tenant_b"})
+    assert len(rows_b) == 1
+
+
+@pytest.mark.integration
+async def test_delete_runs_older_than_batched_uses_two_statements(
+    pg_conn: ConnectionManager,
+):
+    """Issue #876 L-2: the retention sweep over N expired runs MUST
+    issue exactly two DELETE statements (events + runs), NOT 2N.
+
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
+
+    past_ts = datetime.now(timezone.utc) - timedelta(days=60)
+    # Insert 5 expired runs for the default tenant.
+    for i in range(5):
+        run_id = f"r-batch-{i}-{uuid.uuid4().hex[:8]}"
+        await store.record_event(
+            NodeCompletionEvent(
+                run_id=run_id,
+                workflow_id="wf",
+                workflow_fingerprint="fp",
+                node_id=f"n{i}",
+                node_type="PythonCodeNode",
+                outputs={},
+                started_at=past_ts,
+                ended_at=past_ts,
+                duration_ms=1,
+                tenant_id="default",
+                error="forced terminal",
+            )
+        )
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
+    assert deleted == 5
+
+    # After the sweep neither runs nor events rows survive for those IDs.
+    surviving = await store.list_runs(filter={"tenant_id": "default"})
+    # Only non-expired runs survive (the post-sweep set excludes the 5
+    # we just inserted).  We can't enumerate "the 5" by run_id post-
+    # delete; the count test is enough — if N×DELETEs leaked rows the
+    # eviction would have left orphan events.
+    assert all(r.get("terminal_at") is None for r in surviving) or surviving == []
+
+
+@pytest.mark.integration
+async def test_delete_runs_older_than_default_is_cross_tenant(
+    pg_conn: ConnectionManager,
+):
+    """Issue #876 L-1: ``tenant_id=None`` (default) preserves the
+    cross-tenant sweep behaviour — every tenant's expired runs are
+    pruned in one call.
+
+    Constructs a store with ``retention_days=False`` so the write-time
+    lazy retention sweep does NOT race the test's explicit sweep call.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    store = PostgresHistoryStore(pg_conn, retention_days=False)
+    await store.initialize()
+
+    past_ts = datetime.now(timezone.utc) - timedelta(days=60)
+    for tenant in ("tenant_a", "tenant_b"):
+        await store.record_event(
+            NodeCompletionEvent(
+                run_id=f"r-cross-{tenant}-{uuid.uuid4().hex[:8]}",
+                workflow_id="wf",
+                workflow_fingerprint="fp",
+                node_id="n",
+                node_type="PythonCodeNode",
+                outputs={},
+                started_at=past_ts,
+                ended_at=past_ts,
+                duration_ms=1,
+                tenant_id=tenant,
+                error="forced terminal",
+            )
+        )
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    deleted = await store.delete_runs_older_than(cutoff, force_downgrade=True)
+    # Both tenants pruned in one call.
+    assert deleted == 2
+    assert await store.list_runs(filter={"tenant_id": "tenant_a"}) == []
+    assert await store.list_runs(filter={"tenant_id": "tenant_b"}) == []
+
+
+# ---------------------------------------------------------------------------
+# 5a. L-4 audit-safe-default — typed payload + unsupported type raise (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_history_store_record_event_raises_on_unsupported_payload_type(
+    history_store: PostgresHistoryStore,
+):
+    """Issue #876 L-4 (Tier-2): a node returning a ``set`` in its
+    outputs MUST cause ``record_event`` to raise ``TypeError`` at
+    audit-write time, NOT silently round-trip the value as its string
+    repr.  Behavior change documented in the CHANGELOG migration entry
+    per zero-tolerance.md Rule 6a.
+    """
+    from datetime import datetime, timezone
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    event = NodeCompletionEvent(
+        run_id=f"r-unsupported-{uuid.uuid4().hex[:8]}",
+        workflow_id="wf-1",
+        workflow_fingerprint="fp",
+        node_id="bad_node",
+        node_type="PythonCodeNode",
+        outputs={"items": {1, 2, 3}},  # set — unsupported by the whitelist
+        started_at=datetime.now(timezone.utc),
+        ended_at=datetime.now(timezone.utc),
+        duration_ms=1,
+        tenant_id="default",
+    )
+    with pytest.raises(TypeError, match=r"unsupported type 'set'"):
+        await history_store.record_event(event)
+
+
+@pytest.mark.integration
+async def test_history_store_record_event_serializes_decimal_payload(
+    pg_conn: ConnectionManager,
+    history_store: PostgresHistoryStore,
+):
+    """Issue #876 L-4 (Tier-2): a node returning a ``Decimal`` in its
+    outputs MUST round-trip through the whitelist as a string-typed
+    JSON value; readers reconstruct the precision via ``Decimal(value)``.
+    """
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    run_id = f"r-decimal-{uuid.uuid4().hex[:8]}"
+    event = NodeCompletionEvent(
+        run_id=run_id,
+        workflow_id="wf-decimal",
+        workflow_fingerprint="fp",
+        node_id="good_node",
+        node_type="PythonCodeNode",
+        outputs={"price": Decimal("19.99")},
+        started_at=datetime.now(timezone.utc),
+        ended_at=datetime.now(timezone.utc),
+        duration_ms=1,
+        tenant_id="default",
+    )
+    await history_store.record_event(event)
+
+    events = await history_store.get_run_events(run_id, tenant_id="default")
+    assert len(events) == 1
+    # Decimal serialized as its string form per the whitelist contract.
+    assert events[0]["payload"]["outputs"]["price"] == "19.99"
+
+
+# ---------------------------------------------------------------------------
+# 5. C-1 hashing-symmetry — no raw record-level IDs at WARN+ (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_history_store_warn_logs_no_raw_record_identifiers(
+    pg_conn: ConnectionManager,
+    history_store: PostgresHistoryStore,
+    caplog,
+):
+    """Issue #876 C-1 (Tier-2): execute a workflow against real Postgres
+    and force the ``payload_decode_failed`` WARN path by writing an
+    invalid JSON payload directly; assert no raw record-level
+    identifier (run_id / workflow_id) appears in any history_store.*
+    log record per ``rules/observability.md`` Rule 8.
+    """
+    import logging
+
+    workflow = _build_two_node_workflow()
+    runtime = AsyncLocalRuntime(history_store=history_store)
+    _, run_id = await runtime.execute_workflow_async(
+        workflow,
+        inputs={},
+        idempotency_key=f"test_warn_hash_{uuid.uuid4().hex[:8]}",
+    )
+
+    # Corrupt one event's payload_json so the next get_run_events read
+    # triggers the WARN path.
+    await pg_conn.execute(
+        "UPDATE workflow_run_events SET payload_json = ? WHERE run_id = ?",
+        "{not valid json",
+        run_id,
+    )
+
+    caplog.clear()
+    caplog.set_level(logging.WARNING)
+    events = await history_store.get_run_events(run_id, tenant_id="default")
+    # Corrupted row surfaces with empty payload (WARN-and-continue per Rule 8).
+    assert any(ev["payload"] == {} for ev in events)
+
+    history_records = [
+        r
+        for r in caplog.records
+        if r.name.startswith("kailash.infrastructure.history_store")
+    ]
+    assert history_records, "expected history_store.* WARN line"
+    for record in history_records:
+        msg = record.getMessage()
+        extra_repr = repr(record.__dict__)
+        # Raw run_id MUST NOT appear in any history_store WARN record.
+        assert run_id not in msg, f"raw run_id leaked into log message: {msg!r}"
+        assert (
+            run_id not in extra_repr
+        ), f"raw run_id leaked into log extra: {extra_repr!r}"

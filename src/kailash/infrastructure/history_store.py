@@ -72,13 +72,18 @@ import contextvars
 import json
 import logging
 import re
+import time as _time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional, Union
+from uuid import UUID
 
 from kailash.db.connection import ConnectionManager
 from kailash.runtime.durable import NodeCompletionEvent, redact_event_for_persistence
+from kailash.runtime.metrics import get_metrics_bridge
+from kailash.sdk_exceptions import MissingRunIdError
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,12 @@ _DEFAULT_RETENTION_DAYS = 30
 
 #: Default per-tenant cap; oldest run evicted with WARN log on overflow.
 _DEFAULT_PER_TENANT_CAP = 10_000
+
+#: Default minimum interval (in monotonic seconds) between consecutive
+#: retention-sweep + per-tenant-cap-check invocations per issue #876
+#: C-4 (L-3).  Set to 0.0 to restore per-event sweep behaviour (every
+#: ``record_event`` call triggers both gates).
+_DEFAULT_SWEEP_INTERVAL_SECONDS = 30.0
 
 #: Bound on the per-run ``asyncio.Lock`` LRU cache.  Long-running stores
 #: shared across many runs would otherwise leak one Lock per unique
@@ -189,6 +200,7 @@ class WorkflowHistoryStore(ABC):
         events_table: str = "workflow_run_events",
         retention_days: Union[int, bool] = _DEFAULT_RETENTION_DAYS,
         per_tenant_cap: int = _DEFAULT_PER_TENANT_CAP,
+        sweep_interval_seconds: float = _DEFAULT_SWEEP_INTERVAL_SECONDS,
         classification_policy: Optional[Any] = None,
     ) -> None:
         # Per ``rules/infrastructure-sql.md`` MUST Rule 6 — validate the
@@ -227,6 +239,36 @@ class WorkflowHistoryStore(ABC):
             raise ValueError(
                 "WorkflowHistoryStore: per_tenant_cap must be a positive " "integer."
             )
+
+        # ``sweep_interval_seconds`` — issue #876 C-4 (L-3).  Numeric
+        # gate, NOT a typed enum: accept any non-negative float-or-int.
+        # Reject bool explicitly so True doesn't silently coerce to 1.0
+        # (zero-tolerance.md Rule 3c sibling).
+        if isinstance(sweep_interval_seconds, bool) or not isinstance(
+            sweep_interval_seconds, (int, float)
+        ):
+            raise ValueError(
+                "WorkflowHistoryStore: sweep_interval_seconds must be a "
+                "non-negative number (float or int)."
+            )
+        if sweep_interval_seconds < 0:
+            raise ValueError(
+                "WorkflowHistoryStore: sweep_interval_seconds must be "
+                "non-negative.  Pass 0.0 to restore per-event sweep "
+                "behaviour."
+            )
+        self._sweep_interval_seconds = float(sweep_interval_seconds)
+        # Monotonic timestamp (NOT wall-clock) so system clock changes
+        # cannot skew the throttle.  ``None`` = never swept; gate passes
+        # on the first call regardless of interval.  We use ``None``
+        # (not ``0.0``) as the sentinel so a faked-clock test starting
+        # at ``time.monotonic() == 0.0`` is indistinguishable from the
+        # post-first-sweep state.
+        self._last_sweep_at: Optional[float] = None
+        # Per-tenant throttle state: a busy tenant must not starve
+        # another tenant's cap check.  Map values are the same
+        # monotonic-or-None sentinel.
+        self._last_cap_check_at: Dict[str, float] = {}
 
         self._conn = conn_manager
         self._runs_table = runs_table
@@ -312,17 +354,21 @@ class WorkflowHistoryStore(ABC):
         if event.run_id is None:
             # The runtime path that produced this event ran without a
             # task_manager AND the AsyncLocalRuntime ID-derivation path
-            # did not assign one.  Without a run_id we cannot partition
-            # the event into a run row; log at WARN and drop.  See
-            # ``rules/observability.md`` Rule 7 (no silent swallow).
-            logger.warning(
-                "history_store.record_event.skipped_no_run_id",
-                extra={
-                    "node_id_hash": _hash_short(event.node_id),
-                    "workflow_id": event.workflow_id,
-                },
+            # did not assign one. Without a run_id we cannot partition
+            # the event into a run row; raise a typed error per issue
+            # #876 C-2a so the runtime's subscriber-error handler
+            # (durable.NodeCompletionHookRegistry.dispatch_async)
+            # observes the typed cause specifically — BEFORE the generic
+            # Exception fallback — and converts it into the WARN +
+            # metric-counter signal documented in
+            # specs/core-runtime.md § audit-log emission contract.
+            # Forward-progress invariant: the typed handler MUST NOT
+            # re-raise; the audit-log gap is signalled via metrics, the
+            # runtime continues processing other subscribers and nodes.
+            raise MissingRunIdError(
+                node_id=event.node_id,
+                workflow_id=event.workflow_id,
             )
-            return
 
         # Read-redaction at write time (cross-cutting invariant 4).
         redacted = redact_event_for_persistence(
@@ -336,7 +382,11 @@ class WorkflowHistoryStore(ABC):
             "outputs": dict(redacted.outputs),
             "metadata": dict(redacted.metadata),
         }
-        payload_json = json.dumps(payload, default=str)
+        # Per issue #876 L-4 — use the explicit-type whitelist
+        # ``_audit_safe_default`` (see helper at the bottom of this
+        # module) instead of the historical ``default=str`` which
+        # silently coerced unsupported types to their string repr.
+        payload_json = json.dumps(payload, default=_audit_safe_default)
 
         # The classified-field count rides at column-level so operators
         # can run "show me runs whose events redacted >0 fields" without
@@ -599,14 +649,22 @@ class WorkflowHistoryStore(ABC):
             try:
                 event_dict["payload"] = json.loads(raw) if raw else {}
             except (TypeError, json.JSONDecodeError) as exc:
+                # Per issue #876 C-1 + ``rules/observability.md`` Rule 8 —
+                # hash the record-level ``run_id`` identifier (sibling
+                # ``tenant_id_hash`` is already hashed at the
+                # per-tenant-cap emission; this WARN line now matches).
+                # ``event_seq`` is a numeric sequence number (not an
+                # identifier) so it stays raw.  Metric counter pairs the
+                # WARN per Rule 8.
                 logger.warning(
                     "history_store.get_run_events.payload_decode_failed",
                     extra={
-                        "run_id": run_id,
+                        "run_id_hash": _hash_short(run_id),
                         "event_seq": event_dict.get("event_seq"),
                         "error_type": type(exc).__name__,
                     },
                 )
+                get_metrics_bridge().record_history_store_payload_decode_failed()
                 event_dict["payload"] = {}
             result.append(event_dict)
         return result
@@ -668,19 +726,34 @@ class WorkflowHistoryStore(ABC):
         self,
         timestamp: Union[datetime, str],
         *,
+        tenant_id: Optional[str] = None,
         force_downgrade: bool = False,
     ) -> int:
         """Delete all runs whose ``terminal_at`` is older than *timestamp*.
 
         In-flight runs (``terminal_at IS NULL``) are NEVER affected.
-        Cross-tenant — every tenant's expired runs are pruned.
 
-        Per ``rules/schema-migration.md`` MUST Rule 7 the destructive
-        downgrade-shape API requires ``force_downgrade=True``;
-        otherwise raises :class:`DowngradeRefusedError`.
+        Parameters
+        ----------
+        timestamp:
+            Cutoff time (``datetime`` or ISO-8601 string).
+        tenant_id:
+            When set, scope deletion to a single tenant per
+            ``rules/tenant-isolation.md`` MUST Rule 5.  When ``None``
+            (default), the cross-tenant sweep is preserved — every
+            tenant's expired runs are pruned.  Issue #876 C-3 (L-1).
+        force_downgrade:
+            Required for the destructive operation per
+            ``rules/schema-migration.md`` MUST Rule 7; otherwise raises
+            :class:`DowngradeRefusedError`.
 
         The internal write-time eviction sweep bypasses the gate via
         a contextvar — user-supplied calls MUST still pass the flag.
+
+        Implementation: per issue #876 C-3 (L-2) the sweep is now
+        statement-count-bounded — one transaction containing exactly
+        two batched DELETEs (events first, runs second).  Was previously
+        ``1 SELECT + 2N DELETEs`` per expired run.
         """
         # The internal-eviction context is set ONLY inside this store's
         # own write path.  User-supplied calls always see the default
@@ -702,25 +775,70 @@ class WorkflowHistoryStore(ABC):
                 f"ISO-8601 string — got {type(timestamp).__name__!r}"
             )
 
+        # The SELECT that produced ``run_ids`` is kept ONLY to compute the
+        # return value (rowcount of runs deleted) since
+        # ``ConnectionManager.execute`` does not guarantee a portable
+        # rowcount across dialects.  The DELETEs themselves are now
+        # batched: events first (subquery into runs), runs second.
+        # SQLite + Postgres both support ``DELETE ... WHERE col IN
+        # (SELECT ... )``; the subquery is resolved at plan time on
+        # Postgres but the FK / referential-ordering invariant is
+        # preserved by issuing the events DELETE before the runs DELETE.
         async with self._conn.transaction() as tx:
-            expired_runs = await tx.fetch(
-                f"SELECT run_id FROM {self._runs_table} "
-                f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
-                ts_iso,
-            )
-            run_ids = [r["run_id"] for r in expired_runs]
-            deleted = len(run_ids)
-            for run_id in run_ids:
-                await tx.execute(
-                    f"DELETE FROM {self._events_table} WHERE run_id = ?",
-                    run_id,
+            if tenant_id is not None:
+                tenant_partition = _tenant_partition(tenant_id)
+                expired_runs = await tx.fetch(
+                    f"SELECT run_id FROM {self._runs_table} "
+                    f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                    f"AND tenant_id = ?",
+                    ts_iso,
+                    tenant_partition,
                 )
-                await tx.execute(
-                    f"DELETE FROM {self._runs_table} WHERE run_id = ?",
-                    run_id,
+                deleted = len(expired_runs)
+                if deleted > 0:
+                    await tx.execute(
+                        f"DELETE FROM {self._events_table} "
+                        f"WHERE run_id IN ("
+                        f"SELECT run_id FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                        f"AND tenant_id = ?)",
+                        ts_iso,
+                        tenant_partition,
+                    )
+                    await tx.execute(
+                        f"DELETE FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                        f"AND tenant_id = ?",
+                        ts_iso,
+                        tenant_partition,
+                    )
+            else:
+                # Cross-tenant default — every tenant's expired runs.
+                expired_runs = await tx.fetch(
+                    f"SELECT run_id FROM {self._runs_table} "
+                    f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
+                    ts_iso,
                 )
+                deleted = len(expired_runs)
+                if deleted > 0:
+                    await tx.execute(
+                        f"DELETE FROM {self._events_table} "
+                        f"WHERE run_id IN ("
+                        f"SELECT run_id FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ?)",
+                        ts_iso,
+                    )
+                    await tx.execute(
+                        f"DELETE FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
+                        ts_iso,
+                    )
 
         if deleted > 0:
+            # Per issue #876 C-1 — emission already verified clean of
+            # record-level identifiers (counts + cutoff-ts only).  Metric
+            # counter pairs the INFO line per ``rules/observability.md``
+            # Rule 8 so operators can detect drift without grepping logs.
             logger.info(
                 "history_store.retention.swept",
                 extra={
@@ -729,6 +847,7 @@ class WorkflowHistoryStore(ABC):
                     "before_ts": ts_iso,
                 },
             )
+            get_metrics_bridge().record_history_store_retention_swept(deleted)
         return deleted
 
     # ------------------------------------------------------------------
@@ -739,9 +858,29 @@ class WorkflowHistoryStore(ABC):
 
         No-op when ``retention_days`` is None (disabled).  Bypasses the
         ``force_downgrade`` gate via the internal-eviction context.
+
+        Throttled per issue #876 C-4 (L-3): consecutive ``record_event``
+        invocations within ``sweep_interval_seconds`` (default 30s) skip
+        the sweep entirely — the gate short-circuits BEFORE any SQL
+        round-trip.  ``sweep_interval_seconds=0.0`` restores per-event
+        behaviour (every call sweeps).
         """
         if self._retention_days is None:
             return
+        # Throttle gate — issue #876 C-4 (L-3).  ``_time.monotonic`` is
+        # immune to system-clock changes; the first call (when
+        # ``_last_sweep_at is None``) always passes regardless of the
+        # configured interval.  The ``_time`` alias avoids the
+        # ``datetime.time`` name collision in this module's imports.
+        now = _time.monotonic()
+        if (
+            self._sweep_interval_seconds > 0.0
+            and self._last_sweep_at is not None
+            and now - self._last_sweep_at < self._sweep_interval_seconds
+        ):
+            return
+        self._last_sweep_at = now
+
         cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
         token = _INTERNAL_EVICTION_CONTEXT.set(True)
         try:
@@ -755,7 +894,29 @@ class WorkflowHistoryStore(ABC):
         Per ``rules/observability.md`` Rule 7 a WARN log line is emitted
         whenever ≥1 row is evicted — operators need bulk-failure
         visibility (attempted/failed/sample fields).
+
+        Throttled per-tenant per issue #876 C-4 (L-3): consecutive
+        invocations for the SAME tenant within ``sweep_interval_seconds``
+        (default 30s) skip the cap-check entirely.  A busy tenant does
+        NOT starve other tenants' cap checks because the throttle map
+        is keyed by ``tenant_id``.  ``sweep_interval_seconds=0.0``
+        restores per-event behaviour.
         """
+        # Per-tenant throttle gate — issue #876 C-4 (L-3).  Short-circuit
+        # BEFORE any SQL round-trip so the throttled path adds zero DB
+        # cost.  ``None`` = never checked (first call passes regardless
+        # of interval).  ``_time`` alias avoids the ``datetime.time``
+        # name collision in this module's imports.
+        now = _time.monotonic()
+        last = self._last_cap_check_at.get(tenant_id)
+        if (
+            self._sweep_interval_seconds > 0.0
+            and last is not None
+            and now - last < self._sweep_interval_seconds
+        ):
+            return
+        self._last_cap_check_at[tenant_id] = now
+
         count_row = await self._conn.fetchone(
             f"SELECT COUNT(*) AS cnt FROM {self._runs_table} WHERE tenant_id = ?",
             tenant_id,
@@ -765,7 +926,13 @@ class WorkflowHistoryStore(ABC):
         if excess <= 0:
             return
 
-        # Identify the N oldest runs and drop them inside a transaction.
+        # Identify the N oldest runs.  The SELECT is retained to compute
+        # the ``sample_run_id`` for the eviction WARN line + the
+        # ``excess`` rowcount returned by the metric counter; the
+        # per-row DELETE loop is gone — replaced by two batched DELETEs
+        # inside a single transaction per issue #876 C-3 (L-2).
+        # SQLite + Postgres both support
+        # ``DELETE ... WHERE col IN (SELECT ... ORDER BY ... LIMIT)``.
         oldest = await self._conn.fetch(
             f"SELECT run_id, started_at FROM {self._runs_table} "
             f"WHERE tenant_id = ? ORDER BY started_at ASC LIMIT ?",
@@ -777,29 +944,47 @@ class WorkflowHistoryStore(ABC):
 
         sample_run_id = oldest[0]["run_id"]
         async with self._conn.transaction() as tx:
-            for row in oldest:
-                run_id = row["run_id"]
-                await tx.execute(
-                    f"DELETE FROM {self._events_table} WHERE run_id = ?",
-                    run_id,
-                )
-                await tx.execute(
-                    f"DELETE FROM {self._runs_table} "
-                    f"WHERE run_id = ? AND tenant_id = ?",
-                    run_id,
-                    tenant_id,
-                )
+            # Events first (FK-ordering invariant), runs second.  The
+            # subquery uses the same WHERE / ORDER / LIMIT shape so the
+            # set of runs the events DELETE matches is identical to the
+            # set of runs the runs DELETE removes — even under READ
+            # COMMITTED isolation, because both statements execute inside
+            # the same transaction.
+            await tx.execute(
+                f"DELETE FROM {self._events_table} "
+                f"WHERE run_id IN ("
+                f"SELECT run_id FROM {self._runs_table} "
+                f"WHERE tenant_id = ? "
+                f"ORDER BY started_at ASC LIMIT ?)",
+                tenant_id,
+                excess,
+            )
+            await tx.execute(
+                f"DELETE FROM {self._runs_table} "
+                f"WHERE run_id IN ("
+                f"SELECT run_id FROM {self._runs_table} "
+                f"WHERE tenant_id = ? "
+                f"ORDER BY started_at ASC LIMIT ?)",
+                tenant_id,
+                excess,
+            )
 
+        # Per issue #876 C-1 + ``rules/observability.md`` Rule 8 — hash
+        # the record-level ``sample_run_id`` identifier so the WARN line
+        # is symmetric with the already-hashed ``tenant_id_hash`` sibling
+        # field.  Counts (``attempted`` / ``failed`` / ``cap``) and the
+        # metric-counter increment do NOT carry record-level identifiers.
         logger.warning(
             "history_store.per_tenant_cap.evicted",
             extra={
                 "attempted": excess,
                 "failed": 0,
                 "tenant_id_hash": _hash_short(tenant_id),
-                "sample_run_id": sample_run_id,
+                "sample_run_id_hash": _hash_short(sample_run_id),
                 "cap": self._per_tenant_cap,
             },
         )
+        get_metrics_bridge().record_history_store_per_tenant_cap_evicted(excess)
 
 
 # ---------------------------------------------------------------------------
@@ -978,3 +1163,46 @@ def _hash_short(value: str) -> str:
     import hashlib
 
     return hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:8]
+
+
+def _audit_safe_default(obj: Any) -> Any:
+    """Whitelist serializer for audit-log payloads — issue #876 L-4.
+
+    Replaces ``json.dumps(payload, default=str)`` at the audit-log write
+    site.  ``default=str`` silently coerced every unsupported type via
+    ``str(obj)``: a ``Decimal("1.50")`` became the string ``"1.50"``; a
+    ``datetime`` became its ISO-8601 repr; a ``set`` became
+    ``"{1, 2, 3}"``.  Audit-log readers could not distinguish a value
+    stored AS a number from a value stored AS a repr of a number — the
+    same failure-mode class as ``zero-tolerance.md`` Rule 3 (silent
+    fallbacks) and Rule 2 (fake serialization).
+
+    Supported (typed) outputs:
+    - ``datetime`` / ``date`` / ``time`` → ``isoformat()`` (ISO-8601
+      string, RFC 3339 for tz-aware datetimes, sortable).
+    - ``Decimal`` → ``str(obj)`` (preserves precision; reader applies
+      ``Decimal(value)``).
+    - ``UUID`` → ``str(obj)`` (canonical hyphenated form).
+
+    Unsupported types (``set``, ``frozenset``, ``bytes``, ``bytearray``,
+    ``memoryview``, custom classes) raise ``TypeError``.  Nodes emitting
+    such types MUST convert at the node boundary (e.g.
+    ``return {"items": list(my_set)}``).
+
+    The error message names the unsupported type AND points to the spec
+    so the reader has actionable migration guidance.
+
+    Spec: ``specs/core-runtime.md`` § audit-log payload supported types.
+    """
+    if isinstance(obj, (datetime, date, time)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, UUID):
+        return str(obj)
+    raise TypeError(
+        f"audit-log payload contains unsupported type "
+        f"{type(obj).__name__!r}; convert to dict / list / str / int / "
+        f"float / bool / None at the node boundary "
+        f"(see specs/core-runtime.md § audit-log payload supported types)"
+    )
