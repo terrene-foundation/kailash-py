@@ -29,8 +29,38 @@ and (Shard 2) consumer cannot drift out of byte-shape agreement.
   whitespace / control-char / null-byte / non-str inputs at the entry
   point, not deep in the dispatch path.
 
-Worker-side multi-queue dequeue is Shard 2; this Shard 1 only delivers
-the producer + helper module + JSON wire format.
+Worker-side multi-queue dequeue is Shard 2 (below).
+
+### Added — issue #911 Shard 2: Worker multi-queue dequeue
+
+`Worker(queues={"fast": 8, "slow": 2})` now declares a multi-queue
+worker that dequeues from each named queue with its own concurrency
+cap. Per the issue's acceptance criterion 3, a slow-queue task running
+does NOT block fast-queue pickup — each queue gets its own asyncio
+dequeue loop and per-queue semaphore.
+
+- Bare-int form: `queues={"fast": 8}` sets concurrency=8 with
+  default visibility_timeout=300.
+- Dict form: `queues={"slow": {"concurrency": 2, "visibility_timeout": 1800}}`
+  overrides per-queue visibility_timeout for legitimate long-running
+  workloads.
+- `queue=` and `queues=` are mutually exclusive at construction
+  (raises `ValueError`).
+- Heartbeat JSON now includes `"queues": {"fast": 8, "slow": 2}` so
+  operators see exactly which queues each worker consumes.
+- `get_status()` reports per-queue pending/processing counts under
+  `queues` while preserving the legacy `queue_pending` / `queue_processing`
+  fields for the primary queue.
+- `TaskEvent.queue_name` is populated on every lifecycle hook
+  (`on_task_prerun` / `_postrun` / `_success` / `_retry` / `_failure`)
+  so per-queue alerting (e.g. `slow_queue_failure_rate` dashboards)
+  can route on the queue.
+- Stale-task recovery sweeps every queue this worker consumes from,
+  not just the primary.
+
+Legacy `Worker(concurrency=N)` and `Worker(queue=tq)` paths remain
+externally indistinguishable from `Worker(queues={"default": N})` —
+same Redis list key, same heartbeat shape minus the `queues` field.
 
 ## [2.18.1] - 2026-05-10
 

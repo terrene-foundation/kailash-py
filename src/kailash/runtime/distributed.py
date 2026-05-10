@@ -741,6 +741,69 @@ class DistributedRuntime(BaseRuntime):
         return workflow.to_dict()
 
 
+@dataclass
+class _QueueSpec:
+    """Per-queue runtime config inside a multi-queue ``Worker``.
+
+    Holds the queue's TaskQueue (already configured with
+    ``make_queue_key(name)``) plus the per-queue concurrency and
+    visibility-timeout. Issue #911 Shard 2.
+    """
+
+    name: str
+    concurrency: int
+    visibility_timeout: int
+    queue: TaskQueue
+    semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _parse_queue_spec(raw: Any) -> Tuple[int, int]:
+    """Parse a single ``Worker(queues=)`` value into (concurrency, vt).
+
+    Accepts EITHER a bare ``int`` (concurrency only; visibility_timeout
+    defaults to 300) OR a dict with ``concurrency`` (required) and
+    optional ``visibility_timeout`` overrides:
+
+        queues={"fast": 8}                                     # bare int
+        queues={"slow": {"concurrency": 2, "visibility_timeout": 1800}}
+
+    Issue #911 Shard 2 failure-point #4.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, (int, dict)):
+        raise ValueError(
+            "queues entry must be int or dict with 'concurrency' key, "
+            f"got {type(raw).__name__}"
+        )
+    if isinstance(raw, int):
+        if raw < 1:
+            raise ValueError(f"queue concurrency must be >= 1, got {raw}")
+        return raw, 300
+    # dict path
+    if "concurrency" not in raw:
+        raise ValueError("queues entry dict must include 'concurrency' key")
+    concurrency_raw = raw["concurrency"]
+    if isinstance(concurrency_raw, bool) or not isinstance(concurrency_raw, int):
+        raise ValueError(
+            "queues entry concurrency must be int, got "
+            f"{type(concurrency_raw).__name__}"
+        )
+    if concurrency_raw < 1:
+        raise ValueError(
+            f"queues entry concurrency must be >= 1, got {concurrency_raw}"
+        )
+    vt_raw = raw.get("visibility_timeout", 300)
+    if isinstance(vt_raw, bool) or not isinstance(vt_raw, int):
+        raise ValueError(
+            "queues entry visibility_timeout must be int, got "
+            f"{type(vt_raw).__name__}"
+        )
+    if vt_raw < 1:
+        raise ValueError(
+            "queues entry visibility_timeout must be >= 1, " f"got {vt_raw}"
+        )
+    return concurrency_raw, vt_raw
+
+
 class Worker:
     """Task queue worker that dequeues and executes workflows.
 
@@ -808,6 +871,7 @@ class Worker:
         default_soft_time_limit: float | None = None,
         default_time_limit: float | None = None,
         hard_time_limit_grace_seconds: float = 1.0,
+        queues: Optional[Dict[str, Any]] = None,
     ):
         # #912 Shard 4 + Shard 6: validate Worker-default time limits AND
         # the grace_seconds at construction so bad configuration surfaces
@@ -820,9 +884,18 @@ class Worker:
             grace_seconds=hard_time_limit_grace_seconds,
         )
 
+        # #911 Shard 2: ``queue`` (legacy single-queue path) and
+        # ``queues`` (multi-queue map) are mutually exclusive — passing
+        # both is a configuration error (the agent has no canonical way
+        # to merge them) so we raise at construction, not silently
+        # prefer one. Per zero-tolerance.md Rule 3 (no silent fallback).
+        if queue is not None and queues is not None:
+            raise ValueError(
+                "Worker(queue=, queues=) are mutually exclusive — "
+                "pass ONE or the other"
+            )
+
         self._redis_url = redis_url or os.environ.get("KAILASH_REDIS_URL", "")
-        self._queue = queue or TaskQueue(redis_url=self._redis_url)
-        self._concurrency = max(1, concurrency)
         self._heartbeat_interval = heartbeat_interval
         self._dead_worker_timeout = dead_worker_timeout
         self._worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
@@ -832,8 +905,59 @@ class Worker:
         self._hard_time_limit_grace_seconds = hard_time_limit_grace_seconds
         self._running = False
         self._tasks: set[asyncio.Task] = set()
-        self._semaphore: Optional[asyncio.Semaphore] = None
         self._redis_client = None
+
+        # Resolve the multi-queue map. Three input shapes resolve to the
+        # same internal ``self._queue_specs`` table (one entry per
+        # logical queue) so the rest of the worker is queue-agnostic:
+        #   1. Legacy ``Worker(concurrency=N)`` → single ``"default"``
+        #      queue with N concurrency. Byte-identical wire format
+        #      to pre-#911.
+        #   2. Legacy ``Worker(queue=tq)`` (pre-built TaskQueue) →
+        #      single ``"default"`` queue using the passed instance.
+        #   3. New ``Worker(queues={"fast": 8, "slow": {"concurrency":
+        #      2, "visibility_timeout": 1800}})`` → one entry per
+        #      named queue, with optional per-queue visibility-timeout
+        #      override (failure-point #4).
+        self._queue_specs: Dict[str, "_QueueSpec"] = {}
+        if queues is not None:
+            if not queues:
+                raise ValueError("Worker(queues={}) must declare at least one queue")
+            for name, raw_spec in queues.items():
+                validate_queue_name(name)
+                queue_concurrency, vt = _parse_queue_spec(raw_spec)
+                tq = TaskQueue(
+                    redis_url=self._redis_url,
+                    queue_key=make_queue_key(name),
+                    default_visibility_timeout=vt,
+                )
+                self._queue_specs[name] = _QueueSpec(
+                    name=name,
+                    concurrency=queue_concurrency,
+                    visibility_timeout=vt,
+                    queue=tq,
+                )
+        else:
+            tq = queue or TaskQueue(redis_url=self._redis_url)
+            self._queue_specs[DEFAULT_QUEUE_NAME] = _QueueSpec(
+                name=DEFAULT_QUEUE_NAME,
+                concurrency=max(1, concurrency),
+                visibility_timeout=tq._default_visibility_timeout,
+                queue=tq,
+            )
+
+        # Legacy attributes preserved for back-compat with code that
+        # reads them (get_status, _heartbeat_loop, etc.). When multi-
+        # queue, ``self._queue`` aliases the default queue (or the
+        # first declared queue if no default was declared) so legacy
+        # callers see SOMETHING; ``self._concurrency`` reports the
+        # AGGREGATE concurrency across declared queues.
+        primary = self._queue_specs.get(
+            DEFAULT_QUEUE_NAME,
+            next(iter(self._queue_specs.values())),
+        )
+        self._queue = primary.queue
+        self._concurrency = sum(spec.concurrency for spec in self._queue_specs.values())
 
         # Lifecycle hook registries (issue #914). Each list holds zero or more
         # handlers, dispatched in registration order. Handler exceptions are
@@ -1064,23 +1188,47 @@ class Worker:
         Registers the worker, starts the heartbeat, recovers stale tasks,
         and begins processing. Blocks until ``stop()`` is called or a
         termination signal is received.
+
+        Multi-queue (#911 Shard 2): spawns one independent asyncio
+        dequeue-loop task per declared queue, each with its own
+        concurrency semaphore. Per-queue tasks are independent so a
+        slow-queue task does NOT block fast-queue dequeue.
         """
         self._running = True
-        self._semaphore = asyncio.Semaphore(self._concurrency)
+
+        # Per-queue semaphores: each declared queue enforces its own
+        # concurrency cap independently. The aggregate self._semaphore
+        # alias points at the default queue's semaphore for back-compat
+        # with code that reads self._semaphore directly.
+        for spec in self._queue_specs.values():
+            spec.semaphore = asyncio.Semaphore(spec.concurrency)
+        self._semaphore = self._queue_specs[
+            (
+                DEFAULT_QUEUE_NAME
+                if DEFAULT_QUEUE_NAME in self._queue_specs
+                else next(iter(self._queue_specs))
+            )
+        ].semaphore
 
         logger.info(
-            "Worker '%s' starting with concurrency=%d",
+            "Worker '%s' starting with queues=%s (aggregate concurrency=%d)",
             self._worker_id,
+            {n: s.concurrency for n, s in self._queue_specs.items()},
             self._concurrency,
         )
 
         # Register worker
         self._register_worker()
 
-        # Recover stale tasks from previous crashes
-        recovered = self._queue.recover_stale_tasks()
-        if recovered:
-            logger.info("Recovered %d stale tasks on startup", recovered)
+        # Recover stale tasks from previous crashes — once per queue.
+        for spec in self._queue_specs.values():
+            recovered = spec.queue.recover_stale_tasks()
+            if recovered:
+                logger.info(
+                    "Recovered %d stale tasks on startup (queue=%s)",
+                    recovered,
+                    spec.name,
+                )
 
         # Start heartbeat task
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -1088,10 +1236,22 @@ class Worker:
         # Start dead worker detection task
         detection_task = asyncio.create_task(self._dead_worker_detection_loop())
 
+        # Start one dequeue loop per declared queue (#911 Shard 2). Each
+        # loop runs independently, so a BLMOVE block on the slow queue
+        # cannot stall fast-queue pickup (failure-point #3).
+        per_queue_loops = [
+            asyncio.create_task(self._dequeue_loop(spec))
+            for spec in self._queue_specs.values()
+        ]
+
         try:
-            await self._process_loop()
+            # Block until any of the dequeue loops exits (typically via
+            # self._running going False on stop()).
+            await asyncio.gather(*per_queue_loops, return_exceptions=True)
         finally:
             self._running = False
+            for loop_task in per_queue_loops:
+                loop_task.cancel()
             heartbeat_task.cancel()
             detection_task.cancel()
             self._deregister_worker()
@@ -1108,57 +1268,88 @@ class Worker:
         logger.info("Worker '%s' stop requested", self._worker_id)
         self._running = False
 
-    async def _process_loop(self):
-        """Main processing loop that dequeues and executes tasks."""
+    async def _dequeue_loop(self, spec: "_QueueSpec"):
+        """Per-queue dequeue loop (#911 Shard 2).
+
+        One asyncio task per declared queue. Each loop dequeues from
+        its OWN Redis list with its OWN semaphore — so a slow-queue
+        task that takes the semaphore does NOT block fast-queue
+        pickup (failure-point #3, acceptance criterion 3).
+        """
+        assert spec.semaphore is not None
         while self._running:
             try:
-                # Non-blocking dequeue with short timeout
+                # Non-blocking dequeue with short timeout — bounded so
+                # self._running becomes False within ~2s of stop().
                 task = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: self._queue.dequeue(timeout=2)
+                    None, lambda: spec.queue.dequeue(timeout=2)
                 )
                 if task is None:
                     continue
 
-                # Acquire semaphore for concurrency control
-                assert self._semaphore is not None
-                await self._semaphore.acquire()
-                async_task = asyncio.create_task(self._execute_task(task))
+                # Acquire THIS queue's semaphore (per-queue concurrency
+                # cap, NOT aggregate). A saturated slow queue does not
+                # block fast-queue dequeue because the fast queue has
+                # its own loop + semaphore.
+                await spec.semaphore.acquire()
+                async_task = asyncio.create_task(self._execute_task(task, spec=spec))
                 self._tasks.add(async_task)
-                async_task.add_done_callback(self._task_done)
+                async_task.add_done_callback(lambda t, s=spec: self._task_done(t, s))
 
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.error("Error in worker process loop: %s", exc)
+                logger.error("Error in dequeue loop (queue=%s): %s", spec.name, exc)
                 await asyncio.sleep(1)
 
-    def _task_done(self, task: asyncio.Task):
-        """Callback when a task completes. Releases the semaphore."""
-        if self._semaphore:
+    def _task_done(self, task: asyncio.Task, spec: Optional["_QueueSpec"] = None):
+        """Callback when a task completes. Releases the per-queue semaphore."""
+        if spec is not None and spec.semaphore is not None:
+            spec.semaphore.release()
+        elif self._semaphore is not None:
+            # Legacy-callback path (no spec) — fall back to default.
             self._semaphore.release()
         if task in self._tasks:
             self._tasks.discard(task)
 
-    async def _execute_task(self, task: TaskMessage):
+    async def _execute_task(
+        self,
+        task: TaskMessage,
+        *,
+        spec: Optional["_QueueSpec"] = None,
+    ):
         """Execute a single task and store the result.
 
         Args:
             task: The task to execute.
+            spec: The :class:`_QueueSpec` of the queue this task was
+                dequeued from (#911 Shard 2). Used to route ack/store/
+                nack back to the originating queue. Falls back to the
+                worker's primary queue (legacy single-queue behavior)
+                when ``None`` so legacy code paths keep working.
         """
+        # Resolve the queue this task belongs to. spec is the canonical
+        # signal; in the rare legacy single-queue path we fall back to
+        # the primary queue (which IS the only queue in that path).
+        active_queue = spec.queue if spec is not None else self._queue
+        active_queue_name = spec.name if spec is not None else task.queue_name
+
         start_time = time.time()
         logger.info(
-            "Worker '%s' executing task %s (attempt %d/%d)",
+            "Worker '%s' executing task %s (queue=%s, attempt %d/%d)",
             self._worker_id,
             task.task_id,
+            active_queue_name,
             task.attempts,
             task.max_attempts,
         )
 
         workflow_name = self._workflow_name_from_task(task)
 
-        # Issue #914: prerun lifecycle hook — handler sees the task BEFORE
-        # the runtime executes. elapsed_ms is None because the task has not
-        # yet run; exception is None.
+        # Issue #914 + #911 Shard 2: prerun lifecycle hook — handler sees
+        # the task BEFORE the runtime executes. queue_name is populated
+        # so per-queue alerting (e.g. slow_queue_failure_rate dashboards)
+        # can route on it.
         if self._hooks_prerun:
             await self._dispatch_task_event(
                 self._hooks_prerun,
@@ -1168,6 +1359,7 @@ class Worker:
                     attempt=task.attempts,
                     max_attempts=task.max_attempts,
                     worker_id=self._worker_id,
+                    queue_name=active_queue_name,
                 ),
             )
 
@@ -1233,18 +1425,20 @@ class Worker:
                 worker_id=self._worker_id,
                 execution_time=execution_time,
             )
-            self._queue.store_result(result)
-            self._queue.ack(task)
+            active_queue.store_result(result)
+            active_queue.ack(task)
 
             logger.info(
-                "Task %s completed in %.2fs by worker '%s'",
+                "Task %s completed in %.2fs by worker '%s' (queue=%s)",
                 task.task_id,
                 execution_time,
                 self._worker_id,
+                active_queue_name,
             )
 
-            # Issue #914: success lifecycle hook — fire AFTER ack so the
-            # handler observes committed-success state.
+            # Issue #914 + #911 Shard 2: success lifecycle hook — fire
+            # AFTER ack so the handler observes committed-success state.
+            # queue_name routes per-queue success metrics.
             if self._hooks_success:
                 await self._dispatch_task_event(
                     self._hooks_success,
@@ -1255,6 +1449,7 @@ class Worker:
                         max_attempts=task.max_attempts,
                         worker_id=self._worker_id,
                         elapsed_ms=execution_time * 1000.0,
+                        queue_name=active_queue_name,
                     ),
                 )
 
@@ -1262,9 +1457,10 @@ class Worker:
             execution_time = time.time() - start_time
             outcome_exc = exc
             logger.error(
-                "Task %s failed after %.2fs: %s",
+                "Task %s failed after %.2fs (queue=%s): %s",
                 task.task_id,
                 execution_time,
+                active_queue_name,
                 exc,
             )
 
@@ -1277,7 +1473,7 @@ class Worker:
                 worker_id=self._worker_id,
                 execution_time=execution_time,
             )
-            self._queue.store_result(result)
+            active_queue.store_result(result)
 
             # Issue #914: classify retry vs final failure BEFORE nack so the
             # handler sees the disposition that nack will apply. TaskQueue.nack
@@ -1291,6 +1487,7 @@ class Worker:
                 worker_id=self._worker_id,
                 elapsed_ms=execution_time * 1000.0,
                 exception=exc,
+                queue_name=active_queue_name,
             )
             if task.attempts < task.max_attempts:
                 if self._hooks_retry:
@@ -1299,11 +1496,12 @@ class Worker:
                 if self._hooks_failure:
                     await self._dispatch_task_event(self._hooks_failure, failure_event)
 
-            self._queue.nack(task)
+            active_queue.nack(task)
 
         finally:
-            # Issue #914: postrun lifecycle hook — fires for both success and
-            # failure paths. Equivalent to Celery's `task_postrun` signal.
+            # Issue #914 + #911 Shard 2: postrun lifecycle hook — fires
+            # for both success and failure paths. Equivalent to Celery's
+            # `task_postrun` signal.
             if self._hooks_postrun:
                 await self._dispatch_task_event(
                     self._hooks_postrun,
@@ -1315,6 +1513,7 @@ class Worker:
                         worker_id=self._worker_id,
                         elapsed_ms=execution_time * 1000.0,
                         exception=outcome_exc,
+                        queue_name=active_queue_name,
                     ),
                 )
 
@@ -1387,6 +1586,14 @@ class Worker:
                     "timestamp": time.time(),
                     "active_tasks": len(self._tasks),
                     "concurrency": self._concurrency,
+                    # #911 Shard 2: per-queue concurrency map. Operators
+                    # observing the heartbeat see exactly which queues
+                    # this worker is consuming from + their per-queue
+                    # caps (failure-point #7).
+                    "queues": {
+                        spec.name: spec.concurrency
+                        for spec in self._queue_specs.values()
+                    },
                 }
             )
             client.set(
@@ -1442,9 +1649,12 @@ class Worker:
                         worker_id,
                     )
                     client.srem(_WORKER_SET_KEY, worker_id)
-                    # Stale task recovery happens in the main loop via
-                    # recover_stale_tasks()
-                    self._queue.recover_stale_tasks()
+                    # #911 Shard 2: stale task recovery sweeps every
+                    # queue this worker consumes from, not just the
+                    # primary. A dead worker may have orphaned tasks
+                    # on multiple queues.
+                    for spec in self._queue_specs.values():
+                        spec.queue.recover_stale_tasks()
 
         except Exception as exc:
             logger.warning("Dead worker detection failed: %s", exc)
@@ -1453,15 +1663,41 @@ class Worker:
         """Get current worker status.
 
         Returns:
-            Dictionary with worker metadata and task counts.
+            Dictionary with worker metadata and task counts. The
+            ``queues`` field (#911 Shard 2) reports per-queue pending
+            and processing counts for every queue this worker consumes
+            from. Legacy fields ``queue_pending`` / ``queue_processing``
+            report the PRIMARY queue's counts so existing dashboards
+            keep working.
         """
+        primary = self._queue
+        per_queue: Dict[str, Dict[str, int]] = {}
+        for spec in self._queue_specs.values():
+            try:
+                if spec.queue.ping():
+                    per_queue[spec.name] = {
+                        "pending": spec.queue.queue_length(),
+                        "processing": spec.queue.processing_length(),
+                        "concurrency": spec.concurrency,
+                    }
+                else:
+                    per_queue[spec.name] = {
+                        "pending": -1,
+                        "processing": -1,
+                        "concurrency": spec.concurrency,
+                    }
+            except Exception:
+                per_queue[spec.name] = {
+                    "pending": -1,
+                    "processing": -1,
+                    "concurrency": spec.concurrency,
+                }
         return {
             "worker_id": self._worker_id,
             "running": self._running,
             "active_tasks": len(self._tasks),
             "concurrency": self._concurrency,
-            "queue_pending": self._queue.queue_length() if self._queue.ping() else -1,
-            "queue_processing": (
-                self._queue.processing_length() if self._queue.ping() else -1
-            ),
+            "queue_pending": primary.queue_length() if primary.ping() else -1,
+            "queue_processing": (primary.processing_length() if primary.ping() else -1),
+            "queues": per_queue,
         }
