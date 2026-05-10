@@ -64,13 +64,22 @@ class _FakeRuntime:
         *,
         idempotency_key: Optional[str] = None,
         force_resume_with_drift: bool = False,
+        soft_time_limit: Optional[float] = None,
+        time_limit: Optional[float] = None,
     ) -> Tuple[Dict[str, Any], str]:
+        # Mock mirrors AsyncLocalRuntime.execute_workflow_async signature
+        # (src/kailash/runtime/async_local.py:847). soft_time_limit + time_limit
+        # added by #876 / #912 plumbing in DurableExecutionEngine.execute
+        # (durable.py:1479–1486). Recording them lets future routing tests
+        # assert kwarg forwarding without re-touching this mock.
         self.execute_calls.append(
             {
                 "workflow": workflow,
                 "inputs": dict(inputs),
                 "idempotency_key": idempotency_key,
                 "force_resume_with_drift": force_resume_with_drift,
+                "soft_time_limit": soft_time_limit,
+                "time_limit": time_limit,
             }
         )
         return {"step1": {"result": {"value": 1}}}, "run_fake_001"
@@ -350,6 +359,40 @@ async def test_issue_882_default_without_dispatcher_runs_in_process_only():
     assert len(runtime_holder[0].execute_calls) == 1
     assert results == {"step1": {"result": {"value": 1}}}
     assert run_id == "run_fake_001"
+
+
+@pytest.mark.asyncio
+async def test_issue_882_time_limit_kwargs_forwarded_to_runtime():
+    """``soft_time_limit`` / ``time_limit`` flow from ``engine.execute(...)``
+    to ``runtime.execute_workflow_async(...)``.
+
+    Structural defense against the silent-fallback failure mode in
+    ``zero-tolerance.md`` Rule 3c (Documented Kwargs Accepted But Unused):
+    the engine docstring at ``durable.py:1374-1383`` advertises these
+    kwargs as forwarded; this test pins the contract behaviorally so a
+    future refactor that drops the kwarg on the floor surfaces here, not
+    at runtime when soft-time-limit alerting silently never fires.
+    """
+    runtime_holder: List[_FakeRuntime] = []
+
+    def factory(**kwargs: Any) -> _FakeRuntime:
+        rt = _FakeRuntime(**kwargs)
+        runtime_holder.append(rt)
+        return rt
+
+    engine = DurableExecutionEngine.builder().runtime(factory).build()
+    workflow = _build_minimal_workflow()
+    await engine.execute(
+        workflow,
+        idempotency_key="time_k1",
+        soft_time_limit=2.5,
+        time_limit=5.0,
+    )
+
+    assert len(runtime_holder[0].execute_calls) == 1
+    call = runtime_holder[0].execute_calls[0]
+    assert call["soft_time_limit"] == 2.5
+    assert call["time_limit"] == 5.0
 
 
 def test_issue_882_engine_execution_mode_property_exposed():
