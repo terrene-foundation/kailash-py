@@ -3118,11 +3118,19 @@ class LocalRuntime(
 
                     raise WorkflowExecutionError(error_msg) from e
                 else:
-                    # Continue execution but record error
+                    # Continue execution but record error.
+                    # Issue #941: preserve the actual exception object under a
+                    # private key so callers (e.g. distributed Worker retry
+                    # classification) can re-raise the original error and walk
+                    # its __cause__/__context__ chain to recover the user-
+                    # meaningful root exception (the SDK wraps user errors in
+                    # NodeExecutionError, which hides ZeroDivisionError etc.
+                    # from lifecycle-hook consumers).
                     results[node_id] = {
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "failed": True,
+                        "_exception": e,
                     }
 
         # Clean up workflow context
