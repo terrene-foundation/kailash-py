@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Hardened — issue #912 corrective gate (Shard 6)
+
+The /redteam Round 1 audit on the merged #912 wave (PRs #921-#925) caught
+two ship-blocking failure modes that this corrective shard fixes:
+
+#### Fixed — In-process runtime enforcement was missing
+
+Five in-process runtimes — `LocalRuntime`, `AsyncLocalRuntime`,
+`ParallelRuntime`, `ParallelCyclicRuntime`, `DockerRuntime` — accepted
+`soft_time_limit` / `time_limit` kwargs in their public signatures,
+called `_validate_limits()`, and then dropped the kwargs on the floor
+without ever arming `arm_time_limits`. The README quickstart::
+
+    runtime = LocalRuntime()
+    runtime.execute(workflow.build(), soft_time_limit=2)
+
+silently never raised `SoftTimeLimitExceeded` against a 5-second
+workflow. Same fake-dispatch failure mode as `zero-tolerance.md`
+Rule 2 § "Fake dispatch": the docstring promised the contract; the
+code did not deliver.
+
+Wired in this shard:
+
+- `LocalRuntime.execute` — `arm_time_limits` (sync threading.Timer)
+  layered on a fresh `CancellationToken`, classifier on
+  `WorkflowCancelledError`, post-completion poll for hard-deadline-
+  fired-after-success.
+- `AsyncLocalRuntime.execute_workflow_async` — `arm_time_limits_async`
+  (asyncio task) with the same pattern. Typed `SoftTimeLimitExceeded`
+  / `HardTimeLimitExceeded` exceptions added above the broad
+  `except Exception` re-wrap so they propagate untouched.
+- `ParallelRuntime.execute` — `arm_time_limits_async` around the
+  parallel-DAG path; typed exception passthrough.
+- `ParallelCyclicRuntime.execute` — `arm_time_limits` around all three
+  execution paths (cyclic / parallel-DAG / LocalRuntime fallback);
+  typed kwargs forwarded to `LocalRuntime` for defense-in-depth.
+- `DockerRuntime.execute` — `arm_time_limits` around the per-node
+  container loop. Per-node-boundary poll: between containers, check
+  if the hard timer fired during the previous container and raise.
+  Documented constraint: long-running single-node Docker workflows
+  cannot be interrupted mid-container (the timer cannot inject into
+  a running `docker run` subprocess); multi-node workflows DO get
+  the full deadline contract at every node boundary.
+- `AccessControlledRuntime.execute` and `DurableExecutionEngine.execute`
+  required NO changes — both already forward typed kwargs by name
+  to their inner runtime's execute call, so the in-process wiring
+  above fires automatically through them.
+
+#### Fixed — Input-validation bypass at the Worker dequeue boundary
+
+Three security findings were paired with the in-process gap:
+
+1. **NaN / Inf bypass `_validate_limits`** — `float('inf') > 0` is
+   True; `float('nan') <= 0` is False. Both slipped through the
+   original sign-check and would arm `Timer(inf, ...)` (sleeps
+   forever, workflow uncancellable) or `Timer(nan, ...)` (raises
+   from a daemon thread with no traceback to the caller).
+   `_validate_limits` now rejects non-finite values via
+   `math.isfinite()` at every entry point.
+2. **Worker accepts arbitrary `execution_limits` dict shape** — a
+   malicious or mis-coded producer could send arbitrary shapes on
+   the wire (`{"soft": "DROP TABLE"}`, `{"soft": [1, 2, 3]}`,
+   `{"hard": -1}`). Without dequeue-side validation, the bad value
+   flowed to `arm_time_limits` and surfaced as TypeError /
+   ValueError from a daemon thread. Added
+   `Worker._validate_execution_limits_dict` static helper, called
+   from `Worker._effective_time_limits` at dequeue. Validates dict-
+   or-None, key types (rejects bool because Python's bool subclasses
+   int), then delegates to `_validate_limits` for finite + sign +
+   ordering. Unknown keys silently ignored for forward-compat.
+3. **`grace_seconds` was unvalidated** — negative grace fires the
+   hard kill BEFORE the soft signal (inverting the celery
+   contract); NaN crashes the daemon thread. `_validate_limits`
+   now accepts an optional `grace_seconds` parameter and validates
+   it; `arm_time_limits` / `arm_time_limits_async` /
+   `Worker.__init__` all forward the value so caller error raises
+   at the entry point.
+
+#### Tests
+
+- `tests/unit/test_time_limits_validation.py` — 12 new finite-check
+  + grace_seconds cases.
+- `tests/integration/runtime/test_local_runtime_time_limits.py` (new)
+  — 8 Tier-2 cases covering soft/hard enforcement on real
+  `LocalRuntime` plus all entry-point validation paths.
+- `tests/integration/runtime/test_async_local_runtime_time_limits.py`
+  (new) — 7 Tier-2 cases mirroring the LocalRuntime suite for the
+  async path.
+- `tests/integration/runtime/test_distributed_time_limits.py` — 11
+  new Worker dequeue-validation cases (no Redis required for the
+  validation surface).
+
+Full #912 regression suite: 149 passed; Tier-1 sweep matching CI:
+3915 passed, 4 skipped, 0 failures.
+
 ### Added — Per-Task Soft / Hard Time Limits (#912)
 
 `runtime.execute(workflow.build(), soft_time_limit=2.0, time_limit=5.0)`
