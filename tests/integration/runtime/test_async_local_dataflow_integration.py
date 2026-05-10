@@ -340,7 +340,11 @@ async def test_async_runtime_matches_local_runtime_dataflow(test_db):
 
     This test ensures parameter passing behavior is consistent between both runtimes.
     """
-    # Test with LocalRuntime
+    # Test with LocalRuntime — context-manager form per the
+    # ``LocalRuntime.execute()`` deprecation guidance. The cleanup-race
+    # ``RuntimeWarning`` that originally blocked this form (#950) was fixed
+    # in src/kailash/runtime/local.py; this call site is the one named in
+    # #950's acceptance criteria for re-adoption.
     local_workflow = WorkflowBuilder()
     local_workflow.add_node(
         "TestItemCreateNode",
@@ -348,8 +352,8 @@ async def test_async_runtime_matches_local_runtime_dataflow(test_db):
         {"id": "test-item-007", "name": "LocalRuntime Test", "status": "active"},
     )
 
-    local_runtime = LocalRuntime()
-    local_results, _ = local_runtime.execute(local_workflow.build())
+    with LocalRuntime() as local_runtime:
+        local_results, _ = local_runtime.execute(local_workflow.build())
     local_item = local_results["create_local"]
 
     # Test with AsyncLocalRuntime
