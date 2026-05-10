@@ -176,7 +176,6 @@ Use this skill when you need to:
 - **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent framework built on Core SDK
 - **[06-cheatsheets](../06-cheatsheets/SKILL.md)** - Quick reference patterns
 - **[08-nodes-reference](../08-nodes-reference/SKILL.md)** - Complete node reference
-- **[09-workflow-patterns](../09-workflow-patterns/SKILL.md)** - Industry workflow templates
 - **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
 
 ## Support

@@ -140,7 +140,6 @@ Use this skill when you need to:
 - **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core SDK workflow patterns (infrastructure backs execution)
 - **[02-dataflow](../02-dataflow/SKILL.md)** - DataFlow for user data (infrastructure for runtime stores)
 - **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel platform deployment
-- **[07-development-guides](../07-development-guides/SKILL.md)** - Testing and development patterns
 
 ## Support
 

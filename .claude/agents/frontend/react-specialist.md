@@ -100,5 +100,4 @@ Change as little as possible. Preserve existing architecture. Add new elements f
 
 ## Skill References
 
-- `skills/11-frontend-integration/react-patterns.md` — implementation patterns
 - `skills/23-uiux-design-principles/SKILL.md` — design principles (CRITICAL)

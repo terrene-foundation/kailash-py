@@ -131,8 +131,6 @@ Phase 1 → Phase 2 → Phase 3
 ## Skill References
 
 - `skills/spec-compliance/SKILL.md` — **MUST** load when doing /redteam Step 1 (spec compliance audit). Defines the AST/grep verification protocol that replaces file-existence checking. Re-derive every check from scratch — never trust prior `.spec-coverage` or `convergence-verify.py` self-reports.
-- `skills/13-architecture-decisions/` — architecture decision patterns
-- `skills/07-development-guides/` — implementation guides
 
 ## /redteam Step 1 Ownership
 

@@ -130,10 +130,7 @@ Use this skill **PROACTIVELY** when:
 
 ## Related Skills
 
-- **[11-frontend-integration](../11-frontend-integration/SKILL.md)** - Technical integration patterns
-- **[19-flutter-patterns](../19-flutter-patterns/SKILL.md)** - Flutter-specific implementation
-- **[21-enterprise-ai-ux](../21-enterprise-ai-ux/SKILL.md)** - AI application UX patterns
-- **[22-conversation-ux](../22-conversation-ux/SKILL.md)** - Conversation UI patterns
+- **[25-ai-interaction-patterns](../25-ai-interaction-patterns/SKILL.md)** - AI UX patterns
 
 ## Support
 
