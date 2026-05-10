@@ -932,14 +932,24 @@ class NodeCompletionHookRegistry:
                     # is the durable signal.
                     pass
             except Exception as exc:  # noqa: BLE001 — see WARN below
+                # Issue #876 same-class follow-on (review-surfaced LOW-2/MEDIUM):
+                # the bare-Exception branch lives in the same function the C-1
+                # hashing-symmetry sweep just touched.  Per autonomous-execution.md
+                # MUST Rule 4 (fix-immediately, same-class gap, ≤3 lines), the
+                # raw run_id is hashed via _hash_short to match every other WARN
+                # emission in this file (see specs/core-runtime.md §4.7.1
+                # hashing-symmetry contract).
                 failed.append((_callback_name(cb), type(exc).__name__))
+                run_id_hash = (
+                    _hash_short(event.run_id) if event.run_id is not None else "None"
+                )
                 logger.warning(
                     "durable.on_node_complete.subscriber_failed",
                     extra={
                         "callback": _callback_name(cb),
                         "error_type": type(exc).__name__,
                         "node_id_hash": _hash_short(event.node_id),
-                        "run_id": event.run_id,
+                        "run_id_hash": run_id_hash,
                     },
                 )
 
