@@ -1095,8 +1095,9 @@ class AsyncLocalRuntime(LocalRuntime):
 
         except WorkflowCancelledError as cancel_exc:
             # #912 Shard 6: classify time-limit cancellations into the
-            # typed deadline subclass. The runtime observed our token
-            # cancelled and raised; if our timers were armed, classify.
+            # subclass that names the deadline. The runtime observed
+            # our token cancelled and raised; if our timers were armed,
+            # classify.
             context.metrics.error_count += 1
             if cancellable is not None:
                 classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)

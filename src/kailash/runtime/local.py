@@ -1125,9 +1125,7 @@ class LocalRuntime(
                     loop = asyncio.get_running_loop()
                     # If we're in an event loop, run synchronously instead
                     if effective_trust_ctx is not None:
-                        from kailash.runtime.trust.context import (
-                            runtime_trust_context,
-                        )
+                        from kailash.runtime.trust.context import runtime_trust_context
 
                         with runtime_trust_context(effective_trust_ctx):
                             results = self._execute_sync(
@@ -1201,8 +1199,8 @@ class LocalRuntime(
             except WorkflowCancelledError as exc:
                 # The runtime observed the cancelled token and raised.
                 # When time-limit timers were armed, classify into the
-                # typed deadline subclass; otherwise it's a user-driven
-                # cancellation and propagates as-is.
+                # subclass that names the deadline; otherwise it's a
+                # user-driven cancellation and propagates as-is.
                 if cancellable is not None:
                     classified = _TimeLimitClassifier(cancellable).classify(exc)
                     if classified is not exc:

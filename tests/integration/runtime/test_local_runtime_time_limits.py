@@ -39,10 +39,7 @@ import time
 import pytest
 
 from kailash.runtime.local import LocalRuntime
-from kailash.sdk_exceptions import (
-    HardTimeLimitExceeded,
-    SoftTimeLimitExceeded,
-)
+from kailash.sdk_exceptions import HardTimeLimitExceeded, SoftTimeLimitExceeded
 from kailash.workflow.builder import WorkflowBuilder
 
 
