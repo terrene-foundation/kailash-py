@@ -24,7 +24,15 @@ from pathlib import Path
 from typing import Any
 
 from kailash.nodes.base import Node
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _validate_limits,
+    arm_time_limits,
+)
+from kailash.runtime.cancellation import CancellationToken
+from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
+    SoftTimeLimitExceeded,
+)
 
 # BaseRuntime doesn't exist - we'll implement task tracking methods directly
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
@@ -592,6 +600,27 @@ class DockerRuntime:
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
 
+        # #912 Shard 6: arm threading.Timer-based deadlines around the
+        # per-node container-execution loop. Docker exec is out-of-
+        # process — the timers cannot inject into a running `docker run`
+        # subprocess — so the practical contract is: between nodes, we
+        # check the cancellation token + hard-deadline flag and raise.
+        # Long-running single-node Docker workflows do NOT get
+        # interrupted mid-container; that's an inherent constraint of
+        # the out-of-process model and is documented on the kwarg
+        # docstring above. Multi-node Docker workflows DO get the
+        # full deadline contract per-node-boundary.
+        _has_time_limit = soft_time_limit is not None or time_limit is not None
+        cancellable = None
+        _attempt_token: CancellationToken | None = None
+        if _has_time_limit:
+            _attempt_token = CancellationToken()
+            cancellable = arm_time_limits(
+                _attempt_token,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
+            )
+
         # Create task run
         run_id = self._create_task_run(workflow)
 
@@ -600,94 +629,141 @@ class DockerRuntime:
         node_resource_limits = node_resource_limits or {}
 
         try:
-            # Validate workflow
-            workflow.validate(runtime_parameters=inputs)
+            try:
+                # Validate workflow
+                workflow.validate(runtime_parameters=inputs)
 
-            # Get execution order
-            execution_order = workflow.get_execution_order()
+                # Get execution order
+                execution_order = workflow.get_execution_order()
 
-            # Track results
-            results = {}
+                # Track results
+                results = {}
 
-            # Prepare all node wrappers and build images
-            logger.info("Preparing Docker containers for workflow execution")
-            for node_id, node in workflow.nodes.items():
-                self.node_wrappers[node_id] = DockerNodeWrapper(
-                    node=node,
-                    node_id=node_id,
-                    base_image=self.base_image,
-                    work_dir=self.work_dir / node_id,
-                    sdk_path=self.sdk_path,
-                )
-
-                # Build image
-                self.node_wrappers[node_id].build_image()
-
-            # Execute nodes in order
-            logger.info(f"Executing workflow in order: {execution_order}")
-            for node_id in execution_order:
-                logger.info(f"Executing node: {node_id}")
-
-                # Get node wrapper
-                wrapper = self.node_wrappers[node_id]
-
-                # Update task status
-                self._update_task_status(run_id, node_id, "running")
-
-                # Get node inputs
-                node_inputs = inputs.get(node_id, {}).copy()
-
-                # Add inputs from upstream nodes
-                _conn_map = getattr(workflow.connections, "get", lambda *a: {})(
-                    node_id, {}
-                )
-                for upstream_id, mapping in (
-                    _conn_map.items() if isinstance(_conn_map, dict) else []
-                ):
-                    if upstream_id in results:
-                        for dest_param, src_param in mapping.items():
-                            if src_param in results[upstream_id]:
-                                node_inputs[dest_param] = results[upstream_id][
-                                    src_param
-                                ]
-
-                # Prepare inputs
-                wrapper.prepare_inputs(node_inputs)
-
-                # Get resource limits for this node
-                resource_limits = None
-                if node_id in node_resource_limits:
-                    resource_limits = node_resource_limits[node_id]
-                elif self.resource_limits:
-                    resource_limits = self.resource_limits
-
-                # Run the container
-                success = wrapper.run_container(
-                    network=self.network_name, resource_limits=resource_limits
-                )
-
-                # Get results
-                if success:
-                    results[node_id] = wrapper.get_results()
-                    self._update_task_status(
-                        run_id, node_id, "completed", results[node_id]
+                # Prepare all node wrappers and build images
+                logger.info("Preparing Docker containers for workflow execution")
+                for node_id, node in workflow.nodes.items():
+                    self.node_wrappers[node_id] = DockerNodeWrapper(
+                        node=node,
+                        node_id=node_id,
+                        base_image=self.base_image,
+                        work_dir=self.work_dir / node_id,
+                        sdk_path=self.sdk_path,
                     )
-                else:
-                    self._update_task_status(
-                        run_id, node_id, "failed", {"error": "Execution failed"}
+
+                    # Build image
+                    self.node_wrappers[node_id].build_image()
+
+                # Execute nodes in order
+                logger.info(f"Executing workflow in order: {execution_order}")
+                for node_id in execution_order:
+                    # Per-node-boundary check: did the hard timer fire
+                    # while we were running the previous container?
+                    if cancellable is not None:
+                        if cancellable.hard_deadline_reached:
+                            raise HardTimeLimitExceeded(
+                                f"workflow exceeded hard time limit "
+                                f"(time_limit={cancellable.time_limit}s + "
+                                f"grace_seconds={cancellable.grace_seconds}s)"
+                            )
+                        if (
+                            _attempt_token is not None
+                            and _attempt_token.is_cancelled
+                            and cancellable.soft_time_limit is not None
+                        ):
+                            raise SoftTimeLimitExceeded(
+                                f"workflow exceeded soft time limit "
+                                f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                            )
+
+                    logger.info(f"Executing node: {node_id}")
+
+                    # Get node wrapper
+                    wrapper = self.node_wrappers[node_id]
+
+                    # Update task status
+                    self._update_task_status(run_id, node_id, "running")
+
+                    # Get node inputs
+                    node_inputs = inputs.get(node_id, {}).copy()
+
+                    # Add inputs from upstream nodes
+                    _conn_map = getattr(workflow.connections, "get", lambda *a: {})(
+                        node_id, {}
                     )
-                    raise NodeExecutionError(f"Node {node_id} execution failed")
+                    for upstream_id, mapping in (
+                        _conn_map.items() if isinstance(_conn_map, dict) else []
+                    ):
+                        if upstream_id in results:
+                            for dest_param, src_param in mapping.items():
+                                if src_param in results[upstream_id]:
+                                    node_inputs[dest_param] = results[upstream_id][
+                                        src_param
+                                    ]
 
-            # Mark run as completed
-            self._complete_task_run(run_id, "completed")
+                    # Prepare inputs
+                    wrapper.prepare_inputs(node_inputs)
 
-            return results, run_id
+                    # Get resource limits for this node
+                    resource_limits = None
+                    if node_id in node_resource_limits:
+                        resource_limits = node_resource_limits[node_id]
+                    elif self.resource_limits:
+                        resource_limits = self.resource_limits
 
-        except Exception as e:
-            # Handle errors
-            logger.error(f"Workflow execution failed: {e}")
-            self._complete_task_run(run_id, "failed", {"error": str(e)})
-            raise
+                    # Run the container
+                    success = wrapper.run_container(
+                        network=self.network_name, resource_limits=resource_limits
+                    )
+
+                    # Get results
+                    if success:
+                        results[node_id] = wrapper.get_results()
+                        self._update_task_status(
+                            run_id, node_id, "completed", results[node_id]
+                        )
+                    else:
+                        self._update_task_status(
+                            run_id, node_id, "failed", {"error": "Execution failed"}
+                        )
+                        raise NodeExecutionError(f"Node {node_id} execution failed")
+
+                # Final post-completion poll (Shard 2 invariant 5).
+                if cancellable is not None:
+                    if cancellable.hard_deadline_reached:
+                        raise HardTimeLimitExceeded(
+                            f"workflow exceeded hard time limit "
+                            f"(time_limit={cancellable.time_limit}s + "
+                            f"grace_seconds={cancellable.grace_seconds}s)"
+                        )
+                    if (
+                        _attempt_token is not None
+                        and _attempt_token.is_cancelled
+                        and cancellable.soft_time_limit is not None
+                    ):
+                        raise SoftTimeLimitExceeded(
+                            f"workflow exceeded soft time limit "
+                            f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                        )
+
+                # Mark run as completed
+                self._complete_task_run(run_id, "completed")
+
+                return results, run_id
+
+            except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+                # Typed deadline exceptions MUST propagate untouched.
+                self._complete_task_run(
+                    run_id, "failed", {"error": "Time limit exceeded"}
+                )
+                raise
+            except Exception as e:
+                # Handle errors
+                logger.error(f"Workflow execution failed: {e}")
+                self._complete_task_run(run_id, "failed", {"error": str(e)})
+                raise
+        finally:
+            if cancellable is not None:
+                cancellable.disarm()
 
     def cleanup(self):
         """Clean up Docker resources."""
