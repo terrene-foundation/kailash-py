@@ -688,19 +688,34 @@ class WorkflowHistoryStore(ABC):
         self,
         timestamp: Union[datetime, str],
         *,
+        tenant_id: Optional[str] = None,
         force_downgrade: bool = False,
     ) -> int:
         """Delete all runs whose ``terminal_at`` is older than *timestamp*.
 
         In-flight runs (``terminal_at IS NULL``) are NEVER affected.
-        Cross-tenant — every tenant's expired runs are pruned.
 
-        Per ``rules/schema-migration.md`` MUST Rule 7 the destructive
-        downgrade-shape API requires ``force_downgrade=True``;
-        otherwise raises :class:`DowngradeRefusedError`.
+        Parameters
+        ----------
+        timestamp:
+            Cutoff time (``datetime`` or ISO-8601 string).
+        tenant_id:
+            When set, scope deletion to a single tenant per
+            ``rules/tenant-isolation.md`` MUST Rule 5.  When ``None``
+            (default), the cross-tenant sweep is preserved — every
+            tenant's expired runs are pruned.  Issue #876 C-3 (L-1).
+        force_downgrade:
+            Required for the destructive operation per
+            ``rules/schema-migration.md`` MUST Rule 7; otherwise raises
+            :class:`DowngradeRefusedError`.
 
         The internal write-time eviction sweep bypasses the gate via
         a contextvar — user-supplied calls MUST still pass the flag.
+
+        Implementation: per issue #876 C-3 (L-2) the sweep is now
+        statement-count-bounded — one transaction containing exactly
+        two batched DELETEs (events first, runs second).  Was previously
+        ``1 SELECT + 2N DELETEs`` per expired run.
         """
         # The internal-eviction context is set ONLY inside this store's
         # own write path.  User-supplied calls always see the default
@@ -722,23 +737,64 @@ class WorkflowHistoryStore(ABC):
                 f"ISO-8601 string — got {type(timestamp).__name__!r}"
             )
 
+        # The SELECT that produced ``run_ids`` is kept ONLY to compute the
+        # return value (rowcount of runs deleted) since
+        # ``ConnectionManager.execute`` does not guarantee a portable
+        # rowcount across dialects.  The DELETEs themselves are now
+        # batched: events first (subquery into runs), runs second.
+        # SQLite + Postgres both support ``DELETE ... WHERE col IN
+        # (SELECT ... )``; the subquery is resolved at plan time on
+        # Postgres but the FK / referential-ordering invariant is
+        # preserved by issuing the events DELETE before the runs DELETE.
         async with self._conn.transaction() as tx:
-            expired_runs = await tx.fetch(
-                f"SELECT run_id FROM {self._runs_table} "
-                f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
-                ts_iso,
-            )
-            run_ids = [r["run_id"] for r in expired_runs]
-            deleted = len(run_ids)
-            for run_id in run_ids:
-                await tx.execute(
-                    f"DELETE FROM {self._events_table} WHERE run_id = ?",
-                    run_id,
+            if tenant_id is not None:
+                tenant_partition = _tenant_partition(tenant_id)
+                expired_runs = await tx.fetch(
+                    f"SELECT run_id FROM {self._runs_table} "
+                    f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                    f"AND tenant_id = ?",
+                    ts_iso,
+                    tenant_partition,
                 )
-                await tx.execute(
-                    f"DELETE FROM {self._runs_table} WHERE run_id = ?",
-                    run_id,
+                deleted = len(expired_runs)
+                if deleted > 0:
+                    await tx.execute(
+                        f"DELETE FROM {self._events_table} "
+                        f"WHERE run_id IN ("
+                        f"SELECT run_id FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                        f"AND tenant_id = ?)",
+                        ts_iso,
+                        tenant_partition,
+                    )
+                    await tx.execute(
+                        f"DELETE FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ? "
+                        f"AND tenant_id = ?",
+                        ts_iso,
+                        tenant_partition,
+                    )
+            else:
+                # Cross-tenant default — every tenant's expired runs.
+                expired_runs = await tx.fetch(
+                    f"SELECT run_id FROM {self._runs_table} "
+                    f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
+                    ts_iso,
                 )
+                deleted = len(expired_runs)
+                if deleted > 0:
+                    await tx.execute(
+                        f"DELETE FROM {self._events_table} "
+                        f"WHERE run_id IN ("
+                        f"SELECT run_id FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ?)",
+                        ts_iso,
+                    )
+                    await tx.execute(
+                        f"DELETE FROM {self._runs_table} "
+                        f"WHERE terminal_at IS NOT NULL AND terminal_at < ?",
+                        ts_iso,
+                    )
 
         if deleted > 0:
             # Per issue #876 C-1 — emission already verified clean of
@@ -790,7 +846,13 @@ class WorkflowHistoryStore(ABC):
         if excess <= 0:
             return
 
-        # Identify the N oldest runs and drop them inside a transaction.
+        # Identify the N oldest runs.  The SELECT is retained to compute
+        # the ``sample_run_id`` for the eviction WARN line + the
+        # ``excess`` rowcount returned by the metric counter; the
+        # per-row DELETE loop is gone — replaced by two batched DELETEs
+        # inside a single transaction per issue #876 C-3 (L-2).
+        # SQLite + Postgres both support
+        # ``DELETE ... WHERE col IN (SELECT ... ORDER BY ... LIMIT)``.
         oldest = await self._conn.fetch(
             f"SELECT run_id, started_at FROM {self._runs_table} "
             f"WHERE tenant_id = ? ORDER BY started_at ASC LIMIT ?",
@@ -802,18 +864,30 @@ class WorkflowHistoryStore(ABC):
 
         sample_run_id = oldest[0]["run_id"]
         async with self._conn.transaction() as tx:
-            for row in oldest:
-                run_id = row["run_id"]
-                await tx.execute(
-                    f"DELETE FROM {self._events_table} WHERE run_id = ?",
-                    run_id,
-                )
-                await tx.execute(
-                    f"DELETE FROM {self._runs_table} "
-                    f"WHERE run_id = ? AND tenant_id = ?",
-                    run_id,
-                    tenant_id,
-                )
+            # Events first (FK-ordering invariant), runs second.  The
+            # subquery uses the same WHERE / ORDER / LIMIT shape so the
+            # set of runs the events DELETE matches is identical to the
+            # set of runs the runs DELETE removes — even under READ
+            # COMMITTED isolation, because both statements execute inside
+            # the same transaction.
+            await tx.execute(
+                f"DELETE FROM {self._events_table} "
+                f"WHERE run_id IN ("
+                f"SELECT run_id FROM {self._runs_table} "
+                f"WHERE tenant_id = ? "
+                f"ORDER BY started_at ASC LIMIT ?)",
+                tenant_id,
+                excess,
+            )
+            await tx.execute(
+                f"DELETE FROM {self._runs_table} "
+                f"WHERE run_id IN ("
+                f"SELECT run_id FROM {self._runs_table} "
+                f"WHERE tenant_id = ? "
+                f"ORDER BY started_at ASC LIMIT ?)",
+                tenant_id,
+                excess,
+            )
 
         # Per issue #876 C-1 + ``rules/observability.md`` Rule 8 — hash
         # the record-level ``sample_run_id`` identifier so the WARN line
