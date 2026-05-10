@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — issue #913: WorkflowScheduler runtime admin API
+
+`kailash.runtime.scheduler_admin.SchedulerAdminAPI` is a thin admin
+surface wrapping a started `WorkflowScheduler`. Operators can now
+list / enable / disable / update-cron / delete schedules at runtime
+without redeploying.
+
+- `admin.list_schedules()` / `admin.get_schedule(schedule_id)` return
+  JSON-friendly `ScheduleAdminView` dicts suitable for HTTP / CLI / RPC.
+- `admin.disable_schedule(sid, actor=...)` pauses; `admin.enable_schedule`
+  resumes; both idempotent.
+- `admin.update_cron(sid, "0 7 * * *", actor=...)` swaps the cron and
+  recomputes `next_run_time` atomically — APScheduler's running
+  `AsyncIOScheduler` picks up the new schedule on its next tick.
+- `admin.delete_schedule(sid, actor=...)` removes the schedule and
+  raises typed `ScheduleNotFound` for unknown IDs (replacing the
+  underlying `KeyError`).
+- Every mutation requires a non-empty `actor` string and writes a
+  structured INFO audit log entry on the
+  `kailash.runtime.scheduler_admin` logger.
+- Admin views surface `retry_spec` (#910 pass-through) and
+  `time_limits` (#912 pass-through) so operators inspecting a schedule
+  see its retry budget and per-fire deadlines without re-implementing
+  the kwarg plumbing.
+- `tenant_scope` parameter declares the admin's logical scope (defaults
+  to `"default"`); the single-tenant assumption is explicit, and the
+  multi-tenant extension hook lives in `_visible_ids` so future
+  tenant-aware schedulers can filter without breaking the contract.
+
+Authentication is the caller's responsibility — `SchedulerAdminAPI`
+performs no identity check on the supplied `actor`. Wrap with the
+`packages/kailash-nexus/` auth middleware when exposing over HTTP.
+
+`specs/scheduling.md` §11 documents the admin surface in full.
+
 ### Fixed — issue #911 Shard 2 followup: multi-queue correctness
 
 Redteam round 1 against the 2.19.0 multi-queue release surfaced same-bug-class

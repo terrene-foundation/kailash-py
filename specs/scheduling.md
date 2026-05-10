@@ -21,6 +21,14 @@ The scheduling subsystem enables workflows to run on cron schedules, fixed inter
 - `WorkflowScheduler`
 - `ScheduleInfo`
 - `ScheduleType`
+- `RetrySpec`
+
+**Companion module**: `kailash.runtime.scheduler_admin`
+
+- `SchedulerAdminAPI` — Runtime admin surface (list / enable / disable /
+  update_cron / delete) suitable for HTTP / CLI / RPC wrappers.
+- `ScheduleAdminView` — JSON-friendly dict view of a schedule.
+- `DEFAULT_TENANT_SCOPE = "default"` — single-tenant scope sentinel.
 
 ---
 
@@ -738,8 +746,142 @@ The policy surface is duck-typed per
 
 1. **No async-native execution**: The default `_execute_workflow` calls `runtime.execute()` synchronously inside an async callback. For fully async execution, provide a custom `runtime_factory` with `AsyncLocalRuntime`.
 2. **No built-in worker pool**: The scheduler enqueues to the dispatcher; the application is responsible for running worker processes that call `dispatcher.poll()` in a loop. The Kailash SDK supplies the dispatcher contract and the SQL-backed adapter; worker orchestration is left to the deploying application.
-3. **No schedule modification**: There is no `update_schedule()` method. To change a schedule's trigger, cancel it and create a new one.
-4. **No pause/resume**: Individual schedules cannot be paused. The entire scheduler can be shut down and restarted.
-5. **Schedule ID format**: IDs are `sched-{12_hex_chars}`. Not configurable.
-6. **No retry on failure**: If a scheduled execution fails (in-process or enqueue-side), it is logged but the scheduler does not retry. The next trigger fires normally. Worker-side retry on `nack` is the dispatcher implementation's responsibility (`SQLTaskQueueDispatcher` requeues until `max_attempts`, then dead-letters).
-7. **APScheduler version**: Requires `apscheduler>=3.10`. APScheduler 4.x has a different API and is not supported.
+3. **Schedule ID format**: IDs are `sched-{12_hex_chars}`. Not configurable.
+4. **APScheduler version**: Requires `apscheduler>=3.10`. APScheduler 4.x has a different API and is not supported.
+
+---
+
+## 11. Runtime Admin Surface (Issue #913)
+
+The companion module `kailash.runtime.scheduler_admin` exposes an admin
+API class wrapping the running scheduler so operators can list, enable,
+disable, update-cron, and delete schedules at runtime — without
+shipping a code change.
+
+### 11.1 `SchedulerAdminAPI` class
+
+**Constructor**: `SchedulerAdminAPI(scheduler, *, tenant_scope="default")`.
+
+- `scheduler`: a started `WorkflowScheduler` instance. The admin holds
+  a direct reference so mutations affect the same in-memory job graph
+  the runtime is firing — there is no parallel state.
+- `tenant_scope`: a non-empty string identifying the logical scope
+  the admin operates on. Single-tenant schedulers MUST use the default
+  `"default"` value; future multi-tenant scheduler support filters
+  visible schedules through `_visible_ids` on this scope.
+
+Constructor raises `ValueError` for `scheduler is None` or for an
+empty `tenant_scope`.
+
+### 11.2 Read methods
+
+- `list_schedules() -> list[ScheduleAdminView]` — every visible
+  schedule rendered as a JSON-friendly dict.
+- `get_schedule(schedule_id) -> ScheduleAdminView` — single schedule
+  view; raises `ScheduleNotFound` for unknown IDs.
+
+### 11.3 Mutation methods
+
+All mutation methods take a keyword-only `actor: str` (non-empty
+operator identifier) and write a structured INFO audit log entry
+naming `actor + operation + schedule_id + tenant_scope` to the
+`kailash.runtime.scheduler_admin` logger.
+
+- `disable_schedule(schedule_id, *, actor) -> ScheduleAdminView` —
+  pauses the schedule; idempotent.
+- `enable_schedule(schedule_id, *, actor) -> ScheduleAdminView` —
+  resumes a paused schedule; recomputes `next_run_time` from the
+  trigger.
+- `update_cron(schedule_id, cron_expression, *, actor) -> ScheduleAdminView`
+  — replaces the cron expression of a CRON schedule and
+  atomically recomputes `next_run_time` via APScheduler's
+  `reschedule_job`. Refuses non-cron schedules with a
+  `ValueError("update_cron is only valid for cron schedules; …")`.
+  Invalid cron expressions raise `ValueError("invalid cron: …")`.
+- `delete_schedule(schedule_id, *, actor) -> None` — removes the
+  schedule entirely; subsequent reads raise `ScheduleNotFound`.
+
+Empty or whitespace-only `actor` raises
+`ValueError("actor must be a non-empty string …")`.
+
+Unknown `schedule_id` raises `ScheduleNotFound` from every method
+(translating the underlying `WorkflowScheduler.cancel`'s `KeyError`
+into the typed admin exception).
+
+### 11.4 `ScheduleAdminView` shape
+
+A `dict` subclass with a documented field schema:
+
+| Field           | Type                         | Notes                                                        |
+| --------------- | ---------------------------- | ------------------------------------------------------------ |
+| `schedule_id`   | `str`                        | `sched-{12_hex_chars}`                                       |
+| `schedule_type` | `str`                        | `"cron"` / `"interval"` / `"once"`                           |
+| `workflow_name` | `str`                        | Operator label, may be `""`                                  |
+| `trigger_args`  | `dict[str, Any]`             | Per-type trigger config snapshot                             |
+| `created_at`    | `str`                        | ISO 8601 (UTC)                                               |
+| `next_run_time` | `Optional[str]`              | ISO 8601 OR `None` if paused / completed                     |
+| `enabled`       | `bool`                       | `True` if the scheduler will fire on next tick               |
+| `kwargs`        | `dict[str, Any]`             | User-supplied runtime kwargs; internal `_kailash_*` filtered |
+| `retry_spec`    | `Optional[dict]`             | Issue #910 retry primitives (see 11.5)                       |
+| `time_limits`   | `dict[str, Optional[float]]` | Issue #912 deadlines (see 11.6)                              |
+
+### 11.5 `retry_spec` field (issue #910 pass-through)
+
+When a schedule was registered with `retry=RetrySpec(...)`, the admin
+view surfaces a JSON-serializable dict:
+
+```python
+{
+    "max_retries": 3,
+    "backoff": "exponential",
+    "backoff_base_seconds": 1.0,
+    "backoff_max_seconds": 60.0,
+    "retry_on": ["ConnectionError", "TimeoutError"],
+    "dont_retry_on": [],
+}
+```
+
+Exception classes are serialized as their `__name__` (string list) so
+the view round-trips through HTTP / CLI without surfacing class
+objects. `None` when the schedule has no retry spec.
+
+### 11.6 `time_limits` field (issue #912 pass-through)
+
+Always present as `{"soft_time_limit": <s|None>, "time_limit": <s|None>}`.
+Surfaces the EFFECTIVE per-fire deadlines (resolved at schedule
+registration time per `_compose_job_kwargs`). Both keys `None` when
+the schedule registered without limits AND the scheduler was
+constructed without defaults.
+
+### 11.7 Authentication and authorization
+
+`SchedulerAdminAPI` performs ZERO authentication. Callers (Nexus
+handlers, CLI tools, ops RPCs) are responsible for authenticating
+the operator and passing a non-empty `actor` field. See
+`packages/kailash-nexus/` for the canonical authentication wiring
+when the admin is exposed over HTTP.
+
+### 11.8 Audit log surface
+
+Every mutation emits one structured INFO log line on the
+`kailash.runtime.scheduler_admin` logger:
+
+```text
+scheduler.admin.disable     actor=ops@example.com schedule_id=sched-... tenant=default
+scheduler.admin.enable      actor=ops@example.com schedule_id=sched-... tenant=default
+scheduler.admin.update_cron actor=ops@example.com schedule_id=sched-... cron='0 7 * * *' tenant=default
+scheduler.admin.delete      actor=ops@example.com schedule_id=sched-... tenant=default
+```
+
+Operators MUST capture this logger to a durable destination if they
+need a long-term audit trail.
+
+### 11.9 Reload semantics
+
+APScheduler's `pause_job` / `resume_job` / `reschedule_job` /
+`remove_job` mutate the in-memory job graph AND the persisted
+SQLAlchemy job store atomically. The running asyncio scheduler
+picks up changes on its next event-loop tick (typically immediate,
+since the scheduler holds the just-modified job in memory). No
+explicit `wakeup()` call is required — APScheduler's internal
+listeners refresh `next_run_time` at every fire-cycle boundary.
