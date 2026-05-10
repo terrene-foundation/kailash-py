@@ -1261,6 +1261,25 @@ class PythonCodeNode(Node):
                 version="1.0.0",
             )
 
+        # Ensure node-specific parameters are stored in config for serialization
+        # This preserves them through to_dict()/from_dict() round-trip
+        consumed_params = {
+            "code": self.code,
+            "function": self.function,
+            "class_type": self.class_type,
+            "process_method": self.process_method,
+            "input_types": self.input_types,
+            "output_type": self.output_type,
+            "input_schema": self._input_schema,
+            "output_schema": self._output_schema,
+            "description": description,
+            "max_code_lines": self.max_code_lines,
+            "validate_security": validate_security,
+            "sandbox_mode": self.sandbox_mode,
+        }
+        # Only add non-None values to avoid polluting config
+        kwargs.update({k: v for k, v in consumed_params.items() if v is not None})
+
         # Pass kwargs to parent
         super().__init__(**kwargs)
 
