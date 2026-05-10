@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.1] - 2026-05-10
+
+### Fixed — issue #941: retry/final lifecycle hooks on leaf-node failures
+
+`Worker._execute_workflow_sync` now re-raises when `LocalRuntime`
+silently records a leaf-node failure in its `results` dict. The
+underlying runtime's `_should_stop_on_error` returns `False` when
+the failed node has no downstream dependents (the typical 1-node
+distributed task shape), so the runtime records `failed: True` and
+returns NORMALLY — meaning the Worker's retry/final classification
+at `_execute_task` never fired and `on_task_retry` /
+`on_task_failure` handlers never ran.
+
+The user-meaningful exception type now survives past SDK wrappers.
+The new private `_unwrap_node_failure` helper walks `__cause__` then
+`__context__`, with cycle detection, so `failure_event.exception`
+carries the user's original error type (`ZeroDivisionError`,
+`ValueError`, …) rather than the bookkeeping `NodeExecutionError`.
+
+`LocalRuntime` now stores the actual exception object under a
+private `_exception` key in the recorded failure payload so the
+worker can introspect the chain. Older callers that JSON-serialize
+the result dict are unaffected — the helper falls back to
+reconstructing by name when `_exception` is absent.
+
+Surfaced by /redteam Round 2 against PR #940 (the #929 round-trip
+serialization fix). Pre-#940 the lifecycle-hooks Tier-2 contract
+test failed at workflow construction (Class G); post-#940 the
+leaf-failure gap (Class H) became visible.
+
+PR #945 (merged at `48a41ed1`).
+
 ## [2.20.0] - 2026-05-10
 
 ### Added — issue #913: WorkflowScheduler runtime admin API
