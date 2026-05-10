@@ -11,6 +11,18 @@ counters and histograms:
 - ``kailash_workflow_duration_seconds``    -- Histogram of workflow durations.
 - ``kailash_node_execution_duration_seconds`` -- Histogram of per-node durations.
 
+History-store audit-log counters (issue #876):
+
+- ``kailash_history_store_record_event_dropped_total`` -- Counter of
+  audit-log writes skipped (typed MissingRunIdError observed by the
+  runtime subscriber-error handler).
+- ``kailash_history_store_payload_decode_failed_total`` -- Counter of
+  ``get_run_events`` payload-decode failures.
+- ``kailash_history_store_per_tenant_cap_evicted_total`` -- Counter of
+  per-tenant-cap eviction sweeps (sum of evicted rows).
+- ``kailash_history_store_retention_swept_total`` -- Counter of
+  retention sweep deletions (sum of deleted rows).
+
 All instruments degrade gracefully when ``opentelemetry-api`` is not installed.
 Included in the base install (``pip install kailash``).
 """
@@ -54,6 +66,17 @@ class MetricsBridge:
         self._workflow_counter: Any = None
         self._workflow_duration: Any = None
         self._node_duration: Any = None
+        # History-store audit-log counters (issue #876 C-1 + C-2b).
+        self._history_store_dropped: Any = None
+        self._history_store_payload_decode_failed: Any = None
+        self._history_store_per_tenant_cap_evicted: Any = None
+        self._history_store_retention_swept: Any = None
+        # Best-effort in-memory cumulative counter mirror.  Tests assert
+        # against this; when OTel is unavailable the OTel instruments
+        # are no-ops but the in-memory counts still increment so the
+        # callsite + handler wiring is observable.  Keyed by counter
+        # name (matches the OTel instrument name).  Issue #876 C-2b.
+        self._cumulative: dict[str, int] = {}
 
         if self._enabled and _metrics_mod is not None:
             meter = _metrics_mod.get_meter(meter_name)
@@ -71,6 +94,36 @@ class MetricsBridge:
                 name="kailash_node_execution_duration_seconds",
                 description="Duration of individual node executions in seconds",
                 unit="s",
+            )
+            # Issue #876 — history-store audit-log counters.
+            self._history_store_dropped = meter.create_counter(
+                name="kailash_history_store_record_event_dropped_total",
+                description=(
+                    "Audit-log writes skipped because the event had no "
+                    "run_id partition key (typed MissingRunIdError observed "
+                    "by the runtime subscriber-error handler)."
+                ),
+                unit="1",
+            )
+            self._history_store_payload_decode_failed = meter.create_counter(
+                name="kailash_history_store_payload_decode_failed_total",
+                description=(
+                    "get_run_events reads where the persisted payload_json "
+                    "column failed to decode back into a dict."
+                ),
+                unit="1",
+            )
+            self._history_store_per_tenant_cap_evicted = meter.create_counter(
+                name="kailash_history_store_per_tenant_cap_evicted_total",
+                description=(
+                    "Per-tenant retention-cap evictions (sum of evicted rows)."
+                ),
+                unit="1",
+            )
+            self._history_store_retention_swept = meter.create_counter(
+                name="kailash_history_store_retention_swept_total",
+                description=("Retention-sweep deletions (sum of expired rows pruned)."),
+                unit="1",
             )
 
     @property
@@ -150,6 +203,88 @@ class MetricsBridge:
                 "status": status,
             },
         )
+
+    # ------------------------------------------------------------------
+    # History-store audit-log counters (issue #876)
+    # ------------------------------------------------------------------
+
+    def record_history_store_dropped(self, count: int = 1) -> None:
+        """Increment ``kailash_history_store_record_event_dropped_total``.
+
+        Called by the runtime subscriber-error handler when it observes
+        a typed :class:`~kailash.sdk_exceptions.MissingRunIdError` from
+        :meth:`WorkflowHistoryStore.record_event`. Issue #876 C-2b.
+        """
+        with self._lock:
+            self._cumulative["kailash_history_store_record_event_dropped_total"] = (
+                self._cumulative.get(
+                    "kailash_history_store_record_event_dropped_total", 0
+                )
+                + count
+            )
+        if self._enabled and self._history_store_dropped is not None:
+            self._history_store_dropped.add(count)
+
+    def record_history_store_payload_decode_failed(self, count: int = 1) -> None:
+        """Increment ``kailash_history_store_payload_decode_failed_total``.
+
+        Called from :meth:`WorkflowHistoryStore.get_run_events` when
+        a persisted ``payload_json`` row fails to decode. Issue #876 C-1.
+        """
+        with self._lock:
+            self._cumulative["kailash_history_store_payload_decode_failed_total"] = (
+                self._cumulative.get(
+                    "kailash_history_store_payload_decode_failed_total", 0
+                )
+                + count
+            )
+        if self._enabled and self._history_store_payload_decode_failed is not None:
+            self._history_store_payload_decode_failed.add(count)
+
+    def record_history_store_per_tenant_cap_evicted(self, count: int) -> None:
+        """Increment ``kailash_history_store_per_tenant_cap_evicted_total``.
+
+        ``count`` is the number of rows evicted in this sweep (sum, not
+        per-call). Called from :meth:`_enforce_per_tenant_cap` when
+        ≥1 row is evicted. Issue #876 C-1.
+        """
+        with self._lock:
+            self._cumulative["kailash_history_store_per_tenant_cap_evicted_total"] = (
+                self._cumulative.get(
+                    "kailash_history_store_per_tenant_cap_evicted_total", 0
+                )
+                + count
+            )
+        if self._enabled and self._history_store_per_tenant_cap_evicted is not None:
+            self._history_store_per_tenant_cap_evicted.add(count)
+
+    def record_history_store_retention_swept(self, count: int) -> None:
+        """Increment ``kailash_history_store_retention_swept_total``.
+
+        ``count`` is the number of rows pruned in this sweep. Called
+        from :meth:`delete_runs_older_than` when ≥1 row is deleted.
+        Issue #876 C-1.
+        """
+        with self._lock:
+            self._cumulative["kailash_history_store_retention_swept_total"] = (
+                self._cumulative.get("kailash_history_store_retention_swept_total", 0)
+                + count
+            )
+        if self._enabled and self._history_store_retention_swept is not None:
+            self._history_store_retention_swept.add(count)
+
+    # ------------------------------------------------------------------
+    # Counter inspection (test surface)
+    # ------------------------------------------------------------------
+
+    def cumulative_count(self, counter_name: str) -> int:
+        """Return the cumulative in-memory count for *counter_name*.
+
+        Used by tests to assert that a code path incremented a counter.
+        Returns ``0`` if the counter has never been incremented.
+        """
+        with self._lock:
+            return self._cumulative.get(counter_name, 0)
 
 
 # ------------------------------------------------------------------
