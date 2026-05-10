@@ -308,3 +308,93 @@ class TestSchedulerAdminAPIRetryAndTimeLimitPassthrough:
             "soft_time_limit": None,
             "time_limit": None,
         }
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+class TestSchedulerAdminAPIWiringThroughFacade:
+    """R2-001 closure: the ``WorkflowScheduler.admin_api`` property + runtime
+    re-export are the documented use paths. Per ``rules/orphan-detection.md``
+    Rule 1 + ``facade-manager-detection.md`` Rule 1, the manager class MUST
+    have a production call site AND be discoverable via the framework
+    facade. This test exercises BOTH wiring paths end-to-end.
+    """
+
+    async def test_runtime_reexports_scheduler_admin_surface(self):
+        """Top-level re-export: ``from kailash.runtime import SchedulerAdminAPI``
+        resolves to the same class as the underlying module export.
+
+        Imports here are inside the test (not at module top) so the test
+        itself exercises the re-export path. Same-class identity assertion
+        guards against a future refactor that ships a divergent shim.
+        """
+        from kailash.runtime import (
+            DEFAULT_TENANT_SCOPE,
+            ScheduleAdminView,
+            ScheduleNotFound,
+            SchedulerAdminAPI,
+        )
+        from kailash.runtime import scheduler_admin as _admin_module
+        from kailash.sdk_exceptions import ScheduleNotFound as _exc_module
+
+        assert SchedulerAdminAPI is _admin_module.SchedulerAdminAPI
+        assert ScheduleAdminView is _admin_module.ScheduleAdminView
+        assert DEFAULT_TENANT_SCOPE == _admin_module.DEFAULT_TENANT_SCOPE
+        assert ScheduleNotFound is _exc_module
+
+    async def test_admin_api_property_returns_bound_admin(self, started_scheduler):
+        """``scheduler.admin_api`` returns a SchedulerAdminAPI bound to THIS
+        scheduler — no parallel state.
+        """
+        from kailash.runtime import SchedulerAdminAPI
+
+        admin = started_scheduler.admin_api
+
+        assert isinstance(admin, SchedulerAdminAPI)
+        # The admin's internal scheduler reference IS the same object.
+        # (Per facade-manager-detection.md Rule 3 the admin holds the
+        # parent framework instance — exposing the identity via the
+        # public ``_visible_ids`` filter would be intrusive; we assert
+        # that mutations on the admin observably touch the scheduler.)
+        sid = started_scheduler.schedule_cron(_trivial_workflow(), "0 6 * * *")
+        listed_via_property = admin.list_schedules()
+        assert sid in {v["schedule_id"] for v in listed_via_property}
+
+    async def test_admin_api_property_memoizes_same_instance(self, started_scheduler):
+        """Repeated property access returns the SAME admin object.
+
+        Memoization matters because ops UIs frequently re-read the
+        property per request; allocating a fresh admin every time would
+        defeat any per-admin caching the surface might add later AND
+        confuses identity-based assertions in test code.
+        """
+        first = started_scheduler.admin_api
+        second = started_scheduler.admin_api
+        third = started_scheduler.admin_api
+
+        assert first is second, "admin_api property allocated a new admin"
+        assert second is third
+
+    async def test_admin_api_property_drives_update_cron_path(self, started_scheduler):
+        """Property-driven mutation: ``scheduler.admin_api.update_cron(...)``
+        changes the schedule's next fire time, end-to-end through the
+        documented use path (no direct SchedulerAdminAPI(...) construction).
+
+        This is the same observable assertion as
+        ``test_update_cron_shifts_next_run_time`` above, but routed through
+        the property — proving the property IS a production call site for
+        the manager (closing the orphan-detection Rule 1 finding).
+        """
+        sid = started_scheduler.schedule_cron(_trivial_workflow(), "0 6 * * *")
+        before = started_scheduler.admin_api.get_schedule(sid)["next_run_time"]
+        assert before is not None and "T06:" in before
+
+        view = started_scheduler.admin_api.update_cron(
+            sid, "0 7 * * *", actor="ops@example.com"
+        )
+
+        assert view["trigger_args"] == {"cron_expression": "0 7 * * *"}
+        after = view["next_run_time"]
+        assert (
+            after is not None and "T07:" in after
+        ), f"property-driven update_cron did not shift next_run_time: {after!r}"
