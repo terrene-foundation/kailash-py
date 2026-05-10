@@ -48,6 +48,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from kailash.runtime._queue_keys import (
     DEFAULT_QUEUE_NAME,
+    make_processing_key,
     make_queue_key,
     validate_queue_name,
 )
@@ -501,6 +502,30 @@ class TaskQueue:
         except Exception:
             return False
 
+    def close(self) -> None:
+        """Release the lazily-created Redis client.
+
+        ``_get_client`` constructs a ``redis.Redis`` connection pool on
+        first use; multi-queue runtimes that route through ``_queue_for``
+        accumulate one client per named queue. ``DistributedRuntime.close``
+        iterates ``self._queues`` and calls this method on each cached
+        TaskQueue so shutdown does not leak per-queue Redis clients.
+
+        Idempotent — calling ``close()`` twice is a no-op.
+
+        Issue #911 Shard 2 followup — R1-005 redteam finding.
+        """
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "TaskQueue.close: ignoring error from Redis client close: %s",
+                    exc,
+                )
+            finally:
+                self._client = None
+
 
 class DistributedRuntime(BaseRuntime):
     """Runtime that enqueues workflows to a distributed task queue.
@@ -544,6 +569,7 @@ class DistributedRuntime(BaseRuntime):
         self._queue = queue or TaskQueue(
             redis_url=self._redis_url,
             queue_key=make_queue_key(default_queue),
+            processing_key=make_processing_key(default_queue),
             default_visibility_timeout=visibility_timeout,
             result_ttl=result_ttl,
         )
@@ -697,6 +723,7 @@ class DistributedRuntime(BaseRuntime):
         new_queue = TaskQueue(
             redis_url=self._redis_url,
             queue_key=make_queue_key(queue_name),
+            processing_key=make_processing_key(queue_name),
             default_visibility_timeout=self._visibility_timeout,
             result_ttl=self._result_ttl,
         )
@@ -717,13 +744,43 @@ class DistributedRuntime(BaseRuntime):
     def get_queue_status(self) -> Dict[str, Any]:
         """Get current queue status metrics.
 
+        Returns the default queue's pending / processing counts at the
+        top level for back-compat with single-queue dashboards, plus a
+        ``queues`` map with per-queue counts for every cached named
+        queue (#911 Shard 2 followup — R1-003 redteam finding). The
+        default queue always appears in ``queues`` under the
+        configured ``default_queue`` name (typically ``"default"``).
+
         Returns:
-            Dictionary with pending and processing counts.
+            Dictionary with the shape::
+
+                {
+                    "pending": <int>,
+                    "processing": <int>,
+                    "redis_available": <bool>,
+                    "queues": {
+                        "<name>": {"pending": <int>, "processing": <int>},
+                        ...
+                    },
+                }
         """
+        per_queue: Dict[str, Dict[str, int]] = {}
+        for name, tq in self._queues.items():
+            try:
+                per_queue[name] = {
+                    "pending": tq.queue_length(),
+                    "processing": tq.processing_length(),
+                }
+            except Exception as exc:
+                logger.warning(
+                    "get_queue_status: failed to read queue %r: %s", name, exc
+                )
+                per_queue[name] = {"pending": -1, "processing": -1}
         return {
             "pending": self._queue.queue_length(),
             "processing": self._queue.processing_length(),
             "redis_available": self._queue.ping(),
+            "queues": per_queue,
         }
 
     def _serialize_workflow(self, workflow: Workflow) -> Dict[str, Any]:
@@ -929,6 +986,7 @@ class Worker:
                 tq = TaskQueue(
                     redis_url=self._redis_url,
                     queue_key=make_queue_key(name),
+                    processing_key=make_processing_key(name),
                     default_visibility_timeout=vt,
                 )
                 self._queue_specs[name] = _QueueSpec(

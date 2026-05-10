@@ -22,6 +22,7 @@ import re
 # their first deploy of the multi-queue SDK. Same back-compat-window
 # semantics as a ``zero-tolerance.md`` Rule 6a public-API rename.
 _QUEUE_KEY_BASE = "kailash:tasks:pending"
+_PROCESSING_KEY_BASE = "kailash:tasks:processing"
 
 DEFAULT_QUEUE_NAME = "default"
 
@@ -72,8 +73,34 @@ def make_queue_key(name: str = DEFAULT_QUEUE_NAME) -> str:
     return f"{_QUEUE_KEY_BASE}:{name}"
 
 
+def make_processing_key(name: str = DEFAULT_QUEUE_NAME) -> str:
+    """Return the canonical Redis processing-list key for ``name``.
+
+    Mirrors :func:`make_queue_key` for the in-flight side of the BLMOVE
+    pattern. Without per-queue processing keys, every named queue would
+    share the legacy ``"kailash:tasks:processing"`` list — defeating
+    per-queue stale-recovery (one queue's stuck tasks would re-queue
+    everywhere) and making per-queue processing-count observability
+    return identical aggregates for every queue.
+
+    The ``"default"`` queue maps to the legacy key
+    ``"kailash:tasks:processing"`` (NO suffix) — load-bearing back-compat
+    with single-queue deployments that already have in-flight tasks
+    under that exact byte string.
+
+    Non-default queues map to ``"kailash:tasks:processing:<name>"``.
+
+    Issue #911 Shard 2 followup — R1-001/R1-002 redteam findings.
+    """
+    validate_queue_name(name)
+    if name == DEFAULT_QUEUE_NAME:
+        return _PROCESSING_KEY_BASE
+    return f"{_PROCESSING_KEY_BASE}:{name}"
+
+
 __all__ = [
     "DEFAULT_QUEUE_NAME",
+    "make_processing_key",
     "make_queue_key",
     "validate_queue_name",
 ]

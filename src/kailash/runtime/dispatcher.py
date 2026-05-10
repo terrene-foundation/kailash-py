@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, Optional
 
+from kailash.runtime._queue_keys import validate_queue_name
+
 __all__ = [
     "Dispatcher",
     "Task",
@@ -126,6 +128,21 @@ class Task:
     planned_fire_time: str
     queue_name: str = "default"
     kwargs: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate ``queue_name`` against the canonical queue-name policy.
+
+        The scheduler-dispatcher path (#859) and the distributed-runtime
+        path (#911) both carry a ``queue_name`` field. Pre-#911-Shard-2
+        only the distributed path validated; an invalid name in this
+        ``Task`` could ride through to a downstream bridge and silently
+        strand work on a malformed Redis key. Validating here closes the
+        bypass at the dispatcher boundary so the dataclass cannot be
+        constructed in an unsafe state.
+
+        Issue #911 Shard 2 followup — R1-006 redteam finding.
+        """
+        validate_queue_name(self.queue_name)
 
 
 class Dispatcher(ABC):
