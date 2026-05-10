@@ -339,7 +339,19 @@ async def test_record_event_routes_through_redaction_helper() -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_event_skips_when_run_id_is_none() -> None:
+async def test_record_event_raises_typed_error_when_run_id_is_none() -> None:
+    """Issue #876 C-2a: ``record_event`` raises typed ``MissingRunIdError``
+    when the incoming event has no ``run_id``.
+
+    Pre-issue-#876 behaviour was WARN + silent drop. The typed error
+    surfaces via the runtime subscriber-error handler
+    (durable.NodeCompletionHookRegistry.dispatch_async) which observes
+    the typed cause specifically BEFORE the generic Exception fallback,
+    increments a metric counter, and preserves the runtime
+    forward-progress invariant.
+    """
+    from kailash.sdk_exceptions import MissingRunIdError
+
     conn = _RecordingConn()
     store = SQLiteHistoryStore(conn)
     store._initialized = True
@@ -355,8 +367,11 @@ async def test_record_event_skips_when_run_id_is_none() -> None:
         duration_ms=1,
         tenant_id="t1",
     )
-    # Does not raise; emits a WARN log line and returns.
-    await store.record_event(event)
+    with pytest.raises(MissingRunIdError) as exc_info:
+        await store.record_event(event)
+    assert exc_info.value.node_id == "n1"
+    assert exc_info.value.workflow_id == "wf-1"
+    # No SQL fired — the typed error gates BEFORE the transaction opens.
     assert conn.executes == []
 
 

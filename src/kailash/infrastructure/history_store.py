@@ -79,6 +79,7 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 
 from kailash.db.connection import ConnectionManager
 from kailash.runtime.durable import NodeCompletionEvent, redact_event_for_persistence
+from kailash.sdk_exceptions import MissingRunIdError
 
 logger = logging.getLogger(__name__)
 
@@ -312,17 +313,21 @@ class WorkflowHistoryStore(ABC):
         if event.run_id is None:
             # The runtime path that produced this event ran without a
             # task_manager AND the AsyncLocalRuntime ID-derivation path
-            # did not assign one.  Without a run_id we cannot partition
-            # the event into a run row; log at WARN and drop.  See
-            # ``rules/observability.md`` Rule 7 (no silent swallow).
-            logger.warning(
-                "history_store.record_event.skipped_no_run_id",
-                extra={
-                    "node_id_hash": _hash_short(event.node_id),
-                    "workflow_id": event.workflow_id,
-                },
+            # did not assign one. Without a run_id we cannot partition
+            # the event into a run row; raise a typed error per issue
+            # #876 C-2a so the runtime's subscriber-error handler
+            # (durable.NodeCompletionHookRegistry.dispatch_async)
+            # observes the typed cause specifically — BEFORE the generic
+            # Exception fallback — and converts it into the WARN +
+            # metric-counter signal documented in
+            # specs/core-runtime.md § audit-log emission contract.
+            # Forward-progress invariant: the typed handler MUST NOT
+            # re-raise; the audit-log gap is signalled via metrics, the
+            # runtime continues processing other subscribers and nodes.
+            raise MissingRunIdError(
+                node_id=event.node_id,
+                workflow_id=event.workflow_id,
             )
-            return
 
         # Read-redaction at write time (cross-cutting invariant 4).
         redacted = redact_event_for_persistence(

@@ -337,6 +337,69 @@ class RetryExhaustedException(RuntimeException):
         super().__init__(message)
 
 
+class MissingRunIdError(RuntimeException):
+    """Raised by audit-log writes when the event has no ``run_id`` partition key.
+
+    Issued by :meth:`kailash.infrastructure.history_store.WorkflowHistoryStore.record_event`
+    when the incoming :class:`~kailash.runtime.durable.NodeCompletionEvent`
+    carries a ``None`` ``run_id``. Without a ``run_id`` the event cannot be
+    partitioned into a run row and the audit-log write is structurally
+    impossible.
+
+    The runtime's per-node subscriber chain
+    (:meth:`~kailash.runtime.durable.NodeCompletionHookRegistry.dispatch_async`)
+    catches this typed error specifically — BEFORE the generic
+    ``Exception`` fallback — and converts it into:
+
+    * a WARN log line ``history_store.record_event.dropped`` with hashed
+      identifiers (``node_id_hash``, ``workflow_id_hash``), per
+      ``rules/observability.md`` Rule 8.
+    * a metric counter increment surfaced via the OTel metrics bridge
+      (``kailash_history_store_record_event_dropped_total``).
+
+    Forward-progress invariant: the typed handler MUST NOT re-raise — a
+    missing ``run_id`` is an audit-log gap, not a runtime failure, and
+    the runtime continues processing subsequent subscribers and nodes.
+
+    Attributes:
+        node_id: The originating node's identifier (used as a hash input).
+        workflow_id: Workflow identifier from the event (may be ``None``
+            if the runtime path did not assign one).
+
+    Added in: v2.20.x (issue #876 cluster C-2).
+    """
+
+    def __init__(
+        self,
+        *,
+        node_id: str,
+        workflow_id: str | None,
+    ) -> None:
+        self.node_id = node_id
+        self.workflow_id = workflow_id
+        # Hash record-level identifiers in the message per
+        # ``rules/observability.md`` Rule 8 — exception messages frequently
+        # land in log aggregators (Datadog, Splunk) where raw node_id /
+        # workflow_id leaks reveal schema-level correlations to anyone with
+        # log read access. The subscriber-error handler that observes this
+        # error logs hashed identifiers via ``_hash_short`` consistently
+        # with the C-1 hashing-symmetry contract.
+        import hashlib
+
+        node_hash = hashlib.sha256(str(node_id).encode("utf-8")).hexdigest()[:8]
+        wf_hash = (
+            hashlib.sha256(str(workflow_id).encode("utf-8")).hexdigest()[:8]
+            if workflow_id is not None
+            else "None"
+        )
+        super().__init__(
+            f"history_store.record_event received event without run_id "
+            f"(node_id_hash={node_hash}, workflow_id_hash={wf_hash}); "
+            f"audit-log write skipped — typed-error handler in subscriber "
+            f"chain observes via metric counter."
+        )
+
+
 # Task tracking exceptions
 class TaskException(KailashException):
     """Base exception for task tracking errors."""
@@ -547,6 +610,7 @@ __all__ = [
     "CircuitBreakerOpenError",
     "ScheduleNotFound",
     "RetryExhaustedException",
+    "MissingRunIdError",
     # Task hierarchy
     "TaskException",
     "TaskStateError",
