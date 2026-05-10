@@ -89,8 +89,10 @@ async def test_async_local_runtime_soft_time_limit_raises_on_sleeping_workflow()
     elapsed = time.monotonic() - start
 
     assert exc_info.type in (SoftTimeLimitExceeded, HardTimeLimitExceeded)
-    # Bound elapsed below 4s so we know we didn't hang.
-    assert elapsed < 4.0, (
+    # Bound elapsed below 10s so we know we didn't hang. Loose enough
+    # to absorb cold-start overhead (PythonCodeNode subprocess + import
+    # warm-up); the no-wiring failure mode hits pytest's 30s timeout.
+    assert elapsed < 10.0, (
         f"raise MUST happen by post-completion poll, not hang; "
         f"elapsed={elapsed:.2f}s, exc={type(exc_info.value).__name__}"
     )
@@ -109,8 +111,10 @@ async def test_async_local_runtime_hard_time_limit_raises_after_grace():
     elapsed = time.monotonic() - start
 
     # Hard kill at 0.5s + 1.0s grace = ~1.5s; workflow completes at 2s.
+    # 10s upper bound absorbs cold-start overhead (see soft-limit test
+    # rationale); no-wiring failure mode hits pytest's 30s timeout.
     assert (
-        elapsed < 4.0
+        elapsed < 10.0
     ), f"hard kill MUST raise by post-completion poll; elapsed={elapsed:.2f}s"
 
 
