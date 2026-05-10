@@ -88,3 +88,112 @@ def test_validate_limits_error_message_mentions_parameters():
     """Error message MUST name the offending parameter for actionable feedback."""
     with pytest.raises(ValueError, match="soft_time_limit|time_limit"):
         _validate_limits(soft_time_limit=-1, time_limit=None)
+
+
+# -----------------------------------------------------------------
+# Issue #912 Shard 6 — finite-check + grace_seconds validation
+# -----------------------------------------------------------------
+#
+# Security finding (redteam Round 1 F1): NaN/Inf bypass _validate_limits.
+# `float('inf') > 0` is True; `not (float('nan') <= 0)` is True. Both
+# pass the original `<= 0` check. The first arms a `Timer(inf, ...)`
+# that sleeps forever; the second arms `Timer(nan, ...)` which raises
+# from the daemon thread with no traceback to the caller.
+#
+# Security finding F3: grace_seconds was unvalidated. A negative grace
+# fires the hard timer BEFORE the soft signal (inverting the contract);
+# a NaN grace crashes the daemon thread at fire time.
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_nan_soft():
+    """NaN soft limit raises ValueError at the entry point.
+
+    `float('nan') <= 0` is False (NaN is unordered) so the original
+    sign-check would silently let NaN through. Catch it via
+    math.isfinite() before any timer is armed.
+    """
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=float("nan"), time_limit=None)
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_nan_hard():
+    """NaN hard limit raises ValueError at the entry point."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=None, time_limit=float("nan"))
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_inf_soft():
+    """Positive infinity soft limit raises ValueError.
+
+    `Timer(inf, ...)` sleeps forever; the soft signal would never fire
+    and the workflow could not be cancelled.
+    """
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=float("inf"), time_limit=None)
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_inf_hard():
+    """Positive infinity hard limit raises ValueError."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=None, time_limit=float("inf"))
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_neg_inf_soft():
+    """Negative infinity soft limit raises ValueError (not finite)."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=float("-inf"), time_limit=None)
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_neg_inf_hard():
+    """Negative infinity hard limit raises ValueError (not finite)."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(soft_time_limit=None, time_limit=float("-inf"))
+
+
+@pytest.mark.unit
+def test_validate_limits_grace_none_is_silent():
+    """grace_seconds=None (default) skips the grace check."""
+    _validate_limits(soft_time_limit=2.0, time_limit=5.0, grace_seconds=None)
+
+
+@pytest.mark.unit
+def test_validate_limits_grace_zero_is_accepted():
+    """grace_seconds=0 is accepted (operator MAY choose no wind-down)."""
+    _validate_limits(soft_time_limit=2.0, time_limit=5.0, grace_seconds=0.0)
+
+
+@pytest.mark.unit
+def test_validate_limits_grace_positive_is_accepted():
+    """grace_seconds=positive-finite is accepted."""
+    _validate_limits(soft_time_limit=2.0, time_limit=5.0, grace_seconds=1.5)
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_negative_grace():
+    """Negative grace_seconds inverts the contract — raises ValueError."""
+    with pytest.raises(ValueError, match="grace_seconds"):
+        _validate_limits(soft_time_limit=2.0, time_limit=5.0, grace_seconds=-1)
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_nan_grace():
+    """NaN grace_seconds crashes the daemon thread — raises ValueError."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(
+            soft_time_limit=2.0, time_limit=5.0, grace_seconds=float("nan")
+        )
+
+
+@pytest.mark.unit
+def test_validate_limits_rejects_inf_grace():
+    """Infinite grace_seconds is unbounded — raises ValueError."""
+    with pytest.raises(ValueError, match="finite"):
+        _validate_limits(
+            soft_time_limit=2.0, time_limit=5.0, grace_seconds=float("inf")
+        )
