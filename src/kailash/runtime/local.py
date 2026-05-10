@@ -53,7 +53,11 @@ if TYPE_CHECKING:
     from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits,
+)
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
@@ -93,7 +97,9 @@ from kailash.runtime.validation.error_categorizer import ErrorCategorizer
 from kailash.runtime.validation.metrics import get_metrics_collector
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
 from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
     RuntimeExecutionError,
+    SoftTimeLimitExceeded,
     WorkflowCancelledError,
     WorkflowExecutionError,
     WorkflowValidationError,
@@ -1050,8 +1056,8 @@ class LocalRuntime(
             - execute_async(): Async variant
         """
         # Validate the typed time-limit kwargs at the entry point so caller
-        # bugs (negative values, soft >= hard) raise loudly here, not later
-        # from a timer thread (per #912 Shard 1; enforcement lands Shard 2).
+        # bugs (negative values, soft >= hard, NaN/Inf) raise loudly here,
+        # not later from a timer thread (per #912 Shard 1 + Shard 6).
         _validate_limits(soft_time_limit, time_limit)
 
         # Emit deprecation warning for non-context-managed usage.
@@ -1082,81 +1088,159 @@ class LocalRuntime(
             "force_resume_with_drift": force_resume_with_drift,
         }
 
+        # #912 Shard 6: arm threading.Timer-based deadlines around the
+        # in-process execution path. Mirrors the scheduler.py pattern:
+        #
+        # 1. When at least one limit is set, layer a FRESH cancellation
+        #    token under our control over whatever the user passed; the
+        #    soft timer cancels our token, the runtime's per-node poll
+        #    observes it and raises WorkflowCancelledError, the classifier
+        #    converts that to SoftTimeLimitExceeded / HardTimeLimitExceeded.
+        # 2. The hard-deadline flag is checked in `finally` so even a
+        #    workflow that ran to completion AFTER the deadline fired
+        #    raises HardTimeLimitExceeded (Shard 2 invariant 5).
+        # 3. The no-limits path stays allocation-free — no token wrap,
+        #    no timer arm, no try/except classifier overhead.
+        _has_time_limit = soft_time_limit is not None or time_limit is not None
+        _attempt_token: CancellationToken | None
+        cancellable = None
+        if _has_time_limit:
+            # Use a NEW token so the timers don't poison the user's token.
+            # The user's token is honored only when no limits are armed
+            # (the scheduler.py:1145-1184 pattern; the docstring of every
+            # runtime.execute() makes the trade-off explicit).
+            _attempt_token = CancellationToken()
+            cancellable = arm_time_limits(
+                _attempt_token,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
+            )
+        else:
+            _attempt_token = cancellation_token
+
         try:
             try:
-                # Check if we're already in an event loop
-                loop = asyncio.get_running_loop()
-                # If we're in an event loop, run synchronously instead
-                if effective_trust_ctx is not None:
-                    from kailash.runtime.trust.context import runtime_trust_context
+                try:
+                    # Check if we're already in an event loop
+                    loop = asyncio.get_running_loop()
+                    # If we're in an event loop, run synchronously instead
+                    if effective_trust_ctx is not None:
+                        from kailash.runtime.trust.context import (
+                            runtime_trust_context,
+                        )
 
-                    with runtime_trust_context(effective_trust_ctx):
-                        return self._execute_sync(
+                        with runtime_trust_context(effective_trust_ctx):
+                            results = self._execute_sync(
+                                workflow=workflow,
+                                task_manager=task_manager,
+                                parameters=parameters,
+                                cancellation_token=_attempt_token,
+                                search_attributes=search_attributes,
+                                **durable_kwargs,
+                            )
+                    else:
+                        results = self._execute_sync(
                             workflow=workflow,
                             task_manager=task_manager,
                             parameters=parameters,
-                            cancellation_token=cancellation_token,
+                            cancellation_token=_attempt_token,
                             search_attributes=search_attributes,
                             **durable_kwargs,
                         )
-                else:
-                    return self._execute_sync(
-                        workflow=workflow,
-                        task_manager=task_manager,
-                        parameters=parameters,
-                        cancellation_token=cancellation_token,
-                        search_attributes=search_attributes,
-                        **durable_kwargs,
-                    )
-            except RuntimeError:
-                # No event loop running, use persistent loop
-                loop = self._ensure_event_loop()
+                except RuntimeError:
+                    # No event loop running, use persistent loop
+                    loop = self._ensure_event_loop()
 
-                # CARE-017: Verify workflow trust before execution (async path)
-                if effective_trust_ctx is not None:
-                    from kailash.runtime.trust.context import (
-                        TrustVerificationMode,
-                        runtime_trust_context,
-                    )
-
-                    # Run verification before execution if verifier is configured
-                    if (
-                        self._trust_verification_mode != TrustVerificationMode.DISABLED
-                        and self._trust_verifier is not None
-                    ):
-                        allowed = loop.run_until_complete(
-                            self._verify_workflow_trust(workflow, effective_trust_ctx)
+                    # CARE-017: Verify workflow trust before execution (async path)
+                    if effective_trust_ctx is not None:
+                        from kailash.runtime.trust.context import (
+                            TrustVerificationMode,
+                            runtime_trust_context,
                         )
-                        if not allowed:
-                            raise WorkflowExecutionError(
-                                "Trust verification denied workflow execution"
-                            )
 
-                    # Run the async execution in the persistent loop with trust context
-                    with runtime_trust_context(effective_trust_ctx):
-                        return loop.run_until_complete(
+                        # Run verification before execution if verifier is configured
+                        if (
+                            self._trust_verification_mode
+                            != TrustVerificationMode.DISABLED
+                            and self._trust_verifier is not None
+                        ):
+                            allowed = loop.run_until_complete(
+                                self._verify_workflow_trust(
+                                    workflow, effective_trust_ctx
+                                )
+                            )
+                            if not allowed:
+                                raise WorkflowExecutionError(
+                                    "Trust verification denied workflow execution"
+                                )
+
+                        # Run the async execution in the persistent loop with trust context
+                        with runtime_trust_context(effective_trust_ctx):
+                            results = loop.run_until_complete(
+                                self._execute_async(
+                                    workflow=workflow,
+                                    task_manager=task_manager,
+                                    parameters=parameters,
+                                    cancellation_token=_attempt_token,
+                                    search_attributes=search_attributes,
+                                    **durable_kwargs,
+                                )
+                            )
+                    else:
+                        # Run the async execution in the persistent loop
+                        results = loop.run_until_complete(
                             self._execute_async(
                                 workflow=workflow,
                                 task_manager=task_manager,
                                 parameters=parameters,
-                                cancellation_token=cancellation_token,
+                                cancellation_token=_attempt_token,
                                 search_attributes=search_attributes,
                                 **durable_kwargs,
                             )
                         )
-                else:
-                    # Run the async execution in the persistent loop
-                    return loop.run_until_complete(
-                        self._execute_async(
-                            workflow=workflow,
-                            task_manager=task_manager,
-                            parameters=parameters,
-                            cancellation_token=cancellation_token,
-                            search_attributes=search_attributes,
-                            **durable_kwargs,
-                        )
+            except WorkflowCancelledError as exc:
+                # The runtime observed the cancelled token and raised.
+                # When time-limit timers were armed, classify into the
+                # typed deadline subclass; otherwise it's a user-driven
+                # cancellation and propagates as-is.
+                if cancellable is not None:
+                    classified = _TimeLimitClassifier(cancellable).classify(exc)
+                    if classified is not exc:
+                        raise classified from exc
+                raise
+
+            # Post-completion poll for hard-deadline-fired-after-success
+            # (Shard 2 invariant 5). Even when the workflow returned
+            # cleanly, the timer may have fired between the runtime's
+            # last poll and our return — the hard kill is non-negotiable.
+            if cancellable is not None:
+                if cancellable.hard_deadline_reached:
+                    raise HardTimeLimitExceeded(
+                        f"workflow exceeded hard time limit "
+                        f"(time_limit={cancellable.time_limit}s + "
+                        f"grace_seconds={cancellable.grace_seconds}s)"
                     )
+                # Soft fired but workflow ran to completion without a
+                # poll between nodes (single-node workflow whose body
+                # blocks past the soft deadline). Promote so callers
+                # observe the celery-style soft signal.
+                if (
+                    _attempt_token is not None
+                    and _attempt_token.is_cancelled
+                    and cancellable.soft_time_limit is not None
+                ):
+                    raise SoftTimeLimitExceeded(
+                        f"workflow exceeded soft time limit "
+                        f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                    )
+
+            return results
         finally:
+            # Always release the timers AND clear the credential store —
+            # the timer cancel is idempotent so the disarm is safe even
+            # on the no-limits path (cancellable is None then).
+            if cancellable is not None:
+                cancellable.disarm()
             # BYOK hardening: clear credential store after execution completes
             from kailash.workflow.credentials import get_credential_store
 

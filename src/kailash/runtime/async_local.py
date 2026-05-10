@@ -29,7 +29,12 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits_async,
+)
+from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.durable import (
     NodeCompletionEvent,
     build_checkpoint_key,
@@ -43,7 +48,13 @@ from kailash.runtime.durable import (
 )
 from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.local import LocalRuntime
-from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
+from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
+    RuntimeExecutionError,
+    SoftTimeLimitExceeded,
+    WorkflowCancelledError,
+    WorkflowExecutionError,
+)
 from kailash.tracking import TaskManager, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -904,6 +915,26 @@ class AsyncLocalRuntime(LocalRuntime):
         # #912 Shard 1: validate typed time-limit kwargs at the entry point.
         _validate_limits(soft_time_limit, time_limit)
 
+        # #912 Shard 6: arm asyncio-task-based deadlines around the
+        # in-process async execution path. Mirrors the LocalRuntime
+        # pattern but uses arm_time_limits_async (asyncio tasks) so the
+        # timers run on the same event loop as the workflow. The
+        # cancellation token is layered onto a fresh CancellationToken
+        # so the timers don't poison any user-supplied token; the soft
+        # timer cancels the token, and the post-completion poll raises
+        # SoftTimeLimitExceeded / HardTimeLimitExceeded per Shard 2
+        # invariant 5 (hard kill is non-negotiable).
+        _has_time_limit = soft_time_limit is not None or time_limit is not None
+        _attempt_token: CancellationToken | None = None
+        cancellable = None
+        if _has_time_limit:
+            _attempt_token = CancellationToken()
+            cancellable = arm_time_limits_async(
+                _attempt_token,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
+            )
+
         start_time = time.time()
 
         # Generate run_id for tracking (consistent with LocalRuntime)
@@ -1029,6 +1060,27 @@ class AsyncLocalRuntime(LocalRuntime):
                     else tracker_result
                 )
 
+            # #912 Shard 6: post-completion poll for hard-deadline-fired-
+            # after-success (Shard 2 invariant 5). Even when the workflow
+            # returned cleanly, the asyncio timer task may have set the
+            # hard flag — the kill is non-negotiable.
+            if cancellable is not None:
+                if cancellable.hard_deadline_reached:
+                    raise HardTimeLimitExceeded(
+                        f"workflow exceeded hard time limit "
+                        f"(time_limit={cancellable.time_limit}s + "
+                        f"grace_seconds={cancellable.grace_seconds}s)"
+                    )
+                if (
+                    _attempt_token is not None
+                    and _attempt_token.is_cancelled
+                    and cancellable.soft_time_limit is not None
+                ):
+                    raise SoftTimeLimitExceeded(
+                        f"workflow exceeded soft time limit "
+                        f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                    )
+
             # P0 Component 1: Return tuple (results, run_id) for consistency
             # This matches LocalRuntime.execute() return structure
             return (results, run_id)
@@ -1041,6 +1093,27 @@ class AsyncLocalRuntime(LocalRuntime):
             await context.cancel_all_tasks()
             raise  # Re-raise TimeoutError
 
+        except WorkflowCancelledError as cancel_exc:
+            # #912 Shard 6: classify time-limit cancellations into the
+            # typed deadline subclass. The runtime observed our token
+            # cancelled and raised; if our timers were armed, classify.
+            context.metrics.error_count += 1
+            if cancellable is not None:
+                classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                if classified is not cancel_exc:
+                    raise classified from cancel_exc
+            raise
+
+        except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+            # #912 Shard 6: typed deadline exceptions MUST propagate
+            # untouched. Without this catch-and-re-raise above the
+            # broad `except Exception`, the time-limit raise would
+            # be swallowed and re-wrapped as WorkflowExecutionError —
+            # callers could not catch the typed exception that the
+            # docstring promises.
+            context.metrics.error_count += 1
+            raise
+
         except WorkflowExecutionError:
             # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
             context.metrics.error_count += 1
@@ -1052,6 +1125,11 @@ class AsyncLocalRuntime(LocalRuntime):
             raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
         finally:
+            # #912 Shard 6: always release the asyncio timer tasks. Safe
+            # to call on the no-limits path (cancellable is None then).
+            if cancellable is not None:
+                cancellable.disarm()
+
             # CARE-017: Reset trust context token
             if trust_token is not None:
                 from kailash.runtime.trust.context import _runtime_trust_context
