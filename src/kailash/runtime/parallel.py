@@ -12,9 +12,17 @@ from datetime import UTC, datetime
 from typing import Any
 
 from kailash.nodes.base_async import AsyncNode
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits_async,
+)
+from kailash.runtime.cancellation import CancellationToken
 from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
     RuntimeExecutionError,
+    SoftTimeLimitExceeded,
+    WorkflowCancelledError,
     WorkflowExecutionError,
     WorkflowValidationError,
 )
@@ -102,70 +110,130 @@ class ParallelRuntime:
         run_id = None
         start_time = time.time()
 
-        try:
-            # Validate workflow
-            workflow.validate(runtime_parameters=parameters)
-
-            # Initialize semaphore for concurrent execution control
-            self.semaphore = asyncio.Semaphore(self.max_workers)
-
-            # Initialize tracking
-            if task_manager:
-                try:
-                    run_id = task_manager.create_run(
-                        workflow_name=workflow.name,
-                        metadata={
-                            "parameters": parameters,
-                            "debug": self.debug,
-                            "runtime": "parallel",
-                            "max_workers": self.max_workers,
-                        },
-                    )
-                except Exception as e:
-                    self.logger.warning(f"Failed to create task run: {e}")
-                    # Continue without tracking
-
-            # Execute workflow with parallel node execution
-            results = await self._execute_workflow_parallel(
-                workflow=workflow,
-                task_manager=task_manager,
-                run_id=run_id,
-                parameters=parameters or {},
+        # #912 Shard 6: arm asyncio-task-based deadlines around the
+        # parallel execution path (mirrors the AsyncLocalRuntime
+        # wiring). When at least one limit is set, we layer a fresh
+        # cancellation token; the soft timer cancels it; the post-
+        # completion poll raises the typed deadline exception per
+        # Shard 2 invariant 5.
+        _has_time_limit = soft_time_limit is not None or time_limit is not None
+        cancellable = None
+        _attempt_token: CancellationToken | None = None
+        if _has_time_limit:
+            _attempt_token = CancellationToken()
+            cancellable = arm_time_limits_async(
+                _attempt_token,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
             )
 
-            # Mark run as completed
-            if task_manager and run_id:
-                try:
-                    end_time = time.time()
-                    execution_time = end_time - start_time
-                    task_manager.update_run_status(run_id, "completed")
-                except Exception as e:
-                    self.logger.warning(f"Failed to update run status: {e}")
+        try:
+            try:
+                # Validate workflow
+                workflow.validate(runtime_parameters=parameters)
 
-            return results, run_id
+                # Initialize semaphore for concurrent execution control
+                self.semaphore = asyncio.Semaphore(self.max_workers)
 
-        except WorkflowValidationError:
-            # Re-raise validation errors as-is
-            if task_manager and run_id:
-                try:
-                    task_manager.update_run_status(
-                        run_id, "failed", error="Validation failed"
-                    )
-                except Exception:
-                    pass
-            raise
-        except Exception as e:
-            # Mark run as failed
-            if task_manager and run_id:
-                try:
-                    task_manager.update_run_status(run_id, "failed", error=str(e))
-                except Exception:
-                    pass
+                # Initialize tracking
+                if task_manager:
+                    try:
+                        run_id = task_manager.create_run(
+                            workflow_name=workflow.name,
+                            metadata={
+                                "parameters": parameters,
+                                "debug": self.debug,
+                                "runtime": "parallel",
+                                "max_workers": self.max_workers,
+                            },
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Failed to create task run: {e}")
+                        # Continue without tracking
 
-            # Wrap other errors in RuntimeExecutionError
-            raise RuntimeExecutionError(
-                f"Parallel workflow execution failed: {type(e).__name__}: {e}"
-            ) from e
+                # Execute workflow with parallel node execution
+                results = await self._execute_workflow_parallel(
+                    workflow=workflow,
+                    task_manager=task_manager,
+                    run_id=run_id,
+                    parameters=parameters or {},
+                )
+
+                # Mark run as completed
+                if task_manager and run_id:
+                    try:
+                        end_time = time.time()
+                        execution_time = end_time - start_time
+                        task_manager.update_run_status(run_id, "completed")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to update run status: {e}")
+
+                # #912 Shard 6: post-completion poll for hard-deadline-
+                # fired-after-success / soft-fired-but-completed.
+                if cancellable is not None:
+                    if cancellable.hard_deadline_reached:
+                        raise HardTimeLimitExceeded(
+                            f"workflow exceeded hard time limit "
+                            f"(time_limit={cancellable.time_limit}s + "
+                            f"grace_seconds={cancellable.grace_seconds}s)"
+                        )
+                    if (
+                        _attempt_token is not None
+                        and _attempt_token.is_cancelled
+                        and cancellable.soft_time_limit is not None
+                    ):
+                        raise SoftTimeLimitExceeded(
+                            f"workflow exceeded soft time limit "
+                            f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                        )
+
+                return results, run_id
+
+            except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+                # Typed deadline exceptions MUST propagate untouched
+                # above the broad except below.
+                if task_manager and run_id:
+                    try:
+                        task_manager.update_run_status(
+                            run_id, "failed", error="Time limit exceeded"
+                        )
+                    except Exception:
+                        pass
+                raise
+            except WorkflowCancelledError as cancel_exc:
+                # Classify token-cancellation into the typed deadline
+                # subclass when timers were armed.
+                if cancellable is not None:
+                    classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                    if classified is not cancel_exc:
+                        raise classified from cancel_exc
+                raise
+            except WorkflowValidationError:
+                # Re-raise validation errors as-is
+                if task_manager and run_id:
+                    try:
+                        task_manager.update_run_status(
+                            run_id, "failed", error="Validation failed"
+                        )
+                    except Exception:
+                        pass
+                raise
+            except Exception as e:
+                # Mark run as failed
+                if task_manager and run_id:
+                    try:
+                        task_manager.update_run_status(run_id, "failed", error=str(e))
+                    except Exception:
+                        pass
+
+                # Wrap other errors in RuntimeExecutionError
+                raise RuntimeExecutionError(
+                    f"Parallel workflow execution failed: {type(e).__name__}: {e}"
+                ) from e
+        finally:
+            # Always release timer tasks even on the no-limit path.
+            if cancellable is not None:
+                cancellable.disarm()
 
     async def _execute_workflow_parallel(
         self,

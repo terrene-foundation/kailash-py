@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -91,6 +92,7 @@ logger = logging.getLogger(__name__)
 def _validate_limits(
     soft_time_limit: float | None,
     time_limit: float | None,
+    grace_seconds: float | None = None,
 ) -> None:
     """Validate the typed time-limit kwargs accepted by every runtime ``execute*``.
 
@@ -107,26 +109,53 @@ def _validate_limits(
 
     Args:
         soft_time_limit: Advisory deadline in seconds. ``None`` = no
-            soft limit. ``<= 0`` is invalid.
+            soft limit. ``<= 0`` and non-finite (``NaN`` / ``±inf``) are
+            invalid — :class:`threading.Timer` would either sleep forever
+            (``inf``) or crash from a daemon thread (``NaN``).
         time_limit: Unconditional kill deadline in seconds. ``None`` =
-            no hard limit. ``<= 0`` is invalid.
+            no hard limit. ``<= 0`` and non-finite are invalid.
+        grace_seconds: Optional wind-down window between the hard
+            deadline and the unconditional raise. ``None`` (the default)
+            skips the grace check — callers that don't pass a grace
+            value want the helper's default applied at arm-time. When
+            set, MUST be ``>= 0`` AND finite. ``grace_seconds < 0``
+            would make the hard timer fire BEFORE ``time_limit``,
+            inverting the celery-style soft-then-hard contract.
 
     Raises:
-        ValueError: If either kwarg is ``<= 0``, or if both are set and
-            ``soft_time_limit >= time_limit``.
+        ValueError: If either time-limit kwarg is ``<= 0`` or non-finite,
+            or if both are set and ``soft_time_limit >= time_limit``,
+            or if ``grace_seconds`` is negative or non-finite.
 
-    Added in: v0.13.0 (issue #912 Shard 1).
+    Added in: v0.13.0 (issue #912 Shard 1). Extended by issue #912
+    Shard 6 to reject NaN / Inf and to validate ``grace_seconds`` so
+    every entry-point call surfaces caller error before any timer
+    thread is started.
     """
-    if soft_time_limit is not None and soft_time_limit <= 0:
-        raise ValueError(
-            f"soft_time_limit MUST be > 0 when set (got {soft_time_limit!r}); "
-            f"pass None to disable the soft deadline"
-        )
-    if time_limit is not None and time_limit <= 0:
-        raise ValueError(
-            f"time_limit MUST be > 0 when set (got {time_limit!r}); "
-            f"pass None to disable the hard deadline"
-        )
+    if soft_time_limit is not None:
+        if not math.isfinite(soft_time_limit):
+            raise ValueError(
+                f"soft_time_limit MUST be finite when set (got {soft_time_limit!r}); "
+                f"NaN sleeps forever from a daemon thread, ±inf is "
+                f"unbounded — pass None to disable the soft deadline"
+            )
+        if soft_time_limit <= 0:
+            raise ValueError(
+                f"soft_time_limit MUST be > 0 when set (got {soft_time_limit!r}); "
+                f"pass None to disable the soft deadline"
+            )
+    if time_limit is not None:
+        if not math.isfinite(time_limit):
+            raise ValueError(
+                f"time_limit MUST be finite when set (got {time_limit!r}); "
+                f"NaN sleeps forever from a daemon thread, ±inf is "
+                f"unbounded — pass None to disable the hard deadline"
+            )
+        if time_limit <= 0:
+            raise ValueError(
+                f"time_limit MUST be > 0 when set (got {time_limit!r}); "
+                f"pass None to disable the hard deadline"
+            )
     if (
         soft_time_limit is not None
         and time_limit is not None
@@ -137,6 +166,18 @@ def _validate_limits(
             f"time_limit ({time_limit!r}) so the advisory signal precedes the "
             f"hard kill with a non-zero warning window"
         )
+    if grace_seconds is not None:
+        if not math.isfinite(grace_seconds):
+            raise ValueError(
+                f"grace_seconds MUST be finite when set (got {grace_seconds!r}); "
+                f"NaN crashes the daemon thread, ±inf is unbounded"
+            )
+        if grace_seconds < 0:
+            raise ValueError(
+                f"grace_seconds MUST be >= 0 when set (got {grace_seconds!r}); "
+                f"a negative grace would fire the hard kill BEFORE the soft "
+                f"signal, inverting the celery-style soft-then-hard contract"
+            )
 
 
 @dataclass
@@ -287,9 +328,12 @@ def arm_time_limits(
             its docstring for the contract). NO timer was started
             when this raises.
 
-    Added in: v0.13.0 (issue #912 Shard 2).
+    Added in: v0.13.0 (issue #912 Shard 2). Extended by Shard 6 to
+    forward ``grace_seconds`` through the validator so caller error
+    (negative / NaN / Inf grace) surfaces at this entry point instead
+    of from a daemon thread later.
     """
-    _validate_limits(soft_time_limit, time_limit)
+    _validate_limits(soft_time_limit, time_limit, grace_seconds=grace_seconds)
 
     armed_at = time.monotonic()
     cancellable = _Cancellable(
@@ -381,9 +425,12 @@ def arm_time_limits_async(
         ValueError: If ``_validate_limits`` rejects the inputs.
         RuntimeError: If called outside a running event loop.
 
-    Added in: v0.13.0 (issue #912 Shard 2).
+    Added in: v0.13.0 (issue #912 Shard 2). Extended by Shard 6 to
+    forward ``grace_seconds`` through the validator so caller error
+    (negative / NaN / Inf grace) surfaces at this entry point instead
+    of from an asyncio task later.
     """
-    _validate_limits(soft_time_limit, time_limit)
+    _validate_limits(soft_time_limit, time_limit, grace_seconds=grace_seconds)
 
     loop = asyncio.get_running_loop()  # raises RuntimeError outside a loop
 

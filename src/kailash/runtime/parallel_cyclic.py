@@ -7,9 +7,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 from kailash.nodes.base import Node
-from kailash.runtime._time_limits import _validate_limits
+from kailash.runtime._time_limits import (
+    _TimeLimitClassifier,
+    _validate_limits,
+    arm_time_limits,
+)
+from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.local import LocalRuntime
-from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
+from kailash.sdk_exceptions import (
+    HardTimeLimitExceeded,
+    RuntimeExecutionError,
+    SoftTimeLimitExceeded,
+    WorkflowCancelledError,
+    WorkflowExecutionError,
+)
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
@@ -97,32 +108,94 @@ class ParallelCyclicRuntime:
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
 
+        # #912 Shard 6: arm threading.Timer-based deadlines around the
+        # parallel/cyclic execution path. The fallback to LocalRuntime
+        # would re-arm the same limits via its own wiring, but doing
+        # the arm here covers the parallel-DAG and cyclic paths that
+        # never reach LocalRuntime.execute. Layer a fresh cancellation
+        # token to keep timer state out of any user-supplied token.
+        _has_time_limit = soft_time_limit is not None or time_limit is not None
+        cancellable = None
+        _attempt_token: CancellationToken | None = None
+        if _has_time_limit:
+            _attempt_token = CancellationToken()
+            cancellable = arm_time_limits(
+                _attempt_token,
+                soft_time_limit=soft_time_limit,
+                time_limit=time_limit,
+            )
+
         try:
-            # Validate workflow
-            workflow.validate(runtime_parameters=parameters)
+            try:
+                # Validate workflow
+                workflow.validate(runtime_parameters=parameters)
 
-            # Check for cycles first
-            if self.enable_cycles and workflow.has_cycles():
-                self.logger.info(
-                    "Cyclic workflow detected, checking for parallel execution opportunities"
-                )
-                return self._execute_cyclic_workflow(workflow, task_manager, parameters)
+                # Check for cycles first
+                if self.enable_cycles and workflow.has_cycles():
+                    self.logger.info(
+                        "Cyclic workflow detected, checking for parallel execution opportunities"
+                    )
+                    results = self._execute_cyclic_workflow(
+                        workflow, task_manager, parameters
+                    )
+                # Check for parallel execution opportunities in DAG workflows
+                elif parallel_nodes or self._can_execute_in_parallel(workflow):
+                    self.logger.info("Parallel execution opportunities detected")
+                    results = self._execute_parallel_dag(
+                        workflow, task_manager, parameters, parallel_nodes
+                    )
+                else:
+                    # Fall back to standard local runtime. Forward typed
+                    # kwargs by name so the inner runtime's wiring also
+                    # arms its own timers (defense-in-depth — the inner
+                    # arm is still cheap and honors the same contract).
+                    self.logger.info("Using standard local runtime execution")
+                    results = self.local_runtime.execute(
+                        workflow,
+                        task_manager,
+                        parameters,
+                        soft_time_limit=soft_time_limit,
+                        time_limit=time_limit,
+                    )
 
-            # Check for parallel execution opportunities in DAG workflows
-            if parallel_nodes or self._can_execute_in_parallel(workflow):
-                self.logger.info("Parallel execution opportunities detected")
-                return self._execute_parallel_dag(
-                    workflow, task_manager, parameters, parallel_nodes
-                )
+                # Post-completion poll for hard-deadline-fired-after-success
+                # / soft-fired-but-completed.
+                if cancellable is not None:
+                    if cancellable.hard_deadline_reached:
+                        raise HardTimeLimitExceeded(
+                            f"workflow exceeded hard time limit "
+                            f"(time_limit={cancellable.time_limit}s + "
+                            f"grace_seconds={cancellable.grace_seconds}s)"
+                        )
+                    if (
+                        _attempt_token is not None
+                        and _attempt_token.is_cancelled
+                        and cancellable.soft_time_limit is not None
+                    ):
+                        raise SoftTimeLimitExceeded(
+                            f"workflow exceeded soft time limit "
+                            f"(soft_time_limit={cancellable.soft_time_limit}s)"
+                        )
 
-            # Fall back to standard local runtime
-            self.logger.info("Using standard local runtime execution")
-            return self.local_runtime.execute(workflow, task_manager, parameters)
+                return results
 
-        except Exception as e:
-            raise RuntimeExecutionError(
-                f"Parallel runtime execution failed: {e}"
-            ) from e
+            except (SoftTimeLimitExceeded, HardTimeLimitExceeded):
+                # Typed deadline exceptions MUST propagate untouched
+                # above the broad except below.
+                raise
+            except WorkflowCancelledError as cancel_exc:
+                if cancellable is not None:
+                    classified = _TimeLimitClassifier(cancellable).classify(cancel_exc)
+                    if classified is not cancel_exc:
+                        raise classified from cancel_exc
+                raise
+            except Exception as e:
+                raise RuntimeExecutionError(
+                    f"Parallel runtime execution failed: {e}"
+                ) from e
+        finally:
+            if cancellable is not None:
+                cancellable.disarm()
 
     def _execute_cyclic_workflow(
         self,
