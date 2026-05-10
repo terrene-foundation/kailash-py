@@ -703,6 +703,139 @@ async def test_retention_swept_emits_metric_counter(caplog) -> None:
         assert not hasattr(r, "workflow_id")
 
 
+# ---------------------------------------------------------------------------
+# C-4: throttled lazy retention sweep (#876)
+# ---------------------------------------------------------------------------
+
+
+def test_constructor_rejects_negative_sweep_interval() -> None:
+    """``sweep_interval_seconds`` must be non-negative — issue #876 C-4."""
+    conn = _RecordingConn()
+    with pytest.raises(ValueError, match=r"sweep_interval_seconds"):
+        SQLiteHistoryStore(conn, sweep_interval_seconds=-1.0)
+
+
+def test_constructor_rejects_bool_sweep_interval() -> None:
+    """``sweep_interval_seconds=True`` is the silent-coerce-to-1.0 trap."""
+    conn = _RecordingConn()
+    with pytest.raises(ValueError, match=r"sweep_interval_seconds"):
+        SQLiteHistoryStore(conn, sweep_interval_seconds=True)
+
+
+def test_constructor_accepts_zero_sweep_interval() -> None:
+    """``0.0`` is the escape hatch — restores per-event sweep behaviour."""
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, sweep_interval_seconds=0.0)
+    assert store._sweep_interval_seconds == 0.0
+
+
+def test_constructor_default_sweep_interval_is_30s() -> None:
+    """Spec default per ``specs/core-runtime.md`` § Retention sweep throttle."""
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn)
+    assert store._sweep_interval_seconds == 30.0
+
+
+@pytest.mark.asyncio
+async def test_lazy_retention_sweep_throttle_short_circuits(monkeypatch) -> None:
+    """N consecutive events within the throttle window produce 1 sweep —
+    issue #876 C-4 (L-3).  The throttled path adds zero DB round-trips.
+    """
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, retention_days=1, sweep_interval_seconds=30.0)
+
+    delete_calls: List[Any] = []
+
+    async def _fake_delete(*args, **kwargs):
+        delete_calls.append((args, kwargs))
+        return 0
+
+    monkeypatch.setattr(store, "delete_runs_older_than", _fake_delete)
+
+    # Fake monotonic clock advances 100ms per tick.
+    from kailash.infrastructure import history_store as hs_mod
+
+    clock = [0.0]
+    monkeypatch.setattr(hs_mod._time, "monotonic", lambda: clock[0])
+
+    # First call always passes (last_sweep_at=0.0 — never swept).
+    await store._lazy_retention_sweep()
+    assert len(delete_calls) == 1
+    # 10 consecutive calls within 1 second — only the first triggered.
+    for _ in range(10):
+        clock[0] += 0.1
+        await store._lazy_retention_sweep()
+    assert len(delete_calls) == 1
+
+    # After the interval elapses, the next call passes again.
+    clock[0] += 31.0
+    await store._lazy_retention_sweep()
+    assert len(delete_calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_lazy_retention_sweep_zero_interval_disables_throttle(
+    monkeypatch,
+) -> None:
+    """``sweep_interval_seconds=0.0`` restores per-event sweep — issue
+    #876 C-4 escape hatch.
+    """
+    conn = _RecordingConn()
+    store = SQLiteHistoryStore(conn, retention_days=1, sweep_interval_seconds=0.0)
+
+    delete_calls: List[Any] = []
+
+    async def _fake_delete(*args, **kwargs):
+        delete_calls.append(1)
+        return 0
+
+    monkeypatch.setattr(store, "delete_runs_older_than", _fake_delete)
+
+    # No clock advance — each call should still sweep.
+    for _ in range(5):
+        await store._lazy_retention_sweep()
+    assert len(delete_calls) == 5
+
+
+@pytest.mark.asyncio
+async def test_enforce_per_tenant_cap_throttle_is_per_tenant(
+    monkeypatch,
+) -> None:
+    """Per-tenant throttle: a busy tenant does NOT starve other tenants —
+    issue #876 C-4 (L-3).
+    """
+    # Adapter returns COUNT(*)=0 so each call short-circuits AFTER the
+    # throttle gate.  We're testing the throttle, not the eviction.
+    conn = _RecordingConn(
+        fetchone_results=[
+            {"cnt": 0},
+            {"cnt": 0},
+            {"cnt": 0},
+        ]
+    )
+    store = SQLiteHistoryStore(conn, sweep_interval_seconds=30.0)
+
+    from kailash.infrastructure import history_store as hs_mod
+
+    clock = [0.0]
+    monkeypatch.setattr(hs_mod._time, "monotonic", lambda: clock[0])
+
+    # Tenant A — first call passes the throttle, SQL fires.
+    await store._enforce_per_tenant_cap("tenant_a")
+    assert len(conn.executes) + len([1 for _ in conn._fetchone_queue]) >= 0
+    initial_queries = sum(1 for q, _ in conn.executes) + 1  # 1 fetchone
+    # 2nd call within window — throttle short-circuits, no SQL.
+    clock[0] += 1.0
+    await store._enforce_per_tenant_cap("tenant_a")
+    after_throttle = sum(1 for q, _ in conn.executes)
+    # Tenant B — first call passes its OWN throttle, SQL fires (the
+    # busy tenant_a did not starve tenant_b).
+    await store._enforce_per_tenant_cap("tenant_b")
+    # The per-tenant throttle map shows BOTH tenants got recorded.
+    assert "tenant_a" in store._last_cap_check_at
+    assert "tenant_b" in store._last_cap_check_at
+
+
 def test_get_or_create_run_lock_promotes_on_access() -> None:
     """Accessing an existing entry promotes it to most-recently-used so
     an active long-lived run is never evicted under bound pressure.

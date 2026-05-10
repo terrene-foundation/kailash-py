@@ -72,6 +72,7 @@ import contextvars
 import json
 import logging
 import re
+import time as _time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import date, datetime, time, timedelta, timezone
@@ -108,6 +109,12 @@ _DEFAULT_RETENTION_DAYS = 30
 
 #: Default per-tenant cap; oldest run evicted with WARN log on overflow.
 _DEFAULT_PER_TENANT_CAP = 10_000
+
+#: Default minimum interval (in monotonic seconds) between consecutive
+#: retention-sweep + per-tenant-cap-check invocations per issue #876
+#: C-4 (L-3).  Set to 0.0 to restore per-event sweep behaviour (every
+#: ``record_event`` call triggers both gates).
+_DEFAULT_SWEEP_INTERVAL_SECONDS = 30.0
 
 #: Bound on the per-run ``asyncio.Lock`` LRU cache.  Long-running stores
 #: shared across many runs would otherwise leak one Lock per unique
@@ -193,6 +200,7 @@ class WorkflowHistoryStore(ABC):
         events_table: str = "workflow_run_events",
         retention_days: Union[int, bool] = _DEFAULT_RETENTION_DAYS,
         per_tenant_cap: int = _DEFAULT_PER_TENANT_CAP,
+        sweep_interval_seconds: float = _DEFAULT_SWEEP_INTERVAL_SECONDS,
         classification_policy: Optional[Any] = None,
     ) -> None:
         # Per ``rules/infrastructure-sql.md`` MUST Rule 6 — validate the
@@ -231,6 +239,36 @@ class WorkflowHistoryStore(ABC):
             raise ValueError(
                 "WorkflowHistoryStore: per_tenant_cap must be a positive " "integer."
             )
+
+        # ``sweep_interval_seconds`` — issue #876 C-4 (L-3).  Numeric
+        # gate, NOT a typed enum: accept any non-negative float-or-int.
+        # Reject bool explicitly so True doesn't silently coerce to 1.0
+        # (zero-tolerance.md Rule 3c sibling).
+        if isinstance(sweep_interval_seconds, bool) or not isinstance(
+            sweep_interval_seconds, (int, float)
+        ):
+            raise ValueError(
+                "WorkflowHistoryStore: sweep_interval_seconds must be a "
+                "non-negative number (float or int)."
+            )
+        if sweep_interval_seconds < 0:
+            raise ValueError(
+                "WorkflowHistoryStore: sweep_interval_seconds must be "
+                "non-negative.  Pass 0.0 to restore per-event sweep "
+                "behaviour."
+            )
+        self._sweep_interval_seconds = float(sweep_interval_seconds)
+        # Monotonic timestamp (NOT wall-clock) so system clock changes
+        # cannot skew the throttle.  ``None`` = never swept; gate passes
+        # on the first call regardless of interval.  We use ``None``
+        # (not ``0.0``) as the sentinel so a faked-clock test starting
+        # at ``time.monotonic() == 0.0`` is indistinguishable from the
+        # post-first-sweep state.
+        self._last_sweep_at: Optional[float] = None
+        # Per-tenant throttle state: a busy tenant must not starve
+        # another tenant's cap check.  Map values are the same
+        # monotonic-or-None sentinel.
+        self._last_cap_check_at: Dict[str, float] = {}
 
         self._conn = conn_manager
         self._runs_table = runs_table
@@ -820,9 +858,29 @@ class WorkflowHistoryStore(ABC):
 
         No-op when ``retention_days`` is None (disabled).  Bypasses the
         ``force_downgrade`` gate via the internal-eviction context.
+
+        Throttled per issue #876 C-4 (L-3): consecutive ``record_event``
+        invocations within ``sweep_interval_seconds`` (default 30s) skip
+        the sweep entirely — the gate short-circuits BEFORE any SQL
+        round-trip.  ``sweep_interval_seconds=0.0`` restores per-event
+        behaviour (every call sweeps).
         """
         if self._retention_days is None:
             return
+        # Throttle gate — issue #876 C-4 (L-3).  ``_time.monotonic`` is
+        # immune to system-clock changes; the first call (when
+        # ``_last_sweep_at is None``) always passes regardless of the
+        # configured interval.  The ``_time`` alias avoids the
+        # ``datetime.time`` name collision in this module's imports.
+        now = _time.monotonic()
+        if (
+            self._sweep_interval_seconds > 0.0
+            and self._last_sweep_at is not None
+            and now - self._last_sweep_at < self._sweep_interval_seconds
+        ):
+            return
+        self._last_sweep_at = now
+
         cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
         token = _INTERNAL_EVICTION_CONTEXT.set(True)
         try:
@@ -836,7 +894,29 @@ class WorkflowHistoryStore(ABC):
         Per ``rules/observability.md`` Rule 7 a WARN log line is emitted
         whenever ≥1 row is evicted — operators need bulk-failure
         visibility (attempted/failed/sample fields).
+
+        Throttled per-tenant per issue #876 C-4 (L-3): consecutive
+        invocations for the SAME tenant within ``sweep_interval_seconds``
+        (default 30s) skip the cap-check entirely.  A busy tenant does
+        NOT starve other tenants' cap checks because the throttle map
+        is keyed by ``tenant_id``.  ``sweep_interval_seconds=0.0``
+        restores per-event behaviour.
         """
+        # Per-tenant throttle gate — issue #876 C-4 (L-3).  Short-circuit
+        # BEFORE any SQL round-trip so the throttled path adds zero DB
+        # cost.  ``None`` = never checked (first call passes regardless
+        # of interval).  ``_time`` alias avoids the ``datetime.time``
+        # name collision in this module's imports.
+        now = _time.monotonic()
+        last = self._last_cap_check_at.get(tenant_id)
+        if (
+            self._sweep_interval_seconds > 0.0
+            and last is not None
+            and now - last < self._sweep_interval_seconds
+        ):
+            return
+        self._last_cap_check_at[tenant_id] = now
+
         count_row = await self._conn.fetchone(
             f"SELECT COUNT(*) AS cnt FROM {self._runs_table} WHERE tenant_id = ?",
             tenant_id,
