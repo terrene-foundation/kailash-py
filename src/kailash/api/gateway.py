@@ -54,13 +54,30 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
-from fastapi import FastAPI
+# `httpx`, `fastapi`, and `starlette` are OPTIONAL dependencies under the
+# `server` extra (pyproject.toml:55-67), not in slim-core dependencies. Per
+# `rules/dependencies.md` § "Declared = Imported" / "BLOCKED Anti-Patterns",
+# optional-extra imports MUST raise loudly with an actionable error message
+# naming the extra — bare `ModuleNotFoundError` leaves a clean-install user
+# with no signal that `kailash[server]` is the correct install. Bundled into
+# one try/except since the entire gateway module is server-extra-only;
+# failure to import any one of them makes WorkflowAPIGateway unusable.
+# `pydantic` is in slim-core dependencies (pyproject.toml:25) so it stays
+# unguarded.
+try:
+    import httpx
+    from fastapi import FastAPI
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.requests import Request
+    from starlette.responses import Response, StreamingResponse
+    from starlette.websockets import WebSocket
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.api.gateway requires server dependencies (httpx, fastapi, "
+        "starlette). Install with: pip install 'kailash[server]'"
+    ) from exc
+
 from pydantic import BaseModel, Field
-from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.responses import Response, StreamingResponse
-from starlette.websockets import WebSocket
 
 from ..runtime.local import LocalRuntime
 from ..utils.lifespan import (

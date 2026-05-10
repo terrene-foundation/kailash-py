@@ -16,7 +16,21 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Optional
 
-import aiosqlite
+# `aiosqlite` is an OPTIONAL dependency under the `db-sqlite` extra
+# (pyproject.toml:78), not in slim-core dependencies (issue #890 audit).
+# Per `rules/dependencies.md` § "Declared = Imported" / "BLOCKED Anti-Patterns",
+# optional-extra imports MUST raise loudly with an actionable error message
+# naming the extra — bare `ModuleNotFoundError: No module named 'aiosqlite'`
+# leaves a clean-install user with no signal that `kailash[db-sqlite]` is the
+# correct install. Same try/except pattern as the 9 lazy-import call sites
+# elsewhere (`nodes/data/async_sql.py:1600`, `db/connection.py:244`, etc.).
+try:
+    import aiosqlite
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "AsyncSQLitePool requires aiosqlite, which is an optional dependency. "
+        "Install with: pip install 'kailash[db-sqlite]'"
+    ) from exc
 
 logger = logging.getLogger(__name__)
 

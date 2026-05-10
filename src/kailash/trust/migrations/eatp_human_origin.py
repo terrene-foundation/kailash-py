@@ -40,7 +40,20 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-import asyncpg
+# `asyncpg` is an OPTIONAL dependency under the `db-postgres` extra
+# (pyproject.toml:76), not in slim-core dependencies. Per
+# `rules/dependencies.md` § "Declared = Imported" / "BLOCKED Anti-Patterns",
+# optional-extra imports MUST raise loudly with an actionable error message
+# naming the extra — bare `ModuleNotFoundError: No module named 'asyncpg'`
+# leaves a clean-install user with no signal that `kailash[db-postgres]` is
+# the correct install. Same try/except pattern as `nodes/data/async_sql.py`.
+try:
+    import asyncpg
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "EATP human-origin migration requires asyncpg, which is an optional "
+        "dependency. Install with: pip install 'kailash[db-postgres]'"
+    ) from exc
 
 logger = logging.getLogger(__name__)
 
