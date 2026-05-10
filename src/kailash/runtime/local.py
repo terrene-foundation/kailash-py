@@ -1576,6 +1576,20 @@ class LocalRuntime(
                         # The outer loop owns the pool lifecycle in that path;
                         # skip async cleanup here and let it close its pools
                         # on its own teardown. Sync SQL cleanup still runs.
+                        #
+                        # Residual constraint: ``AsyncSQLDatabaseNode._shared_pools``
+                        # is process-wide, not partitioned by loop. If a caller
+                        # used this same ``LocalRuntime`` instance synchronously
+                        # FIRST (creating pools whose reaper tasks bind to the
+                        # persistent loop), then re-entered ``__exit__`` from
+                        # inside an outer async loop, those persistent-loop-
+                        # owned pools will not be disposed by either path. The
+                        # outer loop's teardown won't reach them (different
+                        # loop); we skip them here. This is an unusual mixed-
+                        # mode pattern; the canonical fix (track which pools
+                        # this runtime created + WARN-log the leak signal)
+                        # is tracked separately so the wait_for warning fix
+                        # can ship now without expanding scope.
                         try:
                             outer_running_loop = asyncio.get_running_loop()
                         except RuntimeError:
