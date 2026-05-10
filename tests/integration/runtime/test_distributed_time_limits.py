@@ -712,3 +712,229 @@ async def test_worker_default_validation_rejects_invalid(_flush_redis):
             default_soft_time_limit=10.0,
             default_time_limit=5.0,
         )
+
+
+# --------------------------------------------------------------------------- #
+# Shard 6 — Worker dequeue-side execution_limits validation (security F2 + F3)
+#
+# These tests do NOT need Redis — they exercise _validate_execution_limits_dict
+# and Worker.__init__ validation directly. The producer-side enqueue path
+# accepts typed kwargs and validates them; the dequeue-side path receives an
+# arbitrary dict from the wire (a malicious or mis-coded producer can send
+# arbitrary shapes) and MUST validate before reaching arm_time_limits.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.integration
+def test_worker_rejects_non_dict_execution_limits():
+    """Non-dict execution_limits raises ValueError with actionable message.
+
+    Security finding F2: a malicious producer can send
+    ``execution_limits = "not-a-dict"`` on the wire. Without
+    validation, the bad value flows to arm_time_limits and raises
+    AttributeError from a daemon thread.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-shape-1",
+        execution_limits="not-a-dict",  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ValueError, match="MUST be dict or None"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_negative_execution_limits():
+    """Negative execution_limits values raise ValueError at dequeue."""
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-neg-1",
+        execution_limits={"soft": -1.0, "hard": 1.0},
+    )
+
+    with pytest.raises(ValueError, match="soft_time_limit"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_non_numeric_execution_limits_value():
+    """Non-numeric execution_limits values raise ValueError at dequeue.
+
+    Security finding F2: a malicious producer can send
+    ``{"soft": "DROP TABLE", "hard": 1}`` on the wire. Without
+    validation, the string flows to arm_time_limits where it raises
+    a TypeError on the threading.Timer() call.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-type-1",
+        execution_limits={"soft": "DROP TABLE", "hard": 1.0},  # type: ignore[dict-item]
+    )
+
+    with pytest.raises(ValueError, match="MUST be numeric"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_list_execution_limits_value():
+    """``{"soft": [1, 2, 3]}`` raises ValueError at dequeue."""
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-list-1",
+        execution_limits={"soft": [1, 2, 3], "hard": 5.0},  # type: ignore[dict-item]
+    )
+
+    with pytest.raises(ValueError, match="MUST be numeric"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_bool_execution_limits_value():
+    """``{"soft": True}`` raises ValueError — bool is a stand-in for missing.
+
+    Python's ``bool`` is a subclass of ``int``; without an explicit
+    bool-rejection, ``True`` would round-trip as ``1.0`` second which
+    is nonsense for a time-limit semantics.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-bool-1",
+        execution_limits={"soft": True, "hard": 5.0},  # type: ignore[dict-item]
+    )
+
+    with pytest.raises(ValueError, match="MUST be numeric"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_nan_execution_limits():
+    """``{"soft": NaN}`` raises ValueError — NaN bypasses ``<= 0`` check.
+
+    Security finding F1 + F2 paired: NaN slipped through the original
+    sign-check; the Shard 6 finite-check rejects it via the canonical
+    _validate_limits.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-nan-1",
+        execution_limits={"soft": float("nan"), "hard": 5.0},
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_rejects_inf_execution_limits():
+    """``{"hard": Inf}`` raises ValueError — Inf would Timer-sleep forever."""
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    bad_task = TaskMessage(
+        task_id="bad-inf-1",
+        execution_limits={"hard": float("inf")},
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        worker._effective_time_limits(bad_task)
+
+
+@pytest.mark.integration
+def test_worker_silently_ignores_unknown_execution_limits_keys():
+    """Unknown keys in execution_limits are silently ignored (forward-compat).
+
+    Wire format contract: workers MUST tolerate new fields a future
+    producer might add (e.g., ``{"soft": 1, "hard": 5, "burst": 0.5}``)
+    so an old worker doesn't crash on a new producer's payload.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(redis_url=REDIS_URL)
+    forward_compat_task = TaskMessage(
+        task_id="forward-compat-1",
+        execution_limits={"soft": 1.0, "hard": 5.0, "future_field": "value"},  # type: ignore[dict-item]
+    )
+
+    soft, hard = worker._effective_time_limits(forward_compat_task)
+    assert soft == 1.0
+    assert hard == 5.0
+
+
+@pytest.mark.integration
+def test_worker_init_validates_grace_seconds_negative():
+    """Worker(hard_time_limit_grace_seconds=-1) raises ValueError at construction.
+
+    Security finding F3: negative grace would fire the hard kill BEFORE
+    the soft signal, inverting the celery contract.
+    """
+    from kailash.runtime.distributed import Worker
+
+    with pytest.raises(ValueError, match="grace_seconds"):
+        Worker(
+            redis_url=REDIS_URL,
+            default_soft_time_limit=1.0,
+            default_time_limit=5.0,
+            hard_time_limit_grace_seconds=-1.0,
+        )
+
+
+@pytest.mark.integration
+def test_worker_init_validates_grace_seconds_nan():
+    """Worker(hard_time_limit_grace_seconds=NaN) raises ValueError at construction."""
+    from kailash.runtime.distributed import Worker
+
+    with pytest.raises(ValueError, match="finite"):
+        Worker(
+            redis_url=REDIS_URL,
+            default_soft_time_limit=1.0,
+            default_time_limit=5.0,
+            hard_time_limit_grace_seconds=float("nan"),
+        )
+
+
+@pytest.mark.integration
+def test_worker_init_validates_grace_seconds_inf():
+    """Worker(hard_time_limit_grace_seconds=Inf) raises ValueError at construction."""
+    from kailash.runtime.distributed import Worker
+
+    with pytest.raises(ValueError, match="finite"):
+        Worker(
+            redis_url=REDIS_URL,
+            default_soft_time_limit=1.0,
+            default_time_limit=5.0,
+            hard_time_limit_grace_seconds=float("inf"),
+        )
+
+
+@pytest.mark.integration
+def test_worker_per_task_validation_does_not_break_no_limit_path():
+    """Task with execution_limits=None passes through to Worker defaults cleanly.
+
+    Regression guard: the validation path MUST NOT raise on the
+    no-per-task-override common path.
+    """
+    from kailash.runtime.distributed import TaskMessage, Worker
+
+    worker = Worker(
+        redis_url=REDIS_URL,
+        default_soft_time_limit=2.0,
+        default_time_limit=5.0,
+    )
+    task = TaskMessage(task_id="no-override-1", execution_limits=None)
+
+    soft, hard = worker._effective_time_limits(task)
+    assert soft == 2.0
+    assert hard == 5.0

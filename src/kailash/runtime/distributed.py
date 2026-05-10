@@ -731,11 +731,16 @@ class Worker:
         default_time_limit: float | None = None,
         hard_time_limit_grace_seconds: float = 1.0,
     ):
-        # #912 Shard 4: validate Worker-default time limits at construction so
-        # bad configuration surfaces here, NOT later from a timer thread on
-        # the first dequeue. Reuses the Shard 1 validator so the contract
-        # stays single-sourced (per security.md § Multi-Site Kwarg Plumbing).
-        _validate_limits(default_soft_time_limit, default_time_limit)
+        # #912 Shard 4 + Shard 6: validate Worker-default time limits AND
+        # the grace_seconds at construction so bad configuration surfaces
+        # here, NOT later from a timer thread on the first dequeue.
+        # Reuses the Shard 1 validator so the contract stays single-
+        # sourced (per security.md § Multi-Site Kwarg Plumbing).
+        _validate_limits(
+            default_soft_time_limit,
+            default_time_limit,
+            grace_seconds=hard_time_limit_grace_seconds,
+        )
 
         self._redis_url = redis_url or os.environ.get("KAILASH_REDIS_URL", "")
         self._queue = queue or TaskQueue(redis_url=self._redis_url)
@@ -874,6 +879,80 @@ class Worker:
         name = wf_data.get("name")
         return name if isinstance(name, str) and name else None
 
+    @staticmethod
+    def _validate_execution_limits_dict(
+        d: Optional[Any],
+    ) -> Optional[Dict[str, float]]:
+        """Validate the shape + content of ``TaskMessage.execution_limits``.
+
+        Per #912 Shard 6 security finding F2: a malicious producer can
+        send arbitrary shapes (``{"soft": "DROP TABLE"}`` /
+        ``{"hard": -1}`` / ``{"soft": [1, 2, 3]}``) on the wire. Without
+        validation at dequeue, the bad value flows to ``arm_time_limits``
+        and surfaces as a TypeError / ValueError from a daemon timer
+        thread — far from the entry point, with no actionable traceback.
+
+        Validation rules (all enforced):
+
+        * ``None`` → return ``None`` (no per-task override; worker
+          defaults will apply).
+        * Non-dict → raise ``ValueError`` with the actual type so the
+          operator can grep the dead-letter for the offending shape.
+        * Unknown keys outside ``{"soft", "hard"}`` → silently ignored
+          (forward-compat with future fields). Keys are NOT raised on
+          to keep the wire format additive.
+        * ``"soft"`` / ``"hard"`` values: MUST be ``int`` or ``float``
+          (NOT ``bool`` — Python's ``bool`` is a subclass of ``int``
+          but a True/False time limit is nonsense). Non-numeric values
+          (``str``, ``list``, ``dict``) raise ``ValueError``.
+        * Numeric values: forwarded to ``_validate_limits`` so the
+          finite-check + ``> 0`` + ``soft < hard`` invariants apply
+          identically to the in-process path.
+
+        Returns:
+            The validated dict (with only ``soft`` / ``hard`` keys), or
+            ``None`` when the input was ``None``.
+
+        Raises:
+            ValueError: If the dict shape, key types, or numeric values
+                violate the contract. Message names the offending field
+                so dead-letter triage can grep the wire payload.
+        """
+        if d is None:
+            return None
+        if not isinstance(d, dict):
+            raise ValueError(
+                f"TaskMessage.execution_limits MUST be dict or None, "
+                f"got {type(d).__name__!r}: {d!r}"
+            )
+        validated: Dict[str, float] = {}
+        for key in ("soft", "hard"):
+            if key not in d:
+                continue
+            value = d[key]
+            # bool is a subclass of int; explicitly reject because
+            # `True` would round-trip through validation as 1.0 second
+            # which is nonsense for a time-limit semantics.
+            if isinstance(value, bool):
+                raise ValueError(
+                    f"TaskMessage.execution_limits[{key!r}] MUST be "
+                    f"numeric (int / float), got bool: {value!r}"
+                )
+            if not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"TaskMessage.execution_limits[{key!r}] MUST be "
+                    f"numeric (int / float), got {type(value).__name__!r}: "
+                    f"{value!r}"
+                )
+            validated[key] = float(value)
+        # Run through the canonical validator so finite-check +
+        # `> 0` + `soft < hard` apply identically to in-process path.
+        _validate_limits(
+            validated.get("soft"),
+            validated.get("hard"),
+        )
+        return validated
+
     def _effective_time_limits(
         self, task: TaskMessage
     ) -> Tuple[Optional[float], Optional[float]]:
@@ -883,11 +962,20 @@ class Worker:
         ``TaskMessage.execution_limits``) wins over ``Worker(default_*)``;
         falls through to ``None`` (no limit) when neither is set.
 
+        Per #912 Shard 6 security finding F2: validate the per-task
+        dict at dequeue so a malicious producer cannot smuggle bad
+        shapes into the timer-arm code path.
+
         Returns:
             ``(effective_soft, effective_hard)`` — either may be ``None``
             when neither the per-task dict nor the Worker default sets it.
+
+        Raises:
+            ValueError: If the per-task ``execution_limits`` dict has a
+                bad shape or non-finite / non-positive values.
         """
-        per_task = task.execution_limits or {}
+        validated = self._validate_execution_limits_dict(task.execution_limits)
+        per_task = validated or {}
         soft = per_task.get("soft", self._default_soft_time_limit)
         hard = per_task.get("hard", self._default_time_limit)
         return soft, hard
