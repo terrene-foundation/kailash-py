@@ -419,3 +419,204 @@ async def test_lifecycle_event_carries_queue_name(_flush_redis) -> None:
 
     assert captured, f"on_task_success never fired for run_id={run_id}"
     assert captured[0].queue_name == "fast"
+
+
+# ---------------------------------------------------------------------------
+# Tier 2 — #911 Shard 2 redteam followup (R1-001..R1-007)
+# ---------------------------------------------------------------------------
+
+
+@skip_no_redis
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_per_queue_processing_isolation(_flush_redis) -> None:
+    """R1-001/R1-002: per-queue processing lists are isolated.
+
+    Pre-fix every named TaskQueue shared one Redis processing list, so
+    Worker.get_status() reported identical aggregate processing counts
+    for every queue. Now each queue has its own processing key — start
+    a slow task on each queue, observe per-queue counts diverge.
+    """
+    from kailash.runtime.distributed import DistributedRuntime, Worker
+
+    runtime = DistributedRuntime(redis_url=REDIS_URL)
+    wf = _build_minimal_workflow()
+
+    # 1 task on "fast", 1 on "slow". With concurrency=1 each, both
+    # in-flight simultaneously and the per-queue processing list
+    # MUST be isolated (1 row per queue, not 2 rows on a shared key).
+    _, fast_id = runtime.execute(wf, queue="fast")
+    _, slow_id_a = runtime.execute(wf, queue="slow")
+
+    # 3.0s sleep is short enough that worker.stop() can wait for the
+    # in-flight task to finish naturally — we only need the task in
+    # flight for ~1s to take the per-queue snapshot.
+    worker = Worker(
+        redis_url=REDIS_URL,
+        queues={"fast": 1, "slow": 1},
+        heartbeat_interval=600,
+        dead_worker_timeout=600,
+        runtime_factory=_make_sleeping_runtime_factory(3.0),
+    )
+    _patch_worker_execute_skip_roundtrip(worker, sleep_seconds=3.0)
+
+    worker_task = asyncio.create_task(worker.start())
+    try:
+        # Wait for both queues to have a task in-flight.
+        deadline = time.monotonic() + 3.0
+        status: dict = {}
+        while time.monotonic() < deadline:
+            status = worker.get_status()
+            queues = status.get("queues", {})
+            if (
+                queues.get("fast", {}).get("processing", 0) >= 1
+                and queues.get("slow", {}).get("processing", 0) >= 1
+            ):
+                break
+            await asyncio.sleep(0.05)
+
+        queues = status["queues"]
+        # Per-queue processing counts MUST reflect each queue's own
+        # in-flight work — NOT the shared aggregate across all queues.
+        # Pre-fix every queue saw the SUM of all queues' processing
+        # rows (2 here); post-fix each sees its own (1).
+        assert queues["fast"]["processing"] == 1, queues
+        assert queues["slow"]["processing"] == 1, queues
+        # Both queues have nothing pending (only one task each, both
+        # dequeued).
+        assert queues["fast"]["pending"] == 0, queues
+        assert queues["slow"]["pending"] == 0, queues
+    finally:
+        await worker.stop()
+        # 15s ceiling gives the in-flight 3.0s task room to complete.
+        await asyncio.wait_for(worker_task, timeout=15.0)
+
+    _ = (fast_id, slow_id_a)
+
+
+@skip_no_redis
+@pytest.mark.integration
+def test_get_queue_status_reports_per_queue(_flush_redis) -> None:
+    """R1-003: DistributedRuntime.get_queue_status() iterates _queues.
+
+    Pre-fix only the default queue's pending/processing was reported;
+    multi-queue producers had zero observability into named queues.
+    """
+    from kailash.runtime.distributed import DistributedRuntime
+
+    runtime = DistributedRuntime(redis_url=REDIS_URL)
+    wf = _build_minimal_workflow()
+
+    # Enqueue 3 to "fast", 5 to "slow". 0 on default.
+    for _ in range(3):
+        runtime.execute(wf, queue="fast")
+    for _ in range(5):
+        runtime.execute(wf, queue="slow")
+
+    status = runtime.get_queue_status()
+    assert "queues" in status, status
+    per_queue = status["queues"]
+
+    # Each named queue reports its own pending count (no worker has
+    # consumed anything yet).
+    assert per_queue["fast"]["pending"] == 3, per_queue
+    assert per_queue["fast"]["processing"] == 0, per_queue
+    assert per_queue["slow"]["pending"] == 5, per_queue
+    assert per_queue["slow"]["processing"] == 0, per_queue
+
+    # Top-level back-compat fields still report the default queue
+    # (which has zero pending here).
+    assert status["pending"] == 0, status
+    assert status["processing"] == 0, status
+
+    runtime.close()
+
+
+@skip_no_redis
+@pytest.mark.integration
+def test_close_releases_per_queue_redis_clients(_flush_redis) -> None:
+    """R1-005: DistributedRuntime.close() releases each TaskQueue's client.
+
+    Pre-fix DistributedRuntime.close() called getattr(tq, "close", None)
+    against TaskQueue instances that had no close() — silently leaking
+    one Redis client per named queue.
+    """
+    from kailash.runtime.distributed import DistributedRuntime
+
+    runtime = DistributedRuntime(redis_url=REDIS_URL)
+
+    # Touch three queue names so _queue_for caches three TaskQueue
+    # instances + force each to construct a Redis client.
+    for name in ("alpha", "beta", "gamma"):
+        tq = runtime._queue_for(name)
+        # Touch a method that triggers _get_client.
+        tq.queue_length()
+        assert tq._client is not None, f"{name!r} client never constructed"
+
+    cached = list(runtime._queues.items())
+    runtime.close()
+
+    # Each cached TaskQueue's _client MUST be None after close.
+    for name, tq in cached:
+        assert tq._client is None, f"{name!r} client leaked: {tq._client!r}"
+
+
+@pytest.mark.integration
+def test_queue_for_memoizes_per_name() -> None:
+    """R1-007: ``DistributedRuntime._queue_for`` caches per name.
+
+    Construction-only test — no Redis traffic — so it does not need
+    skip_no_redis. Asserts the cache returns the same TaskQueue
+    instance for a repeated name and a different instance for a
+    different name (per the manager-shape collection contract per
+    facade-manager-detection.md Rule 1).
+    """
+    from kailash.runtime.distributed import DistributedRuntime
+
+    runtime = DistributedRuntime(redis_url=REDIS_URL)
+    q1 = runtime._queue_for("fast")
+    q2 = runtime._queue_for("fast")
+    assert q1 is q2, "_queue_for did not memoize same-name lookups"
+    q3 = runtime._queue_for("slow")
+    assert q3 is not q1, "_queue_for returned same instance for different name"
+
+
+@pytest.mark.integration
+def test_dispatcher_task_validates_queue_name() -> None:
+    """R1-006: ``dispatcher.Task`` validates queue_name at construction.
+
+    Pre-fix the Task dataclass accepted any string in ``queue_name``
+    while the distributed-runtime path validated. A scheduler →
+    dispatcher → distributed-runtime bridge could carry a malformed
+    name through. Now Task.__post_init__ validates uniformly.
+    """
+    from kailash.runtime.dispatcher import Task
+
+    # Default queue_name="default" is valid.
+    valid = Task(
+        task_id="t1",
+        schedule_id="s1",
+        workflow_blob=b"{}",
+        planned_fire_time="2026-05-10T00:00:00+00:00",
+    )
+    assert valid.queue_name == "default"
+
+    # Colon is BLOCKED — same policy as the producer side.
+    with pytest.raises(ValueError, match=r"\[A-Za-z0-9_-\]"):
+        Task(
+            task_id="t2",
+            schedule_id="s2",
+            workflow_blob=b"{}",
+            planned_fire_time="2026-05-10T00:00:00+00:00",
+            queue_name="invalid:name:with:colons",
+        )
+
+    # Empty queue name BLOCKED.
+    with pytest.raises(ValueError, match="must not be empty"):
+        Task(
+            task_id="t3",
+            schedule_id="s3",
+            workflow_blob=b"{}",
+            planned_fire_time="2026-05-10T00:00:00+00:00",
+            queue_name="",
+        )

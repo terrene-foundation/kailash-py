@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — issue #911 Shard 2 followup: multi-queue correctness
+
+Redteam round 1 against the 2.19.0 multi-queue release surfaced same-bug-class
+gaps in the Worker / DistributedRuntime surface. Multi-queue users now see
+correct per-queue processing counts, per-queue observability for queue-status
+snapshots, released Redis clients on shutdown, and validated queue names at
+the scheduler-dispatcher boundary.
+
+- **Per-queue processing isolation** — every named queue now owns its own
+  Redis processing list (`kailash:tasks:processing:<name>`). Pre-fix every
+  named queue shared `kailash:tasks:processing`, so per-queue stale-task
+  recovery rolled up across queues and `Worker.get_status()["queues"]` reported
+  identical aggregate processing counts for every queue. The default queue
+  still resolves to the legacy bare key for byte-identical back-compat with
+  single-queue deployments. (R1-001 / R1-002)
+- **`DistributedRuntime.get_queue_status()` reports every queue** — the
+  response now includes a `"queues"` map with per-queue pending / processing
+  counts for every cached named queue. The top-level `pending` / `processing`
+  fields keep reporting the default queue for back-compat with single-queue
+  dashboards. Pre-fix multi-queue producers had zero observability into named
+  queues. (R1-003)
+- **`TaskQueue.close()` releases the lazily-created Redis client** —
+  `DistributedRuntime.close()` now actually frees the Redis client every named
+  queue lazily constructed. Pre-fix multi-queue runtimes leaked one client per
+  named queue on shutdown. (R1-005)
+- **`dispatcher.Task` validates `queue_name` at construction** — the
+  scheduler-dispatcher path now uses the same canonical validator as the
+  distributed-runtime path, closing the silent bypass a
+  scheduler→dispatcher→distributed-runtime bridge could carry. (R1-006)
+
 ## [2.19.0] - 2026-05-10
 
 ### Added — issue #911 Shard 1: multi-queue routing producer surface
