@@ -74,8 +74,10 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional, Union
+from uuid import UUID
 
 from kailash.db.connection import ConnectionManager
 from kailash.runtime.durable import NodeCompletionEvent, redact_event_for_persistence
@@ -342,7 +344,11 @@ class WorkflowHistoryStore(ABC):
             "outputs": dict(redacted.outputs),
             "metadata": dict(redacted.metadata),
         }
-        payload_json = json.dumps(payload, default=str)
+        # Per issue #876 L-4 — use the explicit-type whitelist
+        # ``_audit_safe_default`` (see helper at the bottom of this
+        # module) instead of the historical ``default=str`` which
+        # silently coerced unsupported types to their string repr.
+        payload_json = json.dumps(payload, default=_audit_safe_default)
 
         # The classified-field count rides at column-level so operators
         # can run "show me runs whose events redacted >0 fields" without
@@ -1003,3 +1009,46 @@ def _hash_short(value: str) -> str:
     import hashlib
 
     return hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:8]
+
+
+def _audit_safe_default(obj: Any) -> Any:
+    """Whitelist serializer for audit-log payloads — issue #876 L-4.
+
+    Replaces ``json.dumps(payload, default=str)`` at the audit-log write
+    site.  ``default=str`` silently coerced every unsupported type via
+    ``str(obj)``: a ``Decimal("1.50")`` became the string ``"1.50"``; a
+    ``datetime`` became its ISO-8601 repr; a ``set`` became
+    ``"{1, 2, 3}"``.  Audit-log readers could not distinguish a value
+    stored AS a number from a value stored AS a repr of a number — the
+    same failure-mode class as ``zero-tolerance.md`` Rule 3 (silent
+    fallbacks) and Rule 2 (fake serialization).
+
+    Supported (typed) outputs:
+    - ``datetime`` / ``date`` / ``time`` → ``isoformat()`` (ISO-8601
+      string, RFC 3339 for tz-aware datetimes, sortable).
+    - ``Decimal`` → ``str(obj)`` (preserves precision; reader applies
+      ``Decimal(value)``).
+    - ``UUID`` → ``str(obj)`` (canonical hyphenated form).
+
+    Unsupported types (``set``, ``frozenset``, ``bytes``, ``bytearray``,
+    ``memoryview``, custom classes) raise ``TypeError``.  Nodes emitting
+    such types MUST convert at the node boundary (e.g.
+    ``return {"items": list(my_set)}``).
+
+    The error message names the unsupported type AND points to the spec
+    so the reader has actionable migration guidance.
+
+    Spec: ``specs/core-runtime.md`` § audit-log payload supported types.
+    """
+    if isinstance(obj, (datetime, date, time)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, UUID):
+        return str(obj)
+    raise TypeError(
+        f"audit-log payload contains unsupported type "
+        f"{type(obj).__name__!r}; convert to dict / list / str / int / "
+        f"float / bool / None at the node boundary "
+        f"(see specs/core-runtime.md § audit-log payload supported types)"
+    )

@@ -295,6 +295,76 @@ async def test_history_store_indexes_present_on_runs_table(
 
 
 # ---------------------------------------------------------------------------
+# 5a. L-4 audit-safe-default — typed payload + unsupported type raise (#876)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_history_store_record_event_raises_on_unsupported_payload_type(
+    history_store: PostgresHistoryStore,
+):
+    """Issue #876 L-4 (Tier-2): a node returning a ``set`` in its
+    outputs MUST cause ``record_event`` to raise ``TypeError`` at
+    audit-write time, NOT silently round-trip the value as its string
+    repr.  Behavior change documented in the CHANGELOG migration entry
+    per zero-tolerance.md Rule 6a.
+    """
+    from datetime import datetime, timezone
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    event = NodeCompletionEvent(
+        run_id=f"r-unsupported-{uuid.uuid4().hex[:8]}",
+        workflow_id="wf-1",
+        workflow_fingerprint="fp",
+        node_id="bad_node",
+        node_type="PythonCodeNode",
+        outputs={"items": {1, 2, 3}},  # set — unsupported by the whitelist
+        started_at=datetime.now(timezone.utc),
+        ended_at=datetime.now(timezone.utc),
+        duration_ms=1,
+        tenant_id="default",
+    )
+    with pytest.raises(TypeError, match=r"unsupported type 'set'"):
+        await history_store.record_event(event)
+
+
+@pytest.mark.integration
+async def test_history_store_record_event_serializes_decimal_payload(
+    pg_conn: ConnectionManager,
+    history_store: PostgresHistoryStore,
+):
+    """Issue #876 L-4 (Tier-2): a node returning a ``Decimal`` in its
+    outputs MUST round-trip through the whitelist as a string-typed
+    JSON value; readers reconstruct the precision via ``Decimal(value)``.
+    """
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    from kailash.runtime.durable import NodeCompletionEvent
+
+    run_id = f"r-decimal-{uuid.uuid4().hex[:8]}"
+    event = NodeCompletionEvent(
+        run_id=run_id,
+        workflow_id="wf-decimal",
+        workflow_fingerprint="fp",
+        node_id="good_node",
+        node_type="PythonCodeNode",
+        outputs={"price": Decimal("19.99")},
+        started_at=datetime.now(timezone.utc),
+        ended_at=datetime.now(timezone.utc),
+        duration_ms=1,
+        tenant_id="default",
+    )
+    await history_store.record_event(event)
+
+    events = await history_store.get_run_events(run_id, tenant_id="default")
+    assert len(events) == 1
+    # Decimal serialized as its string form per the whitelist contract.
+    assert events[0]["payload"]["outputs"]["price"] == "19.99"
+
+
+# ---------------------------------------------------------------------------
 # 5. C-1 hashing-symmetry — no raw record-level IDs at WARN+ (#876)
 # ---------------------------------------------------------------------------
 
