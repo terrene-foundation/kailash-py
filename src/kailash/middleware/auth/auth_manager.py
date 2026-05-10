@@ -13,11 +13,23 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import jwt
-from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
+# `jwt`, `fastapi`, and `starlette` are OPTIONAL dependencies. PyJWT ships with
+# both the `server` extra (middleware needs it) and the `trust` extra (SSO
+# needs it); fastapi/starlette ship only with `server`. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports MUST
+# raise loudly with an actionable error naming the extra.
+try:
+    import jwt
+    from fastapi import Depends
+    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+    from starlette.exceptions import HTTPException
+    from starlette.requests import Request
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.middleware.auth.auth_manager requires server dependencies "
+        "(PyJWT, fastapi, starlette). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ...nodes.admin import PermissionCheckNode
 from ...nodes.data import AsyncSQLDatabaseNode

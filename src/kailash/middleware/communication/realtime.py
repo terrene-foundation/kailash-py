@@ -14,9 +14,18 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Set, Union
 from urllib.parse import parse_qs
 
-from starlette.requests import Request
-from starlette.responses import Response, StreamingResponse
-from starlette.websockets import WebSocket, WebSocketDisconnect
+# `starlette` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from starlette.requests import Request
+    from starlette.responses import Response, StreamingResponse
+    from starlette.websockets import WebSocket, WebSocketDisconnect
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.middleware.communication.realtime requires server "
+        "dependencies (starlette). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ...nodes.api import HTTPRequestNode
 from ...nodes.security import CredentialManagerNode

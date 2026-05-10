@@ -19,7 +19,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, runtime_checkable
 from urllib.parse import urlparse
 
-import aiohttp
+# `aiohttp` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    import aiohttp
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.nodes.transaction.participant_transport requires server "
+        "dependencies (aiohttp). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 if TYPE_CHECKING:
     from kailash.nodes.transaction.two_phase_commit import TwoPhaseCommitParticipant

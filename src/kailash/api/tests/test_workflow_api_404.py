@@ -9,7 +9,17 @@ This is expected behavior - we write tests FIRST, then implement.
 """
 
 import pytest
-from fastapi.testclient import TestClient
+
+# `fastapi` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from fastapi.testclient import TestClient
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.api.tests.test_workflow_api_404 requires server dependencies "
+        "(fastapi). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from kailash.api.workflow_api import WorkflowAPI
 from kailash.workflow.builder import WorkflowBuilder

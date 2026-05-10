@@ -12,9 +12,18 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+# `starlette` is an OPTIONAL dependency under the `server` extra (via fastapi).
+# Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from starlette.exceptions import HTTPException
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response, StreamingResponse
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.servers.durable_workflow_server requires server dependencies "
+        "(starlette). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ..middleware.gateway.checkpoint_manager import CheckpointManager
 from ..middleware.gateway.deduplicator import RequestDeduplicator

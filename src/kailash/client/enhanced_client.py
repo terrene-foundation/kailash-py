@@ -10,7 +10,16 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
-import aiohttp
+# `aiohttp` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    import aiohttp
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.client.enhanced_client requires server dependencies (aiohttp). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ..gateway.resource_resolver import ResourceReference
 
