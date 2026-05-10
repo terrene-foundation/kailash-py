@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-05-10
+
 ### Added — issue #911 Shard 1: multi-queue routing producer surface
 
 `DistributedRuntime.execute(queue=...)` now accepts an optional logical
