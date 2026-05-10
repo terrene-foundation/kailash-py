@@ -53,7 +53,15 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 
 if TYPE_CHECKING:
     from kailash.runtime.dispatcher import Dispatcher
-    from kailash.runtime.scheduler_admin import SchedulerAdminAPI
+
+# NOTE: SchedulerAdminAPI is intentionally NOT imported under TYPE_CHECKING.
+# scheduler_admin.py imports scheduler symbols (RetrySpec, ScheduleInfo,
+# ScheduleType, WorkflowScheduler) for typing — adding a TYPE_CHECKING
+# import here would form a module-level cyclic import that CodeQL flags
+# as `py/unsafe-cyclic-import`. The runtime resolution is the lazy import
+# inside the `admin_api` property body (search this file for
+# `from kailash.runtime.scheduler_admin import SchedulerAdminAPI`).
+# Type annotations referencing the class use `Any` to avoid the cycle.
 
 from kailash.runtime._time_limits import (
     _TimeLimitClassifier,
@@ -470,7 +478,8 @@ class WorkflowScheduler:
         # `scheduler.admin_api` access so the SchedulerAdminAPI module's
         # `from kailash.runtime.scheduler import ...` TYPE_CHECKING import
         # cannot create a circular-import hazard at scheduler import time.
-        self._admin_api: Optional["SchedulerAdminAPI"] = None
+        # Typed `Any` to avoid cyclic-import (see module-level NOTE).
+        self._admin_api: Optional[Any] = None
 
         # Per-job fire-time capture: APScheduler's EVENT_JOB_SUBMITTED listener
         # fires BEFORE the job callback with `event.scheduled_run_time`, the
@@ -545,7 +554,7 @@ class WorkflowScheduler:
             logger.info("WorkflowScheduler shut down (wait=%s)", wait)
 
     @property
-    def admin_api(self) -> "SchedulerAdminAPI":
+    def admin_api(self) -> Any:
         """Runtime admin surface for this scheduler (#913).
 
         Production users edit schedules at runtime through this property —

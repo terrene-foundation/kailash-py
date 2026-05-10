@@ -87,13 +87,17 @@ __all__ = [
 DEFAULT_TENANT_SCOPE = "default"
 
 
-# Internal kwargs keys persisted by the scheduler in APScheduler's job
-# kwargs dict. Re-defined here as module-private constants so the admin
-# view can reach into a job's kwargs to surface retry + time-limit fields
-# WITHOUT importing scheduler internals at function-call time (which
-# would create a circular import when the scheduler grows an admin
-# property).
-_RETRY_SPEC_KWARG = "_kailash_retry_spec"
+# Internal kwargs key persisted by the scheduler in APScheduler's job
+# kwargs dict. Re-defined here as a module-private constant so the admin
+# view can reach into a job's kwargs to surface time-limit fields WITHOUT
+# importing scheduler internals at function-call time (which would create
+# a circular import when the scheduler grows an admin property).
+#
+# Note: retry-spec passthrough surfaces via ``ScheduleInfo.retry_spec``
+# (set by the scheduler at schedule-time), not via the persisted job
+# kwargs dict — the equivalent ``_RETRY_SPEC_KWARG`` constant from the
+# scheduler module is intentionally NOT re-defined here because the
+# admin view never needs to read it.
 _TIME_LIMIT_KWARG = "_kailash_time_limits"
 
 
