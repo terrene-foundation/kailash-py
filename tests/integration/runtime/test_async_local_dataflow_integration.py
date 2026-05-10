@@ -17,6 +17,11 @@ These integration tests verify:
 
 Test Tier: 2 (Integration)
 Policy: NO MOCKING - Uses real SQLite database
+
+Convention: AsyncLocalRuntime.execute_workflow_async() returns
+(results_dict, run_id). Always unpack the tuple at the call site:
+    results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    node_result = results["<node_id>"]
 """
 
 import os
@@ -67,7 +72,7 @@ def test_db():
     # Cleanup
     try:
         os.unlink(db_path)
-    except:
+    except OSError:
         pass
 
 
@@ -93,10 +98,10 @@ async def test_dataflow_create_node_with_async_runtime(test_db):
 
     # Execute with AsyncLocalRuntime
     runtime = AsyncLocalRuntime()
-    result = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
     # Verify item was created with correct parameters
-    created_item = result["results"]["create_item"]
+    created_item = results["create_item"]
     assert (
         created_item["id"] == "test-item-001"
     ), "AsyncLocalRuntime MUST pass 'id' from node.config to CreateNode"
@@ -142,10 +147,12 @@ async def test_dataflow_update_node_with_async_runtime(test_db):
         },
     )
 
-    result = await runtime.execute_workflow_async(update_workflow.build(), inputs={})
+    results, _ = await runtime.execute_workflow_async(
+        update_workflow.build(), inputs={}
+    )
 
     # Verify update succeeded
-    update_result = result["results"]["update"]
+    update_result = results["update"]
     assert (
         update_result["updated"] >= 1
     ), "AsyncLocalRuntime MUST pass 'filter' and 'fields' to UpdateNode"
@@ -184,8 +191,10 @@ async def test_dataflow_list_node_with_async_runtime(test_db):
     list_all_workflow = WorkflowBuilder()
     list_all_workflow.add_node("TestItemListNode", "list_all", {})
 
-    result = await runtime.execute_workflow_async(list_all_workflow.build(), inputs={})
-    all_items = result["results"]["list_all"]["items"]
+    results, _ = await runtime.execute_workflow_async(
+        list_all_workflow.build(), inputs={}
+    )
+    all_items = results["list_all"]["records"]
     assert len(all_items) >= 2, "Should have at least 2 items"
 
     # List with filter
@@ -194,10 +203,10 @@ async def test_dataflow_list_node_with_async_runtime(test_db):
         "TestItemListNode", "list_filtered", {"filter": {"status": "active"}}
     )
 
-    result = await runtime.execute_workflow_async(
+    results, _ = await runtime.execute_workflow_async(
         list_filtered_workflow.build(), inputs={}
     )
-    filtered_items = result["results"]["list_filtered"]["items"]
+    filtered_items = results["list_filtered"]["records"]
     assert (
         len(filtered_items) >= 1
     ), "AsyncLocalRuntime MUST pass 'filter' from node.config to ListNode"
@@ -236,10 +245,12 @@ async def test_dataflow_delete_node_with_async_runtime(test_db):
         "TestItemDeleteNode", "delete", {"filter": {"id": "test-item-005"}}
     )
 
-    result = await runtime.execute_workflow_async(delete_workflow.build(), inputs={})
+    results, _ = await runtime.execute_workflow_async(
+        delete_workflow.build(), inputs={}
+    )
 
     # Verify deletion
-    delete_result = result["results"]["delete"]
+    delete_result = results["delete"]
     assert (
         delete_result["deleted"] >= 1
     ), "AsyncLocalRuntime MUST pass 'filter' from node.config to DeleteNode"
@@ -264,10 +275,10 @@ async def test_dataflow_crud_workflow_async_runtime(test_db):
         {"id": "test-item-006", "name": "Full CRUD Test", "status": "pending"},
     )
 
-    create_result = await runtime.execute_workflow_async(
+    create_results, _ = await runtime.execute_workflow_async(
         create_workflow.build(), inputs={}
     )
-    created_item = create_result["results"]["create"]
+    created_item = create_results["create"]
     assert created_item["id"] == "test-item-006"
     assert created_item["status"] == "pending"
 
@@ -277,8 +288,10 @@ async def test_dataflow_crud_workflow_async_runtime(test_db):
         "TestItemListNode", "list", {"filter": {"id": "test-item-006"}}
     )
 
-    list_result = await runtime.execute_workflow_async(list_workflow.build(), inputs={})
-    items = list_result["results"]["list"]["items"]
+    list_results, _ = await runtime.execute_workflow_async(
+        list_workflow.build(), inputs={}
+    )
+    items = list_results["list"]["records"]
     assert len(items) == 1
     assert items[0]["name"] == "Full CRUD Test"
 
@@ -290,10 +303,10 @@ async def test_dataflow_crud_workflow_async_runtime(test_db):
         {"filter": {"id": "test-item-006"}, "fields": {"status": "completed"}},
     )
 
-    update_result = await runtime.execute_workflow_async(
+    update_results, _ = await runtime.execute_workflow_async(
         update_workflow.build(), inputs={}
     )
-    assert update_result["results"]["update"]["updated"] >= 1
+    assert update_results["update"]["updated"] >= 1
 
     # Verify update
     verify_workflow = WorkflowBuilder()
@@ -301,10 +314,10 @@ async def test_dataflow_crud_workflow_async_runtime(test_db):
         "TestItemListNode", "verify", {"filter": {"id": "test-item-006"}}
     )
 
-    verify_result = await runtime.execute_workflow_async(
+    verify_results, _ = await runtime.execute_workflow_async(
         verify_workflow.build(), inputs={}
     )
-    updated_item = verify_result["results"]["verify"]["items"][0]
+    updated_item = verify_results["verify"]["records"][0]
     assert updated_item["status"] == "completed"
 
     # Delete
@@ -313,10 +326,10 @@ async def test_dataflow_crud_workflow_async_runtime(test_db):
         "TestItemDeleteNode", "delete", {"filter": {"id": "test-item-006"}}
     )
 
-    delete_result = await runtime.execute_workflow_async(
+    delete_results, _ = await runtime.execute_workflow_async(
         delete_workflow.build(), inputs={}
     )
-    assert delete_result["results"]["delete"]["deleted"] >= 1
+    assert delete_results["delete"]["deleted"] >= 1
 
 
 @pytest.mark.asyncio
@@ -348,10 +361,10 @@ async def test_async_runtime_matches_local_runtime_dataflow(test_db):
     )
 
     async_runtime = AsyncLocalRuntime()
-    async_results = await async_runtime.execute_workflow_async(
+    async_results, _ = await async_runtime.execute_workflow_async(
         async_workflow.build(), inputs={}
     )
-    async_item = async_results["results"]["create_async"]
+    async_item = async_results["create_async"]
 
     # Compare results structure
     assert local_item["name"] == "LocalRuntime Test"
@@ -387,12 +400,12 @@ async def test_parameter_precedence_with_dataflow_nodes(test_db):
 
     # But context provides different name
     runtime = AsyncLocalRuntime()
-    result = await runtime.execute_workflow_async(
+    results, _ = await runtime.execute_workflow_async(
         workflow.build(),
         inputs={"name": "Context Name"},  # Should override config
     )
 
-    created_item = result["results"]["create"]
+    created_item = results["create"]
     assert (
         created_item["name"] == "Context Name"
     ), "Context variables should override node.config for DataFlow nodes"
@@ -425,11 +438,11 @@ async def test_multiple_dataflow_nodes_independent_configs(test_db):
     )
 
     runtime = AsyncLocalRuntime()
-    result = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
     # Each node should receive its own config
-    item1 = result["results"]["create1"]
-    item2 = result["results"]["create2"]
+    item1 = results["create1"]
+    item2 = results["create2"]
 
     assert item1["id"] == "test-item-010"
     assert item1["name"] == "Item One"
@@ -459,12 +472,12 @@ async def test_dataflow_config_not_mutated_across_executions(test_db):
     runtime = AsyncLocalRuntime()
 
     # Execute twice
-    result1 = await runtime.execute_workflow_async(built_workflow, inputs={})
-    result2 = await runtime.execute_workflow_async(built_workflow, inputs={})
+    results1, _ = await runtime.execute_workflow_async(built_workflow, inputs={})
+    results2, _ = await runtime.execute_workflow_async(built_workflow, inputs={})
 
     # Both should create items with same config (not mutated)
-    item1 = result1["results"]["create"]
-    item2 = result2["results"]["create"]
+    item1 = results1["create"]
+    item2 = results2["create"]
 
     # Note: Second execution will fail if ID is not unique
     # The important part is that config was not mutated
