@@ -7,7 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — issue #876: hashing-symmetry across history_store.* log emissions + metric counters
+## [2.20.2] - 2026-05-11
+
+### Fixed — issue #950: LocalRuntime cleanup-race coroutine leak
+
+`LocalRuntime` cleanup path no longer leaks coroutines when the cleanup
+runs concurrently with the workflow loop's tail. The race window was
+that the synchronous cleanup spawned an asyncio.run on a coroutine the
+running loop still owned references to — surfacing as `coroutine was
+never awaited` warnings at GC under load. The fix gates the cleanup on
+event-loop state and awaits the residual coroutines in-loop when the
+loop is still alive. Residual sync-then-async pool-leak constraint is
+documented at `src/kailash/runtime/local.py`.
+
+### Fixed — issue #882: DurableExecutionEngine routing test — mock-kwarg drift
+
+`_FakeRuntime.execute_workflow_async` in
+`tests/regression/test_issue_882_durable_execution_mode.py` was missing
+the `soft_time_limit` and `time_limit` keyword-only kwargs that
+`DurableExecutionEngine.execute` now forwards (added by the #876 / #912
+plumbing in `durable.py`). The mock now mirrors the canonical
+`AsyncLocalRuntime.execute_workflow_async` signature and records both
+kwargs in `execute_calls`. A new behavioral regression test asserts
+the engine forwards the kwargs to the runtime — structural defense
+against the silent-fallback failure mode in
+`rules/zero-tolerance.md` Rule 3c (Documented Kwargs Accepted But
+Unused).
+
+### Fixed — issue #876 follow-on: actionable error on optional-extra imports
+
+Every module-scope import of an optional-extra package (FastAPI /
+Starlette / Uvicorn / aiohttp / aiohttp-cors / bcrypt / PyJWT) in
+production source now raises an actionable `ImportError` naming the
+correct `pip install 'kailash[<extra>]'` recipe — instead of a bare
+`ModuleNotFoundError` that gave clean-install users no signal. 25
+sites swept in total (3 in the first wave, 22 in the second sibling
+sweep), with a structural invariant test
+(`tests/regression/test_optional_extra_import_guards.py`) AST-walking
+every Python module in `src/kailash/` to gate future regressions.
+
+The `_KNOWN_VIOLATIONS` allowlist is now empty — going forward, any
+new module-scope optional-extra import without a `try/except
+ImportError` guard surfaces as a test failure, not silently absorbed.
+
+### Test — issue #912: widen time-limit Tier-2 elapsed bound for cold-start
+
+Tier-2 time-limit tests at `tests/integration/runtime/test_local_
+runtime_time_limits.py` had a tight elapsed-time bound that
+intermittently failed on cold-start CI runners (slow first-import
+penalty pushing elapsed past the original threshold). Bound widened
+with explicit rationale in the test comment; no behaviour change in
+the runtime.
+
+### Test — issues #948, #949: pre-existing test infrastructure fixes
+
+- `#948`: drop orphan `_patch_worker_execute_skip_roundtrip` call in
+  the distributed-runtime suite — the helper had been deleted in a
+  prior refactor but one call site survived, blocking collection.
+- `#949`: fix tuple-unpack on `execute_workflow_async` return value
+  plus ListNode key in `tests/regression/`. The runtime started
+  returning `(results, run_id)` two-tuple in 2.16.0; the regression
+  test still used the pre-tuple return shape.
+
+### Added — issue #876: hashing-symmetry across history_store.\* log emissions + metric counters
 
 Every `history_store.*` log emission at WARN level or higher now hashes
 record-level identifiers (`run_id`, `workflow_id`, `node_id`,
