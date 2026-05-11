@@ -24,7 +24,6 @@ Key design decisions:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -154,14 +153,21 @@ class ReasoningTrace:
                     f"{_MAX_ALTERNATIVE_LEN} characters, got {len(alt)}"
                 )
         if len(self.evidence) > _MAX_EVIDENCE_ITEMS:
-            raise ValueError(f"evidence exceeds maximum of {_MAX_EVIDENCE_ITEMS} items, got {len(self.evidence)}")
-        if self.methodology is not None and len(self.methodology) > _MAX_METHODOLOGY_LEN:
+            raise ValueError(
+                f"evidence exceeds maximum of {_MAX_EVIDENCE_ITEMS} items, got {len(self.evidence)}"
+            )
+        if (
+            self.methodology is not None
+            and len(self.methodology) > _MAX_METHODOLOGY_LEN
+        ):
             raise ValueError(
                 f"methodology exceeds maximum length of {_MAX_METHODOLOGY_LEN} characters, got {len(self.methodology)}"
             )
         if self.confidence is not None:
             if not (0.0 <= self.confidence <= 1.0):
-                raise ValueError(f"confidence must be between 0.0 and 1.0 inclusive, got {self.confidence}")
+                raise ValueError(
+                    f"confidence must be between 0.0 and 1.0 inclusive, got {self.confidence}"
+                )
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -256,11 +262,22 @@ class ReasoningTrace:
         same trace always produces the same hash regardless of field
         insertion order.
 
+        Canonical bytes come from ``serialize_for_signing`` (issue #959):
+        byte-stable across Python versions and cross-SDK boundaries. Replaces
+        the prior ``json.dumps(..., default=str)`` canon which serialized
+        datetimes / Decimals / UUIDs via ``str()`` — implementation-defined.
+
         Returns:
             Raw SHA-256 digest (32 bytes).
         """
+        # Late import to break the cycle:
+        # ``kailash.trust.signing.crypto`` imports ``ReasoningTrace`` at
+        # module scope for sign_reasoning_trace(); a module-scope import here
+        # would close the cycle.
+        from kailash.trust.signing.crypto import serialize_for_signing
+
         payload = self.to_signing_payload()
-        serialized = json.dumps(payload, sort_keys=True, default=str)
+        serialized = serialize_for_signing(payload)
         return hashlib.sha256(serialized.encode("utf-8")).digest()
 
     def content_hash_hex(self) -> str:

@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — issue #959: trust-plane canonical bytes are now byte-stable
+
+`DecisionRecord.content_hash`, `ReasoningTrace.content_hash`, and
+`plane.models.ConstraintEnvelope.envelope_hash` now use
+`kailash.trust.signing.crypto.serialize_for_signing()` to produce
+canonical bytes for SHA-256 hashing. The prior `json.dumps(..., default=str)`
+canon serialized datetimes, Decimals, and UUIDs via Python's `str()` form,
+which is implementation-defined and not byte-stable across Python versions
+or cross-SDK boundaries (kailash-py ↔ kailash-rs). The replacement is an
+explicit-type whitelist: `datetime`/`date`/`time` → `.isoformat()`,
+`Decimal` → `str()` with full precision preserved (e.g. `Decimal("1.50")`
+serializes as `"1.50"` not `"1.5"`), `UUID` → 8-4-4-4-12 hex,
+`Enum` → `.value`, `bytes` → base64. Unsupported types now raise
+`TypeError` at signing time rather than silently coercing via `str()`.
+
+`TrustProject.verify(strict=True)` now raises
+`kailash.trust.plane.exceptions.ChainHashMismatchError` on the first
+decision-record hash mismatch (typed `.details` carries `record_id`,
+`stored_hash`, `computed_hash`, `record_type="decision"`). Default mode
+(`strict=False`, backward-compatible) continues to populate
+`integrity_issues` and set `chain_valid=False` in the returned report, AND
+now emits a structured WARN log line (`trust_chain.hash_mismatch`) per the
+log-triage gate. Both modes are exercised by the new Tier 2 regression
+test at `tests/regression/test_issue_959_trust_canonical_bytes.py`.
+
+### Migration — re-anchor existing audit chains on upgrade
+
+Audit chains signed by kailash 2.20.2 or earlier MAY fail re-verification
+after upgrading because the canonical-bytes serializer changed. This is
+loud-and-actionable behavior:
+
+- In default `verify()` mode, the returned report shows `chain_valid=False`
+  with `integrity_issues` listing every mismatched record. Operators see
+  the issue and decide whether to re-anchor (re-sign the chain with the
+  new canon) or accept the audit-trail break.
+- In `verify(strict=True)` mode, the first mismatch raises
+  `ChainHashMismatchError` immediately with full record context in
+  `.details`.
+
+There is intentionally no `legacy_default_str_fallback` flag — perpetuating
+the broken canon ships the problem forward and breaks cross-SDK byte
+parity. Re-anchoring is the safe disposition for any chain that may
+have been signed with the implementation-defined prior canon.
+
+Records containing only native JSON primitives (str, int, float, bool,
+None, list, dict) are unaffected. Records containing custom classes that
+previously relied on `default=str` to coerce them now raise `TypeError`
+at signing time — declare a `to_dict()` method or serializer on those
+dataclasses.
+
+### Added — cross-SDK fixture for kailash-rs
+
+A new cross-SDK byte-pin fixture lives at
+`tests/test-vectors/trust-plane-canonical.json`. kailash-rs SHOULD vendor
+this file per `cross-sdk-inspection.md` Rule 4a so the Python and Rust
+implementations both reproduce the same canonical bytes and SHA-256 hex
+for the eight pinned vectors (ASCII payload, UTC datetime, non-UTC
+datetime, Decimal precision, UUID, Unicode BMP, above-BMP emoji,
+empty-dict sentinel).
+
+### Out of scope for this release — deferred no-verifier `default=str` sites
+
+The audit at workspace-time identified five additional `default=str`
+signing-shape sites under `src/kailash/trust/` that have NO active
+re-verifier consuming the canonical bytes. They produce SHA-256 digests
+that are stored or used as audit/dedup sentinels but are not subsequently
+re-derived for chain-integrity verification. These sites are byte-stable
+within a single Python version but are NOT guaranteed cross-SDK or
+cross-version stable; cross-SDK forensic correlation will be added in a
+follow-up issue:
+
+- `src/kailash/trust/enforce/selective_disclosure.py:47` — `_hash_value`
+  redaction sentinel.
+- `src/kailash/trust/enforce/selective_disclosure.py:279` —
+  `_compute_chain_hash` (compact canon already symmetric with verifier).
+- `src/kailash/trust/enforce/selective_disclosure.py:341` —
+  `export_for_witness` sign payload.
+- `src/kailash/trust/enforce/selective_disclosure.py:385` — mirror of
+  `:341` in `verify_signature`.
+- `src/kailash/trust/enforce/decorators.py:305` — `_hash_result` for the
+  `@verified` decorator's integrity hash (audit-log dedup only).
+
+Touching these sites is non-load-bearing for #959's primary scope
+(silent verification failure) — the change is cross-SDK parity hygiene
+only. A cross-SDK follow-up issue will land per
+`cross-sdk-inspection.md` Rule 1 with user gate per
+`upstream-issue-hygiene.md`.
+
 ## [2.20.2] - 2026-05-11
 
 ### Fixed — issue #950: LocalRuntime cleanup-race coroutine leak

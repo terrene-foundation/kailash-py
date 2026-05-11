@@ -1,8 +1,5 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-
-from __future__ import annotations
-
 """Data models for TrustPlane.
 
 Domain models wrapping EATP primitives:
@@ -13,8 +10,9 @@ Domain models wrapping EATP primitives:
 - ProjectManifest: Persistent project state
 """
 
+from __future__ import annotations
+
 import hashlib
-import json
 import logging
 import math
 import secrets
@@ -22,6 +20,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+from kailash.trust.signing.crypto import serialize_for_signing
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +295,13 @@ class ConstraintEnvelope:
         )
 
     def envelope_hash(self) -> str:
-        """SHA-256 of constraint content for tamper detection."""
+        """SHA-256 of constraint content for tamper detection.
+
+        Canonical bytes come from ``serialize_for_signing`` (issue #959):
+        byte-stable across Python versions and cross-SDK boundaries. Replaces
+        the prior ``json.dumps(..., default=str)`` canon which serialized
+        datetimes / Decimals / UUIDs via ``str()`` — implementation-defined.
+        """
         payload = {
             "operational": self.operational.to_dict(),
             "data_access": self.data_access.to_dict(),
@@ -303,9 +309,7 @@ class ConstraintEnvelope:
             "temporal": self.temporal.to_dict(),
             "communication": self.communication.to_dict(),
         }
-        return hashlib.sha256(
-            json.dumps(payload, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        return hashlib.sha256(serialize_for_signing(payload).encode()).hexdigest()
 
     def is_tighter_than(self, other: "ConstraintEnvelope") -> bool:
         """Check if this envelope is at least as tight as another.
@@ -817,8 +821,14 @@ class DecisionRecord:
         )
 
     def content_hash(self) -> str:
-        """SHA-256 of the decision content for tamper detection."""
-        payload = json.dumps(self.to_dict(), sort_keys=True, default=str)
+        """SHA-256 of the decision content for tamper detection.
+
+        Canonical bytes come from ``serialize_for_signing`` (issue #959):
+        byte-stable across Python versions and cross-SDK boundaries. Replaces
+        the prior ``json.dumps(..., default=str)`` canon which serialized
+        datetimes / Decimals / UUIDs via ``str()`` — implementation-defined.
+        """
+        payload = serialize_for_signing(self.to_dict())
         return hashlib.sha256(payload.encode()).hexdigest()
 
 

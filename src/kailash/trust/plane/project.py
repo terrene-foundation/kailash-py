@@ -56,6 +56,7 @@ from kailash.trust.enforce.strict import HeldBehavior, StrictEnforcer, Verdict
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.plane.exceptions import (
     BudgetExhaustedError,
+    ChainHashMismatchError,
     ConstraintViolationError,
     TrustPlaneError,
 )
@@ -1013,7 +1014,7 @@ class TrustProject:
         logger.info("Recorded milestone %s (%s)", version, milestone.milestone_id)
         return milestone.milestone_id
 
-    async def verify(self) -> dict[str, Any]:
+    async def verify(self, *, strict: bool = False) -> dict[str, Any]:
         """Verify the project's trust chain integrity.
 
         Performs three levels of verification:
@@ -1022,13 +1023,29 @@ class TrustProject:
         3. Decision content hash verification (detect tampered decision records)
         4. Key consistency check
 
+        Args:
+            strict: When ``True``, raise ``ChainHashMismatchError`` on the FIRST
+                decision-record hash mismatch (fails fast for programmatic
+                callers). When ``False`` (default), continue iterating and
+                populate ``integrity_issues`` + ``chain_valid=False`` in the
+                returned report (existing bulk-audit behavior). Either mode
+                emits a WARN log line per ``observability.md`` Rule 5 when a
+                mismatch is detected.
+
         Returns:
-            Verification report dictionary
+            Verification report dictionary (only when ``strict=False`` or no
+            mismatch detected).
+
+        Raises:
+            ChainHashMismatchError: When ``strict=True`` and a decision
+                record's stored hash diverges from a fresh re-derivation.
+                ``.details`` carries ``record_id``, ``stored_hash``,
+                ``computed_hash``, ``record_type="decision"``.
         """
         async with self._async_lock:
-            return await self._verify_locked()
+            return await self._verify_locked(strict=strict)
 
-    async def _verify_locked(self) -> dict[str, Any]:
+    async def _verify_locked(self, *, strict: bool = False) -> dict[str, Any]:
         integrity_issues: list[str] = []
         chain_valid = True
 
@@ -1079,6 +1096,25 @@ class TrustProject:
             record = DecisionRecord.from_dict(data)
             computed_hash = record.content_hash()
             if stored_hash and not hmac_mod.compare_digest(stored_hash, computed_hash):
+                # WARN log per observability.md Rule 5 (log triage gate) +
+                # Rule 8 (no schema-revealing field values at WARN — record_id
+                # is the identifier, not classified content).
+                logger.warning(
+                    "trust_chain.hash_mismatch",
+                    extra={
+                        "record_id": record.decision_id,
+                        "record_type": "decision",
+                        "file": df.name,
+                    },
+                )
+                if strict:
+                    raise ChainHashMismatchError(
+                        f"decision record {record.decision_id} hash mismatch",
+                        record_id=record.decision_id,
+                        stored_hash=stored_hash,
+                        computed_hash=computed_hash,
+                        record_type="decision",
+                    )
                 integrity_issues.append(f"{df.name}: hash mismatch (tampered?)")
                 chain_valid = False
 

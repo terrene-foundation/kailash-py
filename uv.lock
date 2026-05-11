@@ -1772,7 +1772,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.20.0"
+version = "2.20.2"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
