@@ -11,10 +11,25 @@ from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Any
 
-import uvicorn
+# `fastapi`, `starlette`, and `uvicorn` are OPTIONAL dependencies under the
+# `server` extra (pyproject.toml). Per `rules/dependencies.md` § "Declared =
+# Imported": optional-extra imports MUST raise loudly with an actionable
+# error naming the extra — bare `ModuleNotFoundError` leaves a clean-install
+# user with no signal that `kailash[server]` is the correct install.
+try:
+    import uvicorn
+    from fastapi import BackgroundTasks, FastAPI
+    from starlette.exceptions import HTTPException
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, StreamingResponse
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.api.workflow_api requires server dependencies (fastapi, "
+        "starlette, uvicorn). Install with: pip install 'kailash[server]'"
+    ) from exc
 
-logger = logging.getLogger(__name__)
-from fastapi import BackgroundTasks, FastAPI
+from pydantic import BaseModel, Field
+
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.lifespan import (
     drive_router_lifespan_shutdown,
@@ -22,10 +37,8 @@ from kailash.utils.lifespan import (
 )
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from pydantic import BaseModel, Field
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionMode(str, Enum):

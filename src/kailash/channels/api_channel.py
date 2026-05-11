@@ -4,10 +4,19 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
-import uvicorn
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import Response
+# `uvicorn` and `starlette` are OPTIONAL dependencies under the `server` extra.
+# Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    import uvicorn
+    from starlette.exceptions import HTTPException
+    from starlette.requests import Request
+    from starlette.responses import Response
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.channels.api_channel requires server dependencies (starlette, "
+        "uvicorn). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ..servers import EnterpriseWorkflowServer
 from ..workflow import Workflow

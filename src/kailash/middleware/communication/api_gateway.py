@@ -15,9 +15,19 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+# `fastapi` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.middleware.communication.api_gateway requires server "
+        "dependencies (fastapi). Install with: pip install 'kailash[server]'"
+    ) from exc
+
 from pydantic import BaseModel, Field
 
 from ...nodes.base import NodeRegistry

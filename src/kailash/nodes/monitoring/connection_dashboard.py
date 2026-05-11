@@ -34,8 +34,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Deque, Dict, List, Optional, Set
 
-import aiohttp_cors
-from aiohttp import web
+# `aiohttp` and `aiohttp_cors` are OPTIONAL dependencies under the `server`
+# extra. Per `rules/dependencies.md` § "Declared = Imported": optional-extra
+# imports MUST raise loudly with an actionable error naming the extra.
+try:
+    import aiohttp_cors
+    from aiohttp import web
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.nodes.monitoring.connection_dashboard requires server "
+        "dependencies (aiohttp, aiohttp-cors). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -224,7 +234,6 @@ class ConnectionDashboardNode(Node):
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
-
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[override]
         """Execute dashboard action.

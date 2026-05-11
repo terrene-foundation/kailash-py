@@ -26,7 +26,16 @@ from __future__ import annotations
 import asyncio
 from typing import Optional
 
-import aiohttp
+# `aiohttp` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    import aiohttp
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.channels.mcp.http requires server dependencies (aiohttp). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from .base import ProtocolError, Transport, TransportError, validate_url
 

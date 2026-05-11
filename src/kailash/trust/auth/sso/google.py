@@ -12,8 +12,18 @@ import logging
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
-import jwt
-from jwt import PyJWKClient
+# `PyJWT` (imported as `jwt`) is an OPTIONAL dependency. It ships under BOTH
+# the `trust` extra (SSO + sign/verify) AND the `server` extra (middleware
+# auth). Per `rules/dependencies.md` § "Declared = Imported": optional-extra
+# imports MUST raise loudly with an actionable error naming the extra.
+try:
+    import jwt
+    from jwt import PyJWKClient
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.trust.auth.sso.google requires PyJWT. "
+        "Install with: pip install 'kailash[trust]' (or 'kailash[server]')"
+    ) from exc
 
 from kailash.trust.auth.sso.base import (
     BaseSSOProvider,

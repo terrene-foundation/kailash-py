@@ -25,7 +25,16 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 from uuid import uuid4
 
-import bcrypt
+# `bcrypt` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    import bcrypt
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.nodes.admin.user_management requires server dependencies "
+        "(bcrypt). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import SQLDatabaseNode

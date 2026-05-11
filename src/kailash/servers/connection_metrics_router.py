@@ -17,7 +17,16 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+# `fastapi` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from fastapi import APIRouter
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.servers.connection_metrics_router requires server dependencies "
+        "(fastapi). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 logger = logging.getLogger(__name__)
 

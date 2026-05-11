@@ -12,11 +12,21 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any, Awaitable, Callable, Optional
 
-from fastapi import FastAPI
+# `fastapi` and `starlette` are OPTIONAL dependencies under the `server` extra.
+# Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from fastapi import FastAPI
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.requests import Request
+    from starlette.websockets import WebSocket
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.servers.workflow_server requires server dependencies (fastapi, "
+        "starlette). Install with: pip install 'kailash[server]'"
+    ) from exc
+
 from pydantic import BaseModel, Field
-from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.websockets import WebSocket
 
 from ..api.workflow_api import WorkflowAPI
 from ..runtime.shutdown import ShutdownCoordinator

@@ -10,7 +10,20 @@ import time
 from enum import Enum
 from typing import Any
 
-import aiohttp
+# `aiohttp` is an OPTIONAL dependency under the `server` extra. `requests` ships
+# under `http-client` AND `server`. Per `rules/dependencies.md` § "Declared =
+# Imported": optional-extra imports MUST raise loudly with an actionable error
+# naming the extra. (`requests` is not in _OPTIONAL_PACKAGES — it's transitively
+# pulled by the server stack and the http-client extra; only `aiohttp` is
+# guarded here.)
+try:
+    import aiohttp
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.nodes.api.http requires server dependencies (aiohttp). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
+
 import requests
 from pydantic import BaseModel
 

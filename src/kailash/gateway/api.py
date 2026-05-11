@@ -9,8 +9,18 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+# `fastapi` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports
+# MUST raise loudly with an actionable error naming the extra.
+try:
+    from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
+    from fastapi.responses import JSONResponse
+except ImportError as exc:  # pragma: no cover — covered by structural invariant test
+    raise ImportError(
+        "kailash.gateway.api requires server dependencies (fastapi). "
+        "Install with: pip install 'kailash[server]'"
+    ) from exc
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..resources.registry import ResourceRegistry

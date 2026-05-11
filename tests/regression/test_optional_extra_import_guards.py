@@ -82,22 +82,14 @@ _OPTIONAL_PACKAGES = frozenset(
 # with an actionable error message. The test verifies the wrap is present.
 _FIXED_SITES = frozenset(
     {
+        # First wave (PR #956): the 3 sites surfaced during #876 follow-up.
         "src/kailash/core/pool/sqlite_pool.py",
         "src/kailash/trust/migrations/eatp_human_origin.py",
         "src/kailash/api/gateway.py",
-    }
-)
-
-
-# Modules with module-scope optional-extra imports that are NOT YET wrapped.
-# Pre-existing same-class violations (sibling sweep of the 3 fixed sites).
-# Each is a follow-up shard. When fixed, MOVE the entry to _FIXED_SITES.
-#
-# Discovery: AST sweep on 2026-05-10 against src/kailash/ found 25 total
-# module-scope optional-extra imports; 3 fixed in this same shard
-# (_FIXED_SITES); remaining 22 listed here as same-class follow-on debt.
-_KNOWN_VIOLATIONS = frozenset(
-    {
+        # Second wave: sibling sweep of the 22 _KNOWN_VIOLATIONS allowlist
+        # entries. Same try/except pattern as the first wave per
+        # rules/dependencies.md § "Declared = Imported" / "__init__.py
+        # Module-Scope Imports Honor The Manifest".
         # FastAPI / Starlette / Uvicorn — server extra
         "src/kailash/api/workflow_api.py",
         "src/kailash/api/tests/test_workflow_api_404.py",
@@ -120,12 +112,20 @@ _KNOWN_VIOLATIONS = frozenset(
         "src/kailash/nodes/transaction/participant_transport.py",
         # bcrypt — server extra
         "src/kailash/nodes/admin/user_management.py",
-        # PyJWT — server extra
+        # PyJWT — server extra (also satisfied by trust extra)
         "src/kailash/trust/auth/sso/azure.py",
         "src/kailash/trust/auth/sso/google.py",
         "src/kailash/trust/auth/sso/apple.py",
     }
 )
+
+
+# All sites listed in _KNOWN_VIOLATIONS at PR #956 landing have been fixed
+# (second-wave sweep). The empty allowlist makes
+# test_no_new_unguarded_optional_extra_imports the only gate going forward —
+# any new module-scope optional-extra import without a guard surfaces as a
+# new violator, not silently absorbed into the allowlist.
+_KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 
 
 def _enumerate_module_scope_optional_imports(file_path: Path) -> list[tuple[str, int]]:
