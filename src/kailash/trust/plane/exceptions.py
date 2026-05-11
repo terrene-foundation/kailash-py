@@ -38,6 +38,8 @@ __all__ = [
     "KeyExpiredError",
     "SigningError",
     "VerificationError",
+    # Chain integrity
+    "ChainHashMismatchError",
     # Constraint / budget
     "ConstraintViolationError",
     "BudgetExhaustedError",
@@ -239,6 +241,61 @@ class VerificationError(KeyManagerError):
 
 
 # ---------------------------------------------------------------------------
+# Chain integrity exceptions
+# ---------------------------------------------------------------------------
+
+
+class ChainHashMismatchError(TrustPlaneError):
+    """Raised when a trust-chain record's stored hash diverges from a
+    re-derivation over the same record's canonical bytes.
+
+    Distinct from ``VerificationError`` (Ed25519 signature failure) — this
+    error signals that the canonical-bytes serialization of the record
+    produces a different SHA-256 digest than the one persisted with the
+    record. Causes include cross-version canonical-bytes drift (the bug
+    fixed by issue #959), tampering with the stored payload, or downstream
+    re-serialization that did not route through ``serialize_for_signing``.
+
+    Attributes:
+        record_id: Identifier of the record whose hash failed to match.
+        stored_hash: Hex-encoded SHA-256 hash persisted with the record.
+        computed_hash: Hex-encoded SHA-256 hash freshly re-derived from
+            the record's canonical bytes.
+        record_type: One of ``"decision"``, ``"milestone"``,
+            ``"delegation"``, or ``"reasoning_trace"``.
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        record_id: str = "",
+        stored_hash: str = "",
+        computed_hash: str = "",
+        record_type: str = "",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        # Defaults keep the cross-exception-hierarchy contract simple
+        # (every `TrustPlaneError` is constructable with a bare message)
+        # while preserving typed attributes for production callers that
+        # supply them via keyword.
+        self.record_id = record_id
+        self.stored_hash = stored_hash
+        self.computed_hash = computed_hash
+        self.record_type = record_type
+        super().__init__(
+            message,
+            details=details
+            or {
+                "record_id": record_id,
+                "stored_hash": stored_hash,
+                "computed_hash": computed_hash,
+                "record_type": record_type,
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
 # Constraint / budget exceptions
 # ---------------------------------------------------------------------------
 
@@ -333,4 +390,7 @@ class TLSSyslogError(TrustPlaneError):
 
 # Re-exported from shared location to avoid circular imports.
 # _locking.py defines the class; plane.exceptions re-exports for backward compat.
-from kailash.trust._locking import LockTimeoutError as LockTimeoutError  # noqa: F401
+# E402 silenced: late import is required to break the import cycle with _locking.
+from kailash.trust._locking import (  # noqa: F401, E402
+    LockTimeoutError as LockTimeoutError,
+)

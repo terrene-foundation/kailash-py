@@ -1,0 +1,84 @@
+{
+  "contract": "trust-plane-canonical-bytes",
+  "version": "1.0.0",
+  "spec_ref": "specs/trust-crypto.md §12.2",
+  "issue": "https://github.com/terrene-foundation/kailash-py/issues/959",
+  "description": "Cross-SDK canonical-bytes byte-pin vectors for the trust-plane signing helper (kailash.trust.signing.crypto.serialize_for_signing). Both kailash-py and kailash-rs MUST produce byte-identical canonical_json and identical SHA-256 hex for every vector. Typed scalars are tagged ({\"$type\": ..., \"$value\": ...}) so the JSON file holds them losslessly. Each SDK's reifier turns tags back into the language's native object before feeding the serializer. Canonical bytes are ASCII-only (json ensure_ascii=True default) for byte-stable cross-SDK output.",
+  "tag_schema": {
+    "datetime": "ISO-8601 string with explicit tz; e.g. 2026-01-01T00:00:00+00:00",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM:SS[.ffffff]",
+    "decimal": "lexical Decimal string preserving precision; e.g. '1.50' not '1.5'",
+    "uuid": "8-4-4-4-12 hex; e.g. 00000000-0000-0000-0000-000000000001"
+  },
+  "vectors": [
+    {
+      "name": "V1_ascii_payload",
+      "input_repr": {
+        "agent": "a1",
+        "action": "approve",
+        "cost": 42
+      },
+      "expected_canonical_json": "{\"action\":\"approve\",\"agent\":\"a1\",\"cost\":42}",
+      "expected_sha256": "3d8562fdd4e63efd07d9de2b3a96bc03f04a179b9b75efd4cd42280240760147"
+    },
+    {
+      "name": "V2_utc_datetime",
+      "input_repr": {
+        "ts": { "$type": "datetime", "$value": "2026-01-01T00:00:00+00:00" }
+      },
+      "expected_canonical_json": "{\"ts\":\"2026-01-01T00:00:00+00:00\"}",
+      "expected_sha256": "b1a289d1082ef3def8eb27ce27519099e69d92875225c01408851b0777b22988"
+    },
+    {
+      "name": "V3_non_utc_datetime",
+      "input_repr": {
+        "ts": { "$type": "datetime", "$value": "2026-01-01T12:00:00+08:00" }
+      },
+      "expected_canonical_json": "{\"ts\":\"2026-01-01T12:00:00+08:00\"}",
+      "expected_sha256": "6bfe8d60a649caf78eaa26a4a0d7ebf7db48562e97bcf36eb7d240df97e8ec8b"
+    },
+    {
+      "name": "V4_decimal_precision_preserved",
+      "input_repr": {
+        "amount": { "$type": "decimal", "$value": "1.50" },
+        "zero": { "$type": "decimal", "$value": "0" }
+      },
+      "expected_canonical_json": "{\"amount\":\"1.50\",\"zero\":\"0\"}",
+      "expected_sha256": "84119573c58750982476c1f83ba891c32278c2893a8a498fc14794ce7825345d"
+    },
+    {
+      "name": "V5_uuid",
+      "input_repr": {
+        "id": {
+          "$type": "uuid",
+          "$value": "00000000-0000-0000-0000-000000000001"
+        }
+      },
+      "expected_canonical_json": "{\"id\":\"00000000-0000-0000-0000-000000000001\"}",
+      "expected_sha256": "2dc5f9c55037c706dbbeee318933924c80a78eeff51d5f0d9310ced9801bfe6b"
+    },
+    {
+      "name": "V6_unicode_bmp",
+      "input_repr": {
+        "name": "漢字"
+      },
+      "expected_canonical_json": "{\"name\":\"\\u6f22\\u5b57\"}",
+      "expected_sha256": "0741d59cd3e8fad3121a875d0494b9db41d7116c30db65a83ea6f10509316d18"
+    },
+    {
+      "name": "V7_above_bmp_emoji",
+      "input_repr": {
+        "flag": "🎉"
+      },
+      "expected_canonical_json": "{\"flag\":\"\\ud83c\\udf89\"}",
+      "expected_sha256": "4ae22bd28ca5ffea28a6e299edefd66aff5cd192a58b7b05a425ad37a963f118"
+    },
+    {
+      "name": "EmptyDict_sentinel",
+      "input_repr": {},
+      "expected_canonical_json": "{}",
+      "expected_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ]
+}
