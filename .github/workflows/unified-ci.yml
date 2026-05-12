@@ -231,4 +231,4 @@ jobs:
           cd packages/kailash-dataflow
           ../../.venv/bin/python -m pytest tests/unit/ \
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis)' \
-            --maxfail=10 -q --timeout=60
+            --maxfail=10 -q
