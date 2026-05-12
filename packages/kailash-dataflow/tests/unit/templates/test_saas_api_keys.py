@@ -64,9 +64,9 @@ class TestAPIKeyManagement:
         # Verify key properties
         assert isinstance(api_key, str), "API key should be string"
         assert len(api_key) >= 32, "API key should be at least 32 characters"
-        assert api_key.isalnum() or "_" in api_key or "-" in api_key, (
-            "Should be URL-safe"
-        )
+        assert (
+            api_key.isalnum() or "_" in api_key or "-" in api_key
+        ), "Should be URL-safe"
 
         # Verify randomness (two keys should be different)
         api_key2 = generate_api_key()
@@ -101,9 +101,9 @@ class TestAPIKeyManagement:
         # Verify different keys produce different hashes
         different_key = "different_api_key_67890"
         different_hash = hash_api_key(different_key)
-        assert hashed != different_hash, (
-            "Different keys should produce different hashes"
-        )
+        assert (
+            hashed != different_hash
+        ), "Different keys should produce different hashes"
 
     def test_create_api_key(self, monkeypatch):
         """
@@ -200,12 +200,15 @@ class TestAPIKeyManagement:
             "created_at": datetime.now(),
         }
 
-        # Mock workflow execution
+        # Mock workflow execution. ListNode response shape changed in
+        # commit 8385851a (2026-04-17) "api_key verify unwraps ListNode dict";
+        # verify_api_key now reads results["list_keys"]["records"], so the
+        # mock MUST nest the record list under the "records" key.
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
         mock_runtime.execute.return_value = (
-            {"list_keys": [api_key_record]},
+            {"list_keys": {"records": [api_key_record], "count": 1, "limit": 1}},
             "run_id_123",
         )
 
@@ -397,9 +400,9 @@ class TestAPIKeyManagement:
             # Verify API keys listed
             assert isinstance(result, list), "Should return list"
             assert len(result) == 2, "Should return 2 keys"
-            assert all(k["organization_id"] == org_id for k in result), (
-                "All keys should belong to org"
-            )
+            assert all(
+                k["organization_id"] == org_id for k in result
+            ), "All keys should belong to org"
 
     def test_api_key_scopes_validation(self):
         """
@@ -424,9 +427,9 @@ class TestAPIKeyManagement:
             validate_scopes(invalid_scopes)
             assert False, "Invalid scopes should raise error"
         except ValueError as e:
-            assert "invalid_scope" in str(e).lower(), (
-                "Error should mention invalid scope"
-            )
+            assert (
+                "invalid_scope" in str(e).lower()
+            ), "Error should mention invalid scope"
 
         # Duplicate scopes should be deduplicated
         duplicate_scopes = ["read", "write", "read"]
@@ -464,11 +467,16 @@ class TestAPIKeyManagement:
             "created_at": datetime.now() - timedelta(days=30),
         }
 
-        # Mock workflow execution
+        # Mock workflow execution. ListNode response shape changed in
+        # commit 8385851a (2026-04-17); mock MUST nest record list under
+        # the "records" key for verify_api_key to find the expired record.
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
-        mock_runtime.execute.return_value = ({"list_keys": [expired_key]}, "run_id_123")
+        mock_runtime.execute.return_value = (
+            {"list_keys": {"records": [expired_key], "count": 1, "limit": 1}},
+            "run_id_123",
+        )
 
         import saas_starter.security.api_keys
 
@@ -489,9 +497,9 @@ class TestAPIKeyManagement:
             # Verify expired key rejected
             assert result is not None, "Should return result"
             assert result["valid"] is False, "Expired key should be invalid"
-            assert "expired" in result.get("error", "").lower(), (
-                "Error should mention expiration"
-            )
+            assert (
+                "expired" in result.get("error", "").lower()
+            ), "Error should mention expiration"
 
     def test_api_key_rate_limiting(self, monkeypatch):
         """
@@ -524,12 +532,14 @@ class TestAPIKeyManagement:
             "created_at": datetime.now(),
         }
 
-        # Mock workflow execution
+        # Mock workflow execution. ListNode response shape changed in
+        # commit 8385851a (2026-04-17); mock MUST nest record list under
+        # the "records" key for verify_api_key to find the rate-limited key.
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
         mock_runtime.execute.return_value = (
-            {"list_keys": [rate_limited_key]},
+            {"list_keys": {"records": [rate_limited_key], "count": 1, "limit": 1}},
             "run_id_123",
         )
 

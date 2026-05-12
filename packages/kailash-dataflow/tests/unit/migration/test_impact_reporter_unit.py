@@ -23,6 +23,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 pytestmark = [pytest.mark.unit]
+from kailash.runtime.local import LocalRuntime
+
 from dataflow.migrations.column_removal_manager import (
     BackupStrategy,
     ColumnRemovalManager,
@@ -45,8 +47,6 @@ from dataflow.migrations.impact_reporter import (
     OutputFormat,
     RecommendationType,
 )
-
-from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -99,8 +99,16 @@ class TestImpactReporterIntegration:
         """Test full integration from DependencyAnalyzer to ImpactReporter."""
         manager, connection = mock_connection_manager
 
-        # Mock database responses for dependency analysis
-        # Mock foreign key query
+        # Mock database responses for dependency analysis.
+        # Trigger and index queries were refactored in commits c869734c
+        # ("trigger analyzer reads function body, not action_statement",
+        # 2026-04-17) and bc202abc ("detect expression indexes and
+        # pg_constraint-native types", 2026-04-17). Mock rows MUST now
+        # include the post-refactor columns: triggers carry function_source
+        # (the pg_proc.prosrc body that membership-checks against the
+        # column name); indexes carry direct_columns / has_expression /
+        # is_partial (pg_index-native fields replacing the legacy
+        # "columns" key).
         connection.fetch.side_effect = [
             # Foreign key dependencies
             [
@@ -122,24 +130,29 @@ class TestImpactReporterIntegration:
                     "definition": "SELECT u.id, u.name, COUNT(o.id) FROM users u LEFT JOIN orders o ON u.id = o.user_id GROUP BY u.id",
                 }
             ],
-            # Trigger dependencies
+            # Trigger dependencies (post-c869734c: function_source is the
+            # canonical column the analyzer checks for OLD.col / NEW.col).
             [
                 {
                     "trigger_name": "user_audit_trigger",
                     "event_manipulation": "UPDATE",
                     "action_timing": "AFTER",
-                    "action_statement": "EXECUTE FUNCTION audit_user_changes()",
+                    "action_statement": "CREATE TRIGGER user_audit_trigger AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION audit_user_changes()",
                     "function_name": "audit_user_changes",
+                    "function_source": "BEGIN INSERT INTO audit_log(user_id) VALUES (NEW.id); RETURN NEW; END;",
                 }
             ],
-            # Index dependencies
+            # Index dependencies (post-bc202abc: direct_columns + has_expression
+            # + is_partial replace the legacy "columns" key).
             [
                 {
                     "index_name": "idx_users_id_unique",
                     "index_type": "btree",
                     "index_definition": "CREATE UNIQUE INDEX idx_users_id_unique ON users USING btree (id)",
                     "is_unique": True,
-                    "columns": ["id"],
+                    "has_expression": False,
+                    "is_partial": False,
+                    "direct_columns": ["id"],
                 }
             ],
             # Constraint dependencies (empty)
@@ -298,24 +311,27 @@ class TestImpactReporterIntegration:
                     "definition": "SELECT u.id, u.name, p.bio FROM users u JOIN user_profiles p ON u.id = p.user_id",
                 },
             ],
-            # Triggers
+            # Triggers (post-c869734c: function_source is canonical)
             [
                 {
                     "trigger_name": "user_delete_cascade",
                     "event_manipulation": "DELETE",
                     "action_timing": "BEFORE",
-                    "action_statement": "EXECUTE FUNCTION cleanup_user_data()",
+                    "action_statement": "CREATE TRIGGER user_delete_cascade BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION cleanup_user_data()",
                     "function_name": "cleanup_user_data",
+                    "function_source": "BEGIN DELETE FROM audit_log WHERE user_id = OLD.id; RETURN OLD; END;",
                 }
             ],
-            # Indexes
+            # Indexes (post-bc202abc: direct_columns / has_expression / is_partial)
             [
                 {
                     "index_name": "users_pkey",
                     "index_type": "btree",
                     "index_definition": "CREATE UNIQUE INDEX users_pkey ON users USING btree (id)",
                     "is_unique": True,
-                    "columns": ["id"],
+                    "has_expression": False,
+                    "is_partial": False,
+                    "direct_columns": ["id"],
                 }
             ],
             # Constraints (empty for this test)
@@ -404,14 +420,17 @@ class TestImpactReporterIntegration:
             [],  # No foreign key dependencies
             [],  # No view dependencies
             [],  # No trigger dependencies
-            # Only a single non-unique index
+            # Only a single non-unique index (post-bc202abc schema:
+            # direct_columns + has_expression + is_partial).
             [
                 {
                     "index_name": "idx_users_temp_column",
                     "index_type": "btree",
                     "index_definition": "CREATE INDEX idx_users_temp_column ON users USING btree (temp_column)",
                     "is_unique": False,
-                    "columns": ["temp_column"],
+                    "has_expression": False,
+                    "is_partial": False,
+                    "direct_columns": ["temp_column"],
                 }
             ],
             [],  # No constraint dependencies

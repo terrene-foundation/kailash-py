@@ -1024,17 +1024,20 @@ class TestInspectorErrorHandling:
         # workflow_summary uses _get_workflow() which prefers self.workflow
         inspector.workflow = built_workflow
 
-        # Single node workflow
-        # Note: workflow_summary analyzes connections, a single node with no connections
-        # will show node_count from connection_graph which may be 0 if no connections exist
+        # Single node workflow — Inspector's connection_graph() includes every
+        # declared workflow node (isolated or connected) since commit caccf762
+        # (2026-04-17) "align Inspector with DataFlow 2.0 workflow + model APIs".
+        # The single node is its own entry and exit point with zero connections.
         summary = inspector.workflow_summary()
-        # With no connections, the graph has no nodes (nodes are extracted from connections)
-        assert summary.node_count == 0
+        assert summary.node_count == 1
         assert summary.connection_count == 0
+        assert summary.entry_points == ["single"]
+        assert summary.exit_points == ["single"]
 
         order = inspector.execution_order()
-        # execution_order also relies on connection_graph which returns empty with no connections
-        assert len(order) == 0
+        # execution_order topologically sorts the graph; one node with no
+        # dependencies sorts as itself.
+        assert order == ["single"]
 
     def test_disconnected_nodes(self):
         """Should handle workflow with disconnected nodes."""
@@ -1061,16 +1064,17 @@ class TestInspectorErrorHandling:
         inspector.workflow_obj = built_workflow
         inspector.workflow = built_workflow
 
-        # Should handle disconnected nodes
+        # Should handle disconnected nodes — Inspector's connection_graph()
+        # includes every declared workflow node since commit caccf762
+        # (2026-04-17). Two disconnected nodes are both visible in the graph
+        # and each is its own entry+exit point.
         summary = inspector.workflow_summary()
-        # With no connections, the graph extracts nodes from connections only
-        # Disconnected nodes are not visible in connection_graph
-        assert summary.node_count == 0
+        assert summary.node_count == 2
         assert summary.connection_count == 0
 
-        # No entry/exit points with no connections
-        assert len(summary.entry_points) == 0
-        assert len(summary.exit_points) == 0
+        # Both disconnected nodes are entry AND exit points (no in/out edges)
+        assert sorted(summary.entry_points) == ["node_a", "node_b"]
+        assert sorted(summary.exit_points) == ["node_a", "node_b"]
 
     def test_node_dependencies_nonexistent_node(self):
         """Should handle nonexistent node ID."""

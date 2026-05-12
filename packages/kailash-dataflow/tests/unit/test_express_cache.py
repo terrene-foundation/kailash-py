@@ -11,7 +11,6 @@ import pytest
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
 
-
 # ============================================================================
 # CacheKeyGenerator — Express-mode key generation
 # ============================================================================
@@ -21,10 +20,14 @@ class TestCacheKeyGeneratorExpress:
     """Test CacheKeyGenerator.generate_express_key()."""
 
     def test_basic_key_format(self):
-        """Key has format prefix:version:model:operation[:hash]."""
+        """Key has format prefix:version:model:operation[:hash].
+
+        Keyspace bumped v1->v2 in commit 64167f7c (BP-049 classified-data
+        cross-SDK fix); test updated to match producer-side default.
+        """
         gen = CacheKeyGenerator()
         key = gen.generate_express_key("User", "list")
-        assert key == "dataflow:v1:User:list"
+        assert key == "dataflow:v2:User:list"
 
     def test_params_produce_hash_suffix(self):
         """When params are provided a short hash is appended."""

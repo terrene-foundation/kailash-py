@@ -5,6 +5,7 @@ These tests use mocks to test adapter logic without requiring
 a real MongoDB instance (Tier 1 - Unit Tests).
 """
 
+import importlib.util
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -118,6 +119,16 @@ class TestMongoDBAdapterFeatureDetection:
 
 class TestMongoDBAdapterConnection:
     """Test MongoDB adapter connection management (with mocks)."""
+
+    # motor is the async MongoDB driver; the connect() code path imports
+    # motor.motor_asyncio at runtime (mongodb.py:123). Tests that exercise
+    # this path require the module to be importable. Skip when motor is
+    # unavailable (optional async-mongo extra), per the same gating pattern
+    # used for `cryptography` in the SaaS API key tests (commit 62eea7e5).
+    pytestmark = pytest.mark.skipif(
+        importlib.util.find_spec("motor") is None,
+        reason="motor not installed (optional async MongoDB driver)",
+    )
 
     @pytest.mark.asyncio
     async def test_connect_success(self):
