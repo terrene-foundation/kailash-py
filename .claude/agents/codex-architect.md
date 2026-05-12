@@ -17,20 +17,19 @@ OWNER:
 
 - `.codex/**`, `.codex-plugin/**`, `.claude/codex-mcp-guard/**` — Codex config + MCP guardrail companion
 - `.claude/hooks/*.js` (top-level, shim runtime) — Codex-native via `.codex/hooks.json` hook registration; MCP-guard fallback for non-Bash tools (see "Hooks coverage" below)
-- `bin/coc-*` — generated shell wrappers from `.claude/wrappers/*.sh.template`
 - `~/.codex/skills/<name>/SKILL.md` (user-global) or `.codex/skills/<name>/SKILL.md` (repo-local) — native progressive-disclosure skills
-- `~/.codex/prompts/<name>.md` (user-global) or `.codex/prompts/<name>.md` (repo-local) — custom slash commands (invoked `/prompts:<name>`, note the namespace prefix)
+- `~/.codex/prompts/<name>.md` (user-global) or `.codex/prompts/<name>.md` (repo-local) — custom slash commands (invoked `/prompts:<name>`, note the namespace prefix). This is the canonical Codex slash-command surface — bash-wrapper emission to `bin/coc-*` was deferred at Shard C (2026-05-10, journal/0006) and is no longer the architect's responsibility.
 
 CONSUMER (read-only at emit time):
 
 - `.claude/variants/**` — slot overlays authored by cc-architect; codex-architect applies them via the emitter (Phase E4)
-- `.claude/commands/**` — phase commands (`/analyze`, `/todos`, etc.); codex-architect emits `coc-<name>` wrappers + `native_primitive_override` carve-outs (e.g. `codex review` replaces `coc-review`) AND emits Codex-native prompts at `.codex/prompts/<name>.md`
+- `.claude/commands/**` — phase commands (`/analyze`, `/todos`, etc.); codex-architect emits Codex-native prompts at `.codex/prompts/<name>.md`. (Bash-wrapper emission to `bin/coc-*` was deferred at Shard C 2026-05-10; native prompts are the only invocation surface.)
 - `.claude/guides/**` — copied to `.codex/docs/` at sync time; no symlinks (USE template tarballs self-contained)
 
 ## Primary Responsibilities
 
 1. **Emit** `AGENTS.md` under the v6 abridgement_protocol from `.claude/sync-manifest.yaml → cli_variants.context/root.md.codex`. Respect warn_cap_bytes (32768) and block_cap_bytes (61440); WARN tier is the expected steady state.
-2. **Generate** shell wrappers at `bin/coc-{name}` from `.claude/wrappers/*.sh.template`, honoring `native_primitive_override` (e.g. skip `coc-review` when `codex review` is the CLI-native replacement). Every wrapper MUST include `-c project_doc_max_bytes=65536` per §2.2 to override Codex's default 32 KiB cap.
+2. **Native slash-command surface** — emit `.codex/prompts/<name>.md` per Phase J2+ (responsibility 6 below). Bash-wrapper emission to `bin/coc-*` was deferred at Shard C 2026-05-10 (journal/0006-DECISION-wrapper-emission-disposition-strip.md) — the wrappers' runtime dependency `.codex/developer-instructions/` was never authored, the native prompt surface covers all 28 commands, and the manifest emit_to declarations were stubs. Revival path documented in the journal entry if external CLI invocation becomes a documented user need.
 3. **Populate** `.claude/codex-mcp-guard/server.js` POLICIES table via AST extraction of `.claude/hooks/*.js` predicate functions (spec v6 §4.4 validator 13). Bijection MUST hold — divergence hard-blocks sync.
 4. **Apply** slot overlays from `.claude/variants/codex/**` and `.claude/variants/<lang>-codex/**` when emitting baseline context + rules. Never edit the global rule; always overlay.
 5. **Validate** TOML-header safety for `agents/**.md` per `cli_variants.agents/**.md.codex.toml_key_safety = iterate_and_classify` (spec v3 §2.2).
@@ -78,7 +77,7 @@ Fixture: `.claude/fixtures/validator-13/` (migrated from `workspaces/` in Phase 
 ## AGENTS.md Size Cap
 
 - Codex native default: **32,768 bytes** (`PROJECT_DOC_MAX_BYTES` in `codex-rs/core/src/config/mod.rs`)
-- Loom wrapper override: `-c project_doc_max_bytes=65536` (2× default — verified legal, no documented hard ceiling above this)
+- Operator invocation override: `-c project_doc_max_bytes=65536` (2× default — verified legal, no documented hard ceiling above this; passed at `codex` launch by the operator. Was originally planned for inclusion in loom-emitted bash wrappers; wrappers deferred per journal/0006-DECISION-wrapper-emission-disposition-strip.md.)
 - Emitted size: **~53,620 B** steady-state post-F4 (9 CRIT rules). WARN tier between 32,768 and 61,440; BLOCK above.
 
 ## Hook Path Resolution
@@ -126,16 +125,15 @@ Per `rules/cross-cli-parity.md`:
 
 ## Common Anti-Patterns
 
-| Anti-Pattern                                             | Fix                                                                                                                                                                                |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Edit `.claude/rules/*.md` to add Codex-specific examples | Author `.claude/variants/codex/rules/*.md` slot overlay instead                                                                                                                    |
-| MCP guard starts with stub POLICIES                      | Keep `POLICIES_POPULATED=false`; emit bijection failure at startup (exit 2)                                                                                                        |
-| Skip `-c project_doc_max_bytes=65536` in a new wrapper   | Every `wrappers/*.sh.template` MUST include the flag; validator blocks sync                                                                                                        |
-| Hand-edit `bin/coc-*` wrappers                           | Regenerate from `.claude/wrappers/*.sh.template` via emitter; manual edits overwritten                                                                                             |
-| Add semantic tokens to `scrub_tokens`                    | Extend `warn_on_drift_in_slots` instead — scrub is for syntax, not semantics                                                                                                       |
-| Use `paths:` frontmatter for path-scoped rules on Codex  | Place content in the relevant subdirectory's `AGENTS.md` — CWD-triggered. **Do NOT use `.github/instructions/*.instructions.md` + `applyTo:`** — that's GitHub Copilot, not Codex. |
-| Assume `PreToolUse` fires on `apply_patch`               | It doesn't — file-write enforcement MUST route through the MCP guard                                                                                                               |
-| Emit slash commands as `/analyze.md` flat name           | Codex invokes `/prompts:analyze` — the `prompts:` namespace prefix is mandatory                                                                                                    |
+| Anti-Pattern                                             | Fix                                                                                                                                                                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Edit `.claude/rules/*.md` to add Codex-specific examples | Author `.claude/variants/codex/rules/*.md` slot overlay instead                                                                                                                                                             |
+| MCP guard starts with stub POLICIES                      | Keep `POLICIES_POPULATED=false`; emit bijection failure at startup (exit 2)                                                                                                                                                 |
+| Re-add `wrappers/*.sh.template:` emit_to to manifest     | Wrapper emission is deferred (journal/0006); revival requires authoring `.codex/developer-instructions/` corpus + emitter wiring + Tier-1 regression. Native `.codex/prompts/` surface is the canonical slash-command path. |
+| Add semantic tokens to `scrub_tokens`                    | Extend `warn_on_drift_in_slots` instead — scrub is for syntax, not semantics                                                                                                                                                |
+| Use `paths:` frontmatter for path-scoped rules on Codex  | Place content in the relevant subdirectory's `AGENTS.md` — CWD-triggered. **Do NOT use `.github/instructions/*.instructions.md` + `applyTo:`** — that's GitHub Copilot, not Codex.                                          |
+| Assume `PreToolUse` fires on `apply_patch`               | It doesn't — file-write enforcement MUST route through the MCP guard                                                                                                                                                        |
+| Emit slash commands as `/analyze.md` flat name           | Codex invokes `/prompts:analyze` — the `prompts:` namespace prefix is mandatory                                                                                                                                             |
 
 ## Related Agents
 

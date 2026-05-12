@@ -61,7 +61,7 @@ class User:
 When working with DataFlow, deploy:
 
 - **dataflow-specialist** — Database operations, auto-generated nodes, bulk operations
-- **testing-specialist** — Real database test fixtures (Real infrastructure recommended)
+- **testing-specialist** — Real database test fixtures (NO MOCKING)
 
 ## Related Commands
 

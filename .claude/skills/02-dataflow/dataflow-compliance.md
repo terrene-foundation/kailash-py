@@ -52,5 +52,4 @@ workflow.add_connection("anonymize_logs", "result", "delete_external", "trigger"
 
 ## Documentation
 
-
 <!-- Trigger Keywords: GDPR dataflow, data compliance, right to be forgotten, data privacy -->

@@ -33,7 +33,7 @@ import os
 workflow = WorkflowBuilder()
 
 # Header-based API key
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search documents"}],
@@ -53,6 +53,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 **API Key Best Practices:**
+
 - Store keys in environment variables (never hardcode)
 - Use different keys for dev/staging/production
 - Rotate keys regularly (90 days recommended)
@@ -61,7 +62,7 @@ results, run_id = runtime.execute(workflow.build())
 ### Bearer Token Authentication
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get weather data"}],
@@ -99,7 +100,7 @@ jwt_token = create_jwt_token(
     tenant_id="tenant_456"
 )
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Process data"}],
@@ -115,6 +116,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ```
 
 **JWT Benefits:**
+
 - Stateless (no server-side session storage)
 - Contains user/tenant information
 - Expires automatically
@@ -150,7 +152,7 @@ oauth_token = get_oauth_token(
 )
 
 # Use OAuth token
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Access protected resource"}],
@@ -168,7 +170,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ### Custom Authentication Headers
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Multi-factor auth"}],
@@ -202,7 +204,7 @@ tenant_tokens = {
 def create_mcp_workflow(tenant_id):
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "openai",
         "model": os.environ["LLM_MODEL"],
         "messages": [{"role": "user", "content": "Get tenant data"}],
@@ -263,7 +265,7 @@ token_manager = TokenManager(
     token_url="https://auth.company.com/oauth/token"
 )
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "api",
         "transport": "http",
@@ -291,7 +293,7 @@ import os
 
 load_dotenv()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "secure",
         "transport": "http",
@@ -331,7 +333,7 @@ secret = os.getenv("HMAC_SECRET")
 payload = '{"action": "search", "query": "documents"}'
 auth_headers = compute_hmac_signature(secret, payload)
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "hmac_protected",
         "transport": "http",
@@ -351,7 +353,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get data"}],
@@ -370,7 +372,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
     }]
 })
 
-# IterativeLLMAgentNode handles 401/403 by retrying or graceful fallback
+# PythonCodeNode handles 401/403 by retrying or graceful fallback
 ```
 
 ## Common Patterns
@@ -396,7 +398,7 @@ auth_config = {
 env = os.getenv("ENV", "development")
 config = auth_config[env]
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{"name": "api", "transport": "http", **config}]
 })
 ```
@@ -419,7 +421,7 @@ class CredentialRotator:
 
 rotator = CredentialRotator()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "api",
         "transport": "http",
@@ -431,13 +433,13 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 
 ## When to Use Each Method
 
-| Method | Use When | Security Level |
-|--------|----------|----------------|
-| **API Key** | Simple services, internal APIs | Medium |
-| **Bearer Token** | Short-lived access | Medium-High |
-| **JWT** | Stateless auth, microservices | High |
-| **OAuth 2.1** | Third-party access, delegated auth | Very High |
-| **HMAC** | Request integrity verification | Very High |
+| Method           | Use When                           | Security Level |
+| ---------------- | ---------------------------------- | -------------- |
+| **API Key**      | Simple services, internal APIs     | Medium         |
+| **Bearer Token** | Short-lived access                 | Medium-High    |
+| **JWT**          | Stateless auth, microservices      | High           |
+| **OAuth 2.1**    | Third-party access, delegated auth | Very High      |
+| **HMAC**         | Request integrity verification     | Very High      |
 
 ## Related Patterns
 
@@ -447,6 +449,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## When to Escalate to Subagent
 
 Use `mcp-specialist` subagent when:
+
 - Implementing OAuth 2.1 authorization flows
 - Setting up custom authentication schemes
 - Integrating with enterprise identity providers (LDAP, Active Directory)

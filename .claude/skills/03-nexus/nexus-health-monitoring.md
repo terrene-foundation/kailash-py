@@ -5,131 +5,221 @@ priority: HIGH
 tags: [nexus, health, monitoring, metrics, observability]
 ---
 
-# Nexus Health and Monitoring
+# Nexus Health Monitoring
 
-## Overview
+Monitor Nexus platform health, metrics, and performance.
 
-Nexus provides built-in health checking, metrics collection, alerting, and observability features. These enable production monitoring through standard health endpoints, configurable metrics backends, and custom health probes for application-specific components.
+## Basic Health Check
 
-## When to Use
+```python
+from nexus import Nexus
 
-- Deploying Nexus behind load balancers or orchestrators that require health endpoints
-- Monitoring workflow execution performance and error rates
-- Integrating with observability platforms (Prometheus, Grafana)
-- Setting up alerting for latency spikes or error rate thresholds
-- Diagnosing production issues with structured logging
+app = Nexus()
 
-## Architecture
-
-```
-Nexus Application
-    |
-    +-- Health Endpoint (/health)
-    |       +-- Platform status
-    |       +-- Registered workflow count
-    |       +-- Active session count
-    |       +-- Component health (custom probes)
-    |
-    +-- Metrics Endpoint (/metrics)
-    |       +-- Request counters
-    |       +-- Duration histograms
-    |       +-- Error rates
-    |       +-- Per-workflow breakdowns
-    |
-    +-- Alerting Engine
-            +-- Threshold-based alerts
-            +-- Custom alert handlers
+# Check platform health
+health = app.health_check()
+print(f"Status: {health['status']}")
+print(f"Workflows: {list(health['workflows'].keys())}")
 ```
 
-## Capabilities
+## Health Endpoints
 
-### Health Endpoints
+```bash
+# Basic health check
+curl http://localhost:8000/health
 
-| Endpoint           | Purpose                | Response                                                 |
-| ------------------ | ---------------------- | -------------------------------------------------------- |
-| `/health`          | Basic platform health  | Status, version, uptime, workflow count, session count   |
-| `/health/detailed` | Component-level health | Per-component status (API, database, cache) with latency |
+# Response
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "uptime": 3600,
+  "workflows": 5,
+  "active_sessions": 3
+}
 
-### Programmatic Health Check
+# Detailed health check
+curl http://localhost:8000/health/detailed
 
-The Nexus instance exposes a `health_check()` method that returns the current platform status, including workflow registry state and active sessions. This can be called without HTTP.
+# Response
+{
+  "status": "healthy",
+  "components": {
+    "api": {"status": "healthy", "latency": 12},
+    "database": {"status": "healthy"},
+    "cache": {"status": "healthy"}
+  },
+  "workflows": {
+    "total": 5,
+    "healthy": 5,
+    "unhealthy": 0
+  }
+}
+```
 
-### Custom Health Probes
+## Enable Monitoring
 
-Register custom health check functions for application-specific components:
+```python
+app = Nexus(
+    enable_monitoring=True,
+    monitoring_interval=60  # Check every 60 seconds
+)
 
-- Database connectivity
-- Cache availability
-- External service reachability
-- Custom business logic validation
+# Configure monitoring backend
+app.monitoring.backend = "prometheus"
+app.monitoring.interval = 30
+app.monitoring.metrics = ["requests", "latency", "errors"]
+```
 
-Each probe returns a status (healthy/unhealthy) and optional error details.
+## Prometheus Metrics
 
-### Monitoring Configuration
+```bash
+# Prometheus metrics endpoint
+curl http://localhost:8000/metrics
 
-| Setting             | Description                                          |
-| ------------------- | ---------------------------------------------------- |
-| Enable monitoring   | Toggle monitoring subsystem on/off                   |
-| Monitoring interval | How frequently health checks run (seconds)           |
-| Metrics backend     | Where metrics are exported (e.g., Prometheus)        |
-| Metric types        | Which metrics to collect (requests, latency, errors) |
+# Response (Prometheus format)
+# HELP nexus_requests_total Total requests
+# TYPE nexus_requests_total counter
+nexus_requests_total{workflow="my-workflow"} 123
 
-### Metrics
+# HELP nexus_request_duration_seconds Request duration
+# TYPE nexus_request_duration_seconds histogram
+nexus_request_duration_seconds_bucket{le="0.1"} 50
+nexus_request_duration_seconds_bucket{le="0.5"} 100
+```
 
-| Metric                       | Type      | Description                                  |
-| ---------------------------- | --------- | -------------------------------------------- |
-| Total requests               | Counter   | Cumulative request count per workflow        |
-| Request duration             | Histogram | Latency distribution with percentile buckets |
-| Error rate                   | Gauge     | Percentage of failed requests                |
-| Success rate                 | Gauge     | Percentage of successful requests            |
-| Per-workflow execution count | Counter   | Invocations per registered workflow          |
-| Per-workflow success rate    | Gauge     | Success percentage per workflow              |
+## Custom Health Checks
 
-Metrics are available in Prometheus exposition format at the `/metrics` endpoint when monitoring is enabled.
+```python
+# Add custom health check
+@app.health_check_handler("database")
+def check_database_health():
+    try:
+        # Check database connection
+        db.execute("SELECT 1")
+        return {"status": "healthy"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
 
-### Alerting
-
-Configure threshold-based alerts that fire when metrics exceed defined bounds:
-
-| Alert Type       | Trigger                                        |
-| ---------------- | ---------------------------------------------- |
-| High error rate  | Error percentage exceeds threshold (e.g., 5%)  |
-| High latency     | P95 latency exceeds threshold (e.g., 1 second) |
-| Low availability | Availability drops below threshold (e.g., 99%) |
-
-Alert handlers can dispatch notifications to external systems (email, Slack, PagerDuty) when thresholds are breached.
-
-### Logging
-
-| Setting    | Description                             |
-| ---------- | --------------------------------------- |
-| Log level  | Verbosity (DEBUG, INFO, WARNING, ERROR) |
-| Log format | Output format (text, JSON)              |
-| Log file   | Optional file output                    |
-
-Structured logging (JSON format) is recommended for production deployments to enable log aggregation and search.
+@app.health_check_handler("cache")
+def check_cache_health():
+    try:
+        cache.ping()
+        return {"status": "healthy"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+```
 
 ## Workflow Health Monitoring
 
-Beyond platform-level health, Nexus can track the health of individual workflows:
+```python
+class WorkflowHealthMonitor:
+    def __init__(self, nexus_app):
+        self.app = nexus_app
 
-- Test execution with minimal inputs to verify workflow availability
-- Aggregate per-workflow metrics (execution count, success rate, average duration)
-- Detect degradation in specific workflows without affecting overall platform health
+    def check_workflow_health(self, workflow_name):
+        """Check if workflow is healthy"""
+        try:
+            # Test execution with minimal inputs
+            result = self.app.execute_workflow(
+                workflow_name,
+                inputs={},
+                timeout=5
+            )
+            return result['success']
+        except:
+            return False
+
+    def get_all_workflow_health(self):
+        """Get health status of all workflows"""
+        health_status = {}
+        for workflow_name in self.app.workflows:
+            health_status[workflow_name] = self.check_workflow_health(workflow_name)
+        return health_status
+
+# Usage
+monitor = WorkflowHealthMonitor(app)
+status = monitor.get_all_workflow_health()
+print(f"Workflow health: {status}")
+```
+
+## Alerting
+
+```python
+# Configure alerting
+app.monitoring.enable_alerts = True
+app.monitoring.alert_thresholds = {
+    "error_rate": 0.05,  # 5% error rate
+    "latency_p95": 1.0,  # 1 second p95 latency
+    "availability": 0.99  # 99% availability
+}
+
+# Alert handlers
+@app.on_alert("high_error_rate")
+def handle_high_errors(alert):
+    print(f"ALERT: High error rate: {alert.value}")
+    # Send notification (email, Slack, PagerDuty, etc.)
+
+@app.on_alert("high_latency")
+def handle_high_latency(alert):
+    print(f"ALERT: High latency: {alert.value}s")
+```
+
+## Logging
+
+```python
+import logging
+
+# Configure logging
+app = Nexus(
+    log_level="INFO",
+    log_format="json",
+    log_file="nexus.log"
+)
+
+# Access logger
+logger = app.logger
+logger.info("Custom log message")
+logger.error("Error occurred", extra={"workflow": "my-workflow"})
+```
+
+## Performance Metrics
+
+```python
+# Get performance metrics
+metrics = app.get_metrics()
+
+print(f"Total requests: {metrics['requests_total']}")
+print(f"Avg latency: {metrics['latency_avg']}s")
+print(f"Error rate: {metrics['error_rate']}%")
+print(f"Success rate: {metrics['success_rate']}%")
+
+# Per-workflow metrics
+workflow_metrics = app.get_workflow_metrics("my-workflow")
+print(f"Workflow executions: {workflow_metrics['executions']}")
+print(f"Workflow success rate: {workflow_metrics['success_rate']}%")
+```
 
 ## Best Practices
 
-1. **Always enable monitoring in production** -- health endpoints are essential for orchestrators and load balancers
-2. **Set meaningful alert thresholds** -- based on baseline performance, not arbitrary numbers
-3. **Monitor all external dependencies** -- register custom probes for databases, caches, and APIs
-4. **Use structured logging** -- JSON format enables log aggregation and alerting
-5. **Track per-workflow metrics** -- a single failing workflow can hide behind healthy aggregate numbers
-6. **Implement graceful degradation** -- unhealthy components should reduce functionality, not crash the platform
+1. **Enable Monitoring in Production**
+2. **Set Appropriate Alert Thresholds**
+3. **Monitor All Components** (API, database, cache)
+4. **Track Workflow-Specific Metrics**
+5. **Use Structured Logging**
+6. **Implement Graceful Degradation**
+7. **Regular Health Checks**
 
-See language-specific variant for implementation details and code examples.
+## Key Takeaways
+
+- Health checks available at /health endpoint
+- Enable monitoring for production systems
+- Custom health checks for components
+- Prometheus metrics for observability
+- Alerting for proactive monitoring
+- Per-workflow health tracking
 
 ## Related Skills
 
-- [nexus-k8s-probes](nexus-k8s-probes.md) - Kubernetes-specific probe integration
-- [nexus-enterprise-features](nexus-enterprise-features.md) - Production features
-- [nexus-plugins](nexus-plugins.md) - Monitoring via plugins
+- [nexus-enterprise-features](#) - Production features
+- [nexus-production-deployment](#) - Deploy with monitoring
+- [nexus-troubleshooting](#) - Fix health issues

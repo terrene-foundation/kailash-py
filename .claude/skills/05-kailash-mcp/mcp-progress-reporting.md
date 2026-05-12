@@ -27,7 +27,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Process large dataset"}],

@@ -1,15 +1,11 @@
 ---
 name: nexus
-description: "Kailash Nexus — API+CLI+MCP platform; workflow deploy, sessions, K8s, OpenAPI, CSRF."
+description: "Kailash Nexus — MANDATORY for HTTP/API/CLI/MCP unified deployment. Direct FastAPI/Flask BLOCKED."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework
 
 Nexus is a zero-config multi-channel platform built on Kailash Core SDK that deploys workflows as API + CLI + MCP simultaneously.
-
-## When to Use
-
-Use Nexus when asking about Nexus, multi-channel, platform deployment, API deployment, CLI deployment, MCP deployment, unified sessions, workflow deployment, production deployment, API gateway, FastAPI alternative, session management, health monitoring, enterprise platform, plugins, event system, or workflow registration. Also covers K8s integration: K8s probes, healthz, readyz, startup probe, `ProbeManager`, `ProbeState`, OpenAPI, `openapi.json`, `OpenApiGenerator`, security headers, CSRF middleware, `CSRFMiddleware`, `SecurityHeadersMiddleware`, middleware presets, `Preset`, and HSTS.
 
 ## Features
 
@@ -21,7 +17,7 @@ Nexus transforms workflows into a complete platform with:
 - **Enterprise Features**: Health monitoring, plugins, event system, comprehensive logging
 - **DataFlow Integration**: Automatic CRUD API generation from database models
 - **Production Ready**: Deployment patterns, monitoring, troubleshooting guides
-- **FastAPI Alternative**: Workflow-based platform without manual route definition
+- **Zero-Config Platform**: Workflow-based platform without manual route definition
 - **Async-First**: Uses AsyncLocalRuntime by default for optimal performance
 
 ## Quick Start
@@ -51,7 +47,7 @@ app.start()
 - **[nexus-installation](nexus-installation.md)** - Installation and setup
 - **[nexus-architecture](nexus-architecture.md)** - Architecture overview
 - **[README](README.md)** - Framework overview
-- **[nexus-comparison](nexus-comparison.md)** - Nexus vs FastAPI/Flask
+- **[nexus-comparison](nexus-comparison.md)** - Nexus vs traditional frameworks
 
 ### Core Concepts
 
@@ -87,17 +83,13 @@ app.start()
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
 
-### M1 ML Integration (`nexus.ml`)
-
-The `nexus.ml` module wires kailash-ml dashboards and serving handles onto a Nexus app: `MLDashboard(auth="nexus")` reuses Nexus's validator adapter and contextvars, and `mount_ml_endpoints(nexus, serve_handle)` registers REST + MCP + WebSocket routes in one call. Live on branch `feat/kailash-ml-1.0.0-m1-foundations` (landed in `60081fed`). For ML-specific behavior, use skill **34-kailash-ml** as the authority.
-
 ## Key Concepts
 
 ### Zero-Config Platform
 
 Nexus eliminates boilerplate:
 
-- **No FastAPI routes** - Automatic API generation from workflows
+- **No manual routes** - Automatic API generation from workflows
 - **No CLI arg parsing** - Automatic CLI creation
 - **No MCP server setup** - Automatic MCP integration
 - **Unified deployment** - One command for all channels
@@ -138,7 +130,7 @@ Use Nexus when you need to:
 - Provide multiple access methods (API/CLI/MCP)
 - Build enterprise platforms quickly
 - Auto-generate CRUD APIs (with DataFlow)
-- Replace FastAPI/Flask with workflow-based platform
+- Replace traditional frameworks with workflow-based platform
 - Create multi-channel applications
 - Deploy AI agent platforms (with Kaizen)
 
@@ -213,13 +205,13 @@ app.start()
 
 ## Critical Rules
 
-- ✅ Use Nexus instead of FastAPI for workflow platforms
+- ✅ Use Nexus for workflow platforms
 - ✅ Register workflows, not individual routes
 - ✅ Leverage unified sessions across channels
 - ✅ Enable health monitoring in production
 - ✅ Use plugins for custom behavior
 - ✅ Nexus uses AsyncLocalRuntime by default (correct for Docker)
-- ❌ NEVER mix FastAPI routes with Nexus
+- ❌ NEVER mix raw HTTP routes with Nexus
 - ❌ NEVER implement manual API/CLI/MCP servers when Nexus can do it
 - ❌ NEVER skip health checks in production
 
@@ -275,4 +267,4 @@ For Nexus-specific questions, invoke:
 
 - `nexus-specialist` - Nexus implementation and deployment
 - `release-specialist` - Production deployment patterns
-- `decide-framework` skill - When to use Nexus vs other approaches
+- ``decide-framework` skill` - When to use Nexus vs other approaches

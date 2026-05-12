@@ -38,7 +38,7 @@ pip install kailash-dataflow
 ```
 
 ```python
-from dataflow import DataFlow
+from kailash.dataflow import DataFlow
 
 # Development (SQLite)
 db = DataFlow("sqlite:///dev.db")
@@ -88,36 +88,6 @@ workflow.add_node("UserUpdateNode", "update", {
 - Mock databases in Tier 2-3 tests
 - Skip risk assessment for HIGH/CRITICAL migrations
 
-## DataFlow 2.0 Patterns (2026-04-08)
-
-### Fabric cache is pluggable
-
-`FabricCacheBackend` ABC with `InMemoryFabricCacheBackend` (dev) and `RedisFabricCacheBackend` (production). Never construct a Redis client yourself — `FabricRuntime._get_or_create_redis_client()` shares one client across cache, leader, webhook.
-
-### Tenant isolation is mandatory
-
-`multi_tenant=True` models MUST supply `tenant_id` everywhere — Express cache keys, fabric cache keys, invalidation, metric labels. Missing tenant raises `TenantRequiredError`, never defaults silently.
-
-### FabricMetrics singleton
-
-`from dataflow.fabric.metrics import get_fabric_metrics` — 13 Prometheus metric families. Every subsystem dispatches through the singleton, never constructs its own counters. `/fabric/metrics` route registered via Nexus.
-
-### Webhook providers
-
-`WebhookConfig(provider="github")` selects one of 5 verifiers (generic, github, gitlab, stripe, slack). Each owns its upstream signature contract. The receiver dispatches, not routes.
-
-### Trust executor wired into Express reads
-
-`_trust_check_read` runs before every Express list/get/find_one. `_trust_record_success/failure` persists audit events. The executor was a 2,407-LOC orphan before 2.0 — now it runs on every query.
-
-### Correlation ID
-
-`from dataflow.observability import with_correlation_id` — ContextVar-based, per-asyncio-task. Every log line SHOULD include `extra={"correlation_id": get_correlation_id()}`.
-
-### ResourceWarning on async resources
-
-`FabricRuntime`, `PipelineExecutor`, `ConnectionManager` all implement `__del__` with `ResourceWarning` so leaked instances surface during `pytest -W error`.
-
 ## Architecture Quick Reference
 
 - **Not an ORM**: Workflow-native database framework
@@ -126,18 +96,12 @@ workflow.add_node("UserUpdateNode", "update", {
 - **ExpressDataFlow**: ~23x faster CRUD via `db.express`
 - **Trust-aware**: Signed audit records, trust-aware queries and multi-tenancy
 - **Data Fabric Engine**: External source integration, derived products, auto-generated endpoints
-- **Observability**: 908 structured log calls, 13 Prometheus families, correlation ID propagation
-
-## ML Integration Surface (dataflow 2.1.0+, M10 W31b)
-
-`dataflow.ml` — bridge module wiring DataFlow models into the `km.feature_store` point-in-time query surface. See `specs/dataflow-ml-integration.md` for the authoritative contract. Every feature-store model uses `ConnectionManager` + DataFlow models (NOT Express, which cannot express window functions). Origin: `feat/w31b-dataflow-ml-bridge` merged at `3d0ec507`.
 
 ## Related Agents
 
 - **nexus-specialist**: Integrate DataFlow with multi-channel platform
 - **pattern-expert**: Core SDK workflow patterns with DataFlow nodes
 - **testing-specialist**: 3-tier testing with real database infrastructure
-- **ml-specialist**: `km.feature_store` uses DataFlow models via `ConnectionManager`
 
 ## Full Documentation
 

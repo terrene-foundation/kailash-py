@@ -11,23 +11,133 @@ AI agent integration via Model Context Protocol (MCP).
 
 ## What is MCP?
 
-MCP (Model Context Protocol) exposes workflows as discoverable tools for AI agents like Claude, ChatGPT, and custom agents. Nexus runs an MCP server alongside the API server -- any registered workflow becomes an MCP tool automatically.
+MCP (Model Context Protocol) exposes workflows as discoverable tools for AI agents like Claude, ChatGPT, and custom agents.
 
-## Basic Setup
+## Basic MCP Integration
 
-```
+```python
+from nexus import Nexus
+from kailash.workflow.builder import WorkflowBuilder
+
+# Enable MCP channel
 app = Nexus(mcp_port=3001)
 
 # Workflows automatically become MCP tools
-app.register("github-lookup", workflow.build())
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "fetch", {
+    "url": "https://api.github.com/users/{{username}}",
+    "method": "GET"
+})
 
+app.register("github-lookup", workflow.build())
 app.start()
-# AI agents can now discover "github-lookup" on localhost:3001
+
+# Now discoverable by AI agents on localhost:3001
+```
+
+## Tool Metadata for AI Discovery
+
+```python
+# Add metadata for better AI understanding
+workflow = WorkflowBuilder()
+
+workflow.add_metadata({
+    "name": "github_user_lookup",
+    "description": "Look up GitHub user information by username",
+    "parameters": {
+        "username": {
+            "type": "string",
+            "description": "GitHub username to look up",
+            "required": True
+        }
+    },
+    "returns": {
+        "type": "object",
+        "description": "GitHub user profile information including name, bio, repos, followers"
+    }
+})
+
+workflow.add_node("HTTPRequestNode", "fetch", {
+    "url": "https://api.github.com/users/{{username}}",
+    "method": "GET"
+})
+
+app.register("github-lookup", workflow.build())
+```
+
+## MCP Client Usage
+
+```python
+import mcp_client
+
+# Connect to Nexus MCP server
+client = mcp_client.connect("http://localhost:3001")
+
+# Discover available tools
+tools = client.list_tools()
+print(f"Available tools: {[t['name'] for t in tools]}")
+
+# Execute tool
+result = client.call_tool("github-lookup", {
+    "username": "octocat"
+})
+
+print(result)
+```
+
+## MCP Configuration
+
+```python
+app = Nexus(
+    mcp_port=3001,
+    mcp_host="0.0.0.0"
+)
+
+# Fine-tune MCP behavior
+app.mcp.tool_caching = True        # Cache tool results
+app.mcp.batch_operations = True    # Batch tool calls
+app.mcp.async_execution = True     # Async execution
+app.mcp.timeout = 30               # Execution timeout
+```
+
+## AI Agent Structured Output
+
+```python
+# Format output for AI agents
+workflow.add_node("PythonCodeNode", "format_for_ai", {
+    "code": """
+def format_for_agents(data):
+    user = data.get('user', {})
+
+    # Structured data for AI consumption
+    return {
+        'tool_name': 'github_user_lookup',
+        'success': True,
+        'data': {
+            'username': user.get('login'),
+            'display_name': user.get('name'),
+            'description': user.get('bio'),
+            'metrics': {
+                'repositories': user.get('public_repos', 0),
+                'followers': user.get('followers', 0)
+            },
+            'profile_url': f"https://github.com/{user.get('login', '')}",
+            'avatar_url': user.get('avatar_url')
+        },
+        'metadata': {
+            'retrieved_at': __import__('datetime').datetime.now().isoformat(),
+            'source': 'github_api'
+        }
+    }
+
+result = format_for_agents(user_data)
+"""
+})
 ```
 
 ## Tool Discovery
 
-MCP clients discover tools automatically. Each registered workflow appears with its name and schema:
+MCP tools are automatically discoverable:
 
 ```json
 {
@@ -50,57 +160,25 @@ MCP clients discover tools automatically. Each registered workflow appears with 
 }
 ```
 
-## Tool Metadata
-
-Add metadata to workflows for better AI discovery and understanding. Metadata includes tool name, description, parameter descriptions, and return type documentation.
-
-The exact API for adding metadata varies by SDK (WorkflowBuilder metadata methods, handler descriptions, etc.). See language-specific variant for metadata API.
-
-## MCP Client Usage
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "github-lookup",
-    "arguments": { "username": "octocat" }
-  }
-}
-```
-
-## MCP Port Configuration
-
-```
-app = Nexus(mcp_port=3001)
-```
-
-The MCP server starts alongside the API server. Default port is 3001.
-
-## MCP Transport
-
-Nexus MCP supports bidirectional communication via `receive_message()` for custom MCP transports.
-
 ## Best Practices
 
-1. **Add rich descriptions** -- AI agents rely on descriptions to understand when and how to use tools
-2. **Use clear parameter names** -- descriptive names help AI agents construct correct calls
-3. **Structure outputs** -- return well-structured data (dicts/maps) for easy AI parsing
-4. **Include metadata** -- descriptions, parameter docs, and return type docs improve tool discovery
-5. **Handle errors gracefully** -- return structured error information rather than raw exceptions
-6. **Provide examples** -- include usage examples in descriptions where applicable
+1. **Add Rich Descriptions** for AI understanding
+2. **Structure Outputs** for easy parsing
+3. **Include Metadata** for context
+4. **Use Clear Parameter Names**
+5. **Provide Examples** in descriptions
+6. **Handle Errors Gracefully**
 
 ## Key Takeaways
 
-- Workflows automatically become MCP tools on registration
-- AI agents discover and execute tools via the MCP protocol
-- MCP server runs on a separate port (default 3001) alongside the API server
-- Tool metadata improves AI agent integration quality
-- Same workflow is accessible via API, CLI, and MCP simultaneously
-
-See language-specific variant for metadata API, MCP configuration options, and structured output examples.
+- Workflows automatically become MCP tools
+- AI agents discover and execute tools
+- Add metadata for better AI integration
+- Structure outputs for easy parsing
+- MCP enables agentic workflows
 
 ## Related Skills
 
-- [nexus-multi-channel](nexus-multi-channel.md) - MCP, API, CLI overview
-- [nexus-api-patterns](nexus-api-patterns.md) - REST API usage
-- [nexus-enterprise-features](nexus-enterprise-features.md) - Auth for MCP
+- [nexus-multi-channel](#) - MCP, API, CLI overview
+- [nexus-api-patterns](#) - REST API usage
+- [nexus-enterprise-features](#) - Auth for MCP

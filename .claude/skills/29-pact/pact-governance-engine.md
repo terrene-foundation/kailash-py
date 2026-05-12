@@ -91,8 +91,6 @@ verdict.to_dict()       # JSON-serializable dict
 5. Combine verdicts (most restrictive wins)
 6. Emit audit anchor
 
-**Critical: fail-closed without envelope.** A role with no `RoleEnvelope` attached produces a Blocked verdict because `compute_envelope` returns an error on an empty ancestor chain. This is the intended security posture (SPEC-06 §8). Tests that need AutoApproved MUST attach a permissive envelope (all dimensions `None`) via `engine.set_role_envelope()`.
-
 ### compute_envelope()
 
 ```python

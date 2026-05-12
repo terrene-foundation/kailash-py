@@ -1,3 +1,8 @@
+---
+name: project
+description: "Project Skills placeholder. Numbered skill directories carry the content; this slot is a redirect kept for parsers that require a project-named skill."
+---
+
 # Project Skills
 
 No project-specific skills. All skills have been moved to numbered directories:

@@ -65,14 +65,14 @@ agent = PlanningAgent(
 
 # RIGHT - OpenAI (100% schema compliance)
 agent = PlanningAgent(
-    llm_provider="openai",
-    model="gpt-4o-mini"
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"]
 )
 
 # RIGHT - Google Gemini (100% schema compliance, v0.8.2)
 agent = PlanningAgent(
-    llm_provider="google",
-    model="gemini-2.0-flash"
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"]
 )
 
 # RIGHT - Azure AI Foundry (100% schema compliance, v0.8.2)

@@ -20,7 +20,7 @@ PACT uses a three-layer envelope model to constrain agent actions across five di
 All dimensions use Pydantic models with `frozen=True` (immutable after creation).
 
 ```python
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
@@ -76,7 +76,7 @@ envelope = ConstraintEnvelopeConfig(
 Standing operating boundary set by a supervisor for a direct report.
 
 ```python
-from pact.governance.envelopes import RoleEnvelope
+from kailash.trust.pact.envelopes import RoleEnvelope
 
 role_env = RoleEnvelope(
     id="env-analyst-1",
@@ -95,7 +95,7 @@ engine.set_role_envelope(role_env)
 Ephemeral narrowing for a specific task. Auto-expires.
 
 ```python
-from pact.governance.envelopes import TaskEnvelope
+from kailash.trust.pact.envelopes import TaskEnvelope
 from datetime import datetime, UTC, timedelta
 
 task_env = TaskEnvelope(
@@ -124,7 +124,7 @@ Per-dimension rules follow XACML deny-overrides:
 | Communication | Set intersection of channels; `internal_only = a OR b`                       |
 
 ```python
-from pact.governance.envelopes import intersect_envelopes
+from kailash.trust.pact.envelopes import intersect_envelopes
 
 effective = intersect_envelopes(parent_envelope, child_envelope)
 # Result is the most restrictive combination of both
@@ -135,7 +135,7 @@ effective = intersect_envelopes(parent_envelope, child_envelope)
 Walks the accountability chain from root to role, intersecting all ancestor `RoleEnvelope`s, then applies any active `TaskEnvelope`.
 
 ```python
-from pact.governance.envelopes import compute_effective_envelope
+from kailash.trust.pact.envelopes import compute_effective_envelope
 
 effective = compute_effective_envelope(
     role_address="D1-R1-T1-R1",
@@ -150,7 +150,7 @@ effective = compute_effective_envelope(
 Before setting a child envelope, validate it does not exceed the parent:
 
 ```python
-from pact.governance.envelopes import RoleEnvelope, MonotonicTighteningError
+from kailash.trust.pact.envelopes import RoleEnvelope, MonotonicTighteningError
 
 try:
     RoleEnvelope.validate_tightening(
@@ -161,7 +161,47 @@ except MonotonicTighteningError as e:
     print(e)  # "Monotonic tightening violation(s): Financial: child max_spend_usd..."
 ```
 
-Checks: financial limits, confidentiality clearance, operational allowed_actions subset, max_delegation_depth.
+Checks all 7 dimensions: financial limits, confidentiality clearance, operational allowed_actions subset, max_delegation_depth, temporal active hours/blackouts, data access read/write paths, communication channels/internal_only.
+
+**None-handling**: If parent has a dimension constraint but child does not (unrestricted), that is a VIOLATION — child is wider. Data access paths are normalized via `normalize_resource_path()` before comparison.
+
+### Per-Dimension Gradient Thresholds
+
+```python
+from kailash.trust.pact.config import DimensionThresholds, GradientThresholdsConfig
+
+gradient = GradientThresholdsConfig(
+    financial=DimensionThresholds(
+        auto_approve_threshold=100.0,   # Below: AUTO_APPROVED
+        flag_threshold=500.0,           # Between: FLAGGED
+        hold_threshold=1000.0,          # Between: HELD, above: BLOCKED
+    ),
+)
+role_env = RoleEnvelope(
+    ...,
+    gradient_thresholds=gradient,
+)
+```
+
+Gradient tightening: child thresholds must be <= parent's per field.
+
+### Pass-Through Envelope Detection
+
+```python
+from kailash.trust.pact.envelopes import check_passthrough_envelope
+
+is_passthrough = check_passthrough_envelope(child_config, parent_config)
+# True if child adds no additional constraints — governance adds no value at this level
+```
+
+### Gradient Dereliction Detection
+
+```python
+from kailash.trust.pact.envelopes import check_gradient_dereliction
+
+warnings = check_gradient_dereliction(role_envelope, effective_envelope)
+# Warns when auto_approve_threshold >= 90% of effective financial limit (rubber-stamping)
+```
 
 ## NaN/Inf Protection
 
@@ -170,25 +210,27 @@ All numeric fields reject `NaN` and `Inf` values via `@field_validator` on Pydan
 ## Default Envelopes by Posture
 
 ```python
-from pact.governance.envelopes import default_envelope_for_posture
-from pact.governance.config import TrustPostureLevel
+from kailash.trust.pact.envelopes import default_envelope_for_posture
+from kailash.trust.pact.config import TrustPostureLevel
 
 env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
 # max_spend_usd=100.0, allowed_actions=["read", "write"], internal_only=True
 ```
 
-| Posture      | max_spend_usd | Allowed Actions            | Internal Only |
-| ------------ | ------------- | -------------------------- | ------------- |
-| PSEUDO_AGENT | 0             | read                       | Yes           |
-| SUPERVISED   | 100           | read, write                | Yes           |
-| SUPERVISED   | 1,000         | read, write, plan, propose | No            |
-| DELEGATING   | 10,000        | +execute, deploy           | No            |
-| AUTONOMOUS   | 100,000       | +approve, delegate         | No            |
+| Posture (canonical) | Autonomy | max_spend_usd | Allowed Actions            | Internal Only |
+| ------------------- | -------- | ------------- | -------------------------- | ------------- |
+| PSEUDO              | 1        | 0             | read                       | Yes           |
+| TOOL                | 2        | 50            | read, write                | Yes           |
+| SUPERVISED          | 3        | 1,000         | read, write, plan, propose | No            |
+| DELEGATING          | 4        | 10,000        | +execute, deploy           | No            |
+| AUTONOMOUS          | 5        | 100,000       | +approve, delegate         | No            |
+
+Old names (`PSEUDO_AGENT`, `SHARED_PLANNING`, `CONTINUOUS_INSIGHT`, `DELEGATED`) are accepted as enum aliases and via `_missing_()` for backward compatibility with serialized data.
 
 ## Degenerate Envelope Detection
 
 ```python
-from pact.governance.envelopes import check_degenerate_envelope
+from kailash.trust.pact.envelopes import check_degenerate_envelope
 
 warnings = check_degenerate_envelope(effective_envelope)
 # ["Operational: no allowed actions -- agent cannot perform any operations"]
@@ -198,9 +240,36 @@ warnings = check_degenerate_envelope(effective_envelope)
 
 `compute_effective_envelope_with_version()` returns an `EffectiveEnvelopeSnapshot` with a `version_hash` (SHA-256 of all contributor envelope versions). The engine includes this hash in every `GovernanceVerdict` for stale snapshot detection.
 
+## SignedEnvelope (Ed25519)
+
+Cryptographic proof that a specific authority approved an envelope configuration. Uses Ed25519 signing via `kailash.trust.signing.crypto`.
+
+```python
+from kailash.trust.pact.envelopes import SignedEnvelope, sign_envelope
+
+# Sign an envelope
+signed = sign_envelope(
+    envelope=constraint_config,
+    private_key=base64_ed25519_private_key,
+    signed_by="D1-R1",  # D/T/R address or key ID
+)
+
+# Verify (checks signature + expiry)
+valid = signed.verify(public_key=base64_ed25519_public_key)
+# Returns False on any error (fail-closed)
+```
+
+**Security properties:**
+
+- `frozen=True` -- immutable after creation
+- 90-day default expiry (`_SIGNED_ENVELOPE_EXPIRY_DAYS = 90`)
+- Fail-closed: expired signatures return `False`, any verification error returns `False`
+- Signature covers canonical JSON of envelope (`serialize_for_signing()`)
+- Ed25519 via PyNaCl (raises `ImportError` if not installed)
+
 ## Cross-References
 
 - `pact-governance-engine.md` -- engine.compute_envelope(), engine.set_role_envelope()
 - `pact-access-enforcement.md` -- confidentiality_clearance used in access checks
-- Source: `pact/governance/envelopes.py`
-- Source: `pact/governance/config.py`
+- Source: `src/kailash/trust/pact/envelopes.py` (including `SignedEnvelope`)
+- Source: `src/kailash/trust/pact/config.py`

@@ -35,7 +35,7 @@ with LocalRuntime() as runtime:
     results, run_id = runtime.execute(workflow.build())
 ```
 
-### Asynchronous Execution (Docker/Nexus)
+### Asynchronous Execution (Docker/async)
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -181,7 +181,7 @@ runtime = AsyncLocalRuntime(
 )
 
 # Execute with async context
-results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
 # All inherited methods available
 runtime.validate_workflow(workflow)         # ValidationMixin
@@ -246,7 +246,6 @@ See `STATE_OWNERSHIP_CONVENTION.md` for mixin development guidelines.
 
 ### Advanced References
 
-
 ## Performance Configuration
 
 Phase 0 optimizations reduce per-node execution overhead. Key configuration:
@@ -301,7 +300,7 @@ See `docs/guides/00-performance-optimizations.md` for full details.
 ## Quick Tips
 
 - Always use `runtime.execute(workflow.build())` - never `workflow.execute()`
-- Choose LocalRuntime for CLI/scripts, AsyncLocalRuntime for Docker/Nexus
+- Choose LocalRuntime for CLI/scripts, AsyncLocalRuntime for Docker/async
 - Both runtimes share the same configuration parameters and validation logic
 - Parameter resolution supports ${param} templates with type preservation
 - Use context manager (`with LocalRuntime() as runtime:`) for proper resource cleanup

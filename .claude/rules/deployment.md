@@ -1,18 +1,4 @@
----
-priority: 10
-scope: path-scoped
-paths:
-  - "deploy/**"
-  - ".github/**"
-  - "pyproject.toml"
-  - "CHANGELOG.md"
----
-
-# SDK Release Rules
-
-
 <!-- slot:neutral-body -->
-
 
 ## Before Any Release
 
