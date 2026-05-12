@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
@@ -396,6 +397,18 @@ class LLMAgentNode(Node):
                 type=str,
                 required=False,
                 description="Per-request base URL override (e.g., for proxy or custom endpoint)",
+            ),
+            "credential_ref": NodeParameter(
+                name="credential_ref",
+                type=str,
+                required=False,
+                description=(
+                    "Reference ID into the runtime CredentialStore (BYOK). "
+                    "Set by WorkflowGenerator when api_key/base_url were "
+                    "provided on BaseAgentConfig; resolved at execution time "
+                    "to a non-serializable Credential. Never contains the "
+                    "credential value itself."
+                ),
             ),
         }
 
