@@ -223,7 +223,7 @@ jobs:
           # Install root kailash editable first — new core modules may not be on PyPI yet
           # (per deployment.md MUST: sibling-package CI installs root SDK editable first)
           uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow[dev,sqlite]" --python .venv/bin/python
 
       - name: Test kailash-dataflow (full unit suite)
         timeout-minutes: 10
