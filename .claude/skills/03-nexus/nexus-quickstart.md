@@ -11,44 +11,42 @@ Zero-configuration platform deployment. Get running in 30 seconds.
 
 ## Instant Start
 
-```
+```python
 from nexus import Nexus
 
+# Zero configuration required
 app = Nexus()
 app.start()
 ```
 
-That creates:
+That's it! You now have:
 
 - API Server on `http://localhost:8000`
 - Health Check at `http://localhost:8000/health`
 - MCP Server on port 3001
 
-## Register a Workflow
+## Add Your First Workflow
 
-```
+```python
+from nexus import Nexus
+from kailash.workflow.builder import WorkflowBuilder
+
+# Create platform
 app = Nexus()
 
-# Build a workflow using the Core SDK WorkflowBuilder
-workflow = create_workflow()  # language-specific — see variant
+# Create workflow
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "fetch", {
+    "url": "https://httpbin.org/json",
+    "method": "GET"
+})
 
-# Register once, available on all channels
-app.register("fetch-data", workflow.build())  # MUST call .build()
+# Register once, available everywhere
+app.register("fetch-data", workflow.build())  # Must call .build()
 
+# Start platform
 app.start()
 ```
-
-## Register a Handler
-
-For simple operations, register a function directly instead of building a workflow:
-
-```
-app = Nexus()
-app.handler("greet", greet_function)
-app.start()
-```
-
-Decorator-style handler registration is also available in most SDKs. See language-specific variant for decorator syntax and signature details.
 
 ## Test All Three Channels
 
@@ -73,25 +71,25 @@ nexus run fetch-data
 }
 ```
 
-## Critical Rules
+## Critical Patterns
 
 ### Always Call .build()
 
-```
+```python
 # CORRECT
 app.register("workflow-name", workflow.build())
 
-# WRONG — will fail
+# WRONG - Will fail
 app.register("workflow-name", workflow)
 ```
 
 ### Correct Parameter Order
 
-```
-# CORRECT — name first, workflow second
+```python
+# CORRECT - name first, workflow second
 app.register("name", workflow.build())
 
-# WRONG — reversed
+# WRONG - reversed
 app.register(workflow.build(), "name")
 ```
 
@@ -99,28 +97,56 @@ app.register(workflow.build(), "name")
 
 ### Port Conflicts
 
-```
+```python
+# Use custom ports if defaults are taken
 app = Nexus(api_port=8001, mcp_port=3002)
+```
+
+### Import Errors
+
+```bash
+pip install kailash-nexus
 ```
 
 ### Workflow Not Found
 
-Ensure `.build()` is called before passing the workflow to `register()`.
+```python
+# Ensure .build() is called
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "test", {"code": "result = {'ok': True}"})
+app.register("test", workflow.build())  # Don't forget .build()
+```
+
+## Handler Pattern (Recommended)
+
+For simple workflows, use `@app.handler()` instead of WorkflowBuilder:
+
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+@app.handler("greet", description="Greeting handler")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    return {"message": f"{greeting}, {name}!"}
+
+app.start()
+```
+
+See [nexus-handler-support](nexus-handler-support.md) for full details.
 
 ## Next Steps
 
-- Register handlers: See [nexus-handler-support](nexus-handler-support.md)
-- Registration patterns: See [nexus-workflow-registration](nexus-workflow-registration.md)
-- Multiple channels: See [nexus-multi-channel](nexus-multi-channel.md)
-- DataFlow integration: See [nexus-dataflow-integration](nexus-dataflow-integration.md)
-- Authentication: See [nexus-auth-plugin](nexus-auth-plugin.md)
+- **Use handlers** (recommended): See [nexus-handler-support](nexus-handler-support.md)
+- Add parameters: See [nexus-workflow-registration](nexus-workflow-registration.md)
+- Use multiple channels: See [nexus-multi-channel](nexus-multi-channel.md)
+- Integrate DataFlow: See [nexus-dataflow-integration](nexus-dataflow-integration.md)
+- Add authentication: See [nexus-auth-plugin](nexus-auth-plugin.md)
 
 ## Key Takeaways
 
-- Zero configuration: `Nexus()` and go
-- Always call `.build()` before registration
+- Zero configuration: Just `Nexus()` and go
+- Always call `.build()` before registration (or use `@app.handler()`)
 - Single registration creates API + CLI + MCP
 - Default ports: 8000 (API), 3001 (MCP)
-- Decorator patterns and route-style endpoints available (see language-specific variant)
-
-See language-specific variant for complete code examples with imports, node types, and decorator patterns.
+- `cors_allow_credentials=False` by default (security)

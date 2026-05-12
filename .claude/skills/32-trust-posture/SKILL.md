@@ -1,6 +1,6 @@
 ---
 name: 32-trust-posture
-description: Graduated trust posture system — five autonomy levels (L1 PSEUDO_AGENT → L5 DELEGATED), violation tracking, automatic downgrade, earned upgrade. MANDATORY consult when authoring rules in /codify, designing /redteam audits, interpreting /implement gates, or asking "should this rule trigger a downgrade?". Auto-loads on /codify, /redteam, /implement, /sweep. Without this skill, rules ship without severity tags / grace periods / downgrade triggers, and the trust system silently degrades to un-instrumented enforcement.
+description: "Graduated trust posture (L1-L5). MANDATORY at /codify, /redteam, /implement. Without: rules ship untagged."
 ---
 
 # Trust Posture — Implementation Skill

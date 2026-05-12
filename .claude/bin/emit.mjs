@@ -207,6 +207,18 @@ export function stripSlotMarkers(raw) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// Rule frontmatter strip (CDX-1: per-rule frontmatter blocks repeated in body)
+// ────────────────────────────────────────────────────────────────
+// Source rules carry a leading frontmatter block declaring `priority:`
+// and `scope:` (validator-14 enforces the pair). The block is metadata
+// for the emitter — Codex/Gemini consume the rendered baseline as
+// instruction prose, so the `---\npriority: 0\nscope: baseline\n---`
+// block must not survive into the emitted body.
+export function stripRuleFrontmatter(raw) {
+  return raw.replace(/^---\n[\s\S]*?\n---\n?/, "");
+}
+
+// ────────────────────────────────────────────────────────────────
 // Overlay application (per variant-authoring.md Rule 1)
 // ────────────────────────────────────────────────────────────────
 // applyOverlay is imported from ./lib/slot-parser.mjs — shared with
@@ -334,6 +346,18 @@ export function loadBudgetTolerance() {
   return m ? parseInt(m[1], 10) / 100 : 0.3;
 }
 
+// Block threshold from sync-manifest.yaml per_rule_budget_block_threshold
+// (v6 §A.2 + §2.2). When a rule's emitted bytes exceed budget * (1 +
+// block_threshold), emission MUST hard-fail — the WARN tier is the
+// drift-signal; the BLOCK tier is the contract. Pre-Shard-D, only the
+// WARN path was wired; zero-tolerance.md ran +64% over budget unchecked.
+export function loadBudgetBlockThreshold() {
+  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
+  const src = fs.readFileSync(manifestPath, "utf8");
+  const m = src.match(/per_rule_budget_block_threshold:\s*"\+(\d+)%"/);
+  return m ? parseInt(m[1], 10) / 100 : 0.3;
+}
+
 // Load warn_cap_bytes + block_cap_bytes from sync-manifest.yaml per CLI.
 // The manifest is the single source of truth for the caps; the hardcoded
 // constants that used to live in emitBaseline (WARN_CAP=32768, BLOCK_CAP=61440)
@@ -390,26 +414,47 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
   const crit = getCritBaseline();
   const budgets = loadPerRuleBudgets();
   const tolerance = loadBudgetTolerance();
+  const blockThreshold = loadBudgetBlockThreshold();
   const perRuleReport = [];
   const chunks = [];
   const allWarnings = [];
   const budgetWarnings = [];
+  const budgetBlockViolations = [];
 
   for (const rule of crit) {
     const { composed, warnings } = composeRule(rule, cli, lang);
-    const abridged = abridgeV6(composed);
+    const fmStripped = stripRuleFrontmatter(composed);
+    const abridged = abridgeV6(fmStripped);
     const cleaned = stripSlotMarkers(abridged);
     const bytes = Buffer.byteLength(cleaned, "utf8");
 
     // Per-rule budget check per sync-manifest.yaml §per_rule_size_budget_bytes.
-    // Outside ±tolerance → WARN (doesn't block emission, but surfaces drift).
-    // Rules in the baseline set must have a budget entry; missing is a WARN.
+    // Outside ±tolerance → WARN (drift signal).
+    // Over budget * (1 + block_threshold) → BLOCK (contract violation;
+    //   per spec v6 §A.2, prevents one CRIT rule from monopolizing the
+    //   total emission budget). Pre-Shard-D, only the WARN path was
+    //   wired and zero-tolerance.md ran +64% over budget unchecked.
     let budgetStatus = "no_budget";
     if (budgets.has(rule)) {
       const budget = budgets.get(rule);
       const tolHigh = Math.floor(budget * (1 + tolerance));
       const tolLow = Math.floor(budget * (1 - tolerance));
-      if (bytes > tolHigh) {
+      const blockHigh = Math.floor(budget * (1 + blockThreshold));
+      if (bytes > blockHigh) {
+        budgetStatus = "block";
+        const overByPct = ((bytes / budget - 1) * 100).toFixed(1);
+        budgetBlockViolations.push({
+          rule,
+          bytes,
+          budget,
+          block_threshold_bytes: blockHigh,
+          over_by_bytes: bytes - blockHigh,
+          over_by_pct: Number(overByPct),
+        });
+        budgetWarnings.push(
+          `${rule}: ${bytes}B BLOCKS budget ${budget}B (+${blockThreshold * 100}% block_threshold = ${blockHigh}B); over by ${bytes - blockHigh}B (+${overByPct}% of budget)`,
+        );
+      } else if (bytes > tolHigh) {
         budgetStatus = "over";
         budgetWarnings.push(
           `${rule}: ${bytes}B over budget ${budget}B (+${tolerance * 100}% = ${tolHigh}B); over by ${bytes - tolHigh}B`,
@@ -434,11 +479,21 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
       budget: budgets.get(rule) || null,
       budget_status: budgetStatus,
     });
-    chunks.push(`\n# ${rule}\n\n${cleaned}`);
+    // CDX-3: drop the redundant `# <filename>.md` H1 prefix — each rule's
+    // own H1 (e.g. `# Zero-Tolerance Rules`) is more descriptive and the
+    // `---` inter-rule separator below provides structural boundary.
+    // CDX-1 fix: stripRuleFrontmatter() above prevents the `---\npriority:`
+    // block from showing up where the file-name H1 used to live.
+    chunks.push(cleaned);
     if (warnings.length) allWarnings.push({ rule, warnings });
   }
 
-  const emission = chunks.join("\n---\n");
+  // CDX-2: append a closing `---` so the document ends with a clean
+  // structural terminator rather than the trailing prose of the last
+  // rule. `chunks.join` only places separators *between* chunks; without
+  // this the final byte lands inside Rule 6a's "Why" paragraph and the
+  // file looks truncated to a Codex/Gemini reader.
+  const emission = chunks.join("\n---\n\n").replace(/\n+$/, "") + "\n\n---\n";
   const emissionBytes = Buffer.byteLength(emission, "utf8");
 
   // v6 caps — load from sync-manifest.yaml (single source of truth). The
@@ -484,6 +539,7 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
       headroom_bytes: headroomBytesForReport,
       headroom_pct: headroomPctForReport,
       budget_warnings: budgetWarnings,
+      budget_block_violations: budgetBlockViolations,
       per_rule: perRuleReport,
       warnings: allWarnings,
       dry_run: true,
@@ -508,6 +564,7 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
         rules_emitted: crit.length,
         per_rule: perRuleReport,
         budget_warnings: budgetWarnings,
+        budget_block_violations: budgetBlockViolations,
         warnings: allWarnings,
       },
       null,
@@ -543,6 +600,8 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
     block_cap_bytes: BLOCK_CAP,
     headroom_bytes: headroomBytes,
     headroom_pct: Number(headroomPct.toFixed(2)),
+    budget_warnings: budgetWarnings,
+    budget_block_violations: budgetBlockViolations,
   };
 }
 
@@ -673,39 +732,69 @@ export function validateRuleFrontmatter() {
 // ────────────────────────────────────────────────────────────────
 // POLICIES writeback to .codex-mcp-guard/
 // ────────────────────────────────────────────────────────────────
-// Runs extract-policies on .claude/hooks/, writes the POLICIES JSON
-// next to server.js, flips POLICIES_POPULATED=true. Orchestrator
-// filtering (drop main-like Shape A orchestrators from the policy
-// set) happens here before the JSON is written.
+// Runs extract-policies on .claude/hooks/. Writes TWO files (CDX-5 fix,
+// Shard B 2026-05-10):
+//
+//   policies.json                — RUNTIME shape consumed by server.js
+//                                  ({version, source_dir, policies}).
+//                                  loadPolicies() in server.js (line 71-89)
+//                                  reads `raw.policies[t]` for each wrapped
+//                                  tool; this writer must match that shape.
+//   extract-policies.dump.json   — AUDIT shape for V13 introspection
+//                                  ({predicates, shape_summary,
+//                                   orchestrators_filtered, policies_predicates}).
+//                                  Sidecar; not loaded at runtime.
+//
+// Pre-Shard-B: this function wrote the audit shape to filename
+// `policies.json`, while the on-disk `.claude/codex-mcp-guard/policies.json`
+// (manually populated) carried the runtime shape. Same filename, two
+// schemas — CDX-5 finding from the 2026-05-10 audit. If a /sync ever
+// shipped this function's output to the codex-mcp-guard runtime
+// directory, server.js would silently see no policies and fail-closed-
+// refuse-to-start.
+//
+// Orchestrator filter per spec v6 §4.4 "Why Shape B is load-bearing":
+// Shape A orchestrator functions (`main`, top-level entry points) are
+// filtered as non-policy. Policies must be Shape B/C/D — Shape A's
+// `main` is the script entry, not a guard predicate.
 export function wireMcpPolicies(outDir) {
   const hooksDir = path.join(REPO, ".claude", "hooks");
   const extracted = extractPolicies(hooksDir);
 
-  // Orchestrator filter per spec v6 §4.4 "Why Shape B is load-bearing":
-  // Shape A orchestrator functions (`main`, top-level entry points) are
-  // filtered as non-policy. Policies must be Shape B or Shape C.
-  const policies = extracted.predicates.filter((p) => {
+  const filteredPredicates = extracted.predicates.filter((p) => {
     if (p.shape === "A" && p.id === "main") return false;
     return true;
   });
 
-  const policyJson = {
+  // Runtime shape — what server.js::loadPolicies consumes.
+  const runtimeJson = {
+    version: 1,
+    source_dir: path.relative(REPO, hooksDir),
+    policies: extracted.policies,
+  };
+
+  // Audit shape — V13 introspection, /cli-audit Phase 2 input.
+  const auditJson = {
     version: 1,
     generated_at: new Date().toISOString(),
     source_dir: hooksDir,
     shape_summary: {
-      A: policies.filter((p) => p.shape === "A").length,
-      B: policies.filter((p) => p.shape === "B").length,
-      C: policies.filter((p) => p.shape === "C").length,
+      A: filteredPredicates.filter((p) => p.shape === "A").length,
+      B: filteredPredicates.filter((p) => p.shape === "B").length,
+      C: filteredPredicates.filter((p) => p.shape === "C").length,
+      D: filteredPredicates.filter((p) => p.shape === "D").length,
     },
-    orchestrators_filtered: extracted.predicates.length - policies.length,
-    predicates: policies,
+    orchestrators_filtered: extracted.predicates.length - filteredPredicates.length,
+    predicates: filteredPredicates,
+    policies_predicates: extracted.policies_predicates,
   };
 
   fs.mkdirSync(outDir, { recursive: true });
-  const policiesPath = path.join(outDir, "policies.json");
-  safeWriteFileSync(policiesPath, JSON.stringify(policyJson, null, 2));
-  return policiesPath;
+  const runtimePath = path.join(outDir, "policies.json");
+  const auditPath = path.join(outDir, "extract-policies.dump.json");
+  safeWriteFileSync(runtimePath, JSON.stringify(runtimeJson, null, 2) + "\n");
+  safeWriteFileSync(auditPath, JSON.stringify(auditJson, null, 2) + "\n");
+  return runtimePath;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -797,6 +886,24 @@ function main() {
       for (const w of result.budget_warnings) {
         process.stderr.write(`  ${w}\n`);
       }
+    }
+    if (result.budget_block_violations && result.budget_block_violations.length > 0) {
+      // Per-rule budget BLOCK — spec v6 §A.2 + sync-manifest.yaml
+      // per_rule_budget_block_threshold. ANY rule over budget * (1 +
+      // block_threshold) is a hard fail; emission is wrong by contract,
+      // not just over a soft target. Closes CDX-7 (2026-05-10 audit).
+      overallPass = false;
+      process.stderr.write(
+        `[${cli}] per-rule budget BLOCK (${result.budget_block_violations.length} rule${result.budget_block_violations.length > 1 ? "s" : ""} exceed block_threshold):\n`,
+      );
+      for (const v of result.budget_block_violations) {
+        process.stderr.write(
+          `  ${v.rule}: ${v.bytes}B over budget ${v.budget}B by +${v.over_by_pct}% (block_threshold ${v.block_threshold_bytes}B); over by ${v.over_by_bytes}B\n`,
+        );
+      }
+      process.stderr.write(
+        `[${cli}] remediation: per spec v6 §A.2, abridge the offending rule (move long examples to .claude/guides/rule-extracts/<rule>.md), tighten the per-rule budget, or demote the rule to path-scoped.\n`,
+      );
     }
     if (result.tier === "BLOCK") {
       overallPass = false;

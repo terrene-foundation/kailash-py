@@ -60,5 +60,5 @@ merge_result = root.merge_child_results(child)
 
 ## Reference
 
-- Spec: Kaizen L3 scoped context brief
+- Spec: `workspaces/kaizen-l3/briefs/02-scoped-context.md`
 - Source: `kaizen/l3/context/`

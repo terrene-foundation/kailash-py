@@ -109,6 +109,8 @@ function detectRepoScopeDriftBash(command, cwd) {
 }
 ```
 
+**Pairs with** `rules/probe-driven-verification.md` MUST-4: lexical hook detectors MAY use regex BUT MUST be paired with a probe-driven gate-review counterpart at `/codify` validation. Hooks alone cannot resolve semantic claims; probes are the authoritative verdict.
+
 **BLOCKED rationalizations:**
 
 - "The regex is tight, false positives are rare"

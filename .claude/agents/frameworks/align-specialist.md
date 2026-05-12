@@ -163,12 +163,8 @@ pip install kailash-align[online]   # + fast generation (vllm, CUDA only)
 pip install kailash-align[all]      # Everything
 ```
 
-## ML Integration Surface (align 0.6.0+, M10 W32b)
-
-`kailash_align.ml` — fine-tuning-as-training-engine namespace: LoRA Lightning callback + W30 RL-bridge trajectory unification (`trajectory_from_alignment_run` converts `AlignmentResult` → `RLLineage`). See `specs/align-ml-integration.md` + `specs/ml-rl-align-unification.md`. Fine-tuning runs dispatch through the same Trainable protocol as classical ML. Origin: `feat/w32b-align-ml-namespace` merged at `09bc2cac`.
-
 ## Cross-References
 
 - `.claude/agents/frameworks/kaizen-specialist.md` — KaizenModelBridge integration
-- `.claude/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML); LoRA callback and trajectory bridge both live in `kailash_align.ml`
+- `.claude/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
 - `.claude/skills/04-kaizen/` — Kaizen Delegate patterns

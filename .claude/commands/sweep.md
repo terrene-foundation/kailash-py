@@ -60,9 +60,20 @@ Surface: drafts >7d, PRs with red CI (never merge red — fix in same branch per
 
 `/redteam` re-derived as a repo-wide sweep. Use `skills/spec-compliance/SKILL.md` protocol — AST/grep verification, never file existence.
 
-Sweep 5 MUST invoke `tools/sweep-redteam.py` (or the equivalent at `tools/` for the consumer project's language) and embed its sentinel comment + findings into the sweep report. Substituting `tools/spec-cite-check.py` or any other proxy for the mandated per-spec symbol + Tier 2 coverage verification is BLOCKED — see `rules/sweep-completeness.md` for the human-gate requirement when proxy substitution is genuinely warranted. The TOOL is BUILD-local (each repo owns `tools/`); the SKILL text mandates the invocation pattern.
+**Pre-condition check (run FIRST):** Sweep 5 only applies in repos that have BOTH (a) at least one `workspaces/*/specs/` directory containing per-workspace specs AND (b) `tools/sweep-redteam.py` (or language equivalent under `tools/`). If EITHER is absent, the repo is in **orchestration mode** (loom, USE templates) — Sweep 5 logs the sentinel `<!-- sweep-redteam:v1:N/A reason=orchestration-mode no_specs=<bool> no_tool=<bool> -->` into the sweep report and Sweep 5 is complete. This is NOT a substitution decision (no proxy is run); it is a structural N/A, recorded explicitly so future readers can grep the sentinel.
+
+When BOTH conditions hold (BUILD repos: kailash-py, kailash-rs), Sweep 5 MUST invoke `tools/sweep-redteam.py` (or the equivalent at `tools/` for the consumer project's language) and embed its sentinel comment + findings into the sweep report. Substituting `tools/spec-cite-check.py` or any other proxy for the mandated per-spec symbol + Tier 2 coverage verification is BLOCKED — see `rules/sweep-completeness.md` for the human-gate requirement when proxy substitution is genuinely warranted. The TOOL is BUILD-local (each repo owns `tools/`); the SKILL text mandates the invocation pattern.
 
 ```bash
+# Pre-condition gate
+spec_count=$(find workspaces/*/specs -type d -mindepth 1 2>/dev/null | wc -l | tr -d ' ')
+tool_present=$([ -f tools/sweep-redteam.py ] && echo true || echo false)
+if [ "$spec_count" = "0" ] || [ "$tool_present" = "false" ]; then
+  echo "<!-- sweep-redteam:v1:N/A reason=orchestration-mode no_specs=$([ $spec_count = 0 ] && echo true || echo false) no_tool=$([ $tool_present = false ] && echo true || echo false) -->"
+  exit 0  # Sweep 5 complete
+fi
+
+# BUILD-mode: run per-workspace
 for ws in workspaces/*/; do
   [ -d "$ws/specs" ] && echo "WORKSPACE: $ws"
 done

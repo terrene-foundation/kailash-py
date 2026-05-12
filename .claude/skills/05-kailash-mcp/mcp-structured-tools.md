@@ -30,7 +30,7 @@ from kailash.runtime import LocalRuntime
 workflow = WorkflowBuilder()
 
 # MCP server with structured tools
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get weather for NYC and London"}],
@@ -74,7 +74,7 @@ results, run_id = runtime.execute(workflow.build())
 ### Complex Type Validation
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search documents"}],
@@ -129,7 +129,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ### Nested Objects and Arrays
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "crm",
         "transport": "http",
@@ -180,7 +180,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Output Schema Validation
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "analytics",
         "transport": "http",
@@ -225,7 +225,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Conditional Schemas
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "payment",
         "transport": "http",
@@ -277,7 +277,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Schema Reuse with Definitions
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "inventory",
         "transport": "http",
@@ -397,10 +397,10 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Error Handling
 
 ```python
-# IterativeLLMAgentNode automatically validates inputs
+# PythonCodeNode automatically validates inputs
 # If validation fails, it includes error in response
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search with invalid params"}],
@@ -434,6 +434,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## When to Escalate to Subagent
 
 Use `mcp-specialist` subagent when:
+
 - Implementing complex conditional schemas (oneOf, anyOf, allOf)
 - Creating reusable schema libraries
 - Building schema validation middleware

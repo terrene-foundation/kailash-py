@@ -110,7 +110,7 @@ Each `@db.model` automatically creates:
 | ------------------------- | ------------------ | ------------------------------------------------------------- |
 | **{Model}CreateNode**     | Single insert      | `{"name": "John", "email": "john@example.com"}`               |
 | **{Model}ReadNode**       | Single select      | `{"id": 123}` or `{"filter": {"email": "alice@example.com"}}` |
-| **{Model}UpdateNode**     | Single update      | `{"id": 123, "name": "Jane"}`                                 |
+| **{Model}UpdateNode**     | Single update      | `{"filter": {"id": 123}, "fields": {"name": "Jane"}}`         |
 | **{Model}DeleteNode**     | Single delete      | `{"id": 123}` or `{"soft_delete": True}`                      |
 | **{Model}ListNode**       | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}`               |
 | **{Model}UpsertNode**     | Insert or update   | `{"data": {"email": "a@b.com"}, "match_fields": ["email"]}`   |
@@ -386,9 +386,9 @@ app.start()
 
 - **Model definition**: [`dataflow-models`](dataflow-models.md)
 - **Query patterns**: [`dataflow-queries`](dataflow-queries.md)
-- **Bulk operations**: [`dataflow-bulk-ops`](dataflow-bulk-ops.md)
-- **Nexus integration**: [`dataflow-nexus-integration`](../../5-cross-cutting/integrations/dataflow-nexus-integration.md)
-- **Migration guide**: [`dataflow-migration-quick`](dataflow-migration-quick.md)
+- **Bulk operations**: [`dataflow-bulk-operations`](dataflow-bulk-operations.md)
+- **Nexus integration**: [`dataflow-nexus-integration`](dataflow-nexus-integration.md)
+- **Migration guide**: [`dataflow-migrations-quick`](dataflow-migrations-quick.md)
 
 ## When to Escalate to Subagent
 

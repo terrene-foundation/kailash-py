@@ -65,5 +65,5 @@ router.route(completion)
 
 ## Reference
 
-- Spec: Kaizen L3 messaging brief
+- Spec: `workspaces/kaizen-l3/briefs/03-messaging.md`
 - Source: `kaizen/l3/messaging/`

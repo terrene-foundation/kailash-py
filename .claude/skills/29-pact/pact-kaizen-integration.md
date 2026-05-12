@@ -10,9 +10,9 @@ PACT governance integrates with Kaizen agent teams through adapters, audit chain
 ## Wrapping a Kaizen Agent
 
 ```python
-from pact.governance.engine import GovernanceEngine
-from pact.governance.agent import PactGovernedAgent, GovernanceBlockedError
-from pact.governance.config import TrustPostureLevel
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.agent import PactGovernedAgent, GovernanceBlockedError
+from kailash.trust.pact.config import TrustPostureLevel
 
 # 1. Build governance engine from org definition
 engine = GovernanceEngine(org_definition)
@@ -44,7 +44,7 @@ except GovernanceBlockedError as e:
 Bridges PACT governance envelopes to trust-layer `ConstraintEnvelope` for backward compatibility with Kaizen's `ExecutionRuntime` and `GradientEngine`.
 
 ```python
-from pact.governance.envelope_adapter import GovernanceEnvelopeAdapter, EnvelopeAdapterError
+from kailash.trust.pact.envelope_adapter import GovernanceEnvelopeAdapter, EnvelopeAdapterError
 
 adapter = GovernanceEnvelopeAdapter(engine=engine)
 
@@ -76,8 +76,8 @@ except EnvelopeAdapterError as e:
 Thread-safe tamper-evident chain of audit anchors for governance decisions.
 
 ```python
-from pact.governance.audit import AuditChain, AuditAnchor, PactAuditAction
-from pact.governance.config import VerificationLevel
+from kailash.trust.pact.audit import AuditChain, AuditAnchor, PactAuditAction
+from kailash.trust.pact.config import VerificationLevel
 
 # Create audit chain
 chain = AuditChain(chain_id="acme-governance")
@@ -144,8 +144,8 @@ is_valid, error_msg = engine.verify_audit_integrity()
 Evaluates actions against constraint dimensions independently from the main engine. Useful for pre-flight checks or custom evaluation.
 
 ```python
-from pact.governance.gradient import GradientEngine, EvaluationResult
-from pact.governance.config import (
+from kailash.trust.pact.gradient import GradientEngine, EvaluationResult
+from kailash.trust.pact.config import (
     VerificationGradientConfig,
     GradientRuleConfig,
     VerificationLevel,
@@ -192,7 +192,7 @@ for dim in result.dimensions:
 Load org definitions from YAML for Kaizen agent team configuration.
 
 ```python
-from pact.governance.yaml_loader import load_org_yaml, LoadedOrg
+from kailash.trust.pact.yaml_loader import load_org_yaml, LoadedOrg
 
 loaded: LoadedOrg = load_org_yaml("org-config.yaml")
 loaded.org_definition   # OrgDefinition
@@ -265,7 +265,7 @@ org:
 - `pact-governance-engine.md` -- GovernanceEngine API
 - `pact-governed-agents.md` -- PactGovernedAgent wrapping pattern
 - `pact-envelopes.md` -- envelope model consumed by adapter
-- Source: `pact/governance/envelope_adapter.py`
-- Source: `pact/governance/audit.py`
-- Source: `pact/governance/gradient.py`
-- Source: `pact/governance/yaml_loader.py`
+- Source: `src/kailash/trust/pact/envelope_adapter.py`
+- Source: `src/kailash/trust/pact/audit.py`
+- Source: `src/kailash/trust/pact/gradient.py`
+- Source: `src/kailash/trust/pact/yaml_loader.py`

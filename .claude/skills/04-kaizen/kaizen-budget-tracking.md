@@ -12,7 +12,6 @@ Two components work together for budget-aware governance:
 
 **Source modules**:
 
-
 ---
 
 ## BudgetTracker
@@ -155,7 +154,7 @@ usd = microdollars_to_usd(1_500_000)       # 1.5
 
 ```python
 from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
-from kailash.trust.postures import PostureStateMachine, TrustPosture
+from kailash.trust.posture import PostureStateMachine, TrustPosture
 from kaizen.governance.posture_budget import PostureBudgetIntegration
 
 # 1. Create budget tracker
@@ -262,7 +261,7 @@ For production budget management, use `BudgetTracker` + `PostureBudgetIntegratio
 
 ```python
 from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
-from kailash.trust.postures import PostureStateMachine, TrustPosture
+from kailash.trust.posture import PostureStateMachine, TrustPosture
 from kaizen.governance.posture_budget import PostureBudgetIntegration
 
 # Setup

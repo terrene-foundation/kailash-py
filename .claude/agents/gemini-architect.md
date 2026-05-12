@@ -16,9 +16,8 @@ Peer to cc-architect and codex-architect. Owns the Gemini-facing substrate of ev
 OWNER:
 
 - `.gemini/**` — Gemini config tree: `settings.json`, `GEMINI.md`, `agents/`, `commands/`, `skills/`, `extensions/`, `policies/`, `storage/`. Repo-local; user-global at `~/.gemini/`; system-wide at `/etc/gemini-cli/settings.json` (Linux) or `/Library/Application Support/GeminiCli/` (macOS)
-- `bin/coc-*` gemini variants — generated shell wrappers from `.claude/wrappers/*.sh.template` with Gemini-native primitives
 - `.gemini/agents/<specialist>.md` — native subagent definitions, one per CC specialist (dataflow, nexus, kaizen, mcp, pact, ml, align, etc.)
-- `.gemini/commands/<name>.toml` — TOML slash commands (NOT Markdown — diverges from CC and Codex)
+- `.gemini/commands/<name>.toml` — TOML slash commands (NOT Markdown — diverges from CC and Codex). This is the canonical Gemini slash-command surface — bash-wrapper emission to `bin/coc-*` was deferred at Shard C (2026-05-10, journal/0006) and is no longer the architect's responsibility.
 - `.gemini/skills/<nn-name>/SKILL.md` — progressive-disclosure skills (same contract as CC SKILL.md)
 - `.geminiignore` — mirror of `.gitignore` patterns for context-loading exclusions
 
@@ -33,7 +32,7 @@ CONSUMER (read-only at emit time):
 ## Primary Responsibilities
 
 1. **Emit** `GEMINI.md` under the v6 abridgement_protocol from `.claude/sync-manifest.yaml → cli_variants.context/root.md.gemini`. Per v6 §2.2, gemini inherits codex's abridgement_protocol (WARN 32 KiB, BLOCK 60 KiB) as the baseline cap. Gemini-specific cap data can refine this if empirical measurement diverges.
-2. **Generate** shell wrappers at `bin/coc-{name}` for the Gemini runtime, applying Gemini-native primitive overrides where they exist (e.g., emit TOML slash command alongside shell wrapper).
+2. **Native slash-command surface** — emit `.gemini/commands/<name>.toml` per Phase J2+. Bash-wrapper emission to `bin/coc-*` was deferred at Shard C 2026-05-10 (journal/0006-DECISION-wrapper-emission-disposition-strip.md) — same evidence and disposition as the codex side. Native TOML commands cover all 28 slash-command surfaces.
 3. **Apply** slot overlays from `.claude/variants/gemini/**` and `.claude/variants/<lang>-gemini/**` when emitting baseline context + rules. The Gemini `@<agent>` directive form is the expected divergence point for the `examples` slot per `rules/cross-cli-parity.md`.
 4. **Honor** parity contract: every rule's `neutral-body` slot MUST be byte-identical to the CC and Codex emissions; only the `examples` slot may diverge to carry Gemini-native delegation syntax.
 5. **Register** agents in `.gemini/agents/` with correct YAML frontmatter (`name`, `description` required; `tools`, `model` optional). Invocation syntax is `@<agent-name> <task>` — native, not convention.

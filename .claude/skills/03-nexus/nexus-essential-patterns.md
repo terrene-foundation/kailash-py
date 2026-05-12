@@ -1,88 +1,87 @@
 ---
 skill: nexus-essential-patterns
-description: Essential code patterns for Nexus setup, registration, DataFlow integration, middleware, and configuration
+description: Essential code patterns for Nexus setup, handler registration, DataFlow integration, connections, and middleware
 priority: HIGH
 tags: [nexus, patterns, setup, handler, dataflow, middleware, configuration]
 ---
 
 # Nexus Essential Patterns
 
-Quick-reference for the most common Nexus operations using shared API.
+Quick-reference code patterns for the most common Nexus operations.
 
 ## Basic Setup
 
-```
+```python
+from nexus import Nexus
 app = Nexus()
 app.register("workflow_name", workflow.build())  # ALWAYS .build()
 app.start()
 ```
 
-## Handler Registration
+## Handler Registration (Recommended)
 
-### Imperative (Shared API)
+Bypasses PythonCodeNode sandbox restrictions. Simpler syntax, automatic parameter derivation, multi-channel deployment from a single function.
 
-```
+```python
+from nexus import Nexus
+
 app = Nexus()
-app.handler("process", process_func)
+
+# Decorator pattern
+@app.handler("greet", description="Greeting handler")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    """Direct async function as multi-channel workflow."""
+    return {"message": f"{greeting}, {name}!"}
+
+# Non-decorator pattern
+async def process(data: dict) -> dict:
+    return {"result": data}
+
+app.register_handler("process", process)
 app.start()
 ```
 
-### Decorator (Language-Specific)
+**Why Use Handlers?**
 
-Decorator-style handler registration is available in most SDKs. The exact syntax varies. See language-specific variant for decorator patterns.
-
-**Why use handlers?**
-
-- Bypasses sandbox restrictions on code nodes
+- Bypasses PythonCodeNode sandbox restrictions
 - No import blocking (use any library)
 - Automatic parameter derivation from function signature
 - Multi-channel deployment (API/CLI/MCP) from single function
 
 ## DataFlow Integration (CRITICAL)
 
-```
-app = Nexus(auto_discovery=False)  # CRITICAL: prevents startup blocking
+```python
+# CORRECT: Fast, non-blocking
+app = Nexus(auto_discovery=False)  # CRITICAL
+
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=True,  # default: Works in Docker/Nexus
+)
 ```
 
 **WARNING**: Without `auto_discovery=False`, Nexus blocks on startup when DataFlow is present.
 
-## Middleware & Plugin API
+## API Input Access in PythonCodeNode
 
-These APIs are shared across all SDKs:
+```python
+# CORRECT: Use try/except in PythonCodeNode
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+try:
+    sector = sector  # From API inputs
+except NameError:
+    sector = None
+result = {'filters': {'sector': sector} if sector else {}}
+"""
+})
 
-```
-# Add middleware
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
-
-# Include existing routers
-app.include_router(legacy_router, prefix="/legacy")
-
-# Add plugins (NexusPlugin protocol)
-app.add_plugin(auth_plugin)
-```
-
-## Presets
-
-```
-app = Nexus(preset="saas")
-app = Nexus(preset="enterprise")
+# WRONG: inputs.get() doesn't exist
 ```
 
-Presets apply one-line middleware stacks for common deployment profiles.
+## Connection Pattern
 
-## Configuration Quick Reference
-
-| Use Case          | Config                                             |
-| ----------------- | -------------------------------------------------- |
-| **With DataFlow** | `Nexus(auto_discovery=False)`                      |
-| **Standalone**    | `Nexus()`                                          |
-| **With Preset**   | `Nexus(preset="saas")`                             |
-| **Custom Ports**  | `Nexus(api_port=8000, mcp_port=3001)`              |
-| **Full Features** | `Nexus(auto_discovery=False)` + `add_plugin(auth)` |
-
-## Connection Pattern (WorkflowBuilder)
-
-```
+```python
 # CORRECT: Explicit connections with dot notation
 workflow.add_connection("prepare", "result.filters", "search", "filter")
 
@@ -90,21 +89,73 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 # "filter": "${prepare.result}"
 ```
 
-## Health Check
+## Middleware & Plugin API (v1.4.1)
 
+```python
+# Native middleware (Starlette-compatible)
+app.add_middleware(CORSMiddleware, allow_origins=["*"])
+
+# Include existing routers
+app.include_router(legacy_router, prefix="/legacy")
+
+# Plugin protocol (NexusPluginProtocol)
+app.add_plugin(auth_plugin)
+
+# Preset system (one-line config)
+app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 ```
-health = app.health_check()
-```
 
-```bash
-curl http://localhost:8000/health
-```
+## Configuration Quick Reference
 
-## Key Rules
+| Use Case          | Config                                                        |
+| ----------------- | ------------------------------------------------------------- |
+| **With DataFlow** | `Nexus(auto_discovery=False)`                                 |
+| **Standalone**    | `Nexus()`                                                     |
+| **With Preset**   | `Nexus(preset="saas")`                                        |
+| **With CORS**     | `Nexus(cors_origins=["..."], cors_allow_credentials=False)`   |
+| **Full Features** | `Nexus(auto_discovery=False)` + `app.add_plugin(auth_plugin)` |
 
-1. **Always call `.build()`** before registering workflows
-2. **`auto_discovery=False`** when integrating with DataFlow
-3. **Explicit connections** -- NOT template syntax `${...}`
-4. **Test all three channels** (API, CLI, MCP) during development
+## Handler Support Details
 
-See language-specific variant for decorator syntax, sandbox configuration, input mapping patterns, and complete code examples.
+### Core Components
+
+**HandlerNode** (`kailash.nodes.handler`):
+
+- Core SDK node that wraps async/sync functions
+- Automatic parameter derivation from function signatures
+- Type annotation mapping to NodeParameter entries
+- Seamless WorkflowBuilder integration
+
+**make_handler_workflow()** utility:
+
+- Builds single-node workflow from handler function
+- Configures workflow-level input mappings
+- Returns ready-to-execute Workflow instance
+
+**Registration-Time Validation** (`_validate_workflow_sandbox`):
+
+- Detects PythonCodeNode/AsyncPythonCodeNode with blocked imports
+- Emits warnings at registration time (not runtime)
+- Helps developers migrate to handlers for restricted code
+
+**Configurable Sandbox Mode**:
+
+- `sandbox_mode="strict"`: Blocks restricted imports (default)
+- `sandbox_mode="permissive"`: Allows all imports (test/dev only)
+- Set via PythonCodeNode/AsyncPythonCodeNode parameter
+
+### Key Files
+
+- `tests/unit/nodes/test_handler_node.py` - 22 SDK unit tests
+
+### Migration Note
+
+**Type Mapping Limitation**: `_derive_params_from_signature()` maps complex generics (e.g., `List[dict]`) to `str`. Use plain `list` instead.
+
+## MCP Transport
+
+- **`receive_message()`**: MCP transport supports `receive_message()` for bidirectional communication in custom MCP transports
+
+## Performance & Monitoring
+
+- **SQLite CARE Audit Storage** (current): Nexus creates `AsyncLocalRuntime()` with `enable_monitoring=True` (default), so all workflow executions automatically get CARE audit persistence to SQLite WAL-mode database. Zero in-loop I/O (~35us/node overhead) with post-execution ACID flush.

@@ -214,7 +214,7 @@ except Exception as exc:
 
 ## Behavioral Test Vectors
 
-45+ cross-SDK conformance tests define the canonical security behavior across Python and Rust SDKs (documented in kaizen-agents behavioral test vectors research).
+45+ cross-SDK conformance tests define the canonical security behavior across Python and Rust SDKs. See `workspaces/kaizen-agents/01-analysis/01-research/13-behavioral-test-vectors.md`.
 
 ## Related
 

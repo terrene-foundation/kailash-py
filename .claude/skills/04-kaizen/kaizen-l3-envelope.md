@@ -86,6 +86,6 @@ if verdict.zone in ("auto_approved", "flagged"):
 
 ## Reference
 
-- Spec: Kaizen L3 envelope extensions brief
+- Spec: `workspaces/kaizen-l3/briefs/01-envelope-extensions.md`
 - Source: `kaizen/l3/envelope/`
 - Tests: `tests/unit/l3/envelope/`

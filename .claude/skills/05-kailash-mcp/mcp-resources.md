@@ -29,7 +29,7 @@ from kailash.runtime import LocalRuntime
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
     "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Get document content"}],
@@ -51,7 +51,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Resource Templates
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "db",
         "transport": "http",
@@ -78,7 +78,7 @@ workflow.add_node("IterativeLLMAgentNode", "agent", {
 ## Resource Subscriptions
 
 ```python
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [{
         "name": "metrics",
         "transport": "websocket",

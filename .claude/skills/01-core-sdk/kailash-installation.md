@@ -16,7 +16,7 @@ Complete guide for installing the Kailash SDK using pip, poetry, virtual environ
 
 - **Basic Install**: `pip install kailash`
 - **Poetry**: `poetry add kailash`
-- **With All Dependencies**: `pip install kailash`
+- **With All Dependencies**: `pip install kailash[all]`
 - **Python Requirement**: 3.8+
 - **Verify**: Import `WorkflowBuilder` and `LocalRuntime`
 
@@ -49,8 +49,8 @@ pip install kailash
 # Install specific version
 pip install kailash==0.9.25
 
-# All standard dependencies are included in the base install
-pip install kailash
+# Install with all optional dependencies
+pip install kailash[all]
 ```
 
 ### Option 2: Poetry Installation (Recommended)
@@ -96,7 +96,7 @@ pip install -r requirements.txt
 | **Poetry**          | Team projects, dependency management | `poetry add kailash`                        |
 | **Virtual env**     | Isolated development                 | `python -m venv env && pip install kailash` |
 | **Docker**          | Production, infrastructure           | `docker-compose up -d`                      |
-| **Full install**    | All standard dependencies            | `pip install kailash`                       |
+| **With extras**     | Full feature set                     | `pip install kailash[all]`                  |
 
 ## Common Mistakes
 
@@ -136,15 +136,16 @@ python my_script.py  # Now works
 ### ❌ Mistake 3: Missing Dependencies
 
 ```python
-# Wrong - Missing optional dependencies
-from kailash.nodes.ai import LLMAgentNode  # ImportError: No module named 'openai'
+# Wrong - kailash.nodes.ai does not exist
+# For LLM integration, use Kaizen agents (pip install kailash-kaizen)
+# or PythonCodeNode with direct API calls
 ```
 
 ### ✅ Fix: Install With Dependencies
 
 ```bash
-# Correct - Reinstall (all standard dependencies included)
-pip install kailash
+# Correct - Install all optional dependencies
+pip install kailash[all]
 ```
 
 ## Verification Test
@@ -176,6 +177,7 @@ print(f"Run ID: {run_id}")
 
 ## When to Escalate to Subagent
 
+Use `analyst` subagent when:
 
 - Installation fails with complex errors
 - Need custom installation for enterprise environments
@@ -200,7 +202,7 @@ Use `release-specialist` subagent when:
 | Issue                                    | Cause                           | Solution                                                |
 | ---------------------------------------- | ------------------------------- | ------------------------------------------------------- |
 | `ImportError: No module named 'kailash'` | Wrong Python environment        | Verify: `pip list \| grep kailash`, reinstall if needed |
-| `ModuleNotFoundError: pydantic`          | Missing dependencies            | Reinstall: `pip install kailash`                        |
+| `ModuleNotFoundError: pydantic`          | Missing dependencies            | Install with extras: `pip install kailash[all]`         |
 | `Python version incompatible`            | Python < 3.8                    | Upgrade to Python 3.8+                                  |
 | Docker services not starting             | Port conflicts or Docker issues | Run: `docker-compose down -v && docker-compose up -d`   |
 
@@ -208,13 +210,13 @@ Use `release-specialist` subagent when:
 
 - 💡 **Use virtual environments**: Isolate project dependencies to avoid conflicts
 - 💡 **Check Python version first**: Ensure Python 3.8+ before installation
-- 💡 **All standard deps included**: `pip install kailash` includes trust, database, monitoring, and more
+- 💡 **Install with [all] for development**: Get all optional dependencies upfront
 - 💡 **Verify installation immediately**: Run test workflow to confirm setup
 - 💡 **Use poetry for teams**: Better dependency management and reproducibility
 
 ## Version Notes
 
-- **v0.9.25+**: AsyncLocalRuntime now default for Docker/async contexts
+- **v0.9.25+**: AsyncLocalRuntime now default for Docker/async
 - **v0.9.20+**: String-based nodes became recommended pattern
 - **v0.8.0+**: Python 3.8+ required
 

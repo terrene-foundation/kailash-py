@@ -82,8 +82,9 @@ python -c "from nexus import Nexus; print('OK')"
 
 **Solution**:
 
-```
-# Configure authentication (method varies by SDK — see language-specific variant)
+```python
+# Configure authentication
+app = Nexus(enable_auth=True)
 
 # For API requests, include auth header
 curl -X POST http://localhost:8000/workflows/test/execute \
@@ -119,12 +120,7 @@ curl -X POST http://localhost:8000/workflows/test/execute \
 # Create session before use
 session_id = app.create_session(channel="api")
 
-# Or extend timeout
-app.session_manager.extend_timeout(session_id, 600)
-
-# Check session exists
-if not app.session_manager.exists(session_id):
-    print("Session expired or invalid")
+# Sessions expire after inactivity — create a new one if expired
 ```
 
 ### 8. Slow Startup
@@ -193,8 +189,8 @@ workflow.add_connection(
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-# Or in Nexus
-app = Nexus(log_level="DEBUG")
+# Nexus uses standard Python logging — configure before creating Nexus()
+app = Nexus()
 ```
 
 ### 2. Add Debug Nodes
@@ -225,10 +221,6 @@ curl http://localhost:8000/health/detailed
 ```python
 # List registered workflows
 print("Registered workflows:", list(app.workflows.keys()))
-
-# Get workflow details
-workflow_info = app.get_workflow_info("my-workflow")
-print(workflow_info)
 ```
 
 ### 5. Test Individual Nodes
@@ -309,39 +301,31 @@ grep "my-workflow" nexus.log
 ### Slow API Responses
 
 ```python
-# Check workflow execution time
-metrics = app.get_workflow_metrics("workflow-name")
-print(f"Avg execution time: {metrics['avg_execution_time']}s")
-
 # Optimize workflow
 # - Remove unnecessary nodes
 # - Optimize PythonCodeNode code
 # - Add caching
 # - Use async operations
+# - Enable debug logging to identify bottleneck nodes
 ```
 
 ### High Memory Usage
 
 ```python
-# Check session cleanup
-app.session_manager.cleanup_expired()
-
-# Configure session limits
-app = Nexus(
-    session_max_age=1800,  # 30 minutes
-    session_cleanup_interval=300  # 5 minutes
-)
+# Nexus manages session cleanup internally
+# Reduce memory by limiting registered workflows and using auto_discovery=False
+app = Nexus(auto_discovery=False)
 ```
 
 ### High CPU Usage
 
 ```python
-# Check concurrent requests
-metrics = app.get_metrics()
-print(f"Concurrent requests: {metrics['concurrent_requests']}")
+# High CPU is typically caused by expensive workflow nodes
+# Profile with debug logging to identify bottleneck nodes
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
-# Limit concurrency
-app.api.max_concurrent_requests = 50
+# Consider offloading heavy computation to async background tasks
 ```
 
 ## Getting Help
@@ -351,7 +335,9 @@ app.api.max_concurrent_requests = 50
 ### 2. Enable Verbose Logging
 
 ```python
-app = Nexus(log_level="DEBUG", log_format="json")
+import logging
+logging.basicConfig(level=logging.DEBUG)
+app = Nexus()
 ```
 
 ### 3. Check GitHub Issues
