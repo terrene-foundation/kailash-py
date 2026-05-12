@@ -548,10 +548,21 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             node_config["model"] = self.config.model
         if self.config.llm_provider is not None:
             node_config["provider"] = self.config.llm_provider
+        # Route generation params into the declared `generation_config` dict.
+        # LLMAgentNode.get_parameters() declares `generation_config: dict`
+        # (description: "Generation parameters (temperature, max_tokens, top_p)")
+        # and llm_agent.py reads ONLY generation_config at runtime — top-level
+        # `temperature` / `max_tokens` are not declared NodeParameters and the
+        # Kailash validator (`src/kailash/nodes/base.py:_validate_inputs`) flags
+        # them as "Unknown parameter" on EVERY execution because
+        # BaseAgentConfig.temperature defaults to 0.1 (non-None).
+        generation_config: Dict[str, Any] = {}
         if self.config.temperature is not None:
-            node_config["temperature"] = self.config.temperature
+            generation_config["temperature"] = self.config.temperature
         if self.config.max_tokens is not None:
-            node_config["max_tokens"] = self.config.max_tokens
+            generation_config["max_tokens"] = self.config.max_tokens
+        if generation_config:
+            node_config["generation_config"] = generation_config
         if self.config.provider_config is not None:
             node_config["provider_config"] = self.config.provider_config
         if self.config.response_format is not None:
