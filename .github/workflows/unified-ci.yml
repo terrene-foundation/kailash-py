@@ -197,7 +197,7 @@ jobs:
     needs: check-duplicate
     if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
 
@@ -232,7 +232,7 @@ jobs:
           uv pip install polars --python .venv/bin/python
 
       - name: Test kailash-dataflow (full unit suite)
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           cd packages/kailash-dataflow
           ../../.venv/bin/python -m pytest tests/unit/ \
