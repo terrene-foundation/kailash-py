@@ -15,6 +15,8 @@ Tests dataclasses and methods:
 """
 
 import pytest
+from kailash.workflow.builder import WorkflowBuilder
+
 from dataflow import DataFlow
 from dataflow.platform.inspector import (
     Inspector,
@@ -25,8 +27,6 @@ from dataflow.platform.inspector import (
     WorkflowValidationReport,
     WorkflowVisualizationData,
 )
-
-from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture
@@ -543,12 +543,18 @@ class TestWorkflowSummaryMethod:
         assert summary.complexity_score > 0
 
     def test_with_complex_workflow(self, inspector_with_complex_workflow):
-        """Test workflow_summary() with complex workflow."""
+        """Test workflow_summary() with complex workflow.
+
+        Inspector includes every declared workflow node (including isolated)
+        since commit caccf762 (2026-04-17). Fixture declares 7 nodes total:
+        entry + branch1/2/3 + bottleneck + exit + isolated.
+        """
         summary = inspector_with_complex_workflow.workflow_summary()
-        # workflow.build() excludes isolated nodes - only 6 connected nodes
-        assert summary.node_count == 6
+        assert summary.node_count == 7
         assert summary.connection_count == 7
         assert len(summary.entry_points) >= 1
+        assert "isolated" in summary.entry_points  # no incoming edges
+        assert "isolated" in summary.exit_points  # no outgoing edges
         assert summary.max_depth > 0
         assert summary.complexity_score > 0
 
@@ -578,13 +584,17 @@ class TestWorkflowMetricsMethod:
         assert metrics.critical_path_length >= 0
 
     def test_with_complex_workflow(self, inspector_with_complex_workflow):
-        """Test workflow_metrics() with complex workflow."""
+        """Test workflow_metrics() with complex workflow.
+
+        Inspector includes every declared workflow node (including isolated)
+        since commit caccf762 (2026-04-17). Fixture has 7 nodes; the
+        "isolated" node has zero edges and surfaces in metrics.isolated_nodes.
+        """
         metrics = inspector_with_complex_workflow.workflow_metrics()
-        # workflow.build() excludes isolated nodes - only 6 connected nodes
-        assert metrics.total_nodes == 6
+        assert metrics.total_nodes == 7
         assert metrics.total_connections == 7
-        # No isolated nodes (excluded by workflow.build())
-        assert len(metrics.isolated_nodes) == 0
+        # The "isolated" node has no connections and surfaces as isolated
+        assert metrics.isolated_nodes == ["isolated"]
         # Entry node has high fan-out (3 branches)
         assert len(metrics.bottleneck_nodes) == 0  # Not high enough for threshold
 
@@ -657,10 +667,14 @@ class TestWorkflowVisualizationDataMethod:
             assert "target_param" in edge
 
     def test_with_complex_workflow(self, inspector_with_complex_workflow):
-        """Test workflow_visualization_data() with complex workflow."""
+        """Test workflow_visualization_data() with complex workflow.
+
+        Inspector includes every declared workflow node (including isolated)
+        since commit caccf762 (2026-04-17). Fixture has 7 declared nodes;
+        the isolated node appears in visualization data with no edges.
+        """
         viz_data = inspector_with_complex_workflow.workflow_visualization_data()
-        # workflow.build() excludes isolated nodes - only 6 connected nodes
-        assert len(viz_data.nodes) == 6
+        assert len(viz_data.nodes) == 7
         assert len(viz_data.edges) == 7
         # Check entry/exit flags
         entry_nodes = [node for node in viz_data.nodes if node["is_entry"]]
