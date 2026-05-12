@@ -25,6 +25,7 @@ import warnings
 import pytest
 
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -150,4 +151,70 @@ async def test_execute_sync_wait_for_failure_does_not_leak_coroutine(
         assert not offenders, (
             "wait_for cancel-before-start path left a coroutine un-awaited "
             f"(issue #942 regression). Offenders: {offenders}"
+        )
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_async_local_runtime_cleanup_wait_for_failure_does_not_leak_coroutine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same-bug-class sibling of #942 in ``AsyncLocalRuntime.cleanup()``.
+
+    ``AsyncLocalRuntime`` is the production-async runtime used by Docker /
+    FastAPI / Nexus deployments — see ``rules/patterns.md`` § "Async vs Sync
+    Runtime". Its ``cleanup()`` coroutine disposed AsyncSQL pools via
+    ``await asyncio.wait_for(_clear_pools(graceful=True), timeout=5.0)``.
+    When ``asyncio.wait_for`` raises BEFORE driving the inner coroutine
+    (broken / monkeypatched wait_for that swallows its coro arg, or
+    CancelledError mid-await), the inner ``_clear_pools(graceful=True)``
+    coroutine is orphaned and Python emits
+    ``RuntimeWarning: coroutine 'clear_shared_pools' was never awaited``.
+
+    This is the SAME failure-mode class as the two sites already fixed in
+    ``LocalRuntime`` (``_cleanup_event_loop`` and ``_execute_sync``
+    teardown) and the fix shape is identical: bind the inner coroutine to
+    a local var and close it in ``finally``.
+
+    The test forces the failure mode by monkeypatching ``asyncio.wait_for``
+    to raise BEFORE driving its coroutine argument. Pre-fix this leaks
+    the ``clear_shared_pools`` coroutine un-awaited; post-fix the
+    ``finally`` block closes ``_inner`` defensively so no warning surfaces.
+    """
+    real_clear = AsyncSQLDatabaseNode.clear_shared_pools
+    real_wait_for = asyncio.wait_for
+
+    # Sanity: ensure the cleanup path will construct a coroutine.
+    assert asyncio.iscoroutinefunction(real_clear)
+
+    def failing_wait_for(coro, timeout):  # noqa: D401
+        # Simulate a wait_for that fails BEFORE driving its inner coro
+        # AND does NOT close the coro arg. Pre-fix this leaks ``coro``
+        # un-awaited; post-fix the cleanup's ``finally`` block closes
+        # ``_inner`` defensively.
+        raise asyncio.TimeoutError("simulated cancel-before-start")
+
+    monkeypatch.setattr(asyncio, "wait_for", failing_wait_for)
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+
+        runtime = AsyncLocalRuntime()
+        try:
+            await runtime.cleanup()
+        finally:
+            # Restore wait_for so subsequent tests are unaffected.
+            monkeypatch.setattr(asyncio, "wait_for", real_wait_for)
+
+        offenders = [
+            str(w.message)
+            for w in recorded
+            if issubclass(w.category, RuntimeWarning)
+            and "never awaited" in str(w.message).lower()
+            and ("wait_for" in str(w.message) or "clear_shared_pools" in str(w.message))
+        ]
+        assert not offenders, (
+            "AsyncLocalRuntime.cleanup() left an un-awaited coroutine when "
+            f"asyncio.wait_for raised pre-drive (issue #942 sibling). "
+            f"Offenders: {offenders}"
         )

@@ -1913,7 +1913,25 @@ class AsyncLocalRuntime(LocalRuntime):
 
             _clear_pools = getattr(AsyncSQLDatabaseNode, "clear_shared_pools", None)
             if _clear_pools is not None:
-                await asyncio.wait_for(_clear_pools(graceful=True), timeout=5.0)
+                # Bind the inner coroutine so we can close it in
+                # ``finally`` if ``asyncio.wait_for`` raises BEFORE
+                # driving it (e.g., monkeypatched wait_for that
+                # swallows its coro arg, or CancelledError mid-await).
+                # Without this, the orphaned coroutine emits
+                # ``RuntimeWarning: coroutine 'clear_shared_pools'
+                # was never awaited``. Sibling fix to LocalRuntime
+                # ``_cleanup_event_loop`` and ``_execute_sync``
+                # teardown paths landed for issue #942.
+                _inner = _clear_pools(graceful=True)
+                try:
+                    await asyncio.wait_for(_inner, timeout=5.0)
+                finally:
+                    _inner_close = getattr(_inner, "close", None)
+                    if _inner_close is not None:
+                        try:
+                            _inner_close()
+                        except Exception:
+                            pass
         except Exception as e:
             logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
         try:
