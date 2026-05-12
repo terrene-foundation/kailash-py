@@ -1,3 +1,8 @@
+---
+name: management
+description: "Management skills — internal COC infrastructure: sync mappings, transformation rules between BUILD repos and COC templates."
+---
+
 # Management Skills
 
 ## Quick Patterns

@@ -10,18 +10,24 @@
     "deny": [
       "Edit(.claude/learning/posture.json)",
       "Edit(.claude/learning/posture.json.bak)",
+      "Edit(.claude/learning/posture.json.tmp.*)",
       "Edit(.claude/learning/violations.jsonl)",
       "Edit(.claude/learning/violations.jsonl.*)",
       "Edit(.claude/learning/.initialized)",
+      "Edit(.claude/learning/.posture-upgrade-nonce)",
       "Write(.claude/learning/posture.json)",
       "Write(.claude/learning/posture.json.bak)",
+      "Write(.claude/learning/posture.json.tmp.*)",
       "Write(.claude/learning/violations.jsonl)",
       "Write(.claude/learning/violations.jsonl.*)",
       "Write(.claude/learning/.initialized)",
+      "Write(.claude/learning/.posture-upgrade-nonce)",
       "Bash(rm:.claude/learning/posture*)",
       "Bash(rm:.claude/learning/violations*)",
+      "Bash(rm:.claude/learning/.posture-upgrade-nonce)",
       "Bash(mv:.claude/learning/posture*)",
-      "Bash(mv:.claude/learning/violations*)"
+      "Bash(mv:.claude/learning/violations*)",
+      "Bash(mv:.claude/learning/.posture-upgrade-nonce)"
     ]
   },
   "hooks": {

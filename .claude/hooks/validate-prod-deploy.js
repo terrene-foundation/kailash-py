@@ -19,6 +19,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const { emit } = require(path.join(__dirname, "lib", "instruct-and-wait.js"));
 
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
@@ -126,24 +127,22 @@ async function main() {
 
     // Check that .staging-passed exists
     if (!fs.existsSync(markerPath)) {
-      console.error(
-        "\n" +
-          "╔══════════════════════════════════════════════════════════╗\n" +
-          "║  BLOCKED: Production deploy without staging             ║\n" +
-          "║                                                          ║\n" +
-          "║  Run staging first:                                      ║\n" +
-          "║    bash deploy/scripts/promote.sh                        ║\n" +
-          "║                                                          ║\n" +
-          "║  Or step-by-step on the server:                          ║\n" +
-          "║    bash deploy/scripts/stage.sh                          ║\n" +
-          "║    bash deploy/scripts/deploy.sh                         ║\n" +
-          "║                                                          ║\n" +
-          "║  Emergency bypass (document the reason afterward):       ║\n" +
-          "║    Add --skip-staging to your command                    ║\n" +
-          "╚══════════════════════════════════════════════════════════╝\n",
-      );
       clearTimeout(timeout);
-      process.exit(2); // Block
+      emit({
+        hookEvent: "PreToolUse",
+        severity: "block",
+        what_happened: `Production deploy command intercepted: ${command.slice(0, 80)}`,
+        why: "deploy-hygiene/staging-marker-missing",
+        agent_must_report: [
+          "Quote the exact production-deploy command that was intercepted",
+          "State that .staging-passed marker is absent at repo root",
+          "Recommend `bash deploy/scripts/promote.sh` (combined) or `stage.sh`+`deploy.sh` (step-by-step)",
+          "Do not retry the production deploy without staging verification",
+        ],
+        agent_must_wait:
+          "Run staging first OR confirm --skip-staging emergency-bypass intent with documented reason.",
+        user_summary: `BLOCKED: production deploy without staging (.staging-passed missing)`,
+      });
       return;
     }
 
@@ -165,21 +164,23 @@ async function main() {
 
     const shortHash = currentCommit.substring(0, 7);
     if (!marker.includes(shortHash)) {
-      console.error(
-        "\n" +
-          "╔══════════════════════════════════════════════════════════╗\n" +
-          "║  BLOCKED: Staging marker is stale                        ║\n" +
-          "║                                                          ║\n" +
-          "║  Code has changed since staging last passed.             ║\n" +
-          `║  Current commit: ${shortHash.padEnd(42)}║\n` +
-          `║  Staging marker: ${marker.substring(0, 7).padEnd(42)}║\n` +
-          "║                                                          ║\n" +
-          "║  Re-run staging:                                         ║\n" +
-          "║    bash deploy/scripts/promote.sh                        ║\n" +
-          "╚══════════════════════════════════════════════════════════╝\n",
-      );
+      const markerShort = marker.substring(0, 7);
       clearTimeout(timeout);
-      process.exit(2); // Block
+      emit({
+        hookEvent: "PreToolUse",
+        severity: "block",
+        what_happened: `Production deploy command intercepted; staging marker stale (current=${shortHash}, marker=${markerShort})`,
+        why: "deploy-hygiene/staging-marker-stale",
+        agent_must_report: [
+          `Quote the exact production-deploy command intercepted`,
+          `State that current HEAD ${shortHash} does not match staging marker ${markerShort}`,
+          `Recommend re-running \`bash deploy/scripts/promote.sh\` to refresh the staging marker against current HEAD`,
+          `Do not retry the production deploy with a stale marker`,
+        ],
+        agent_must_wait:
+          "Re-stage to update .staging-passed against current HEAD before retrying.",
+        user_summary: `BLOCKED: staging marker stale (current ${shortHash}, marker ${markerShort})`,
+      });
       return;
     }
 

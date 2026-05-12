@@ -108,7 +108,7 @@ function validateBashCommand(data) {
   // entirely for those (segment-anchor isn't sufficient — the body can span
   // many lines containing arbitrary shell-like syntax as documentation).
   const STATE_PATH_RX =
-    /\.claude\/learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|\.initialized)\b/;
+    /\.claude\/learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|\.initialized|\.posture-upgrade-nonce)\b/;
   const isGitCommitWithBody = /^\s*git\s+commit\b[^|;]*(?:\s-m\s|\s-F\s)/.test(
     command,
   );
