@@ -792,6 +792,14 @@ class LocalRuntime(
         self._ref_count = 1  # Creator holds first reference
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
+        # Issue #953: track AsyncSQL pool keys this runtime's persistent loop
+        # created so the outer-loop-running cleanup branch in
+        # ``_cleanup_event_loop`` can emit a WARN naming the leak when the
+        # mixed-mode pattern (sync execute → outer-async __exit__) leaves
+        # persistent-loop-owned pools that NEITHER cleanup path reaches.
+        # Populated post-run by ``_snapshot_async_sql_pool_keys`` after
+        # every ``_persistent_loop.run_until_complete(...)``.
+        self._created_async_sql_pools: "set[str]" = set()
         # Track whether an owning framework manages this runtime's lifecycle.
         # Set via ``mark_externally_managed()`` by frameworks (e.g. DataFlow)
         # that hold a long-lived runtime across many ``execute()`` calls.
@@ -1243,6 +1251,14 @@ class LocalRuntime(
             from kailash.workflow.credentials import get_credential_store
 
             get_credential_store().clear()
+            # Issue #953: snapshot AsyncSQL pool keys whose loop_id prefix
+            # matches our persistent loop. This populates
+            # ``self._created_async_sql_pools`` so the outer-loop-running
+            # cleanup branch in ``_cleanup_event_loop`` can emit the
+            # leak-detected WARN when the mixed-mode pattern (sync execute
+            # → outer-async __exit__) leaves persistent-loop-owned pools
+            # that neither cleanup path reaches.
+            self._snapshot_async_sql_pool_keys()
 
     async def execute_async(
         self,
@@ -1479,6 +1495,60 @@ class LocalRuntime(
 
             return self._persistent_loop
 
+    def _snapshot_async_sql_pool_keys(self) -> None:
+        """Capture AsyncSQL pool keys owned by this runtime's persistent loop.
+
+        Issue #953: ``AsyncSQLDatabaseNode._shared_pools`` is process-wide,
+        not partitioned by event loop. When a caller uses this same
+        ``LocalRuntime`` instance synchronously first (creating pools whose
+        reaper tasks bind to ``self._persistent_loop``) and then re-enters
+        ``__exit__`` from inside an outer async loop, the outer-loop
+        cleanup branch in ``_cleanup_event_loop`` correctly skips disposal
+        (the outer loop owns its own pools' lifecycle) — but those
+        persistent-loop-owned pools are unreachable from either path.
+
+        This helper observes ``_shared_pools`` after every
+        ``self._persistent_loop.run_until_complete(...)`` and records the
+        keys of pools whose loop_id prefix matches our persistent loop.
+        The set drives the WARN-log emission in ``_cleanup_event_loop``'s
+        outer-running-loop skip branch (acceptance criterion 2 of #953).
+
+        Pool keys are formed
+        ``"<loop_id>|<db_type>|<connection_or_host_port>|<pool_size>|<max_pool_size>"``
+        per ``AsyncSQLDatabaseNode._generate_pool_key`` — the connection
+        segment can carry credentials, so callers MUST NOT log raw keys
+        (see ``rules/security.md`` § "No secrets in logs"). The cleanup
+        WARN path emits only the count + the loop_id prefix, never the
+        connection segment.
+
+        Safe to call when no pools were created — observes the dict and
+        adds nothing. Best-effort: failure to introspect is swallowed
+        because cleanup tracking MUST NOT raise into the user's workflow
+        path. The miss surfaces as an absent WARN, NOT a runtime failure.
+        """
+        loop = self._persistent_loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+            shared_pools = getattr(AsyncSQLDatabaseNode, "_shared_pools", None)
+            if not shared_pools:
+                return
+            loop_id_prefix = f"{id(loop)}|"
+            # ``list(...)`` snapshot prevents RuntimeError if a concurrent
+            # pool init mutates the dict during iteration (same hardening
+            # the kailash-dataflow engine applies at line 9856).
+            for pool_key in list(shared_pools.keys()):
+                if pool_key.startswith(loop_id_prefix):
+                    self._created_async_sql_pools.add(pool_key)
+        except Exception:  # noqa: BLE001 — best-effort observability hook
+            # Cleanup tracking is observability-only; never poison the
+            # workflow execution path with a tracking-helper failure.
+            # The absent-WARN cost is bounded; a raise here would break
+            # every execute() that touches AsyncSQL.
+            return
+
     def _cleanup_event_loop(self) -> None:
         """
         Clean up persistent event loop and resources.
@@ -1535,11 +1605,27 @@ class LocalRuntime(
 
             # Cancel all pending tasks (graceful shutdown)
             if not loop.is_closed():
+                # Issue #953: lift the outer-loop check above the task-
+                # cancellation block. ``loop.run_until_complete`` raises
+                # ``RuntimeError: Cannot run the event loop while another
+                # loop is running`` not only when disposing pools but
+                # also when gathering cancelled tasks. When the outer
+                # loop is running, we MUST skip every
+                # ``run_until_complete`` call on our persistent loop —
+                # both the task gather AND the pool dispose. The outer
+                # loop's teardown reclaims its own task graph; ours is
+                # left to GC when ``loop.close()`` fires below. The
+                # mixed-mode leak WARN still fires per the issue's
+                # acceptance criterion 2.
+                try:
+                    _early_outer_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    _early_outer_loop = None
                 try:
                     # Get all pending tasks
                     pending = asyncio.all_tasks(loop)
 
-                    if pending:
+                    if pending and _early_outer_loop is None:
                         logger.debug(
                             f"Cancelling {len(pending)} pending tasks in event loop cleanup "
                             f"(runtime {self._runtime_id})"
@@ -1549,7 +1635,8 @@ class LocalRuntime(
                         for task in pending:
                             task.cancel()
 
-                        # Wait for cancellation to complete
+                        # Wait for cancellation to complete (safe — no
+                        # outer loop is running on this thread).
                         loop.run_until_complete(
                             asyncio.gather(*pending, return_exceptions=True)
                         )
@@ -1559,6 +1646,18 @@ class LocalRuntime(
                                 f"Successfully cancelled {len(pending)} tasks "
                                 f"(runtime {self._runtime_id})"
                             )
+                    elif pending and _early_outer_loop is not None:
+                        # Outer-loop-running path: cancel without
+                        # gathering. The tasks will be reaped when
+                        # ``loop.close()`` runs at the end of this
+                        # function.
+                        for task in pending:
+                            task.cancel()
+                        logger.debug(
+                            f"Cancelled {len(pending)} pending tasks without "
+                            f"gathering (runtime {self._runtime_id}): outer "
+                            f"event loop is running (loop_id={id(_early_outer_loop)})"
+                        )
 
                     # Dispose connection pools before closing the loop.
                     if not loop.is_closed():
@@ -1678,6 +1777,45 @@ class LocalRuntime(
                                 f"running (loop_id={id(outer_running_loop)}); "
                                 "outer loop owns pool lifecycle"
                             )
+                            # Issue #953: when this runtime ran synchronously
+                            # FIRST (creating pools whose reaper tasks bound
+                            # to ``self._persistent_loop``) and then re-
+                            # entered ``__exit__`` from inside the outer
+                            # async loop, those persistent-loop-owned pools
+                            # are unreachable from either path — outer
+                            # loop's teardown won't see them (different
+                            # loop), and we just skipped them. Emit a WARN
+                            # naming the count so operators can see the
+                            # mixed-mode leak signal. Pool keys can carry
+                            # credentials per
+                            # ``AsyncSQLDatabaseNode._generate_pool_key``
+                            # (the connection-string segment) so we log
+                            # ONLY the count + persistent-loop-id —
+                            # never raw keys — per ``rules/security.md`` §
+                            # "No secrets in logs". See acceptance
+                            # criterion 2 of the issue.
+                            orphan_count = len(self._created_async_sql_pools)
+                            if orphan_count > 0:
+                                logger.warning(
+                                    "localruntime.async_sql_pools_orphaned: "
+                                    f"runtime {self._runtime_id} skipped "
+                                    f"disposal of {orphan_count} AsyncSQL "
+                                    f"pool(s) bound to its persistent loop "
+                                    f"(loop_id={id(loop)}); outer event "
+                                    f"loop "
+                                    f"(loop_id={id(outer_running_loop)}) "
+                                    "owns its own pools' lifecycle but "
+                                    "cannot reach ours. This is the "
+                                    "mixed-mode pattern documented in "
+                                    "issue #953: sync execute() created "
+                                    "pools on the persistent loop, then "
+                                    "__exit__ ran from inside an outer "
+                                    "async loop. Pools will be reclaimed "
+                                    "at process exit. To avoid: call "
+                                    "runtime.close() before entering the "
+                                    "outer async context, OR keep a "
+                                    "single async context throughout."
+                                )
 
                         try:
                             from kailash.nodes.data.sql import SQLDatabaseNode
@@ -2575,6 +2713,17 @@ class LocalRuntime(
             if _deferred_storage is not None:
                 self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
 
+            # Issue #953: snapshot AsyncSQL pool keys BEFORE node.cleanup()
+            # disposes them. The per-node ``cleanup()`` calls below
+            # decrement ref-counts and remove pools whose count drops to
+            # zero from ``AsyncSQLDatabaseNode._shared_pools``. We need
+            # the key NOW (while the pool is still in the dict) so the
+            # outer-loop-running skip branch in ``_cleanup_event_loop``
+            # can emit the leak-detected WARN later. The set semantics
+            # of ``_created_async_sql_pools`` preserve the record across
+            # node.cleanup()'s removal.
+            self._snapshot_async_sql_pool_keys()
+
             # Final cleanup of all node instances
             for node_id, node_instance in workflow._node_instances.items():
                 if hasattr(node_instance, "cleanup"):
@@ -3191,6 +3340,14 @@ class LocalRuntime(
                 )
                 _tracer.end_span(_node_span, status="ok")
 
+                # Issue #953: snapshot AsyncSQL pool keys BEFORE per-node
+                # cleanup decrements ref-counts and removes pools from
+                # ``_shared_pools``. Without this snapshot the tracking
+                # set stays empty for short-workflows (single execute
+                # ends with ref_count → 0 → pool gone), defeating the
+                # leak-WARN signal the issue mandates.
+                self._snapshot_async_sql_pool_keys()
+
                 # Clean up async resources if the node has a cleanup method
                 if hasattr(node_instance, "cleanup"):
                     try:
@@ -3228,6 +3385,13 @@ class LocalRuntime(
                         error=str(e),
                         ended_at=datetime.now(UTC),
                     )
+
+                # Issue #953: snapshot AsyncSQL pool keys BEFORE the
+                # failure-path cleanup (same reason as the success-path
+                # snapshot above — pools may still be present in
+                # ``_shared_pools`` when execution fails and we MUST
+                # capture them before cleanup disposes them).
+                self._snapshot_async_sql_pool_keys()
 
                 # Clean up async resources even on failure
                 if hasattr(node_instance, "cleanup"):
