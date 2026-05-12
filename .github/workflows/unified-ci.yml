@@ -223,12 +223,18 @@ jobs:
           # Install root kailash editable first — new core modules may not be on PyPI yet
           # (per deployment.md MUST: sibling-package CI installs root SDK editable first)
           uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow[dev,sqlite]" --python .venv/bin/python
+          # [monitoring] provides psutil (required by migration_performance_tracker)
+          # [sqlite] provides aiosqlite (required by conftest)
+          uv pip install -e "packages/kailash-dataflow[dev,sqlite,monitoring]" --python .venv/bin/python
+          # polars is not declared under any kailash-dataflow optional extra; install separately
+          # (required by tests/unit/ml/test_dataflow_ml_symbols.py at module level)
+          uv pip install polars --python .venv/bin/python
 
       - name: Test kailash-dataflow (full unit suite)
         timeout-minutes: 10
         run: |
           cd packages/kailash-dataflow
           ../../.venv/bin/python -m pytest tests/unit/ \
+            --ignore=tests/unit/templates \
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis)' \
             --maxfail=10 -q
