@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterator
 
 import pytest
 from kailash.runtime.local import LocalRuntime
@@ -47,7 +48,7 @@ class QASignature(Signature):
 
 
 @pytest.fixture(autouse=True)
-def _clear_credential_store() -> None:
+def _clear_credential_store() -> Iterator[None]:
     """Per-test isolation — CredentialStore is process-global."""
     get_credential_store().clear()
     yield
@@ -119,7 +120,7 @@ def test_credential_ref_round_trips_through_workflow_to_node(
     caplog.set_level(logging.WARNING, logger="kailash.nodes.base")
 
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(
+    results, _run_id = runtime.execute(
         built,
         parameters={
             "agent_exec": {
