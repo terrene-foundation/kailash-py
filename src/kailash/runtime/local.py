@@ -1616,9 +1616,21 @@ class LocalRuntime(
                                     # users adopted the
                                     # ``with LocalRuntime()`` pattern.
                                     async def _dispose_async_sql_pools() -> None:
+                                        # Bind the inner coroutine to a local
+                                        # name so that if ``asyncio.wait_for``
+                                        # raises BEFORE driving it (broken /
+                                        # monkeypatched wait_for that swallows
+                                        # its coro arg), the ``finally`` block
+                                        # can close the inner coroutine and
+                                        # suppress the
+                                        # ``coroutine 'clear_shared_pools' was
+                                        # never awaited`` warning. Issue #917
+                                        # closed the outer wrapper; #942
+                                        # closes the inner coroutine.
+                                        _inner = _clear_pools(graceful=True)
                                         try:
                                             await asyncio.wait_for(
-                                                _clear_pools(graceful=True),
+                                                _inner,
                                                 timeout=5.0,
                                             )
                                         except asyncio.TimeoutError:
@@ -1627,6 +1639,15 @@ class LocalRuntime(
                                                 "pools during shutdown for "
                                                 f"runtime {self._runtime_id}"
                                             )
+                                        finally:
+                                            _inner_close = getattr(
+                                                _inner, "close", None
+                                            )
+                                            if _inner_close is not None:
+                                                try:
+                                                    _inner_close()
+                                                except Exception:
+                                                    pass
 
                                     _dispose_coro = _dispose_async_sql_pools()
                                     try:
@@ -2053,22 +2074,71 @@ class LocalRuntime(
                             AsyncSQLDatabaseNode, "clear_shared_pools", None
                         )
                         if _clear_pools is not None:
-                            loop.run_until_complete(
-                                asyncio.wait_for(
-                                    _clear_pools(graceful=True),
-                                    timeout=5.0,
-                                )
-                            )
-                    except Exception:
-                        pass
+                            # Wrap in an inner ``async def`` so only one
+                            # coroutine escapes scope. Closing the wrapper
+                            # cancels the inner ``wait_for`` cleanly if
+                            # ``run_until_complete`` raises before
+                            # consuming it — preventing the ``coroutine
+                            # 'wait_for' was never awaited`` warning
+                            # tracked in issue #942.
+                            async def _dispose_async_sql_pools() -> None:
+                                # Bind the inner coroutine so we can
+                                # close it in ``finally`` if
+                                # ``asyncio.wait_for`` raises before
+                                # driving it (e.g., monkeypatched
+                                # wait_for that swallows its arg).
+                                # See sibling fix in
+                                # ``_cleanup_event_loop`` above.
+                                _inner = _clear_pools(graceful=True)
+                                try:
+                                    await asyncio.wait_for(
+                                        _inner,
+                                        timeout=5.0,
+                                    )
+                                except asyncio.TimeoutError:
+                                    logger.warning(
+                                        "Timeout disposing AsyncSQL pools "
+                                        "during _execute_sync teardown"
+                                    )
+                                finally:
+                                    _inner_close = getattr(_inner, "close", None)
+                                    if _inner_close is not None:
+                                        try:
+                                            _inner_close()
+                                        except Exception:
+                                            pass
+
+                            _dispose_coro = _dispose_async_sql_pools()
+                            try:
+                                loop.run_until_complete(_dispose_coro)
+                            finally:
+                                # No-op if the wrapper already ran to
+                                # completion. Closes both the wrapper
+                                # and any orphaned inner ``wait_for``
+                                # if ``run_until_complete`` raised
+                                # before driving the wrapper.
+                                _close = getattr(_dispose_coro, "close", None)
+                                if _close is not None:
+                                    try:
+                                        _close()
+                                    except Exception:
+                                        pass
+                    except Exception as e:
+                        logger.warning(
+                            f"Error disposing AsyncSQL pools during "
+                            f"_execute_sync teardown: {e}"
+                        )
                     try:
                         from kailash.nodes.data.sql import SQLDatabaseNode
 
                         _cleanup = getattr(SQLDatabaseNode, "cleanup_pools", None)
                         if _cleanup is not None:
                             _cleanup()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(
+                            f"Error disposing SQL pools during "
+                            f"_execute_sync teardown: {e}"
+                        )
                 if loop:
                     loop.close()
 
