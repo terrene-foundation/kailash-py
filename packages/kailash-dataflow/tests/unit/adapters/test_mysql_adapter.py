@@ -8,6 +8,14 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+# `aiomysql` is an optional `[mysql]` extra. The unit tests mock the driver,
+# but `@patch("dataflow.adapters.mysql.aiomysql.create_pool")` still imports
+# the adapter module which imports `aiomysql` at top level. Skip the file
+# cleanly when the extra isn't installed (CI `[dev]` venv) instead of failing
+# with an opaque `ModuleNotFoundError` during collection.
+pytest.importorskip("aiomysql")
+
 from dataflow.adapters.exceptions import ConnectionError, QueryError
 from dataflow.adapters.mysql import MySQLAdapter
 

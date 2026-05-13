@@ -11,6 +11,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# `redis` is an optional `[redis]` extra. Tests use mocks but
+# `dataflow.cache.auto_detection` imports `redis` at the module level for
+# the `redis_available()` probe; without the extra the patch targets fail
+# at collection. Skip the file cleanly when `redis` isn't installed.
+pytest.importorskip("redis")
+
 
 class TestCacheBackendDetection:
     """Test cache backend auto-detection logic."""
