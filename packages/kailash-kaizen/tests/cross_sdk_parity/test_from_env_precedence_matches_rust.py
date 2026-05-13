@@ -29,7 +29,6 @@ import threading
 from pathlib import Path
 
 import pytest
-
 from kaizen.llm.errors import InvalidUri, NoKeysConfigured
 from kaizen.llm.from_env import (
     ENV_DEPLOYMENT_URI,
@@ -38,7 +37,6 @@ from kaizen.llm.from_env import (
     SUPPORTED_SCHEMES,
     resolve_env_deployment,
 )
-
 
 # Module-scope lock per testing.md § "Env-Var Test Isolation" -- every
 # test in this file mutates process-level LLM env vars; serialize to
@@ -143,8 +141,8 @@ def test_selector_tier_wins_over_legacy(monkeypatch) -> None:
     monkeypatch.setenv(ENV_SELECTOR, "anthropic")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-legacy-openai")
     # Selector requires ANTHROPIC_API_KEY + ANTHROPIC_MODEL; deliberately
-    # leave ANTHROPIC_MODEL unset so the selector path raises the expected
-    # typed error AND we know the legacy OpenAI fallback was NOT taken.
+    # leave ANTHROPIC_MODEL unset so the selector path raises the
+    # expected typed error AND we know the legacy OpenAI fallback was NOT taken.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic")
 
     from kaizen.llm.errors import MissingCredential

@@ -903,7 +903,6 @@ class PactEngine:
             since: Skip anchors timestamped before this UTC datetime.
             until: Skip anchors timestamped after this UTC datetime.
         """
-        from pact.governance.results import ChainVerificationResult
 
         async with self._submit_lock:
             return self._verify_audit_chain_locked(
@@ -1123,7 +1122,7 @@ class PactEngine:
             )
 
         # --- by role_address (thread-safe: compute_envelope acquires lock) ---
-        assert role_address is not None  # type-narrowing for mypy
+        assert role_address is not None  # narrowing for mypy
         try:
             envelope = self._governance.compute_envelope(role_address)
         except Exception as exc:

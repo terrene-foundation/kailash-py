@@ -343,7 +343,7 @@ def test_dl_diagnostics_grad_cam_returns_heatmap() -> None:
     # grad_cam moves `input_tensor.to(self.device)` internally before the
     # forward pass, so if the device-resolver picks MPS (darwin-arm
     # default) while the model lives on CPU, F.conv2d sees mismatched
-    # types. Pin both to CPU: override diag.device + move model to CPU.
+    # dtypes. Pin both to CPU: override diag.device + move model to CPU.
     # CI Linux default is CPU anyway; this makes the local Mac run
     # deterministic.
     cpu = torch.device("cpu")

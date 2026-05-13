@@ -53,10 +53,7 @@ import logging
 import typing
 from typing import Any, Callable, Mapping, Optional, Type, TypeVar
 
-from .service_client import (
-    ServiceClient,
-    ServiceClientDeserializeError,
-)
+from .service_client import ServiceClient, ServiceClientDeserializeError
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +114,8 @@ def _default_decode(payload: Any, model_cls: Type[M]) -> M:
 
     # Structural dataclass validation — catch wrong-type fields before they
     # land in the instance. ``cls(**payload)`` for a dataclass does NOT
-    # type-check; an ``email: str`` field receiving an integer constructs
-    # fine and surfaces as a string-formatting bug far from the API
+    # validate the annotations; an ``email: str`` field receiving an integer
+    # constructs fine and surfaces as a string-formatting bug far from the API
     # boundary. We check dataclass fields against resolved annotations so
     # drift is caught at the deserialisation step.
     if dataclasses.is_dataclass(model_cls):
@@ -218,7 +215,9 @@ def _default_decode(payload: Any, model_cls: Type[M]) -> M:
 def _is_optional(annotation: Any) -> bool:
     """Return True if the annotation is ``Optional[X]`` / ``X | None``."""
     origin = typing.get_origin(annotation)
-    if origin is typing.Union or origin is getattr(__import__("types"), "UnionType", None):
+    if origin is typing.Union or origin is getattr(
+        __import__("types"), "UnionType", None
+    ):
         args = typing.get_args(annotation)
         return type(None) in args
     return False
@@ -337,9 +336,7 @@ class TypedServiceClient(ServiceClient):
                 f"model_cls must be a class (got {type(model_cls).__name__})"
             )
         if not callable(decoder):
-            raise TypeError(
-                f"decoder must be callable (got {type(decoder).__name__})"
-            )
+            raise TypeError(f"decoder must be callable (got {type(decoder).__name__})")
         self._decoders[model_cls] = decoder
         logger.debug(
             "nexus.typed_service_client.register_decoder",

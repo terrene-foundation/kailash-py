@@ -31,10 +31,7 @@ import logging
 from datetime import datetime
 from typing import Any, List, Optional
 
-from dataflow.ml._errors import (
-    FeatureSourceError,
-    TenantRequiredError,
-)
+from dataflow.ml._errors import FeatureSourceError, TenantRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -211,8 +208,8 @@ def ml_feature_source(
 
     group_name = _group_name(feature_group)
 
-    # Tenant strict mode — missing tenant on a multi-tenant group is a
-    # typed error (`rules/tenant-isolation.md` § 2).
+    # Tenant strict mode — missing tenant on a multi-tenant group
+    # raises a typed error per `rules/tenant-isolation.md` § 2.
     if _is_multi_tenant_group(feature_group) and tenant_id is None:
         raise TenantRequiredError(
             f"FeatureGroup {group_name!r} is multi_tenant=True; tenant_id is required"

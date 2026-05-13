@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:  # type-only forward reference
+if TYPE_CHECKING:  # forward reference for typechecker only
     from pact.governance.results import ConsumptionReport
 
 __all__ = ["CostTracker"]
