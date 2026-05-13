@@ -48,21 +48,50 @@ class DataFlowEventMixin:
     """
 
     _event_bus: Any = None  # Set by _init_events()
+    _event_bus_import_error: Optional[ImportError] = (
+        None  # Set by _init_events() on failure
+    )
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def _init_events(self) -> None:
-        """Initialize the event bus.  Called once in ``DataFlow.__init__``."""
+        """Initialize the event bus.  Called once in ``DataFlow.__init__``.
+
+        The ``InMemoryEventBus`` lives under ``kailash.middleware`` whose
+        ``__init__.py`` eagerly imports ``kailash.nodes.admin.user_management``
+        (requires ``bcrypt``) and ``kailash.middleware.communication.api_gateway``
+        (requires ``fastapi``) -- both from the ``kailash[server]`` extra.
+
+        Per ``rules/zero-tolerance.md`` Rule 3a (Typed Delegate Guards For
+        None Backing Objects), an ``ImportError`` here MUST NOT be silently
+        swallowed -- the resulting opaque ``AttributeError`` on later
+        ``_event_bus.subscribe()`` calls hides the real failure (missing
+        ``[server]`` extra) behind a None-backing-object trap that blocks
+        N tests with no actionable signal.
+
+        When ``InMemoryEventBus`` is unavailable, ``_event_bus`` remains
+        ``None`` AND every method that would touch it raises a typed
+        ``DataFlowError`` naming the missing extra. The deferred failure
+        keeps ``DataFlow.__init__`` runnable on a kailash core install
+        (no events) while making the actionable signal visible at the
+        first subscribe / on_model_change call site.
+        """
         try:
             from kailash.middleware.communication.backends.memory import (
                 InMemoryEventBus,
             )
 
             self._event_bus = InMemoryEventBus()
-        except ImportError:
+            self._event_bus_import_error: Optional[ImportError] = None
+        except ImportError as exc:
+            # Defer the typed-error surface to subscribe / on_model_change
+            # callsites (Rule 3a). Storing the original ImportError preserves
+            # the actionable diagnostic ("install kailash[server]") for the
+            # raise site below without re-importing.
             self._event_bus = None
+            self._event_bus_import_error = exc
 
     # ------------------------------------------------------------------
     # Emission
@@ -93,8 +122,9 @@ class DataFlowEventMixin:
         if self._event_bus is None:
             return
 
-        from dataflow.classification.event_payload import format_record_id_for_event
         from kailash.middleware.communication.domain_event import DomainEvent
+
+        from dataflow.classification.event_payload import format_record_id_for_event
 
         policy = getattr(self, "_classification_policy", None)
         safe_record_id = format_record_id_for_event(
@@ -145,12 +175,28 @@ class DataFlowEventMixin:
             List of subscription IDs (one per write operation type).
 
         Raises:
-            DataFlowConfigError: If called before ``db.initialize()``.
+            DataFlowError: If called before ``db.initialize()`` OR if the
+                event bus was not initialised (typically because
+                ``kailash[server]`` is missing -- see ``_init_events``).
         """
         if not getattr(self, "_connected", False):
             from dataflow.exceptions import DataFlowError
 
             raise DataFlowError("on_model_change() requires db.initialize() first")
+
+        # Rule 3a typed guard: surface the missing-extra signal here instead
+        # of letting AttributeError propagate from ``None.subscribe(...)``.
+        if self._event_bus is None:
+            from dataflow.exceptions import DataFlowError
+
+            cause = self._event_bus_import_error
+            hint = (
+                "kailash.middleware EventBus failed to import. Install the "
+                "server extra: pip install 'kailash[server]'"
+            )
+            if cause is not None:
+                raise DataFlowError(f"{hint} (underlying: {cause})") from cause
+            raise DataFlowError(hint)
 
         sub_ids: List[str] = []
         for op in WRITE_OPERATIONS:

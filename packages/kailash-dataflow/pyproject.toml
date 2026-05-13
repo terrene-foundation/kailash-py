@@ -143,6 +143,21 @@ dev = [
     # the "tier-1 collection requires extra not installed" gap that
     # PR #976's failure-layer family produced.
     "aiosqlite>=0.19.0",
+    # kailash[server]: issue #979 / S-EV (test_dataflow_events.py — PR #976
+    # AC#2). dataflow.core.events.DataFlowEventMixin._init_events imports
+    # kailash.middleware.communication.backends.memory.InMemoryEventBus.
+    # Python's import machinery runs kailash.middleware/__init__.py which
+    # eagerly imports kailash.nodes.admin.user_management (requires bcrypt)
+    # and kailash.middleware.communication.api_gateway (requires fastapi)
+    # — both from the [server] extra. Without this pin, clean-venv
+    # `pip install -e packages/kailash-dataflow[dev]` produces 5 failures
+    # in tests/unit/features/test_dataflow_events.py because _init_events
+    # cannot resolve InMemoryEventBus. Same "tier-1 collection requires
+    # extra not installed" gap pattern as the aiosqlite + pytest-timeout
+    # pins above. Per zero-tolerance.md Rule 3a, the events.py mixin now
+    # surfaces a typed DataFlowError on _event_bus=None, but the test fixture
+    # needs the real bus to exercise the subscribe path.
+    "kailash[server]",
     "black>=23.0.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
