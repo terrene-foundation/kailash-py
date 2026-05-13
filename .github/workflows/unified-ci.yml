@@ -235,7 +235,14 @@ jobs:
         timeout-minutes: 15
         run: |
           cd packages/kailash-dataflow
+          # `--forked` runs each test in a fresh subprocess so memory is
+          # reclaimed per-test. The unaccompanied invocation OOM'd at ~22s
+          # / [32%] of the 3000+-test suite on ubuntu-latest's ~7GB
+          # budget; per-test process isolation is the structural fix.
+          # See rules/python-environment.md Rule 4 for the related
+          # MemoryError-during-collection failure mode.
           ../../.venv/bin/python -m pytest tests/unit/ \
             --ignore=tests/unit/templates \
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis)' \
+            --forked \
             --maxfail=10 -q

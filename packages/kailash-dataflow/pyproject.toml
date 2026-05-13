@@ -130,6 +130,11 @@ dev = [
     # that lose all diagnostic. Without this plugin pytest silently ignores
     # the `timeout` / `timeout_method` directives.
     "pytest-timeout>=2.0.0",
+    # Required for unified-ci.yml DataFlow Unit Suite `--forked` flag:
+    # each test runs in a subprocess so memory is reclaimed per-test
+    # instead of accumulating across the 3000+ test run (which OOMs
+    # ubuntu-latest's ~7GB budget at ~1180 tests in).
+    "pytest-forked>=1.6.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
