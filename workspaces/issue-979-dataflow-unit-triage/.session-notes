@@ -1,0 +1,62 @@
+# Session Notes — 2026-05-13
+
+## Where we are
+
+`/analyze` + `/redteam` (to convergence) + `/todos` complete for
+issue **#979 DataFlow Unit Suite Triage**. User approved
+**OPTION-C′** verbatim ("approved") then directed `/wrapup`. Next
+step is `/implement` of Workstream-A's S1 (the precondition shard).
+No code changes shipped this session — only workspace artifacts.
+
+## Read first
+
+1. `todos/active/00-INDEX.md` — shard list, dependency graph,
+   Workstream-B / -C handoff, forest-vs-trees rank
+2. `todos/active/01-S1-preconditions.md` — first shard to implement;
+   blocks the rest
+3. `journal/0005-DECISION-todos-crystallized.md` — the OPTION-C′
+   approval + trade-offs + risk register
+4. `journal/0004-DECISION-redteam-convergence.md` — 3-round redteam
+   convergence verdict (zero new CRIT/HIGH at R3)
+5. `02-plans/02-amendments-v2-post-redteam-r1r2.md` — the
+   authoritative plan the todos crystallize
+6. `01-analysis/02-pentest/` — pentest artifact (3 files; DEFENSE-2
+   + DEFENSE-3 land in S6)
+
+## In-flight state
+
+- Entire `workspaces/issue-979-dataflow-unit-triage/` is untracked
+  (the brief, journals 0001-0005, plans 00+01+02, 01-analysis tree,
+  todos/active/00-07). Decide commit timing at next session: either
+  commit the workspace at /implement start, or leave untracked until
+  S6 lands.
+- `specs/testing-tiers.md` + the `_index.md` row pointing at it ARE
+  untracked too (added during /analyze). These SHOULD commit with S1
+  or earlier so they're authoritative when S6's CLAUDE.md alignment
+  cites them.
+- No code touched outside `workspaces/` and `specs/`.
+
+## Traps
+
+- **PR #976 was NEVER MERGED** (`mergedAt: null`). Its `_fresh_db_url`
+  + `timeout = 120` fixes are NOT on main. Plan starts from pre-fix
+  state. Trap: assuming PR #976's fixes apply.
+- **`test_saas_tenancy.py` MUST STAY in tier-1** (R2 ATTACK-6
+  verified: 100% mocked, pure-Python, meets contract). It is NOT in
+  S4's MOVE list. Trap: a generic "move SaaS tests" sweep grabs it.
+- **S6 workflow MUST have ZERO `-m` flags** (CRIT-B). S1's
+  pytest.ini::addopts is the sole filter. PR #968's `-m` baked into
+  the workflow IS the trap to avoid on cherry-pick.
+- **`pytest-forked` is NOT archived upstream** (R1 falsified that
+  claim) — drop it from S1 for "zero consumer," not for "archived."
+- **`sanitize_sql_input` is a nested closure** at
+  `nodes.py:787` — not importable. DEFENSE-2 test in S6 MUST use
+  public API (`db.express_sync.create(...)`).
+- **fabric S3 move loses 2 tier-1 security signals** unless
+  `test_fabric_smoke_invariants.py` ships in S6. The compensation
+  is MANDATORY per R3 N1 fix; not optional.
+
+## Open questions for the human
+
+None — OPTION-C′ approved. Next session resumes at S1 of
+Workstream-A under `/implement`.

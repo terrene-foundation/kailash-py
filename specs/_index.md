@@ -4,12 +4,12 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## Core SDK
 
-| File                                   | Description                                                                   |
-| -------------------------------------- | ----------------------------------------------------------------------------- |
-| [core-nodes.md](core-nodes.md)         | Node architecture, Node base class, NodeParameter, NodeMetadata, NodeRegistry |
-| [core-workflows.md](core-workflows.md) | WorkflowBuilder, Connection, CyclicConnection, workflow validation            |
+| File                                   | Description                                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [core-nodes.md](core-nodes.md)         | Node architecture, Node base class, NodeParameter, NodeMetadata, NodeRegistry                                                   |
+| [core-workflows.md](core-workflows.md) | WorkflowBuilder, Connection, CyclicConnection, workflow validation                                                              |
 | [core-runtime.md](core-runtime.md)     | LocalRuntime, AsyncLocalRuntime, DistributedRuntime, cycles, resilience, DLQ, durable execution (checkpoint + on_node_complete) |
-| [core-servers.md](core-servers.md)     | WorkflowServer variants, create_gateway, error/exception hierarchy            |
+| [core-servers.md](core-servers.md)     | WorkflowServer variants, create_gateway, error/exception hierarchy                                                              |
 
 ## DataFlow
 
@@ -174,3 +174,4 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | [spec-drift-gate.md](spec-drift-gate.md)         | Mechanical pre-commit + CI check that verifies spec assertions against code; section-context inference, override directives, baseline grace |
 | [diagnostics-catalog.md](diagnostics-catalog.md) | Cross-cutting diagnostics catalog — error taxonomy, observability hooks, and protocol-conformance markers shared across packages            |
+| [testing-tiers.md](testing-tiers.md)             | 3-tier testing contract (unit/integration/e2e) — infra surfaces, fixture mandates, marker discipline, plugin pinning, CI gate strategy      |
