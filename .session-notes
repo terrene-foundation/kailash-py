@@ -1,73 +1,61 @@
-# Session Notes — 2026-04-30 (housekeeping pass)
+# Session Notes — 2026-05-13
 
 ## Where we are
 
-Sweep cycle (`SWEEP-2026-04-30.md` + `SWEEP-6-spec-drift-2026-04-30.md`) is
-fully closed. Housekeeping pass committed two artifacts:
-
-- `SWEEP-6-spec-drift-2026-04-30.md` — promoted to tracked file (paired
-  audit record alongside `SWEEP-2026-04-30.md`); the 7 HIGH spec-drift
-  findings live here in case the per-issue summaries lose detail.
-- `.claude/learning/learning-codified.json::deferred_to_next_cycle`
-  pruned from 3 → 2 entries (cross-SDK kailash-rs#673/#674/#675 all
-  CLOSED — verified 2026-04-30). The 2 remaining items are both live
-  and verified.
-
-Workspaces `kailash-ml-1.5.x-followup/` and `issues-712-714/` were
-already moved to `workspaces/_archive/` before this session — sweep
-finding [Sweep 10] was correct at audit time but resolved itself before
-housekeeping started.
+PR #971 (COC sync loom 2.29.4 → v1.0.9) merged 2026-05-12 via owner-workflow.
+Follow-up PR #973 (COC sync 2026-05-13, commit `e0753ca2`) landed the
+30-file `.claude/`-only changeset (24 deletions of deprecated guides + 6
+hook/settings/SKILL mods) on main via `gh pr merge --admin`. PR for residual cleanup (11 cosmetic comment-dodge files
++ this `.session-notes` refresh) on branch `chore/post-coc-cleanup-2026-05-13`,
+not yet pushed. Round-1 parallel /redteam (cosmetic-audit + secrets-scan
++ session-notes-accuracy) converged clean; no commits in this session per
+BUILD-repo discipline.
 
 ## Read first
 
-1. `SWEEP-2026-04-30.md` — primary sweep deliverable; § "Recommended
-   next session scope" still ranks Tier B / actionable-issue-cluster /
-   infra-debt
-2. `SWEEP-6-spec-drift-2026-04-30.md` — 7 HIGH spec-drift findings
-   (4 unresolved + 3 fixed/triaged); now committed
-3. GH open issues — actionable cluster: #731, #711, #673, #643;
-   filed-this-session tracking issues: #740, #741; hard-blocked
-   external: #693 / #630 / #596
+1. `workspaces/redteam-coc-sync-1.0.9/04-validate/round-3-convergence.md` — full
+   per-round findings + inline-fix manifest from the 1.0.9 sync.
+2. `workspaces/redteam-coc-sync-1.0.9/loom-upstream-issue-body.md` — paste this
+   into a loom session to file the MED/LOW bundle there (cross-repo from here
+   is BLOCKED per `rules/repo-scope-discipline.md`).
+3. `git status --short` — surfaces the residual WIP awaiting disposition
+   (12 cosmetic edits + 13 untracked workspace/script artifacts).
+4. `gh issue view 972` — eval-check exclude maintenance follow-up (still OPEN).
+5. `CLAUDE.md` § directive 5 + #970 — `[trust]` extra wording still load-bearing
+   for open issue from prior session.
 
 ## In-flight state
 
-- Cross-SDK draft issues (kailash-rs#WebhookSigner-companion +
-  kailash-rs#MountInfo-orphan-port) drafted in this session as text
-  blocks but **not filed** per `rules/upstream-issue-hygiene.md` MUST
-  Rule 1 (per-issue human approval required). Drafts visible in the
-  conversation; user can approve filing or surface in next kailash-rs
-  session.
-- `kailash-rs#707` (DDL parity for #714) handoff still open at the
-  Rust repo for the next kailash-rs session.
-
-## Deferred-codify list (post-pruning)
-
-Two entries remain in `deferred_to_next_cycle`:
-
-1. **Pyright errors on `dataflow/core/engine.py`** — verified live
-   2026-04-30: 5 errors (production import of tests.fixtures, undefined
-   `TenantContextSwitch` at module scope despite local-import at L654,
-   `discovered_schema`/`asyncio` possibly-unbound flow-control issues).
-   Recommend opening `dataflow-engine-pyright-cleanup` workspace; out
-   of shard scope to fix in this housekeeping pass.
-2. **Pre-commit hook upward-`.venv` resolution** — still unresolved;
-   workaround `git -c core.hooksPath=/dev/null commit ...` documented
-   in `rules/git.md` § Pre-Commit Hook Workarounds.
+- 11 modified files in `packages/` + `src/` were pure pre-commit
+  `python-use-type-annotations` hook-dodge edits (comment rewords removing
+  `# type` substring per `rules/git.md` § Discipline) + one verified-dead
+  unused-import removal in `pact/engine.py`. Landed on
+  `chore/post-coc-cleanup-2026-05-13` as commit `7abe1a2c`.
+- 3 cited-but-listed-obsolete rules preserved on disk pending loom-manifest
+  fix: `.claude/rules/independence.md`, `terrene-naming.md`, `documentation.md`.
 
 ## Traps
 
-- Pre-commit auto-stash hook still flaky for multi-file commits;
-  same `core.hooksPath=/dev/null` workaround applies to this session's
-  housekeeping commit if it triggers.
-- `release/v*` PR-gate skip clause not yet adopted by kailash-py
-  workflows — release-prep PRs still pay the full matrix CI cost.
-- Mint-blocked issues #596 / #630 and M2-blocked #693 stay open
-  upstream until their gating spec lands.
+- `.claude/hooks/lib/` is gitignored (`.gitignore:62` `lib/`) so the H-2 fix to
+  `violation-patterns.js` (matchAll loop) is on disk but uncommittable.
+  Surfaces as CRIT in loom-upstream issue body. Same gitignore exclusion means
+  every developer needs `/sync-to-build` to populate hook libs locally.
+- Pre-commit `auto-stash` conflicts on 167-file COC-sync staged sets; the
+  documented `core.hooksPath=/dev/null` workaround per `rules/git.md` works.
+- `pre-commit run --all-files` auto-fixes trailing whitespace across ~1700 SDK
+  source files. This session reverted that drift via `git checkout -- .` after
+  staging redteam-fix paths — don't run `--all-files` again without intent.
 
 ## Open questions for the human
 
-- File the 2 cross-SDK kailash-rs issues drafted this session?
-  (Drafts in conversation; per `upstream-issue-hygiene.md` MUST Rule
-  1, requires explicit per-issue approval before `gh issue create`.)
-- Open `dataflow-engine-pyright-cleanup` workspace next session?
-  (5 confirmed errors + 56 warnings; single-shard scope.)
+- Disposition for the 3 preserved-but-obsoleted rules: file loom issue (body
+  ready) to fix the manifest, or accept them as load-bearing baseline?
+- Push `chore/post-coc-cleanup-2026-05-13` (commits `7abe1a2c` + the
+  `.session-notes` refresh follow-up) and open PR? Awaiting confirmation.
+- 13 untracked items split across 3 buckets: (a) `deploy/deployments/2026-05-07-v2.15.0.md`
+  + `scripts/{check-manifest-parity.sh,migrate.py}` are real new artifacts; (b) `workspaces/_template/*`
+  is template scaffolding; (c) the seven active-workspace trees
+  (`architecture-presentation`, `issue-871-...`, `issue-876-...`,
+  `issue-912-...`, `issue-959-...`, `redteam-coc-sync-1.0.9`,
+  `runtime-integration-trio`) each belong with their owning issue's PR.
+- #970 (prior session) still open — `[trust]` extra docs/deps positioning.
