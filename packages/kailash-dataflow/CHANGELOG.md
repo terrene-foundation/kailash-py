@@ -1,5 +1,50 @@
 # DataFlow Changelog
 
+## [2.9.1] — 2026-05-14 — tier-1 test-config floor (S1 of #979)
+
+Patch release shipping the test-discipline floor for issue #979 DataFlow
+Unit Suite Triage Workstream-A. Wheel content is unchanged at runtime —
+only `pip install kailash-dataflow[dev]` resolution is affected (two new
+pins for the unit-test contract). No public API surface change.
+
+### Changed
+
+- **`[dev]` extras now require `pytest-timeout>=2.3.0`** — pins the plugin
+  pytest.ini's `timeout = 120` directive depends on. Without this pin,
+  a clean-venv install reproducing CI silently lost per-test timeout
+  enforcement and the originating-failure-mode (5-layer hang) of
+  PR #976 could surface again on any fresh CI runner.
+- **`[dev]` extras now require `aiosqlite>=0.19.0`** — required by the
+  Tier-1 canonical fixtures (`memory_dataflow`, `file_dataflow` per
+  `specs/testing-tiers.md`) which back every unit test. Without it, a
+  clean-venv `pytest tests/unit --collect-only` cannot even load the
+  conftest.
+- **Consolidated `pytest.ini` as the single source of truth** for
+  pytest config. Removed dead `[tool.pytest.ini_options]` and
+  `[tool.coverage.run]` sections from `pyproject.toml` (pytest.ini
+  already won file precedence — the pyproject blocks were silent
+  drift surfaces for any contributor editing them).
+- **Sole marker-filter location**: `pytest.ini::addopts` now carries
+  `-m "not (requires_postgres or requires_mysql or requires_redis or
+requires_docker)"`. Integration/E2E CI jobs override via
+  `-o "addopts="`, not by injecting another `-m`.
+- **Per-test timeout enforced**: `pytest.ini` declares
+  `timeout = 120` + `timeout_method = thread`.
+
+### Tests
+
+- Added `tests/regression/test_issue_979_s1_preconditions.py` —
+  5 structural invariants (`@pytest.mark.regression`,
+  `@pytest.mark.unit`) lock the dev-extras pins, pytest.ini timeout
+  - marker filter, consolidated-config invariant, and asyncio
+    loop-scope keys against regression.
+
+### Behavior unchanged
+
+- No `dataflow` runtime API change; `import dataflow` resolves
+  identically. Wheel byte content is identical (test infrastructure
+  changes don't ship in the wheel).
+
 ## [2.9.0] — 2026-05-09 — slim install + audit-store loud failure
 
 Minor bump aligning kailash-dataflow with the kailash 2.18.0 slim-core
