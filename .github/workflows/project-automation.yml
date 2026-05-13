@@ -18,7 +18,7 @@ jobs:
     # Paused — create org project first, then update URL and re-enable
     if: false && github.event_name == 'issues' && github.event.action == 'opened'
     steps:
-      - uses: actions/add-to-project@v1
+      - uses: actions/add-to-project@v2
         with:
           # Format: https://github.com/orgs/<org>/projects/<number>
           project-url: https://github.com/orgs/terrene-foundation/projects/${{ env.PROJECT_NUMBER }}
