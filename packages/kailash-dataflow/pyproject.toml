@@ -125,6 +125,11 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
+    # Required for pytest.ini::timeout — surfaces hung tests as single-test
+    # failures with stack traces, instead of 15-minute job-wide timeouts
+    # that lose all diagnostic. Without this plugin pytest silently ignores
+    # the `timeout` / `timeout_method` directives.
+    "pytest-timeout>=2.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
