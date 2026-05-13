@@ -40,14 +40,8 @@ import logging
 from typing import List, Optional
 
 import httpx
-
 from kaizen.llm.deployment import EmbedOptions, LlmDeployment, WireProtocol
-from kaizen.llm.errors import (
-    InvalidResponse,
-    ProviderError,
-    RateLimited,
-    Timeout,
-)
+from kaizen.llm.errors import InvalidResponse, ProviderError, RateLimited, Timeout
 from kaizen.llm.http_client import LlmHttpClient
 from kaizen.llm.redaction import redact_messages
 from kaizen.llm.wire_protocols import ollama_embeddings, openai_embeddings
@@ -304,9 +298,7 @@ class LlmClient:
                 "LlmClient.from_deployment(...) or LlmClient.from_env() first"
             )
         if not isinstance(texts, list):
-            raise TypeError(
-                f"texts must be list[str]; got {type(texts).__name__}"
-            )
+            raise TypeError(f"texts must be list[str]; got {type(texts).__name__}")
         if options is not None and not isinstance(options, EmbedOptions):
             raise TypeError(
                 f"options must be EmbedOptions; got {type(options).__name__}"
@@ -344,7 +336,7 @@ class LlmClient:
                 deployment_preset=wire.name,
                 timeout=60.0,
             )
-        assert http_client is not None  # type narrower
+        assert http_client is not None  # narrowing for type-checker
 
         try:
             # Build request, let auth strategy install its header.
@@ -357,7 +349,9 @@ class LlmClient:
                 request["headers"].setdefault(k, v)
 
             auth_kind = (
-                auth.auth_strategy_kind() if hasattr(auth, "auth_strategy_kind") else None
+                auth.auth_strategy_kind()
+                if hasattr(auth, "auth_strategy_kind")
+                else None
             )
             logger.info(
                 "llm.embed.start",

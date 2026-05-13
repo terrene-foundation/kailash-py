@@ -237,7 +237,7 @@ class ServiceClient:
             headers={"X-Client": "my-app"},
         )
 
-        user = await client.get("/users/42")          # typed JSON
+        user = await client.get("/users/42")          # parsed JSON dict
         resp = await client.get_raw("/healthz")        # HttpResponse, no status check
 
     Layer order (issue #473 NN1): the SSRF private-IP / metadata check runs
@@ -410,8 +410,8 @@ class ServiceClient:
             )
         except InvalidEndpointError as exc:
             # SSRF rejection at URL-parse or connect time. Translate into
-            # the transport-layer ServiceClientHttpError so callers get one
-            # typed surface for every "request did not reach upstream"
+            # the transport-layer ServiceClientHttpError so callers get
+            # one typed surface for every "request did not reach upstream"
             # condition.
             raise ServiceClientHttpError(f"request blocked: {exc}", cause=exc) from exc
         except httpx.TimeoutException as exc:

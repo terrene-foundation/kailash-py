@@ -53,7 +53,7 @@ class ResourceRequest:
 
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     requester: str = ""
-    resources: Dict[str, float] = field(default_factory=dict)  # type -> amount
+    resources: Dict[str, float] = field(default_factory=dict)  # resource-name -> amount
     priority: int = 5  # 1-10, higher is more important
     duration: Optional[int] = None  # Seconds, None = indefinite
     preemptible: bool = True

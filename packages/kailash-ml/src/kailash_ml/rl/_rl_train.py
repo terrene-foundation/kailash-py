@@ -340,8 +340,8 @@ def _run_bridge_adapter(
         "tenant_id": tenant_id,
     }
     # DPO-family adapters require ``preference_dataset``; PPO-RLHF
-    # requires ``reward_model``. Surface the missing kwarg as a
-    # typed ValueError BEFORE constructing the adapter so the caller
+    # requires ``reward_model``. Surface the missing kwarg with
+    # a typed ValueError BEFORE constructing the adapter so the caller
     # gets an actionable message (not a TypeError from the adapter
     # __init__). Per ``rules/zero-tolerance.md`` Rule 3 (no silent
     # fallbacks).

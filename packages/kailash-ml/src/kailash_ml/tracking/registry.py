@@ -54,7 +54,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional
 
 if TYPE_CHECKING:
-    import polars as pl  # type-checker-only; runtime import is lazy inside methods
+    import polars as pl  # for static analyzers only; runtime import is lazy inside methods
 
 from kailash_ml._result import TrainingResult
 from kailash_ml.errors import fingerprint_classified_value
