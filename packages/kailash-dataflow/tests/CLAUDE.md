@@ -84,6 +84,7 @@ async def test_my_feature(test_suite):
 - **personas/** - User persona scenarios
 - **dataflow/** - DataFlow-specific features
 - **migration/** - Migration system with real databases
+- **fabric/** - DataFlow Fabric (webhooks, MCP, SSE, source adapters). Requires `[fabric]` extra: `pip install -e "packages/kailash-dataflow[fabric]"`. Top-level imports from `dataflow.fabric.*` are NOT available with the `[dev]` install alone; this is why the fabric suite lives in the integration tier, not tier-1 unit (see specs/testing-tiers.md §Tier-1 Rule 1).
 
 #### E2E Tests (`tests/e2e/`)
 - **applications/** - Complete application scenarios
