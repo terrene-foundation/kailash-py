@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-05-13
+
+### Added — issue #953: LocalRuntime-owned AsyncSQL pool tracking
+
+`LocalRuntime` now tracks AsyncSQL connection pools it instantiates, enabling
+deterministic cleanup at runtime teardown. Pools created via `LocalRuntime`
+register with the runtime instance; `runtime.cleanup()` (and `__aexit__` in
+async contexts) drains the registered pools before returning. This closes the
+class of leaks where AsyncSQL pools survived runtime teardown and held
+connections open against the database.
+
+`src/kailash/runtime/local.py` grew the pool-tracking machinery; `src/kailash/runtime/async_local.py` and `src/kailash/edge/resource/resource_pools.py` received
+small adjustments to honor the new ownership contract.
+
+### Fixed — issue #942 sibling: orphaned `wait_for` + `clear_shared_pools` coroutines
+
+`AsyncLocalRuntime._execute_sync` and the shared-pools cleanup path no longer
+leak `wait_for` coroutines on shutdown. Previously, an exception during
+`wait_for` could leave the underlying coroutine pending, surfacing as
+`RuntimeWarning: coroutine '...' was never awaited` in CI and in production
+process-exit logs. Both paths now explicitly close orphaned coroutines on
+cleanup.
+
+### CI / DataFlow test repairs
+
+Test-only / CI-only changes since 2.20.3 (no consumer-visible behavior change,
+included in this release for completeness because they ship in the wheel's
+sdist alongside the runtime fixes above):
+
+- DataFlow unit test repairs: inspector workflow analysis + error handling
+  tests aligned to current API, express_cache v2 key format, migration impact
+  reporter tests repaired, SaaS API key ListNode response shape unwrapped,
+  MongoDB connection tests gated on optional `motor` driver.
+- CI: `[security]` extra installed for cryptography in test_signed_audit
+  collection; DataFlow test step timeout raised to 15 min; pytest-timeout
+  flag removed.
+
 ## [2.20.3] - 2026-05-11
 
 ### Changed — issue #959: trust-plane canonical bytes are now byte-stable
