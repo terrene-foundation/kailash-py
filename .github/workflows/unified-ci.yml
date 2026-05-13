@@ -226,7 +226,10 @@ jobs:
           # [monitoring] provides psutil (required by migration_performance_tracker)
           # [sqlite] provides aiosqlite (required by conftest)
           # [security] provides cryptography (required by tests/unit/trust/test_signed_audit.py)
-          uv pip install -e "packages/kailash-dataflow[dev,sqlite,monitoring,security]" --python .venv/bin/python
+          # [fabric] provides httpx/watchdog/msgpack/prometheus-client (required by
+          #   tests/unit/fabric/*.py — RestSourceAdapter etc. fail at fixture
+          #   setup without them with `ImportError: requires the [fabric] extra`)
+          uv pip install -e "packages/kailash-dataflow[dev,sqlite,monitoring,security,fabric]" --python .venv/bin/python
           # polars is not declared under any kailash-dataflow optional extra; install separately
           # (required by tests/unit/ml/test_dataflow_ml_symbols.py at module level)
           uv pip install polars --python .venv/bin/python
