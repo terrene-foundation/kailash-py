@@ -125,6 +125,24 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0.0",
+    # pytest-timeout: per-test timeout enforcement (issue #979 / PR #976
+    # failure-layer 1). Required by pytest.ini's `timeout = 120` directive
+    # so a clean-venv install reproduces CI's per-test traceback behavior
+    # instead of letting an individual test hang the whole job-wall-clock.
+    # Pinned redundantly here (not transitively from root) per
+    # specs/testing-tiers.md § Tier-1 Contract Rule 6.
+    "pytest-timeout>=2.3.0",
+    # aiosqlite: Tier-1 canonical fixtures (`memory_dataflow`,
+    # `file_dataflow` in tests/unit/conftest.py + tests/fixtures/
+    # unit_test_harness.py) use async SQLite. Per
+    # specs/testing-tiers.md § Tier-1 Contract — Three tiers (SQLite
+    # is the Tier-1 infra surface), a clean `pip install -e
+    # packages/kailash-dataflow[dev]` MUST be able to collect the
+    # unit suite. Sibling `[sqlite]` extra carries the same pin for
+    # runtime SQLite consumers; declaring it explicitly here closes
+    # the "tier-1 collection requires extra not installed" gap that
+    # PR #976's failure-layer family produced.
+    "aiosqlite>=0.19.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
@@ -150,30 +168,14 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
-asyncio_mode = "auto"
-markers = [
-    "unit: tier 1 unit tests (mocks allowed)",
-    "integration: tier 2 integration tests (real infrastructure)",
-    "e2e: tier 3 end-to-end tests (real infrastructure)",
-    "regression: permanent bug reproduction",
-    "security: security-critical path",
-    "trust: trust-plane path",
-]
-
-[tool.coverage.run]
-source = ["src/dataflow"]
-branch = true
-omit = [
-    "tests/*",
-    "*/__init__.py",
-    "*/_vendor/*",
-]
+# NOTE (issue #979 S1 — CRIT-C + Gap-2 consolidation):
+# `[tool.pytest.ini_options]` and `[tool.coverage.run]` previously lived
+# here and were superseded by `pytest.ini` at file-precedence time
+# (pytest.ini wins when both exist). Deleting the dead blocks removes the
+# silent-drift surface — a contributor editing the pyproject sections
+# would see no effect at test-run time while believing the change took.
+# Canonical config lives in `pytest.ini` (markers, addopts, asyncio,
+# timeout, coverage[:run]). See specs/testing-tiers.md § Tier-1 Contract.
 
 [tool.coverage.report]
 # General coverage floor per rules/testing.md § Coverage Requirements.
