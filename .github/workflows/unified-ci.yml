@@ -250,16 +250,21 @@ jobs:
         # (DataFlow.__del__ async cleanup discipline) is tracked separately.
         run: |
           cd packages/kailash-dataflow
-          set -o pipefail
           LOG=/tmp/pytest-dataflow.out
-          ../../.venv/bin/python -m pytest tests/unit/ \
-            --maxfail=10 -q --timeout=120 2>&1 | tee "$LOG" &
+          # Write directly to the log (no tee pipeline) so `$!` captures
+          # the actual pytest PID — not a tee subshell. setsid puts pytest
+          # in its own process group so `kill -9 -PGID` reaches every
+          # finalizer thread, not just the shell wrapper.
+          setsid ../../.venv/bin/python -m pytest tests/unit/ \
+            --maxfail=10 -q --timeout=120 > "$LOG" 2>&1 &
           PYTEST_PID=$!
+          PYTEST_PGID=$(ps -o pgid= -p "$PYTEST_PID" | tr -d ' ')
 
-          # Wait up to 150s for natural completion (well past brief AC#6 ≤2min).
+          # Wait up to 150s for natural completion (brief AC#6 ≤2min has plenty headroom).
           for _ in $(seq 1 150); do
             if ! kill -0 "$PYTEST_PID" 2>/dev/null; then
               wait "$PYTEST_PID"; EXIT=$?
+              tail -20 "$LOG"
               echo "::notice::pytest exited cleanly with code $EXIT"
               exit "$EXIT"
             fi
@@ -267,14 +272,18 @@ jobs:
           done
 
           # pytest still alive past 150s — inspect summary.
+          tail -20 "$LOG"
           if grep -qE '^=+ .* passed' "$LOG" && \
              ! grep -qE '^=+ [^=]*[1-9][0-9]* failed' "$LOG" && \
              ! grep -qE '^=+ [^=]*[1-9][0-9]* error' "$LOG"; then
-            echo "::warning::Pytest reached success summary but finalizer hung; SIGKILLing (rules/patterns.md § Async Resource Cleanup)"
+            echo "::warning::Pytest reached success summary but finalizer hung; SIGKILLing process group ${PYTEST_PGID} (rules/patterns.md § Async Resource Cleanup)"
+            kill -9 -- "-${PYTEST_PGID}" 2>/dev/null || true
             kill -9 "$PYTEST_PID" 2>/dev/null || true
             wait "$PYTEST_PID" 2>/dev/null || true
+            echo "::notice::Summary-based success after SIGKILL"
             exit 0
           fi
           echo "::error::Pytest hung without successful summary"
+          kill -9 -- "-${PYTEST_PGID}" 2>/dev/null || true
           kill -9 "$PYTEST_PID" 2>/dev/null || true
           exit 124
