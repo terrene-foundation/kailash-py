@@ -12,6 +12,7 @@ All tests verify that ErrorEnhancer produces correct error codes and actionable 
 """
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.exceptions import EnhancedDataFlowError
 
@@ -27,34 +28,34 @@ class TestMigrationSystemErrors:
         produces an enhanced error with error code DF-301.
         """
         # Arrange: Create DataFlow without migration system
-        db = DataFlow(":memory:", migration_enabled=False)
+        with DataFlow(":memory:", migration_enabled=False) as db:
 
-        @db.model
-        class User:
-            id: str
-            name: str
+            @db.model
+            class User:
+                id: str
+                name: str
 
-        # Act & Assert: Attempt to call auto_migrate
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            import asyncio
+            # Act & Assert: Attempt to call auto_migrate
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                import asyncio
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(db.auto_migrate())
-            finally:
-                loop.close()
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(db.auto_migrate())
+                finally:
+                    loop.close()
 
-        # Verify error enhancement
-        error_message = str(exc_info.value)
-        assert (
-            "DF-301" in error_message
-            or "Migration system not initialized" in error_message
-        )
-        assert (
-            "migration_enabled" in error_message.lower()
-            or "auto-migration" in error_message.lower()
-        )
+            # Verify error enhancement
+            error_message = str(exc_info.value)
+            assert (
+                "DF-301" in error_message
+                or "Migration system not initialized" in error_message
+            )
+            assert (
+                "migration_enabled" in error_message.lower()
+                or "auto-migration" in error_message.lower()
+            )
 
 
 class TestSchemaDiscoveryErrors:
@@ -70,17 +71,22 @@ class TestSchemaDiscoveryErrors:
         """
         # Arrange: Create DataFlow with MongoDB URL (unsupported for schema discovery)
         db = DataFlow("mongodb://localhost:27017/test_db")
+        try:
+            # Act & Assert: Attempt schema discovery (will fail - unsupported)
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                await db._inspect_database_schema_real()
 
-        # Act & Assert: Attempt schema discovery (will fail - unsupported)
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            await db._inspect_database_schema_real()
-
-        # Verify error enhancement
-        error_message = str(exc_info.value)
-        assert "DF-301" in error_message or "schema discovery" in error_message.lower()
-        assert (
-            "mongodb" in error_message.lower() or "unsupported" in error_message.lower()
-        )
+            # Verify error enhancement
+            error_message = str(exc_info.value)
+            assert (
+                "DF-301" in error_message or "schema discovery" in error_message.lower()
+            )
+            assert (
+                "mongodb" in error_message.lower()
+                or "unsupported" in error_message.lower()
+            )
+        finally:
+            await db.close_async()
 
     @pytest.mark.asyncio
     async def test_in_memory_sqlite_schema_discovery_error_enhanced(self):
@@ -92,18 +98,20 @@ class TestSchemaDiscoveryErrors:
         """
         # Arrange: Create DataFlow with in-memory SQLite
         db = DataFlow(":memory:")
+        try:
+            # Act & Assert: Attempt schema discovery on memory database
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                await db._inspect_sqlite_schema_real(":memory:")
 
-        # Act & Assert: Attempt schema discovery on memory database
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            await db._inspect_sqlite_schema_real(":memory:")
-
-        # Verify error enhancement
-        error_message = str(exc_info.value)
-        assert "DF-301" in error_message or "in-memory" in error_message.lower()
-        assert (
-            "file-based" in error_message.lower()
-            or "not supported" in error_message.lower()
-        )
+            # Verify error enhancement
+            error_message = str(exc_info.value)
+            assert "DF-301" in error_message or "in-memory" in error_message.lower()
+            assert (
+                "file-based" in error_message.lower()
+                or "not supported" in error_message.lower()
+            )
+        finally:
+            await db.close_async()
 
 
 class TestExistingSchemaValidationErrors:
@@ -144,27 +152,27 @@ class TestErrorEnhancementPatterns:
         All migration errors occur AFTER self.error_enhancer is initialized (line 267).
         """
         # Test migration system not initialized (post-initialization)
-        db = DataFlow(":memory:", migration_enabled=False)
+        with DataFlow(":memory:", migration_enabled=False) as db:
 
-        @db.model
-        class TestModel:
-            id: str
-            value: int
+            @db.model
+            class TestModel:
+                id: str
+                value: int
 
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            import asyncio
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                import asyncio
 
-            asyncio.run(db.auto_migrate())
+                asyncio.run(db.auto_migrate())
 
-        error_message = str(exc_info.value)
-        # Should contain enhanced error details
-        assert any(
-            [
-                "DF-501" in error_message,
-                "Migration system not initialized" in error_message,
-                "migration_enabled" in error_message.lower(),
-            ]
-        )
+            error_message = str(exc_info.value)
+            # Should contain enhanced error details
+            assert any(
+                [
+                    "DF-501" in error_message,
+                    "Migration system not initialized" in error_message,
+                    "migration_enabled" in error_message.lower(),
+                ]
+            )
 
 
 class TestErrorMessages:
@@ -172,49 +180,51 @@ class TestErrorMessages:
 
     def test_migration_errors_explain_how_to_fix(self):
         """Verify that migration errors explain how to enable migration system."""
-        db = DataFlow(":memory:", migration_enabled=False)
+        with DataFlow(":memory:", migration_enabled=False) as db:
 
-        @db.model
-        class Item:
-            id: str
-            name: str
+            @db.model
+            class Item:
+                id: str
+                name: str
 
-        # Trigger migration system not initialized error
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            import asyncio
+            # Trigger migration system not initialized error
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                import asyncio
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(db.auto_migrate())
-            finally:
-                loop.close()
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(db.auto_migrate())
+                finally:
+                    loop.close()
 
-        error_message = str(exc_info.value)
-        # Should explain that migration_enabled must be True
-        assert (
-            "migration_enabled" in error_message.lower()
-            or "not initialized" in error_message.lower()
-        )
+            error_message = str(exc_info.value)
+            # Should explain that migration_enabled must be True
+            assert (
+                "migration_enabled" in error_message.lower()
+                or "not initialized" in error_message.lower()
+            )
 
     @pytest.mark.asyncio
     async def test_schema_discovery_errors_list_supported_databases(self):
         """Verify that schema discovery errors list supported databases."""
         db = DataFlow("mongodb://localhost:27017/test")
+        try:
+            # Trigger unsupported database scheme error
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                await db._inspect_database_schema_real()
 
-        # Trigger unsupported database scheme error
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            await db._inspect_database_schema_real()
-
-        error_message = str(exc_info.value)
-        # Should mention PostgreSQL and SQLite as supported
-        assert any(
-            [
-                "postgresql" in error_message.lower(),
-                "sqlite" in error_message.lower(),
-                "supported" in error_message.lower(),
-            ]
-        )
+            error_message = str(exc_info.value)
+            # Should mention PostgreSQL and SQLite as supported
+            assert any(
+                [
+                    "postgresql" in error_message.lower(),
+                    "sqlite" in error_message.lower(),
+                    "supported" in error_message.lower(),
+                ]
+            )
+        finally:
+            await db.close_async()
 
 
 # Summary of test coverage:
