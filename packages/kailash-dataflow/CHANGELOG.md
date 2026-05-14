@@ -1,5 +1,43 @@
 # DataFlow Changelog
 
+## [2.9.5] — 2026-05-14 — V5 tempfile→canonical fixture refactor (S5a of #979)
+
+Patch release shipping shard **S5a** of issue #979 DataFlow Unit Suite Triage
+Workstream-A. Tier-1 unit-test fixture hygiene refactor — replaces ad-hoc
+`tempfile.NamedTemporaryFile(suffix=".db", ...)` + `DataFlow(...)` instantiation
+with the canonical `tmp_path` fixture + `try/finally db.close()` pattern across
+5 files (~60 sites). **No runtime API surface change.**
+
+### Changed
+
+- **`tests/unit/migrations/test_sync_ddl_executor.py`** — 9 sites refactored to
+  `tmp_path` (the `asyncio.get_running_loop()` assertion that gates the
+  sync-DDL-vs-async-loop invariant is preserved unchanged).
+- **`tests/unit/core/test_async_sql_sqlite.py`** — 1 site refactored.
+- **`tests/unit/testing/test_tdd_performance_benchmark.py`** — 4 sites refactored
+  with explicit `try/finally db.close()`.
+- **`tests/unit/context_aware/test_performance_benchmarks.py`** — 2 sites
+  refactored (multi-tenant mode preserved).
+- **`tests/unit/context_aware/test_instance_isolation.py`** — ~44 paired
+  isolation-test sites refactored.
+
+### Why
+
+Closes the `__del__` deadlock class that PR #976 kept rediscovering. The
+canonical fixture's `try/finally db.close()` ensures cleanup runs on test
+failure (where ad-hoc `DataFlow(f"sqlite:///{tmp.name}")` previously leaked to
+GC, allowing `__del__` to deadlock per the documented `engine.py` commit
+`2c98e7b3` issue).
+
+Anchored on `specs/testing-tiers.md` § Tier-1 Contract Rule 2 verbatim:
+"`tempfile.NamedTemporaryFile(suffix=\".db\", ...)` for DB paths" is BLOCKED.
+
+### Verified
+
+Mechanical invariant — zero `tempfile.*\.db` hits in test code after this
+release; the only remaining `tempfile.` reference is a documentation
+docstring intentionally citing the rejected pattern.
+
 ## [2.9.4] — 2026-05-14 — Layer D PG-requiring unit tests audit + move (S4 of #979)
 
 Patch release shipping shard **S4** of issue #979 DataFlow Unit Suite Triage
