@@ -181,23 +181,17 @@ class TestDataFlowInitializationPerformance:
 
         start = time.time()
 
-        db = DataFlow(f"sqlite:///{db_path}", multi_tenant=True)
+        with DataFlow(f"sqlite:///{db_path}", multi_tenant=True) as db:
+            elapsed = time.time() - start
 
-        elapsed = time.time() - start
-
-        try:
             assert elapsed < 10.0, f"Init took {elapsed:.2f}s"
             assert db.tenant_context is not None
-        finally:
-            db.close()
 
     def test_tenant_context_access_after_init(self, tmp_path):
         """Accessing tenant_context after init is fast."""
         db_path = tmp_path / "tenant_ctx_access.db"
 
-        db = DataFlow(f"sqlite:///{db_path}", multi_tenant=True)
-
-        try:
+        with DataFlow(f"sqlite:///{db_path}", multi_tenant=True) as db:
             start = time.time()
 
             for _ in range(1000):
@@ -206,8 +200,6 @@ class TestDataFlowInitializationPerformance:
             elapsed = time.time() - start
 
             assert elapsed < 10.0, f"1000 accesses took {elapsed:.2f}s"
-        finally:
-            db.close()
 
 
 @pytest.mark.unit

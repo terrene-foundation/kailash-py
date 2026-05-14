@@ -108,23 +108,28 @@ class TestSaaSDataModels:
 
     @pytest.fixture
     def saas_dataflow(self, test_database_url):
-        """Create DataFlow with SaaS models."""
-        db = DataFlow(
+        """Create DataFlow with SaaS models.
+
+        NOTE: Whole file is `pytest.mark.skip`-ped (see pytestmark above);
+        this fixture never executes. Migrated to yield+close for hygiene
+        per issue #1002.
+        """
+        with DataFlow(
             test_database_url,
             auto_migrate=False,
             migration_enabled=False,
             cache_enabled=False,
-        )
+        ) as db:
 
-        # Import models from template
-        from saas_starter.models import register_models
+            # Import models from template
+            from saas_starter.models import register_models
 
-        register_models(db)
+            register_models(db)
 
-        # Explicitly create tables for SQLite file database
-        db.create_tables(database_type="sqlite")
+            # Explicitly create tables for SQLite file database
+            db.create_tables(database_type="sqlite")
 
-        return db
+            yield db
 
     def test_organization_model_structure(self, saas_dataflow):
         """
@@ -483,22 +488,25 @@ class TestAuthenticationWorkflows:
 
     @pytest.fixture
     def saas_dataflow(self, test_database_url):
-        """Create DataFlow with SaaS models."""
-        # Use migration_enabled=False to avoid migration system issues with :memory:
-        db = DataFlow(
+        """Create DataFlow with SaaS models.
+
+        Whole file is skipped (see pytestmark above); migrated to
+        yield+close for hygiene per issue #1002.
+        """
+        with DataFlow(
             test_database_url,
             auto_migrate=False,
             migration_enabled=False,
             cache_enabled=False,
-        )
-        from saas_starter.models import register_models
+        ) as db:
+            from saas_starter.models import register_models
 
-        register_models(db)
+            register_models(db)
 
-        # Explicitly create tables for SQLite file database
-        db.create_tables(database_type="sqlite")
+            # Explicitly create tables for SQLite file database
+            db.create_tables(database_type="sqlite")
 
-        return db
+            yield db
 
     @pytest.fixture
     def runtime(self):
@@ -990,22 +998,25 @@ class TestMultiTenantIsolation:
 
     @pytest.fixture
     def saas_dataflow(self, test_database_url):
-        """Create DataFlow with SaaS models."""
-        # Use migration_enabled=False to avoid migration system issues with :memory:
-        db = DataFlow(
+        """Create DataFlow with SaaS models.
+
+        Whole file is skipped (see pytestmark above); migrated to
+        yield+close for hygiene per issue #1002.
+        """
+        with DataFlow(
             test_database_url,
             auto_migrate=False,
             migration_enabled=False,
             cache_enabled=False,
-        )
-        from saas_starter.models import register_models
+        ) as db:
+            from saas_starter.models import register_models
 
-        register_models(db)
+            register_models(db)
 
-        # Explicitly create tables for SQLite file database
-        db.create_tables(database_type="sqlite")
+            # Explicitly create tables for SQLite file database
+            db.create_tables(database_type="sqlite")
 
-        return db
+            yield db
 
     @pytest.fixture
     def runtime(self):

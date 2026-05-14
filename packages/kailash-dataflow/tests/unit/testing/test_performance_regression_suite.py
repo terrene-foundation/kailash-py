@@ -714,9 +714,16 @@ def test_concurrent_regression_testing(regression_suite):
     assert all(r.execution_time_ms < 100.0 for r in results)  # All under 100ms
 
 
-@pytest.mark.asyncio
 def test_async_regression_testing(regression_suite):
-    """Test regression testing with async operations."""
+    """Test regression testing with async operations.
+
+    NOTE: `@pytest.mark.asyncio` was removed (was applied to a sync function).
+    The test body is synchronous — it passes a nested `async def async_operation`
+    callable into `regression_suite.run_regression_test`, which handles its
+    own event loop / awaiting. The function body itself does not await,
+    so the asyncio marker fired a PytestWarning. Issue #1002 invariant 10
+    (asyncio-mark hygiene) per zero-tolerance.md Rule 1.
+    """
 
     async def async_operation(delay_ms: int):
         """Async operation for testing."""
