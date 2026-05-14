@@ -10055,15 +10055,43 @@ class DataFlow(DataFlowEventMixin):
                 self._memory_connection = None
 
         # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
-        if hasattr(self, "runtime") and self.runtime is not None:
+        #
+        # Issue #1002 — the `self.runtime` property resolves to ONE runtime
+        # for the CURRENT context (async loop OR sync singleton). The
+        # instance may hold others in `_loop_runtime_cache` (one per
+        # event-loop the instance saw) AND `_sync_runtime_singleton`
+        # concurrently. Closing only `self.runtime` leaks every cached
+        # runtime EXCEPT the one bound to the calling context — those
+        # leaked LocalRuntime references kept aiosqlite threads alive at
+        # `_Py_Finalize` time, producing the post-summary hang.
+        #
+        # Iterate every cached runtime (override + loop cache + sync
+        # singleton) and close each. Each runtime's own ref-count logic
+        # handles double-close safely.
+        runtimes_to_close = []
+        override = getattr(self, "_runtime_override", None)
+        if override is not None:
+            runtimes_to_close.append(("override", override))
+        loop_cache = getattr(self, "_loop_runtime_cache", None) or {}
+        for loop_id, rt in list(loop_cache.items()):
+            runtimes_to_close.append((f"loop[{loop_id}]", rt))
+        sync_singleton = getattr(self, "_sync_runtime_singleton", None)
+        if sync_singleton is not None:
+            runtimes_to_close.append(("sync_singleton", sync_singleton))
+        for label, rt in runtimes_to_close:
             try:
-                self.runtime.close()
+                rt.close()
             except Exception as e:
                 logger.debug(
-                    "engine.error_closing_shared_runtime", extra={"error": str(e)}
+                    "engine.error_closing_shared_runtime",
+                    extra={"runtime": label, "error": str(e)},
                 )
-            finally:
-                self.runtime = None
+        # Clear caches so the runtime property returns None on subsequent
+        # access (mirrors the pre-fix `self.runtime = None` assignment).
+        if hasattr(self, "_loop_runtime_cache"):
+            self._loop_runtime_cache = {}
+        self._sync_runtime_singleton = None
+        self._runtime_override = None
 
     async def close_async(self):
         """Close database connections and clean up resources (async version).
@@ -10175,16 +10203,33 @@ class DataFlow(DataFlowEventMixin):
             finally:
                 self._audit_backend = None
 
-        # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
-        if hasattr(self, "runtime") and self.runtime is not None:
+        # M2-001 + issue #1002: Close ALL cached runtimes (override + per-loop
+        # cache + sync singleton). The `self.runtime` property resolves to one
+        # runtime; closing only it leaks every other cached runtime, keeping
+        # aiosqlite worker threads alive at `_Py_Finalize` time and producing
+        # the post-summary hang. Mirrors the sync close() fix at L10058.
+        runtimes_to_close = []
+        override = getattr(self, "_runtime_override", None)
+        if override is not None:
+            runtimes_to_close.append(("override", override))
+        loop_cache = getattr(self, "_loop_runtime_cache", None) or {}
+        for loop_id, rt in list(loop_cache.items()):
+            runtimes_to_close.append((f"loop[{loop_id}]", rt))
+        sync_singleton = getattr(self, "_sync_runtime_singleton", None)
+        if sync_singleton is not None:
+            runtimes_to_close.append(("sync_singleton", sync_singleton))
+        for label, rt in runtimes_to_close:
             try:
-                self.runtime.close()
+                rt.close()
             except Exception as e:
                 logger.debug(
-                    "engine.error_closing_shared_runtime", extra={"error": str(e)}
+                    "engine.error_closing_shared_runtime",
+                    extra={"runtime": label, "error": str(e)},
                 )
-            finally:
-                self.runtime = None
+        if hasattr(self, "_loop_runtime_cache"):
+            self._loop_runtime_cache = {}
+        self._sync_runtime_singleton = None
+        self._runtime_override = None
 
         logger.debug(
             "engine.dataflow_instance_closed_async",
