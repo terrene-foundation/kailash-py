@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.core.config import (
     DatabaseConfig,
@@ -61,24 +62,26 @@ class TestArchitecturalRefactoring:
     def test_dataflow_initialization_patterns(self):
         """Test all supported DataFlow initialization patterns."""
         # Pattern 1: Zero-config (uses defaults)
-        db1 = DataFlow()
-        assert db1.config is not None
-        assert db1.config.database is not None
+        with DataFlow() as db1:
+            assert db1.config is not None
+            assert db1.config.database is not None
 
         # Pattern 2: Direct database URL
-        db2 = DataFlow(database_url="sqlite:///:memory:")
-        assert db2.config.database.url == "sqlite:///:memory:"
+        with DataFlow(database_url="sqlite:///:memory:") as db2:
+            assert db2.config.database.url == "sqlite:///:memory:"
 
         # Pattern 3: Structured configuration
         config = DataFlowConfig(database=DatabaseConfig(url="sqlite:///:memory:"))
-        db3 = DataFlow(config=config)
-        assert db3.config.database.url == "sqlite:///:memory:"
+        with DataFlow(config=config) as db3:
+            assert db3.config.database.url == "sqlite:///:memory:"
 
         # Pattern 4: Mixed parameters
-        db4 = DataFlow(database_url="sqlite:///:memory:", pool_size=15, monitoring=True)
-        assert db4.config.database.url == "sqlite:///:memory:"
-        assert db4.config.database.pool_size == 15
-        assert db4.config.monitoring.enabled is True
+        with DataFlow(
+            database_url="sqlite:///:memory:", pool_size=15, monitoring=True
+        ) as db4:
+            assert db4.config.database.url == "sqlite:///:memory:"
+            assert db4.config.database.pool_size == 15
+            assert db4.config.monitoring.enabled is True
 
     def test_configuration_validation(self):
         """Test that configuration validation works correctly."""
@@ -189,22 +192,22 @@ class TestDocumentationAlignment:
     def test_claude_md_patterns_work(self):
         """Test that patterns shown in CLAUDE.md actually work."""
         # Test the basic pattern from CLAUDE.md
-        db = DataFlow()  # Zero config - creates SQLite automatically
-        assert db.config is not None
+        with DataFlow() as db:  # Zero config - creates SQLite automatically
+            assert db.config is not None
 
         # Test production pattern from CLAUDE.md
-        db_prod = DataFlow(
+        with DataFlow(
             database_url="postgresql://user:pass@localhost/db", pool_size=20
-        )
-        assert db_prod.config.database.url == "postgresql://user:pass@localhost/db"
-        assert db_prod.config.database.pool_size == 20
+        ) as db_prod:
+            assert db_prod.config.database.url == "postgresql://user:pass@localhost/db"
+            assert db_prod.config.database.pool_size == 20
 
     def test_decision_matrix_examples(self):
         """Test that decision matrix examples from docs work."""
         # Test quick prototype pattern
         quick_config = DataFlowConfig(environment=Environment.DEVELOPMENT)
-        db_quick = DataFlow(config=quick_config)
-        assert db_quick.config.environment == Environment.DEVELOPMENT
+        with DataFlow(config=quick_config) as db_quick:
+            assert db_quick.config.environment == Environment.DEVELOPMENT
 
         # Test enterprise pattern
         enterprise_config = DataFlowConfig(
@@ -221,9 +224,9 @@ class TestDocumentationAlignment:
                 alert_on_connection_exhaustion=True,
             ),
         )
-        db_enterprise = DataFlow(config=enterprise_config)
-        assert db_enterprise.config.security.multi_tenant is True
-        assert db_enterprise.config.monitoring.enabled is True
+        with DataFlow(config=enterprise_config) as db_enterprise:
+            assert db_enterprise.config.security.multi_tenant is True
+            assert db_enterprise.config.monitoring.enabled is True
 
 
 class TestRegressionPrevention:
@@ -236,26 +239,27 @@ class TestRegressionPrevention:
             database=DatabaseConfig(url="sqlite:///:memory:", pool_size=10),
             monitoring=MonitoringConfig(enabled=True),
         )
-        db = DataFlow(config=config)
-        assert db.config.database.pool_size == 10
+        with DataFlow(config=config) as db:
+            assert db.config.database.pool_size == 10
 
         # Mixed approach should also work (backward compatibility)
-        db2 = DataFlow(database_url="sqlite:///:memory:", pool_size=15, monitoring=True)
-        assert db2.config.database.pool_size == 15
-        assert db2.config.monitoring.enabled is True
+        with DataFlow(
+            database_url="sqlite:///:memory:", pool_size=15, monitoring=True
+        ) as db2:
+            assert db2.config.database.pool_size == 15
+            assert db2.config.monitoring.enabled is True
 
     def test_configuration_immutability_after_init(self):
         """Test that configuration is properly managed after initialization."""
         config = DataFlowConfig(database=DatabaseConfig(url="sqlite:///:memory:"))
-        db = DataFlow(config=config)
+        with DataFlow(config=config) as db:
+            # Configuration should be accessible
+            assert db.config.database.url == "sqlite:///:memory:"
 
-        # Configuration should be accessible
-        assert db.config.database.url == "sqlite:///:memory:"
-
-        # Modifying original config shouldn't affect initialized instance
-        config.database.pool_size = 999
-        # DataFlow should have its own copy or be unaffected
-        assert db.config.database.pool_size != 999
+            # Modifying original config shouldn't affect initialized instance
+            config.database.pool_size = 999
+            # DataFlow should have its own copy or be unaffected
+            assert db.config.database.pool_size != 999
 
     def test_environment_specific_defaults(self):
         """Test that environment-specific defaults work correctly."""
