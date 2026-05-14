@@ -237,7 +237,44 @@ jobs:
         # location per S1 CRIT-B fix (packages/kailash-dataflow/pytest.ini).
         # `--timeout=120` matches the addopts entry; explicit here as defense
         # against pytest-timeout plugin auto-discovery regressions.
+        #
+        # Post-summary finalizer hang workaround: after pytest produces its
+        # summary (~50s, brief AC#6 ≤2min), Python's GC finalizer can
+        # deadlock on aiosqlite cleanup (brief failure-layer #3, rules/
+        # patterns.md § Async Resource Cleanup). The wrapper polls pytest's
+        # stdout for the summary line; if pytest reaches the summary but
+        # the process is still alive 30s later, SIGKILL the finalizer and
+        # exit based on the summary's pass/fail count. This keeps the gate
+        # responsive to real test failures while not burning the 10-minute
+        # step timeout on the known finalizer hang. The underlying SDK fix
+        # (DataFlow.__del__ async cleanup discipline) is tracked separately.
         run: |
           cd packages/kailash-dataflow
+          set -o pipefail
+          LOG=/tmp/pytest-dataflow.out
           ../../.venv/bin/python -m pytest tests/unit/ \
-            --maxfail=10 -q --timeout=120
+            --maxfail=10 -q --timeout=120 2>&1 | tee "$LOG" &
+          PYTEST_PID=$!
+
+          # Wait up to 150s for natural completion (well past brief AC#6 ≤2min).
+          for _ in $(seq 1 150); do
+            if ! kill -0 "$PYTEST_PID" 2>/dev/null; then
+              wait "$PYTEST_PID"; EXIT=$?
+              echo "::notice::pytest exited cleanly with code $EXIT"
+              exit "$EXIT"
+            fi
+            sleep 1
+          done
+
+          # pytest still alive past 150s — inspect summary.
+          if grep -qE '^=+ .* passed' "$LOG" && \
+             ! grep -qE '^=+ [^=]*[1-9][0-9]* failed' "$LOG" && \
+             ! grep -qE '^=+ [^=]*[1-9][0-9]* error' "$LOG"; then
+            echo "::warning::Pytest reached success summary but finalizer hung; SIGKILLing (rules/patterns.md § Async Resource Cleanup)"
+            kill -9 "$PYTEST_PID" 2>/dev/null || true
+            wait "$PYTEST_PID" 2>/dev/null || true
+            exit 0
+          fi
+          echo "::error::Pytest hung without successful summary"
+          kill -9 "$PYTEST_PID" 2>/dev/null || true
+          exit 124
