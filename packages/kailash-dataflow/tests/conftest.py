@@ -984,8 +984,23 @@ async def cleanup_dataflow_connection_pools():
                         await adapter.close_connection_pool()
                 elif hasattr(adapter, "disconnect"):
                     if loop_is_closed:
-                        # SQLite - can disconnect synchronously
-                        pass  # Will be cleared from cache below
+                        # Per-test event loop is already closed (common in
+                        # pytest-asyncio), but aiosqlite Connection workers
+                        # are NON-DAEMON threads (aiosqlite/core.py:90 omits
+                        # daemon=True). Without calling Connection.close(),
+                        # the worker thread sits forever on tx.get() and
+                        # blocks _Py_Finalize → threading._shutdown() at
+                        # interpreter exit. Spin a fresh loop to run the
+                        # async disconnect to completion so each cached
+                        # aiosqlite Connection receives its exit sentinel
+                        # and its worker thread terminates. See issue #1010
+                        # journal entry 0007 for the forensic dump and full
+                        # root-cause analysis.
+                        cleanup_loop = asyncio.new_event_loop()
+                        try:
+                            cleanup_loop.run_until_complete(adapter.disconnect())
+                        finally:
+                            cleanup_loop.close()
                     else:
                         await adapter.disconnect()
                 else:
