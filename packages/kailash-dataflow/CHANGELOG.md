@@ -1,5 +1,43 @@
 # DataFlow Changelog
 
+## [2.9.4] — 2026-05-14 — Layer D PG-requiring unit tests audit + move (S4 of #979)
+
+Patch release shipping shard **S4** of issue #979 DataFlow Unit Suite Triage
+Workstream-A. Test-tier reclassification for PostgreSQL-requiring "unit" tests
+
+- one `pytest.importorskip` gate; no runtime API surface change.
+
+### Changed
+
+- **12 PG-requiring test files moved `tests/unit/` → `tests/integration/`** (PR #988).
+  Closes AC#4 + AC#5 of issue #979 — the moved files violated `specs/testing-tiers.md`
+  Tier-1 Rule 1 (no real PostgreSQL connections, no `IntegrationTestSuite` import
+  in tier-1). Moves preserve git history via rename detection.
+- **`tests/unit/testing/test_tdd_support.py`** — bare `import asyncpg` replaced
+  with `asyncpg = pytest.importorskip("asyncpg")` so clean-venv `[dev]`-only
+  installs do not ImportError at collection time.
+
+### Audited (kept in tier-1)
+
+Eight files audited per the S4 plan's Category-C protocol — PostgreSQL URLs
+were config-only (no real connections opened); files stay in tier-1.
+Receipt at `workspaces/issue-979-dataflow-unit-triage/journal/0008-DECISION-s4-category-c-audit.md`
+per `rules/verify-resource-existence.md` MUST-4.
+
+### Preserved
+
+- `tests/unit/templates/test_saas_tenancy.py` stays in tier-1 (100% mocked,
+  meets tier-1 contract — explicit per S4 plan).
+
+### Known follow-up
+
+9 of the 12 moved files contain `@patch`/`MagicMock`/`unittest.mock` calls
+(byte-identical to pre-move state on `main` `d655038e`). These now sit in
+the integration tier where `specs/testing-tiers.md` § Tier-2 Rule 1 mandates
+NO MOCKING. Tracked as a separate Workstream-B follow-up issue with
+value-anchor citing the spec; out of #979 brief scope (AC#4 + AC#5 did not
+mandate tier-2 mock-free rewrite).
+
 ## [2.9.3] — 2026-05-14 — fabric to integration + conftest refinement (S3 of #979)
 
 Patch release shipping shard **S3** of issue #979 DataFlow Unit Suite Triage
