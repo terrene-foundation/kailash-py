@@ -202,7 +202,10 @@ jobs:
     # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
     if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25 min cap accommodates issue #1010 Phase A diagnostic capture
+    # (reviewer-observed hang up to 17:31 min). Production setsid wrapper
+    # finishes in ~5-6 min so the bump is headroom, not regression risk.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
 
@@ -233,22 +236,43 @@ jobs:
 
       - name: Test DataFlow tier-1 unit suite (issue-1010 Phase A diagnostic)
         if: github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics'
-        timeout-minutes: 25
+        timeout-minutes: 24
         env:
           DATAFLOW_DIAGNOSE_FINALIZE: "1"
           PYTHONFAULTHANDLER: "1"
+          DATAFLOW_DIAGNOSE_LOG: "/tmp/issue-1010-diagnostic.log"
         # Issue #1010 Phase A — diagnostic capture branch ONLY.
-        # Runs pytest WITHOUT the setsid wrapper so the post-summary
-        # _Py_Finalize hang surfaces; the conftest session fixture
-        # (gated on DATAFLOW_DIAGNOSE_FINALIZE=1) emits threading.enumerate(),
-        # full faulthandler stacks, resource_tracker state, and
-        # AsyncSQLDatabaseNode._shared_pools entries at exit.
-        # 25-min step timeout > the 17:31 reviewer-observed hang so we get
-        # the full forensic dump before the step timeout fires.
+        # `-s` disables pytest's --capture=fd so fixture stderr/file
+        # writes survive to the runner log. The conftest session fixture
+        # mirrors output to /tmp/issue-1010-diagnostic.log so even a
+        # SIGKILL on job-timeout cancel leaves the forensic dump on disk
+        # for the "Print diagnostic log" step below.
         run: |
           cd packages/kailash-dataflow
           ../../.venv/bin/python -X faulthandler -m pytest tests/unit/ \
-            --maxfail=10 -q --timeout=120
+            --maxfail=10 -q -s --timeout=120
+
+      - name: Print issue-1010 diagnostic log (always)
+        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics')
+        # Run even on step cancel / job timeout so the on-disk forensic
+        # capture reaches the job log. `cat` is null-safe.
+        run: |
+          echo "=== /tmp/issue-1010-diagnostic.log ==="
+          if [ -f /tmp/issue-1010-diagnostic.log ]; then
+            cat /tmp/issue-1010-diagnostic.log
+          else
+            echo "(no diagnostic file written; fixture may not have activated)"
+          fi
+          echo "=== end of diagnostic log ==="
+
+      - name: Upload issue-1010 diagnostic log
+        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics')
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: issue-1010-phase-a-diagnostic
+          path: /tmp/issue-1010-diagnostic.log
+          if-no-files-found: warn
 
       - name: Test DataFlow tier-1 unit suite
         if: github.ref_name != 'debug/issue-1010-phase-a-diagnostics' && github.head_ref != 'debug/issue-1010-phase-a-diagnostics'
