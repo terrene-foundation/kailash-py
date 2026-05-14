@@ -92,9 +92,9 @@ class TestContextSwitchLatency:
 
         assert elapsed < 10.0, f"1000 switches took {elapsed:.2f}s, expected < 10s"
         # Log average latency for reference (not failing assertion)
-        assert avg_latency_ms < 100, (
-            f"Avg latency {avg_latency_ms:.3f}ms seems too high"
-        )
+        assert (
+            avg_latency_ms < 100
+        ), f"Avg latency {avg_latency_ms:.3f}ms seems too high"
 
     def test_switch_latency_consistent(self, memory_dataflow):
         """Switch latency is consistent across iterations."""
@@ -175,41 +175,39 @@ class TestContextPropagationPerformance:
 class TestDataFlowInitializationPerformance:
     """Test DataFlow initialization with tenant context."""
 
-    def test_dataflow_init_with_multi_tenant_flag(self):
+    def test_dataflow_init_with_multi_tenant_flag(self, tmp_path):
         """DataFlow initialization with multi_tenant=True is fast."""
-        import tempfile
+        db_path = tmp_path / "init_multi_tenant.db"
 
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=True) as tmp:
+        start = time.time()
+
+        db = DataFlow(f"sqlite:///{db_path}", multi_tenant=True)
+
+        elapsed = time.time() - start
+
+        try:
+            assert elapsed < 10.0, f"Init took {elapsed:.2f}s"
+            assert db.tenant_context is not None
+        finally:
+            db.close()
+
+    def test_tenant_context_access_after_init(self, tmp_path):
+        """Accessing tenant_context after init is fast."""
+        db_path = tmp_path / "tenant_ctx_access.db"
+
+        db = DataFlow(f"sqlite:///{db_path}", multi_tenant=True)
+
+        try:
             start = time.time()
 
-            db = DataFlow(f"sqlite:///{tmp.name}", multi_tenant=True)
+            for _ in range(1000):
+                _ = db.tenant_context
 
             elapsed = time.time() - start
 
-            try:
-                assert elapsed < 10.0, f"Init took {elapsed:.2f}s"
-                assert db.tenant_context is not None
-            finally:
-                db.close()
-
-    def test_tenant_context_access_after_init(self):
-        """Accessing tenant_context after init is fast."""
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=True) as tmp:
-            db = DataFlow(f"sqlite:///{tmp.name}", multi_tenant=True)
-
-            try:
-                start = time.time()
-
-                for _ in range(1000):
-                    _ = db.tenant_context
-
-                elapsed = time.time() - start
-
-                assert elapsed < 10.0, f"1000 accesses took {elapsed:.2f}s"
-            finally:
-                db.close()
+            assert elapsed < 10.0, f"1000 accesses took {elapsed:.2f}s"
+        finally:
+            db.close()
 
 
 @pytest.mark.unit
