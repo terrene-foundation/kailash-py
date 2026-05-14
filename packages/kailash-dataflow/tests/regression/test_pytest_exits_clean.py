@@ -15,10 +15,12 @@ isolates the lifecycle; the parent observes exit code AND wall-clock from
 outside the GC arena that would block the hang.
 
 Subset chosen: ``tests/unit/cache/`` — covers the Redis + SQLite cleanup paths
-surfaced as the highest-risk leak class in Shard 2 (8 adapter test files plus
-DataFlow Express cache integration). Small enough to run in <30 s under
-healthy conditions; large enough to exercise the cache + lightweight-pool +
-runtime-cache cleanup paths Shards 1-3 closed.
+exercised by 4 test files (``test_async_redis_adapter.py``,
+``test_auto_detection.py``, ``test_memory_cache.py``,
+``test_redis_invalidate_v2_keyspace.py``), the highest-risk leak class
+surfaced in Shard 2. Small enough to run in <30 s under healthy conditions
+(~4 s observed today); large enough to exercise the cache + lightweight-pool
++ runtime-cache cleanup paths Shards 1-3 closed.
 
 Per ``rules/refactor-invariants.md`` MUST Rule 1 (invariant test in CI default
 path, no special marker exclusion) + ``rules/testing.md`` § "Regression
@@ -44,6 +46,9 @@ WALL_CLOCK_BUDGET_S = 90  # total wall-clock budget for the subset run
 pytestmark = [pytest.mark.regression]
 
 
+# `OUTER_TIMEOUT + 30s` gives `subprocess.TimeoutExpired` time to raise and
+# the except-handler time to format the diagnostic message BEFORE pytest's
+# outer per-test timeout fires. Defense in depth.
 @pytest.mark.timeout(OUTER_TIMEOUT + 30)
 def test_pytest_exits_clean_without_setsid_wrapper() -> None:
     """Run the Tier-1 cache subset as a subprocess; assert clean exit + budget.
@@ -68,6 +73,9 @@ def test_pytest_exits_clean_without_setsid_wrapper() -> None:
         str(SUBSET),
         "-q",
         f"--timeout={INNER_TIMEOUT}",
+        # `-p no:cacheprovider` keeps the subprocess from polluting
+        # `.pytest_cache/` in the parent's cwd — clean isolation between the
+        # outer pytest invocation and this regression's inner subprocess.
         "-p",
         "no:cacheprovider",
     ]
