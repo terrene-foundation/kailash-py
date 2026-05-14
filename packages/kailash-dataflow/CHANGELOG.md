@@ -1,5 +1,27 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **#1000 (full closure) + #1002 (closure)** — Tier-1 unit suite test
+  fixtures now explicitly close `DataFlow`, `AsyncRedisCacheAdapter`,
+  `aiomysql`, and `motor` async resources in fixture teardown across
+  Shards 1-3 of issue #1002, eliminating the post-pytest-summary
+  `_Py_Finalize → wait_for_thread_shutdown` hang that previously
+  required the `setsid` + 150s polling + SIGKILL wrapper in
+  `.github/workflows/unified-ci.yml::test-dataflow`. CI now runs plain
+  `pytest tests/unit/` and observes natural exit ≤92s wall-clock
+  (3274 passed, 87 skipped). Shard 4a's behavioral regression test
+  (`packages/kailash-dataflow/tests/regression/test_pytest_exits_clean.py`)
+  guards against re-introduction. Engine-side production fixes:
+  `DataFlow.close()` / `close_async()` now close cached
+  `AsyncSQLDatabaseNode` instances and release every cached runtime
+  (`_runtime_override`, `_loop_runtime_cache`, `_sync_runtime_singleton`),
+  not just `self.runtime`. The structural cleanup contract is mandated
+  by `specs/testing-tiers.md` §2 and `rules/patterns.md` § "Async
+  Resource Cleanup".
+
 ## [2.9.7] — 2026-05-14 — Structural `__del__` rule compliance (partial closure of #1000)
 
 Closes 9 `__del__` rule violations per `rules/patterns.md` § Async Resource

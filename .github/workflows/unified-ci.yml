@@ -238,52 +238,16 @@ jobs:
         # `--timeout=120` matches the addopts entry; explicit here as defense
         # against pytest-timeout plugin auto-discovery regressions.
         #
-        # Post-summary finalizer hang workaround: after pytest produces its
-        # summary (~50s, brief AC#6 ≤2min), Python's GC finalizer can
-        # deadlock on aiosqlite cleanup (brief failure-layer #3, rules/
-        # patterns.md § Async Resource Cleanup). The wrapper polls pytest's
-        # stdout for the summary line; if pytest reaches the summary but
-        # the process is still alive 30s later, SIGKILL the finalizer and
-        # exit based on the summary's pass/fail count. This keeps the gate
-        # responsive to real test failures while not burning the 10-minute
-        # step timeout on the known finalizer hang. The underlying SDK fix
-        # (DataFlow.__del__ async cleanup discipline) is tracked separately.
+        # Plain pytest invocation: the `setsid` + 150s polling wrapper that
+        # previously masked the post-summary `_Py_Finalize` hang was removed
+        # in #1002 Shard 4b after Shards 1-3 closed the underlying leak class
+        # (test-fixture resource cleanup + DataFlow.close() runtime-cache
+        # release + AsyncSQLDatabaseNode cache cleanup). The Shard-4a
+        # regression at packages/kailash-dataflow/tests/regression/
+        # test_pytest_exits_clean.py guards against re-introduction of the
+        # hang. See rules/patterns.md § Async Resource Cleanup +
+        # specs/testing-tiers.md §2.
         run: |
           cd packages/kailash-dataflow
-          LOG=/tmp/pytest-dataflow.out
-          # Write directly to the log (no tee pipeline) so `$!` captures
-          # the actual pytest PID — not a tee subshell. setsid puts pytest
-          # in its own process group so `kill -9 -PGID` reaches every
-          # finalizer thread, not just the shell wrapper.
-          setsid ../../.venv/bin/python -m pytest tests/unit/ \
-            --maxfail=10 -q --timeout=120 > "$LOG" 2>&1 &
-          PYTEST_PID=$!
-          PYTEST_PGID=$(ps -o pgid= -p "$PYTEST_PID" | tr -d ' ')
-
-          # Wait up to 150s for natural completion (brief AC#6 ≤2min has plenty headroom).
-          for _ in $(seq 1 150); do
-            if ! kill -0 "$PYTEST_PID" 2>/dev/null; then
-              wait "$PYTEST_PID"; EXIT=$?
-              tail -20 "$LOG"
-              echo "::notice::pytest exited cleanly with code $EXIT"
-              exit "$EXIT"
-            fi
-            sleep 1
-          done
-
-          # pytest still alive past 150s — inspect summary.
-          tail -20 "$LOG"
-          if grep -qE '^=+ .* passed' "$LOG" && \
-             ! grep -qE '^=+ [^=]*[1-9][0-9]* failed' "$LOG" && \
-             ! grep -qE '^=+ [^=]*[1-9][0-9]* error' "$LOG"; then
-            echo "::warning::Pytest reached success summary but finalizer hung; SIGKILLing process group ${PYTEST_PGID} (rules/patterns.md § Async Resource Cleanup)"
-            kill -9 -- "-${PYTEST_PGID}" 2>/dev/null || true
-            kill -9 "$PYTEST_PID" 2>/dev/null || true
-            wait "$PYTEST_PID" 2>/dev/null || true
-            echo "::notice::Summary-based success after SIGKILL"
-            exit 0
-          fi
-          echo "::error::Pytest hung without successful summary"
-          kill -9 -- "-${PYTEST_PGID}" 2>/dev/null || true
-          kill -9 "$PYTEST_PID" 2>/dev/null || true
-          exit 124
+          ../../.venv/bin/python -m pytest tests/unit/ \
+            --maxfail=10 -q --timeout=120
