@@ -243,14 +243,17 @@ class TestIntegrationCacheDisabled:
 
             try:
                 from dataflow import DataFlow
+            except ImportError as e:
+                pytest.skip(f"DataFlow not available: {e}")
 
-                # Create DataFlow with caching DISABLED using the enable_caching alias
-                # FIX: enable_caching is now an alias for cache_enabled
-                db = DataFlow(
-                    ":memory:",
-                    auto_migrate=True,
-                    enable_caching=False,  # Using the alias (bug report parameter name)
-                )
+            # Create DataFlow with caching DISABLED using the enable_caching alias
+            # FIX: enable_caching is now an alias for cache_enabled
+            db = DataFlow(
+                ":memory:",
+                auto_migrate=True,
+                enable_caching=False,  # Using the alias (bug report parameter name)
+            )
+            try:
 
                 @db.model
                 class User:
@@ -262,14 +265,14 @@ class TestIntegrationCacheDisabled:
                 await db.initialize()
 
                 # Verify cache is disabled via config
-                assert db.config.enable_query_cache is False, (
-                    "Config enable_query_cache should be False when enable_caching=False"
-                )
+                assert (
+                    db.config.enable_query_cache is False
+                ), "Config enable_query_cache should be False when enable_caching=False"
 
                 # FIXED: Cache integration should be None when caching is disabled
-                assert db._cache_integration is None, (
-                    "Cache integration should be None when enable_caching=False"
-                )
+                assert (
+                    db._cache_integration is None
+                ), "Cache integration should be None when enable_caching=False"
 
                 # Check for any cache-related warnings
                 cache_warnings = [
@@ -283,9 +286,8 @@ class TestIntegrationCacheDisabled:
                     f"Found {len(cache_warnings)} cache-related warnings: "
                     f"{[str(w.message) for w in cache_warnings]}"
                 )
-
-            except ImportError as e:
-                pytest.skip(f"DataFlow not available: {e}")
+            finally:
+                await db.close_async()
 
     @pytest.mark.asyncio
     async def test_dataflow_cache_enabled_parameter_alias(self):
@@ -296,22 +298,33 @@ class TestIntegrationCacheDisabled:
         """
         try:
             from dataflow import DataFlow
-
-            # Test with cache_enabled=False
-            db1 = DataFlow(":memory:", cache_enabled=False)
-            assert db1.config.enable_query_cache is False
-
-            # Test with enable_caching=False (alias)
-            db2 = DataFlow(":memory:", enable_caching=False)
-            assert db2.config.enable_query_cache is False
-
-            # Test with cache_enabled=True (default)
-            db3 = DataFlow(":memory:", cache_enabled=True)
-            assert db3.config.enable_query_cache is True
-
-            # Test with enable_caching=True (alias)
-            db4 = DataFlow(":memory:", enable_caching=True)
-            assert db4.config.enable_query_cache is True
-
         except ImportError as e:
             pytest.skip(f"DataFlow not available: {e}")
+
+        # Test with cache_enabled=False
+        db1 = DataFlow(":memory:", cache_enabled=False)
+        try:
+            assert db1.config.enable_query_cache is False
+        finally:
+            await db1.close_async()
+
+        # Test with enable_caching=False (alias)
+        db2 = DataFlow(":memory:", enable_caching=False)
+        try:
+            assert db2.config.enable_query_cache is False
+        finally:
+            await db2.close_async()
+
+        # Test with cache_enabled=True (default)
+        db3 = DataFlow(":memory:", cache_enabled=True)
+        try:
+            assert db3.config.enable_query_cache is True
+        finally:
+            await db3.close_async()
+
+        # Test with enable_caching=True (alias)
+        db4 = DataFlow(":memory:", enable_caching=True)
+        try:
+            assert db4.config.enable_query_cache is True
+        finally:
+            await db4.close_async()
