@@ -6,7 +6,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
+    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*, debug/*]
     paths:
       - "src/**"
       - "packages/**"
@@ -231,7 +231,27 @@ jobs:
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
 
+      - name: Test DataFlow tier-1 unit suite (issue-1010 Phase A diagnostic)
+        if: github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics'
+        timeout-minutes: 25
+        env:
+          DATAFLOW_DIAGNOSE_FINALIZE: "1"
+          PYTHONFAULTHANDLER: "1"
+        # Issue #1010 Phase A — diagnostic capture branch ONLY.
+        # Runs pytest WITHOUT the setsid wrapper so the post-summary
+        # _Py_Finalize hang surfaces; the conftest session fixture
+        # (gated on DATAFLOW_DIAGNOSE_FINALIZE=1) emits threading.enumerate(),
+        # full faulthandler stacks, resource_tracker state, and
+        # AsyncSQLDatabaseNode._shared_pools entries at exit.
+        # 25-min step timeout > the 17:31 reviewer-observed hang so we get
+        # the full forensic dump before the step timeout fires.
+        run: |
+          cd packages/kailash-dataflow
+          ../../.venv/bin/python -X faulthandler -m pytest tests/unit/ \
+            --maxfail=10 -q --timeout=120
+
       - name: Test DataFlow tier-1 unit suite
+        if: github.ref_name != 'debug/issue-1010-phase-a-diagnostics' && github.head_ref != 'debug/issue-1010-phase-a-diagnostics'
         timeout-minutes: 10
         # ZERO `-m` flag here: pytest.ini::addopts is the SOLE marker filter
         # location per S1 CRIT-B fix (packages/kailash-dataflow/pytest.ini).
