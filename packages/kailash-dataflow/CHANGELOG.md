@@ -1,5 +1,71 @@
 # DataFlow Changelog
 
+## [2.9.8] — 2026-05-15 — Test-fixture + engine close() cleanup (partial closure of #1000 / #1002)
+
+Closes the leak-class half of issue #1002 (AC#1, AC#4) and adds engine
+production-path fixes. The CI-side AC#3 (remove `setsid` wrapper from
+`unified-ci.yml::test-dataflow`) remains DEFERRED to follow-up issue
+#1010 because the underlying `_Py_Finalize` post-summary hang is
+cross-platform (Linux/Python 3.11 + macOS) and not fully closed by the
+fixes in this release. Issue #1010 tracks the remaining diagnostic
+phases (H1 `LocalRuntime.__del__` core SDK violation, H2
+`SyncExpress` orphan daemon thread, H3 `AsyncSQLDatabaseNode._shared_pools`
+never cleared by `DataFlow.close()`).
+
+### Fixed
+
+- **Test fixture cleanup contract** (issue #1002 AC#1) — 156 inline
+  `DataFlow` / `AsyncRedisCacheAdapter` constructions across 28 unit
+  test files migrated to fixture / context-manager / try-finally
+  cleanup patterns per the contract at `specs/testing-tiers.md` §2 and
+  `rules/patterns.md` § Async Resource Cleanup. Sites:
+  - Shard 1: 67 sites in 5 high-density files (PR #1004)
+  - Shard 2: 45 sites in 4 mid-density + adapter files (PR #1005)
+  - Shard 3: 44 sites in 19 of 24 tail files + `warnings.filters`
+    isolation in `test_validation_off_mode_no_checks` + asyncio-mark
+    hygiene in `test_performance_regression_suite` (PR #1006)
+- **`DataFlow.close()` AsyncSQLDatabaseNode cache cleanup** —
+  `packages/kailash-dataflow/src/dataflow/core/engine.py::close()` now
+  iterates `_async_sql_node_cache` and closes each cached node via
+  `async_safe_run(node.close())`, matching the existing `close_async()`
+  block. Previously sync `close()` left cached nodes leaked at GC,
+  emitting `PytestUnraisableExceptionWarning` from
+  `AsyncSQLDatabaseNode.__del__`. Behavioral regression at
+  `packages/kailash-dataflow/tests/regression/test_issue_1002_sync_close_closes_async_sql_node_cache.py`
+  (3 probes: direct cache prime, sync context-manager teardown,
+  partial-failure tolerance).
+- **`DataFlow.close()` / `close_async()` release ALL cached runtimes** —
+  previously only `self.runtime` was closed; now every entry of
+  `_runtime_override`, `_loop_runtime_cache`, `_sync_runtime_singleton`
+  is closed and the caches cleared. Leaked `LocalRuntime` references
+  previously kept aiosqlite background threads alive past
+  `_Py_Finalize`. Behavioral regression at
+  `packages/kailash-dataflow/tests/regression/test_issue_1002_close_releases_all_cached_runtimes.py`
+  (3 probes: sync + async parity + partial-failure tolerance).
+
+### Added
+
+- **`packages/kailash-dataflow/tests/regression/test_pytest_exits_clean.py`**
+  (issue #1002 AC#4) — subprocess-based regression test that invokes
+  pytest against `tests/unit/cache/` and asserts clean exit within
+  budget. Subset chosen: 4 Redis + cache adapter test files. **Known
+  coverage gap** — the cache subset does not exercise the engine
+  close() / runtime-cache cleanup paths the engine-side fixes above
+  closed; coverage broadening tracked in issue #1010 Phase C.
+
+### Known limitations (deferred to #1010)
+
+- **CI `test-dataflow` lane still runs under `setsid` wrapper** —
+  removing the wrapper exposes a residual `_Py_Finalize` post-summary
+  hang that reproduces on both Linux/Python 3.11 (CI) and macOS
+  (intermittently). Root-cause candidates H1/H2/H3 identified in
+  `/redteam` Round 1; diagnostic + fix work scheduled for issue #1010.
+- **`packages/kailash-dataflow/tests/regression/` NOT exercised by any
+  CI step** — the 3 regression tests above are dark on PR CI. Wiring
+  blocked by an unrelated pre-existing failure
+  (`test_issue_753_psycopg2_dep_declared` policy conflict between #753
+  baseline-dep and #890 audit). Both tracked in #1010.
+
 ## [2.9.7] — 2026-05-14 — Structural `__del__` rule compliance (partial closure of #1000)
 
 Closes 9 `__del__` rule violations per `rules/patterns.md` § Async Resource
