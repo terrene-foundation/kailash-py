@@ -182,82 +182,79 @@ async def test_tdd_transaction_performance_single(
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
-async def test_tdd_savepoint_isolation_performance(performance_validator):
+async def test_tdd_savepoint_isolation_performance(performance_validator, tmp_path):
     """Test performance of savepoint-based isolation concept using workflow patterns."""
-    import tempfile
-
     from kailash.runtime.local import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
 
     start_time = time.time()
 
     # Simulate savepoint-based isolation using SQLite's transaction capabilities
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=True) as tmp:
-        db_path = tmp.name
+    db_path = tmp_path / "savepoint_isolation.db"
 
-        # Create workflow for database operations
-        workflow = WorkflowBuilder()
+    # Create workflow for database operations
+    workflow = WorkflowBuilder()
 
-        # Begin transaction (simulating savepoint)
-        workflow.add_node(
-            "AsyncSQLDatabaseNode",
-            "begin_transaction",
-            {
-                "connection_string": f"sqlite:///{db_path}",
-                "query": "BEGIN TRANSACTION",
-                "validate_queries": False,
-            },
-        )
+    # Begin transaction (simulating savepoint)
+    workflow.add_node(
+        "AsyncSQLDatabaseNode",
+        "begin_transaction",
+        {
+            "connection_string": f"sqlite:///{db_path}",
+            "query": "BEGIN TRANSACTION",
+            "validate_queries": False,
+        },
+    )
 
-        # Create a test table within transaction
-        workflow.add_node(
-            "AsyncSQLDatabaseNode",
-            "create_table",
-            {
-                "connection_string": f"sqlite:///{db_path}",
-                "query": """
-                CREATE TABLE IF NOT EXISTS perf_test_table (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """,
-                "validate_queries": False,
-            },
-        )
-
-        # Insert test data within transaction
-        for i in range(10):
-            workflow.add_node(
-                "AsyncSQLDatabaseNode",
-                f"insert_{i}",
-                {
-                    "connection_string": f"sqlite:///{db_path}",
-                    "query": f"INSERT INTO perf_test_table (name) VALUES ('Test Record {i}')",
-                    "validate_queries": False,
-                },
+    # Create a test table within transaction
+    workflow.add_node(
+        "AsyncSQLDatabaseNode",
+        "create_table",
+        {
+            "connection_string": f"sqlite:///{db_path}",
+            "query": """
+            CREATE TABLE IF NOT EXISTS perf_test_table (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """,
+            "validate_queries": False,
+        },
+    )
 
-        # Rollback transaction (simulating savepoint rollback for isolation)
+    # Insert test data within transaction
+    for i in range(10):
         workflow.add_node(
             "AsyncSQLDatabaseNode",
-            "rollback",
+            f"insert_{i}",
             {
                 "connection_string": f"sqlite:///{db_path}",
-                "query": "ROLLBACK",
+                "query": f"INSERT INTO perf_test_table (name) VALUES ('Test Record {i}')",
                 "validate_queries": False,
             },
         )
 
-        # Execute workflow
-        runtime = LocalRuntime()
-        try:
-            results, run_id = runtime.execute(workflow.build())
-            # Check that operations executed (even if rolled back)
-            assert "begin_transaction" in results
-        except Exception:
-            # SQLite transaction handling might vary - that's OK for performance test
-            pass
+    # Rollback transaction (simulating savepoint rollback for isolation)
+    workflow.add_node(
+        "AsyncSQLDatabaseNode",
+        "rollback",
+        {
+            "connection_string": f"sqlite:///{db_path}",
+            "query": "ROLLBACK",
+            "validate_queries": False,
+        },
+    )
+
+    # Execute workflow
+    runtime = LocalRuntime()
+    try:
+        results, run_id = runtime.execute(workflow.build())
+        # Check that operations executed (even if rolled back)
+        assert "begin_transaction" in results
+    except Exception:
+        # SQLite transaction handling might vary - that's OK for performance test
+        pass
 
     end_time = time.time()
     duration_ms = (end_time - start_time) * 1000
@@ -274,9 +271,8 @@ async def test_tdd_savepoint_isolation_performance(performance_validator):
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
-async def test_tdd_parallel_performance(performance_validator):
+async def test_tdd_parallel_performance(performance_validator, tmp_path):
     """Test performance of parallel-safe TDD execution using isolated SQLite databases."""
-    import tempfile
     import uuid
 
     from kailash.runtime.local import LocalRuntime
@@ -288,71 +284,70 @@ async def test_tdd_parallel_performance(performance_validator):
     unique_id = f"test_{uuid.uuid4().hex[:8]}"
 
     # Use separate SQLite database for isolation (simulating parallel-safe execution)
-    with tempfile.NamedTemporaryFile(suffix=f"_{unique_id}.db", delete=True) as tmp:
-        db_path = tmp.name
-        table_name = f"parallel_perf_test_{unique_id}"
+    db_path = tmp_path / f"parallel_{unique_id}.db"
+    table_name = f"parallel_perf_test_{unique_id}"
 
-        # Create workflow for parallel-safe operations
-        workflow = WorkflowBuilder()
+    # Create workflow for parallel-safe operations
+    workflow = WorkflowBuilder()
 
-        # Create unique test table
-        workflow.add_node(
-            "AsyncSQLDatabaseNode",
-            "create_table",
-            {
-                "connection_string": f"sqlite:///{db_path}",
-                "query": f"""
-                CREATE TABLE IF NOT EXISTS {table_name} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    data TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """,
-                "validate_queries": False,
-            },
-        )
-
-        # Perform concurrent-style operations
-        for i in range(5):
-            workflow.add_node(
-                "AsyncSQLDatabaseNode",
-                f"insert_{i}",
-                {
-                    "connection_string": f"sqlite:///{db_path}",
-                    "query": f"INSERT INTO {table_name} (data) VALUES ('Parallel test data {i}')",
-                    "validate_queries": False,
-                },
+    # Create unique test table
+    workflow.add_node(
+        "AsyncSQLDatabaseNode",
+        "create_table",
+        {
+            "connection_string": f"sqlite:///{db_path}",
+            "query": f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            if i > 0:
-                workflow.add_connection(
-                    f"insert_{i - 1}", "result", f"insert_{i}", "trigger"
-                )
-            else:
-                workflow.add_connection("create_table", "result", "insert_0", "trigger")
+        """,
+            "validate_queries": False,
+        },
+    )
 
-        # Query data count
+    # Perform concurrent-style operations
+    for i in range(5):
         workflow.add_node(
             "AsyncSQLDatabaseNode",
-            "count_records",
+            f"insert_{i}",
             {
                 "connection_string": f"sqlite:///{db_path}",
-                "query": f"SELECT COUNT(*) as count FROM {table_name}",
+                "query": f"INSERT INTO {table_name} (data) VALUES ('Parallel test data {i}')",
                 "validate_queries": False,
             },
         )
-        workflow.add_connection("insert_4", "result", "count_records", "trigger")
+        if i > 0:
+            workflow.add_connection(
+                f"insert_{i - 1}", "result", f"insert_{i}", "trigger"
+            )
+        else:
+            workflow.add_connection("create_table", "result", "insert_0", "trigger")
 
-        # Execute workflow
-        runtime = LocalRuntime()
-        try:
-            results, run_id = runtime.execute(workflow.build())
-            # Verify operations completed
-            assert "create_table" in results
-            for i in range(5):
-                assert f"insert_{i}" in results
-        except Exception:
-            # SQLite operations might vary - that's OK for performance test
-            pass
+    # Query data count
+    workflow.add_node(
+        "AsyncSQLDatabaseNode",
+        "count_records",
+        {
+            "connection_string": f"sqlite:///{db_path}",
+            "query": f"SELECT COUNT(*) as count FROM {table_name}",
+            "validate_queries": False,
+        },
+    )
+    workflow.add_connection("insert_4", "result", "count_records", "trigger")
+
+    # Execute workflow
+    runtime = LocalRuntime()
+    try:
+        results, run_id = runtime.execute(workflow.build())
+        # Verify operations completed
+        assert "create_table" in results
+        for i in range(5):
+            assert f"insert_{i}" in results
+    except Exception:
+        # SQLite operations might vary - that's OK for performance test
+        pass
 
     end_time = time.time()
     duration_ms = (end_time - start_time) * 1000
@@ -369,19 +364,17 @@ async def test_tdd_parallel_performance(performance_validator):
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
-async def test_tdd_seeded_data_performance(performance_validator):
+async def test_tdd_seeded_data_performance(performance_validator, tmp_path):
     """Test performance of pre-seeded data scenarios using DataFlow patterns."""
-    import tempfile
-
     from dataflow import DataFlow
 
     start_time = time.time()
 
     # Create DataFlow with pre-seeded data
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=True) as tmp:
-        db_path = tmp.name
-        df = DataFlow(f"sqlite:///{db_path}")
+    db_path = tmp_path / "seeded_data.db"
+    df = DataFlow(f"sqlite:///{db_path}")
 
+    try:
         # Define models (simulating pre-seeded schema)
         @df.model
         class User:
@@ -441,6 +434,8 @@ async def test_tdd_seeded_data_performance(performance_validator):
         # Simulate operations that would use the seeded data
         # In a real TDD scenario, this data would already be in the database
         await asyncio.sleep(0.001)  # Minimal processing time
+    finally:
+        df.close()
 
     end_time = time.time()
     duration_ms = (end_time - start_time) * 1000
@@ -456,25 +451,23 @@ async def test_tdd_seeded_data_performance(performance_validator):
 
 @pytest.mark.asyncio
 @pytest.mark.tdd
-async def test_tdd_connection_reuse_performance(performance_validator):
+async def test_tdd_connection_reuse_performance(performance_validator, tmp_path):
     """Test performance benefits of connection reuse using DataFlow's connection pooling."""
-    import tempfile
-
     from dataflow import DataFlow
 
     start_time = time.time()
 
     # Create DataFlow with connection pooling enabled
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=True) as tmp:
-        db_path = tmp.name
+    db_path = tmp_path / "connection_reuse.db"
 
-        # DataFlow manages its own connection pool
-        df = DataFlow(
-            f"sqlite:///{db_path}",
-            pool_size=5,  # Simulate connection pool
-            pool_max_overflow=0,
-        )
+    # DataFlow manages its own connection pool
+    df = DataFlow(
+        f"sqlite:///{db_path}",
+        pool_size=5,  # Simulate connection pool
+        pool_max_overflow=0,
+    )
 
+    try:
         # Perform multiple operations simulating connection reuse
         for i in range(5):
             # Each operation would reuse connections from the pool
@@ -490,7 +483,7 @@ async def test_tdd_connection_reuse_performance(performance_validator):
                 # SQLite doesn't have true connection pooling like PostgreSQL
                 # But the test validates the performance pattern
                 pass
-
+    finally:
         df.close()
 
     end_time = time.time()
