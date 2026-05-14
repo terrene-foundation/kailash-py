@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from dataflow.cache.async_redis_adapter import AsyncRedisCacheAdapter
 
@@ -51,20 +52,32 @@ class TestAsyncRedisCacheAdapterBasics:
         mock.warmup.return_value = True
         return mock
 
-    @pytest.fixture
-    def adapter(self, mock_redis_manager):
-        """Create AsyncRedisCacheAdapter with mocked manager."""
-        return AsyncRedisCacheAdapter(mock_redis_manager)
+    @pytest_asyncio.fixture
+    async def adapter(self, mock_redis_manager):
+        """Create AsyncRedisCacheAdapter with mocked manager.
+
+        Yields + closes per rules/testing.md § Fixtures Yield + Cleanup —
+        without close_async() the underlying ThreadPoolExecutor leaves
+        non-daemon worker threads keeping the process alive past pytest
+        summary (issue #1002).
+        """
+        adapter = AsyncRedisCacheAdapter(mock_redis_manager)
+        try:
+            yield adapter
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
     async def test_initialization(self, mock_redis_manager):
         """Test adapter initialization."""
         adapter = AsyncRedisCacheAdapter(mock_redis_manager, max_workers=4)
-
-        assert adapter.redis_manager is mock_redis_manager
-        assert adapter._executor is not None
-        assert adapter._executor._max_workers == 4
+        try:
+            assert adapter.redis_manager is mock_redis_manager
+            assert adapter._executor is not None
+            assert adapter._executor._max_workers == 4
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -218,10 +231,14 @@ class TestAsyncRedisCacheAdapterConcurrency:
         mock.set.return_value = True
         return mock
 
-    @pytest.fixture
-    def adapter(self, mock_redis_manager):
+    @pytest_asyncio.fixture
+    async def adapter(self, mock_redis_manager):
         """Create adapter."""
-        return AsyncRedisCacheAdapter(mock_redis_manager)
+        adapter = AsyncRedisCacheAdapter(mock_redis_manager)
+        try:
+            yield adapter
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -275,9 +292,11 @@ class TestAsyncRedisCacheAdapterErrorHandling:
         mock_manager.get.side_effect = ValueError("Redis connection failed")
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-
-        with pytest.raises(ValueError, match="Redis connection failed"):
-            await adapter.get("test_key")
+        try:
+            with pytest.raises(ValueError, match="Redis connection failed"):
+                await adapter.get("test_key")
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -287,9 +306,11 @@ class TestAsyncRedisCacheAdapterErrorHandling:
         mock_manager.set.side_effect = RuntimeError("Write failed")
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-
-        with pytest.raises(RuntimeError, match="Write failed"):
-            await adapter.set("test_key", "value")
+        try:
+            with pytest.raises(RuntimeError, match="Write failed"):
+                await adapter.set("test_key", "value")
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -299,9 +320,11 @@ class TestAsyncRedisCacheAdapterErrorHandling:
         mock_manager.delete.side_effect = ConnectionError("Connection lost")
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-
-        with pytest.raises(ConnectionError, match="Connection lost"):
-            await adapter.delete("test_key")
+        try:
+            with pytest.raises(ConnectionError, match="Connection lost"):
+                await adapter.delete("test_key")
+        finally:
+            await adapter.close_async()
 
 
 class TestAsyncRedisCacheAdapterCleanup:
@@ -405,15 +428,16 @@ class TestAsyncRedisCacheAdapterCleanup:
 
         adapter1 = AsyncRedisCacheAdapter(mock_manager1, max_workers=2)
         adapter2 = AsyncRedisCacheAdapter(mock_manager2, max_workers=4)
-
-        # Executors should be independent
-        assert adapter1._executor is not adapter2._executor
-        assert adapter1._executor._max_workers == 2
-        assert adapter2._executor._max_workers == 4
-
-        # Cleanup
-        del adapter1
-        del adapter2
+        try:
+            # Executors should be independent
+            assert adapter1._executor is not adapter2._executor
+            assert adapter1._executor._max_workers == 2
+            assert adapter2._executor._max_workers == 4
+        finally:
+            # Cleanup via the documented contract (issue #1002 — `del`
+            # leaves non-daemon worker threads alive past pytest summary).
+            await adapter1.close_async()
+            await adapter2.close_async()
 
 
 class TestAsyncRedisCacheAdapterEdgeCases:
@@ -427,9 +451,11 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.get.return_value = None
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.get("nonexistent_key")
-
-        assert result is None
+        try:
+            result = await adapter.get("nonexistent_key")
+            assert result is None
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -439,10 +465,12 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.set.return_value = True
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.set("key", "value", ttl=None)
-
-        assert result is True
-        mock_manager.set.assert_called_once_with("key", "value", None)
+        try:
+            result = await adapter.set("key", "value", ttl=None)
+            assert result is True
+            mock_manager.set.assert_called_once_with("key", "value", None)
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -452,9 +480,11 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.delete.return_value = 0
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.delete("nonexistent")
-
-        assert result == 0
+        try:
+            result = await adapter.delete("nonexistent")
+            assert result == 0
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -464,10 +494,12 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.delete_many.return_value = 0
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.delete_many([])
-
-        assert result == 0
-        mock_manager.delete_many.assert_called_once_with([])
+        try:
+            result = await adapter.delete_many([])
+            assert result == 0
+            mock_manager.delete_many.assert_called_once_with([])
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -477,9 +509,11 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.get_ttl.return_value = -2
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.get_ttl("nonexistent")
-
-        assert result == -2
+        try:
+            result = await adapter.get_ttl("nonexistent")
+            assert result == -2
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -489,9 +523,11 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.get_ttl.return_value = -1
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.get_ttl("persistent_key")
-
-        assert result == -1
+        try:
+            result = await adapter.get_ttl("persistent_key")
+            assert result == -1
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -501,10 +537,12 @@ class TestAsyncRedisCacheAdapterEdgeCases:
         mock_manager.get_many.return_value = {"key1": "value1"}  # key2 missing
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
-        result = await adapter.get_many(["key1", "key2"])
-
-        assert "key1" in result
-        assert "key2" not in result
+        try:
+            result = await adapter.get_many(["key1", "key2"])
+            assert "key1" in result
+            assert "key2" not in result
+        finally:
+            await adapter.close_async()
 
 
 class TestAsyncRedisCacheAdapterIntegration:
@@ -522,21 +560,23 @@ class TestAsyncRedisCacheAdapterIntegration:
         mock_manager.set.return_value = True
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
+        try:
+            # Cache miss
+            result1 = await adapter.get("user:123")
+            assert result1 is None
 
-        # Cache miss
-        result1 = await adapter.get("user:123")
-        assert result1 is None
+            # Store in cache
+            await adapter.set("user:123", {"data": "cached_value"})
 
-        # Store in cache
-        await adapter.set("user:123", {"data": "cached_value"})
+            # Cache hit
+            result2 = await adapter.get("user:123")
+            assert result2 == {"data": "cached_value"}
 
-        # Cache hit
-        result2 = await adapter.get("user:123")
-        assert result2 == {"data": "cached_value"}
-
-        # Verify call sequence
-        assert mock_manager.get.call_count == 2
-        assert mock_manager.set.call_count == 1
+            # Verify call sequence
+            assert mock_manager.get.call_count == 2
+            assert mock_manager.set.call_count == 1
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -546,12 +586,14 @@ class TestAsyncRedisCacheAdapterIntegration:
         mock_manager.clear_pattern.return_value = 3
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
+        try:
+            # Invalidate all user cache entries
+            deleted_count = await adapter.clear_pattern("user:*")
 
-        # Invalidate all user cache entries
-        deleted_count = await adapter.clear_pattern("user:*")
-
-        assert deleted_count == 3
-        mock_manager.clear_pattern.assert_called_once_with("user:*")
+            assert deleted_count == 3
+            mock_manager.clear_pattern.assert_called_once_with("user:*")
+        finally:
+            await adapter.close_async()
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -565,16 +607,18 @@ class TestAsyncRedisCacheAdapterIntegration:
         }
 
         adapter = AsyncRedisCacheAdapter(mock_manager)
+        try:
+            # Bulk set
+            items = [
+                ("user:1", {"name": "Alice"}, 300),
+                ("user:2", {"name": "Bob"}, 300),
+            ]
+            set_result = await adapter.set_many(items)
+            assert set_result is True
 
-        # Bulk set
-        items = [
-            ("user:1", {"name": "Alice"}, 300),
-            ("user:2", {"name": "Bob"}, 300),
-        ]
-        set_result = await adapter.set_many(items)
-        assert set_result is True
-
-        # Bulk get
-        get_result = await adapter.get_many(["user:1", "user:2"])
-        assert get_result["user:1"]["name"] == "Alice"
-        assert get_result["user:2"]["name"] == "Bob"
+            # Bulk get
+            get_result = await adapter.get_many(["user:1", "user:2"])
+            assert get_result["user:1"]["name"] == "Alice"
+            assert get_result["user:2"]["name"] == "Bob"
+        finally:
+            await adapter.close_async()
