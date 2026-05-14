@@ -70,7 +70,9 @@ class TestAutoMigrationSystemLockIntegration:
         migration_system.inspector.get_current_schema = AsyncMock(return_value={})
         migration_system.comparator = Mock()
         migration_system.comparator.compare_schemas = Mock()
-        migration_system.comparator.compare_schemas.return_value.has_changes.return_value = False
+        migration_system.comparator.compare_schemas.return_value.has_changes.return_value = (
+            False
+        )
 
         # Test auto_migrate
         target_schema = {}
@@ -176,7 +178,9 @@ class TestAutoMigrationSystemLockIntegration:
         migration_system.inspector.get_current_schema = AsyncMock(return_value={})
         migration_system.comparator = Mock()
         migration_system.comparator.compare_schemas = Mock()
-        migration_system.comparator.compare_schemas.return_value.has_changes.return_value = False
+        migration_system.comparator.compare_schemas.return_value.has_changes.return_value = (
+            False
+        )
 
         target_schema = {}
         await migration_system.auto_migrate(

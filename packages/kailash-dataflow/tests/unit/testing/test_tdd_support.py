@@ -13,8 +13,14 @@ import os
 from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import asyncpg
 import pytest
+
+# Tier-1 contract per specs/testing-tiers.md § Tier-1 Rule 1: bare top-imports
+# of asyncpg are BLOCKED in tests/unit/. asyncpg is only needed by the
+# integration-tier tests this module exercises through the TDD harness; gate
+# behind importorskip so clean-venv unit collection (no [integration] extra)
+# does not ImportError at module load.
+asyncpg = pytest.importorskip("asyncpg")
 
 # Test the TDD infrastructure we're about to build
 from dataflow.testing.tdd_support import (
