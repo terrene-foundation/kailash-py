@@ -64,11 +64,25 @@ Canonical fixtures:
 | `mock_migration_executor` | Mock                                | Migration logic w/o real DDL                   |
 
 Each fixture yields+closes per `rules/testing.md` §
-"Fixtures Yield + Cleanup, Never Return". Direct
-`DataFlow(...)` instantiation in a test bypasses cleanup and
-can trigger the `__del__` deadlock that hung the suite under
-PR #968's CI gate (the originating failure mode this spec
-prevents).
+"Fixtures Yield + Cleanup, Never Return", which for DataFlow
+means an explicit `await dataflow.close_async()` in the
+fixture's `finally` block. The canonical shape is at
+`packages/kailash-dataflow/tests/unit/conftest.py:80-108`
+(`memory_dataflow` / `file_dataflow` / `auto_migrate_dataflow`).
+
+Direct `DataFlow(...)` instantiation in a test body bypasses
+this cleanup. After PR #1001 (commit `5cae13c0`), `DataFlow.__del__`
+only emits a `ResourceWarning` per `rules/patterns.md` §
+"Async Resource Cleanup" — it does NOT close the underlying
+aiosqlite connection pool. Un-closed instances leave non-daemon
+aiosqlite background threads alive past pytest's success summary,
+blocking `_Py_Finalize → wait_for_thread_shutdown` indefinitely
+(reproduces today: see issue #1002).
+
+DataFlow exposes a sync context manager (`with DataFlow(...) as
+db:` calling `close()` on `__exit__`) but NO async context
+manager. Async tests MUST use the `try / finally: await
+dataflow.close_async()` shape, not `async with`.
 
 ### 3. Marker discipline
 
