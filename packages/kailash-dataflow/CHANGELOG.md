@@ -1,5 +1,64 @@
 # DataFlow Changelog
 
+## [2.9.2] — 2026-05-14 — Workstream-A wave-1 (S2a + S-EV of #979)
+
+Patch release bundling shards **S2a** (gallery move) and **S-EV** (events
+silent-fallback fix) of issue #979 DataFlow Unit Suite Triage Workstream-A.
+
+Wave-1 was merged in parallel before either release was cut; honest
+bundling per `rules/build-repo-release-discipline.md` Rule 2 (clean-venv
+installability is the done gate — both shards' changes flow into the wheel).
+
+### Fixed
+
+- **`DataFlowEventMixin._init_events` silent-fallback closed** (S-EV / PR #984).
+  Prior behavior swallowed `ImportError` on the `kailash.middleware.communication`
+  chain and left `_event_bus=None`, producing opaque `AttributeError` on
+  downstream `subscribe()` / `on_model_change()` calls. New behavior records
+  the original `ImportError` to a class-level `_event_bus_import_error`
+  attribute and raises a typed `DataFlowError` from `on_model_change` citing
+  the missing `kailash[server]` extra (per `rules/zero-tolerance.md` Rule 3a —
+  Typed Delegate Guards For None Backing Objects). `_emit_write_event`'s
+  documented `None`-noop preserved.
+- **Clean-venv `pytest tests/unit/features/test_dataflow_events.py`**
+  now passes 11/11 (previously 5/11 failed in a fresh
+  `pip install -e packages/kailash-dataflow[dev]` install).
+
+### Changed
+
+- **`[dev]` extras now require `kailash[server]`** (S-EV / PR #984). The
+  events mixin imports `kailash.middleware.communication.backends.memory.InMemoryEventBus`;
+  Python loads `kailash.middleware/__init__.py` which eagerly imports
+  `kailash.nodes.admin.user_management` (bcrypt) and
+  `kailash.middleware.communication.api_gateway` (fastapi) — both from
+  the `[server]` extra. Same "tier-1 collection requires extra not
+  installed" pattern as 2.9.1's pytest-timeout + aiosqlite pins.
+- **`tests/unit/examples/test_example_gallery.py` → `tests/integration/examples/`**
+  (S2a / PR #983). The gallery exercises real workflows (~12s/test) which
+  violates `specs/testing-tiers.md` Tier-1 Contract Rule 1 (no
+  `AsyncLocalRuntime` / `WorkflowBuilder` top-imports) AND Rule 2
+  (no `tempfile.mktemp` for DB paths — was at line 28-30, the deadlock
+  source PR #976 surfaced). Closes AC#1 of issue #979.
+- **Removed vestigial `from unittest.mock import AsyncMock, MagicMock, patch` from the moved gallery** — none of the three symbols were
+  referenced anywhere in the file body; the integration tier's NO MOCKING
+  AST gate (`tests/integration/conftest.py::_module_imports_unittest_mock`,
+  load-bearing per `rules/testing.md`) required this dead-import removal
+  for clean collection.
+
+### Added
+
+- **`tests/regression/test_issue_979_s_ev_dataflow_events.py`** (S-EV).
+  Three new regression tests pinning: (a) `_init_events` records the
+  `ImportError` to `_event_bus_import_error`, (b) `on_model_change` raises
+  typed `DataFlowError` when bus is unavailable, (c) `_emit_write_event`
+  preserves None-noop semantics.
+
+### Notes
+
+- Closes AC#1 (S2a) + AC#2 (S-EV) of issue #979.
+- Wave-1 third shard (S3 — fabric move + conftest hook refinement) ships
+  separately as 2.9.3 (PR #985 + release/v2.9.3 pending CI).
+
 ## [2.9.1] — 2026-05-14 — tier-1 test-config floor (S1 of #979)
 
 Patch release shipping the test-discipline floor for issue #979 DataFlow
