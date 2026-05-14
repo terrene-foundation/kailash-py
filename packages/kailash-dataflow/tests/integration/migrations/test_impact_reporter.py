@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import pytest
+
 from dataflow.migrations.column_removal_manager import SafetyValidation
 from dataflow.migrations.dependency_analyzer import (
     ConstraintDependency,
