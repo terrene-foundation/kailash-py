@@ -191,3 +191,53 @@ jobs:
           cd packages/kailash-pact
           ../../.venv/bin/python -m pytest tests/ \
             --maxfail=5 -q --timeout=120
+
+  test-dataflow:
+    name: Test DataFlow Unit Suite (Tier 1)
+    needs: check-duplicate
+    # Re-applies issue #898 gate (PR #968 was reverted; this is a fresh
+    # implementation atop issue #979's tier-1 cleanup — S1+S2a+S-EV+S3+S4+S5a).
+    # Paths cover BOTH the package and the core SDK (per ci-runners.md Rule 6 —
+    # filter MUST follow the transitive dep graph, not just package dir).
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-py3.11-dataflow-${{ hashFiles('pyproject.toml', 'packages/kailash-dataflow/pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py3.11-dataflow-
+
+      - name: Install dependencies
+        # Per deployment.md § "Sibling-Package CI Installs Root SDK Editable":
+        # root kailash MUST be installed editable BEFORE the sub-package so
+        # `kailash.<new_module>` resolves to the local checkout, not stale PyPI.
+        run: |
+          uv venv .venv
+          uv pip install -e "." --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
+
+      - name: Test DataFlow tier-1 unit suite
+        timeout-minutes: 10
+        # ZERO `-m` flag here: pytest.ini::addopts is the SOLE marker filter
+        # location per S1 CRIT-B fix (packages/kailash-dataflow/pytest.ini).
+        # `--timeout=120` matches the addopts entry; explicit here as defense
+        # against pytest-timeout plugin auto-discovery regressions.
+        run: |
+          cd packages/kailash-dataflow
+          ../../.venv/bin/python -m pytest tests/unit/ \
+            --maxfail=10 -q --timeout=120
