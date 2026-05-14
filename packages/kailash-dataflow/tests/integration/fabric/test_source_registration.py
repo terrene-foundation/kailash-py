@@ -12,10 +12,7 @@ from __future__ import annotations
 import pytest
 
 from dataflow import DataFlow
-from dataflow.fabric.config import (
-    FileSourceConfig,
-    RestSourceConfig,
-)
+from dataflow.fabric.config import FileSourceConfig, RestSourceConfig
 from dataflow.fabric.testing import MockSource
 
 

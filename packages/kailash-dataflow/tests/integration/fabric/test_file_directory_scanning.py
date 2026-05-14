@@ -15,9 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from dataflow.fabric.config import FileSourceConfig
 from dataflow.adapters.file_adapter import FileSourceAdapter
-
+from dataflow.fabric.config import FileSourceConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -29,11 +29,57 @@ logger = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).parent.resolve()
 
 
+# Mocking PRIMITIVES from unittest.mock — importing any of these implies
+# the test constructs a test double rather than exercising real infra. The
+# AST gate fails collection on these names.
+_MOCKING_PRIMITIVES: frozenset[str] = frozenset(
+    {
+        "Mock",
+        "MagicMock",
+        "AsyncMock",
+        "NonCallableMock",
+        "NonCallableMagicMock",
+        "patch",
+        "patch.object",
+        "patch.dict",
+        "patch.multiple",
+        "PropertyMock",
+        "seal",
+        "create_autospec",
+    }
+)
+
+# Non-primitive helpers from unittest.mock — argument-equality sentinels
+# and call-record types. Importing these does NOT imply mocking; they are
+# stdlib utilities legitimately used in real-infrastructure tests for
+# partial-call-equality matching (e.g. mock_calls assertions, ANY in dict
+# comparisons, sentinel.UNSET defaults).
+_MOCKING_NON_PRIMITIVES: frozenset[str] = frozenset(
+    {
+        "ANY",
+        "sentinel",
+        "DEFAULT",
+        "call",
+        "mock_open",  # file-stub helper; integration tests may use against real fs paths
+    }
+)
+
+
 def _module_imports_unittest_mock(path: Path) -> bool:
-    """Return True if ``path`` imports ``unittest.mock`` or names from it.
+    """Return True if ``path`` imports a mocking PRIMITIVE from unittest.mock.
 
     Uses AST parsing so comments / docstrings that mention the string
     ``unittest.mock`` do not trigger false positives.
+
+    Whitelisted non-primitive exports (``ANY``, ``sentinel``, ``DEFAULT``,
+    ``call``, ``mock_open``) are stdlib equality-matcher helpers compatible
+    with real-infrastructure tests and do NOT trigger the gate. Module-level
+    rebinds (``from unittest import mock``, ``import unittest.mock as m``)
+    are blocked because the rebinding makes downstream primitive use
+    unauditable at the import site.
+
+    See rules/testing.md § Tier 2 and issue #979 S3 Finding C for the
+    full rationale.
     """
     try:
         source = path.read_text(encoding="utf-8")
@@ -45,10 +91,27 @@ def _module_imports_unittest_mock(path: Path) -> bool:
         return False
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
+            # `from unittest.mock import X, Y, Z` — examine names.
             if node.module and node.module.startswith("unittest.mock"):
-                return True
+                for alias in node.names:
+                    if alias.name in _MOCKING_PRIMITIVES:
+                        return True
+                    # Wildcard import pulls EVERYTHING including primitives.
+                    if alias.name == "*":
+                        return True
+                # All imported names were non-primitives (ANY, sentinel, ...).
+                continue
+            # `from unittest import mock` — the bare-module rebind makes
+            # downstream `mock.MagicMock(...)` calls unauditable; block.
+            if node.module == "unittest":
+                for alias in node.names:
+                    if alias.name == "mock":
+                        return True
         elif isinstance(node, ast.Import):
             for alias in node.names:
+                # `import unittest.mock` or `import unittest.mock as m` —
+                # bare-module rebind; same reason as `from unittest import
+                # mock` above.
                 if alias.name and alias.name.startswith("unittest.mock"):
                     return True
     return False
@@ -266,10 +329,7 @@ async def memory_test_suite():
     will receive a SQLite-memory engine here — matching the fixture's
     semantics in ``tests/unit/conftest.py``.
     """
-    from tests.fixtures.unit_test_harness import (
-        UnitTestDatabaseConfig,
-        UnitTestSuite,
-    )
+    from tests.fixtures.unit_test_harness import UnitTestDatabaseConfig, UnitTestSuite
 
     config = UnitTestDatabaseConfig.memory_database()
     suite = UnitTestSuite(config)

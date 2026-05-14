@@ -30,7 +30,6 @@ from dataflow.adapters.file_adapter import FileSourceAdapter, _validate_file_pat
 from dataflow.adapters.source_adapter import SourceState
 from dataflow.fabric.config import FileSourceConfig
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

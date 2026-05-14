@@ -19,6 +19,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+# Gate fabric imports per issue #979 AC#3: tier-1 unit tests MUST NOT
+# require optional extras at module top. `[fabric]` is not in `[dev]`,
+# so callers without that extra skip cleanly rather than ImportError.
+pytest.importorskip("dataflow.fabric.config")
+pytest.importorskip("dataflow.fabric.mcp_integration")
+pytest.importorskip("dataflow.fabric.products")
+
 from dataflow.fabric.config import ProductMode, RateLimit, StalenessPolicy
 from dataflow.fabric.mcp_integration import (
     _product_params_to_schema,

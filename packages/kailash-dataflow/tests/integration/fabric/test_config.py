@@ -27,7 +27,6 @@ from dataflow.fabric.config import (
     WebhookConfig,
 )
 
-
 # ---------- Auth types ----------
 
 
