@@ -17,6 +17,8 @@ import warnings
 from typing import Optional
 
 import pytest
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import declarative_base, relationship
 
 # Import validation components (will be implemented)
 from dataflow.decorators import (
@@ -27,10 +29,44 @@ from dataflow.decorators import (
     model,
 )
 from dataflow.exceptions import DataFlowValidationWarning, ModelValidationError
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+# ==============================================================================
+# Per-test warnings.filters isolation (issue #1002 invariant 12)
+# ==============================================================================
+#
+# `test_validation_off_mode_no_checks` asserts `len(w) == 0` inside a
+# `warnings.catch_warnings(record=True)` block. Sibling tests in this file
+# (and across this module's collection group) mutate global `warnings.filters`
+# via `warnings.simplefilter("always")` / `warnings.filterwarnings(...)` and
+# emit `DataFlowValidationWarning` instances during `@model(...)` decoration.
+# `warnings.catch_warnings(record=True)` snapshots+restores the filters and
+# captures records emitted DURING the block, but the captured filter set
+# inherits whatever the prior test left in the global state. When sibling
+# tests scheduled BEFORE this one have promoted warnings to "always", the
+# `record=True` capture sees the OFF-mode test's incidental warnings too,
+# producing the order-dependent `assert 6 == 0` failure documented in
+# `workspaces/issue-1002-aiosqlite-fixture-cleanup/journal/0005-DISCOVERY-…`.
+#
+# Fix per the discovery journal: snapshot+restore `warnings.filters` per
+# test via an autouse fixture so each test starts with the same
+# pristine-default filter set. This is order-independent and applies to
+# every test in the module — closing the broader flake class.
+@pytest.fixture(autouse=True)
+def _isolate_warnings_filters():
+    """Snapshot warnings.filters before each test; restore after.
+
+    Per issue #1002 invariant 12: prevents sibling-test mutations of the
+    global `warnings.filters` from leaking into `catch_warnings(record=True)`
+    capture sets in tests that assert `len(w) == 0`.
+    """
+    snapshot = warnings.filters[:]
+    try:
+        yield
+    finally:
+        warnings.filters[:] = snapshot
 
 
 # ==============================================================================
@@ -489,9 +525,14 @@ class TestValidationModes:
 
         Useful for advanced users who know what they're doing or when
         importing legacy schemas.
+
+        Per issue #1002 invariant 12: explicitly resetwarnings() inside the
+        catch_warnings block to defend against any residual filter state
+        the autouse fixture might miss (belt-and-suspenders).
         """
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+            warnings.resetwarnings()
+            warnings.simplefilter("always", category=DataFlowValidationWarning)
 
             # Model with multiple issues
             @model(validation=ValidationMode.OFF)
@@ -501,8 +542,20 @@ class TestValidationModes:
                 firstName = Column(String)  # camelCase, no length
                 created_at = Column(DateTime)  # Auto-managed conflict
 
-            # Should have zero warnings
-            assert len(w) == 0
+            # Filter to only the validation warnings we care about. Other
+            # libraries (sqlalchemy, etc.) may emit unrelated warnings during
+            # column registration that the OFF-mode test must not assert on.
+            df_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, DataFlowValidationWarning)
+            ]
+
+            # Should have zero DataFlow validation warnings
+            assert len(df_warnings) == 0, (
+                f"OFF-mode should emit no DataFlowValidationWarnings; "
+                f"got {[str(x.message) for x in df_warnings]}"
+            )
 
     def test_validation_warn_mode_default(self):
         """
