@@ -11,6 +11,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Tier-1 import-skip per issue #979 brief AC#5 — `redis` lives in the
+# `[redis]` extra, not `[dev]`. Tests that patch `redis.Redis` need the
+# actual `redis` module loaded so `dataflow.cache.auto_detection.redis`
+# is not `None` (otherwise `AttributeError: None does not have the
+# attribute 'Redis'`). Module-level gate keeps the tier-1 unit suite
+# clean on a `[dev]`-only install.
+pytest.importorskip(
+    "redis",
+    reason="redis not installed; install via `[redis]` extras",
+)
+
 
 class TestCacheBackendDetection:
     """Test cache backend auto-detection logic."""

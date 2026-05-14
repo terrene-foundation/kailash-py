@@ -8,6 +8,17 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+# Tier-1 import-skip per issue #979 brief AC#5 (verbatim: "Any
+# remaining tier-1 test that imports motor, psycopg, or other DB
+# drivers is either gated behind importorskip OR moved to
+# tests/integration/"). The MySQLAdapter top-imports `aiomysql` which
+# lives in the `[mysql]` extra, not `[dev]`.
+pytest.importorskip(
+    "aiomysql",
+    reason="aiomysql not installed; install via `[mysql]` extras",
+)
+
 from dataflow.adapters.exceptions import ConnectionError, QueryError
 from dataflow.adapters.mysql import MySQLAdapter
 

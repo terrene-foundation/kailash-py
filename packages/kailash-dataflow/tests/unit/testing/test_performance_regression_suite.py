@@ -35,6 +35,15 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
+# Tier-1 import-skip per specs/testing-tiers.md § Tier-1 Rule 1:
+# dataflow.testing.performance_optimization top-imports `psutil`
+# which lives in the `[monitoring]` extra, not `[dev]` (issue #979
+# brief AC#5).
+pytest.importorskip(
+    "psutil",
+    reason="psutil not installed; install via `[monitoring]` extras",
+)
+
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -481,7 +490,7 @@ def regression_suite():
     # Cleanup
     try:
         os.unlink(temp_file.name)
-    except:
+    except OSError:
         pass
 
 
@@ -498,7 +507,7 @@ def performance_baseline():
     # Cleanup
     try:
         os.unlink(temp_file.name)
-    except:
+    except OSError:
         pass
 
 
@@ -654,7 +663,7 @@ def test_regression_report_generation(regression_suite):
         regression_suite.run_regression_test(
             "failing_test", failing_test, establish_baseline=True
         )
-    except:
+    except Exception:
         pass  # Expected to fail
 
     # Generate report

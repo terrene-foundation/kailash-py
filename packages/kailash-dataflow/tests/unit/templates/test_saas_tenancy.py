@@ -28,6 +28,15 @@ from typing import Dict, List, Optional
 
 import pytest
 
+# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
+# Rule 1 — bare top-imports of `LocalRuntime` + `WorkflowBuilder` plus
+# `runtime.execute(workflow)` against aiosqlite hangs the GH-runner
+# py3.11 worker (brief failure-layer #3). Rewrite scheduled as B-2 per
+# `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`.
+pytestmark = pytest.mark.skip(
+    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
+)
+
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
     sys.path.insert(0, TEMPLATES_DIR)
@@ -201,12 +210,12 @@ class TestMultiTenantIsolation:
             # Verify users returned
             assert isinstance(result, list), "Should return list of users"
             assert len(result) == 2, "Should return 2 users"
-            assert result[0]["organization_id"] == org_id, (
-                "All users should belong to org"
-            )
-            assert result[1]["organization_id"] == org_id, (
-                "All users should belong to org"
-            )
+            assert (
+                result[0]["organization_id"] == org_id
+            ), "All users should belong to org"
+            assert (
+                result[1]["organization_id"] == org_id
+            ), "All users should belong to org"
 
     def test_check_user_belongs_to_org_success(self, monkeypatch):
         """
@@ -440,9 +449,9 @@ class TestMultiTenantIsolation:
 
         assert filters_1["organization_id"] == org_id_1, "Should isolate to org 1"
         assert filters_2["organization_id"] == org_id_2, "Should isolate to org 2"
-        assert filters_1["organization_id"] != filters_2["organization_id"], (
-            "Should enforce separation"
-        )
+        assert (
+            filters_1["organization_id"] != filters_2["organization_id"]
+        ), "Should enforce separation"
 
     def test_cross_tenant_access_blocked(self, monkeypatch):
         """
@@ -558,11 +567,11 @@ class TestMultiTenantIsolation:
 
             # Verify only org A users returned
             assert len(result) == 2, "Should return only org A users"
-            assert all(u["organization_id"] == org_a_id for u in result), (
-                "All users should belong to org A"
-            )
+            assert all(
+                u["organization_id"] == org_a_id for u in result
+            ), "All users should belong to org A"
             # Verify no org B users leaked in
             org_b_emails = ["user@orgb.com"]
-            assert not any(u["email"] in org_b_emails for u in result), (
-                "No org B users should leak"
-            )
+            assert not any(
+                u["email"] in org_b_emails for u in result
+            ), "No org B users should leak"

@@ -75,6 +75,7 @@ class TestMyFeature:
 ### Directory Structure
 
 #### Unit Tests (`tests/unit/`)
+
 - **adapters/** - Database adapter unit tests (with mocks)
 - **cli/** - Command-line interface unit tests
 - **core/** - Core functionality, API validation, basic SQLite operations
@@ -91,9 +92,28 @@ class TestMyFeature:
 ### 1. Allowed Dependencies by Tier
 
 **Unit Tests (Tier 1) - THIS DIRECTORY:**
+
 - ✅ **SQLite databases** (both `:memory:` and file-based) - Lightweight, no external infrastructure required
 - ✅ **Mocks and stubs** for external services and complex components
 - ❌ **PostgreSQL connections** - Use integration tests instead
+
+### 1a. No bare top-imports of integration-tier modules
+
+Per `specs/testing-tiers.md` § Tier-1 Contract Rule 1, the following
+MUST NOT appear at module scope in any `tests/unit/` file unless
+gated by `pytest.importorskip(...)`:
+
+- `import asyncpg` / `import psycopg` / `import psycopg2` / `import pymysql`
+- `import aiomysql` / `import motor` / `import redis`
+- `from kailash.runtime import AsyncLocalRuntime` (real workflow runtime)
+- `from kailash.workflow.builder import WorkflowBuilder` (real workflow builder)
+- `from tests.infrastructure.test_harness import IntegrationTestSuite`
+  (the PG integration harness)
+
+Bare top-imports BLOCK collection in a clean `[dev]`-only install
+(no `[fabric]`, no PostgreSQL). The `importorskip` gate converts
+`ImportError` into a clean skip. This list mirrors the spec
+verbatim — drift between the two is a spec-authority violation.
 
 ### 2. ALWAYS Use Standardized Fixtures
 
@@ -364,17 +384,20 @@ class TestAutoCleanup:
 ## 🚨 Critical Rules for Unit Tests
 
 ### Database Usage
+
 - **ALWAYS**: Use SQLite (`:memory:` or file-based) for unit tests
 - **NEVER**: Use PostgreSQL in unit tests (use integration tests instead)
 - **ALWAYS**: Use standardized fixtures (`memory_dataflow`, `file_dataflow`, etc.)
 - **NEVER**: Create manual database connections with `tempfile` or hardcoded paths
 
 ### Mocking Strategy
+
 - **Mock external services**: HTTP clients, external APIs, complex dependencies
 - **Don't mock SQLite**: Use real SQLite databases for database operations
 - **Use provided mocks**: Leverage `mock_migration_executor`, `mock_connection_manager`, etc.
 
 ### Test Isolation
+
 - **Each test is independent**: Fixtures provide fresh state for each test
 - **No shared state**: Don't rely on state from other tests
 - **Automatic cleanup**: Trust the fixtures to handle cleanup
@@ -382,11 +405,13 @@ class TestAutoCleanup:
 ## 📊 Performance Guidelines
 
 ### Fast Tests (Prefer These)
+
 - **Memory databases**: Use `memory_dataflow` and `memory_test_suite` for speed
 - **Simple operations**: Keep unit tests focused on individual components
 - **Minimal setup**: Use standardized fixtures to minimize setup overhead
 
 ### Slower Tests (Use When Necessary)
+
 - **File databases**: Only when persistence between operations is required
 - **Complex scenarios**: Move complex multi-component scenarios to integration tests
 

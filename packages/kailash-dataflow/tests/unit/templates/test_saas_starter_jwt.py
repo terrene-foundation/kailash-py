@@ -28,6 +28,15 @@ from datetime import datetime, timedelta
 
 import pytest
 
+# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
+# Rule 1 — bare top-imports of `LocalRuntime` + `WorkflowBuilder` plus
+# `runtime.execute(workflow)` against aiosqlite hangs the GH-runner
+# py3.11 worker (brief failure-layer #3). Rewrite scheduled as B-2 per
+# `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`.
+pytestmark = pytest.mark.skip(
+    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
+)
+
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
     sys.path.insert(0, TEMPLATES_DIR)
@@ -383,9 +392,9 @@ class TestSimplifiedJWTAuth:
             # Verify wrong password fails
             wrong_login = login_user(mock_db, email, "WrongPassword")
             assert wrong_login["success"] is False, "Wrong password should fail"
-            assert wrong_login["error_code"] == "INVALID_CREDENTIALS", (
-                "Should indicate invalid credentials"
-            )
+            assert (
+                wrong_login["error_code"] == "INVALID_CREDENTIALS"
+            ), "Should indicate invalid credentials"
         finally:
             # Restore original function
             saas_starter.auth.jwt_auth.find_user_by_email = original_find

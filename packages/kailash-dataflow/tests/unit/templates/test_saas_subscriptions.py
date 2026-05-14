@@ -28,6 +28,15 @@ from typing import Dict, Optional
 
 import pytest
 
+# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
+# Rule 1 — bare top-imports of `LocalRuntime` + `WorkflowBuilder` plus
+# `runtime.execute(workflow)` against aiosqlite hangs the GH-runner
+# py3.11 worker (brief failure-layer #3). Rewrite scheduled as B-2 per
+# `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`.
+pytestmark = pytest.mark.skip(
+    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
+)
+
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
     sys.path.insert(0, TEMPLATES_DIR)
@@ -329,12 +338,12 @@ class TestSubscriptionManagement:
 
             # Verify subscription marked for cancellation
             assert result is not None, "Should return updated subscription"
-            assert result["cancel_at_period_end"] is True, (
-                "Should be marked for cancellation"
-            )
-            assert result["status"] == "active", (
-                "Should still be active until period end"
-            )
+            assert (
+                result["cancel_at_period_end"] is True
+            ), "Should be marked for cancellation"
+            assert (
+                result["status"] == "active"
+            ), "Should still be active until period end"
 
     def test_feature_limits_enforcement(self):
         """
@@ -351,9 +360,9 @@ class TestSubscriptionManagement:
         # Free tier features (limited)
         free_features = ["basic_features", "single_user"]
         for feature in free_features:
-            assert check_feature_access("free", feature) is True, (
-                f"Free tier should have {feature}"
-            )
+            assert (
+                check_feature_access("free", feature) is True
+            ), f"Free tier should have {feature}"
 
         # Pro tier features (more)
         pro_features = [
@@ -363,9 +372,9 @@ class TestSubscriptionManagement:
             "team_collaboration",
         ]
         for feature in pro_features:
-            assert check_feature_access("pro", feature) is True, (
-                f"Pro tier should have {feature}"
-            )
+            assert (
+                check_feature_access("pro", feature) is True
+            ), f"Pro tier should have {feature}"
 
         # Enterprise features (most)
         enterprise_features = [
@@ -377,9 +386,9 @@ class TestSubscriptionManagement:
             "custom_integrations",
         ]
         for feature in enterprise_features:
-            assert check_feature_access("enterprise", feature) is True, (
-                f"Enterprise tier should have {feature}"
-            )
+            assert (
+                check_feature_access("enterprise", feature) is True
+            ), f"Enterprise tier should have {feature}"
 
     def test_subscription_tier_transitions(self):
         """

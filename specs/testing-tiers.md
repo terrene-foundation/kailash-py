@@ -52,15 +52,16 @@ connections. The following patterns are BLOCKED:
 
 Canonical fixtures:
 
-| Fixture                   | Yields                          | Use case                                      |
-| ------------------------- | ------------------------------- | --------------------------------------------- |
-| `memory_dataflow`         | DataFlow w/ in-memory SQLite    | Fast DataFlow API tests (most common)         |
-| `file_dataflow`           | DataFlow w/ file SQLite         | Tests requiring persistence across operations |
-| `auto_migrate_dataflow`   | DataFlow w/ `auto_migrate=True` | Tests of migration triggering only            |
-| `memory_test_suite`       | Suite handle (raw SQLite conn)  | Direct-SQL without DataFlow facade            |
-| `file_test_suite`         | Suite handle (file SQLite)      | Direct-SQL w/ persistence                     |
-| `mock_connection_manager` | Mock                            | External-pool-shape behavior tests            |
-| `mock_migration_executor` | Mock                            | Migration logic w/o real DDL                  |
+| Fixture                   | Yields                              | Use case                                       |
+| ------------------------- | ----------------------------------- | ---------------------------------------------- |
+| `memory_dataflow`         | DataFlow w/ in-memory SQLite        | Fast DataFlow API tests (most common)          |
+| `file_dataflow`           | DataFlow w/ file SQLite             | Tests requiring persistence across operations  |
+| `auto_migrate_dataflow`   | DataFlow w/ `auto_migrate=True`     | Tests of migration triggering only             |
+| `unit_test_suite`         | Suite handle (StandardUnitFixtures) | Default unit-test suite handle (memory-backed) |
+| `memory_test_suite`       | Suite handle (raw SQLite conn)      | Direct-SQL without DataFlow facade             |
+| `file_test_suite`         | Suite handle (file SQLite)          | Direct-SQL w/ persistence                      |
+| `mock_connection_manager` | Mock                                | External-pool-shape behavior tests             |
+| `mock_migration_executor` | Mock                                | Migration logic w/o real DDL                   |
 
 Each fixture yields+closes per `rules/testing.md` §
 "Fixtures Yield + Cleanup, Never Return". Direct

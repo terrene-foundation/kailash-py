@@ -29,6 +29,20 @@ from datetime import datetime, timedelta
 
 import pytest
 
+# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
+# Rule 1 — this file top-imports `kailash.runtime.local.LocalRuntime` +
+# `kailash.workflow.builder.WorkflowBuilder` (banned at tier-1) and runs
+# `runtime.execute(workflow)` against aiosqlite, which deadlocks on the
+# GH-runner py3.11 worker (brief failure-layer #3 — "fork + asyncio
+# incompatibility"). Rewrite to remove `unittest.mock` + move to
+# `tests/integration/templates/` is tracked as Workstream-B item B-2
+# per `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`
+# (~6 files, ≥1 session). Skipping at the unit tier so the #898 CI gate
+# fires cleanly while the rewrite is scheduled.
+pytestmark = pytest.mark.skip(
+    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
+)
+
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
     sys.path.insert(0, TEMPLATES_DIR)

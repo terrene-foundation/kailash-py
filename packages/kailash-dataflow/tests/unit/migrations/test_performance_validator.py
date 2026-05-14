@@ -19,6 +19,14 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+# Tier-1 import-skip per specs/testing-tiers.md § Tier-1 Rule 1:
+# dataflow.migrations.performance_validator top-imports `psutil`
+# (in `[monitoring]` extra, not `[dev]`) — issue #979 AC#5.
+pytest.importorskip(
+    "psutil",
+    reason="psutil not installed; install via `[monitoring]` extras",
+)
+
 # Import the components we'll be testing (to be implemented)
 from dataflow.migrations.performance_validator import (
     PerformanceBaseline,

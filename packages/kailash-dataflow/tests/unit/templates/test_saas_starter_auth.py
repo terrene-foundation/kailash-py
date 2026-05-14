@@ -19,6 +19,15 @@ from typing import Any, Dict
 
 import pytest
 
+# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
+# Rule 1 — bare top-imports of `LocalRuntime` + `WorkflowBuilder` plus
+# `runtime.execute(workflow)` against aiosqlite hangs the GH-runner
+# py3.11 worker (brief failure-layer #3). Rewrite scheduled as B-2 per
+# `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`.
+pytestmark = pytest.mark.skip(
+    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
+)
+
 # Add templates directory to Python path for imports
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
