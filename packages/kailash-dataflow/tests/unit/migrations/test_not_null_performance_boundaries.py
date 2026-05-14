@@ -15,8 +15,15 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-import psutil
 import pytest
+
+# Tier-1 import-skip per specs/testing-tiers.md § Tier-1 Rule 1:
+# `psutil` lives in the `[monitoring]` extra, not `[dev]` — issue
+# #979 AC#5.
+psutil = pytest.importorskip(
+    "psutil",
+    reason="psutil not installed; install via `[monitoring]` extras",
+)
 
 from dataflow.migrations.constraint_validator import ConstraintValidator
 from dataflow.migrations.default_strategies import DefaultValueStrategyManager

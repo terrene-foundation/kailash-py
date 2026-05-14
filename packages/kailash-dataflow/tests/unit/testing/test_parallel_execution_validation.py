@@ -29,6 +29,16 @@ from typing import Any, Dict, List
 
 import pytest
 
+# Tier-1 import-skip per specs/testing-tiers.md § Tier-1 Rule 1:
+# dataflow.testing.performance_optimization top-imports `psutil`
+# which lives in the `[monitoring]` extra, not `[dev]`. Gate at
+# module top so collection skips cleanly without the extra (issue
+# #979 brief AC#5).
+pytest.importorskip(
+    "psutil",
+    reason="psutil not installed; install via `[monitoring]` extras",
+)
+
 # Enable TDD mode and optimization
 os.environ["DATAFLOW_TDD_MODE"] = "true"
 os.environ["DATAFLOW_PERFORMANCE_OPTIMIZATION"] = "true"
@@ -209,15 +219,15 @@ async def test_basic_parallel_execution(parallel_validator):
     stats = parallel_validator.get_statistics()
 
     assert stats["total_tests"] == test_count
-    assert stats["success_rate"] == 100.0, (
-        f"Not all parallel tests succeeded: {stats['success_rate']}%"
-    )
-    assert stats["parallel_safety"], (
-        f"Thread conflicts detected: {stats['thread_conflicts']}, Resource conflicts: {stats['resource_conflicts']}"
-    )
-    assert stats["avg_execution_time_ms"] < 100.0, (
-        f"Average execution time too high: {stats['avg_execution_time_ms']}ms"
-    )
+    assert (
+        stats["success_rate"] == 100.0
+    ), f"Not all parallel tests succeeded: {stats['success_rate']}%"
+    assert stats[
+        "parallel_safety"
+    ], f"Thread conflicts detected: {stats['thread_conflicts']}, Resource conflicts: {stats['resource_conflicts']}"
+    assert (
+        stats["avg_execution_time_ms"] < 100.0
+    ), f"Average execution time too high: {stats['avg_execution_time_ms']}ms"
 
 
 @pytest.mark.asyncio
@@ -250,15 +260,15 @@ async def test_high_concurrency_execution(parallel_validator):
     stats = parallel_validator.get_statistics()
 
     assert stats["total_tests"] == test_count
-    assert stats["success_rate"] >= 95.0, (
-        f"Success rate too low under high concurrency: {stats['success_rate']}%"
-    )
-    assert stats["max_execution_time_ms"] < 200.0, (
-        f"Individual test took too long under load: {stats['max_execution_time_ms']}ms"
-    )
-    assert total_time < test_count * 100.0, (
-        f"Total execution time suggests no parallelism: {total_time}ms"
-    )
+    assert (
+        stats["success_rate"] >= 95.0
+    ), f"Success rate too low under high concurrency: {stats['success_rate']}%"
+    assert (
+        stats["max_execution_time_ms"] < 200.0
+    ), f"Individual test took too long under load: {stats['max_execution_time_ms']}ms"
+    assert (
+        total_time < test_count * 100.0
+    ), f"Total execution time suggests no parallelism: {total_time}ms"
 
 
 @pytest.mark.asyncio
@@ -444,15 +454,15 @@ async def test_performance_consistency_under_load():
     degradation_factor = avg_parallel_time / baseline_time
     max_degradation_factor = max_parallel_time / baseline_time
 
-    assert degradation_factor < 2.0, (
-        f"Average performance degraded too much under load: {degradation_factor:.2f}x"
-    )
-    assert max_degradation_factor < 3.0, (
-        f"Worst case performance degraded too much: {max_degradation_factor:.2f}x"
-    )
-    assert avg_parallel_time < 100.0, (
-        f"Average execution time exceeded target under load: {avg_parallel_time:.2f}ms"
-    )
+    assert (
+        degradation_factor < 2.0
+    ), f"Average performance degraded too much under load: {degradation_factor:.2f}x"
+    assert (
+        max_degradation_factor < 3.0
+    ), f"Worst case performance degraded too much: {max_degradation_factor:.2f}x"
+    assert (
+        avg_parallel_time < 100.0
+    ), f"Average execution time exceeded target under load: {avg_parallel_time:.2f}ms"
 
 
 @pytest.mark.asyncio
@@ -525,17 +535,17 @@ async def test_parallel_execution_with_real_database_operations():
 
     # Validate results
     success_count = sum(1 for r in results if r["success"])
-    assert success_count == test_count, (
-        f"Not all database operations succeeded: {success_count}/{test_count}"
-    )
+    assert (
+        success_count == test_count
+    ), f"Not all database operations succeeded: {success_count}/{test_count}"
 
     # Check performance
     durations = [r["duration_ms"] for r in results if "duration_ms" in r]
     if durations:
         avg_duration = sum(durations) / len(durations)
-        assert avg_duration < 100.0, (
-            f"Database operations too slow under parallel load: {avg_duration:.2f}ms"
-        )
+        assert (
+            avg_duration < 100.0
+        ), f"Database operations too slow under parallel load: {avg_duration:.2f}ms"
 
 
 def test_parallel_execution_statistics():

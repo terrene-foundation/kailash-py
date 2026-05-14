@@ -17,6 +17,15 @@ from statistics import mean
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+# Tier-1 import-skip per specs/testing-tiers.md § Tier-1 Rule 1:
+# dataflow.migrations.migration_performance_tracker top-imports
+# `psutil` (in `[monitoring]` extra, not `[dev]`) — issue #979 AC#5.
+pytest.importorskip(
+    "psutil",
+    reason="psutil not installed; install via `[monitoring]` extras",
+)
+
 from dataflow.migrations.auto_migration_system import (
     Migration,
     MigrationOperation,
@@ -718,9 +727,9 @@ class TestMigrationPerformanceTracker:
         overhead_time = (time.perf_counter() - start_time) * 1000  # Convert to ms
 
         # Verify overhead is minimal
-        assert overhead_time < 50.0, (
-            f"Performance tracking overhead {overhead_time:.2f}ms exceeds 50ms limit"
-        )
+        assert (
+            overhead_time < 50.0
+        ), f"Performance tracking overhead {overhead_time:.2f}ms exceeds 50ms limit"
         assert metrics is not None
 
 
