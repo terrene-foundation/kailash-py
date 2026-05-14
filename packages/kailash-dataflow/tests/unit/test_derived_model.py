@@ -25,7 +25,6 @@ from dataflow.features.derived import (
     _parse_interval,
 )
 
-
 # ---------------------------------------------------------------------------
 # Interval parsing
 # ---------------------------------------------------------------------------
@@ -554,73 +553,73 @@ class TestDerivedModelDecorator:
         """Verify derived_model decorator applies @db.model and registers derived."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
 
-        @db.derived_model(sources=["Order"], refresh="manual")
-        class OrderSummary:
-            id: str
-            total: float
-
-            @staticmethod
-            def compute(sources):
-                return []
-
-        # Should be registered as a regular model
-        assert "OrderSummary" in db._models
-
-        # Should also be registered as a derived model
-        assert "OrderSummary" in db._derived_engine._models
-        meta = db._derived_engine._models["OrderSummary"]
-        assert meta.sources == ["Order"]
-        assert meta.refresh == "manual"
-        assert meta.schedule is None
-
-    def test_decorator_scheduled_without_schedule_raises(self):
-        """Verify that refresh='scheduled' without schedule raises ValueError."""
-        from dataflow import DataFlow
-
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
-
-        with pytest.raises(ValueError, match="requires a 'schedule' parameter"):
-
-            @db.derived_model(sources=["Order"], refresh="scheduled")
-            class BadModel:
+            @db.derived_model(sources=["Order"], refresh="manual")
+            class OrderSummary:
                 id: str
+                total: float
 
                 @staticmethod
                 def compute(sources):
                     return []
 
+            # Should be registered as a regular model
+            assert "OrderSummary" in db._models
+
+            # Should also be registered as a derived model
+            assert "OrderSummary" in db._derived_engine._models
+            meta = db._derived_engine._models["OrderSummary"]
+            assert meta.sources == ["Order"]
+            assert meta.refresh == "manual"
+            assert meta.schedule is None
+
+    def test_decorator_scheduled_without_schedule_raises(self):
+        """Verify that refresh='scheduled' without schedule raises ValueError."""
+        from dataflow import DataFlow
+
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            with pytest.raises(ValueError, match="requires a 'schedule' parameter"):
+
+                @db.derived_model(sources=["Order"], refresh="scheduled")
+                class BadModel:
+                    id: str
+
+                    @staticmethod
+                    def compute(sources):
+                        return []
+
     def test_decorator_missing_compute_raises(self):
         """Verify that a class without compute() raises TypeError."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            with pytest.raises(TypeError, match="must define a callable"):
 
-        with pytest.raises(TypeError, match="must define a callable"):
-
-            @db.derived_model(sources=["Order"], refresh="manual")
-            class NoCompute:
-                id: str
+                @db.derived_model(sources=["Order"], refresh="manual")
+                class NoCompute:
+                    id: str
 
     def test_decorator_with_schedule(self):
         """Verify scheduled derived model stores schedule correctly."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
 
-        @db.derived_model(sources=["Order"], refresh="scheduled", schedule="every 6h")
-        class HourlySummary:
-            id: str
-            count: int
+            @db.derived_model(
+                sources=["Order"], refresh="scheduled", schedule="every 6h"
+            )
+            class HourlySummary:
+                id: str
+                count: int
 
-            @staticmethod
-            def compute(sources):
-                return []
+                @staticmethod
+                def compute(sources):
+                    return []
 
-        meta = db._derived_engine._models["HourlySummary"]
-        assert meta.refresh == "scheduled"
-        assert meta.schedule == "every 6h"
+            meta = db._derived_engine._models["HourlySummary"]
+            assert meta.refresh == "scheduled"
+            assert meta.schedule == "every 6h"
 
 
 # ---------------------------------------------------------------------------
@@ -633,26 +632,26 @@ class TestDerivedModelStatusAndSync:
         """Verify db.derived_model_status() returns correct metadata."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
 
-        @db.derived_model(sources=["Order"], refresh="manual")
-        class Summary:
-            id: str
+            @db.derived_model(sources=["Order"], refresh="manual")
+            class Summary:
+                id: str
 
-            @staticmethod
-            def compute(sources):
-                return []
+                @staticmethod
+                def compute(sources):
+                    return []
 
-        status = db.derived_model_status()
-        assert "Summary" in status
-        assert status["Summary"].status == "pending"
+            status = db.derived_model_status()
+            assert "Summary" in status
+            assert status["Summary"].status == "pending"
 
     def test_derived_model_status_empty(self):
         """Verify db.derived_model_status() returns empty dict when no derived models."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
-        assert db.derived_model_status() == {}
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            assert db.derived_model_status() == {}
 
 
 # ---------------------------------------------------------------------------
@@ -666,48 +665,48 @@ class TestDerivedModelIntegration:
         from dataflow import DataFlow
 
         db_path = tmp_path / "derived_e2e.db"
-        db = DataFlow(f"sqlite:///{db_path}")
+        with DataFlow(f"sqlite:///{db_path}") as db:
 
-        @db.model
-        class Order:
-            id: str
-            amount: str  # Store as string to avoid isinstance() issue in test env
-            status: str = "pending"
+            @db.model
+            class Order:
+                id: str
+                amount: str  # Store as string to avoid isinstance() issue in test env
+                status: str = "pending"
 
-        @db.derived_model(sources=["Order"], refresh="manual")
-        class OrderStats:
-            id: str
-            order_count: str
-            total_amount: str
+            @db.derived_model(sources=["Order"], refresh="manual")
+            class OrderStats:
+                id: str
+                order_count: str
+                total_amount: str
 
-            @staticmethod
-            def compute(sources):
-                orders = sources.get("Order", [])
-                total = sum(float(o.get("amount", "0")) for o in orders)
-                return [
-                    {
-                        "id": "stats",
-                        "order_count": str(len(orders)),
-                        "total_amount": str(total),
-                    }
-                ]
+                @staticmethod
+                def compute(sources):
+                    orders = sources.get("Order", [])
+                    total = sum(float(o.get("amount", "0")) for o in orders)
+                    return [
+                        {
+                            "id": "stats",
+                            "order_count": str(len(orders)),
+                            "total_amount": str(total),
+                        }
+                    ]
 
-        # Create source data via sync express
-        db.express_sync.create("Order", {"id": "o1", "amount": "100.0"})
-        db.express_sync.create("Order", {"id": "o2", "amount": "250.0"})
-        db.express_sync.create("Order", {"id": "o3", "amount": "50.0"})
+            # Create source data via sync express
+            db.express_sync.create("Order", {"id": "o1", "amount": "100.0"})
+            db.express_sync.create("Order", {"id": "o2", "amount": "250.0"})
+            db.express_sync.create("Order", {"id": "o3", "amount": "50.0"})
 
-        # Refresh derived model via sync
-        result = db.refresh_derived_sync("OrderStats")
-        assert result.error is None
-        assert result.records_upserted == 1
-        assert result.sources_queried["Order"] == 3
+            # Refresh derived model via sync
+            result = db.refresh_derived_sync("OrderStats")
+            assert result.error is None
+            assert result.records_upserted == 1
+            assert result.sources_queried["Order"] == 3
 
-        # Read derived data -- verify persistence
-        stats = db.express_sync.list("OrderStats")
-        assert len(stats) == 1
-        assert stats[0]["order_count"] == "3"
-        assert stats[0]["total_amount"] == "400.0"
+            # Read derived data -- verify persistence
+            stats = db.express_sync.list("OrderStats")
+            assert len(stats) == 1
+            assert stats[0]["order_count"] == "3"
+            assert stats[0]["total_amount"] == "400.0"
 
     @pytest.mark.asyncio
     async def test_derived_model_gets_crud_nodes(self):
@@ -715,154 +714,157 @@ class TestDerivedModelIntegration:
         from dataflow import DataFlow
 
         db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        try:
 
-        @db.derived_model(sources=["Order"], refresh="manual")
-        class Stats:
-            id: str
-            value: int
+            @db.derived_model(sources=["Order"], refresh="manual")
+            class Stats:
+                id: str
+                value: int
 
-            @staticmethod
-            def compute(sources):
-                return []
+                @staticmethod
+                def compute(sources):
+                    return []
 
-        # Check that CRUD nodes were generated (from @db.model treatment)
-        assert "Stats" in db._models
-        nodes = db._nodes.get("Stats", {})
-        # The model registration generates node entries
-        assert db._models["Stats"] is not None
+            # Check that CRUD nodes were generated (from @db.model treatment)
+            assert "Stats" in db._models
+            nodes = db._nodes.get("Stats", {})
+            # The model registration generates node entries
+            assert db._models["Stats"] is not None
+        finally:
+            await db.close_async()
 
     def test_multi_source_derived_model_sqlite(self, tmp_path):
         """Integration: two source models, one derived model, real SQLite."""
         from dataflow import DataFlow
 
         db_path = tmp_path / "derived_multi.db"
-        db = DataFlow(f"sqlite:///{db_path}")
+        with DataFlow(f"sqlite:///{db_path}") as db:
 
-        @db.model
-        class Product:
-            id: str
-            name: str
-            price: str = "0"
+            @db.model
+            class Product:
+                id: str
+                name: str
+                price: str = "0"
 
-        @db.model
-        class Sale:
-            id: str
-            product_id: str
-            quantity: str = "1"
+            @db.model
+            class Sale:
+                id: str
+                product_id: str
+                quantity: str = "1"
 
-        @db.derived_model(sources=["Product", "Sale"], refresh="manual")
-        class SalesReport:
-            id: str
-            product_name: str
-            total_quantity: str
-            total_revenue: str
+            @db.derived_model(sources=["Product", "Sale"], refresh="manual")
+            class SalesReport:
+                id: str
+                product_name: str
+                total_quantity: str
+                total_revenue: str
 
-            @staticmethod
-            def compute(sources):
-                products = {p["id"]: p for p in sources.get("Product", [])}
-                sales = sources.get("Sale", [])
-                # Aggregate sales per product
-                agg: Dict[str, Dict[str, Any]] = {}
-                for sale in sales:
-                    pid = sale.get("product_id", "")
-                    if pid not in agg:
-                        product = products.get(pid, {})
-                        agg[pid] = {
-                            "id": f"report-{pid}",
-                            "product_name": product.get("name", "Unknown"),
-                            "total_quantity": 0,
-                            "total_revenue": 0.0,
-                        }
-                    qty = int(sale.get("quantity", "1"))
-                    price = float(products.get(pid, {}).get("price", "0"))
-                    agg[pid]["total_quantity"] += qty
-                    agg[pid]["total_revenue"] += qty * price
-                # Convert numeric values to strings for storage
-                for v in agg.values():
-                    v["total_quantity"] = str(v["total_quantity"])
-                    v["total_revenue"] = str(v["total_revenue"])
-                return list(agg.values())
+                @staticmethod
+                def compute(sources):
+                    products = {p["id"]: p for p in sources.get("Product", [])}
+                    sales = sources.get("Sale", [])
+                    # Aggregate sales per product
+                    agg: Dict[str, Dict[str, Any]] = {}
+                    for sale in sales:
+                        pid = sale.get("product_id", "")
+                        if pid not in agg:
+                            product = products.get(pid, {})
+                            agg[pid] = {
+                                "id": f"report-{pid}",
+                                "product_name": product.get("name", "Unknown"),
+                                "total_quantity": 0,
+                                "total_revenue": 0.0,
+                            }
+                        qty = int(sale.get("quantity", "1"))
+                        price = float(products.get(pid, {}).get("price", "0"))
+                        agg[pid]["total_quantity"] += qty
+                        agg[pid]["total_revenue"] += qty * price
+                    # Convert numeric values to strings for storage
+                    for v in agg.values():
+                        v["total_quantity"] = str(v["total_quantity"])
+                        v["total_revenue"] = str(v["total_revenue"])
+                    return list(agg.values())
 
-        # Create source data via sync express
-        db.express_sync.create(
-            "Product", {"id": "p1", "name": "Widget", "price": "10.0"}
-        )
-        db.express_sync.create(
-            "Product", {"id": "p2", "name": "Gadget", "price": "25.0"}
-        )
-        db.express_sync.create(
-            "Sale", {"id": "s1", "product_id": "p1", "quantity": "3"}
-        )
-        db.express_sync.create(
-            "Sale", {"id": "s2", "product_id": "p1", "quantity": "2"}
-        )
-        db.express_sync.create(
-            "Sale", {"id": "s3", "product_id": "p2", "quantity": "1"}
-        )
+            # Create source data via sync express
+            db.express_sync.create(
+                "Product", {"id": "p1", "name": "Widget", "price": "10.0"}
+            )
+            db.express_sync.create(
+                "Product", {"id": "p2", "name": "Gadget", "price": "25.0"}
+            )
+            db.express_sync.create(
+                "Sale", {"id": "s1", "product_id": "p1", "quantity": "3"}
+            )
+            db.express_sync.create(
+                "Sale", {"id": "s2", "product_id": "p1", "quantity": "2"}
+            )
+            db.express_sync.create(
+                "Sale", {"id": "s3", "product_id": "p2", "quantity": "1"}
+            )
 
-        # Refresh via sync
-        result = db.refresh_derived_sync("SalesReport")
-        assert result.error is None
-        assert result.records_upserted == 2
-        assert result.sources_queried["Product"] == 2
-        assert result.sources_queried["Sale"] == 3
+            # Refresh via sync
+            result = db.refresh_derived_sync("SalesReport")
+            assert result.error is None
+            assert result.records_upserted == 2
+            assert result.sources_queried["Product"] == 2
+            assert result.sources_queried["Sale"] == 3
 
-        # Read back -- verify persistence
-        reports = db.express_sync.list("SalesReport")
-        assert len(reports) == 2
-        # Find widget report
-        widget_report = next(
-            (r for r in reports if r.get("product_name") == "Widget"), None
-        )
-        assert widget_report is not None
-        assert widget_report["total_quantity"] == "5"
-        assert widget_report["total_revenue"] == "50.0"
+            # Read back -- verify persistence
+            reports = db.express_sync.list("SalesReport")
+            assert len(reports) == 2
+            # Find widget report
+            widget_report = next(
+                (r for r in reports if r.get("product_name") == "Widget"), None
+            )
+            assert widget_report is not None
+            assert widget_report["total_quantity"] == "5"
+            assert widget_report["total_revenue"] == "50.0"
 
     def test_refresh_returns_correct_result(self, tmp_path):
         """Verify that refresh returns correct result metadata."""
         from dataflow import DataFlow
 
         db_path = tmp_path / "derived_result.db"
-        db = DataFlow(f"sqlite:///{db_path}")
+        with DataFlow(f"sqlite:///{db_path}") as db:
 
-        refresh_call_count = {"n": 0}
+            refresh_call_count = {"n": 0}
 
-        @db.model
-        class Item:
-            id: str
-            name: str = ""
+            @db.model
+            class Item:
+                id: str
+                name: str = ""
 
-        @db.derived_model(sources=["Item"], refresh="manual")
-        class ItemSummary:
-            id: str
-            item_count: str
+            @db.derived_model(sources=["Item"], refresh="manual")
+            class ItemSummary:
+                id: str
+                item_count: str
 
-            @staticmethod
-            def compute(sources):
-                items = sources.get("Item", [])
-                refresh_call_count["n"] += 1
-                return [
-                    {
-                        "id": f"summary-{refresh_call_count['n']}",
-                        "item_count": str(len(items)),
-                    }
-                ]
+                @staticmethod
+                def compute(sources):
+                    items = sources.get("Item", [])
+                    refresh_call_count["n"] += 1
+                    return [
+                        {
+                            "id": f"summary-{refresh_call_count['n']}",
+                            "item_count": str(len(items)),
+                        }
+                    ]
 
-        # Create source data
-        db.express_sync.create("Item", {"id": "i1", "name": "alpha"})
-        db.express_sync.create("Item", {"id": "i2", "name": "beta"})
+            # Create source data
+            db.express_sync.create("Item", {"id": "i1", "name": "alpha"})
+            db.express_sync.create("Item", {"id": "i2", "name": "beta"})
 
-        # Refresh and check result
-        result = db.refresh_derived_sync("ItemSummary")
-        assert result.error is None
-        assert result.records_upserted == 1
-        assert result.sources_queried["Item"] == 2
-        assert result.duration_ms > 0
+            # Refresh and check result
+            result = db.refresh_derived_sync("ItemSummary")
+            assert result.error is None
+            assert result.records_upserted == 1
+            assert result.sources_queried["Item"] == 2
+            assert result.duration_ms > 0
 
-        # Read back derived data -- verify persistence
-        summaries = db.express_sync.list("ItemSummary")
-        assert len(summaries) >= 1
-        assert summaries[0]["item_count"] == "2"
+            # Read back derived data -- verify persistence
+            summaries = db.express_sync.list("ItemSummary")
+            assert len(summaries) >= 1
+            assert summaries[0]["item_count"] == "2"
 
 
 # ---------------------------------------------------------------------------
@@ -1173,40 +1175,40 @@ class TestOnSourceChangeDecorator:
         """Verify derived_model with refresh='on_source_change' registers."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
 
-        @db.derived_model(sources=["Order"], refresh="on_source_change")
-        class OrderStats:
-            id: str
-            count: str
+            @db.derived_model(sources=["Order"], refresh="on_source_change")
+            class OrderStats:
+                id: str
+                count: str
 
-            @staticmethod
-            def compute(sources):
-                return []
+                @staticmethod
+                def compute(sources):
+                    return []
 
-        meta = db._derived_engine._models["OrderStats"]
-        assert meta.refresh == "on_source_change"
-        assert meta.debounce_ms == 100.0  # Default
+            meta = db._derived_engine._models["OrderStats"]
+            assert meta.refresh == "on_source_change"
+            assert meta.debounce_ms == 100.0  # Default
 
     def test_decorator_custom_debounce(self):
         """Verify custom debounce_ms is passed through."""
         from dataflow import DataFlow
 
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
 
-        @db.derived_model(
-            sources=["Order"], refresh="on_source_change", debounce_ms=500
-        )
-        class SlowStats:
-            id: str
-            value: str
+            @db.derived_model(
+                sources=["Order"], refresh="on_source_change", debounce_ms=500
+            )
+            class SlowStats:
+                id: str
+                value: str
 
-            @staticmethod
-            def compute(sources):
-                return []
+                @staticmethod
+                def compute(sources):
+                    return []
 
-        meta = db._derived_engine._models["SlowStats"]
-        assert meta.debounce_ms == 500
+            meta = db._derived_engine._models["SlowStats"]
+            assert meta.debounce_ms == 500
 
 
 class TestOnSourceChangeCircularDetection:
