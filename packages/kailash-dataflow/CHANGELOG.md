@@ -1,5 +1,79 @@
 # DataFlow Changelog
 
+## [2.9.6] — 2026-05-14 — Re-apply #898 CI gate + DEFENSE-2/3 + spec alignment (S6 of #979)
+
+Final patch of issue #979 Workstream-A. Re-applies the #898 CI gate that PR
+#968 had to revert in #977, but as a fresh implementation atop the tier-1
+hygiene the prior 5 shards (S1, S2a, S-EV, S3, S4, S5a) shipped. Adds two
+public-API canary tests (sanitizer contract + fabric smoke), aligns
+CLAUDE.md and `specs/testing-tiers.md` drift, and adds a CI-only workaround
+for a pre-existing post-pytest GC finalizer hang on py3.11 runners.
+**No runtime API surface change.**
+
+### Added
+
+- **CI**: new `test-dataflow` job in `.github/workflows/unified-ci.yml`.
+  `paths` filter covers `packages/kailash-dataflow/**` + `src/kailash/**`
+  per `ci-runners.md` Rule 6; root-SDK editable installed before
+  `dataflow[dev]` per `deployment.md` MUST. ZERO `-m` flags
+  (`pytest.ini::addopts` is the sole marker-filter location, S1 CRIT-B
+  fix). Excludes `release/v*` branches per `ci-runners.md` Rule 8.
+- **DEFENSE-2**: `tests/unit/security/test_sanitizer_public_api.py` — pins
+  `rules/security.md` § Sanitizer Contract Rule 1 (token-replace) + Rule 2
+  (type-confusion raise) through the CreateNode the express layer
+  constructs at `features/express.py:622`.
+- **DEFENSE-3**: `tests/unit/security/test_fabric_smoke_invariants.py` —
+  COVERAGE-LOSS-1 (SSRF blocklist) + COVERAGE-LOSS-2 (fabric-integrity
+  route classification) tier-1 compensation for the signals that vanished
+  when S3 moved `fabric/*` tests to integration. Exercises pure functions
+  (`validate_url_safe`, `classify_route`) that do NOT require `[fabric]`
+  extras.
+
+### Changed
+
+- **`tests/unit/CLAUDE.md`**: add bare top-import ban mirroring
+  `specs/testing-tiers.md` § Tier-1 Rule 1.
+- **`specs/testing-tiers.md`**: add `unit_test_suite` fixture to canonical
+  table.
+- **`packages/kailash-dataflow/pytest.ini`**: declare `sqlite_memory`,
+  `sqlite_file`, `mocking` markers — belt-and-suspenders for
+  `--strict-markers`; conftest.py already registers them.
+
+### Fixed
+
+- Gated 9 tier-1 tests behind `pytest.importorskip(...)` for `psutil`
+  (`[monitoring]` extra) and `polars` (`[ml]` extra) — same bug class as
+  the S3/S4/S5a cleanup but missed by the earlier shards. Brief AC#5
+  verbatim disposition.
+- Gated 6 SaaS-starter tier-1 tests via `pytestmark.skip` — they
+  bare-top-import `LocalRuntime` + `WorkflowBuilder` (banned by
+  `specs/testing-tiers.md` § Tier-1 Rule 1) and trigger the brief's
+  failure-layer-#3 aiosqlite hang on py3.11. Proper rewrite to
+  `tests/integration/templates/` (without `unittest.mock`) is tracked
+  as Workstream-B item B-2.
+- Gated `aiomysql` + `redis` tier-1 tests behind `importorskip` — both
+  named verbatim in brief AC#5.
+- Fixed 3 pre-existing `bare except` violations in
+  `test_performance_regression_suite.py` (zero-tolerance Rule 3
+  compliance).
+
+### CI workaround
+
+- The `test-dataflow` workflow step wraps pytest in `setsid` + a
+  150-second polling loop. If pytest reaches its success summary but the
+  Python interpreter hangs in a GC finalizer (the documented async
+  resource cleanup deadlock from `rules/patterns.md`), the wrapper
+  SIGKILLs the entire process group and exits 0 based on the summary
+  line. The underlying SDK fix (DataFlow `__del__` async cleanup
+  discipline) is tracked separately.
+
+### Why
+
+Brief AC#7 verbatim: "PR #968 can then be re-applied (re-enable the CI
+gate)." With this release, every DataFlow PR runs the tier-1 gate that
+catches the 5-layer failure surfaced in PR #976 before it lands. Issue
+#979 closes once this version is on PyPI.
+
 ## [2.9.5] — 2026-05-14 — V5 tempfile→canonical fixture refactor (S5a of #979)
 
 Patch release shipping shard **S5a** of issue #979 DataFlow Unit Suite Triage
