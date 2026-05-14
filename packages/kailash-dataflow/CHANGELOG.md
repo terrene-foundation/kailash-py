@@ -1,5 +1,55 @@
 # DataFlow Changelog
 
+## [2.9.7] — 2026-05-14 — Structural `__del__` rule compliance (partial closure of #1000)
+
+Closes 9 `__del__` rule violations per `rules/patterns.md` § Async Resource
+Cleanup. Issue #1000 originated from `AsyncRedisCacheAdapter.__del__`
+emitting `logger.debug(...)` from inside a GC finalizer — deadlocking
+against the root logging lock already held by the finalizer thread. The
+same bug class was found in 8 sibling sites calling `self.close()` from
+`__del__`. All 9 sites now emit `ResourceWarning` only.
+
+### Fixed
+
+- **`__del__` GC finalizer deadlock** (issue #1000, AC#1, #2, #4):
+  - `cache/async_redis_adapter.py` — replaces `executor.shutdown(wait=False)
+    - logger.debug(...)`with`ResourceWarning` emission + safe sync drain.
+  - 8 sibling sites stop invoking `self.close()` from `__del__`:
+    `core/model_registry.py`, `gateway_integration.py`, three sites in
+    `migrations/auto_migration_system.py`, `migrations/schema_state_manager.py`,
+    `testing/dataflow_test_utils.py`, `utils/connection_adapter.py`.
+  - 2 fabric `__del__` signatures tightened with `_warnings=warnings`
+    default (`fabric/runtime.py`, `fabric/pipeline.py`) for interpreter-
+    shutdown safety.
+
+### Added
+
+- **AST-walk regression**: `tests/unit/test_del_no_close.py` — sweeps every
+  `__del__` in the dataflow source tree and asserts no body invokes
+  `close()`/`close_async()`/`cleanup()`/`stop()`/`drain()` or any logger
+  emission. Prevents reintroduction of the deadlock pattern.
+- **Contract tests for `AsyncRedisCacheAdapter`**: 5 new tests in
+  `tests/unit/cache/test_async_redis_adapter.py` covering `close_async`
+  semantics, idempotency, `ResourceWarning` emission, and the sync-drain
+  invariant in `__del__`.
+
+### Behavior change
+
+- `AsyncRedisCacheAdapter` now exposes `await adapter.close_async()` as the
+  deterministic-cleanup path. Callers who let the adapter be garbage-
+  collected without closing it will see a `ResourceWarning` rather than
+  silent deadlock — per `rules/patterns.md`'s "loud leak vs silent
+  deadlock" trade-off.
+
+### Deferred to issue #1002
+
+- **AC#3 of #1000** ("remove the setsid wrapper, confirm pytest exits
+  cleanly") is NOT delivered in this release. The CI `setsid` wrapper in
+  `.github/workflows/unified-ci.yml::test-dataflow` remains — it protects
+  against a distinct post-pytest `_Py_Finalize` hang caused by test
+  fixtures leaking aiosqlite background threads (separate root cause from
+  the `__del__` deadlock). Tracked in #1002 as a multi-shard cleanup.
+
 ## [2.9.6] — 2026-05-14 — Re-apply #898 CI gate + DEFENSE-2/3 + spec alignment (S6 of #979)
 
 Final patch of issue #979 Workstream-A. Re-applies the #898 CI gate that PR
