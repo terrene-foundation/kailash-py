@@ -32,7 +32,8 @@ from dataflow.platform.inspector import (
 @pytest.fixture
 def db():
     """Create a test DataFlow instance."""
-    return DataFlow(database_url="sqlite:///:memory:")
+    with DataFlow(database_url="sqlite:///:memory:") as instance:
+        yield instance
 
 
 @pytest.fixture

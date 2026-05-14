@@ -87,17 +87,21 @@ def performance_validator():
 
 @pytest.fixture
 async def tdd_transaction_dataflow():
-    """Mock fixture for TDD transaction dataflow."""
+    """Mock fixture for TDD transaction dataflow.
+
+    NOTE: This whole file is `pytest.mark.skip`-ped (see pytestmark above),
+    so this fixture never executes. Migrated to yield+close for hygiene.
+    """
     import uuid
     from unittest.mock import Mock
 
     from dataflow import DataFlow
 
     # Create a simple in-memory dataflow for testing
-    df = DataFlow(":memory:")
-    context = Mock()
-    context.test_id = "test_" + str(uuid.uuid4())[:8]
-    return df, context
+    with DataFlow(":memory:") as df:
+        context = Mock()
+        context.test_id = "test_" + str(uuid.uuid4())[:8]
+        yield df, context
 
 
 @pytest.mark.asyncio
@@ -372,9 +376,7 @@ async def test_tdd_seeded_data_performance(performance_validator, tmp_path):
 
     # Create DataFlow with pre-seeded data
     db_path = tmp_path / "seeded_data.db"
-    df = DataFlow(f"sqlite:///{db_path}")
-
-    try:
+    with DataFlow(f"sqlite:///{db_path}") as df:
         # Define models (simulating pre-seeded schema)
         @df.model
         class User:
@@ -434,8 +436,6 @@ async def test_tdd_seeded_data_performance(performance_validator, tmp_path):
         # Simulate operations that would use the seeded data
         # In a real TDD scenario, this data would already be in the database
         await asyncio.sleep(0.001)  # Minimal processing time
-    finally:
-        df.close()
 
     end_time = time.time()
     duration_ms = (end_time - start_time) * 1000
@@ -461,13 +461,11 @@ async def test_tdd_connection_reuse_performance(performance_validator, tmp_path)
     db_path = tmp_path / "connection_reuse.db"
 
     # DataFlow manages its own connection pool
-    df = DataFlow(
+    with DataFlow(
         f"sqlite:///{db_path}",
         pool_size=5,  # Simulate connection pool
         pool_max_overflow=0,
-    )
-
-    try:
+    ) as df:
         # Perform multiple operations simulating connection reuse
         for i in range(5):
             # Each operation would reuse connections from the pool
@@ -483,8 +481,6 @@ async def test_tdd_connection_reuse_performance(performance_validator, tmp_path)
                 # SQLite doesn't have true connection pooling like PostgreSQL
                 # But the test validates the performance pattern
                 pass
-    finally:
-        df.close()
 
     end_time = time.time()
     duration_ms = (end_time - start_time) * 1000

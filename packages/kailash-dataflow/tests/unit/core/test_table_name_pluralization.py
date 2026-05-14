@@ -24,7 +24,8 @@ class TestTableNamePluralization:
     @pytest.fixture
     def db(self):
         """Create a DataFlow instance for testing."""
-        return DataFlow(":memory:", test_mode=True, auto_migrate=False)
+        with DataFlow(":memory:", test_mode=True, auto_migrate=False) as db:
+            yield db
 
     # ============================================================
     # Standard pluralization (add 's')
@@ -56,9 +57,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # Words ending in 'y' preceded by consonant -> 'ies'
@@ -128,9 +129,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     def test_vowel_y_pluralization(self, db):
         """Test words ending in 'y' preceded by a vowel -> just add 's'."""
@@ -151,9 +152,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # Words ending in 's', 'x', 'z', 'ch', 'sh' -> add 'es'
@@ -207,9 +208,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # Irregular plurals
@@ -243,9 +244,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     def test_latin_greek_irregular_plurals(self, db):
         """Test Latin/Greek origin irregular plurals."""
@@ -283,9 +284,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     def test_unchanged_plurals(self, db):
         """Test words that don't change between singular and plural."""
@@ -314,9 +315,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     def test_uncountable_nouns(self, db):
         """Test uncountable nouns that stay singular."""
@@ -339,9 +340,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # CamelCase to snake_case conversion
@@ -365,9 +366,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     def test_acronyms_in_names(self, db):
         """Test handling of acronyms in class names."""
@@ -382,9 +383,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # Compound words with underscores
@@ -407,9 +408,9 @@ class TestTableNamePluralization:
         ]
         for word, expected in test_cases:
             result = db._pluralize(word)
-            assert result == expected, (
-                f"_pluralize('{word}') -> '{result}', expected '{expected}'"
-            )
+            assert (
+                result == expected
+            ), f"_pluralize('{word}') -> '{result}', expected '{expected}'"
 
     # ============================================================
     # -o endings
@@ -440,9 +441,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
     # ============================================================
     # Real-world model name examples
@@ -520,9 +521,9 @@ class TestTableNamePluralization:
         ]
         for model_name, expected_table in test_cases:
             result = db._class_name_to_table_name(model_name)
-            assert result == expected_table, (
-                f"{model_name} -> {result}, expected {expected_table}"
-            )
+            assert (
+                result == expected_table
+            ), f"{model_name} -> {result}, expected {expected_table}"
 
 
 class TestPluralizationRegression:
@@ -531,7 +532,8 @@ class TestPluralizationRegression:
     @pytest.fixture
     def db(self):
         """Create a DataFlow instance for testing."""
-        return DataFlow(":memory:", test_mode=True, auto_migrate=False)
+        with DataFlow(":memory:", test_mode=True, auto_migrate=False) as db:
+            yield db
 
     def test_summary_not_summarys(self, db):
         """Verify Summary -> summaries, not summarys (the original bug)."""
@@ -542,9 +544,9 @@ class TestPluralizationRegression:
     def test_category_not_categorys(self, db):
         """Verify Category -> categories, not categorys."""
         result = db._class_name_to_table_name("Category")
-        assert result == "categories", (
-            f"Category should be 'categories', got '{result}'"
-        )
+        assert (
+            result == "categories"
+        ), f"Category should be 'categories', got '{result}'"
         assert result != "categorys", "Category should NOT be 'categorys'"
 
     def test_entity_not_entitys(self, db):
@@ -614,7 +616,7 @@ class TestPluralizationRegression:
 
         for model_name, correct, incorrect in known_issues:
             result = db._class_name_to_table_name(model_name)
-            assert result == correct, (
-                f"{model_name} should be '{correct}', got '{result}'"
-            )
+            assert (
+                result == correct
+            ), f"{model_name} should be '{correct}', got '{result}'"
             assert result != incorrect, f"{model_name} should NOT be '{incorrect}'"

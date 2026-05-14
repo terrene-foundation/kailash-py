@@ -9,13 +9,20 @@ All tests verify that ErrorEnhancer produces correct error codes and actionable 
 """
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.exceptions import EnhancedDataFlowError  # Core ErrorEnhancer exception
 from dataflow.platform.errors import DataFlowError  # Platform ErrorEnhancer exception
 
 
 class TestPreInitializationConfigurationErrors:
-    """Test Group A: Pre-initialization configuration errors in _is_valid_database_url()."""
+    """Test Group A: Pre-initialization configuration errors in _is_valid_database_url().
+
+    These tests construct DataFlow inside `pytest.raises` — the constructor
+    raises BEFORE the instance is created, so no cleanup is needed (no DataFlow
+    object survives the call). Per issue #1002 the cleanup concern is leaked
+    aiosqlite connections from successfully-constructed instances.
+    """
 
     def test_invalid_file_extension_error_enhanced(self):
         """
@@ -29,7 +36,7 @@ class TestPreInitializationConfigurationErrors:
 
         # Act & Assert: Should raise enhanced DataFlowError with DF-401
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow(invalid_url)
+            DataFlow(invalid_url)
 
         # Verify error enhancement
         error_message = str(exc_info.value)
@@ -55,7 +62,7 @@ class TestPreInitializationConfigurationErrors:
 
         # Act & Assert: Should raise enhanced DataFlowError
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow(invalid_url)
+            DataFlow(invalid_url)
 
         # Verify error enhancement
         error_message = str(exc_info.value)
@@ -82,7 +89,7 @@ class TestPreInitializationConfigurationErrors:
 
         # Act & Assert: Should raise enhanced DataFlowError
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow(invalid_url)
+            DataFlow(invalid_url)
 
         # Verify error enhancement
         error_message = str(exc_info.value)
@@ -104,7 +111,7 @@ class TestPreInitializationConfigurationErrors:
 
         # Act & Assert: Should raise enhanced DataFlowError
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow(invalid_url)
+            DataFlow(invalid_url)
 
         # Verify error enhancement
         error_message = str(exc_info.value)
@@ -125,26 +132,25 @@ class TestPostInitializationErrors:
         Verify that registering the same model twice produces an enhanced error
         with error code DF-501 and actionable solutions.
         """
-        # Arrange: Create DataFlow instance and register a model
-        db = DataFlow(":memory:")
-
-        @db.model
-        class User:
-            id: str
-            name: str
-
-        # Act & Assert: Attempt to register the same model again
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
+        with DataFlow(":memory:") as db:
 
             @db.model
-            class User:  # Same name, duplicate registration
+            class User:
                 id: str
-                email: str
+                name: str
 
-        # Verify error enhancement
-        error_message = str(exc_info.value)
-        assert "DF-501" in error_message or "already registered" in error_message
-        assert "User" in error_message
+            # Act & Assert: Attempt to register the same model again
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+
+                @db.model
+                class User:  # Same name, duplicate registration
+                    id: str
+                    email: str
+
+            # Verify error enhancement
+            error_message = str(exc_info.value)
+            assert "DF-501" in error_message or "already registered" in error_message
+            assert "User" in error_message
 
     def test_model_persistence_disabled_error_enhanced(self):
         """
@@ -153,22 +159,22 @@ class TestPostInitializationErrors:
         Verify that accessing model registry when persistence is disabled
         produces an enhanced error with error code DF-501.
         """
-        # Arrange: Create DataFlow with model persistence disabled
-        db = DataFlow(":memory:", enable_model_persistence=False)
+        with DataFlow(":memory:", enable_model_persistence=False) as db:
 
-        # Act & Assert: Attempt to access model registry
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            registry = db.get_model_registry()
+            # Act & Assert: Attempt to access model registry
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                db.get_model_registry()
 
-        # Verify error enhancement
-        error_message = str(exc_info.value)
-        assert (
-            "DF-501" in error_message
-            or "Model persistence is disabled" in error_message
-        )
-        assert (
-            "DataFlow instance" in error_message or "disabled" in error_message.lower()
-        )
+            # Verify error enhancement
+            error_message = str(exc_info.value)
+            assert (
+                "DF-501" in error_message
+                or "Model persistence is disabled" in error_message
+            )
+            assert (
+                "DataFlow instance" in error_message
+                or "disabled" in error_message.lower()
+            )
 
 
 class TestErrorEnhancementPatterns:
@@ -182,7 +188,7 @@ class TestErrorEnhancementPatterns:
         """
         # Test invalid file extension (pre-initialization)
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow("mydata.txt")
+            DataFlow("mydata.txt")
 
         error_message = str(exc_info.value)
         # Should contain enhanced error details
@@ -200,31 +206,30 @@ class TestErrorEnhancementPatterns:
 
         These errors occur AFTER self.error_enhancer is initialized (line 267).
         """
-        # Create DataFlow instance (initializes error_enhancer)
-        db = DataFlow(":memory:")
-
-        @db.model
-        class Product:
-            id: str
-            name: str
-
-        # Test duplicate model registration (post-initialization)
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
+        with DataFlow(":memory:") as db:
 
             @db.model
-            class Product:  # Duplicate
+            class Product:
                 id: str
-                price: float
+                name: str
 
-        error_message = str(exc_info.value)
-        # Should contain enhanced error details
-        assert any(
-            [
-                "DF-501" in error_message,
-                "already registered" in error_message,
-                "Product" in error_message,
-            ]
-        )
+            # Test duplicate model registration (post-initialization)
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+
+                @db.model
+                class Product:  # Duplicate
+                    id: str
+                    price: float
+
+            error_message = str(exc_info.value)
+            # Should contain enhanced error details
+            assert any(
+                [
+                    "DF-501" in error_message,
+                    "already registered" in error_message,
+                    "Product" in error_message,
+                ]
+            )
 
 
 class TestErrorMessages:
@@ -234,7 +239,7 @@ class TestErrorMessages:
         """Verify that configuration errors provide URL format examples."""
         # Test unsupported scheme
         with pytest.raises(DataFlowError) as exc_info:
-            db = DataFlow("mssql://localhost/db")
+            DataFlow("mssql://localhost/db")
 
         error_message = str(exc_info.value)
         # Should provide examples of supported formats
@@ -248,39 +253,39 @@ class TestErrorMessages:
 
     def test_model_errors_include_model_name(self):
         """Verify that model errors include the specific model name."""
-        db = DataFlow(":memory:")
-
-        @db.model
-        class Order:
-            id: str
-            total: float
-
-        # Trigger duplicate registration error
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
+        with DataFlow(":memory:") as db:
 
             @db.model
-            class Order:  # Duplicate
+            class Order:
                 id: str
-                status: str
+                total: float
 
-        error_message = str(exc_info.value)
-        # Should include model name for context
-        assert "Order" in error_message
+            # Trigger duplicate registration error
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+
+                @db.model
+                class Order:  # Duplicate
+                    id: str
+                    status: str
+
+            error_message = str(exc_info.value)
+            # Should include model name for context
+            assert "Order" in error_message
 
     def test_runtime_errors_explain_feature_status(self):
         """Verify that runtime errors explain feature status and how to enable."""
-        db = DataFlow(":memory:", enable_model_persistence=False)
+        with DataFlow(":memory:", enable_model_persistence=False) as db:
 
-        # Trigger model persistence disabled error
-        with pytest.raises(EnhancedDataFlowError) as exc_info:
-            registry = db.get_model_registry()
+            # Trigger model persistence disabled error
+            with pytest.raises(EnhancedDataFlowError) as exc_info:
+                db.get_model_registry()
 
-        error_message = str(exc_info.value)
-        # Should explain that feature is disabled
-        assert (
-            "disabled" in error_message.lower()
-            or "not available" in error_message.lower()
-        )
+            error_message = str(exc_info.value)
+            # Should explain that feature is disabled
+            assert (
+                "disabled" in error_message.lower()
+                or "not available" in error_message.lower()
+            )
 
 
 # Summary of test coverage:

@@ -263,21 +263,21 @@ class TestTDDNodeGenerationIntegration:
             # Create DataFlow with TDD context
             test_context = TDDTestContext(test_id="init_test")
 
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://test:pass@localhost:5432/testdb",
                 tdd_mode=True,
                 test_context=test_context,
                 auto_migrate=False,
                 existing_schema_mode=True,
-            )
+            ) as db:
 
-            # Verify TDD mode was set
-            assert db._tdd_mode
-            assert db._test_context == test_context
+                # Verify TDD mode was set
+                assert db._tdd_mode
+                assert db._test_context == test_context
 
-            # Verify NodeGenerator was created with TDD context
-            assert db._node_generator._tdd_mode
-            assert db._node_generator._test_context == test_context
+                # Verify NodeGenerator was created with TDD context
+                assert db._node_generator._tdd_mode
+                assert db._node_generator._test_context == test_context
 
     def test_model_registration_tdd_logging(self):
         """Test that model registration includes TDD logging."""
@@ -285,32 +285,34 @@ class TestTDDNodeGenerationIntegration:
             # Create DataFlow with TDD context
             test_context = TDDTestContext(test_id="logging_test")
 
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://test:pass@localhost:5432/testdb",
                 tdd_mode=True,
                 test_context=test_context,
                 auto_migrate=False,
                 existing_schema_mode=True,
-            )
+            ) as db:
 
-            # Mock the logger to capture log messages
-            with patch("dataflow.core.engine.logger") as mock_logger:
-                # Register a model
-                @db.model
-                class LoggingTest:
-                    name: str
-                    value: int
+                # Mock the logger to capture log messages
+                with patch("dataflow.core.engine.logger") as mock_logger:
+                    # Register a model
+                    @db.model
+                    class LoggingTest:
+                        name: str
+                        value: int
 
-                # Verify TDD logging was called
-                mock_logger.debug.assert_called()
+                    # Verify TDD logging was called
+                    mock_logger.debug.assert_called()
 
-                # Check that TDD-specific log messages were generated
-                debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
-                tdd_logs = [
-                    msg
-                    for msg in debug_calls
-                    if "TDD-aware" in msg and "logging_test" in msg
-                ]
+                    # Check that TDD-specific log messages were generated
+                    debug_calls = [
+                        call[0][0] for call in mock_logger.debug.call_args_list
+                    ]
+                    tdd_logs = [
+                        msg
+                        for msg in debug_calls
+                        if "TDD-aware" in msg and "logging_test" in msg
+                    ]
 
                 # Should have logs for both CRUD and bulk node generation
                 assert len(tdd_logs) >= 2

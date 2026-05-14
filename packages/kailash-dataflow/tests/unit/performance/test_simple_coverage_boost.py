@@ -11,177 +11,145 @@ from dataflow import DataFlow
 from dataflow.core.config import DataFlowConfig
 
 
+def _test_db_url() -> str:
+    """Resolve the test PostgreSQL URL for the coverage suite."""
+    import os
+
+    return os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql://test_user:test_password@localhost:5434/kailash_test",
+    )
+
+
 class TestDataFlowCoreEngineCoverage:
     """Simple tests for core engine methods that definitely exist."""
 
     def test_dataflow_initialization_variations(self):
         """Test various DataFlow initialization patterns."""
-        import os
-
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
+        db_url = _test_db_url()
 
         # Basic initialization
-        db1 = DataFlow(db_url, existing_schema_mode=True)
-        assert db1 is not None
+        with DataFlow(db_url, existing_schema_mode=True) as db1:
+            assert db1 is not None
 
         # With configuration parameters
-        db2 = DataFlow(
+        with DataFlow(
             db_url,
             existing_schema_mode=True,
             auto_migrate=False,
             monitoring=True,
             debug=False,
-        )
-        assert db2 is not None
+        ) as db2:
+            assert db2 is not None
 
         # With enterprise features
-        db3 = DataFlow(
-            db_url, existing_schema_mode=True, multi_tenant=False, cache_enabled=True
-        )
-        assert db3 is not None
+        with DataFlow(
+            db_url,
+            existing_schema_mode=True,
+            multi_tenant=False,
+            cache_enabled=True,
+        ) as db3:
+            assert db3 is not None
 
     def test_model_management_methods(self):
         """Test model management methods that exist."""
-        import os
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
 
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
+            # Test initial state
+            models = db.get_models()
+            assert isinstance(models, dict)
+            assert len(models) == 0
 
-        # Test initial state
-        models = db.get_models()
-        assert isinstance(models, dict)
-        assert len(models) == 0
+            model_names = db.list_models()
+            assert isinstance(model_names, list)
+            assert len(model_names) == 0
 
-        model_names = db.list_models()
-        assert isinstance(model_names, list)
-        assert len(model_names) == 0
+            # Register a model
+            @db.model
+            class TestUser:
+                name: str
+                email: str
+                active: bool = True
 
-        # Register a model
-        @db.model
-        class TestUser:
-            name: str
-            email: str
-            active: bool = True
+            # Check registration worked
+            models = db.get_models()
+            assert "TestUser" in models
+            assert models["TestUser"] == TestUser
 
-        # Check registration worked
-        models = db.get_models()
-        assert "TestUser" in models
-        assert models["TestUser"] == TestUser
+            model_names = db.list_models()
+            assert "TestUser" in model_names
 
-        model_names = db.list_models()
-        assert "TestUser" in model_names
-
-        # Test model info
-        info = db.get_model_info("TestUser")
-        assert info is not None
-        assert isinstance(info, dict)
+            # Test model info
+            info = db.get_model_info("TestUser")
+            assert info is not None
+            assert isinstance(info, dict)
 
     def test_enterprise_feature_properties(self):
         """Test that enterprise feature properties exist and are accessible."""
-        import os
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
+            # These should exist and not be None
+            assert db.bulk is not None
+            assert db.transactions is not None
+            assert db.connection is not None
 
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
-
-        # These should exist and not be None
-        assert db.bulk is not None
-        assert db.transactions is not None
-        assert db.connection is not None
-
-        # Test that they have expected types
-        assert hasattr(db.bulk, "__class__")
-        assert hasattr(db.transactions, "__class__")
-        assert hasattr(db.connection, "__class__")
+            # Test that they have expected types
+            assert hasattr(db.bulk, "__class__")
+            assert hasattr(db.transactions, "__class__")
+            assert hasattr(db.connection, "__class__")
 
     def test_configuration_access(self):
         """Test configuration object access."""
-        import os
-
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
-
-        assert db.config is not None
-        assert hasattr(db.config, "database")
-        assert db.config.database is not None
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
+            assert db.config is not None
+            assert hasattr(db.config, "database")
+            assert db.config.database is not None
 
     def test_model_decorator_with_different_types(self):
         """Test model decorator with various field types."""
-        import os
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
 
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
+            @db.model
+            class TypeTestModel:
+                id: int
+                name: str
+                price: float
+                active: bool
+                created_at: object  # Generic type
 
-        @db.model
-        class TypeTestModel:
-            id: int
-            name: str
-            price: float
-            active: bool
-            created_at: object  # Generic type
+            # Should be registered
+            assert "TypeTestModel" in db.get_models()
 
-        # Should be registered
-        assert "TypeTestModel" in db.get_models()
-
-        # Should have model info
-        info = db.get_model_info("TypeTestModel")
-        assert info is not None
+            # Should have model info
+            info = db.get_model_info("TypeTestModel")
+            assert info is not None
 
     def test_schema_discovery_method_exists(self):
         """Test that schema discovery method exists (even if it fails)."""
-        import os
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
+            # Method should exist
+            assert callable(db.discover_schema)
 
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
-
-        # Method should exist
-        assert callable(db.discover_schema)
-
-        # Calling it may fail due to no real DB, but method should exist
-        try:
-            schema = db.discover_schema()
-            assert isinstance(schema, dict)
-        except Exception:
-            # Expected - no real database connection
-            pass
+            # Calling it may fail due to no real DB, but method should exist
+            try:
+                schema = db.discover_schema()
+                assert isinstance(schema, dict)
+            except Exception:
+                # Expected - no real database connection
+                pass
 
     def test_register_schema_as_models_method_exists(self):
         """Test that dynamic model registration method exists."""
-        import os
+        with DataFlow(_test_db_url(), existing_schema_mode=True) as db:
+            # Method should exist
+            assert callable(db.register_schema_as_models)
 
-        db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://test_user:test_password@localhost:5434/kailash_test",
-        )
-        db = DataFlow(db_url, existing_schema_mode=True)
-
-        # Method should exist
-        assert callable(db.register_schema_as_models)
-
-        # Calling it may fail due to no real DB, but method should exist
-        try:
-            result = db.register_schema_as_models()
-            assert isinstance(result, dict)
-        except Exception:
-            # Expected - no real database connection
-            pass
+            # Calling it may fail due to no real DB, but method should exist
+            try:
+                result = db.register_schema_as_models()
+                assert isinstance(result, dict)
+            except Exception:
+                # Expected - no real database connection
+                pass
 
 
 class TestMultiTenancyModuleBasic:
@@ -207,13 +175,7 @@ class TestMultiTenancyModuleBasic:
             assert config is not None
             assert config.tenant_id == "test-tenant"
 
-            import os
-
-            db_url = os.getenv(
-                "TEST_DATABASE_URL",
-                "postgresql://test_user:test_password@localhost:5434/kailash_test",
-            )
-            manager = TenantManager(db_url)
+            manager = TenantManager(_test_db_url())
             assert manager is not None
 
             registry = TenantRegistry()
@@ -322,16 +284,9 @@ class TestAutoMigrationSystemBasic:
     def test_auto_migration_system_import(self):
         """Test auto-migration system import and basic functionality."""
         try:
-            # Test creation with connection string
-            import os
-
             from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 
-            db_url = os.getenv(
-                "TEST_DATABASE_URL",
-                "postgresql://test_user:test_password@localhost:5434/kailash_test",
-            )
-            migration_system = AutoMigrationSystem(db_url)
+            migration_system = AutoMigrationSystem(_test_db_url())
             assert migration_system is not None
 
             # Check for expected methods that actually exist

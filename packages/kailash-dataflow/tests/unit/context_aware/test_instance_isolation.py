@@ -13,9 +13,8 @@ Tests that multiple DataFlow instances maintain proper isolation:
 
 Uses SQLite file-based databases via pytest's tmp_path fixture
 (NOT tempfile.NamedTemporaryFile per specs/testing-tiers.md Tier-1
-Rule 2). DataFlow instances are wrapped in try/finally db.close()
-to prevent the DataFlow.__del__ deadlock the canonical fixtures
-were designed to avoid.
+Rule 2). DataFlow instances use sync `with` context manager to
+prevent the DataFlow.__del__ ResourceWarning class fix (see #1002).
 """
 
 import pytest
@@ -30,10 +29,10 @@ class TestInstanceStateIsolation:
 
     def test_two_instances_have_separate_models(self, tmp_path):
         """Two DataFlow instances have independent model registries."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class User:
@@ -50,16 +49,13 @@ class TestInstanceStateIsolation:
             # db2 should only have Product
             assert "Product" in db2.get_models()
             assert "User" not in db2.get_models()
-        finally:
-            db1.close()
-            db2.close()
 
     def test_model_count_independent(self, tmp_path):
         """Model counts are independent between instances."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class A:
@@ -75,16 +71,13 @@ class TestInstanceStateIsolation:
 
             assert len(db1.get_models()) == 2
             assert len(db2.get_models()) == 1
-        finally:
-            db1.close()
-            db2.close()
 
     def test_instances_with_same_model_name(self, tmp_path):
         """Same model name in different instances are independent."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class User:
@@ -98,9 +91,6 @@ class TestInstanceStateIsolation:
             # Both should have User model but they're separate
             assert "User" in db1.get_models()
             assert "User" in db2.get_models()
-        finally:
-            db1.close()
-            db2.close()
 
 
 @pytest.mark.unit
@@ -109,10 +99,10 @@ class TestNodeRegistrationIsolation:
 
     def test_generated_nodes_isolated(self, tmp_path):
         """Generated nodes are isolated to their DataFlow instance."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class Order:
@@ -124,15 +114,10 @@ class TestNodeRegistrationIsolation:
             # db2 should not have Order nodes in its instance
             # (though global registry may have them)
             assert "Order" not in db2.get_models()
-        finally:
-            db1.close()
-            db2.close()
 
     def test_all_eleven_operations_generated_per_model(self, tmp_path):
         """Each model generates all 11 operation nodes."""
-        db = DataFlow(f"sqlite:///{tmp_path / 'db.db'}")
-
-        try:
+        with DataFlow(f"sqlite:///{tmp_path / 'db.db'}") as db:
 
             @db.model
             class Item:
@@ -154,8 +139,6 @@ class TestNodeRegistrationIsolation:
 
             for node_name in expected_ops:
                 assert node_name in db._nodes, f"{node_name} should be registered"
-        finally:
-            db.close()
 
 
 @pytest.mark.unit
@@ -164,23 +147,20 @@ class TestWorkflowBinderIsolation:
 
     def test_workflow_binders_are_instance_scoped(self, tmp_path):
         """Each DataFlow instance has its own workflow binder."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
             assert db1._workflow_binder is not db2._workflow_binder
             assert db1._workflow_binder.dataflow_instance is db1
             assert db2._workflow_binder.dataflow_instance is db2
-        finally:
-            db1.close()
-            db2.close()
 
     def test_workflows_dont_leak_between_instances(self, tmp_path):
         """Workflows created in one instance don't appear in another."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
             wf1 = db1.create_workflow("workflow_1")
             wf2 = db2.create_workflow("workflow_2")
 
@@ -190,16 +170,13 @@ class TestWorkflowBinderIsolation:
 
             assert "workflow_2" in db2._workflow_binder.list_workflows()
             assert "workflow_1" not in db2._workflow_binder.list_workflows()
-        finally:
-            db1.close()
-            db2.close()
 
     def test_available_nodes_isolated(self, tmp_path):
         """get_available_nodes() returns only the instance's models."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class Alpha:
@@ -217,9 +194,6 @@ class TestWorkflowBinderIsolation:
 
             assert "Beta" in nodes2
             assert "Alpha" not in nodes2
-        finally:
-            db1.close()
-            db2.close()
 
 
 @pytest.mark.unit
@@ -228,26 +202,23 @@ class TestTenantContextIsolation:
 
     def test_tenant_contexts_are_independent(self, tmp_path):
         """Each DataFlow instance has its own tenant context."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True)
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True)
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True) as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True) as db2,
+        ):
             ctx1 = db1.tenant_context
             ctx2 = db2.tenant_context
 
             assert ctx1 is not ctx2
             assert ctx1.dataflow_instance is db1
             assert ctx2.dataflow_instance is db2
-        finally:
-            db1.close()
-            db2.close()
 
     def test_tenant_registrations_isolated(self, tmp_path):
         """Tenant registrations are isolated between instances."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True)
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True)
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True) as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True) as db2,
+        ):
             db1.tenant_context.register_tenant("tenant-a", "Tenant A")
             db2.tenant_context.register_tenant("tenant-b", "Tenant B")
 
@@ -256,16 +227,13 @@ class TestTenantContextIsolation:
 
             assert db2.tenant_context.is_tenant_registered("tenant-b")
             assert not db2.tenant_context.is_tenant_registered("tenant-a")
-        finally:
-            db1.close()
-            db2.close()
 
     def test_tenant_switches_isolated(self, tmp_path):
         """Tenant context switches in one instance don't affect another."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True)
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True)
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}", multi_tenant=True) as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}", multi_tenant=True) as db2,
+        ):
             db1.tenant_context.register_tenant("tenant-1", "Tenant 1")
             db2.tenant_context.register_tenant("tenant-2", "Tenant 2")
 
@@ -273,9 +241,6 @@ class TestTenantContextIsolation:
                 # db2 should still have no active context
                 assert db1.tenant_context.get_current_tenant() == "tenant-1"
                 # Note: Context variable is shared, but registration is not
-        finally:
-            db1.close()
-            db2.close()
 
 
 @pytest.mark.unit
@@ -284,29 +249,34 @@ class TestCloseCleanupIsolation:
 
     def test_close_one_instance_other_remains_usable(self, tmp_path):
         """Closing one DataFlow instance doesn't affect another."""
+        # NOTE: This test explicitly tests close() ordering; use try/finally
+        # since we need to call db1.close() mid-test before db2 cleanup.
         db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
         db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
 
-        @db1.model
-        class Model1:
-            value: str
+        try:
 
-        @db2.model
-        class Model2:
-            value: str
+            @db1.model
+            class Model1:
+                value: str
 
-        # Close db1
-        db1.close()
+            @db2.model
+            class Model2:
+                value: str
 
-        # db2 should still work
-        assert "Model2" in db2.get_models()
-        wf = db2.create_workflow()
-        assert wf is not None
+            # Close db1
+            db1.close()
 
-        db2.close()
+            # db2 should still work
+            assert "Model2" in db2.get_models()
+            wf = db2.create_workflow()
+            assert wf is not None
+        finally:
+            db2.close()
 
     def test_models_persist_after_other_instance_closes(self, tmp_path):
         """Models in one instance persist after another instance closes."""
+        # NOTE: This test explicitly closes db1 mid-test; use try/finally for db2.
         db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
         db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
 
@@ -332,52 +302,40 @@ class TestSequentialInstanceCreationDestruction:
         """Sequential instances with same URL are independent."""
         url = f"sqlite:///{tmp_path / 'seq_same.db'}"
 
-        db1 = DataFlow(url)
+        with DataFlow(url) as db1:
 
-        @db1.model
-        class First:
-            value: str
-
-        db1.close()
+            @db1.model
+            class First:
+                value: str
 
         # Create new instance with same URL
-        db2 = DataFlow(url)
+        with DataFlow(url) as db2:
 
-        @db2.model
-        class Second:
-            value: str
+            @db2.model
+            class Second:
+                value: str
 
-        try:
             # db2 is a fresh instance (though schema may persist in file)
             assert "Second" in db2.get_models()
-        finally:
-            db2.close()
 
     def test_multiple_sequential_instances(self, tmp_path):
         """Multiple sequential instances work correctly."""
         url = f"sqlite:///{tmp_path / 'seq_multi.db'}"
 
         for i in range(3):
-            db = DataFlow(url)
-
-            try:
+            with DataFlow(url) as db:
                 # Define model unique to this iteration
                 # Can't dynamically name classes easily, but we can verify instance works
                 assert db is not None
                 assert db._models is not None or db.get_models() is not None
-            finally:
-                db.close()
 
     def test_rapid_creation_destruction_cycle(self, tmp_path):
         """Rapid creation/destruction cycle doesn't cause issues."""
         url = f"sqlite:///{tmp_path / 'rapid.db'}"
 
         for _ in range(5):
-            db = DataFlow(url)
-            try:
+            with DataFlow(url) as db:
                 assert db is not None
-            finally:
-                db.close()
 
 
 @pytest.mark.unit
@@ -386,10 +344,10 @@ class TestModelRegistrationIsolation:
 
     def test_model_fields_isolated(self, tmp_path):
         """Model field metadata is isolated between instances."""
-        db1 = DataFlow(f"sqlite:///{tmp_path / 'db1.db'}")
-        db2 = DataFlow(f"sqlite:///{tmp_path / 'db2.db'}")
-
-        try:
+        with (
+            DataFlow(f"sqlite:///{tmp_path / 'db1.db'}") as db1,
+            DataFlow(f"sqlite:///{tmp_path / 'db2.db'}") as db2,
+        ):
 
             @db1.model
             class Record:
@@ -403,15 +361,10 @@ class TestModelRegistrationIsolation:
             # Each instance should have its own field metadata
             assert "Record" in db1.get_models()
             assert "Record" in db2.get_models()
-        finally:
-            db1.close()
-            db2.close()
 
     def test_model_decorator_returns_correct_class(self, tmp_path):
         """@db.model decorator returns the decorated class unchanged."""
-        db = DataFlow(f"sqlite:///{tmp_path / 'decorator.db'}")
-
-        try:
+        with DataFlow(f"sqlite:///{tmp_path / 'decorator.db'}") as db:
 
             @db.model
             class TestClass:
@@ -420,14 +373,10 @@ class TestModelRegistrationIsolation:
             # The decorator should return the class
             assert TestClass is not None
             assert hasattr(TestClass, "__annotations__")
-        finally:
-            db.close()
 
     def test_multiple_models_per_instance(self, tmp_path):
         """Multiple models can be registered to the same instance."""
-        db = DataFlow(f"sqlite:///{tmp_path / 'multi_models.db'}")
-
-        try:
+        with DataFlow(f"sqlite:///{tmp_path / 'multi_models.db'}") as db:
 
             @db.model
             class ModelA:
@@ -446,5 +395,3 @@ class TestModelRegistrationIsolation:
             assert "ModelA" in models
             assert "ModelB" in models
             assert "ModelC" in models
-        finally:
-            db.close()

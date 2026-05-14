@@ -78,40 +78,40 @@ class TestDataFlowInitPoolSize:
         """DataFlow created without pool_size passes None to DatabaseConfig (TODO-00)."""
         from dataflow import DataFlow
 
-        df = DataFlow("sqlite:///:memory:", auto_migrate=False)
-        # The DatabaseConfig should NOT have pool_size=20
-        # If pool_size was explicitly set to 20, get_pool_size would return 20
-        # regardless of environment. We need to check the raw pool_size attribute.
-        db_config = df.config.database
-        # After TODO-00: pool_size should be None (not 20) when user didn't specify it
-        assert db_config.pool_size is None, (
-            f"Expected pool_size=None (user didn't specify), "
-            f"got pool_size={db_config.pool_size}. "
-            f"TODO-00: Remove hardcoded pool_size=20 from DataFlow.__init__"
-        )
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as df:
+            # The DatabaseConfig should NOT have pool_size=20
+            # If pool_size was explicitly set to 20, get_pool_size would return 20
+            # regardless of environment. We need to check the raw pool_size attribute.
+            db_config = df.config.database
+            # After TODO-00: pool_size should be None (not 20) when user didn't specify it
+            assert db_config.pool_size is None, (
+                f"Expected pool_size=None (user didn't specify), "
+                f"got pool_size={db_config.pool_size}. "
+                f"TODO-00: Remove hardcoded pool_size=20 from DataFlow.__init__"
+            )
 
     def test_explicit_pool_size_is_preserved(self):
         """DataFlow created with explicit pool_size preserves it."""
         from dataflow import DataFlow
 
-        df = DataFlow("sqlite:///:memory:", pool_size=42, auto_migrate=False)
-        assert df.config.database.pool_size == 42
+        with DataFlow("sqlite:///:memory:", pool_size=42, auto_migrate=False) as df:
+            assert df.config.database.pool_size == 42
 
     def test_pool_max_overflow_default_is_none(self):
         """pool_max_overflow defaults to None, not 30 (TODO-04a)."""
         from dataflow import DataFlow
 
-        df = DataFlow("sqlite:///:memory:", auto_migrate=False)
-        # After TODO-04a, the max_overflow should come from get_max_overflow(),
-        # not from the hardcoded default of 30
-        db_config = df.config.database
-        # If user didn't set max_overflow, it should be None on the config
-        # (letting get_max_overflow calculate it)
-        assert db_config.max_overflow is None or db_config.max_overflow != 30, (
-            f"Expected max_overflow to not be the old hardcoded 30, "
-            f"got max_overflow={db_config.max_overflow}. "
-            f"TODO-04a: Make pool_max_overflow Optional[int] = None"
-        )
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as df:
+            # After TODO-04a, the max_overflow should come from get_max_overflow(),
+            # not from the hardcoded default of 30
+            db_config = df.config.database
+            # If user didn't set max_overflow, it should be None on the config
+            # (letting get_max_overflow calculate it)
+            assert db_config.max_overflow is None or db_config.max_overflow != 30, (
+                f"Expected max_overflow to not be the old hardcoded 30, "
+                f"got max_overflow={db_config.max_overflow}. "
+                f"TODO-04a: Make pool_max_overflow Optional[int] = None"
+            )
 
 
 class TestDataFlowConfigConnectionPoolSize:
@@ -187,12 +187,12 @@ class TestDatabaseAdapterDefaults:
 
     def test_adapter_pool_size_accepts_none(self):
         """DatabaseAdapter should accept None for pool_size (TODO-03)."""
-        from dataflow.adapters.base import DatabaseAdapter
-
         # DatabaseAdapter is abstract, but we can check kwargs handling
         # by instantiating a concrete subclass or checking the code
         import ast
         import inspect
+
+        from dataflow.adapters.base import DatabaseAdapter
 
         source = inspect.getsource(DatabaseAdapter.__init__)
         # The source should contain kwargs.get("pool_size") without a default of 10

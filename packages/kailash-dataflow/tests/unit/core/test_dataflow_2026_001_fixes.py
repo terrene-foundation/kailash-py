@@ -24,7 +24,8 @@ class TestGenericTypeMapping:
         """Create DataFlow instance for type mapping tests."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_list_str_maps_to_jsonb_postgresql(self, dataflow):
         """List[str] should map to JSONB in PostgreSQL."""
@@ -107,7 +108,8 @@ class TestDDLDefaultValueHandling:
         """Create DataFlow instance for DDL tests."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_empty_list_default_postgresql(self, dataflow):
         """Empty list default should produce valid PostgreSQL DDL."""
@@ -247,7 +249,8 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow("sqlite:///:memory:", skip_registry=True, auto_migrate=False)
+            with DataFlow("sqlite:///:memory:", skip_registry=True, auto_migrate=False):
+                pass
 
             # Should have at least one warning
             assert len(w) >= 1
@@ -267,7 +270,10 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow("sqlite:///:memory:", skip_migration=True, auto_migrate=False)
+            with DataFlow(
+                "sqlite:///:memory:", skip_migration=True, auto_migrate=False
+            ):
+                pass
 
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
             assert len(df_warnings) == 1
@@ -283,9 +289,10 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow(
+            with DataFlow(
                 "sqlite:///:memory:", connection_pool_size=10, auto_migrate=False
-            )
+            ):
+                pass
 
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
             assert len(df_warnings) == 1
@@ -301,7 +308,10 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow("sqlite:///:memory:", enable_metrics=True, auto_migrate=False)
+            with DataFlow(
+                "sqlite:///:memory:", enable_metrics=True, auto_migrate=False
+            ):
+                pass
 
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
             assert len(df_warnings) == 1
@@ -317,12 +327,13 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow(
+            with DataFlow(
                 "sqlite:///:memory:",
                 my_unknown_param="value",
                 another_unknown=123,
                 auto_migrate=False,
-            )
+            ):
+                pass
 
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
             assert len(df_warnings) == 1
@@ -339,14 +350,15 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow(
+            with DataFlow(
                 "sqlite:///:memory:",
                 batch_size=100,
                 schema_cache_enabled=True,
                 schema_cache_ttl=3600,
                 use_namespaced_nodes=True,
                 auto_migrate=False,
-            )
+            ):
+                pass
 
             # Should not have DF-CFG-001 warnings
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
@@ -359,13 +371,14 @@ class TestUnknownKwargsValidation:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            _ = DataFlow(
+            with DataFlow(
                 "sqlite:///:memory:",
                 skip_registry=True,
                 skip_migration=True,
                 unknown_param=123,
                 auto_migrate=False,
-            )
+            ):
+                pass
 
             # Should have exactly one DF-CFG-001 warning
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
@@ -386,7 +399,8 @@ class TestDDLGenerationIntegration:
         """Create DataFlow instance."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_model_with_list_field_generates_valid_ddl(self, dataflow):
         """Model with List[str] field should generate valid DDL."""
@@ -446,7 +460,8 @@ class TestEdgeCases:
         """Create DataFlow instance."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_deeply_nested_dict_default(self, dataflow):
         """Deeply nested dict default should serialize correctly."""
@@ -505,7 +520,8 @@ class TestSQLEscapingEdgeCases:
         """Create DataFlow instance."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_single_quote_in_json_default_is_escaped(self, dataflow):
         """Single quotes in JSON default must be SQL-escaped to prevent syntax errors."""
@@ -628,7 +644,8 @@ class TestFrozenSetTypeMapping:
         """Create DataFlow instance."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_frozenset_str_maps_to_jsonb_postgresql(self, dataflow):
         """FrozenSet[str] should map to JSONB in PostgreSQL."""
@@ -660,7 +677,8 @@ class TestComplexTypeScenarios:
         """Create DataFlow instance."""
         from dataflow import DataFlow
 
-        return DataFlow("sqlite:///:memory:", auto_migrate=False)
+        with DataFlow("sqlite:///:memory:", auto_migrate=False) as db:
+            yield db
 
     def test_deeply_nested_mixed_types_default(self, dataflow):
         """Complex nested structure with all JSON types should serialize correctly."""
