@@ -1,5 +1,56 @@
 # DataFlow Changelog
 
+## [2.9.3] — 2026-05-14 — fabric to integration + conftest refinement (S3 of #979)
+
+Patch release shipping shard **S3** of issue #979 DataFlow Unit Suite Triage
+Workstream-A. Test-tier reclassification + integration-tier conftest hook
+refinement; no runtime API surface change.
+
+### Changed
+
+- **`tests/unit/fabric/` → `tests/integration/fabric/`** (21 files, S3 / PR #985).
+  Closes AC#3 of issue #979 — the fabric subdir's 16 module-top
+  `from dataflow.fabric.*` imports violated `specs/testing-tiers.md`
+  Tier-1 Rule 1 (no top-imports requiring optional extras); the `[fabric]`
+  extra is available in integration tier.
+- **`tests/unit/adapters/test_file_adapter.py` → `tests/integration/adapters/`**
+  (Finding A — same-class sweep). Self-documented as Tier-2; imports
+  `dataflow.fabric.config.FileSourceConfig`.
+- **`tests/integration/fabric/test_express_pagination.py` → `tests/unit/features/`**
+  (Finding B — same-class revert-move). Zero `dataflow.fabric.*` imports;
+  mock-heavy → tier-1-shaped per `specs/testing-tiers.md` Tier-2 Rule 1
+  (NO MOCKING). Brief AC#3's OR clause permits this disposition.
+- **`tests/integration/fabric/test_mcp_integration.py` → `tests/unit/features/`**
+  (Finding C.2 — same-class revert-move). 13 mock primitives → tier-1.
+- **`tests/integration/fabric/test_resource_warning.py` → `tests/unit/features/`**
+  (Finding C.3 — same-class revert-move). Mock-required → tier-1.
+- **`packages/kailash-dataflow/tests/integration/conftest.py::_module_imports_unittest_mock`
+  hook refined** (Finding C.1). The hook was over-broad — blocked ALL
+  `from unittest.mock import …` regardless of name. `ANY`, `sentinel`,
+  `DEFAULT`, `call`, `mock_open` are stdlib argument-equality/utility
+  helpers, NOT mocking primitives — they ARE compatible with real-infra
+  tier-2 tests. New behavior: whitelist non-primitive names; BLOCK only
+  primitive imports (`Mock`, `MagicMock`, `AsyncMock`, `NonCallableMock`,
+  `NonCallableMagicMock`, `patch`, `PropertyMock`, `seal`). Plain
+  `from unittest import mock` module-rebind continues to BLOCK.
+- **`packages/kailash-dataflow/tests/CLAUDE.md`** documents `[fabric]`
+  extra requirement for integration tier's fabric subdir.
+
+### Added
+
+- **`tests/integration/test_conftest_no_mocking_hook.py`** — 23 regression
+  tests pinning the conftest hook's whitelist boundary, including the
+  `from unittest.mock import ANY` (allowed), primitive imports (blocked),
+  and `from unittest import mock` module-rebind (blocked) cases.
+- **`workspaces/issue-979-dataflow-unit-triage/journal/0007-AMENDMENT-s3-findings.md`** —
+  chronicle of Findings A/B/C with command-output receipts.
+
+### Notes
+
+- Closes AC#3 of issue #979.
+- Workstream-A wave-1 complete. Wave-2 (S4 + S5a) next; S6 gate shard
+  follows wave-2 completion.
+
 ## [2.9.2] — 2026-05-14 — Workstream-A wave-1 (S2a + S-EV of #979)
 
 Patch release bundling shards **S2a** (gallery move) and **S-EV** (events
