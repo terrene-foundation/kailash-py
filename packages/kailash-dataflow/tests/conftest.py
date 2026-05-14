@@ -1046,12 +1046,31 @@ def _issue_1010_finalize_diagnostics():
     import sys
     import threading
 
+    # Open a file on disk for forensic dumps so output survives SIGKILL /
+    # GitHub Actions job-timeout cancel. pytest's --capture=fd swallows
+    # stderr writes; an on-disk file is the only reliable channel that
+    # also survives the runner's worker-process cancel. The CI step
+    # explicitly prints this file contents with `if: always()` so the
+    # forensics make it to the job log even when the process is killed
+    # before atexit handlers can run.
+    diag_path = os.getenv("DATAFLOW_DIAGNOSE_LOG", "/tmp/issue-1010-diagnostic.log")
+    try:
+        diag_fp = open(diag_path, "w", buffering=1)  # line-buffered
+    except OSError:
+        diag_fp = None
+
     def _write_stderr(msg: str) -> None:
         # Direct fd-2 write — never touches the logging root lock.
         try:
             os.write(2, msg.encode("utf-8", errors="replace"))
         except Exception:
             pass
+        if diag_fp is not None:
+            try:
+                diag_fp.write(msg)
+                diag_fp.flush()
+            except Exception:
+                pass
 
     def _dump_at_exit() -> None:
         _write_stderr("\n[issue-1010-diag] === atexit handler ===\n")
@@ -1070,6 +1089,9 @@ def _issue_1010_finalize_diagnostics():
 
         _write_stderr("[issue-1010-diag] === faulthandler all-thread stacks ===\n")
         try:
+            if diag_fp is not None:
+                faulthandler.dump_traceback(file=diag_fp, all_threads=True)
+                diag_fp.flush()
             faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
         except Exception as exc:
             _write_stderr(f"[issue-1010-diag] faulthandler dump failed: {exc!r}\n")
@@ -1121,9 +1143,15 @@ def _issue_1010_finalize_diagnostics():
     # the pytest summary, faulthandler dumps every thread's stack and we
     # see what's still running.
     try:
-        faulthandler.dump_traceback_later(120, repeat=True, file=sys.stderr, exit=False)
+        # Route dump_traceback_later watchdog output to the on-disk file
+        # (survives SIGKILL on job-timeout cancel) AND mirror to stderr.
+        watchdog_target = diag_fp if diag_fp is not None else sys.stderr
+        faulthandler.dump_traceback_later(
+            60, repeat=True, file=watchdog_target, exit=False
+        )
         _write_stderr(
-            "[issue-1010-diag] session-finish: dump_traceback_later(120) armed\n"
+            f"[issue-1010-diag] session-finish: dump_traceback_later(60) armed, "
+            f"target={diag_path}\n"
         )
     except Exception as exc:
         _write_stderr(f"[issue-1010-diag] dump_traceback_later arm failed: {exc!r}\n")
