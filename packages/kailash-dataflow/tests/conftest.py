@@ -1025,3 +1025,120 @@ async def cleanup_dataflow_connection_pools():
         import logging
 
         logging.warning(f"Error during pool cleanup: {e}", exc_info=True)
+
+
+# ============================================================================
+# Issue #1010 Phase A — _Py_Finalize forensic capture
+# ============================================================================
+# Gated behind DATAFLOW_DIAGNOSE_FINALIZE=1 so it ONLY activates on the
+# debug/issue-1010-phase-a-diagnostics branch's CI step. Captures:
+#   - threading.enumerate() at atexit (which threads are still alive)
+#   - full faulthandler stack dump of every thread (where each thread is)
+#   - multiprocessing.resource_tracker cache state
+#   - AsyncSQLDatabaseNode._shared_pools residual entries
+#   - faulthandler.dump_traceback_later(120) re-arm so a post-summary hang
+#     past 2 minutes self-dumps stacks to stderr instead of relying on CI
+#     to timeout silently.
+#
+# Uses os.write to fd 2 (stderr) rather than print() / logger to bypass the
+# Python logging root lock — the very lock the deadlock-in-__del__ failure
+# mode in patterns.md § "Async Resource Cleanup" identifies. If we logged
+# through the framework logger here, we would risk deadlocking the
+# diagnostic itself.
+# ============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _issue_1010_finalize_diagnostics():
+    import os
+
+    if os.getenv("DATAFLOW_DIAGNOSE_FINALIZE") != "1":
+        yield
+        return
+
+    import atexit
+    import faulthandler
+    import sys
+    import threading
+
+    def _write_stderr(msg: str) -> None:
+        # Direct fd-2 write — never touches the logging root lock.
+        try:
+            os.write(2, msg.encode("utf-8", errors="replace"))
+        except Exception:
+            pass
+
+    def _dump_at_exit() -> None:
+        _write_stderr("\n[issue-1010-diag] === atexit handler ===\n")
+        try:
+            threads = threading.enumerate()
+            _write_stderr(
+                f"[issue-1010-diag] threading.enumerate() = {len(threads)} threads\n"
+            )
+            for t in threads:
+                _write_stderr(
+                    f"[issue-1010-diag] thread name={t.name!r} "
+                    f"daemon={t.daemon} alive={t.is_alive()} ident={t.ident}\n"
+                )
+        except Exception as exc:
+            _write_stderr(f"[issue-1010-diag] threading.enumerate failed: {exc!r}\n")
+
+        _write_stderr("[issue-1010-diag] === faulthandler all-thread stacks ===\n")
+        try:
+            faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+        except Exception as exc:
+            _write_stderr(f"[issue-1010-diag] faulthandler dump failed: {exc!r}\n")
+
+        _write_stderr("[issue-1010-diag] === multiprocessing.resource_tracker ===\n")
+        try:
+            from multiprocessing import resource_tracker
+
+            tracker = getattr(resource_tracker, "_resource_tracker", None)
+            cache = getattr(tracker, "_cache", None) if tracker is not None else None
+            _write_stderr(
+                f"[issue-1010-diag] resource_tracker cache: {dict(cache) if cache else cache!r}\n"
+            )
+        except Exception as exc:
+            _write_stderr(f"[issue-1010-diag] resource_tracker query failed: {exc!r}\n")
+
+        _write_stderr("[issue-1010-diag] === AsyncSQLDatabaseNode._shared_pools ===\n")
+        try:
+            from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+            pools = list(AsyncSQLDatabaseNode._shared_pools.items())
+            _write_stderr(f"[issue-1010-diag] _shared_pools entries: {len(pools)}\n")
+            for key, value in pools:
+                # value shape historically is (adapter, loop_id) but defensive
+                try:
+                    adapter, loop_id = value
+                    _write_stderr(
+                        f"[issue-1010-diag]   pool key={key!r} "
+                        f"adapter={type(adapter).__name__} loop_id={loop_id}\n"
+                    )
+                except Exception:
+                    _write_stderr(
+                        f"[issue-1010-diag]   pool key={key!r} value_repr={value!r}\n"
+                    )
+        except Exception as exc:
+            _write_stderr(f"[issue-1010-diag] _shared_pools query failed: {exc!r}\n")
+
+        _write_stderr("[issue-1010-diag] === end ===\n")
+
+    atexit.register(_dump_at_exit)
+    faulthandler.enable(all_threads=True)
+    _write_stderr(
+        "[issue-1010-diag] session-start: atexit hook + faulthandler enabled\n"
+    )
+
+    yield
+
+    # Session ended — re-arm a 120s timer so if _Py_Finalize hangs past
+    # the pytest summary, faulthandler dumps every thread's stack and we
+    # see what's still running.
+    try:
+        faulthandler.dump_traceback_later(120, repeat=True, file=sys.stderr, exit=False)
+        _write_stderr(
+            "[issue-1010-diag] session-finish: dump_traceback_later(120) armed\n"
+        )
+    except Exception as exc:
+        _write_stderr(f"[issue-1010-diag] dump_traceback_later arm failed: {exc!r}\n")
