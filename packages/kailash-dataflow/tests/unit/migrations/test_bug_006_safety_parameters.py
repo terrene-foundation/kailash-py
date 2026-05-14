@@ -23,73 +23,75 @@ class TestDataFlowSafetyParameters:
 
         # Create DataFlow with auto_migrate=False
         with patch("dataflow.core.engine.ConnectionManager"):
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://test:test@localhost/test",
                 auto_migrate=False,  # Safety parameter
-            )
+            ) as db:
 
-            # Verify parameter is stored
-            assert db._auto_migrate is False
+                # Verify parameter is stored
+                assert db._auto_migrate is False
 
-            # Mock migration system
-            db._migration_system = Mock()
+                # Mock migration system
+                db._migration_system = Mock()
 
-            # Define a model
-            @db.model
-            class TestModel:
-                name: str
-                value: int
-
-            # Verify migration was NOT called
-            db._migration_system.auto_migrate.assert_not_called()
-
-    def test_existing_schema_mode_validates_compatibility(self):
-        """Test that existing_schema_mode validates schema compatibility."""
-
-        with patch("dataflow.core.engine.ConnectionManager"):
-            db = DataFlow(
-                database_url="postgresql://test:test@localhost/test",
-                existing_schema_mode=True,  # Safety mode for existing DBs
-                auto_migrate=True,
-            )
-
-            # Verify parameter is stored
-            assert db._existing_schema_mode is True
-
-            # Mock migration system with schema validation
-            db._migration_system = Mock()
-            db._migration_system.inspector = Mock()
-
-            # Mock compatible schema
-            db._migration_system.inspector._schemas_are_compatible = Mock(
-                return_value=True
-            )
-
-            # Mock get_current_schema to return existing table
-            async def mock_get_schema():
-                return {
-                    "test_models": TableDefinition(
-                        name="test_models",
-                        columns=[
-                            ColumnDefinition(name="id", type="integer"),
-                            ColumnDefinition(name="name", type="varchar"),
-                            ColumnDefinition(name="value", type="integer"),
-                        ],
-                    )
-                }
-
-            db._migration_system.inspector.get_current_schema = mock_get_schema
-
-            # Mock database connection
-            with patch.object(db, "_get_database_connection", return_value=AsyncMock()):
-                # Define model - should validate but not migrate
+                # Define a model
                 @db.model
                 class TestModel:
                     name: str
                     value: int
 
-                # Verify migration was NOT called (validation passed)
+                # Verify migration was NOT called
                 db._migration_system.auto_migrate.assert_not_called()
+
+    def test_existing_schema_mode_validates_compatibility(self):
+        """Test that existing_schema_mode validates schema compatibility."""
+
+        with patch("dataflow.core.engine.ConnectionManager"):
+            with DataFlow(
+                database_url="postgresql://test:test@localhost/test",
+                existing_schema_mode=True,  # Safety mode for existing DBs
+                auto_migrate=True,
+            ) as db:
+
+                # Verify parameter is stored
+                assert db._existing_schema_mode is True
+
+                # Mock migration system with schema validation
+                db._migration_system = Mock()
+                db._migration_system.inspector = Mock()
+
+                # Mock compatible schema
+                db._migration_system.inspector._schemas_are_compatible = Mock(
+                    return_value=True
+                )
+
+                # Mock get_current_schema to return existing table
+                async def mock_get_schema():
+                    return {
+                        "test_models": TableDefinition(
+                            name="test_models",
+                            columns=[
+                                ColumnDefinition(name="id", type="integer"),
+                                ColumnDefinition(name="name", type="varchar"),
+                                ColumnDefinition(name="value", type="integer"),
+                            ],
+                        )
+                    }
+
+                db._migration_system.inspector.get_current_schema = mock_get_schema
+
+                # Mock database connection
+                with patch.object(
+                    db, "_get_database_connection", return_value=AsyncMock()
+                ):
+                    # Define model - should validate but not migrate
+                    @db.model
+                    class TestModel:
+                        name: str
+                        value: int
+
+                    # Verify migration was NOT called (validation passed)
+                    db._migration_system.auto_migrate.assert_not_called()
 
     def test_incompatible_schema_behavior_in_existing_mode(self):
         """Test behavior with existing_schema_mode - migrations are skipped.
@@ -103,36 +105,36 @@ class TestDataFlowSafetyParameters:
         raising validation errors.
         """
         with patch("dataflow.core.engine.ConnectionManager"):
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://test:test@localhost/test",
                 existing_schema_mode=True,
                 auto_migrate=True,
-            )
+            ) as db:
 
-            # Verify existing_schema_mode is enabled
-            assert db._existing_schema_mode is True
+                # Verify existing_schema_mode is enabled
+                assert db._existing_schema_mode is True
 
-            # In existing_schema_mode, schema operations are skipped
-            # rather than validated. This is the documented behavior.
-            @db.model
-            class TestModel:
-                name: str
-                value: int
+                # In existing_schema_mode, schema operations are skipped
+                # rather than validated. This is the documented behavior.
+                @db.model
+                class TestModel:
+                    name: str
+                    value: int
 
-            # The model is registered but no migrations are applied
-            # This prevents destructive migrations by skipping all schema changes
-            assert "TestModel" in db._models
+                # The model is registered but no migrations are applied
+                # This prevents destructive migrations by skipping all schema changes
+                assert "TestModel" in db._models
 
     def test_default_behavior_unchanged(self):
         """Test that default DataFlow behavior is unchanged (backward compatible)."""
 
         with patch("dataflow.core.engine.ConnectionManager"):
             # Default initialization
-            db = DataFlow(database_url="postgresql://test:test@localhost/test")
+            with DataFlow(database_url="postgresql://test:test@localhost/test") as db:
 
-            # Verify defaults
-            assert db._auto_migrate is True  # Default: migrations enabled
-            assert db._existing_schema_mode is False  # Default: not in safe mode
+                # Verify defaults
+                assert db._auto_migrate is True  # Default: migrations enabled
+                assert db._existing_schema_mode is False  # Default: not in safe mode
 
     def test_migration_disabled_via_env(self):
         """Test that DATAFLOW_DISABLE_MIGRATIONS env var still works."""
@@ -143,13 +145,13 @@ class TestDataFlowSafetyParameters:
 
         try:
             with patch("dataflow.core.engine.ConnectionManager"):
-                db = DataFlow(
+                with DataFlow(
                     database_url="postgresql://test:test@localhost/test",
                     auto_migrate=True,  # Should be overridden by env var
-                )
+                ) as db:
 
-                # Migration system should not be initialized
-                assert db._migration_system is None
+                    # Migration system should not be initialized
+                    assert db._migration_system is None
 
         finally:
             del os.environ["DATAFLOW_DISABLE_MIGRATIONS"]
@@ -159,17 +161,17 @@ class TestDataFlowSafetyParameters:
 
         with patch("dataflow.core.engine.ConnectionManager"):
             # Recommended safe initialization for existing DB
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://prod:prod@localhost/legacy_db",
                 auto_migrate=False,  # Don't auto-migrate
                 existing_schema_mode=True,  # Validate compatibility
-            )
+            ) as db:
 
-            # Both safety features enabled
-            assert db._auto_migrate is False
-            assert db._existing_schema_mode is True
+                # Both safety features enabled
+                assert db._auto_migrate is False
+                assert db._existing_schema_mode is True
 
-            # This configuration prevents ALL destructive operations
+                # This configuration prevents ALL destructive operations
 
 
 class TestBug006Scenarios:
@@ -180,72 +182,72 @@ class TestBug006Scenarios:
 
         with patch("dataflow.core.engine.ConnectionManager"):
             # Safe connection to existing database
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://user:pass@localhost/existing_db",
                 auto_migrate=False,
                 existing_schema_mode=True,
-            )
+            ) as db:
 
-            # Mock existing database with data
-            db._migration_system = Mock()
+                # Mock existing database with data
+                db._migration_system = Mock()
 
-            @db.model
-            class Customer:
-                name: str
-                email: str
+                @db.model
+                class Customer:
+                    name: str
+                    email: str
 
-            # No migration attempted - existing data is safe
-            if db._migration_system:
-                db._migration_system.auto_migrate.assert_not_called()
+                # No migration attempted - existing data is safe
+                if db._migration_system:
+                    db._migration_system.auto_migrate.assert_not_called()
 
     def test_scenario_2_multiple_apps_safe(self):
         """Scenario 2: Multiple apps can use same database safely."""
 
         # App 1
         with patch("dataflow.core.engine.ConnectionManager"):
-            app1_db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://shared:shared@localhost/shared_db",
                 auto_migrate=True,  # First app can migrate
-            )
+            ) as app1_db:
 
-            @app1_db.model
-            class User:
-                username: str
-                email: str
+                @app1_db.model
+                class User:
+                    username: str
+                    email: str
 
         # App 2 - connects to same database
         with patch("dataflow.core.engine.ConnectionManager"):
-            app2_db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://shared:shared@localhost/shared_db",
                 auto_migrate=False,  # Subsequent apps don't migrate
                 existing_schema_mode=True,  # Validate compatibility
-            )
+            ) as app2_db:
 
-            @app2_db.model
-            class User:
-                username: str
-                email: str
+                @app2_db.model
+                class User:
+                    username: str
+                    email: str
 
-            # Both apps can coexist without conflicts
+                # Both apps can coexist without conflicts
 
     def test_scenario_3_legacy_integration(self):
         """Scenario 3: Legacy database integration without destruction."""
 
         with patch("dataflow.core.engine.ConnectionManager"):
-            db = DataFlow(
+            with DataFlow(
                 database_url="postgresql://legacy:legacy@localhost/legacy_system",
                 auto_migrate=False,
                 existing_schema_mode=True,
-            )
+            ) as db:
 
-            # Define models matching subset of legacy schema
-            @db.model
-            class LegacyCustomer:
-                customer_code: str
-                company_name: str
-                # Legacy DB has many more fields - that's OK
+                # Define models matching subset of legacy schema
+                @db.model
+                class LegacyCustomer:
+                    customer_code: str
+                    company_name: str
+                    # Legacy DB has many more fields - that's OK
 
-            # Legacy fields are preserved, no migration attempted
+                # Legacy fields are preserved, no migration attempted
 
 
 if __name__ == "__main__":
