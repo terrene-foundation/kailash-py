@@ -1,5 +1,33 @@
 # DataFlow Changelog
 
+## [2.9.2] — 2026-05-14 — gallery to integration tier (S2a of #979)
+
+Patch release shipping the second shard of issue #979 DataFlow Unit Suite
+Triage Workstream-A. Test-tier reclassification only; no runtime API
+surface change and no `[dev]` extras change.
+
+### Changed
+
+- **`tests/unit/examples/test_example_gallery.py` → `tests/integration/examples/`**
+  (PR #983). The gallery exercises real workflows (~12s/test) which
+  violates `specs/testing-tiers.md` Tier-1 Contract Rule 1 (no
+  `AsyncLocalRuntime` / `WorkflowBuilder` top-imports) AND Rule 2
+  (no `tempfile.mktemp` for DB paths — was at line 28-30, the deadlock
+  source PR #976 surfaced). Closes AC#1 of issue #979.
+- **Removed vestigial `from unittest.mock import AsyncMock, MagicMock,
+patch` from the moved gallery** — none of the three symbols were
+  referenced anywhere in the file body; the integration tier's NO MOCKING
+  AST gate (`tests/integration/conftest.py::_module_imports_unittest_mock`,
+  load-bearing per `rules/testing.md`) required this dead-import removal
+  for clean collection.
+
+### Fixed
+
+- **Clean-venv `pytest tests/unit --collect-only`** no longer pulls the
+  gallery's `AsyncLocalRuntime` top-import — one fewer optional-dep
+  cascade surface for the #898 CI gate to navigate when it re-lands at
+  S6.
+
 ## [2.9.1] — 2026-05-14 — tier-1 test-config floor (S1 of #979)
 
 Patch release shipping the test-discipline floor for issue #979 DataFlow
