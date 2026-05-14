@@ -9954,6 +9954,7 @@ class DataFlow(DataFlowEventMixin):
         - Model registry (releases shared runtime reference)
         - Pool monitor thread
         - Connection pool manager pools
+        - Cached AsyncSQLDatabaseNode instances (via async_safe_run bridge)
         - Connection manager connections
         - Persistent :memory: connections
         - Shared runtime (actual cleanup at ref_count=0)
@@ -10013,6 +10014,22 @@ class DataFlow(DataFlowEventMixin):
             except Exception:
                 pass
             self._lightweight_pool = None
+
+        # Issue #1002 — clean up cached AsyncSQLDatabaseNode instances (Express API uses these).
+        # Mirrors close_async() lines 10116-10127. node.close() is async; bridge via async_safe_run
+        # so the sync DataFlow.close() path (e.g. `with DataFlow(...) as db:` __exit__) does not
+        # leak nodes whose __del__ would emit PytestUnraisableExceptionWarning at GC.
+        if hasattr(self, "_async_sql_node_cache") and self._async_sql_node_cache:
+            for db_type, (node, _) in list(self._async_sql_node_cache.items()):
+                try:
+                    if hasattr(node, "close") and callable(node.close):
+                        async_safe_run(node.close())
+                except Exception as e:
+                    logger.debug(
+                        "engine.error_closing_cached_sql_node_for",
+                        extra={"db_type": db_type, "error": str(e)},
+                    )
+            self._async_sql_node_cache.clear()
 
         # Clean up connection manager
         # close_all_connections() is async; bridge to sync via async_safe_run.
