@@ -879,16 +879,18 @@ class PipelineExecutor:
         await self.drain()
         self._closed = True
 
-    def __del__(self) -> None:
+    def __del__(self, _warnings=warnings) -> None:
         """Emit ResourceWarning if PipelineExecutor was not closed.
 
         ``getattr(..., True)`` defaults to "closed" so __del__ is safe
         even when __init__ raised before setting the flag — the
         executor is treated as "never opened" rather than "leaked".
+        The ``_warnings=warnings`` default arg keeps the module reachable
+        during interpreter shutdown when module globals have been torn down.
         """
         if not getattr(self, "_closed", True):
             try:
-                warnings.warn(
+                _warnings.warn(
                     f"Unclosed PipelineExecutor instance "
                     f"{getattr(self, '_instance_name', '?')!r}. "
                     "Call 'await executor.close()' (or stop the parent "

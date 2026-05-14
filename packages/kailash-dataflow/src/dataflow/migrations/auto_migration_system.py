@@ -621,15 +621,18 @@ class PostgreSQLSchemaInspector:
         self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — see issue #1000.
+        """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
                 pass
 
@@ -1350,15 +1353,18 @@ class SQLiteSchemaInspector:
         self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — see issue #1000.
+        """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
                 pass
 
@@ -3213,16 +3219,18 @@ class AutoMigrationSystem:
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly.
 
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — see issue #1000.
+
         Only fires when the system held an explicit runtime override or
         a self-owned runtime (legacy / no-parent paths).
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
                 pass

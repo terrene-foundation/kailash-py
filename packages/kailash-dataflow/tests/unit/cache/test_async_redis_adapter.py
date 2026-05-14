@@ -13,6 +13,7 @@ Test Coverage:
 """
 
 import asyncio
+import warnings
 from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -304,24 +305,94 @@ class TestAsyncRedisCacheAdapterErrorHandling:
 
 
 class TestAsyncRedisCacheAdapterCleanup:
-    """Test executor cleanup."""
+    """Test executor cleanup (issue #1000 — ``__del__`` MUST NOT shut down).
+
+    Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__`` only
+    emits ``ResourceWarning`` — it MUST NOT call ``executor.shutdown()``
+    or ``close()`` because doing so from a GC finalizer can deadlock
+    against the root logging lock. Real cleanup is the caller's
+    responsibility via ``await adapter.close_async()``.
+    """
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_executor_shutdown_on_delete(self):
-        """Test executor is shut down when adapter is deleted."""
+    async def test_close_async_shuts_down_executor(self):
+        """Explicit ``close_async()`` MUST shut down the executor."""
+        mock_manager = MagicMock()
+        adapter = AsyncRedisCacheAdapter(mock_manager)
+        executor = adapter._executor
+
+        await adapter.close_async()
+
+        # Verify the executor refuses new submissions after close_async.
+        with pytest.raises(RuntimeError):
+            executor.submit(lambda: None)
+        assert adapter._closed is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_close_async_is_idempotent(self):
+        """Calling ``close_async()`` twice MUST be a no-op the second time."""
         mock_manager = MagicMock()
         adapter = AsyncRedisCacheAdapter(mock_manager)
 
-        # Get reference to executor
+        await adapter.close_async()
+        # Second call MUST NOT raise (executor already shut down).
+        await adapter.close_async()
+        assert adapter._closed is True
+
+    @pytest.mark.unit
+    def test_del_emits_resource_warning_when_not_closed(self):
+        """``__del__`` on an unclosed adapter MUST emit ``ResourceWarning``.
+
+        Regression for issue #1000. Pre-fix, ``__del__`` called
+        ``executor.shutdown(wait=False)`` AND ``logger.debug(...)`` — both
+        forbidden by ``rules/patterns.md`` § Async Resource Cleanup. The
+        canonical replacement emits ``ResourceWarning`` and returns.
+        """
+        mock_manager = MagicMock()
+        adapter = AsyncRedisCacheAdapter(mock_manager)
+
+        with pytest.warns(ResourceWarning, match="AsyncRedisCacheAdapter not closed"):
+            adapter.__del__()
+
+    @pytest.mark.unit
+    def test_del_after_close_async_is_silent(self):
+        """``__del__`` on a properly-closed adapter MUST NOT warn."""
+        import asyncio
+
+        mock_manager = MagicMock()
+        adapter = AsyncRedisCacheAdapter(mock_manager)
+        asyncio.run(adapter.close_async())
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # any warning would raise
+            adapter.__del__()  # MUST be silent — no executor, no warn
+
+    @pytest.mark.unit
+    def test_del_signals_executor_drain_for_clean_shutdown(self):
+        """``__del__`` MUST signal ``executor.shutdown(wait=False)``.
+
+        Issue #1000 root cause was ``__del__`` calling ``logger.debug(...)``
+        — a log emission from inside the GC finalizer that deadlocks
+        against the root logging lock. The fix removes the log call but
+        KEEPS the synchronous ``executor.shutdown(wait=False)`` drain —
+        otherwise non-daemon worker threads keep the process alive past
+        pytest summary, blocking ``_Py_Finalize`` and causing CI hangs.
+
+        See ``rules/patterns.md`` § Async Resource Cleanup: the rule
+        bans logging/close/cleanup paths from ``__del__``; pure-sync
+        thread-pool drains are allowed because they don't touch logging.
+        """
+        mock_manager = MagicMock()
+        adapter = AsyncRedisCacheAdapter(mock_manager)
         executor = adapter._executor
 
-        # Delete adapter
-        del adapter
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ResourceWarning)
+            adapter.__del__()
 
-        # Executor should be shut down (verify it's closed)
-        # Note: ThreadPoolExecutor doesn't have a simple "is_shutdown" flag
-        # We verify by ensuring we can't submit new tasks
+        # Executor MUST refuse new submissions — drain signaled by __del__.
         with pytest.raises(RuntimeError):
             executor.submit(lambda: None)
 

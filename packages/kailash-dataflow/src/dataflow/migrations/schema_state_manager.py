@@ -1450,16 +1450,18 @@ class MigrationHistoryManager:
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly.
 
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — see issue #1000.
+
         Only fires when the manager held an explicit runtime override.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
                 pass
 

@@ -629,7 +629,7 @@ class FabricRuntime:
             extra={"instance_name": self._instance_name},
         )
 
-    def __del__(self) -> None:
+    def __del__(self, _warnings=warnings) -> None:
         """Emit ResourceWarning if FabricRuntime was started but not stopped.
 
         Per ``rules/patterns.md`` § Async Resource Cleanup, every async
@@ -639,11 +639,13 @@ class FabricRuntime:
         adapters — all of which leak across process lifetime.
 
         ``getattr(..., False)`` is used so __del__ is safe even if
-        __init__ raised before setting the flag.
+        __init__ raised before setting the flag. The ``_warnings=warnings``
+        default arg keeps the module reachable during interpreter shutdown
+        when module globals have been torn down.
         """
         if getattr(self, "_started", False):
             try:
-                warnings.warn(
+                _warnings.warn(
                     f"Unclosed FabricRuntime instance "
                     f"{getattr(self, '_instance_name', '?')!r}. "
                     "Use 'async with db.fabric(...) as runtime:' or call "
