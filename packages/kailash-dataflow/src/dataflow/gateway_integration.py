@@ -751,15 +751,20 @@ class DataFlowGateway:
         self._explicit_runtime = None
 
     def __del__(self, _warnings=warnings):
-        """Emit ResourceWarning if close() was not called explicitly."""
+        """Emit ResourceWarning if close() was not called explicitly.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — it can spawn a new event
+        loop / touch logging and deadlock against the root logging lock
+        already held by the finalizer thread.
+        """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
                 pass
 

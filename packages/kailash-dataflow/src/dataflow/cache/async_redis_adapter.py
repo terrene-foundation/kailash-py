@@ -18,6 +18,7 @@ with both cache backends.
 
 import asyncio
 import logging
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -70,6 +71,7 @@ class AsyncRedisCacheAdapter:
         """
         self.redis_manager = redis_manager
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._closed = False
         logger.debug(
             f"AsyncRedisCacheAdapter initialized with max_workers={max_workers}"
         )
@@ -393,8 +395,63 @@ class AsyncRedisCacheAdapter:
         query_count = await self.clear_pattern(query_pattern)
         return express_count + query_count
 
-    def __del__(self):
-        """Cleanup executor on deletion."""
-        if hasattr(self, "_executor"):
-            self._executor.shutdown(wait=False)
-            logger.debug("AsyncRedisCacheAdapter executor shut down")
+    async def close_async(self) -> None:
+        """Shut down the executor thread pool deterministically.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, callers MUST
+        invoke this (or use the adapter as an ``async with`` context) to
+        release the executor's worker threads. ``__del__`` only emits a
+        ``ResourceWarning`` — it does NOT call shutdown, because doing so
+        from a GC finalizer deadlocks against the root logging lock.
+        """
+        if self._closed:
+            return
+        self._executor.shutdown(wait=True)
+        self._closed = True
+        logger.debug("AsyncRedisCacheAdapter executor shut down")
+
+    def __del__(self, _warnings=warnings) -> None:
+        """Emit ResourceWarning if the adapter was not closed.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT call ``close()``, ``cleanup()``, or any method that
+        emits a log line — those paths fire from inside Python's logging
+        machinery during GC and deadlock against the root logging lock
+        already held by the finalizer thread. Issue #1000 originated
+        from a ``logger.debug(...)`` call AFTER the executor shutdown.
+
+        ``ThreadPoolExecutor.shutdown(wait=False)`` itself is safe — it
+        is purely synchronous (no logging, no event loop, no async), and
+        only acquires an instance-local ``_shutdown_lock`` to signal
+        workers via the work-queue. Calling it from ``__del__`` lets the
+        worker threads exit so Python's ``_Py_Finalize`` does not block
+        on non-daemon thread shutdown. The ResourceWarning is still
+        emitted so the leak is loud — the caller's contract remains
+        ``await adapter.close_async()`` for deterministic cleanup.
+
+        The ``_warnings=warnings`` default arg keeps the ``warnings``
+        module reachable even during interpreter shutdown when module
+        globals have been torn down.
+        """
+        if not getattr(self, "_closed", True):
+            try:
+                _warnings.warn(
+                    "AsyncRedisCacheAdapter not closed; call "
+                    "'await adapter.close_async()' before the adapter is "
+                    "garbage collected — the executor thread pool will "
+                    "leak otherwise.",
+                    ResourceWarning,
+                    stacklevel=2,
+                    source=self,
+                )
+            except Exception:
+                # Interpreter shutdown or recursive GC — best-effort only.
+                pass
+            # Sync thread-pool drain. NOT a log/close/cleanup call —
+            # see docstring for the rule-pragmatics distinction.
+            executor = getattr(self, "_executor", None)
+            if executor is not None:
+                try:
+                    executor.shutdown(wait=False)
+                except Exception:
+                    pass

@@ -1824,18 +1824,25 @@ class ModelRegistry:
     def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly.
 
+        Per ``rules/patterns.md`` § Async Resource Cleanup, ``__del__``
+        MUST NOT invoke ``close()`` itself — calling close() from a GC
+        finalizer can spawn a new event loop / touch logging and deadlock
+        against the root logging lock already held by the finalizer
+        thread. Real cleanup is the caller's responsibility via
+        ``close()`` / ``async with`` before the object is collected.
+
         Only fires when this registry held an explicit runtime override
         (legacy path). The lazy-parent path holds no resource of its
-        own — the parent DataFlow's own ``__del__`` / ``close()`` is
-        responsible for cleaning up the per-event-loop cache.
+        own — the parent DataFlow's own ``close()`` is responsible for
+        cleaning up the per-event-loop cache.
         """
         if getattr(self, "_explicit_runtime", None) is not None:
-            _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
-                ResourceWarning,
-                source=self,
-            )
             try:
-                self.close()
+                _warnings.warn(
+                    f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                    ResourceWarning,
+                    source=self,
+                )
             except Exception:
+                # Interpreter shutdown or recursive GC — best-effort only.
                 pass
