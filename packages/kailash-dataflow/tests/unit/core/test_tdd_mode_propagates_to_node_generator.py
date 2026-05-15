@@ -1,13 +1,25 @@
 """
-Real integration test for TDD with DataFlow @db.model decorator.
+Tier-1 unit tests: TDD-mode propagation from DataFlow into the node generator.
 
-Tests the complete integration without mocking to ensure everything works end-to-end.
+Tests that setting ``DATAFLOW_TDD_MODE=true`` and constructing a
+``TDDTestContext`` propagates correctly through the ``@db.model``
+decorator's node-generation path. Uses the in-process DataFlow
+instance + an in-memory TDDTestContext — no PostgreSQL connection
+required, no infrastructure dependency.
+
+Renamed from ``tests/integration/test_real_tdd_integration.py``
+(per issue #992) because the test set self-declares as Tier-1
+(in-process state mutations, no real database connection) and was
+sitting under tests/integration/ where the NO MOCKING conftest
+blocks collection on the file's ``unittest.mock.patch`` import.
 """
 
 import os
 from unittest.mock import patch
 
 import pytest
+
+pytestmark = [pytest.mark.unit]
 
 # Set TDD mode for this test
 os.environ["DATAFLOW_TDD_MODE"] = "true"
@@ -16,8 +28,8 @@ from dataflow import DataFlow
 from dataflow.testing.tdd_support import TDDTestContext
 
 
-class TestRealTDDIntegration:
-    """Test real TDD integration with DataFlow."""
+class TestTDDModePropagatesToNodeGenerator:
+    """Test TDD-mode propagation through the @db.model decorator."""
 
     def test_dataflow_model_registration_with_tdd_context(self):
         """Test that @db.model works with TDD context."""

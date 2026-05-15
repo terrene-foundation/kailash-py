@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 pytestmark = [pytest.mark.unit]
-from kailash.runtime.local import LocalRuntime
 
 from dataflow.migrations.column_removal_manager import (
     BackupStrategy,
@@ -47,21 +46,6 @@ from dataflow.migrations.impact_reporter import (
     OutputFormat,
     RecommendationType,
 )
-from tests.infrastructure.test_harness import IntegrationTestSuite
-
-
-@pytest.fixture
-async def test_suite():
-    """Create complete integration test suite with infrastructure."""
-    suite = IntegrationTestSuite()
-    async with suite.session():
-        yield suite
-
-
-@pytest.fixture
-def runtime():
-    """Create LocalRuntime for workflow execution."""
-    return LocalRuntime()
 
 
 class TestImpactReporterIntegration:
@@ -73,7 +57,7 @@ class TestImpactReporterIntegration:
         return ImpactReporter()
 
     @pytest.fixture
-    def mock_connection_manager(self, test_suite):
+    def mock_connection_manager(self):
         """Create mock connection manager."""
         manager = MagicMock()
         connection = AsyncMock()

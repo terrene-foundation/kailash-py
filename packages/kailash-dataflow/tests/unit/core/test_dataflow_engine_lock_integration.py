@@ -12,11 +12,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 from dataflow.core.engine import DataFlow
 
 
-@pytest.mark.unit
 @pytest.mark.mocking
 class TestDataFlowEngineLockIntegration:
     """Test DataFlow engine integration with migration lock manager."""

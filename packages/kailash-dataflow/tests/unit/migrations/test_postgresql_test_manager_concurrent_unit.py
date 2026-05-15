@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from dataflow.migrations.postgresql_test_manager import (
     ContainerInfo,
     ContainerStatus,
@@ -20,7 +22,6 @@ from dataflow.migrations.postgresql_test_manager import (
 )
 
 
-@pytest.mark.unit
 @pytest.mark.timeout(1)
 class TestPostgreSQLTestManagerConcurrentUnit:
     """Unit tests for concurrent access functionality."""

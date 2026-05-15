@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 from dataflow.migrations.concurrent_access_manager import MigrationLockManager

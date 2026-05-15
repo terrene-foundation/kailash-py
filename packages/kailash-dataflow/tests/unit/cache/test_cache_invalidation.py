@@ -29,21 +29,6 @@ from dataflow.cache.invalidation import CacheInvalidator, InvalidationPattern
 from dataflow.cache.redis_manager import CacheConfig, RedisCacheManager
 
 
-@pytest.fixture
-async def test_suite():
-    """Create complete integration test suite with infrastructure."""
-    suite = IntegrationTestSuite()
-    async with suite.session():
-        yield suite
-
-
-@pytest.fixture
-def runtime():
-    """Create LocalRuntime for workflow execution."""
-    return LocalRuntime()
-
-
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestTableBasedInvalidation:
     """Test table-based invalidation patterns."""
@@ -153,7 +138,6 @@ class TestTableBasedInvalidation:
         assert mock_cache_manager.clear_pattern.return_value == 1000
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestPatternBasedInvalidation:
     """Test pattern-based invalidation rules."""
@@ -262,7 +246,6 @@ class TestPatternBasedInvalidation:
         )
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestManualInvalidation:
     """Test manual invalidation commands."""
@@ -343,7 +326,6 @@ class TestManualInvalidation:
         mock_cache_manager.delete_many.assert_called_once_with(["key1"])
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestCascadeInvalidation:
     """Test cascade invalidation for related tables."""
@@ -448,7 +430,6 @@ class TestCascadeInvalidation:
         assert "dataflow:tasks:*" in call_args
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestBulkInvalidation:
     """Test bulk invalidation operations for performance."""
@@ -546,7 +527,6 @@ class TestBulkInvalidation:
             assert False, "Should have triggered cleanup"
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestInvalidationEvents:
     """Test invalidation event handling and notifications."""
@@ -650,7 +630,6 @@ class TestInvalidationEvents:
         assert call_args["cleared_count"] == 1
 
 
-@pytest.mark.integration
 @pytest.mark.timeout(30)
 class TestErrorHandling:
     """Test error handling in invalidation operations."""

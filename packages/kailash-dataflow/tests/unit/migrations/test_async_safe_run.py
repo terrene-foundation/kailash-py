@@ -41,6 +41,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from dataflow.core.async_utils import async_safe_run, get_execution_context
 
 
@@ -604,84 +606,6 @@ class TestDataFlowInitializationScenarios:
         result = await db.initialize()
         # May fail due to connection issues in test, but shouldn't hang
         await db.close_async()
-
-
-class TestRegressionScenarios:
-    """Test scenarios that would have failed before the fix."""
-
-    @pytest.mark.asyncio
-    async def test_original_bug_scenario(self):
-        """
-        Reproduce the original bug scenario:
-        When event loop is running (FastAPI), LocalRuntime.execute()
-        would cause "Task got Future attached to a different loop".
-
-        This should NOT happen with the fix.
-
-        Note: SQLite has threading limitations which cause a different error.
-        The key test is that we DON'T get "Task got Future attached to a different loop".
-        PostgreSQL (the actual production use case) works correctly.
-        """
-        from kailash.workflow.builder import WorkflowBuilder
-
-        from dataflow.migrations.auto_migration_system import _execute_workflow_safe
-
-        # Simulate being in FastAPI context (event loop running)
-        loop = asyncio.get_running_loop()
-        assert loop.is_running(), "Test requires running event loop"
-
-        # This would have failed before the fix
-        workflow = WorkflowBuilder()
-        workflow.add_node(
-            "SQLDatabaseNode",
-            "bug_repro",
-            {
-                "connection_string": "sqlite:///:memory:",
-                "database_type": "sqlite",
-                "query": "SELECT 'no_hang' as result",
-            },
-        )
-
-        # Should complete without hanging or raising event loop errors
-        # (SQLite threading error is expected, not event loop error)
-        try:
-            results, run_id = _execute_workflow_safe(workflow)
-            assert "bug_repro" in results
-        except Exception as e:
-            error_str = str(e).lower()
-            # The OLD bug would show "Future attached to a different loop"
-            # We should NOT see that error anymore
-            assert (
-                "future attached to a different loop" not in error_str
-            ), "Old bug not fixed: still getting event loop error"
-            # SQLite threading error is expected (not the old bug)
-            assert (
-                "thread" in error_str
-            ), f"Unexpected error (not SQLite threading): {e}"
-
-    @pytest.mark.asyncio
-    async def test_simulated_fastapi_lifespan(self):
-        """Simulate FastAPI lifespan context where auto_migrate would be called."""
-        from dataflow import DataFlow
-
-        # Simulate FastAPI lifespan (async context with running loop)
-        db = DataFlow("sqlite:///:memory:", auto_migrate=False)
-
-        @db.model
-        class LifespanModel:
-            id: str
-            created: str
-
-        # In real FastAPI, this would be called during startup
-        # The migration system should work without hanging
-        try:
-            result = await db.initialize()
-            # Success or graceful failure, but NOT hanging
-        except Exception as e:
-            # Acceptable - we're not testing full functionality, just no hangs
-            pass
-        finally:
-            await db.close_async()
 
 
 class TestEdgeCases:

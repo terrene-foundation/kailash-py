@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+pytestmark = [pytest.mark.unit]
+
 from dataflow.migrations.auto_migration_system import (
     ColumnDefinition,
     Migration,
