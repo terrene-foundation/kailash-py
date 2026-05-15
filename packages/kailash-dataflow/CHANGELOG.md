@@ -1,5 +1,76 @@
 # DataFlow Changelog
 
+## [2.9.9] — 2026-05-15 — \_Py_Finalize CI hang fully closed; setsid wrapper removed (final closure of #1000 / #1002 / #1010)
+
+Closes brief AC#3 of issue #1000 (verbatim): "Verify on CI: remove the
+setsid wrapper from `unified-ci.yml::test-dataflow` and confirm pytest
+exits cleanly." Three merges since 2.9.8 land the two-part fix and the
+wrapper removal.
+
+### Fixed
+
+- **`cleanup_dataflow_connection_pools` SQLite branch — fresh-loop disconnect**
+  (PR #1014, commit `a8b54a97`). The fixture previously hit
+  `pass  # Will be cleared from cache below` when the per-test event
+  loop was closed at fixture-teardown time. Replaced with a fresh
+  `asyncio.new_event_loop()` that runs `adapter.disconnect()` to
+  completion, so cached aiosqlite Connections receive their exit
+  sentinel where the closed-loop branch is exercised. Sufficient on
+  macOS/Python 3.13 (locally verified clean exit at 95s). Insufficient
+  on Linux/Python 3.11 — fix continued below.
+- **aiosqlite worker thread daemon-flag monkey-patch** (PR #1016,
+  commit `a9bc2c7c`). `aiosqlite/core.py:90` constructs the Connection
+  worker thread without `daemon=True`. When a test transiently fails
+  to call `Connection.close()` the worker sits on `tx.get()` and
+  blocks `threading._shutdown()` at interpreter exit. Test-side patch
+  in `packages/kailash-dataflow/tests/conftest.py::_patch_aiosqlite_worker_threads_daemon`
+  overrides `Connection.__init__` so every worker thread is daemon —
+  Python kills daemon threads at interpreter exit without blocking.
+  Phase A-prime forensic capture (Linux/Python 3.11, CI run
+  `25906188360`) confirmed Phase B alone left 2 non-daemon workers
+  alive; daemon-patch closes that path. CI run on PR #1016 with
+  setsid wrapper still in place completed in 76s (vs pre-fix 14–17 min
+  hangs and Phase-B-only wrapper-masked 163s).
+- **Production code MUST still call `await conn.close()`** — the
+  monkey-patch is test-side only. Filing the upstream `daemon=True`
+  default against aiosqlite is the long-term remediation (human-gated
+  per `rules/upstream-issue-hygiene.md`).
+
+### Changed
+
+- **`.github/workflows/unified-ci.yml::test-dataflow` step — setsid
+  wrapper REMOVED** (PR #1017, commit `512fc4a5`). Closes brief AC#3
+  verbatim. The 47-line wrapper (PID tracking, 150s polling, SIGKILL
+  fallback) was masking the aiosqlite worker leak; with the leak fixed
+  the wrapper is redundant. CI verification on Linux/Python 3.11: bare
+  pytest, end-to-end 78–81s, conclusion SUCCESS. Future regressions to
+  the daemon-flag invariant will surface at the 10-min step timeout
+  instead of being silently SIGKILLed.
+
+### Added
+
+- **Tier 2 regression tests** at
+  `packages/kailash-dataflow/tests/regression/test_issue_1010_aiosqlite_worker_thread_cleanup.py`
+  — three probes pin the safety contract:
+  - `test_aiosqlite_monkeypatch_active`: confirms conftest patch
+    activated before any aiosqlite Connection is constructed.
+  - `test_sync_dataflow_close_terminates_aiosqlite_worker_threads`:
+    after `with DataFlow(...) as db`, every aiosqlite worker thread is
+    either gone or daemon=True.
+  - `test_async_dataflow_express_cleanup_terminates_aiosqlite_workers`:
+    same invariant via `await db.close_async()`.
+- **Phase A diagnostic capture wiring** at
+  `workspaces/issue-1002-aiosqlite-fixture-cleanup/journal/0007-DISCOVERY-py-finalize-root-cause-aiosqlite-nondaemon-workers.md`
+  — forensic record of the two-iteration diagnostic (env-gated
+  `faulthandler.dump_traceback_later(60)` + on-disk file capture +
+  `if: always()` print step) that identified the root cause.
+
+### Closed issues
+
+- #1000 (AC#3 — final closure)
+- #1002 (parent issue)
+- #1010 (forensic + Phase B-prime daemon-flag fix)
+
 ## [2.9.8] — 2026-05-15 — Test-fixture + engine close() cleanup (partial closure of #1000 / #1002)
 
 Closes the leak-class half of issue #1002 (AC#1, AC#4) and adds engine
