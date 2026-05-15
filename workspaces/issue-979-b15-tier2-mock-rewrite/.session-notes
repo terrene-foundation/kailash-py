@@ -1,0 +1,54 @@
+# Session Notes — 2026-05-16
+
+## Where we are
+
+`/analyze` + `/todos` complete for #992 B-1.5 (tier-2 mock rewrite,
+Workstream-B of #979). Human approved all 6 INDEX open questions
+verbatim ("approved") in this session. Next step is `/implement` —
+launch S1 + S2 as a worktree wave of 2, then S3 sequenced post-merge.
+No code changes shipped this session — only workspace artifacts.
+
+## Read first
+
+1. `todos/active/00-INDEX.md` — 3-shard table, dependency graph,
+   forest-vs-trees rank, the 6 approved open questions
+2. `todos/active/01-S1-cluster-a-tier1-moves.md` — 8 Tier-1 moves +
+   File 4 split; worktree launch + parent-side ls verification
+3. `todos/active/02-S2-cluster-b-file6-split.md` — extract Tier-1
+   param-conversion + DELETE plural-dir mocked file
+4. `todos/active/03-S3-verification-gate.md` — post-merge sweep,
+   `gh pr view --json mergedAt` gate, gh issue close, follow-up
+   issue draft for user gate
+5. `journal/0007-DECISION-todos-crystallized.md` — convergence
+   receipts + capacity-budget walk
+6. `02-plans/01-architecture-plan-v2.md` + `02-amendments-post-round2.md`
+   — the authoritative plan the todos crystallize
+
+## In-flight state
+
+- All 6 INDEX open questions approved verbatim by user in this session
+  (sequence, File 9 + File 10 renames, lifespan delete, follow-up
+  issue file post-#992, verified 10-file scope). Approval not in any
+  git/journal artifact yet — record at /implement start in a
+  journal DECISION entry before launching agents.
+- Entire `workspaces/issue-979-b15-tier2-mock-rewrite/` is untracked
+  (briefs, classification audit, harness contract, plan v1 + v2 +
+  amendments, 6 redteam reports across 2 rounds, 7 journals, 4 todos).
+  Decide commit timing at next session: either commit at /implement
+  start or bundle into S1's worktree.
+
+## Traps
+
+- Two files share the name `test_migration_lock_manager_integration.py`:
+  one at `tests/integration/migration/` (singular dir — real PG, NO
+  MOCKS, UNTOUCHABLE) and one at `tests/integration/migrations/`
+  (plural dir — File 6, S2 deletes this one). Easy to confuse.
+  See `journal/0001`.
+- `_execute_workflow_safe` is SYNC in v0.10.11+ (uses `SyncDDLExecutor`).
+  File 4's `test_original_bug_scenario` regression targets a CLOSED
+  bug class; keep test per `rules/testing.md` § Regression but
+  simplify assertion to drop dead `except` arm. See `journal/0002`.
+- Issue body prose says "9 files" but table has 10. Verified scope
+  is 10 files / 139 mock sites. /implement uses 10. See `journal/0006`.
+- `tests/integration/conftest.py:68-145` AST scan has no file-level
+  exemption — S3 MUST sequence strictly after S1+S2 merge.
