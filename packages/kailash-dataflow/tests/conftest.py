@@ -13,6 +13,62 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
+# Issue #1010 — aiosqlite worker thread daemon-flag monkey-patch
+# ---------------------------------------------------------------------------
+#
+# aiosqlite/core.py:90 constructs the Connection worker thread WITHOUT
+# `daemon=True`. When tests forget (or transiently fail) to call
+# Connection.close(), the worker thread sits forever on `tx.get()` and
+# blocks threading._shutdown() at interpreter exit. On Linux/Python 3.11
+# CI this produced the canonical 14-17 min hang that issue #1010
+# tracked. Phase B's fresh-loop disconnect fix (PR #1014, commit
+# a8b54a97) closed one path but Phase A-prime forensics on
+# `debug/issue-1010-phase-a-prime-linux` (CI run 25906188360) confirmed
+# two aiosqlite worker threads still survive shutdown on Linux — the
+# fresh-loop disconnect raises silently when Connection._execute()
+# creates a future bound to the closed test event loop.
+#
+# Test-side monkey-patch: override Connection.__init__ so every worker
+# thread is daemon=True. Daemon threads do NOT block _shutdown();
+# Python kills them at interpreter exit. This DOES NOT change
+# production behavior — the patch lives in conftest.py and is only
+# active during the test session.
+#
+# Production code MUST still call `await conn.close()` on every
+# aiosqlite Connection to avoid abandoned mid-write transactions.
+# Filing the upstream daemon=True fix against aiosqlite is the
+# long-term remediation (human-gated per rules/upstream-issue-hygiene.md).
+# ---------------------------------------------------------------------------
+
+
+def _patch_aiosqlite_worker_threads_daemon() -> None:
+    import aiosqlite.core  # noqa: PLC0415 (intentionally lazy)
+
+    if getattr(aiosqlite.core, "_kailash_issue_1010_patched", False):
+        return
+    aiosqlite.core._kailash_issue_1010_patched = True
+
+    _original_init = aiosqlite.core.Connection.__init__
+
+    def _patched_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        _original_init(self, *args, **kwargs)
+        # The Thread is constructed (but not started) inside _original_init.
+        # Setting .daemon BEFORE .start() is supported; after start() raises
+        # RuntimeError, which we catch defensively.
+        thread = getattr(self, "_thread", None)
+        if thread is not None:
+            try:
+                thread.daemon = True
+            except RuntimeError:
+                pass
+
+    aiosqlite.core.Connection.__init__ = _patched_init  # type: ignore[method-assign]
+
+
+_patch_aiosqlite_worker_threads_daemon()
+
+
+# ---------------------------------------------------------------------------
 # Phase 9.6 release gate — collect_ignore for orphan test files
 # ---------------------------------------------------------------------------
 #

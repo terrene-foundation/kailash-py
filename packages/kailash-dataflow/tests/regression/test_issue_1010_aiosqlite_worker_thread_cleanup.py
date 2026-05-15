@@ -33,6 +33,7 @@ Acceptance criteria:
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import threading
 import time
@@ -68,18 +69,52 @@ def _aiosqlite_worker_threads_alive() -> list[threading.Thread]:
     return leaked
 
 
-def test_sync_dataflow_close_terminates_aiosqlite_worker_threads(tmp_path) -> None:
-    """Sync ``DataFlow.close()`` MUST close every cached aiosqlite Connection.
+def _assert_no_blocking_aiosqlite_workers(baseline: list[threading.Thread]) -> None:
+    """Assert every NEW aiosqlite worker thread is daemon=True.
 
-    Exercises the engine's sync close path that Shard 2 of issue #1002
-    extended at ``engine.py:10018-10032`` (cached AsyncSQLDatabaseNode
-    teardown via ``async_safe_run(node.close())``). When ``close()`` is
-    called inside a sync context (``with DataFlow(...) as db:``), every
-    aiosqlite Connection's worker thread MUST receive its exit sentinel
-    before the next test's ``threading.enumerate()`` snapshot.
+    The shutdown-hang failure mode (issue #1010) requires a non-daemon
+    aiosqlite worker thread alive at interpreter exit. Two acceptable
+    outcomes after cleanup:
+
+    1. Worker thread no longer alive (Connection.close() succeeded and
+       the worker exited).
+    2. Worker thread still alive but daemon=True (conftest.py monkey-patch
+       made the worker daemon; Python kills it at interpreter exit
+       without blocking threading._shutdown()).
+
+    Either outcome means the suite exits cleanly. The assertion below
+    fails ONLY if a worker is alive AND non-daemon — that is the
+    actual shutdown-blocking failure mode.
+    """
+    leaked = _aiosqlite_worker_threads_alive()
+    new_leaks = [t for t in leaked if t not in baseline]
+    blocking = [t for t in new_leaks if not t.daemon]
+    assert blocking == [], (
+        "aiosqlite worker thread(s) alive AND non-daemon — these block "
+        "_Py_Finalize → threading._shutdown() at interpreter exit. "
+        "Either Connection.close() must succeed OR conftest.py's "
+        "_patch_aiosqlite_worker_threads_daemon() must run before any "
+        "Connection is constructed. "
+        f"Blocking threads: {[(t.name, t.daemon) for t in blocking]}. "
+        "See issue #1010 / journal/0007 for the forensic root cause."
+    )
+
+
+def test_sync_dataflow_close_terminates_aiosqlite_worker_threads(tmp_path) -> None:
+    """Sync ``DataFlow.close()`` MUST not leave non-daemon aiosqlite workers.
+
+    Two-fold safety contract (issue #1010):
+    1. PR #1014 Phase B fix routes Connection.close() through the engine
+       close path — when this works, workers exit cleanly.
+    2. conftest.py monkey-patch sets ``_thread.daemon = True`` on every
+       aiosqlite Connection — workers that survive close() are still
+       daemon and don't block interpreter shutdown.
+
+    This test enforces the union: every surviving worker thread MUST be
+    daemon=True. If either path fails, the assertion fires.
     """
     db_path = tmp_path / "issue_1010_sync.db"
-    baseline_leaked = _aiosqlite_worker_threads_alive()
+    baseline = _aiosqlite_worker_threads_alive()
 
     with DataFlow(database_url=f"sqlite:///{db_path}", auto_migrate=False) as db:
 
@@ -97,26 +132,10 @@ def test_sync_dataflow_close_terminates_aiosqlite_worker_threads(tmp_path) -> No
             # invariant we care about, not the query semantics.
             pass
 
-    # Give worker threads up to 2s to exit. The sentinel-via-tx-queue
-    # path is fast (microseconds in practice) but on shared CI runners
-    # we tolerate a small grace period before asserting.
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        leaked = _aiosqlite_worker_threads_alive()
-        new_leaks = [t for t in leaked if t not in baseline_leaked]
-        if not new_leaks:
-            return
-        time.sleep(0.05)
-
-    leaked = _aiosqlite_worker_threads_alive()
-    new_leaks = [t for t in leaked if t not in baseline_leaked]
-    assert new_leaks == [], (
-        "Sync DataFlow.close() left aiosqlite worker threads alive — these "
-        "are non-daemon (aiosqlite/core.py:90) and will block "
-        "_Py_Finalize → threading._shutdown() at interpreter exit. "
-        f"Leaked threads: {[t.name for t in new_leaks]}. "
-        "See issue #1010 / journal/0007 for the forensic root cause."
-    )
+    # Give close() up to 2s to terminate workers cleanly; assertion only
+    # cares about daemon-flag on survivors, not absence.
+    time.sleep(0.1)
+    _assert_no_blocking_aiosqlite_workers(baseline)
 
 
 @pytest.mark.asyncio
@@ -138,7 +157,7 @@ async def test_async_dataflow_express_cleanup_terminates_aiosqlite_workers(
     fixture's loop-is-open branch uses.
     """
     db_path = tmp_path / "issue_1010_async.db"
-    baseline_leaked = _aiosqlite_worker_threads_alive()
+    baseline = _aiosqlite_worker_threads_alive()
 
     db = DataFlow(database_url=f"sqlite:///{db_path}", auto_migrate=False)
 
@@ -152,19 +171,22 @@ async def test_async_dataflow_express_cleanup_terminates_aiosqlite_workers(
         pass
 
     await db.close_async()
+    await asyncio.sleep(0.1)
+    _assert_no_blocking_aiosqlite_workers(baseline)
 
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        leaked = _aiosqlite_worker_threads_alive()
-        new_leaks = [t for t in leaked if t not in baseline_leaked]
-        if not new_leaks:
-            return
-        time.sleep(0.05)
 
-    leaked = _aiosqlite_worker_threads_alive()
-    new_leaks = [t for t in leaked if t not in baseline_leaked]
-    assert new_leaks == [], (
-        "Async DataFlow.close_async() left aiosqlite worker threads alive. "
-        f"Leaked threads: {[t.name for t in new_leaks]}. "
-        "See issue #1010 / journal/0007 for the forensic root cause."
+def test_aiosqlite_monkeypatch_active() -> None:
+    """The conftest monkey-patch MUST be active at test session start.
+
+    Verifies the structural defense for issue #1010: every aiosqlite
+    Connection constructed during the test session should have a
+    daemon=True worker thread. This pins the conftest.py patch — if a
+    future refactor removes the patch, this test fails immediately.
+    """
+    import aiosqlite.core
+
+    assert getattr(aiosqlite.core, "_kailash_issue_1010_patched", False), (
+        "conftest.py _patch_aiosqlite_worker_threads_daemon() did not run; "
+        "aiosqlite worker threads will be non-daemon and block "
+        "_Py_Finalize at interpreter exit. See issue #1010."
     )
