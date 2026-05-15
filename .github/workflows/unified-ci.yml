@@ -235,7 +235,7 @@ jobs:
           uv pip install -e "packages/kailash-dataflow[dev]" --python .venv/bin/python
 
       - name: Test DataFlow tier-1 unit suite (issue-1010 Phase A diagnostic)
-        if: github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics'
+        if: github.ref_name == 'debug/issue-1010-phase-a-prime-linux' || github.head_ref == 'debug/issue-1010-phase-a-prime-linux'
         timeout-minutes: 24
         env:
           DATAFLOW_DIAGNOSE_FINALIZE: "1"
@@ -253,7 +253,7 @@ jobs:
             --maxfail=10 -q -s --timeout=120
 
       - name: Print issue-1010 diagnostic log (always)
-        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics')
+        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-prime-linux' || github.head_ref == 'debug/issue-1010-phase-a-prime-linux')
         # Run even on step cancel / job timeout so the on-disk forensic
         # capture reaches the job log. `cat` is null-safe.
         run: |
@@ -266,7 +266,7 @@ jobs:
           echo "=== end of diagnostic log ==="
 
       - name: Upload issue-1010 diagnostic log
-        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-diagnostics' || github.head_ref == 'debug/issue-1010-phase-a-diagnostics')
+        if: always() && (github.ref_name == 'debug/issue-1010-phase-a-prime-linux' || github.head_ref == 'debug/issue-1010-phase-a-prime-linux')
         uses: actions/upload-artifact@v7
         continue-on-error: true
         with:
@@ -275,7 +275,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Test DataFlow tier-1 unit suite
-        if: github.ref_name != 'debug/issue-1010-phase-a-diagnostics' && github.head_ref != 'debug/issue-1010-phase-a-diagnostics'
+        if: github.ref_name != 'debug/issue-1010-phase-a-prime-linux' && github.head_ref != 'debug/issue-1010-phase-a-prime-linux'
         timeout-minutes: 10
         # ZERO `-m` flag here: pytest.ini::addopts is the SOLE marker filter
         # location per S1 CRIT-B fix (packages/kailash-dataflow/pytest.ini).

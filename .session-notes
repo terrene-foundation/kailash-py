@@ -1,61 +1,112 @@
-# Session Notes — 2026-05-13
+# Session Notes — 2026-05-14 (#1002 Shard 1 merged)
 
 ## Where we are
 
-PR #971 (COC sync loom 2.29.4 → v1.0.9) merged 2026-05-12 via owner-workflow.
-Follow-up PR #973 (COC sync 2026-05-13, commit `e0753ca2`) landed the
-30-file `.claude/`-only changeset (24 deletions of deprecated guides + 6
-hook/settings/SKILL mods) on main via `gh pr merge --admin`. PR for residual cleanup (11 cosmetic comment-dodge files
-+ this `.session-notes` refresh) on branch `chore/post-coc-cleanup-2026-05-13`,
-not yet pushed. Round-1 parallel /redteam (cosmetic-audit + secrets-scan
-+ session-notes-accuracy) converged clean; no commits in this session per
-BUILD-repo discipline.
+PR #1004 merged to main at commit `b0ba53ef` — Shard 1 of issue #1002
+(AC#3 follow-up of #1000). 67 inline `DataFlow(...)` constructions in
+5 high-concentration `tests/unit/` files converted to fixture-managed /
+context-manager-wrapped sites. Spec `specs/testing-tiers.md` §2 amended
+to cite canonical fixture shape and document the post-pytest
+`_Py_Finalize` hang root cause. Workspace
+`issue-1002-aiosqlite-fixture-cleanup/` carries the remaining 5 shards.
 
-## Read first
+## What shipped today
 
-1. `workspaces/redteam-coc-sync-1.0.9/04-validate/round-3-convergence.md` — full
-   per-round findings + inline-fix manifest from the 1.0.9 sync.
-2. `workspaces/redteam-coc-sync-1.0.9/loom-upstream-issue-body.md` — paste this
-   into a loom session to file the MED/LOW bundle there (cross-repo from here
-   is BLOCKED per `rules/repo-scope-discipline.md`).
-3. `git status --short` — surfaces the residual WIP awaiting disposition
-   (12 cosmetic edits + 13 untracked workspace/script artifacts).
-4. `gh issue view 972` — eval-check exclude maintenance follow-up (still OPEN).
-5. `CLAUDE.md` § directive 5 + #970 — `[trust]` extra wording still load-bearing
-   for open issue from prior session.
+| PR | Branch | Merged at | Note |
+|-----|--------|-----------|------|
+| #1004 | fix/issue-1002-shard1-high-concentration-cleanup | b0ba53ef | Shard 1 (67 sites, 5 files) |
+
+Reviewer + security-reviewer: 0 CRIT/0 HIGH/0 MED. All latest-per-check
+CI lanes SUCCESS at merge. Admin-merged per owner workflow.
+
+Pre-existing flaky test surfaced on the obsolete push-trigger CI run
+(`test_validation_off_mode_no_checks` warning-count drift); not
+introduced by Shard 1, not blocking merge. Disposition: deferred to
+Shard 3 invariant 12 per `workspaces/issue-1002-aiosqlite-fixture-cleanup/journal/0005-...md`.
+
+## Read first (next session)
+
+1. `workspaces/issue-1002-aiosqlite-fixture-cleanup/.session-notes`
+   — Shard 1 cut + next-shard pickup
+2. `workspaces/issue-1002-aiosqlite-fixture-cleanup/02-plans/01-architecture-plan.md`
+   — §"Shard 2"
+3. `workspaces/issue-1002-aiosqlite-fixture-cleanup/journal/0004-DISCOVERY-asyncsqldatabasenode-del-leak-via-sync-close.md`
+   — Shard 2 inherits an extra invariant (engine `close()` must close
+   cached AsyncSQLDatabaseNode)
+4. `workspaces/issue-1002-aiosqlite-fixture-cleanup/todos/active/02-shard2-mid-concentration-and-async-adapter-cleanup.md`
 
 ## In-flight state
 
-- 11 modified files in `packages/` + `src/` were pure pre-commit
-  `python-use-type-annotations` hook-dodge edits (comment rewords removing
-  `# type` substring per `rules/git.md` § Discipline) + one verified-dead
-  unused-import removal in `pact/engine.py`. Landed on
-  `chore/post-coc-cleanup-2026-05-13` as commit `7abe1a2c`.
-- 3 cited-but-listed-obsolete rules preserved on disk pending loom-manifest
-  fix: `.claude/rules/independence.md`, `terrene-naming.md`, `documentation.md`.
+- **Branch deleted**: `fix/issue-1002-shard1-high-concentration-cleanup`
+  cleaned at merge (`--delete-branch`).
+- **`setsid` wrapper** at `.github/workflows/unified-ci.yml:251-289`
+  STILL IN PLACE — only Shard 4b removes it. Every PR in flight
+  continues to rely on it for CI green.
+- **5 remaining shards** in `workspaces/issue-1002-aiosqlite-fixture-cleanup/todos/active/`:
+  Shard 2 → 3 → 4a → 4b → release/v2.9.8.
+- **`architecture-presentation/`** workspace remains on HOLD across
+  sessions, preserved untracked.
 
-## Traps
+## Traps for next session
 
-- `.claude/hooks/lib/` is gitignored (`.gitignore:62` `lib/`) so the H-2 fix to
-  `violation-patterns.js` (matchAll loop) is on disk but uncommittable.
-  Surfaces as CRIT in loom-upstream issue body. Same gitignore exclusion means
-  every developer needs `/sync-to-build` to populate hook libs locally.
-- Pre-commit `auto-stash` conflicts on 167-file COC-sync staged sets; the
-  documented `core.hooksPath=/dev/null` workaround per `rules/git.md` works.
-- `pre-commit run --all-files` auto-fixes trailing whitespace across ~1700 SDK
-  source files. This session reverted that drift via `git checkout -- .` after
-  staging redteam-fix paths — don't run `--all-files` again without intent.
+- **DO NOT** parallelize Shards 2 + 3 per `journal/0003` Decision 1.
+  Strict sequential. Each shard depends on prior merged to main.
+- **DO NOT** modify `test_del_no_close.py` or
+  `features/test_resource_warning.py` — do-not-touch list at
+  `02-plans/01-architecture-plan.md` § "Do-not-touch list".
+- **Shard 2 invariant count: 10** (was 9 at /todos time). Added
+  invariant 10 per `journal/0004`: sync `DataFlow.close()` MUST close
+  cached `AsyncSQLDatabaseNode` instances. If the engine fix exceeds
+  Shard 2 LOC budget, split into Shard 2.5 (engine-only).
+- **Shard 3 invariant count: 12** (was 11 at /todos time). Added
+  invariant 12 per `journal/0005`: fix
+  `test_validation_off_mode_no_checks` flake — `warnings.filters`
+  state isolation.
+- **Pre-existing pyright noise** (~26 info-level diagnostics) on
+  Shard-1 files is verified pre-existing on main; out of #1002 scope.
+- **Issue #1002 + #1000 stay OPEN** until Shard 4b's PR merges (#1000
+  full closure) + release-prep PR cuts v2.9.8.
+- **CI flake on push-trigger runs**: the push event may trigger a
+  parallel run that fails on `test_validation_off_mode_no_checks`.
+  GitHub mergeability uses latest-per-check, so PR-trigger run is
+  canonical. Don't panic on the push-trigger fail; check
+  `gh pr view <N> --json statusCheckRollup`.
+- **Journal frontmatter gap**: entries 0001-0005 in
+  `issue-1002-aiosqlite-fixture-cleanup/journal/` lack the YAML
+  frontmatter mandated by `rules/journal.md`. New entries should
+  include frontmatter per the rule.
 
-## Open questions for the human
+## Forest-vs-trees
 
-- Disposition for the 3 preserved-but-obsoleted rules: file loom issue (body
-  ready) to fix the manifest, or accept them as load-bearing baseline?
-- Push `chore/post-coc-cleanup-2026-05-13` (commits `7abe1a2c` + the
-  `.session-notes` refresh follow-up) and open PR? Awaiting confirmation.
-- 13 untracked items split across 3 buckets: (a) `deploy/deployments/2026-05-07-v2.15.0.md`
-  + `scripts/{check-manifest-parity.sh,migrate.py}` are real new artifacts; (b) `workspaces/_template/*`
-  is template scaffolding; (c) the seven active-workspace trees
-  (`architecture-presentation`, `issue-871-...`, `issue-876-...`,
-  `issue-912-...`, `issue-959-...`, `redteam-coc-sync-1.0.9`,
-  `runtime-integration-trio`) each belong with their owning issue's PR.
-- #970 (prior session) still open — `[trust]` extra docs/deps positioning.
+**Forest**: brief #1000 AC#3 anchor (verbatim from `gh issue view 1002`):
+> "Verify on CI: remove the setsid wrapper from
+> `.github/workflows/unified-ci.yml::test-dataflow` and confirm pytest
+> exits cleanly"
+
+Shard 4b's PR merge closes this. Shards 1-3 build the leak-free
+surface; Shard 4a builds the regression test; Shard 4b removes the
+wrapper. Release-prep cuts v2.9.8.
+
+**Trees** (this session): Shard 1 of 4 shipped. 4 implementation
+shards + 1 release cycle remain.
+
+## Deferred this session (per `value-prioritization.md` MUST-2)
+
+- **Engine-layer sync close() fix** — Shard 2 invariant 10. Value-anchor:
+  `journal/0004` verbatim. Foundation for AC#2 (local pytest clean exit).
+- **Pre-existing pyright noise** — no user-anchored value-rationale;
+  out of session scope; not deferred-as-tracked, simply not in scope.
+- **`test_validation_off_mode_no_checks` flake** — Shard 3 invariant 12.
+  Value-anchor: `journal/0005` verbatim.
+
+## Sibling-package release sweep
+
+Skipped this session because only kailash-dataflow tests touched (no
+release). Re-enumerate at start of release/v2.9.8 cycle per template
+in `rules/build-repo-release-discipline.md` § 1.
+
+## Open question for next session
+
+After Shard 1 on main, start Shard 2 (~250 LOC mid-concentration +
+8 Redis/MySQL/Mongo adapter tests + the engine `close()` fix from
+`journal/0004`)? Single session per `journal/0003` Decision 1.

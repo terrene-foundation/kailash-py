@@ -1,62 +1,69 @@
-# Session Notes — 2026-05-13
+# Session Notes — 2026-05-14 (B-Δ partial closure)
 
 ## Where we are
 
-`/analyze` + `/redteam` (to convergence) + `/todos` complete for
-issue **#979 DataFlow Unit Suite Triage**. User approved
-**OPTION-C′** verbatim ("approved") then directed `/wrapup`. Next
-step is `/implement` of Workstream-A's S1 (the precondition shard).
-No code changes shipped this session — only workspace artifacts.
+PR #1001 in CI on `fix/issue-1000-dataflow-del-deadlock` — partial
+closure of #1000. Structural `__del__` rule violations fixed (9 sites);
+CI setsid wrapper REMAINS protecting a different root cause. Follow-up
+issue #1002 filed for AC#3 (test-fixture aiosqlite cleanup, multi-shard
+scope). After PR #1001 merges, cut `release/v2.9.7` per `rules/git.md`
+§ Release-Prep convention. Not started yet.
 
 ## Read first
 
-1. `todos/active/00-INDEX.md` — shard list, dependency graph,
-   Workstream-B / -C handoff, forest-vs-trees rank
-2. `todos/active/01-S1-preconditions.md` — first shard to implement;
-   blocks the rest
-3. `journal/0005-DECISION-todos-crystallized.md` — the OPTION-C′
-   approval + trade-offs + risk register
-4. `journal/0004-DECISION-redteam-convergence.md` — 3-round redteam
-   convergence verdict (zero new CRIT/HIGH at R3)
-5. `02-plans/02-amendments-v2-post-redteam-r1r2.md` — the
-   authoritative plan the todos crystallize
-6. `01-analysis/02-pentest/` — pentest artifact (3 files; DEFENSE-2
-   + DEFENSE-3 land in S6)
+1. `gh pr view 1001` — PR body has full AC closure status + cross-SDK note
+2. `gh issue view 1002` — AC#3 deferred-scope with value-anchor verbatim
+3. `.claude/rules/patterns.md` § Async Resource Cleanup — the rule the fix
+   codifies; restored `executor.shutdown(wait=False)` is rule-pragmatic
+4. `packages/kailash-dataflow/tests/unit/test_del_no_close.py` — AST-walk
+   regression gate; allows safe sync drain, bans close/cleanup/logger
+5. `packages/kailash-dataflow/CHANGELOG.md` — [2.9.6] format reference for
+   the [2.9.7] entry to write in the `release/v2.9.7` branch
 
 ## In-flight state
 
-- Entire `workspaces/issue-979-dataflow-unit-triage/` is untracked
-  (the brief, journals 0001-0005, plans 00+01+02, 01-analysis tree,
-  todos/active/00-07). Decide commit timing at next session: either
-  commit the workspace at /implement start, or leave untracked until
-  S6 lands.
-- `specs/testing-tiers.md` + the `_index.md` row pointing at it ARE
-  untracked too (added during /analyze). These SHOULD commit with S1
-  or earlier so they're authoritative when S6's CLAUDE.md alignment
-  cites them.
-- No code touched outside `workspaces/` and `specs/`.
+- PR #1001 admin-merge NOT done — last 2 lanes (Test Python 3.11/3.12)
+  still running when /wrapup invoked. DataFlow Tier-1 (setsid-wrapped)
+  + CodeQL + PACT already green.
+- `release/v2.9.7` branch NOT cut. CHANGELOG entry NOT written.
+  Version anchors at 2.9.6 in `pyproject.toml` + `__init__.py`.
+- Pre-existing untracked artifacts preserved (architecture-presentation
+  workspace on HOLD; pytestdebug.log; two .journal-skipped.log files).
+- `.session-notes` files at root + this workspace still show as modified
+  from earlier this session — they'll be rewritten by this /wrapup.
 
 ## Traps
 
-- **PR #976 was NEVER MERGED** (`mergedAt: null`). Its `_fresh_db_url`
-  + `timeout = 120` fixes are NOT on main. Plan starts from pre-fix
-  state. Trap: assuming PR #976's fixes apply.
-- **`test_saas_tenancy.py` MUST STAY in tier-1** (R2 ATTACK-6
-  verified: 100% mocked, pure-Python, meets contract). It is NOT in
-  S4's MOVE list. Trap: a generic "move SaaS tests" sweep grabs it.
-- **S6 workflow MUST have ZERO `-m` flags** (CRIT-B). S1's
-  pytest.ini::addopts is the sole filter. PR #968's `-m` baked into
-  the workflow IS the trap to avoid on cherry-pick.
-- **`pytest-forked` is NOT archived upstream** (R1 falsified that
-  claim) — drop it from S1 for "zero consumer," not for "archived."
-- **`sanitize_sql_input` is a nested closure** at
-  `nodes.py:787` — not importable. DEFENSE-2 test in S6 MUST use
-  public API (`db.express_sync.create(...)`).
-- **fabric S3 move loses 2 tier-1 security signals** unless
-  `test_fabric_smoke_invariants.py` ships in S6. The compensation
-  is MANDATORY per R3 N1 fix; not optional.
+- DO NOT remove the `setsid` wrapper from `.github/workflows/unified-ci.yml`
+  in this session — AC#3 scope is issue #1002, post-pytest `_Py_Finalize`
+  hang has a different root cause (aiosqlite thread leaks at fixture level).
+- DO NOT cut `release/v2.9.7` from a `feat/`/`fix/` branch — `release/v*`
+  auto-skips PR-gate matrix per `rules/git.md`. Branch from main AFTER #1001
+  merges to capture all 11 fixed files.
+- Cross-SDK action item for kailash-rs (`AsyncRedisCacheAdapter`-class
+  `__del__` deadlock check) is documented in PR #1001 body — user handles
+  in a kailash-rs session per `rules/repo-scope-discipline.md`. Do NOT
+  `gh` the kailash-rs repo from this session.
+- Sibling-package release sweep was NOT enumerated at session start.
+  Re-enumerate per the script in root `.session-notes` template before
+  the 2.9.7 cut.
 
-## Open questions for the human
+## Forest-vs-trees
 
-None — OPTION-C′ approved. Next session resumes at S1 of
-Workstream-A under `/implement`.
+**Forest**: brief #1000 AC anchor (source b, `briefs/00-brief.md:27-28`):
+remove the non-structural CI `setsid` shim left from #979. NOT delivered
+this session — the wrapper stays.
+
+**Trees**: structural `__del__` rule violations fixed + regression-locked
+(9 sites). AC#1/#2/#4 met. PR #1001 ships those.
+
+**Deferred this session (value-anchored per `rules/value-prioritization.md`
+MUST-2)**:
+- **AC#3 (CI wrapper removal)** → issue #1002. Anchor: brief AC#3 verbatim
+  ("confirm pytest exits cleanly"). Multi-shard per autonomous-execution.md
+  MUST-1 (test-fixture sweep ~hundreds of files; not single-shard fit).
+
+## Open question
+
+After PR #1001 admin-merges with all CI green, cut `release/v2.9.7` (CHANGELOG
+entry + tag) this session, or hold for next session per user discretion?

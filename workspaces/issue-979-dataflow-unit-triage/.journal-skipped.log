@@ -1,0 +1,67 @@
+2026-05-14T00:37:18.882Z <journal-skip>commit=d655038e9b8c reason=merge-commit subject="Merge pull request #987 from terrene-foundation/release/v2.9.3"</journal-skip>
+2026-05-14T00:37:18.882Z <journal-skip>commit=50cb5c825270 reason=no-match subject="release(kailash-dataflow): cut 2.9.3 — S3 fabric tier + conftest refinement"</journal-skip>
+2026-05-14T00:37:18.882Z <journal-skip>commit=3392266661ef reason=merge-commit subject="Merge pull request #985 from terrene-foundation/feat/issue-979-s3-fabric-move"</journal-skip>
+2026-05-14T00:37:18.882Z <journal-skip>commit=87cf4181d2cd reason=merge-commit subject="Merge pull request #986 from terrene-foundation/release/v2.9.2"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=3013a004decd reason=no-match subject="release(kailash-dataflow): bundle S2a + S-EV into 2.9.2 CHANGELOG"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=e25566aaa577 reason=merge-commit subject="Merge branch 'main' into release/v2.9.2"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=04fc7037513b reason=merge-commit subject="Merge pull request #984 from terrene-foundation/feat/issue-979-s-ev-dataflow-events"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=07b07bb5e87e reason=no-match subject="release(kailash-dataflow): cut 2.9.2 — gallery to integration tier"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=cf4ebed75ff4 reason=merge-commit subject="Merge pull request #983 from terrene-foundation/feat/issue-979-s2a-gallery-move"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=1f2687a9244d reason=docs-routine subject="docs(workspace): amend journal/0007 with Finding C dispositions + receipt"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=628cba4f2e9b reason=test-routine subject="test(dataflow): wip(s3-6) refine integration NO-MOCKING hook to whitelist non-primitives (ANY, sentinel)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=c668b7b38c4d reason=test-routine subject="test(dataflow): wip(s3-7) revert-move test_mcp_integration to tier-1 features (mock-heavy)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=e34ee5b65120 reason=test-routine subject="test(dataflow): wip(s3-8) revert-move test_resource_warning to tier-1 features (mock-required)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=caed254fb99c reason=docs-routine subject="docs(workspace): amend journal/0001 Layer C with S3 same-class findings"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=58bfd4f50c5a reason=fix-routine subject="fix(dataflow): close S-EV silent-fallback in DataFlowEventMixin._init_events"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=c096a8fb9a4e reason=test-routine subject="test(dataflow): wip(s3-5) revert-move test_express_pagination to tier-1 features (zero fabric deps)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=2d19af912ce4 reason=test-routine subject="test(dataflow): wip(s3-4) move test_file_adapter.py to integration tier (same-class sweep)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=fd67c66b720d reason=test-routine subject="test(dataflow): wip(s2a-4) remove unused unittest.mock import from gallery (NO MOCKING tier-2 gate)"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=118969f4c918 reason=test-routine subject="test(dataflow): wip(s3-3) document [fabric] extra requirement in tests/CLAUDE.md"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=4d4642ed5a6a reason=test-routine subject="test(dataflow): wip(s3-1) git mv fabric tests to integration tier"</journal-skip>
+2026-05-14T00:37:18.883Z <journal-skip>commit=b2e2513a01ff reason=test-routine subject="test(dataflow): wip(s2a-1) git mv gallery to integration tier"</journal-skip>
+2026-05-14T04:00:05.164Z <journal-skip>commit=f4e77d4d2ae4 reason=merge-commit subject="Merge pull request #991 from terrene-foundation/release/v2.9.5"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=4e18244c0762 reason=no-match subject="release(kailash-dataflow): cut 2.9.5 — S5a V5 tempfile→canonical fixture refactor"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=8ba52ba062ce reason=merge-commit subject="Merge pull request #990 from terrene-foundation/release/v2.9.4"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=fb43fb394999 reason=merge-commit subject="Merge pull request #989 from terrene-foundation/feat/issue-979-s5a-tempfile-refactor"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=fa693972d65d reason=no-match subject="release(kailash-dataflow): cut 2.9.4 — S4 PG-requiring unit tests audit + move"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=88dc590e0df5 reason=merge-commit subject="Merge pull request #988 from terrene-foundation/feat/issue-979-s4-pg-audit"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=44e5c8b732e1 reason=no-match subject="wip(s5a): refactor test_instance_isolation.py to tmp_path"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=1718f06483dc reason=no-match subject="wip(s5a): refactor test_performance_benchmarks.py to tmp_path"</journal-skip>
+2026-05-14T04:00:05.165Z <journal-skip>commit=6b8b0a769a73 reason=no-match subject="wip(s5a): refactor test_tdd_performance_benchmark.py to tmp_path"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=1581992fb074 reason=no-match subject="wip(s4-cat-a): move 12 PG-requiring tests from tests/unit to tests/integration"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=66a67d517fae reason=no-match subject="wip(s5a): refactor test_async_sql_sqlite.py to tmp_path"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=ae705567679d reason=no-match subject="wip(s5a): refactor test_sync_ddl_executor.py to tmp_path"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=891d6a911c52 reason=no-match subject="wip(s4-cat-b): gate asyncpg import in test_tdd_support.py"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=d655038e9b8c reason=merge-commit subject="Merge pull request #987 from terrene-foundation/release/v2.9.3"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=50cb5c825270 reason=no-match subject="release(kailash-dataflow): cut 2.9.3 — S3 fabric tier + conftest refinement"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=3392266661ef reason=merge-commit subject="Merge pull request #985 from terrene-foundation/feat/issue-979-s3-fabric-move"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=87cf4181d2cd reason=merge-commit subject="Merge pull request #986 from terrene-foundation/release/v2.9.2"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=3013a004decd reason=no-match subject="release(kailash-dataflow): bundle S2a + S-EV into 2.9.2 CHANGELOG"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=e25566aaa577 reason=merge-commit subject="Merge branch 'main' into release/v2.9.2"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=04fc7037513b reason=merge-commit subject="Merge pull request #984 from terrene-foundation/feat/issue-979-s-ev-dataflow-events"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=07b07bb5e87e reason=no-match subject="release(kailash-dataflow): cut 2.9.2 — gallery to integration tier"</journal-skip>
+2026-05-14T04:00:05.166Z <journal-skip>commit=cf4ebed75ff4 reason=merge-commit subject="Merge pull request #983 from terrene-foundation/feat/issue-979-s2a-gallery-move"</journal-skip>
+2026-05-14T08:15:24.060Z <journal-skip>commit=9dd8db58917d reason=merge-commit subject="Merge pull request #994 from terrene-foundation/release/v2.9.6"</journal-skip>
+2026-05-14T08:15:24.061Z <journal-skip>commit=ce8bdd435f08 reason=no-match subject="release(kailash-dataflow): cut 2.9.6 — S6 of #979 final shard"</journal-skip>
+2026-05-14T08:15:24.061Z <journal-skip>commit=2e25a5d30109 reason=merge-commit subject="Merge pull request #993 from terrene-foundation/feat/issue-979-s6-gate-defenses-alignment"</journal-skip>
+2026-05-14T08:15:24.061Z <journal-skip>commit=b5040e33fc97 reason=no-match subject="ci(dataflow): use setsid + process-group kill in pytest finalizer wrapper"</journal-skip>
+2026-05-14T08:15:24.061Z <journal-skip>commit=bab5baf1288e reason=no-match subject="ci(dataflow): wrap pytest in summary-aware finalizer-hang workaround"</journal-skip>
+2026-05-14T08:15:24.062Z <journal-skip>commit=b8eb9de7e15d reason=fix-routine subject="fix(dataflow): gate aiomysql + redis tier-1 tests behind importorskip"</journal-skip>
+2026-05-14T08:15:24.062Z <journal-skip>commit=582a5585af71 reason=fix-routine subject="fix(dataflow): skip 6 SaaS-starter tier-1 tests at module level (B-2 deferral)"</journal-skip>
+2026-05-14T08:15:24.062Z <journal-skip>commit=66692186ec28 reason=fix-routine subject="fix(dataflow): gate 9 tier-1 tests behind importorskip(psutil/polars)"</journal-skip>
+2026-05-14T08:15:24.062Z <journal-skip>commit=81b1a4b5ab91 reason=feat-no-novel-body subject="feat(dataflow): issue #979 S6 — re-apply #898 CI gate + DEFENSE-2/3 + spec alignment"</journal-skip>
+2026-05-14T08:40:28.541Z <journal-skip>commit=9dd8db58917d reason=merge-commit subject="Merge pull request #994 from terrene-foundation/release/v2.9.6"</journal-skip>
+2026-05-14T08:40:28.542Z <journal-skip>commit=ce8bdd435f08 reason=no-match subject="release(kailash-dataflow): cut 2.9.6 — S6 of #979 final shard"</journal-skip>
+2026-05-14T08:40:28.542Z <journal-skip>commit=2e25a5d30109 reason=merge-commit subject="Merge pull request #993 from terrene-foundation/feat/issue-979-s6-gate-defenses-alignment"</journal-skip>
+2026-05-14T08:40:28.542Z <journal-skip>commit=b5040e33fc97 reason=no-match subject="ci(dataflow): use setsid + process-group kill in pytest finalizer wrapper"</journal-skip>
+2026-05-14T08:40:28.543Z <journal-skip>commit=bab5baf1288e reason=no-match subject="ci(dataflow): wrap pytest in summary-aware finalizer-hang workaround"</journal-skip>
+2026-05-14T08:40:28.543Z <journal-skip>commit=b8eb9de7e15d reason=fix-routine subject="fix(dataflow): gate aiomysql + redis tier-1 tests behind importorskip"</journal-skip>
+2026-05-14T08:40:28.543Z <journal-skip>commit=582a5585af71 reason=fix-routine subject="fix(dataflow): skip 6 SaaS-starter tier-1 tests at module level (B-2 deferral)"</journal-skip>
+2026-05-14T08:40:28.543Z <journal-skip>commit=66692186ec28 reason=fix-routine subject="fix(dataflow): gate 9 tier-1 tests behind importorskip(psutil/polars)"</journal-skip>
+2026-05-14T08:40:28.543Z <journal-skip>commit=81b1a4b5ab91 reason=feat-no-novel-body subject="feat(dataflow): issue #979 S6 — re-apply #898 CI gate + DEFENSE-2/3 + spec alignment"</journal-skip>
+2026-05-14T11:09:28.013Z <journal-skip>commit=13176660c3f7 reason=merge-commit subject="Merge pull request #1003 from terrene-foundation/release/v2.9.7"</journal-skip>
+2026-05-14T11:09:28.014Z <journal-skip>commit=0c4e36587850 reason=no-match subject="release(kailash-dataflow): cut 2.9.7 — partial closure of #1000"</journal-skip>
+2026-05-14T11:09:28.014Z <journal-skip>commit=33786f60259c reason=merge-commit subject="Merge pull request #1001 from terrene-foundation/fix/issue-1000-dataflow-del-deadlock"</journal-skip>
+2026-05-14T11:09:28.014Z <journal-skip>commit=5cae13c06038 reason=fix-routine subject="fix(dataflow): structural __del__ rule compliance — partial closure of #1000"</journal-skip>
+2026-05-14T11:09:28.014Z <journal-skip>commit=9dd8db58917d reason=merge-commit subject="Merge pull request #994 from terrene-foundation/release/v2.9.6"</journal-skip>
+2026-05-14T11:09:28.014Z <journal-skip>commit=ce8bdd435f08 reason=no-match subject="release(kailash-dataflow): cut 2.9.6 — S6 of #979 final shard"</journal-skip>

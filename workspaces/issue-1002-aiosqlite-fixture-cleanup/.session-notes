@@ -1,0 +1,64 @@
+# Session Notes — 2026-05-15
+
+## Where we are
+
+kailash-dataflow 2.9.8 shipped (PyPI verified, clean-venv install confirmed
+`__version__ == "2.9.8"`). Issues #1000 + #1002 stay OPEN — full closure
+blocked by cross-platform `_Py_Finalize` post-summary hang tracked in
+**issue #1010**. PR #1008 (Shard 4b setsid removal) closed without merge
+after CI reproduced the hang.
+
+## Read first
+
+1. `gh issue view 1010` — combined tracking issue with /redteam Round 1+2
+   forensics: H1 (LocalRuntime/AsyncLocalRuntime `__del__` calls `close()`),
+   H2 (SyncExpress orphan daemon thread, no close()), H3
+   (AsyncSQLDatabaseNode._shared_pools never cleared by DataFlow.close()).
+   Phase A diagnostic commands + B/C/D/E/F fix-shard outline included.
+2. `workspaces/issue-1002-aiosqlite-fixture-cleanup/todos/deferred/README.md`
+   — why Shard 4b is deferred and what reopens it.
+3. `src/kailash/runtime/local.py:2026-2040` + `async_local.py:2007-2022` —
+   H1 violation sites (Core SDK runtimes call `self.close()` from `__del__`).
+4. `packages/kailash-dataflow/src/dataflow/features/express.py:1924-1959` —
+   H2 site (no `close()` method); reference fix in `transactions.py:946-984`.
+5. `src/kailash/nodes/data/async_sql.py:2977, 5191, 5287` — H3 site
+   (`_shared_pools` class state + unwired cleanup classmethods).
+
+## In-flight state
+
+- Working tree on `main` has pre-existing unstaged drift in `.claude/skills/`
+  + `.session-notes` + `packages/kailash-dataflow/uv.lock` — not introduced
+  this session; pre-dates Shard 1.
+- A stray dirty `uv.lock` ran through pre-commit during the release commit
+  but was not part of the staged diff.
+
+## Traps
+
+- **Local AC#2 gate is NOT a reliable proof.** Two clean exits earlier this
+  session (92.20s + 91.58s on macOS/3.13) were race-condition lucky;
+  reviewer + pact-specialist later reproduced the post-summary hang on the
+  same code (17:31 min + 21:14 min). The hang is non-deterministic
+  cross-platform. Don't trust a single local-gate pass.
+- **`tests/regression/` is dark in CI.** Three #1002 regression tests don't
+  run anywhere on PR CI (#1010 LOW-1). Wiring is blocked by the #753/#890
+  psycopg2 baseline-vs-extras policy conflict — see #1010.
+- **`test_pytest_exits_clean.py` coverage gap.** Cache subset doesn't
+  exercise the engine close() / runtime-cache paths Shards 2+3 fixed.
+  Empirically passes against a broken engine. #1010 F1 tracks docstring
+  correction OR subset broadening.
+- **Pre-commit auto-stash.** Pre-commit stashes unstaged changes during
+  commit. Stage explicitly with `git add <path>` — never `git add -u`/`-A`.
+
+## Forest-vs-trees + deferrals
+
+**Forest** (verbatim, `briefs/00-brief.md:5-7`):
+> "Verify on CI: remove the setsid wrapper from
+> `unified-ci.yml::test-dataflow` and confirm pytest exits cleanly"
+
+**Trees** this session: shipped Shards 1-3 + 4a + v2.9.8 partial-closure
+release. The forest's CI removal (AC#3) is NOT closed.
+
+**Deferred (value-anchored):**
+- Shard 4b setsid removal — anchor: `briefs/00-brief.md:5-7` verbatim above.
+  Re-opens when #1010 Phase A diagnostics + B/C/D fixes close the
+  cross-platform residual hang.

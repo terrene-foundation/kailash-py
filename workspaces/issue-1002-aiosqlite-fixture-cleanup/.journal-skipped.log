@@ -1,0 +1,22 @@
+2026-05-14T13:05:18.419Z <journal-skip>commit=b0ba53ef3d89 reason=merge-commit subject="Merge pull request #1004 from terrene-foundation/fix/issue-1002-shard1-high-concentration-cleanup"</journal-skip>
+2026-05-14T13:05:18.420Z <journal-skip>commit=3393a64f68a8 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/test_cache_invalidation_bug.py (#1002)"</journal-skip>
+2026-05-14T13:05:18.420Z <journal-skip>commit=13f3a3bcdb28 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/test_engine_migration_errors.py (#1002)"</journal-skip>
+2026-05-14T13:05:18.420Z <journal-skip>commit=d10911d8aa50 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/test_dataflow_bug_011_012_fixes.py (#1002)"</journal-skip>
+2026-05-14T13:05:18.420Z <journal-skip>commit=dd348b7809f0 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/core/test_dataflow_test_mode.py (#1002)"</journal-skip>
+2026-05-14T13:05:18.420Z <journal-skip>commit=9fa7a033a7f4 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/test_derived_model.py (#1002)"</journal-skip>
+2026-05-14T13:05:18.421Z <journal-skip>commit=13176660c3f7 reason=merge-commit subject="Merge pull request #1003 from terrene-foundation/release/v2.9.7"</journal-skip>
+2026-05-14T13:05:18.421Z <journal-skip>commit=0c4e36587850 reason=no-match subject="release(kailash-dataflow): cut 2.9.7 — partial closure of #1000"</journal-skip>
+2026-05-14T13:05:18.421Z <journal-skip>commit=33786f60259c reason=merge-commit subject="Merge pull request #1001 from terrene-foundation/fix/issue-1000-dataflow-del-deadlock"</journal-skip>
+2026-05-14T13:05:18.421Z <journal-skip>commit=5cae13c06038 reason=fix-routine subject="fix(dataflow): structural __del__ rule compliance — partial closure of #1000"</journal-skip>
+2026-05-14T20:02:38.378Z <journal-skip>commit=7843e7514602 reason=merge-commit subject="Merge pull request #1011 from terrene-foundation/release/v2.9.8"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=b98892ce127f reason=no-match subject="release(dataflow): cut v2.9.8 — test-fixture + engine close() cleanup (partial #1000/#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=d5a979b73c5b reason=merge-commit subject="Merge pull request #1007 from terrene-foundation/fix/issue-1002-shard4a-regression-test"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=baf96fd8f6de reason=docs-routine subject="docs(regression): correct cache subset cardinality per reviewer MEDIUM (#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=82e7341d4e50 reason=test-routine subject="test(dataflow): add pytest-exits-clean regression for issue #1002 AC#4"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=e29ad8a23f98 reason=merge-commit subject="Merge pull request #1006 from terrene-foundation/fix/issue-1002-shard3-tail-and-hygiene"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=301986797d17 reason=test-routine subject="test(dataflow): add regression for runtime-cache cleanup on close() (#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=e79fca27c1b0 reason=fix-routine subject="fix(dataflow): release ALL cached runtimes on DataFlow.close() (#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=5acd9e8d2b48 reason=fix-routine subject="fix(dataflow): isolate warnings.filters in test_validation_off_mode_no_checks (#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=ebd7446e7c30 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit tail-batch + asyncio-mark hygiene (#1002)"</journal-skip>
+2026-05-14T20:02:38.379Z <journal-skip>commit=5b67811bf7b5 reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/{lazy_connection,upsert_conflict,architecture,2026_001_fixes} (#1002)"</journal-skip>
+2026-05-14T20:02:38.380Z <journal-skip>commit=b4020e91e42c reason=fix-routine subject="fix(dataflow): close inline DataFlow in tests/unit/{context_aware,upsert,engine_errors} (#1002)"</journal-skip>
