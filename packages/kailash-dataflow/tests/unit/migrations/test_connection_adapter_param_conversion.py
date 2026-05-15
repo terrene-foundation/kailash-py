@@ -39,6 +39,7 @@ class _FakeDatabaseConfig:
         # ConnectionManagerAdapter.__init__ calls
         # self.dataflow.config.database.get_connection_url(self.dataflow.config.environment)
         # — accept the env positional arg the way the real DatabaseConfig does.
+        del environment  # interface-only; deterministic stub returns one url
         return self.url
 
 
