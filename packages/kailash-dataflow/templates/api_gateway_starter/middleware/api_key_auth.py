@@ -6,16 +6,17 @@ Reuses SaaS Starter's verify_api_key function.
 """
 
 from functools import wraps
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException, Request
+
 from templates.saas_starter.security import api_keys
 
 # Import verify_api_key for test mocking
 verify_api_key = api_keys.verify_api_key
 
 
-async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> any:
+async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> Any:
     """
     Verify API key and attach organization + scopes to request.state.
 
@@ -62,7 +63,7 @@ async def api_key_auth_middleware(request: Request, call_next: Callable, db) -> 
     return response
 
 
-def api_key_required(required_scopes: List[str] = None) -> Callable:
+def api_key_required(required_scopes: Optional[List[str]] = None) -> Callable:
     """
     Decorator for API key protected endpoints.
 

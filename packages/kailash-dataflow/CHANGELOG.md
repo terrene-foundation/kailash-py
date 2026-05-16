@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+## [2.9.11] — 2026-05-16 — api_gateway_starter template type-safety + rate-limit hardening
+
+Closes 6 basic-mode pyright findings in `templates/api_gateway_starter/` — real
+`Optional[X]` annotations + `Request.client` None-guards on production middleware
+code paths. Templates ship inside the wheel; no SDK runtime API change. Surfaced
+during issue #1037 baseline audit (the 13 strict-only findings in #1037's body
+do not surface under the project's enforced pyright config and are out of scope).
+
+Security-reviewer surfaced a MED finding (rate-limit shared-bucket DoS) + LOW
+finding (CORS wildcard + credentials default) on the touched middleware sites;
+both landed in the same PR per `rules/autonomous-execution.md` MUST-4 (same-class
+gap within shard budget).
+
+### Security
+
+- **`middleware/rate_limit.py`** (both sites) — when `request.client is None`
+  AND no `request.state.user_id`, the rate-limit key now uses a per-request
+  sentinel (`f"unknown:{id(request)}"`) instead of the shared string
+  `"unknown"`. Prior shared bucket caused DoS amplification: one slow
+  anonymous caller starved every other anonymous caller. Per-request
+  sentinel keeps the bucket-per-caller property. Comment added pointing
+  template users at uvicorn `--proxy-headers` for X-Forwarded-For parsing
+  in production deployments behind a reverse proxy.
+- **`middleware/cors.py`** — inline warning comment added at the
+  `allowed_origins is None → ["*"]` fallback explaining that wildcard +
+  `allow_credentials=True` is browser-rejected by CORS spec, so the
+  combination breaks credentialed frontends. Production MUST set
+  `ALLOWED_ORIGINS` env var to explicit hosts.
+
+### Fixed
+
+- **`example_app/main.py::create_app`** — `db: DataFlow = None` →
+  `db: Optional[DataFlow] = None`. The lifespan branch initializes `db` from
+  settings when `None` was passed; the prior annotation lied about the contract.
+- **`middleware/api_key_auth.py::api_key_auth_middleware`** — return annotation
+  was the lowercase builtin `any` (a function), now `Any` from `typing`.
+- **`middleware/api_key_auth.py::api_key_required`** —
+  `required_scopes: List[str] = None` → `Optional[List[str]] = None`.
+- **`middleware/cors.py::configure_cors`** —
+  `allowed_origins: List[str] = None` → `Optional[List[str]] = None`.
+- **`middleware/rate_limit.py`** (rate_limit_middleware + rate_limit decorator)
+  — `request.client.host` guarded with `if request.client` fallback to a
+  per-request sentinel `f"unknown:{id(request)}"` (see `### Security` above
+  for the shared-bucket DoS rationale). `Request.client` is Optional on
+  Starlette transports (direct ASGI lifespan calls, certain test clients);
+  the prior access raised `AttributeError` on those transports.
+
 ## [2.9.10] — 2026-05-16 — issue #996 Round-5 tenant hardening + B-2 Tier-2 wave + B-1 tier-1 hygiene
 
 Closes issue #996 (saas_starter tenant-isolation hardening) and ships the B-1 / B-2 workstream of issue #979 (DataFlow unit-test triage). Templates + tests only — no SDK runtime API change.

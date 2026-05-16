@@ -11,6 +11,8 @@ Production-ready application demonstrating complete middleware stack integration
 Integrates all components from API Gateway Starter template with DataFlow for database operations.
 """
 
+from typing import Optional
+
 from fastapi import FastAPI, Request
 
 from dataflow import DataFlow
@@ -34,7 +36,7 @@ from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.responses import success_response
 
 
-def create_app(db: DataFlow = None) -> FastAPI:
+def create_app(db: Optional[DataFlow] = None) -> FastAPI:
     """
     Create and configure FastAPI application with complete middleware stack.
 
