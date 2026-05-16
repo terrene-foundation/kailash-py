@@ -380,6 +380,15 @@ class TestProtectionSystemCriticalGaps:
             # This is the deterministic, file-backed-correct assertion of
             # the protection contract (replaces the ":memory:"-only "no
             # such table" fallback).
+            #
+            # KNOWN COVERAGE GAP — tracked: issue #1050 (CRITICAL). The
+            # mock-wrapped runtime.execute above proves interception ran,
+            # NOT that the runtime hot path enforces protection. The
+            # protection ENGINE is an orphan on the async path
+            # (ProtectedDataFlowRuntime / db.express never invoke
+            # check_operation for generated CRUD nodes). End-to-end
+            # runtime-path enforcement assertion MUST be restored here once
+            # #1050's engine-wiring fix lands.
             protection_engine = db._protection_engine
             with pytest.raises(ProtectionViolation) as exc_info:
                 protection_engine.check_operation(
@@ -428,6 +437,13 @@ class TestProtectionSystemCriticalGaps:
         # level==BLOCK. That is exactly the metadata the original "Test 1"
         # branch asserted; the ":memory:" "no such table" branch was a
         # table-isolation accident that masked, not exercised, this contract.
+        #
+        # KNOWN COVERAGE GAP — tracked: issue #1050 (CRITICAL). This asserts
+        # the protection ENGINE in isolation, NOT that the runtime hot path
+        # invokes it. ProtectedDataFlowRuntime / db.express do NOT enforce
+        # write-protection on generated CRUD nodes (the engine is an orphan
+        # on the async path). End-to-end runtime-path enforcement assertion
+        # MUST be restored here once #1050's engine-wiring fix lands.
         protection_engine = db._protection_engine
         with pytest.raises(ProtectionViolation) as exc_info:
             protection_engine.check_operation(
