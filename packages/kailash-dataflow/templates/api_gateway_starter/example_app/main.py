@@ -11,8 +11,9 @@ Production-ready application demonstrating complete middleware stack integration
 Integrates all components from API Gateway Starter template with DataFlow for database operations.
 """
 
-from dataflow import DataFlow
 from fastapi import FastAPI, Request
+
+from dataflow import DataFlow
 from templates.api_gateway_starter.example_app.config import get_settings
 from templates.api_gateway_starter.example_app.models import register_models
 from templates.api_gateway_starter.example_app.routes.organizations import (
@@ -191,6 +192,7 @@ def create_app(db: DataFlow = None) -> FastAPI:
 
     # API key protected endpoints
     from fastapi import APIRouter
+
     from templates.api_gateway_starter.middleware.api_key_auth import api_key_required
 
     api_router = APIRouter(prefix="/api", tags=["api"])
@@ -213,13 +215,13 @@ def create_app(db: DataFlow = None) -> FastAPI:
             401: Missing or invalid API key
             403: Insufficient scopes
         """
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
         from templates.api_gateway_starter.utils.responses import paginated_response
         from templates.api_gateway_starter.utils.validation import (
             validate_pagination_params,
         )
-
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
 
         # Get organization from API key
         api_key_data = getattr(request.state, "api_key_data", {})
@@ -240,8 +242,10 @@ def create_app(db: DataFlow = None) -> FastAPI:
             },
         )
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        # Context-managed runtime per round-5 redteam F1 sibling sweep —
+        # bare LocalRuntime() leaks the connection pool until GC.
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         users = results.get("list", [])
         total = len(users)
