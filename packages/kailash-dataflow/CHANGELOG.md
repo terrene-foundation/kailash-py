@@ -43,10 +43,11 @@ gap within shard budget).
 - **`middleware/cors.py::configure_cors`** —
   `allowed_origins: List[str] = None` → `Optional[List[str]] = None`.
 - **`middleware/rate_limit.py`** (rate_limit_middleware + rate_limit decorator)
-  — `request.client.host` guarded with `if request.client` fallback to
-  `"unknown"`. `Request.client` is Optional on Starlette transports (direct ASGI
-  lifespan calls, certain test clients); the prior access raised
-  `AttributeError` on those transports.
+  — `request.client.host` guarded with `if request.client` fallback to a
+  per-request sentinel `f"unknown:{id(request)}"` (see `### Security` above
+  for the shared-bucket DoS rationale). `Request.client` is Optional on
+  Starlette transports (direct ASGI lifespan calls, certain test clients);
+  the prior access raised `AttributeError` on those transports.
 
 ## [2.9.10] — 2026-05-16 — issue #996 Round-5 tenant hardening + B-2 Tier-2 wave + B-1 tier-1 hygiene
 
