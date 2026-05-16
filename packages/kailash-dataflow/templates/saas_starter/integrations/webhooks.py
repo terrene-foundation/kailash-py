@@ -74,8 +74,10 @@ def create_webhook_event(
         },
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    # Use LocalRuntime as a context manager per kailash>=0.11 deprecation
+    # of bare .execute() — pending v0.12 hard removal.
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("create_event")
 
@@ -109,14 +111,21 @@ def get_webhook_events(
     if filters:
         query_filters.update(filters)
 
-    # Query webhook events
+    # Query webhook events. DataFlow ``*ListNode`` reads ``filter`` (singular)
+    # — ``filters`` (plural) is dropped silently. Response shape is
+    # ``{"records": [...], "count": N, "limit": L}`` not a bare list. Both
+    # idioms surfaced as production bugs when this surface moved from
+    # mocked Tier-1 to real-DataFlow Tier-2 in issue #996 / shard B-2d.
     workflow = WorkflowBuilder()
-    workflow.add_node("WebhookEventListNode", "list_events", {"filters": query_filters})
+    workflow.add_node("WebhookEventListNode", "list_events", {"filter": query_filters})
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
-    return results.get("list_events", [])
+    list_result = results.get("list_events") or {}
+    if isinstance(list_result, dict):
+        return list_result.get("records", [])
+    return list_result if isinstance(list_result, list) else []
 
 
 def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
@@ -135,43 +144,74 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
         >>> print(event["retry_count"])
         1
     """
-    # Get current event to check retry count
+    # Get current event to check retry count. The sibling api_keys.py +
+    # subscriptions.py both use the ``*ListNode`` + ``filter={"id":...}``
+    # idiom over the ``*ReadNode`` direct-id form for cross-dialect
+    # consistency; we follow the same pattern here.
     read_workflow = WorkflowBuilder()
-    read_workflow.add_node("WebhookEventReadNode", "read_event", {"id": event_id})
-
-    runtime = LocalRuntime()
-    read_results, _ = runtime.execute(read_workflow.build())
-
-    current_event = read_results.get("read_event")
-    if not current_event:
-        return None
-
-    # Increment retry count
-    new_retry_count = current_event.get("retry_count", 0) + 1
-
-    # Determine status based on retry count
-    if new_retry_count >= MAX_RETRY_COUNT:
-        new_status = "failed"
-    else:
-        new_status = "pending"
-
-    # Update webhook event
-    update_workflow = WorkflowBuilder()
-    update_workflow.add_node(
-        "WebhookEventUpdateNode",
-        "update_event",
-        {
-            "filters": {"id": event_id},
-            "fields": {
-                "retry_count": new_retry_count,
-                "status": new_status,
-                "last_retry_at": datetime.now(),
-            },
-        },
+    read_workflow.add_node(
+        "WebhookEventListNode",
+        "read_event",
+        {"filter": {"id": event_id}, "limit": 1},
     )
 
-    update_results, _ = runtime.execute(update_workflow.build())
-    return update_results.get("update_event")
+    # Single runtime context spans both the read + update workflows so the
+    # connection pool is shared and the deprecation warning is silenced.
+    with LocalRuntime() as runtime:
+        read_results, _ = runtime.execute(read_workflow.build())
+
+        list_result = read_results.get("read_event") or {}
+        records = (
+            list_result.get("records", []) if isinstance(list_result, dict) else []
+        )
+        if not records:
+            return None
+        current_event = records[0]
+
+        # Increment retry count
+        new_retry_count = current_event.get("retry_count", 0) + 1
+
+        # Determine status based on retry count
+        if new_retry_count >= MAX_RETRY_COUNT:
+            new_status = "failed"
+        else:
+            new_status = "pending"
+
+        # Update webhook event. DataFlow ``*UpdateNode`` reads ``filter``
+        # (singular) — ``filters`` (plural) is dropped silently and the
+        # node raises UPDATE_NODE_MISSING_FILTER_ID (same gotcha
+        # documented in api_keys.py::revoke_api_key).
+        update_workflow = WorkflowBuilder()
+        update_workflow.add_node(
+            "WebhookEventUpdateNode",
+            "update_event",
+            {
+                "filter": {"id": event_id},
+                "fields": {
+                    "retry_count": new_retry_count,
+                    "status": new_status,
+                    "last_retry_at": datetime.now(),
+                },
+            },
+        )
+
+        runtime.execute(update_workflow.build())
+
+        # Read-back the post-update row per rules/testing.md § State
+        # Persistence Verification — the UpdateNode payload echo may omit
+        # unspecified columns, so we re-query the canonical state.
+        readback_workflow = WorkflowBuilder()
+        readback_workflow.add_node(
+            "WebhookEventListNode",
+            "readback_event",
+            {"filter": {"id": event_id}, "limit": 1},
+        )
+        readback_results, _ = runtime.execute(readback_workflow.build())
+        readback_list = readback_results.get("readback_event") or {}
+        readback_records = (
+            readback_list.get("records", []) if isinstance(readback_list, dict) else []
+        )
+    return readback_records[0] if readback_records else None
 
 
 def mark_webhook_delivered(db, event_id: str) -> Optional[Dict]:
@@ -190,20 +230,37 @@ def mark_webhook_delivered(db, event_id: str) -> Optional[Dict]:
         >>> print(event["status"])
         delivered
     """
+    # DataFlow ``*UpdateNode`` reads ``filter`` (singular). See
+    # api_keys.py::revoke_api_key for the same gotcha — ``filters``
+    # (plural) is silently dropped and raises UPDATE_NODE_MISSING_FILTER_ID.
     workflow = WorkflowBuilder()
     workflow.add_node(
         "WebhookEventUpdateNode",
         "update_event",
         {
-            "filters": {"id": event_id},
+            "filter": {"id": event_id},
             "fields": {"status": "delivered", "delivered_at": datetime.now()},
         },
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        runtime.execute(workflow.build())
 
-    return results.get("update_event")
+        # Read-back the post-update row per rules/testing.md § State
+        # Persistence Verification — the UpdateNode payload echo may omit
+        # unspecified columns (e.g. organization_id, delivery_attempts).
+        readback_workflow = WorkflowBuilder()
+        readback_workflow.add_node(
+            "WebhookEventListNode",
+            "readback_event",
+            {"filter": {"id": event_id}, "limit": 1},
+        )
+        readback_results, _ = runtime.execute(readback_workflow.build())
+        readback_list = readback_results.get("readback_event") or {}
+        records = (
+            readback_list.get("records", []) if isinstance(readback_list, dict) else []
+        )
+    return records[0] if records else None
 
 
 def verify_webhook_signature(payload: Dict, signature: str, secret: str) -> bool:
