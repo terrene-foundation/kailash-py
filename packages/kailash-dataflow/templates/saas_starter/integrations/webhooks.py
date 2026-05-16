@@ -74,8 +74,10 @@ def create_webhook_event(
         },
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    # Use LocalRuntime as a context manager per kailash>=0.11 deprecation
+    # of bare .execute() — pending v0.12 hard removal.
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("create_event")
 
@@ -113,8 +115,8 @@ def get_webhook_events(
     workflow = WorkflowBuilder()
     workflow.add_node("WebhookEventListNode", "list_events", {"filters": query_filters})
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("list_events", [])
 
@@ -139,38 +141,40 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
     read_workflow = WorkflowBuilder()
     read_workflow.add_node("WebhookEventReadNode", "read_event", {"id": event_id})
 
-    runtime = LocalRuntime()
-    read_results, _ = runtime.execute(read_workflow.build())
+    # Single runtime context spans both the read + update workflows so the
+    # connection pool is shared and the deprecation warning is silenced.
+    with LocalRuntime() as runtime:
+        read_results, _ = runtime.execute(read_workflow.build())
 
-    current_event = read_results.get("read_event")
-    if not current_event:
-        return None
+        current_event = read_results.get("read_event")
+        if not current_event:
+            return None
 
-    # Increment retry count
-    new_retry_count = current_event.get("retry_count", 0) + 1
+        # Increment retry count
+        new_retry_count = current_event.get("retry_count", 0) + 1
 
-    # Determine status based on retry count
-    if new_retry_count >= MAX_RETRY_COUNT:
-        new_status = "failed"
-    else:
-        new_status = "pending"
+        # Determine status based on retry count
+        if new_retry_count >= MAX_RETRY_COUNT:
+            new_status = "failed"
+        else:
+            new_status = "pending"
 
-    # Update webhook event
-    update_workflow = WorkflowBuilder()
-    update_workflow.add_node(
-        "WebhookEventUpdateNode",
-        "update_event",
-        {
-            "filters": {"id": event_id},
-            "fields": {
-                "retry_count": new_retry_count,
-                "status": new_status,
-                "last_retry_at": datetime.now(),
+        # Update webhook event
+        update_workflow = WorkflowBuilder()
+        update_workflow.add_node(
+            "WebhookEventUpdateNode",
+            "update_event",
+            {
+                "filters": {"id": event_id},
+                "fields": {
+                    "retry_count": new_retry_count,
+                    "status": new_status,
+                    "last_retry_at": datetime.now(),
+                },
             },
-        },
-    )
+        )
 
-    update_results, _ = runtime.execute(update_workflow.build())
+        update_results, _ = runtime.execute(update_workflow.build())
     return update_results.get("update_event")
 
 
@@ -200,8 +204,8 @@ def mark_webhook_delivered(db, event_id: str) -> Optional[Dict]:
         },
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("update_event")
 

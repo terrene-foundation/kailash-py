@@ -330,9 +330,11 @@ def register_models(db: DataFlow) -> None:
         payload: dict
         status: str  # pending, delivered, failed
         retry_count: int
-        last_retry_at: datetime  # Optional
-        delivered_at: datetime  # Optional
-        delivery_attempts: list  # Optional
+        last_retry_at: Optional[datetime] = None  # Set after first retry attempt
+        delivered_at: Optional[datetime] = None  # Set after successful delivery
+        delivery_attempts: Optional[list] = (
+            None  # Per-attempt metadata, set by delivery handler
+        )
 
         __dataflow__ = {
             "indexes": [
