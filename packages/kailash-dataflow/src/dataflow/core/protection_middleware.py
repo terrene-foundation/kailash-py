@@ -33,6 +33,18 @@ class ProtectedDataFlowRuntime(LocalRuntime):
 
     def __init__(self, protection_config: WriteProtectionConfig, **kwargs):
         super().__init__(**kwargs)
+        # ProtectedDataFlowRuntime is a long-lived, framework-held runtime:
+        # DataFlow constructs it via create_protected_runtime() and drives
+        # execute() directly without the `with LocalRuntime() as rt:` context
+        # manager. Without this opt-out, LocalRuntime.execute() emits a
+        # DeprecationWarning ("without context manager ... error in v0.12.0")
+        # on every protection-enforced workflow run. mark_externally_managed()
+        # is the SDK-blessed opt-out for exactly this framework-ownership case
+        # (see kailash.runtime.local.LocalRuntime.mark_externally_managed,
+        # issue #478) and is the established DataFlow convention (engine.py,
+        # auto_migration_system.py, connection_adapter.py). The owning caller
+        # is responsible for close() at teardown.
+        self.mark_externally_managed()
         self.protection_engine = WriteProtectionEngine(protection_config)
 
     def execute(self, workflow, task_manager=None, parameters=None):
