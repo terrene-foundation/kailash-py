@@ -491,3 +491,147 @@ class TestAPIKeyRateLimiting:
         assert result["valid"] is True
         assert "rate_limit" in result
         assert result["rate_limit"] == 1000
+
+
+# ---------------------------------------------------------------------------
+# Round-5 timezone-safety regression tests — MED-2
+#
+# verify_api_key compares expires_at against datetime.now(). Pre-fix the
+# right-hand side was naive — a tz-aware expires_at (PostgreSQL
+# TIMESTAMP WITH TIME ZONE, aiosqlite-with-detect_types) raised
+# TypeError instead of returning the documented expired-key error.
+#
+# The two tests below exercise BOTH branches of the normalization fix:
+#  - tz-aware expires_at compares cleanly (no TypeError)
+#  - naive expires_at is normalized to UTC then compared cleanly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestAPIKeyExpirationTimezoneSafety:
+    """Round-5 MED-2 regression: tz-aware datetime comparison for expires_at."""
+
+    def test_verify_api_key_handles_tz_aware_expired(self, db, org_id):
+        """A tz-aware expires_at in the past MUST return the expired-error,
+        NOT raise TypeError."""
+        from datetime import timezone as _timezone
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
+        from templates.saas_starter.security.api_keys import (
+            create_api_key,
+            verify_api_key,
+        )
+
+        created = create_api_key(db, org_id, "TZ-Aware Expired", ["read"])
+        plain_key = created["key"]
+        key_id = created["record"]["id"]
+
+        # Stamp a tz-aware (UTC) expires_at in the past.
+        tz_aware_past = datetime.now(_timezone.utc) - timedelta(hours=1)
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "APIKeyUpdateNode",
+            "expire_key",
+            {
+                "filter": {"id": key_id},
+                "fields": {"expires_at": tz_aware_past},
+            },
+        )
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
+
+        # Pre-fix this raised TypeError because datetime.now() returned a
+        # naive datetime and tz-aware < naive comparison is illegal.
+        result = verify_api_key(db, plain_key)
+
+        assert result is not None, "verify_api_key MUST NOT raise"
+        assert result["valid"] is False
+        assert "expired" in result.get("error", "").lower()
+
+    def test_verify_api_key_handles_tz_aware_not_expired(self, db, org_id):
+        """A tz-aware expires_at in the future MUST verify successfully
+        (positive control proving the tz-aware path is exercised)."""
+        from datetime import timezone as _timezone
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
+        from templates.saas_starter.security.api_keys import (
+            create_api_key,
+            verify_api_key,
+        )
+
+        created = create_api_key(db, org_id, "TZ-Aware Future", ["read"])
+        plain_key = created["key"]
+        key_id = created["record"]["id"]
+
+        # Stamp a tz-aware (UTC) expires_at in the future.
+        tz_aware_future = datetime.now(_timezone.utc) + timedelta(hours=1)
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "APIKeyUpdateNode",
+            "set_expires",
+            {
+                "filter": {"id": key_id},
+                "fields": {"expires_at": tz_aware_future},
+            },
+        )
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
+
+        result = verify_api_key(db, plain_key)
+
+        assert result is not None, "verify_api_key MUST NOT raise"
+        assert result["valid"] is True, "Future-expiry key MUST validate"
+        assert result["organization_id"] == org_id
+
+    def test_verify_api_key_handles_naive_string_expired(self, db, org_id):
+        """A naive ISO-string expires_at (the aiosqlite path) MUST be
+        normalized to UTC and compared cleanly without TypeError.
+
+        SQLite stores DATETIME columns as TEXT and returns them as ISO
+        strings; verify_api_key parses with datetime.fromisoformat,
+        which produces a NAIVE datetime when the string has no tz
+        suffix. Pre-fix, comparing naive < datetime.now(UTC) raised
+        TypeError; post-fix the naive value is upgraded to UTC via
+        replace(tzinfo=timezone.utc) before comparison.
+        """
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
+
+        from templates.saas_starter.security.api_keys import (
+            create_api_key,
+            verify_api_key,
+        )
+
+        created = create_api_key(db, org_id, "Naive String Expired", ["read"])
+        plain_key = created["key"]
+        key_id = created["record"]["id"]
+
+        # Stamp a NAIVE datetime in the past. On SQLite this stores as
+        # an ISO string with no tz suffix and round-trips back as a
+        # naive datetime (or as the same ISO string, depending on the
+        # adapter — verify_api_key handles both cases).
+        naive_past = datetime.now() - timedelta(hours=2)
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "APIKeyUpdateNode",
+            "expire_key",
+            {
+                "filter": {"id": key_id},
+                "fields": {"expires_at": naive_past},
+            },
+        )
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
+
+        # Pre-fix this raised TypeError on PostgreSQL (tz-aware row +
+        # naive datetime.now()); post-fix the naive expires_at branch
+        # is normalized to UTC and the comparison runs cleanly.
+        result = verify_api_key(db, plain_key)
+
+        assert result is not None, "verify_api_key MUST NOT raise"
+        assert result["valid"] is False
+        assert "expired" in result.get("error", "").lower()

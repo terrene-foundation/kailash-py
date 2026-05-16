@@ -458,3 +458,151 @@ async def test_webhook_event_ordering(db):
     assert all(
         e.get("created_at") is not None for e in result
     ), "Every event should have an auto-managed created_at"
+
+
+# ---------------------------------------------------------------------------
+# Round-5 tenant-isolation regression tests — MED-1a / MED-1b
+#
+# Cross-tenant mutation defense: retry_failed_webhook and
+# mark_webhook_delivered MUST refuse to mutate a row whose
+# (event_id, organization_id) pair does not match. The test seeds an
+# event under tenant A, calls the helper with tenant B's organization_id,
+# and asserts BOTH (a) the helper returns None AND (b) the row in the
+# database is bit-for-bit unchanged on every column the helper would
+# otherwise touch.
+#
+# Per rules/testing.md § State Persistence Verification + rules/facade-
+# manager-detection.md MUST Rule 1: exercises the helper through the
+# template facade against a real DataFlow backend.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_retry_failed_webhook_rejects_cross_tenant_event_id(db):
+    """Round-5 MED-1a regression: retry_failed_webhook with another
+    tenant's organization_id MUST return None AND leave the row's
+    retry_count / status / last_retry_at unchanged.
+    """
+    tenant_a = "org_tenant_a"
+    tenant_b = "org_tenant_b"
+    event_id = "evt_cross_tenant_retry"
+
+    # Seed a pending event under tenant A. retry_count starts at 0.
+    await db.express.create(
+        "WebhookEvent",
+        _make_event(
+            id=event_id,
+            organization_id=tenant_a,
+            status="pending",
+            retry_count=0,
+        ),
+    )
+
+    # Snapshot the pre-call row state from tenant A's perspective.
+    before = await db.express.read("WebhookEvent", event_id)
+    assert before is not None
+    assert before["organization_id"] == tenant_a
+    assert before["status"] == "pending"
+    assert before["retry_count"] == 0
+    last_retry_before = before.get("last_retry_at")
+
+    # Call retry_failed_webhook with tenant B's organization_id. The
+    # tenant-scoped filter (id, organization_id) returns no rows, so
+    # the helper returns None and no UPDATE fires.
+    result = retry_failed_webhook(db, event_id, tenant_b)
+    assert result is None, "Cross-tenant retry MUST return None"
+
+    # Verify the row is unchanged from tenant A's perspective.
+    after = await db.express.read("WebhookEvent", event_id)
+    assert after is not None, "Event must still exist after cross-tenant call"
+    assert after["organization_id"] == tenant_a, "organization_id unchanged"
+    assert after["status"] == "pending", "status MUST NOT have changed"
+    assert after["retry_count"] == 0, "retry_count MUST NOT have incremented"
+    assert (
+        after.get("last_retry_at") == last_retry_before
+    ), "last_retry_at MUST NOT have been written"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_mark_webhook_delivered_rejects_cross_tenant_event_id(db):
+    """Round-5 MED-1b regression: mark_webhook_delivered with another
+    tenant's organization_id MUST return None AND leave the row's
+    status / delivered_at unchanged.
+    """
+    tenant_a = "org_tenant_a"
+    tenant_b = "org_tenant_b"
+    event_id = "evt_cross_tenant_deliver"
+
+    await db.express.create(
+        "WebhookEvent",
+        _make_event(
+            id=event_id,
+            organization_id=tenant_a,
+            status="pending",
+        ),
+    )
+
+    before = await db.express.read("WebhookEvent", event_id)
+    assert before is not None
+    assert before["status"] == "pending"
+    delivered_at_before = before.get("delivered_at")
+
+    # Cross-tenant call MUST be a no-op.
+    result = mark_webhook_delivered(db, event_id, tenant_b)
+    assert result is None, "Cross-tenant mark-delivered MUST return None"
+
+    after = await db.express.read("WebhookEvent", event_id)
+    assert after is not None, "Event must still exist"
+    assert after["organization_id"] == tenant_a, "organization_id unchanged"
+    assert after["status"] == "pending", "status MUST NOT have flipped to delivered"
+    assert (
+        after.get("delivered_at") == delivered_at_before
+    ), "delivered_at MUST NOT have been written"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_retry_failed_webhook_succeeds_with_matching_tenant(db):
+    """Round-5 MED-1a positive control: the matching-tenant call still
+    works (proves the cross-tenant rejection is not over-broad)."""
+    tenant_a = "org_tenant_a"
+    event_id = "evt_matching_tenant_retry"
+
+    await db.express.create(
+        "WebhookEvent",
+        _make_event(
+            id=event_id,
+            organization_id=tenant_a,
+            status="failed",
+            retry_count=0,
+        ),
+    )
+
+    result = retry_failed_webhook(db, event_id, tenant_a)
+    assert result is not None, "Matching-tenant retry MUST succeed"
+    assert result["retry_count"] == 1, "retry_count incremented"
+    assert result["status"] == "pending", "status flipped to pending"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_mark_webhook_delivered_succeeds_with_matching_tenant(db):
+    """Round-5 MED-1b positive control: matching-tenant call still works."""
+    tenant_a = "org_tenant_a"
+    event_id = "evt_matching_tenant_deliver"
+
+    await db.express.create(
+        "WebhookEvent",
+        _make_event(
+            id=event_id,
+            organization_id=tenant_a,
+            status="pending",
+        ),
+    )
+
+    result = mark_webhook_delivered(db, event_id, tenant_a)
+    assert result is not None, "Matching-tenant deliver MUST succeed"
+    assert result["status"] == "delivered", "status flipped to delivered"
+    assert result.get("delivered_at") is not None, "delivered_at written"
