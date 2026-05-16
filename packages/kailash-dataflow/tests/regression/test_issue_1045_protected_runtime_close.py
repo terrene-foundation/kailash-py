@@ -49,9 +49,11 @@ async-SQL-node-cache path), NOT the protected-runtime event-loop leak this
 shard closes. These tests therefore assert the event-loop drain
 behaviorally and do not force GC of the aiosqlite connection into the test
 body (which would surface the unrelated pre-existing leak). The aiosqlite
-leak is tracked as a follow-up — see the shard report.
+:memory: teardown leak is tracked as issue #1051 (distinct bug class,
+DataFlow.close() core lifecycle, out of this shard's budget).
 
-See issue #1045, rules/dataflow-pool.md Rule 5 (no orphan runtimes),
+See issue #1045, issue #1051 (deferred aiosqlite :memory: teardown),
+rules/dataflow-pool.md Rule 5 (no orphan runtimes),
 rules/zero-tolerance.md Rule 1 (warnings are errors).
 """
 
