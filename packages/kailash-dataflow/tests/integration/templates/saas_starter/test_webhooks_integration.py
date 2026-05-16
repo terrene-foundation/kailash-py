@@ -232,12 +232,17 @@ async def test_get_webhook_events(db):
 async def test_retry_failed_webhook(db):
     """retry_failed_webhook increments retry_count + flips status to pending."""
     event_id = "evt_failed"
+    org_id = "org_456"
     await db.express.create(
         "WebhookEvent",
-        _make_event(id=event_id, status="failed", retry_count=0),
+        _make_event(
+            id=event_id, organization_id=org_id, status="failed", retry_count=0
+        ),
     )
 
-    retry_failed_webhook(db, event_id)
+    # organization_id is REQUIRED per round-5 tenant-isolation hardening
+    # (MED-1a); see webhooks.py::retry_failed_webhook docstring.
+    retry_failed_webhook(db, event_id, org_id)
 
     # Read-back per rules/testing.md § State Persistence Verification.
     after = await db.express.read("WebhookEvent", event_id)
@@ -251,12 +256,15 @@ async def test_retry_failed_webhook(db):
 async def test_mark_webhook_delivered(db):
     """mark_webhook_delivered sets status=delivered + delivered_at."""
     event_id = "evt_123"
+    org_id = "org_456"
     await db.express.create(
         "WebhookEvent",
-        _make_event(id=event_id, status="pending"),
+        _make_event(id=event_id, organization_id=org_id, status="pending"),
     )
 
-    mark_webhook_delivered(db, event_id)
+    # organization_id is REQUIRED per round-5 tenant-isolation hardening
+    # (MED-1b); see webhooks.py::mark_webhook_delivered docstring.
+    mark_webhook_delivered(db, event_id, org_id)
 
     after = await db.express.read("WebhookEvent", event_id)
     assert after is not None, "Webhook event should still exist after delivery"
@@ -345,12 +353,16 @@ async def test_webhook_retry_logic(db):
     flips to ``failed`` per the gate at webhooks.py:153.
     """
     event_id = "evt_retry_test"
+    org_id = "org_456"
     await db.express.create(
         "WebhookEvent",
-        _make_event(id=event_id, status="pending", retry_count=2),
+        _make_event(
+            id=event_id, organization_id=org_id, status="pending", retry_count=2
+        ),
     )
 
-    retry_failed_webhook(db, event_id)
+    # organization_id is REQUIRED per round-5 tenant-isolation hardening.
+    retry_failed_webhook(db, event_id, org_id)
 
     after = await db.express.read("WebhookEvent", event_id)
     assert after is not None, "Webhook event should still exist after retry"
@@ -371,6 +383,7 @@ async def test_webhook_delivery_tracking(db):
     via the mocked runtime side_effect.
     """
     event_id = "evt_track"
+    org_id = "org_456"
     attempts = [
         {
             "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
@@ -386,12 +399,13 @@ async def test_webhook_delivery_tracking(db):
     await db.express.create(
         "WebhookEvent",
         {
-            **_make_event(id=event_id, status="pending"),
+            **_make_event(id=event_id, organization_id=org_id, status="pending"),
             "delivery_attempts": attempts,
         },
     )
 
-    mark_webhook_delivered(db, event_id)
+    # organization_id is REQUIRED per round-5 tenant-isolation hardening.
+    mark_webhook_delivered(db, event_id, org_id)
 
     after = await db.express.read("WebhookEvent", event_id)
     assert after is not None, "Webhook event should still exist"
