@@ -47,17 +47,24 @@ class ProtectedDataFlowRuntime(LocalRuntime):
         self.mark_externally_managed()
         self.protection_engine = WriteProtectionEngine(protection_config)
 
-    def execute(self, workflow, task_manager=None, parameters=None):
-        """Override execute to handle ProtectionViolations specially."""
+    def execute(self, workflow, task_manager=None, parameters=None, *args, **kwargs):
+        """Override execute to handle ProtectionViolations specially.
+
+        Forwards every positional/keyword argument transparently to
+        ``LocalRuntime.execute`` so callers passing ``idempotency_key``,
+        ``time_limit``, ``cancellation_token`` etc. on the protection-enforced
+        path are not silently dropped (signature parity with the base).
+        """
         # Call parent execute which returns (results, run_id)
-        results, run_id = super().execute(workflow, task_manager, parameters)
+        results, run_id = super().execute(
+            workflow, task_manager, parameters, *args, **kwargs
+        )
 
         # Check results for protection violations
-        for node_id, node_result in results.items():
+        for node_result in results.values():
             if isinstance(node_result, dict):
                 # Check if this node failed with a protection violation
                 error_msg = node_result.get("error", "")
-                error_type = node_result.get("error_type", "")
                 failed = node_result.get("failed", False)
 
                 if failed and (
@@ -173,6 +180,12 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
     """
 
     class ProtectedNode(original_class):
+        # Injected post-construction by DataFlow's node-generation machinery
+        # (the generated node is bound to its owning DataFlow instance there).
+        # Declared so static analysis knows the attribute exists; every read
+        # is still hasattr()-guarded because it is absent until injection.
+        dataflow_instance: Any
+
         def run(self, **kwargs) -> Dict[str, Any]:
             """Override run to add protection checks."""
             logger.debug(
@@ -258,8 +271,12 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
                             )
                             raise
 
-            # Execute original method if protection passes
-            return super().run(**kwargs)
+            # Execute original method if protection passes.
+            # original_class is ALWAYS a concrete generated DataFlow node at
+            # runtime (the decorator only wraps concrete *Node classes); the
+            # Type[Node] parameter annotation makes pyright treat Node.run as
+            # abstract. Static-analysis expressiveness gap, not a real bug.
+            return super().run(**kwargs)  # pyright: ignore[reportAbstractUsage]
 
     # Preserve class metadata
     ProtectedNode.__name__ = original_class.__name__
