@@ -1,5 +1,19 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Tests
+
+- test(dataflow): gate banned top-imports in 4 unit inspector files (#995)
+  — added `pytest.importorskip("kailash.workflow.builder")` gates in
+  `tests/unit/test_inspector_realtime_debugging.py`,
+  `tests/unit/test_inspector_parameter_tracing.py`, and
+  `tests/unit/test_inspector_workflow_analysis.py` per
+  `specs/testing-tiers.md` §Tier-1 Rule 1.
+  `tests/unit/test_inspector.py` already had no banned top-imports
+  (the WorkflowBuilder import lives inside a fixture); no edit needed.
+  Closes part of issue #995 (#979 Workstream-B shard B-1).
+
 ## [2.9.9] — 2026-05-15 — \_Py_Finalize CI hang fully closed; setsid wrapper removed (final closure of #1000 / #1002 / #1010)
 
 Closes brief AC#3 of issue #1000 (verbatim): "Verify on CI: remove the
