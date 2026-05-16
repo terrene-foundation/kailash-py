@@ -25,6 +25,7 @@ Dependencies:
 - DataFlow: Database operations only
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -33,8 +34,19 @@ import jwt
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# JWT Configuration
-JWT_SECRET = "your-secret-key-change-in-production"  # Change in production
+# JWT Configuration — secret MUST come from the environment so production
+# deployments do not ship a known hardcoded key. Fail loudly at import if
+# unset; the canonical envvar name is ``SAAS_STARTER_JWT_SECRET`` so
+# multiple saas_starter modules (auth, middleware/tenant, workflows/auth)
+# share one secret without per-module env vars.
+_JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
+JWT_SECRET = os.environ.get(_JWT_SECRET_ENV)
+if not JWT_SECRET:
+    raise RuntimeError(
+        f"{_JWT_SECRET_ENV} environment variable is required. "
+        f"Set a cryptographically random value (>=32 bytes) before importing "
+        f"saas_starter.auth.jwt_auth. See README for production deployment."
+    )
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 REFRESH_TOKEN_EXPIRY_SECONDS = 604800  # 7 days

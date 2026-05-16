@@ -4,13 +4,24 @@ SaaS Starter Template - Tenant Middleware
 Multi-tenant isolation middleware for SaaS applications.
 """
 
+import os
 from typing import Any, Dict
 
 import jwt
 from kailash.workflow.builder import WorkflowBuilder
 
-# JWT Configuration
-JWT_SECRET = "test-secret-key-change-in-production"
+# JWT Configuration — secret MUST come from the environment. See
+# saas_starter.auth.jwt_auth for the canonical SAAS_STARTER_JWT_SECRET
+# envvar; the tenant middleware shares the same key to verify the JWT
+# claims set by the auth workflows.
+_JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
+JWT_SECRET = os.environ.get(_JWT_SECRET_ENV)
+if not JWT_SECRET:
+    raise RuntimeError(
+        f"{_JWT_SECRET_ENV} environment variable is required. "
+        f"Set a cryptographically random value (>=32 bytes) before importing "
+        f"saas_starter.middleware.tenant."
+    )
 JWT_ALGORITHM = "HS256"
 
 

@@ -229,9 +229,13 @@ class TestSimplifiedJWTAuth:
             "iat": datetime.now(UTC) - timedelta(hours=3),  # Issued 3h ago
             "type": "access",
         }
-        expired_token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
+        expired_token = jwt.encode(
+            payload, "test-secret-key-32bytes-floor-rfc7518", algorithm="HS256"
+        )
 
-        result = verify_token(expired_token, secret="test-secret-key")
+        result = verify_token(
+            expired_token, secret="test-secret-key-32bytes-floor-rfc7518"
+        )
 
         assert result["valid"] is False, "Expired token should be invalid"
         assert "error" in result, "Should contain error message"

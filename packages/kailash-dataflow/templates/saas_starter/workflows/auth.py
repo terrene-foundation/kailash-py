@@ -4,6 +4,7 @@ SaaS Starter Template - Authentication Workflow Builders
 Workflow-based authentication for multi-tenant SaaS applications.
 """
 
+import os
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -13,8 +14,19 @@ import bcrypt
 import jwt
 from kailash.workflow.builder import WorkflowBuilder
 
-# JWT Configuration
-JWT_SECRET = "test-secret-key-change-in-production"
+# JWT Configuration — secret MUST come from the environment. See
+# saas_starter.auth.jwt_auth for the canonical SAAS_STARTER_JWT_SECRET
+# envvar; this module shares the same key so registration / login /
+# password-reset workflows all sign tokens that the JWT middleware can
+# verify with one secret.
+_JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
+JWT_SECRET = os.environ.get(_JWT_SECRET_ENV)
+if not JWT_SECRET:
+    raise RuntimeError(
+        f"{_JWT_SECRET_ENV} environment variable is required. "
+        f"Set a cryptographically random value (>=32 bytes) before importing "
+        f"saas_starter.workflows.auth."
+    )
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 RESET_TOKEN_EXPIRY_SECONDS = 900  # 15 minutes
