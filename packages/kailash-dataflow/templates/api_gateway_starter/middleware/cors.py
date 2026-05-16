@@ -37,6 +37,11 @@ def configure_cors(app: FastAPI, allowed_origins: Optional[List[str]] = None):
         ```
     """
     if allowed_origins is None:
+        # WARNING: ["*"] is dev-only. Browsers REJECT wildcard origins when
+        # `allow_credentials=True` (per CORS spec) — so this combination
+        # breaks credentialed requests from real frontends. Production MUST
+        # set ALLOWED_ORIGINS to explicit host list (e.g., via env var) so
+        # `settings.allowed_origins` resolves to specific origins.
         allowed_origins = ["*"]
 
     app.add_middleware(

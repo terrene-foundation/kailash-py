@@ -2,13 +2,34 @@
 
 ## [Unreleased]
 
-## [2.9.11] — 2026-05-16 — api_gateway_starter template type-safety hygiene
+## [2.9.11] — 2026-05-16 — api_gateway_starter template type-safety + rate-limit hardening
 
 Closes 6 basic-mode pyright findings in `templates/api_gateway_starter/` — real
 `Optional[X]` annotations + `Request.client` None-guards on production middleware
 code paths. Templates ship inside the wheel; no SDK runtime API change. Surfaced
 during issue #1037 baseline audit (the 13 strict-only findings in #1037's body
 do not surface under the project's enforced pyright config and are out of scope).
+
+Security-reviewer surfaced a MED finding (rate-limit shared-bucket DoS) + LOW
+finding (CORS wildcard + credentials default) on the touched middleware sites;
+both landed in the same PR per `rules/autonomous-execution.md` MUST-4 (same-class
+gap within shard budget).
+
+### Security
+
+- **`middleware/rate_limit.py`** (both sites) — when `request.client is None`
+  AND no `request.state.user_id`, the rate-limit key now uses a per-request
+  sentinel (`f"unknown:{id(request)}"`) instead of the shared string
+  `"unknown"`. Prior shared bucket caused DoS amplification: one slow
+  anonymous caller starved every other anonymous caller. Per-request
+  sentinel keeps the bucket-per-caller property. Comment added pointing
+  template users at uvicorn `--proxy-headers` for X-Forwarded-For parsing
+  in production deployments behind a reverse proxy.
+- **`middleware/cors.py`** — inline warning comment added at the
+  `allowed_origins is None → ["*"]` fallback explaining that wildcard +
+  `allow_credentials=True` is browser-rejected by CORS spec, so the
+  combination breaks credentialed frontends. Production MUST set
+  `ALLOWED_ORIGINS` env var to explicit hosts.
 
 ### Fixed
 

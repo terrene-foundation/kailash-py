@@ -149,9 +149,14 @@ async def rate_limit_middleware(
     """
     # Get rate limit key (user_id from JWT or API key, else client host).
     # `request.client` is Optional on Starlette transports (e.g., direct ASGI
-    # lifespan calls, certain test clients) — fall back to "unknown" so the
-    # rate-limit bucket exists even when no client address is available.
-    client_host = request.client.host if request.client else "unknown"
+    # lifespan calls, certain test clients). When absent, fall back to a
+    # PER-REQUEST sentinel (`unknown:<id>`) — NOT a shared `"unknown"` string
+    # — to avoid a DoS amplification where every anonymous unclaimed caller
+    # collides on one bucket and one slow caller starves the rest.
+    # Production deployments behind a reverse proxy MUST configure trusted-
+    # proxy header parsing (e.g., X-Forwarded-For via uvicorn --proxy-headers)
+    # so `request.client.host` reflects the real client, not the proxy.
+    client_host = request.client.host if request.client else f"unknown:{id(request)}"
     key = getattr(request.state, "user_id", None) or client_host
 
     # Check rate limit
@@ -206,8 +211,11 @@ def rate_limit(rate: int = 1000, window: int = 3600) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(request: Request, *args, **kwargs):
-            # Get rate limit key (Optional client guarded as in middleware above)
-            client_host = request.client.host if request.client else "unknown"
+            # Get rate limit key (per-request sentinel guards against shared-
+            # bucket DoS amplification — see middleware above for rationale).
+            client_host = (
+                request.client.host if request.client else f"unknown:{id(request)}"
+            )
             key = getattr(request.state, "user_id", None) or client_host
 
             # Check rate limit
