@@ -11,17 +11,17 @@ This system integrates with the existing AutoMigrationSystem to provide:
 - Performance optimization with <100ms schema comparison operations
 """
 
-import asyncio
 import json
 import logging
 import threading
-import time
 import warnings
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from dataflow.core.async_utils import async_safe_run
 
 logger = logging.getLogger(__name__)
 
