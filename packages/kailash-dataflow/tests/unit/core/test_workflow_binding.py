@@ -31,8 +31,11 @@ Test coverage:
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kailash.runtime import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+
+_runtime = pytest.importorskip("kailash.runtime")
+LocalRuntime = _runtime.LocalRuntime
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 
 @pytest.mark.unit
@@ -597,9 +600,9 @@ class TestDataFlowWorkflowBinder:
 
         for op_name, expected_node_type in expected_ops:
             resolved = binder._resolve_node_type("Entity", op_name)
-            assert resolved == expected_node_type, (
-                f"Operation {op_name} should resolve to {expected_node_type}"
-            )
+            assert (
+                resolved == expected_node_type
+            ), f"Operation {op_name} should resolve to {expected_node_type}"
 
     def test_all_operations_in_operation_map(self, memory_dataflow):
         """Verify OPERATION_MAP has exactly 11 operations."""
