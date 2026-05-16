@@ -5,16 +5,17 @@ Provides JWT verification middleware and decorators for FastAPI endpoints.
 Reuses SaaS Starter's verify_token function.
 """
 
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 
 from fastapi import HTTPException, Request
+
 from templates.saas_starter.auth import jwt_auth
 
 # Import verify_token for test mocking
 verify_token = jwt_auth.verify_token
 
 
-async def jwt_auth_middleware(request: Request, call_next: Callable) -> any:
+async def jwt_auth_middleware(request: Request, call_next: Callable) -> Any:
     """
     Verify JWT token and attach user claims to request.state.
 
@@ -52,6 +53,22 @@ async def jwt_auth_middleware(request: Request, call_next: Callable) -> any:
     if not verification.get("valid"):
         error_message = verification.get("error", "Invalid token")
         raise HTTPException(status_code=401, detail=error_message)
+
+    # Defense-in-depth: reject signed-but-wrong-type tokens at the API
+    # gateway boundary. ``saas_starter`` issues three token shapes signed
+    # with the SAME ``SAAS_STARTER_JWT_SECRET``:
+    #   - ``type=access``          (1h expiry, intended for API access)
+    #   - ``type=refresh``         (7d expiry, only valid at refresh endpoint)
+    #   - ``type=password_reset``  (15m expiry, only valid at reset endpoint)
+    # Without this check, a signed ``refresh`` or ``password_reset`` token
+    # passes ``verify_token`` (signature + expiry are valid) and the claims
+    # are attached to ``request.state.user_claims``, granting the caller
+    # full API access for the token's lifetime. ``saas_starter``'s
+    # ``refresh_token`` helper (auth/jwt_auth.py:486) applies the
+    # equivalent check on the refresh path; this is the mirror on the
+    # api_gateway access path.
+    if verification.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type for API access")
 
     # Attach user claims to request state
     request.state.user_claims = {

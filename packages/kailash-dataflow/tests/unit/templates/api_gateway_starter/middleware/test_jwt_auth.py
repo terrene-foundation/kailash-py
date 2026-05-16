@@ -39,6 +39,7 @@ class TestJWTAuthentication:
                 "org_id": "org_456",
                 "email": "alice@example.com",
                 "exp": 1234567890,
+                "type": "access",
             }
 
             response = await jwt_auth_middleware(request, call_next)
@@ -210,6 +211,7 @@ class TestJWTAuthentication:
                 "org_id": "org_789",
                 "email": "bob@example.com",
                 "exp": 1234567890,
+                "type": "access",
             }
 
             await jwt_auth_middleware(request, call_next)

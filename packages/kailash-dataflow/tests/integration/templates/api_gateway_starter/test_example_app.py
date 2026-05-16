@@ -10,8 +10,9 @@ import tempfile
 import uuid
 
 import pytest
-from dataflow import DataFlow
 from fastapi.testclient import TestClient
+
+from dataflow import DataFlow
 from templates.saas_starter.auth.jwt_auth import generate_access_token, hash_password
 from templates.saas_starter.security.api_keys import create_api_key
 
@@ -161,13 +162,19 @@ def jwt_token(test_user, test_organization):
 
     import jwt
 
-    # Create token with role included
+    # Create token with role included.
+    # ``type: "access"`` is REQUIRED — the api_gateway middleware now
+    # rejects tokens without ``type=access`` (issue #996 Shard C). Pre-fix
+    # this fixture omitted ``type`` and the middleware accepted it; the
+    # check now distinguishes access from refresh/password_reset tokens
+    # signed with the same SAAS_STARTER_JWT_SECRET.
     payload = {
         "user_id": test_user["id"],
         "org_id": test_organization["id"],
         "email": test_user["email"],
         "role": test_user["role"],  # Include role in token
         "exp": int(time.time()) + 3600,
+        "type": "access",
     }
 
     from templates.saas_starter.auth.jwt_auth import JWT_SECRET
@@ -318,7 +325,6 @@ class TestRBAC:
         import time
 
         import jwt
-
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -340,13 +346,16 @@ class TestRBAC:
         runtime = LocalRuntime()
         results, _ = runtime.execute(workflow.build())
 
-        # Generate token with role
+        # Generate token with role.
+        # ``type: "access"`` required post-issue #996 Shard C — see
+        # jwt_token fixture above for full rationale.
         payload = {
             "user_id": user_id,
             "org_id": test_organization["id"],
             "email": email,
             "role": "member",
             "exp": int(time.time()) + 3600,
+            "type": "access",
         }
         from templates.saas_starter.auth.jwt_auth import JWT_SECRET
 
@@ -367,7 +376,6 @@ class TestRBAC:
         import time
 
         import jwt
-
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -389,13 +397,16 @@ class TestRBAC:
         runtime = LocalRuntime()
         results, _ = runtime.execute(workflow.build())
 
-        # Generate token with member role
+        # Generate token with member role.
+        # ``type: "access"`` required post-issue #996 Shard C — see
+        # jwt_token fixture above for full rationale.
         payload = {
             "user_id": user_id,
             "org_id": test_organization["id"],
             "email": email,
             "role": "member",
             "exp": int(time.time()) + 3600,
+            "type": "access",
         }
         from templates.saas_starter.auth.jwt_auth import JWT_SECRET
 
