@@ -5,8 +5,11 @@ Tests SQL generation for COUNT(*) operations across PostgreSQL, MySQL, and SQLit
 """
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+
+_runtime = pytest.importorskip("kailash.runtime")
+AsyncLocalRuntime = _runtime.AsyncLocalRuntime
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 from dataflow import DataFlow
 
