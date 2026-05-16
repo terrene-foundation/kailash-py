@@ -53,6 +53,15 @@ class TestProtectionSystemCriticalGaps:
 
         self.test_model = TestModel
 
+    def teardown_method(self):
+        """Close the DataFlow instance so its aiosqlite connection pool is
+        released (ProtectedDataFlow inherits DataFlow.close()). Without
+        this the connection is reclaimed by GC, emitting aiosqlite
+        ResourceWarning (the residual #1002/#1010 test-side leak)."""
+        db = getattr(self, "db", None)
+        if db is not None:
+            db.close()
+
     def test_node_detection_failure_gap(self):
         """Test: Protection system fails to detect DataFlow-generated nodes."""
         # Get generated node class
@@ -208,6 +217,9 @@ class TestProtectionSystemCriticalGaps:
                 create_node_class = cls
                 break
 
+        assert (
+            create_node_class is not None
+        ), "no *CreateNode class found in self.db._nodes — test setup invariant"
         node = create_node_class(node_id="test_create")
 
         # Test 1: Node should have access to dataflow instance
@@ -231,6 +243,9 @@ class TestProtectionSystemCriticalGaps:
 
         # Test 4: Protection check should work with resolved connection
         protection_engine = self.db._protection_engine
+        assert (
+            protection_engine is not None
+        ), "self.db._protection_engine is None — protection wiring invariant"
 
         # This should not raise an exception for connection string resolution
         try:
@@ -249,6 +264,9 @@ class TestProtectionSystemCriticalGaps:
         """Test: AsyncSQLDatabaseNode protection wrapping fails."""
         # Test the AsyncSQLProtectionWrapper
         protection_engine = self.db._protection_engine
+        assert (
+            protection_engine is not None
+        ), "self.db._protection_engine is None — protection wiring invariant"
         wrapper = AsyncSQLProtectionWrapper(protection_engine)
 
         # Mock AsyncSQLDatabaseNode for testing
@@ -297,6 +315,13 @@ class TestProtectionSystemRobustNodeDetection:
             name: str
 
         self.test_model = NodeDetectionTest
+
+    def teardown_method(self):
+        """Close the DataFlow instance (see TestProtectionSystemCriticalGaps
+        .teardown_method) — releases the aiosqlite pool, no ResourceWarning."""
+        db = getattr(self, "db", None)
+        if db is not None:
+            db.close()
 
     def test_dataflow_node_identification_patterns(self):
         """Test various ways to identify DataFlow-generated nodes."""
@@ -353,35 +378,44 @@ class TestProtectionSystemConnectionResolution:
 
     def test_connection_string_fallback_scenarios(self):
         """Test connection string resolution fallback logic."""
-        # Test 1: Direct database_url parameter
-        db1 = ProtectedDataFlow(
-            database_url="postgresql://user:pass@host:5432/db1", enable_protection=True
-        )
-
-        # Test 2: SQLite memory database
-        db2 = ProtectedDataFlow(
-            database_url="sqlite:///:memory:", enable_protection=True
-        )
-
-        # Test 3: No explicit URL (should use default)
+        db1 = db2 = db3 = None
         try:
-            db3 = ProtectedDataFlow(enable_protection=True)
-            # Should not fail initialization
-            assert db3._protection_engine is not None
-        except Exception:
-            # This might fail if no default database is configured
-            pass
+            # Test 1: Direct database_url parameter
+            db1 = ProtectedDataFlow(
+                database_url="postgresql://user:pass@host:5432/db1",
+                enable_protection=True,
+            )
 
-        # Test connection resolution for each
-        for db in [db1, db2]:
+            # Test 2: SQLite memory database
+            db2 = ProtectedDataFlow(
+                database_url="sqlite:///:memory:", enable_protection=True
+            )
+
+            # Test 3: No explicit URL (should use default)
             try:
-                connection_url = db.config.database.get_connection_url(
-                    db.config.environment
-                )
-                assert connection_url is not None
-                assert len(connection_url) > 0
-            except Exception as e:
-                pytest.fail(f"Connection resolution failed for {db}: {e}")
+                db3 = ProtectedDataFlow(enable_protection=True)
+                # Should not fail initialization
+                assert db3._protection_engine is not None
+            except Exception:
+                # This might fail if no default database is configured
+                pass
+
+            # Test connection resolution for each
+            for db in [db1, db2]:
+                try:
+                    connection_url = db.config.database.get_connection_url(
+                        db.config.environment
+                    )
+                    assert connection_url is not None
+                    assert len(connection_url) > 0
+                except Exception as e:
+                    pytest.fail(f"Connection resolution failed for {db}: {e}")
+        finally:
+            # Release each DataFlow's aiosqlite pool — no ResourceWarning
+            # (residual #1002/#1010 test-side leak).
+            for db in (db1, db2, db3):
+                if db is not None:
+                    db.close()
 
 
 if __name__ == "__main__":

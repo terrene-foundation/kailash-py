@@ -72,7 +72,7 @@ _patch_aiosqlite_worker_threads_daemon()
 # Phase 9.6 release gate — collect_ignore for orphan test files
 # ---------------------------------------------------------------------------
 #
-# 38 test files reference modules that were deleted in the Phase 0-2
+# 36 test files reference modules that were deleted in the Phase 0-2
 # security + orphan sweep (commit 53dab715). Deleting the tests was
 # scoped out of Phase 0-2 and Phase 8; they've sat as collection
 # errors ever since. The release-gate fix is to prevent them from
@@ -131,11 +131,13 @@ collect_ignore = [
     # dataflow.adapters.sqlite_enterprise (folded into sqlite.py)
     "integration/test_sqlite_enterprise_features.py",
     "unit/core/test_sqlite_enterprise_transaction.py",
-    # dataflow.validators / dataflow.decorators (deleted)
-    "integration/test_strict_mode_integration.py",
-    "unit/test_strict_mode_connection_validation.py",
-    "unit/test_strict_mode_dataflow_config.py",
-    "unit/test_strict_mode_workflow_validation.py",
+    # dataflow.validators (deleted duplicate of dataflow.validation) —
+    # the 4 strict_mode orphan test files were DELETED in #1026: the
+    # API has no replacement (StrictConnectionValidator /
+    # StrictModeValidator / StrictLevel absent from all of src;
+    # dataflow.validation is a different functional surface, not a
+    # rename), so collect_ignore parking was the orphan-detection.md
+    # Rule 3 "deprecated-not-deleted" anti-pattern. No entries needed.
     # dataflow.cli stub module (shadow of cli/ package)
     "unit/cli/test_cli.py",
     # dataflow.cli.debug_agent_cli imports dataflow.debug → needs kaizen
