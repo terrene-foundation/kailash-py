@@ -1443,13 +1443,15 @@ def verify_envelope(
       :func:`coerce_algorithm_id`. Non-default values raise
       ``NotImplementedError`` BEFORE any HMAC work — fail-closed to
       avoid the appearance of approval for an unsupported algorithm.
-    - When ``alg_id`` is ``None`` (legacy / pre-#604 caller), the
-      verifier emits a one-time ``DeprecationWarning`` per process whose
-      message contains the literal substring
-      ``"scaffold for #604; wire format pending mint ISS-31"`` and then
-      proceeds with the HMAC verification using the default algorithm.
-      The warning is grep-able across log archives so operators can
-      correlate stale call sites.
+    - When ``alg_id`` is ``None``, the verifier resolves the default
+      algorithm and proceeds with HMAC verification — symmetric with
+      :func:`sign_envelope`, which calls :func:`coerce_algorithm_id`
+      unconditionally. ``None`` is the ONLY supported calling
+      convention until the ``alg_id`` wire format lands (ISS-31; #604
+      closed without it); no ``DeprecationWarning`` is emitted because
+      deprecating the only supported path with no migration target is
+      premature. The PR that lands the wire format reintroduces a
+      proper deprecation with a real migration path at that time.
 
     The HMAC ConstraintEnvelope is the asymmetric pair: ``algorithm`` is
     recorded in the caller's metadata dict, NOT inside the
@@ -1459,8 +1461,9 @@ def verify_envelope(
         envelope: The ConstraintEnvelope to verify.
         signature: Hex-encoded HMAC-SHA256 digest to verify against.
         secret_ref: Reference to the verification secret.
-        alg_id: Optional algorithm identifier. ``None`` falls through to
-            the legacy-warning branch.
+        alg_id: Optional algorithm identifier. ``None`` resolves to the
+            default algorithm (the only supported convention until
+            ISS-31). Non-default values raise ``NotImplementedError``.
 
     Returns:
         True if the signature matches, False otherwise. Fail-closed on
