@@ -2,24 +2,98 @@
 
 ## [Unreleased]
 
+## [2.9.10] — 2026-05-16 — issue #996 Round-5 tenant hardening + B-2 Tier-2 wave + B-1 tier-1 hygiene
+
+Closes issue #996 (saas_starter tenant-isolation hardening) and ships the B-1 / B-2 workstream of issue #979 (DataFlow unit-test triage). Templates + tests only — no SDK runtime API change.
+
+### Security
+
+- **saas_starter webhooks — cross-tenant mutation surface closed** (PR #1036, MED-1a/1b).
+  `retry_failed_webhook(db, event_id, organization_id)` and
+  `mark_webhook_delivered(db, event_id, organization_id)` now REQUIRE an
+  explicit `organization_id` parameter. Every read / update / read-back
+  filter inside both helpers carries the tenant predicate, so a
+  cross-tenant `event_id` returns `None` before any mutation fires. All
+  in-repo callers (4 pre-existing tests + 4 new cross-tenant tests + 2
+  docstring examples) updated in the same PR per `rules/security.md` §
+  "Multi-Site Kwarg Plumbing".
+- **saas_starter api_keys — tz-aware expiry comparison** (PR #1036, MED-2).
+  `validate_api_key` normalizes naive ISO-string `expires_at` values to
+  UTC and compares against `datetime.now(timezone.utc)`. Previously raised
+  `TypeError: can't compare offset-naive and offset-aware datetimes` on
+  PostgreSQL-returned tz-aware values.
+
+### Fixed
+
+- **LocalRuntime context-manager sweep — 16 sites** (PR #1036, F1).
+  All bare `LocalRuntime()` constructions in saas_starter
+  (`tenancy/isolation.py` × 4) and api_gateway_starter
+  (`routes/users.py` × 5, `routes/organizations.py` × 5,
+  `main.py` × 1, plus 1 originally flagged site) wrapped in
+  `with LocalRuntime() as runtime:` context managers. Prevents
+  connection/task leaks on exception paths. The brief originally scoped
+  this to 5 sites; the AST-walking regression test surfaced 11 additional
+  template sites with the same pattern — fixed in the same shard per
+  `rules/autonomous-execution.md` MUST Rule 4 (same-bug-class within
+  shard budget).
+- **saas_starter DataFlow API contract violations** — `filters` → `filter`
+  (DataFlow `*UpdateNode` reads singular, plural silently dropped);
+  `ListNode` dict-unwrap; datetime / bool dialect normalization
+  (commit 4db8ffeeb, B-2d follow-up).
+- **saas_starter JWT_SECRET env-var fail-loud at import** (commit
+  09cece422, B-2e). Removed silent default; reading `SAAS_STARTER_JWT_SECRET`
+  raises on import if unset.
+- **api_gateway_starter — reject non-access JWT token types at
+  middleware** (PR #1034, MED via Round-3). Tokens with `type=refresh` /
+  `type=id` are now rejected with 401 at the middleware boundary instead
+  of being passed through to handlers.
+- **api_gateway_starter middleware** — typing.Any not builtin any() for
+  return annotation (commit 719a98af5).
+
 ### Tests
 
-- test(dataflow): gate banned top-imports in 4 unit inspector files (#995)
-  — added `pytest.importorskip("kailash.workflow.builder")` gates in
-  `tests/unit/test_inspector_realtime_debugging.py`,
-  `tests/unit/test_inspector_parameter_tracing.py`, and
-  `tests/unit/test_inspector_workflow_analysis.py` per
-  `specs/testing-tiers.md` §Tier-1 Rule 1.
-  `tests/unit/test_inspector.py` already had no banned top-imports
-  (the WorkflowBuilder import lives inside a fixture); no edit needed.
-  Closes part of issue #995 (#979 Workstream-B shard B-1).
-- **B-2f (#996 partial)** — `test_saas_tenancy.py` STAYS in tier-1 with the
-  `pytestmark.skip` block removed. The file is 100% mocked, pure-Python,
-  and meets the tier-1 contract per ATTACK-6 R2 verification (workspace
-  `issue-979-dataflow-unit-triage/02-plans/02-amendments-v2-post-redteam-r1r2.md`
-  line 264-266). 10 tests now collect and pass. Sibling 5 SaaS-starter
-  files (api_keys / starter_auth / starter_jwt / subscriptions / webhooks)
-  remain skipped pending B-2a..B-2e sub-shards for tier-2 rewrite + move.
+- **Round-5 Tier-2 regression tests** (PR #1036): 8 new integration tests
+  in `tests/integration/templates/saas_starter/` covering cross-tenant
+  webhook rejection (MED-1a/1b positive + negative pairs), tz-aware
+  api_key expiry (MED-2 tz/naive branches), and an AST-walking invariant
+  `test_template_files_use_context_managed_localruntime` that blocks
+  future bare `LocalRuntime()` regressions across the template tree.
+- **Tier-1 mock pattern update** (PR #1036, commit 77b19dac1):
+  `test_saas_tenancy.py` mocks now wire `mock_runtime.__enter__/__exit__`
+  so the context-manager wrap doesn't break legacy unit-test mocks.
+- **saas_starter webhooks + auth Tier-2 rewrite** (PRs #1032/#1033, B-2d/B-2e):
+  full rewrite of webhooks and auth/tenancy unit tests as Tier-2 integration
+  with real fixture infrastructure.
+- **api_gateway_starter Tier-2 regression for JWT token-type check**
+  (PR #1034, commit 7da19c064): Tier-2 coverage for the MED token-type
+  rejection at middleware boundary.
+- **sibling-fixture sweep — type=access claim** (commits a73e88e34,
+  a618eb83e): api_gateway_starter test mocks across multiple files
+  updated to include `type=access` claim so the token-type check passes
+  in the unchanged paths.
+- **B-2a..B-2c saas_starter Tier-2 rewrites** (PRs #1028, #1029, earlier):
+  api_keys + subscriptions tier-2 coverage + decorator-registered User
+  class pyright/ruff ignore (commit 82e480f9a).
+- **B-1 tier-1 hygiene** (#995): gated banned top-imports in 4 unit
+  inspector files via `pytest.importorskip("kailash.workflow.builder")`
+  per `specs/testing-tiers.md` § Tier-1 Rule 1. Closes part of #995
+  (#979 Workstream-B shard B-1).
+- **B-2f (#996)**: `test_saas_tenancy.py` STAYS in tier-1 with
+  `pytestmark.skip` removed — 10 tests collect and pass; meets tier-1
+  contract per ATTACK-6 R2 verification.
+
+### Docs
+
+- **tests/CLAUDE.md carve-out** (commit 0bd9aec25): documents the
+  `tests/integration/templates/*` file-backed SQLite usage and rationale
+  (clean `[dev]` install collectability without Docker dependency).
+
+### Known follow-up
+
+- **Template pyright hygiene** (issue #1037): 19 informational pyright
+  findings on saas_starter / api_gateway_starter template scaffolding
+  (unused `db` / `request` parameters as part of the canonical template
+  helper signature). Tracked separately — not in this release scope.
 
 ## [2.9.9] — 2026-05-15 — \_Py_Finalize CI hang fully closed; setsid wrapper removed (final closure of #1000 / #1002 / #1010)
 
