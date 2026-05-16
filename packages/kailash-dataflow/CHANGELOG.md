@@ -4,6 +4,15 @@
 
 ### Tests
 
+- test(dataflow): gate banned top-imports in 4 unit inspector files (#995)
+  — added `pytest.importorskip("kailash.workflow.builder")` gates in
+  `tests/unit/test_inspector_realtime_debugging.py`,
+  `tests/unit/test_inspector_parameter_tracing.py`, and
+  `tests/unit/test_inspector_workflow_analysis.py` per
+  `specs/testing-tiers.md` §Tier-1 Rule 1.
+  `tests/unit/test_inspector.py` already had no banned top-imports
+  (the WorkflowBuilder import lives inside a fixture); no edit needed.
+  Closes part of issue #995 (#979 Workstream-B shard B-1).
 - **B-2f (#996 partial)** — `test_saas_tenancy.py` STAYS in tier-1 with the
   `pytestmark.skip` block removed. The file is 100% mocked, pure-Python,
   and meets the tier-1 contract per ATTACK-6 R2 verification (workspace
