@@ -147,8 +147,12 @@ async def rate_limit_middleware(
             return await rate_limit_middleware(request, call_next, limiter)
         ```
     """
-    # Get rate limit key (user_id from JWT or API key)
-    key = getattr(request.state, "user_id", None) or request.client.host
+    # Get rate limit key (user_id from JWT or API key, else client host).
+    # `request.client` is Optional on Starlette transports (e.g., direct ASGI
+    # lifespan calls, certain test clients) — fall back to "unknown" so the
+    # rate-limit bucket exists even when no client address is available.
+    client_host = request.client.host if request.client else "unknown"
+    key = getattr(request.state, "user_id", None) or client_host
 
     # Check rate limit
     allowed, info = limiter.check_rate_limit(key)
@@ -202,8 +206,9 @@ def rate_limit(rate: int = 1000, window: int = 3600) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(request: Request, *args, **kwargs):
-            # Get rate limit key
-            key = getattr(request.state, "user_id", None) or request.client.host
+            # Get rate limit key (Optional client guarded as in middleware above)
+            client_host = request.client.host if request.client else "unknown"
+            key = getattr(request.state, "user_id", None) or client_host
 
             # Check rate limit
             allowed, info = limiter.check_rate_limit(key)

@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [2.9.11] — 2026-05-16 — api_gateway_starter template type-safety hygiene
+
+Closes 6 basic-mode pyright findings in `templates/api_gateway_starter/` — real
+`Optional[X]` annotations + `Request.client` None-guards on production middleware
+code paths. Templates ship inside the wheel; no SDK runtime API change. Surfaced
+during issue #1037 baseline audit (the 13 strict-only findings in #1037's body
+do not surface under the project's enforced pyright config and are out of scope).
+
+### Fixed
+
+- **`example_app/main.py::create_app`** — `db: DataFlow = None` →
+  `db: Optional[DataFlow] = None`. The lifespan branch initializes `db` from
+  settings when `None` was passed; the prior annotation lied about the contract.
+- **`middleware/api_key_auth.py::api_key_auth_middleware`** — return annotation
+  was the lowercase builtin `any` (a function), now `Any` from `typing`.
+- **`middleware/api_key_auth.py::api_key_required`** —
+  `required_scopes: List[str] = None` → `Optional[List[str]] = None`.
+- **`middleware/cors.py::configure_cors`** —
+  `allowed_origins: List[str] = None` → `Optional[List[str]] = None`.
+- **`middleware/rate_limit.py`** (rate_limit_middleware + rate_limit decorator)
+  — `request.client.host` guarded with `if request.client` fallback to
+  `"unknown"`. `Request.client` is Optional on Starlette transports (direct ASGI
+  lifespan calls, certain test clients); the prior access raised
+  `AttributeError` on those transports.
+
 ## [2.9.10] — 2026-05-16 — issue #996 Round-5 tenant hardening + B-2 Tier-2 wave + B-1 tier-1 hygiene
 
 Closes issue #996 (saas_starter tenant-isolation hardening) and ships the B-1 / B-2 workstream of issue #979 (DataFlow unit-test triage). Templates + tests only — no SDK runtime API change.

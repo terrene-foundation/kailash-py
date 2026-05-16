@@ -4,13 +4,13 @@ CORS configuration middleware for API Gateway.
 Provides Cross-Origin Resource Sharing (CORS) configuration with environment-based settings.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-def configure_cors(app: FastAPI, allowed_origins: List[str] = None):
+def configure_cors(app: FastAPI, allowed_origins: Optional[List[str]] = None):
     """
     Configure CORS middleware with allowed origins.
 
