@@ -5,7 +5,7 @@ Provides JWT verification middleware and decorators for FastAPI endpoints.
 Reuses SaaS Starter's verify_token function.
 """
 
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 
 from fastapi import HTTPException, Request
 
@@ -15,7 +15,7 @@ from templates.saas_starter.auth import jwt_auth
 verify_token = jwt_auth.verify_token
 
 
-async def jwt_auth_middleware(request: Request, call_next: Callable) -> any:
+async def jwt_auth_middleware(request: Request, call_next: Callable) -> Any:
     """
     Verify JWT token and attach user claims to request.state.
 
