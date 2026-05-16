@@ -15,7 +15,12 @@ Tests dataclasses and methods:
 """
 
 import pytest
-from kailash.workflow.builder import WorkflowBuilder
+
+# Per specs/testing-tiers.md §Tier-1 Rule 1, gate banned top-imports behind
+# pytest.importorskip so tier-1 collection succeeds in a clean [dev]-only
+# install (without the full kailash core runtime) — closes part of #995.
+_kw = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _kw.WorkflowBuilder
 
 from dataflow import DataFlow
 from dataflow.platform.inspector import (
