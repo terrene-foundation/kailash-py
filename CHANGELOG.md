@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.1] - 2026-05-16
+
+### Fixed
+
+- **`verify_envelope` premature `DeprecationWarning` (trust)** — `verify_envelope`
+  emitted a `DeprecationWarning` on the `alg_id=None` path, but that is the ONLY
+  supported calling convention (a non-default `alg_id` raises `NotImplementedError`
+  — the ISS-31 wire-format gate). Deprecating the only working path is incorrect;
+  the warning had no migration target and referenced now-closed #604. It was also
+  asymmetric with `sign_envelope` (quiet via `coerce_algorithm_id`). `verify_envelope`
+  now mirrors `sign_envelope` — unconditional `coerce_algorithm_id(alg_id)`, quiet on
+  the default, `NotImplementedError` on non-default, before any HMAC work. The HMAC
+  verification path (`hmac.compare_digest`), fail-closed semantics, and the ISS-31
+  gate are unchanged (verified by security-reviewer gate-review — no findings above
+  LOW). Removed the now-dead `_LEGACY_HMAC_ENVELOPE_WARNED` global, the orphaned
+  `import warnings as _warnings`, the unused `ALGORITHM_DEFAULT` import, and synced
+  the `verify_envelope` docstring to the no-warning behavior. This warning was
+  self-inflicted (the project's own `test_envelope_round_trip.py` triggered it) and
+  failed `-W error`, blocking the Tier-1 pre-commit gate for every kailash-dataflow
+  PR. The `alg_id` wire format remains tracked by ISS-31, unchanged.
+
 ## [2.21.0] - 2026-05-13
 
 ### Added — issue #953: LocalRuntime-owned AsyncSQL pool tracking
