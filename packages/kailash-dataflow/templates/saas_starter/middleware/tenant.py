@@ -8,6 +8,7 @@ import os
 from typing import Any, Dict
 
 import jwt
+from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
 # JWT Configuration — secret MUST come from the environment. See
@@ -15,13 +16,14 @@ from kailash.workflow.builder import WorkflowBuilder
 # envvar; the tenant middleware shares the same key to verify the JWT
 # claims set by the auth workflows.
 _JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
-JWT_SECRET = os.environ.get(_JWT_SECRET_ENV)
-if not JWT_SECRET:
+_jwt_secret_raw = os.environ.get(_JWT_SECRET_ENV)
+if not _jwt_secret_raw:
     raise RuntimeError(
         f"{_JWT_SECRET_ENV} environment variable is required. "
         f"Set a cryptographically random value (>=32 bytes) before importing "
         f"saas_starter.middleware.tenant."
     )
+JWT_SECRET: str = _jwt_secret_raw
 JWT_ALGORITHM = "HS256"
 
 
@@ -41,7 +43,7 @@ def inject_tenant_context(token: str) -> Dict[str, Any]:
 
 def build_tenant_scoped_read_workflow(
     model_name: str, record_id: str, tenant_token: str
-) -> WorkflowBuilder:
+) -> Workflow:
     """
     Build tenant-scoped read workflow.
 
@@ -68,7 +70,7 @@ def build_tenant_scoped_read_workflow(
 
 def build_tenant_scoped_update_workflow(
     model_name: str, record_id: str, updates: Dict[str, Any], tenant_token: str
-) -> WorkflowBuilder:
+) -> Workflow:
     """
     Build tenant-scoped update workflow.
 
@@ -111,7 +113,7 @@ result = True
 
 def build_tenant_scoped_delete_workflow(
     model_name: str, record_id: str, tenant_token: str
-) -> WorkflowBuilder:
+) -> Workflow:
     """
     Build tenant-scoped delete workflow.
 
@@ -152,9 +154,7 @@ result = True
     return workflow.build()
 
 
-def build_tenant_scoped_list_workflow(
-    model_name: str, tenant_token: str
-) -> WorkflowBuilder:
+def build_tenant_scoped_list_workflow(model_name: str, tenant_token: str) -> Workflow:
     """
     Build tenant-scoped list workflow.
 
@@ -181,7 +181,7 @@ def build_tenant_scoped_list_workflow(
 
 def build_org_switching_workflow(
     user_id: str, target_org_id: str, operation: str
-) -> WorkflowBuilder:
+) -> Workflow:
     """
     Build organization switching workflow.
 
@@ -205,7 +205,7 @@ def build_org_switching_workflow(
 
 def build_tenant_scoped_bulk_update_workflow(
     model_name: str, updates: Dict[str, Any], tenant_token: str
-) -> WorkflowBuilder:
+) -> Workflow:
     """
     Build tenant-scoped bulk update workflow.
 

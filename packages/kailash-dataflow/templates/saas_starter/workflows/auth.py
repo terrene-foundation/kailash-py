@@ -7,7 +7,7 @@ Workflow-based authentication for multi-tenant SaaS applications.
 import os
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict
 
 import bcrypt
@@ -20,13 +20,14 @@ from kailash.workflow.builder import WorkflowBuilder
 # password-reset workflows all sign tokens that the JWT middleware can
 # verify with one secret.
 _JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
-JWT_SECRET = os.environ.get(_JWT_SECRET_ENV)
-if not JWT_SECRET:
+_jwt_secret_raw = os.environ.get(_JWT_SECRET_ENV)
+if not _jwt_secret_raw:
     raise RuntimeError(
         f"{_JWT_SECRET_ENV} environment variable is required. "
         f"Set a cryptographically random value (>=32 bytes) before importing "
         f"saas_starter.workflows.auth."
     )
+JWT_SECRET: str = _jwt_secret_raw
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
 RESET_TOKEN_EXPIRY_SECONDS = 900  # 15 minutes
@@ -42,8 +43,8 @@ def _hash_password(password: str) -> str:
 
 def _generate_jwt(payload: Dict[str, Any], expiry_seconds: int) -> str:
     """Generate JWT token with payload and expiry."""
-    payload["exp"] = datetime.utcnow() + timedelta(seconds=expiry_seconds)
-    payload["iat"] = datetime.utcnow()
+    payload["exp"] = datetime.now(UTC) + timedelta(seconds=expiry_seconds)
+    payload["iat"] = datetime.now(UTC)
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
