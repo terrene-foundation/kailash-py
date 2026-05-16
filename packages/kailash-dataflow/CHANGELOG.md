@@ -1,5 +1,17 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Tests
+
+- **B-2f (#996 partial)** — `test_saas_tenancy.py` STAYS in tier-1 with the
+  `pytestmark.skip` block removed. The file is 100% mocked, pure-Python,
+  and meets the tier-1 contract per ATTACK-6 R2 verification (workspace
+  `issue-979-dataflow-unit-triage/02-plans/02-amendments-v2-post-redteam-r1r2.md`
+  line 264-266). 10 tests now collect and pass. Sibling 5 SaaS-starter
+  files (api_keys / starter_auth / starter_jwt / subscriptions / webhooks)
+  remain skipped pending B-2a..B-2e sub-shards for tier-2 rewrite + move.
+
 ## [2.9.9] — 2026-05-15 — \_Py_Finalize CI hang fully closed; setsid wrapper removed (final closure of #1000 / #1002 / #1010)
 
 Closes brief AC#3 of issue #1000 (verbatim): "Verify on CI: remove the
