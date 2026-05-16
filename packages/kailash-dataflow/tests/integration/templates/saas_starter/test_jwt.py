@@ -42,7 +42,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -83,7 +83,7 @@ def db():
     # password_hash, role, status}; find_user_by_email() filters by
     # ``email`` and returns the same row shape.
     @db_instance.model
-    class User:
+    class User:  # pyright: ignore[reportUnusedClass]  # registered via @db_instance.model decorator side-effect
         id: str
         organization_id: str
         email: str
@@ -222,8 +222,8 @@ class TestSimplifiedJWTAuth:
         payload = {
             "user_id": "user_expired",
             "org_id": "org_expired",
-            "exp": datetime.utcnow() - timedelta(hours=2),  # Expired 2h ago
-            "iat": datetime.utcnow() - timedelta(hours=3),  # Issued 3h ago
+            "exp": datetime.now(UTC) - timedelta(hours=2),  # Expired 2h ago
+            "iat": datetime.now(UTC) - timedelta(hours=3),  # Issued 3h ago
             "type": "access",
         }
         expired_token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
