@@ -1,6 +1,7 @@
 # ADR-017: Test Mode API Specification
 
 ## Document Purpose
+
 This document provides the **complete API specification** for DataFlow test mode enhancements. It defines method signatures, parameters, return types, usage patterns, and integration points for implementing ADR-017 testing improvements.
 
 ---
@@ -12,6 +13,7 @@ This document provides the **complete API specification** for DataFlow test mode
 **Location**: `/packages/kailash-dataflow/src/dataflow/core/engine.py`
 
 **Current Signature** (lines 34-62):
+
 ```python
 def __init__(
     self,
@@ -26,6 +28,7 @@ def __init__(
 ```
 
 **Enhanced Signature** (NEW):
+
 ```python
 def __init__(
     self,
@@ -67,6 +70,7 @@ def __init__(
 ```
 
 **Implementation Details**:
+
 ```python
 # In DataFlow.__init__() after config initialization:
 
@@ -98,6 +102,7 @@ if self._test_mode:
 **Return Value**: DataFlow instance
 
 **Raises**:
+
 - `ValueError`: If database_url is invalid
 - `ConnectionError`: If initial connection fails (when applicable)
 
@@ -108,6 +113,7 @@ if self._test_mode:
 **Location**: `/packages/kailash-dataflow/src/dataflow/core/engine.py`
 
 **Method Signature**:
+
 ```python
 def _detect_test_environment(self) -> bool:
     """Detect if running in test environment.
@@ -153,6 +159,7 @@ def _detect_test_environment(self) -> bool:
 **Location**: `/packages/kailash-dataflow/src/dataflow/core/engine.py`
 
 **Class Attributes**:
+
 ```python
 class DataFlow:
     """Main DataFlow interface."""
@@ -163,6 +170,7 @@ class DataFlow:
 ```
 
 **Method: enable_test_mode()**
+
 ```python
 @classmethod
 def enable_test_mode(cls) -> None:
@@ -198,6 +206,7 @@ def enable_test_mode(cls) -> None:
 ```
 
 **Method: disable_test_mode()**
+
 ```python
 @classmethod
 def disable_test_mode(cls) -> None:
@@ -216,6 +225,7 @@ def disable_test_mode(cls) -> None:
 ```
 
 **Method: is_test_mode_enabled()**
+
 ```python
 @classmethod
 def is_test_mode_enabled(cls) -> Optional[bool]:
@@ -240,6 +250,7 @@ def is_test_mode_enabled(cls) -> Optional[bool]:
 ```
 
 **Integration with Constructor**:
+
 ```python
 # In DataFlow.__init__(), modify test mode detection:
 
@@ -263,6 +274,7 @@ else:
 **Location**: `/packages/kailash-dataflow/src/dataflow/core/engine.py`
 
 **Method: cleanup_stale_pools()**
+
 ```python
 async def cleanup_stale_pools(self) -> Dict[str, Any]:
     """Proactively detect and cleanup stale connection pools.
@@ -336,6 +348,7 @@ async def cleanup_stale_pools(self) -> Dict[str, Any]:
 ```
 
 **Method: cleanup_all_pools()**
+
 ```python
 async def cleanup_all_pools(self, force: bool = False) -> Dict[str, Any]:
     """Cleanup all connection pools managed by DataFlow.
@@ -417,6 +430,7 @@ async def cleanup_all_pools(self, force: bool = False) -> Dict[str, Any]:
 ```
 
 **Method: get_cleanup_metrics()**
+
 ```python
 def get_cleanup_metrics(self) -> Dict[str, Any]:
     """Get connection pool lifecycle metrics.
@@ -488,9 +502,10 @@ def get_cleanup_metrics(self) -> Dict[str, Any]:
 
 **Location**: `/src/kailash/nodes/data/async_sql.py`
 
-**Method: _cleanup_closed_loop_pools() Enhancement**
+**Method: \_cleanup_closed_loop_pools() Enhancement**
 
 **Current Implementation** (lines 4034-4072):
+
 ```python
 @classmethod
 def _cleanup_closed_loop_pools(cls) -> int:
@@ -499,6 +514,7 @@ def _cleanup_closed_loop_pools(cls) -> int:
 ```
 
 **Enhanced Implementation**:
+
 ```python
 @classmethod
 async def _cleanup_closed_loop_pools(cls) -> int:
@@ -596,6 +612,7 @@ async def _cleanup_closed_loop_pools(cls) -> int:
 **Method: clear_shared_pools() Enhancement**
 
 **Current Implementation** (lines 4072-4073):
+
 ```python
 @classmethod
 async def clear_shared_pools(cls) -> None:
@@ -603,6 +620,7 @@ async def clear_shared_pools(cls) -> None:
 ```
 
 **Enhanced Implementation**:
+
 ```python
 @classmethod
 async def clear_shared_pools(cls, graceful: bool = True) -> Dict[str, Any]:
@@ -692,6 +710,7 @@ async def clear_shared_pools(cls, graceful: bool = True) -> Dict[str, Any]:
 **Location**: `/packages/kailash-dataflow/src/dataflow/core/nodes.py`
 
 **Node Generation Enhancement**:
+
 ```python
 class NodeGenerator:
     """Generate workflow nodes from models."""
@@ -754,7 +773,10 @@ async def test_user_crud():
     })
 
     runtime = AsyncLocalRuntime()
-    results, _ = await runtime.execute_workflow_async(workflow.build())
+    # `inputs` is a required parameter of execute_workflow_async.
+    results, _ = await runtime.execute_workflow_async(
+        workflow.build(), inputs={}
+    )
 
     assert results["create"]["name"] == "Alice"
 
@@ -987,6 +1009,7 @@ async def test_cleanup_error_handling():
 **File**: `/packages/kailash-dataflow/src/dataflow/core/engine.py`
 
 **Integration Steps**:
+
 1. Add `test_mode` and `test_mode_aggressive_cleanup` parameters to `__init__`
 2. Add `_test_mode` and `_test_mode_aggressive_cleanup` instance attributes
 3. Add `_global_test_mode` and `_global_test_mode_lock` class attributes
@@ -1001,6 +1024,7 @@ async def test_cleanup_error_handling():
 **File**: `/src/kailash/nodes/data/async_sql.py`
 
 **Integration Steps**:
+
 1. Enhance `_cleanup_closed_loop_pools()` with async design (lines 4034-4072)
 2. Enhance `clear_shared_pools()` with metrics (lines 4072-4073)
 3. Add graceful shutdown handling
@@ -1013,6 +1037,7 @@ async def test_cleanup_error_handling():
 **File**: `/packages/kailash-dataflow/src/dataflow/core/nodes.py`
 
 **Integration Steps**:
+
 1. Modify `NodeGenerator.generate_nodes()` to pass test mode
 2. Add test mode binding to generated node classes
 3. Ensure test mode propagates to all CRUD nodes
@@ -1022,6 +1047,7 @@ async def test_cleanup_error_handling():
 **File**: `/packages/kailash-dataflow/src/dataflow/core/config.py`
 
 **Integration Steps** (Optional):
+
 1. Add `test_mode_config` section to `DataFlowConfig`
 2. Add test mode configuration options
 3. Document test mode settings
@@ -1033,6 +1059,7 @@ async def test_cleanup_error_handling():
 ### 4.1 Zero Breaking Changes
 
 **Guarantees**:
+
 - All existing code works without modifications
 - `test_mode=None` (default) maintains auto-detection behavior
 - New parameters have sensible defaults
@@ -1040,6 +1067,7 @@ async def test_cleanup_error_handling():
 - Production code unaffected (test mode changes only)
 
 **Validation**:
+
 ```python
 # Existing code continues to work
 db = DataFlow("postgresql://...")  # ✓ Works exactly as before
@@ -1062,11 +1090,13 @@ db = DataFlow("postgresql://...", test_mode=False)  # ✓ New feature
 ### 5.1 Graceful Degradation
 
 All cleanup methods use graceful degradation:
+
 - Errors are logged, not raised
 - Partial cleanup succeeds even if some pools fail
 - Metrics capture failure details for debugging
 
 **Example**:
+
 ```python
 # Even if one pool fails, others are cleaned
 metrics = await db.cleanup_all_pools()
@@ -1078,6 +1108,7 @@ metrics = await db.cleanup_all_pools()
 ### 5.2 Error Patterns
 
 **Pattern 1: No Event Loop**
+
 ```python
 # If no event loop available, cleanup returns early
 metrics = await db.cleanup_stale_pools()
@@ -1085,12 +1116,14 @@ metrics = await db.cleanup_stale_pools()
 ```
 
 **Pattern 2: Closed Adapter**
+
 ```python
 # If adapter is already closed, logs warning and continues
 # No exception raised, cleanup continues for remaining pools
 ```
 
 **Pattern 3: Invalid Pool Key**
+
 ```python
 # If pool key format is invalid, logs warning and skips
 # Remaining pools are still processed
@@ -1105,6 +1138,7 @@ metrics = await db.cleanup_stale_pools()
 **Location**: `/packages/kailash-dataflow/tests/test_test_mode.py`
 
 **Test Cases**:
+
 ```python
 # Test 1: Auto-detection works
 def test_auto_detect_pytest_environment():
@@ -1146,6 +1180,7 @@ async def test_cleanup_metrics():
 **Location**: `/packages/kailash-dataflow/tests/integration/test_test_mode_integration.py`
 
 **Test Cases**:
+
 ```python
 # Test 1: Fixture pattern works
 @pytest.mark.asyncio
@@ -1176,6 +1211,7 @@ async def test_pool_reuse(db_module):
 **Location**: `/packages/kailash-dataflow/tests/e2e/test_documentation_examples.py`
 
 **Test Cases**:
+
 ```python
 # Run all documentation examples
 @pytest.mark.e2e
@@ -1193,10 +1229,12 @@ def test_all_documentation_examples():
 ### 7.1 Overhead
 
 **Test Mode Detection**: <1ms
+
 - Environment variable lookup: ~0.1ms
 - sys.modules check: ~0.1ms
 
 **Cleanup Operations**:
+
 - `cleanup_stale_pools()`: <50ms for 10 pools
 - `cleanup_all_pools()`: <100ms for 10 pools
 - `get_cleanup_metrics()`: <1ms
@@ -1204,11 +1242,13 @@ def test_all_documentation_examples():
 ### 7.2 Optimization
 
 **Connection Pooling**: Maintained
+
 - Test mode doesn't disable connection pooling
 - Pools are shared within event loop
 - Only stale pools are cleaned
 
 **Lazy Cleanup**: Opt-in
+
 - Aggressive cleanup is opt-in via `test_mode_aggressive_cleanup`
 - Default behavior: cleanup on explicit call only
 
@@ -1221,6 +1261,7 @@ def test_all_documentation_examples():
 **Location**: `/packages/kailash-dataflow/docs/api/test_mode.md`
 
 **Sections**:
+
 - Test mode overview
 - API reference (all methods)
 - Usage patterns
@@ -1231,6 +1272,7 @@ def test_all_documentation_examples():
 **Location**: `/packages/kailash-dataflow/docs/testing/`
 
 **Files**:
+
 - `README.md` - Overview
 - `fixture-patterns.md` - Pytest fixtures (CORE)
 - `setup-guide.md` - Initial setup
@@ -1241,6 +1283,7 @@ def test_all_documentation_examples():
 **Location**: `/packages/kailash-dataflow/docs/testing/examples/`
 
 **Files**:
+
 - `basic_test.py` - Simple CRUD test
 - `conftest.py` - Fixture definitions
 - `transaction_test.py` - Rollback pattern
@@ -1275,6 +1318,7 @@ def test_all_documentation_examples():
 **Status**: Proposed
 
 **Next Steps**:
+
 1. Technical review by DataFlow maintainers
 2. API review for consistency
 3. Implementation approval
