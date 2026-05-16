@@ -9,6 +9,21 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
+# JWT signing secret MUST come from the environment — fail loudly at import if
+# unset so deployments cannot ship with a known hardcoded key. The shared
+# envvar name is ``SAAS_STARTER_JWT_SECRET`` so api_gateway_starter and
+# saas_starter (which exchange tokens) verify with the same key.
+_JWT_SECRET_ENV = "SAAS_STARTER_JWT_SECRET"
+_jwt_secret_raw = os.environ.get(_JWT_SECRET_ENV)
+if not _jwt_secret_raw:
+    raise RuntimeError(
+        f"{_JWT_SECRET_ENV} environment variable is required. "
+        f"Set a cryptographically random value (>=32 bytes) before importing "
+        f"templates.api_gateway_starter.example_app.config. See README for "
+        f"production deployment."
+    )
+_JWT_SECRET: str = _jwt_secret_raw
+
 
 class Settings(BaseModel):
     """
@@ -16,7 +31,8 @@ class Settings(BaseModel):
 
     Environment Variables:
         DATABASE_URL: Database connection URL (default: ":memory:")
-        JWT_SECRET: Secret key for JWT token signing (required in production)
+        SAAS_STARTER_JWT_SECRET: Secret key for JWT token signing (REQUIRED,
+            shared with saas_starter; fail-loud at import if unset)
         ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins (default: "*")
         RATE_LIMIT_REQUESTS: Maximum requests per window (default: 1000)
         RATE_LIMIT_WINDOW: Time window in seconds (default: 3600)
@@ -36,8 +52,8 @@ class Settings(BaseModel):
     )
 
     jwt_secret: str = Field(
-        default=os.getenv("JWT_SECRET", "change-this-secret-in-production"),
-        description="Secret key for JWT tokens",
+        default=_JWT_SECRET,
+        description="Secret key for JWT tokens (from SAAS_STARTER_JWT_SECRET)",
     )
 
     allowed_origins: List[str] = Field(
