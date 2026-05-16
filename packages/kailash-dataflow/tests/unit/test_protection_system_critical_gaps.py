@@ -11,7 +11,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from kailash.nodes.base import Node
-from kailash.workflow.builder import WorkflowBuilder
+
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 from dataflow.core.nodes import NodeGenerator
 from dataflow.core.protected_engine import ProtectedDataFlow, ProtectedNodeGenerator
@@ -70,9 +72,9 @@ class TestProtectionSystemCriticalGaps:
         # Test 1: Check if node has protection attributes that the middleware expects
         assert hasattr(node, "model_name"), "Node should have model_name attribute"
         assert hasattr(node, "operation"), "Node should have operation attribute"
-        assert hasattr(node, "dataflow_instance"), (
-            "Node should have dataflow_instance attribute"
-        )
+        assert hasattr(
+            node, "dataflow_instance"
+        ), "Node should have dataflow_instance attribute"
 
         # Test 2: Check if protection engine can detect the node type
         # This exposes the fragile hasattr detection
@@ -139,9 +141,7 @@ class TestProtectionSystemCriticalGaps:
 
         assert (
             is_protection_violation or contains_protection_message or is_database_error
-        ), (
-            f"Expected ProtectionViolation, protection message, or database error, got: {exception_message}"
-        )
+        ), f"Expected ProtectionViolation, protection message, or database error, got: {exception_message}"
 
     def test_error_propagation_chain_gap(self):
         """Test: Protection violations or database errors are properly propagated."""
@@ -195,9 +195,7 @@ class TestProtectionSystemCriticalGaps:
         # instead of protection violations
         assert (
             found_protection_violation or has_protection_message or has_database_error
-        ), (
-            f"Protection violation or database error not found in exception chain. Exception: {exception}, Chain depth: {chain_depth}"
-        )
+        ), f"Protection violation or database error not found in exception chain. Exception: {exception}, Chain depth: {chain_depth}"
 
     def test_connection_string_resolution_gap(self):
         """Test: Connection string detection fallback logic fails."""
