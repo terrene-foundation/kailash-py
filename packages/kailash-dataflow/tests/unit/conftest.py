@@ -11,7 +11,19 @@ This file provides fixtures specifically for Tier 1 (unit) tests:
 - ❌ NO PostgreSQL connections (use integration tests instead)
 """
 
+import os
 from typing import AsyncGenerator
+
+# saas_starter modules read SAAS_STARTER_JWT_SECRET at import time and
+# fail loudly if it's unset (security.md § No Hardcoded Secrets +
+# env-models.md). Tier-1 tests under tests/unit/templates/ import those
+# modules; without this setdefault the entire tests/unit/ collection
+# would fail with RuntimeError. >=32 bytes per testing.md § JWT Test
+# Secrets >= 32 Bytes (RFC 7518 §3.2).
+os.environ.setdefault(
+    "SAAS_STARTER_JWT_SECRET",
+    "test-secret-saas-starter-tier1-32bytes-minimum-floor",
+)
 
 import pytest
 

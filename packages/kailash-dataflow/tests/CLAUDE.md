@@ -106,6 +106,20 @@ async def test_my_feature(test_suite):
 - ✅ **PostgreSQL databases** on shared test infrastructure (port 5434)
 - ❌ **NO MOCKING** - Must use real infrastructure components
 
+**Carve-out — `tests/integration/templates/*`** (file-backed SQLite):
+The `templates/saas_starter/` and `templates/api_gateway_starter/`
+integration suites use file-backed SQLite (NOT shared PostgreSQL) per
+the api_gateway_starter precedent. Rationale: the saas_starter helpers
+exercise pure CRUD against schema-only models (no PostgreSQL-specific
+dialect features like `RETURNING`, `JSONB`, partial indexes, or
+`CREATE EXTENSION`), so SQLite faithfully reproduces production
+semantics for these tests while keeping the suite collectable with a
+clean `[dev]`-only install (no Docker / port 5434 required). The
+fixtures use `tempfile.mkdtemp()` + `sqlite:///<tmp>/test.db` (file-
+backed, NOT `:memory:`) because DataFlow's migration pool opens
+multiple short-lived connections and bare `:memory:` gives each one
+an isolated database, breaking the migration handshake.
+
 ### 2. NO MOCKING in Integration/E2E Tests
 ```python
 # ❌ NEVER DO THIS in integration/e2e tests:

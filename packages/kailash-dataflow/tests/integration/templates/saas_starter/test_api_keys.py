@@ -433,17 +433,18 @@ class TestAPIKeyExpiration:
         key_id = created["record"]["id"]
 
         # Stamp an expires_at in the past via APIKeyUpdateNode
+        # (UpdateNode reads ``filter`` singular — ``filters`` plural is dropped)
         workflow = WorkflowBuilder()
         workflow.add_node(
             "APIKeyUpdateNode",
             "expire_key",
             {
-                "filters": {"id": key_id},
+                "filter": {"id": key_id},
                 "fields": {"expires_at": datetime.now() - timedelta(days=1)},
             },
         )
-        runtime = LocalRuntime()
-        runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
 
         # Verify rejects the expired key
         result = verify_api_key(db, plain_key)
@@ -474,14 +475,15 @@ class TestAPIKeyRateLimiting:
         plain_key = created["key"]
         key_id = created["record"]["id"]
 
+        # (UpdateNode reads ``filter`` singular — ``filters`` plural is dropped)
         workflow = WorkflowBuilder()
         workflow.add_node(
             "APIKeyUpdateNode",
             "set_rate_limit",
-            {"filters": {"id": key_id}, "fields": {"rate_limit": 1000}},
+            {"filter": {"id": key_id}, "fields": {"rate_limit": 1000}},
         )
-        runtime = LocalRuntime()
-        runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
 
         result = verify_api_key(db, plain_key)
 

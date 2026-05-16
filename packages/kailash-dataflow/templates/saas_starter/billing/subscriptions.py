@@ -62,17 +62,26 @@ def get_organization_subscription(db, organization_id: str) -> Optional[Dict]:
         ...     print(sub["plan_id"])
         price_pro_monthly
     """
+    # DataFlow ListNode reads ``filter`` (singular) — ``filters`` (plural)
+    # is silently dropped, so the list returned every org's subscription.
     workflow = WorkflowBuilder()
     workflow.add_node(
         "SubscriptionListNode",
         "list_subscriptions",
-        {"filters": {"organization_id": organization_id}, "limit": 1},
+        {"filter": {"organization_id": organization_id}, "limit": 1},
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
-    subscriptions = results.get("list_subscriptions", [])
+    # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
+    # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)
+    # unwrap idiom. Bare ``subscriptions[0]`` raised ``KeyError: 0`` on every
+    # caller of every subscription helper (upgrade/downgrade/cancel/trial/etc.).
+    list_result = results.get("list_subscriptions") or {}
+    subscriptions = (
+        list_result.get("records", []) if isinstance(list_result, dict) else []
+    )
     return subscriptions[0] if subscriptions else None
 
 
@@ -97,6 +106,35 @@ def check_feature_access(subscription_tier: str, feature_name: str) -> bool:
     return feature_name in tier_features
 
 
+def _update_subscription_fields(
+    db, organization_id: str, fields: Dict
+) -> Optional[Dict]:
+    """Internal helper: look up subscription by org, then update by ``id``.
+
+    DataFlow's ``*UpdateNode`` requires ``id`` / ``record_id`` in the filter
+    (see UPDATE_NODE_MISSING_FILTER_ID error code). Subscriptions are
+    1:1 with organizations in this template but the row is keyed by ``id``,
+    so we resolve the id via ``get_organization_subscription`` first.
+    """
+    existing = get_organization_subscription(db, organization_id)
+    if existing is None:
+        return None
+
+    workflow = WorkflowBuilder()
+    workflow.add_node(
+        "SubscriptionUpdateNode",
+        "update_subscription",
+        {"filter": {"id": existing["id"]}, "fields": fields},
+    )
+
+    with LocalRuntime() as runtime:
+        runtime.execute(workflow.build())
+
+    # Return the post-update row read-back (state-persistence verification
+    # per rules/testing.md § State Persistence Verification).
+    return get_organization_subscription(db, organization_id)
+
+
 def upgrade_subscription(db, organization_id: str, new_tier: str) -> Optional[Dict]:
     """
     Upgrade subscription to higher tier.
@@ -115,20 +153,9 @@ def upgrade_subscription(db, organization_id: str, new_tier: str) -> Optional[Di
         ...     print(sub["plan_id"])
         price_pro_monthly
     """
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "SubscriptionUpdateNode",
-        "update_subscription",
-        {
-            "filters": {"organization_id": organization_id},
-            "fields": {"plan_id": new_tier, "status": "active"},
-        },
+    return _update_subscription_fields(
+        db, organization_id, {"plan_id": new_tier, "status": "active"}
     )
-
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
-
-    return results.get("update_subscription")
 
 
 def downgrade_subscription(db, organization_id: str, new_tier: str) -> Optional[Dict]:
@@ -149,20 +176,7 @@ def downgrade_subscription(db, organization_id: str, new_tier: str) -> Optional[
         ...     print(sub["plan_id"])
         price_basic_monthly
     """
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "SubscriptionUpdateNode",
-        "update_subscription",
-        {
-            "filters": {"organization_id": organization_id},
-            "fields": {"plan_id": new_tier},
-        },
-    )
-
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
-
-    return results.get("update_subscription")
+    return _update_subscription_fields(db, organization_id, {"plan_id": new_tier})
 
 
 def cancel_subscription(db, organization_id: str) -> Optional[Dict]:
@@ -182,17 +196,6 @@ def cancel_subscription(db, organization_id: str) -> Optional[Dict]:
         ...     print(sub["cancel_at_period_end"])
         True
     """
-    workflow = WorkflowBuilder()
-    workflow.add_node(
-        "SubscriptionUpdateNode",
-        "update_subscription",
-        {
-            "filters": {"organization_id": organization_id},
-            "fields": {"cancel_at_period_end": True},
-        },
+    return _update_subscription_fields(
+        db, organization_id, {"cancel_at_period_end": True}
     )
-
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
-
-    return results.get("update_subscription")

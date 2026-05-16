@@ -275,7 +275,11 @@ async def test_cancel_subscription(db):
 
     after = get_organization_subscription(db, org_id)
     assert after is not None, "Subscription should still exist after cancel"
-    assert after["cancel_at_period_end"] is True, "Should be marked for cancellation"
+    # SQLite stores BOOLEAN as INTEGER (1/0); PostgreSQL stores native bool.
+    # Normalize with bool() for cross-backend assertion.
+    assert (
+        bool(after["cancel_at_period_end"]) is True
+    ), "Should be marked for cancellation"
     assert after["status"] == "active", "Should still be active until period end"
 
 
@@ -354,9 +358,15 @@ async def test_trial_period_expiration(db):
 
     assert result is not None, "Should return trial subscription"
     assert result["status"] == "trialing", "Should have trialing status"
+    # SQLite returns DATETIME columns as ISO-format strings (no native
+    # datetime type); PostgreSQL returns datetime objects. Normalize before
+    # comparison so the assertion works on both backends.
+    period_end = result["current_period_end"]
+    if isinstance(period_end, str):
+        period_end = datetime.fromisoformat(period_end)
     # Compare to a fresh `datetime.now()` snapshot; the stored value is
     # strictly in the past so the assertion does not race the test clock.
-    assert result["current_period_end"] < datetime.now(), "Should be expired"
+    assert period_end < datetime.now(), "Should be expired"
 
 
 @pytest.mark.integration
