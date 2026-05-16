@@ -106,6 +106,13 @@ class DataFlowProtectionMixin:
     without requiring inheritance changes.
     """
 
+    # Tracks every ProtectedDataFlowRuntime returned by
+    # create_protected_runtime() so close()/close_async() can drain their
+    # externally-managed event loops (issue #1045). Class-level annotation so
+    # static analysis resolves the attribute through the ProtectedDataFlow
+    # MRO; the real value is assigned in __init__ below.
+    _protected_runtimes: list
+
     def __init__(
         self, *args, protection_config: Optional[WriteProtectionConfig] = None, **kwargs
     ):
