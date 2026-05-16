@@ -140,8 +140,8 @@ def create_api_key(db, organization_id: str, name: str, scopes: List[str]) -> Di
         },
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     record = results.get("create_key")
 
@@ -184,8 +184,8 @@ def verify_api_key(db, api_key: str) -> Dict:
         "APIKeyListNode", "list_keys", {"filter": {"key_hash": key_hash}, "limit": 1}
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     list_result = results.get("list_keys") or {}
     records = list_result.get("records", []) if isinstance(list_result, dict) else []
@@ -250,8 +250,8 @@ def revoke_api_key(db, key_id: str) -> Optional[Dict]:
         {"filter": {"id": key_id}, "fields": {"status": "revoked"}},
     )
 
-    runtime = LocalRuntime()
-    runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        runtime.execute(workflow.build())
 
     # Read-back the full row so callers see the post-update state, not just
     # the UpdateNode payload echo (which may omit unspecified columns like
@@ -261,8 +261,8 @@ def revoke_api_key(db, key_id: str) -> Optional[Dict]:
     read_workflow.add_node(
         "APIKeyListNode", "read_key", {"filter": {"id": key_id}, "limit": 1}
     )
-    read_runtime = LocalRuntime()
-    read_results, _ = read_runtime.execute(read_workflow.build())
+    with LocalRuntime() as read_runtime:
+        read_results, _ = read_runtime.execute(read_workflow.build())
     list_result = read_results.get("read_key") or {}
     records = list_result.get("records", []) if isinstance(list_result, dict) else []
     return records[0] if records else None
@@ -293,8 +293,8 @@ def list_organization_api_keys(db, organization_id: str) -> List[Dict]:
         "APIKeyListNode", "list_keys", {"filter": {"organization_id": organization_id}}
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
     # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)

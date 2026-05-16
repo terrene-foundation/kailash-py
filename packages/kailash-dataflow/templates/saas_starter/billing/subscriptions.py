@@ -71,8 +71,8 @@ def get_organization_subscription(db, organization_id: str) -> Optional[Dict]:
         {"filter": {"organization_id": organization_id}, "limit": 1},
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
     # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)
@@ -127,8 +127,8 @@ def _update_subscription_fields(
         {"filter": {"id": existing["id"]}, "fields": fields},
     )
 
-    runtime = LocalRuntime()
-    runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        runtime.execute(workflow.build())
 
     # Return the post-update row read-back (state-persistence verification
     # per rules/testing.md § State Persistence Verification).

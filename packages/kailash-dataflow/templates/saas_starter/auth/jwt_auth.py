@@ -26,7 +26,7 @@ Dependencies:
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
 import bcrypt
@@ -138,8 +138,8 @@ def generate_access_token(user_id: str, org_id: str, email: str) -> Dict[str, An
         "user_id": user_id,
         "org_id": org_id,
         "email": email,
-        "exp": datetime.utcnow() + timedelta(seconds=ACCESS_TOKEN_EXPIRY_SECONDS),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(UTC) + timedelta(seconds=ACCESS_TOKEN_EXPIRY_SECONDS),
+        "iat": datetime.now(UTC),
         "type": "access",
     }
 
@@ -171,8 +171,8 @@ def generate_refresh_token(user_id: str) -> Dict[str, Any]:
 
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(seconds=REFRESH_TOKEN_EXPIRY_SECONDS),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(UTC) + timedelta(seconds=REFRESH_TOKEN_EXPIRY_SECONDS),
+        "iat": datetime.now(UTC),
         "type": "refresh",
     }
 
@@ -260,8 +260,8 @@ def create_user_record(db, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]
     workflow = WorkflowBuilder()
     workflow.add_node("UserCreateNode", "create_user", user_data)
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("create_user")
 
@@ -290,8 +290,8 @@ def find_user_by_email(db, email: str) -> Optional[Dict[str, Any]]:
         "UserListNode", "find_user", {"filter": {"email": email}, "limit": 1}
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
     # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)

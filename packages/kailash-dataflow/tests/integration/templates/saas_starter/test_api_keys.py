@@ -443,8 +443,8 @@ class TestAPIKeyExpiration:
                 "fields": {"expires_at": datetime.now() - timedelta(days=1)},
             },
         )
-        runtime = LocalRuntime()
-        runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
 
         # Verify rejects the expired key
         result = verify_api_key(db, plain_key)
@@ -482,8 +482,8 @@ class TestAPIKeyRateLimiting:
             "set_rate_limit",
             {"filter": {"id": key_id}, "fields": {"rate_limit": 1000}},
         )
-        runtime = LocalRuntime()
-        runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
 
         result = verify_api_key(db, plain_key)
 
