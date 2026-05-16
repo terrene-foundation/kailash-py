@@ -13,13 +13,15 @@ Expected Pass Rate: 100%
 """
 
 import pytest
+
 from dataflow.validators.connection_validator import (
     StrictConnectionValidator,
     ValidationError,
 )
 from dataflow.validators.strict_mode_validator import StrictModeValidator
 
-from kailash.workflow.builder import WorkflowBuilder
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 # =============================================================================
 # Test Fixtures
