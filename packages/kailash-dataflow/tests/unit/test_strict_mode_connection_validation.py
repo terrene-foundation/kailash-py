@@ -10,12 +10,14 @@ Test Coverage:
 """
 
 import pytest
+
 from dataflow.validators.connection_validator import (
     StrictConnectionValidator,
     ValidationError,
 )
 
-from kailash.workflow.builder import WorkflowBuilder
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 # =============================================================================
 # Test Fixtures

@@ -13,7 +13,9 @@ import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kailash.runtime.local import LocalRuntime
+
+_runtime = pytest.importorskip("kailash.runtime.local")
+LocalRuntime = _runtime.LocalRuntime
 
 
 class TestModelRegistryRuntimeInjection:

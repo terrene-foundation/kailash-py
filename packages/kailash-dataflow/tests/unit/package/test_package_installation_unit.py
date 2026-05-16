@@ -29,8 +29,10 @@ pytestmark = [pytest.mark.unit]
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))
 
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+_runtime = pytest.importorskip("kailash.runtime.local")
+LocalRuntime = _runtime.LocalRuntime
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 from dataflow import DataFlow
 

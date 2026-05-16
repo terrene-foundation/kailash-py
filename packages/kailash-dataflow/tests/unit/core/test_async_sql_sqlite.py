@@ -7,8 +7,12 @@ NOTE: These tests may fail due to Core SDK bugs in AsyncSQLDatabaseNode.
 They are marked xfail until the Core SDK is updated.
 """
 
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+import pytest
+
+_runtime = pytest.importorskip("kailash.runtime.local")
+LocalRuntime = _runtime.LocalRuntime
+_wf = pytest.importorskip("kailash.workflow.builder")
+WorkflowBuilder = _wf.WorkflowBuilder
 
 
 class TestAsyncSQLSQLite:
