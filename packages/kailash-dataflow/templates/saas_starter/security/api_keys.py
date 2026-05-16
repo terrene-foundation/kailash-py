@@ -199,8 +199,15 @@ def verify_api_key(db, api_key: str) -> Dict:
     if key_record.get("status") != "active":
         return {"valid": False, "error": "API key is revoked or inactive"}
 
-    # Check if key is expired
+    # Check if key is expired. SQLite returns DATETIME columns as ISO-format
+    # strings (no native datetime type); PostgreSQL returns datetime objects.
+    # Normalize to datetime so the comparison works on both backends.
     expires_at = key_record.get("expires_at")
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except ValueError:
+            expires_at = None
     if expires_at and expires_at < datetime.now():
         return {"valid": False, "error": "API key has expired"}
 
@@ -234,17 +241,31 @@ def revoke_api_key(db, key_id: str) -> Optional[Dict]:
         >>> print(key["status"])
         revoked
     """
+    # DataFlow UpdateNode reads ``filter`` (singular) — ``filters`` (plural)
+    # is dropped silently and the node raises UPDATE_NODE_MISSING_FILTER_ID.
     workflow = WorkflowBuilder()
     workflow.add_node(
         "APIKeyUpdateNode",
         "update_key",
-        {"filters": {"id": key_id}, "fields": {"status": "revoked"}},
+        {"filter": {"id": key_id}, "fields": {"status": "revoked"}},
     )
 
     runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    runtime.execute(workflow.build())
 
-    return results.get("update_key")
+    # Read-back the full row so callers see the post-update state, not just
+    # the UpdateNode payload echo (which may omit unspecified columns like
+    # ``organization_id`` / ``key_hash`` / ``rate_limit``). State-persistence
+    # verification per rules/testing.md § State Persistence Verification.
+    read_workflow = WorkflowBuilder()
+    read_workflow.add_node(
+        "APIKeyListNode", "read_key", {"filter": {"id": key_id}, "limit": 1}
+    )
+    read_runtime = LocalRuntime()
+    read_results, _ = read_runtime.execute(read_workflow.build())
+    list_result = read_results.get("read_key") or {}
+    records = list_result.get("records", []) if isinstance(list_result, dict) else []
+    return records[0] if records else None
 
 
 def list_organization_api_keys(db, organization_id: str) -> List[Dict]:
@@ -265,12 +286,20 @@ def list_organization_api_keys(db, organization_id: str) -> List[Dict]:
         Production Key
         Dev Key
     """
+    # DataFlow ListNode reads ``filter`` (singular) — ``filters`` (plural)
+    # is silently dropped and the list returns every org's keys.
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "APIKeyListNode", "list_keys", {"filters": {"organization_id": organization_id}}
+        "APIKeyListNode", "list_keys", {"filter": {"organization_id": organization_id}}
     )
 
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
 
-    return results.get("list_keys", [])
+    # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
+    # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)
+    # unwrap idiom. Returning the raw dict broke callers who expected ``len()``
+    # and per-record iteration.
+    list_result = results.get("list_keys") or {}
+    records = list_result.get("records", []) if isinstance(list_result, dict) else []
+    return records

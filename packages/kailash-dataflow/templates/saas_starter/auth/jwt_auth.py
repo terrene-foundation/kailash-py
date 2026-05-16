@@ -30,7 +30,6 @@ from typing import Any, Dict, Optional
 
 import bcrypt
 import jwt
-
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -272,15 +271,21 @@ def find_user_by_email(db, email: str) -> Optional[Dict[str, Any]]:
         ...     print(user["email"])
         test@example.com
     """
+    # DataFlow ListNode reads ``filter`` (singular) — ``filters`` (plural)
+    # is silently dropped and the lookup returns every user in the table.
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "UserListNode", "find_user", {"filters": {"email": email}, "limit": 1}
+        "UserListNode", "find_user", {"filter": {"email": email}, "limit": 1}
     )
 
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
 
-    users = results.get("find_user", [])
+    # DataFlow 2.0 ``*ListNode`` returns ``{"records": [...], "count": n, ...}``
+    # rather than a raw list — mirrors the verify_api_key (commit 8385851a0)
+    # unwrap idiom. Bare ``users[0]`` raised ``KeyError: 0`` on every lookup.
+    list_result = results.get("find_user") or {}
+    users = list_result.get("records", []) if isinstance(list_result, dict) else []
     return users[0] if users else None
 
 
