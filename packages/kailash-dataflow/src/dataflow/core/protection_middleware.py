@@ -112,6 +112,25 @@ class DataFlowProtectionMixin:
         super().__init__(*args, **kwargs)
         self._protection_config = protection_config or WriteProtectionConfig()
         self._protection_engine = WriteProtectionEngine(self._protection_config)
+        # Issue #1045 — every ProtectedDataFlowRuntime returned by
+        # create_protected_runtime() calls mark_externally_managed() in its
+        # __init__ (the Shard A deprecation fix). mark_externally_managed()
+        # deliberately SKIPS atexit.register(self._cleanup_event_loop)
+        # (kailash.runtime.local.LocalRuntime._get_persistent_loop) —
+        # transferring cleanup responsibility to the owning framework. The
+        # owner MUST close() each runtime at teardown or its persistent
+        # asyncio event loop leaks (one per create_protected_runtime() call).
+        #
+        # This is the same owner-tracks-then-drains invariant every sibling
+        # mark_externally_managed() call site already honors:
+        #   - engine.py:883  -> self._sync_runtime_singleton, drained in
+        #     DataFlow.close()/close_async() (engine.py rt.close() loop)
+        #   - auto_migration_system.py:279/1074/1703 -> self._explicit_runtime,
+        #     drained in their close()
+        # ProtectedDataFlowRuntime is structurally different (it IS the
+        # runtime, not a wrapper holding one) and create_protected_runtime()
+        # returns a fresh instance per call, so the owner tracks the LIST.
+        self._protected_runtimes: list = []
 
     def set_protection_config(self, config: WriteProtectionConfig):
         """Update the protection configuration."""
@@ -165,10 +184,89 @@ class DataFlowProtectionMixin:
         return self._protection_config.auditor.events
 
     def create_protected_runtime(self, **runtime_kwargs) -> ProtectedDataFlowRuntime:
-        """Create a runtime with protection enforcement."""
-        return ProtectedDataFlowRuntime(
+        """Create a runtime with protection enforcement.
+
+        The returned runtime is registered on this owning DataFlow so
+        ``close()`` / ``close_async()`` can drain its persistent event loop
+        at teardown (issue #1045). ``ProtectedDataFlowRuntime`` opts out of
+        ``atexit`` cleanup via ``mark_externally_managed()`` — without this
+        registration the loop would leak.
+        """
+        runtime = ProtectedDataFlowRuntime(
             protection_config=self._protection_config, **runtime_kwargs
         )
+        # Track for owner-driven cleanup. Plain list (not WeakSet): the
+        # owner is the sole lifecycle authority for these runtimes, and a
+        # weak ref would let the loop be collected without close(), which
+        # is the leak itself.
+        runtimes = getattr(self, "_protected_runtimes", None)
+        if runtimes is None:
+            # Defensive: a subclass may construct the runtime before the
+            # mixin __init__ ran (unusual, but the attribute MUST exist
+            # before the first append or the drain in close() misses it).
+            self._protected_runtimes = runtimes = []
+        runtimes.append(runtime)
+        return runtime
+
+    def _drain_protected_runtimes(self) -> None:
+        """Close every runtime handed out by create_protected_runtime().
+
+        Sync — ``LocalRuntime.close()`` is synchronous (it joins the
+        persistent loop thread / closes the loop). Idempotent: each
+        runtime's own ref-count logic makes a second close() a no-op, and
+        the tracking list is cleared so a second drain is empty. Safe to
+        call from both close() and close_async().
+        """
+        runtimes = getattr(self, "_protected_runtimes", None)
+        if not runtimes:
+            return
+        for runtime in list(runtimes):
+            try:
+                runtime.close()
+            except Exception as e:
+                # Mirror the sibling-pattern disposition in
+                # DataFlow.close() (engine.py rt.close() loop): a failure
+                # closing one externally-managed runtime MUST NOT abort the
+                # rest of teardown. Logged, not swallowed silently
+                # (rules/zero-tolerance.md Rule 3 / observability.md).
+                logger.warning(
+                    "protection_middleware.error_closing_protected_runtime",
+                    extra={
+                        "runtime_id": getattr(runtime, "_runtime_id", "unknown"),
+                        "error": str(e),
+                    },
+                )
+        runtimes.clear()
+
+    def close(self) -> None:
+        """Drain protected runtimes, then delegate to DataFlow.close().
+
+        Cooperative-MRO override. ``ProtectedDataFlow`` resolves
+        ``DataFlowProtectionMixin -> DataFlow``; draining BEFORE
+        ``super().close()`` releases the protection runtimes' loops while
+        the rest of the engine is still live, matching the
+        release-subsystems-first ordering DataFlow.close() already uses.
+        """
+        self._drain_protected_runtimes()
+        # super() may not define close() in every composition; guard so the
+        # mixin is safe if applied to a base without it.
+        parent_close = getattr(super(), "close", None)
+        if callable(parent_close):
+            parent_close()
+
+    async def close_async(self) -> None:
+        """Async-context teardown: drain protected runtimes, then delegate.
+
+        ``LocalRuntime.close()`` is sync, so the drain itself is sync; only
+        the delegation to ``DataFlow.close_async()`` is awaited. Mirrors the
+        sync ``close()`` ordering (drain first, engine last).
+        """
+        self._drain_protected_runtimes()
+        parent_close_async = getattr(super(), "close_async", None)
+        if parent_close_async is not None:
+            result = parent_close_async()
+            if result is not None:
+                await result
 
 
 def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
