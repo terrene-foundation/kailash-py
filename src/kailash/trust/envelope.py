@@ -32,29 +32,14 @@ import hmac as hmac_mod
 import json
 import logging
 import math
-import warnings as _warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from kailash.trust.signing.algorithm_id import (
-    ALGORITHM_DEFAULT,
-    AlgorithmIdentifier,
-    coerce_algorithm_id,
-)
+from kailash.trust.signing.algorithm_id import AlgorithmIdentifier, coerce_algorithm_id
 
 logger = logging.getLogger(__name__)
-
-# Module-level guard for once-per-process DeprecationWarning emission when an
-# HMAC envelope is verified without a recorded algorithm. The warning text MUST
-# contain the literal "scaffold for #604; wire format pending mint ISS-31"
-# substring per issue-#604 directive (zero-tolerance.md Rule 1 + grep-ability
-# requirement). The HMAC ConstraintEnvelope is asymmetric — see § 21.4 of
-# specs/trust-crypto.md for the rationale: adding `algorithm` to the dataclass
-# would alter the canonical-JSON payload bytes that the HMAC signs, breaking
-# every existing HMAC-signed envelope on disk.
-_LEGACY_HMAC_ENVELOPE_WARNED: bool = False
 
 __all__ = [
     # Error classes
@@ -1414,8 +1399,7 @@ def sign_envelope(
       payload bytes. Adding ``algorithm`` to the canonical-JSON shape
       would invalidate every existing HMAC-signed envelope on disk
       (the payload-bytes change → the HMAC changes). The asymmetry is
-      documented in spec § 21.4 + the module guard
-      ``_LEGACY_HMAC_ENVELOPE_WARNED``.
+      documented in spec § 21.4.
 
     The HMAC primitive (`hmac.compare_digest`) is unchanged; threading
     ``alg_id`` adds metadata to the surrounding shape, NOT the
@@ -1486,21 +1470,16 @@ def verify_envelope(
         NotImplementedError: If ``alg_id`` is non-default (pending mint
             ISS-31). Raised BEFORE any HMAC work.
     """
-    global _LEGACY_HMAC_ENVELOPE_WARNED
-    if alg_id is None:
-        # Legacy / pre-#604 caller. Accept AND warn once per process.
-        if not _LEGACY_HMAC_ENVELOPE_WARNED:
-            _LEGACY_HMAC_ENVELOPE_WARNED = True
-            _warnings.warn(
-                "verify_envelope called without alg_id (legacy / pre-#604 "
-                f"caller); defaulting to {ALGORITHM_DEFAULT!r} — scaffold "
-                "for #604; wire format pending mint ISS-31.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-    else:
-        # Validate (coerce raises NotImplementedError on non-default).
-        coerce_algorithm_id(alg_id)
+    # alg_id wire format deferred to ISS-31 (#604 closed without it).
+    # None resolves to the default algorithm — consistent with
+    # sign_envelope, which calls coerce_algorithm_id unconditionally.
+    # coerce raises NotImplementedError on a non-default alg_id (the
+    # ISS-31 gate), BEFORE any HMAC work. No DeprecationWarning is
+    # emitted: the alg_id-less call is the ONLY supported convention
+    # until ISS-31 lands a migration target, so deprecating it is
+    # premature. The PR that lands the alg_id wire format reintroduces
+    # a proper deprecation with a real migration path at that time.
+    coerce_algorithm_id(alg_id)
 
     try:
         key_bytes = _resolve_secret(secret_ref)
