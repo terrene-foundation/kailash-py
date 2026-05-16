@@ -82,8 +82,11 @@ def db():
     # create_user_record() inserts {id, organization_id, email,
     # password_hash, role, status}; find_user_by_email() filters by
     # ``email`` and returns the same row shape.
+    # The User class is registered via @db_instance.model decorator side-effect;
+    # static analyzers cannot trace decorator-driven registration so suppress the
+    # unused-symbol warning explicitly.
     @db_instance.model
-    class User:  # pyright: ignore[reportUnusedClass]  # registered via @db_instance.model decorator side-effect
+    class User:  # noqa: F841  # pyright: ignore[reportUnusedExpression, reportUnusedClass]
         id: str
         organization_id: str
         email: str
