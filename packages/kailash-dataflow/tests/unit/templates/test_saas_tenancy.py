@@ -28,14 +28,13 @@ from typing import Dict, List, Optional
 
 import pytest
 
-# Tier-1 gate per issue #979 brief AC#5 + specs/testing-tiers.md § Tier-1
-# Rule 1 — bare top-imports of `LocalRuntime` + `WorkflowBuilder` plus
-# `runtime.execute(workflow)` against aiosqlite hangs the GH-runner
-# py3.11 worker (brief failure-layer #3). Rewrite scheduled as B-2 per
-# `workspaces/issue-979-dataflow-unit-triage/todos/active/00-INDEX.md`.
-pytestmark = pytest.mark.skip(
-    reason="Tier-1 spec violation (LocalRuntime + WorkflowBuilder top-imports); rewrite scheduled in Workstream-B B-2 per issue #979 brief AC#5"
-)
+# File STAYS in tier-1 per `workspaces/issue-979-dataflow-unit-triage/02-plans/
+# 02-amendments-v2-post-redteam-r1r2.md:264-266` ATTACK-6 R2 verification:
+# 100% mocked, pure-Python, meets the tier-1 contract. Mocking IS allowed
+# at tier-1 per `specs/testing-tiers.md` § Tier-1 Rule 4. Sibling 5 saas
+# tests (api_keys / starter_auth / starter_jwt / subscriptions / webhooks)
+# are deferred to follow-up sub-shards B-2a..B-2e for the move-to-integration
+# rewrite per `value-prioritization.md` MUST-2 sharding.
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "../../../templates")
 if TEMPLATES_DIR not in sys.path:
