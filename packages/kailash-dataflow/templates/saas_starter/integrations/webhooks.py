@@ -6,8 +6,8 @@ Simplified webhook handling with direct Python functions.
 Functions:
 - create_webhook_event(db, organization_id, event_type, payload) - Log webhook event
 - get_webhook_events(db, organization_id, filters) - Query webhook events
-- retry_failed_webhook(db, event_id) - Retry webhook
-- mark_webhook_delivered(db, event_id) - Mark as delivered
+- retry_failed_webhook(db, event_id, organization_id) - Retry webhook (tenant-scoped)
+- mark_webhook_delivered(db, event_id, organization_id) - Mark as delivered (tenant-scoped)
 - verify_webhook_signature(payload, signature, secret) - Verify webhook signature
 
 Architecture:
@@ -128,19 +128,26 @@ def get_webhook_events(
     return list_result if isinstance(list_result, list) else []
 
 
-def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
+def retry_failed_webhook(db, event_id: str, organization_id: str) -> Optional[Dict]:
     """
-    Retry failed webhook.
+    Retry failed webhook (tenant-scoped).
 
     Args:
         db: DataFlow instance
         event_id: Webhook event ID to retry
+        organization_id: Tenant organization ID. REQUIRED — every
+            read/update filter is scoped by ``(id, organization_id)``
+            so a caller cannot retry a webhook event belonging to
+            another tenant even if they know or guess its event_id.
+            Returns ``None`` if no event matches the (event_id,
+            organization_id) pair.
 
     Returns:
-        Updated webhook event dict
+        Updated webhook event dict, or ``None`` when no event matches
+        the tenant-scoped filter.
 
     Example:
-        >>> event = retry_failed_webhook(db, "evt_123")
+        >>> event = retry_failed_webhook(db, "evt_123", "org_456")
         >>> print(event["retry_count"])
         1
     """
@@ -148,11 +155,19 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
     # subscriptions.py both use the ``*ListNode`` + ``filter={"id":...}``
     # idiom over the ``*ReadNode`` direct-id form for cross-dialect
     # consistency; we follow the same pattern here.
+    #
+    # Tenant-isolation: every filter binds BOTH ``id`` AND
+    # ``organization_id`` so a cross-tenant ``event_id`` returns no rows
+    # and the function returns ``None`` BEFORE any update fires. Per
+    # round-5 redteam MED-1a finding.
     read_workflow = WorkflowBuilder()
     read_workflow.add_node(
         "WebhookEventListNode",
         "read_event",
-        {"filter": {"id": event_id}, "limit": 1},
+        {
+            "filter": {"id": event_id, "organization_id": organization_id},
+            "limit": 1,
+        },
     )
 
     # Single runtime context spans both the read + update workflows so the
@@ -186,7 +201,7 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
             "WebhookEventUpdateNode",
             "update_event",
             {
-                "filter": {"id": event_id},
+                "filter": {"id": event_id, "organization_id": organization_id},
                 "fields": {
                     "retry_count": new_retry_count,
                     "status": new_status,
@@ -204,7 +219,10 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
         readback_workflow.add_node(
             "WebhookEventListNode",
             "readback_event",
-            {"filter": {"id": event_id}, "limit": 1},
+            {
+                "filter": {"id": event_id, "organization_id": organization_id},
+                "limit": 1,
+            },
         )
         readback_results, _ = runtime.execute(readback_workflow.build())
         readback_list = readback_results.get("readback_event") or {}
@@ -214,31 +232,42 @@ def retry_failed_webhook(db, event_id: str) -> Optional[Dict]:
     return readback_records[0] if readback_records else None
 
 
-def mark_webhook_delivered(db, event_id: str) -> Optional[Dict]:
+def mark_webhook_delivered(db, event_id: str, organization_id: str) -> Optional[Dict]:
     """
-    Mark webhook as delivered.
+    Mark webhook as delivered (tenant-scoped).
 
     Args:
         db: DataFlow instance
         event_id: Webhook event ID
+        organization_id: Tenant organization ID. REQUIRED — the update
+            filter binds BOTH ``id`` AND ``organization_id`` so a caller
+            cannot mark a webhook event from another tenant as
+            delivered even if they know or guess its event_id.
+            Returns ``None`` if no event matches the (event_id,
+            organization_id) pair.
 
     Returns:
-        Updated webhook event dict with status="delivered"
+        Updated webhook event dict with status="delivered", or ``None``
+        when no event matches the tenant-scoped filter.
 
     Example:
-        >>> event = mark_webhook_delivered(db, "evt_123")
+        >>> event = mark_webhook_delivered(db, "evt_123", "org_456")
         >>> print(event["status"])
         delivered
     """
     # DataFlow ``*UpdateNode`` reads ``filter`` (singular). See
     # api_keys.py::revoke_api_key for the same gotcha — ``filters``
     # (plural) is silently dropped and raises UPDATE_NODE_MISSING_FILTER_ID.
+    #
+    # Tenant-isolation: the update + read-back filters BOTH bind
+    # ``organization_id`` so a cross-tenant ``event_id`` is a no-op and
+    # returns ``None``. Per round-5 redteam MED-1b finding.
     workflow = WorkflowBuilder()
     workflow.add_node(
         "WebhookEventUpdateNode",
         "update_event",
         {
-            "filter": {"id": event_id},
+            "filter": {"id": event_id, "organization_id": organization_id},
             "fields": {"status": "delivered", "delivered_at": datetime.now()},
         },
     )
@@ -253,7 +282,10 @@ def mark_webhook_delivered(db, event_id: str) -> Optional[Dict]:
         readback_workflow.add_node(
             "WebhookEventListNode",
             "readback_event",
-            {"filter": {"id": event_id}, "limit": 1},
+            {
+                "filter": {"id": event_id, "organization_id": organization_id},
+                "limit": 1,
+            },
         )
         readback_results, _ = runtime.execute(readback_workflow.build())
         readback_list = readback_results.get("readback_event") or {}

@@ -90,6 +90,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
 
         # First call returns user, second call returns org
         mock_runtime.execute.side_effect = [
@@ -188,6 +192,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"list_users": users_data}, "run_id_123")
 
         import saas_starter.tenancy.isolation
@@ -247,6 +255,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"read_user": user_data}, "run_id_123")
 
         import saas_starter.tenancy.isolation
@@ -298,6 +310,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"read_user": user_data}, "run_id_123")
 
         import saas_starter.tenancy.isolation
@@ -357,6 +373,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.side_effect = [
             ({"read_org": org_data}, "run_id_1"),
             ({"update_user": updated_user}, "run_id_2"),
@@ -405,6 +425,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"read_org": None}, "run_id_123")
 
         import saas_starter.tenancy.isolation
@@ -485,6 +509,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"read_user": user_data}, "run_id_123")
 
         import saas_starter.tenancy.isolation
@@ -546,6 +574,10 @@ class TestMultiTenantIsolation:
         mock_workflow = MagicMock()
         mock_workflow.build.return_value = MagicMock()
         mock_runtime = MagicMock()
+        # Round-5: isolation.py wraps LocalRuntime() in `with` context manager;
+        # mock must support __enter__/__exit__ returning the same configured mock.
+        mock_runtime.__enter__.return_value = mock_runtime
+        mock_runtime.__exit__.return_value = None
         mock_runtime.execute.return_value = ({"list_users": org_a_users}, "run_id_123")
 
         import saas_starter.tenancy.isolation

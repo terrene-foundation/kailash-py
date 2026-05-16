@@ -23,7 +23,7 @@ Architecture:
 import hashlib
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from kailash.runtime import LocalRuntime
@@ -202,13 +202,23 @@ def verify_api_key(db, api_key: str) -> Dict:
     # Check if key is expired. SQLite returns DATETIME columns as ISO-format
     # strings (no native datetime type); PostgreSQL returns datetime objects.
     # Normalize to datetime so the comparison works on both backends.
+    #
+    # Timezone-safety: PostgreSQL ``TIMESTAMP WITH TIME ZONE`` returns
+    # tz-aware datetimes; aiosqlite-with-detect_types may return either
+    # tz-aware or naive depending on the stored ISO string. A naive
+    # ``datetime.now()`` raises ``TypeError: can't compare offset-naive and
+    # offset-aware datetimes`` whenever expires_at is tz-aware. Normalize
+    # naive values to UTC so both backends compare safely against
+    # ``datetime.now(timezone.utc)``. Per round-5 redteam MED-2 finding.
     expires_at = key_record.get("expires_at")
     if isinstance(expires_at, str):
         try:
             expires_at = datetime.fromisoformat(expires_at)
         except ValueError:
             expires_at = None
-    if expires_at and expires_at < datetime.now():
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
         return {"valid": False, "error": "API key has expired"}
 
     # Return key info

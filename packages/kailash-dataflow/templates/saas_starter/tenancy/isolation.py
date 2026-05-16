@@ -40,25 +40,30 @@ def get_user_organization(db, user_id: str) -> Optional[Dict]:
         ...     print(org["name"])
         Acme Corp
     """
-    # First, get the user to find organization_id
+    # First, get the user to find organization_id. Use LocalRuntime as a
+    # context manager per round-5 redteam F1 — bare LocalRuntime() leaks
+    # connections + background tasks until GC and triggers the kailash
+    # v0.12 hard-removal deprecation warning. The same runtime context
+    # spans BOTH the user read and the organization read so the
+    # connection pool is shared.
     workflow = WorkflowBuilder()
     workflow.add_node("UserReadNode", "read_user", {"id": user_id})
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
-    user = results.get("read_user")
-    if not user:
-        return None
+        user = results.get("read_user")
+        if not user:
+            return None
 
-    # Now get the organization
-    org_workflow = WorkflowBuilder()
-    org_workflow.add_node(
-        "OrganizationReadNode", "read_org", {"id": user["organization_id"]}
-    )
+        # Now get the organization
+        org_workflow = WorkflowBuilder()
+        org_workflow.add_node(
+            "OrganizationReadNode", "read_org", {"id": user["organization_id"]}
+        )
 
-    org_results, _ = runtime.execute(org_workflow.build())
-    return org_results.get("read_org")
+        org_results, _ = runtime.execute(org_workflow.build())
+        return org_results.get("read_org")
 
 
 def filter_by_organization(filters: Dict, organization_id: str) -> Dict:
@@ -107,8 +112,9 @@ def list_organization_users(db, organization_id: str) -> List[Dict]:
         "UserListNode", "list_users", {"filters": {"organization_id": organization_id}}
     )
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    # Context-managed runtime per round-5 redteam F1 (resource hygiene).
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     return results.get("list_users", [])
 
@@ -134,8 +140,9 @@ def check_user_belongs_to_org(db, user_id: str, organization_id: str) -> bool:
     workflow = WorkflowBuilder()
     workflow.add_node("UserReadNode", "read_user", {"id": user_id})
 
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
+    # Context-managed runtime per round-5 redteam F1 (resource hygiene).
+    with LocalRuntime() as runtime:
+        results, _ = runtime.execute(workflow.build())
 
     user = results.get("read_user")
     if not user:
@@ -162,24 +169,27 @@ def switch_user_organization(db, user_id: str, new_org_id: str) -> Optional[Dict
         ...     print(user["organization_id"])
         org_789
     """
-    # First, verify new organization exists
+    # First, verify new organization exists. Context-managed runtime per
+    # round-5 redteam F1 — both the org-verify read and the user update
+    # share ONE LocalRuntime context so the connection pool is shared
+    # and the deprecation warning is silenced.
     org_workflow = WorkflowBuilder()
     org_workflow.add_node("OrganizationReadNode", "read_org", {"id": new_org_id})
 
-    runtime = LocalRuntime()
-    org_results, _ = runtime.execute(org_workflow.build())
+    with LocalRuntime() as runtime:
+        org_results, _ = runtime.execute(org_workflow.build())
 
-    org = org_results.get("read_org")
-    if not org:
-        return None  # Organization doesn't exist
+        org = org_results.get("read_org")
+        if not org:
+            return None  # Organization doesn't exist
 
-    # Update user's organization_id
-    update_workflow = WorkflowBuilder()
-    update_workflow.add_node(
-        "UserUpdateNode",
-        "update_user",
-        {"filters": {"id": user_id}, "fields": {"organization_id": new_org_id}},
-    )
+        # Update user's organization_id
+        update_workflow = WorkflowBuilder()
+        update_workflow.add_node(
+            "UserUpdateNode",
+            "update_user",
+            {"filters": {"id": user_id}, "fields": {"organization_id": new_org_id}},
+        )
 
-    update_results, _ = runtime.execute(update_workflow.build())
-    return update_results.get("update_user")
+        update_results, _ = runtime.execute(update_workflow.build())
+        return update_results.get("update_user")

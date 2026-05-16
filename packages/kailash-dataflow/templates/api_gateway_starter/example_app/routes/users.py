@@ -4,8 +4,11 @@ User CRUD routes with authentication and RBAC.
 All endpoints require JWT authentication and enforce role-based access control.
 """
 
-from dataflow import DataFlow
 from fastapi import APIRouter, HTTPException, Request
+from kailash.runtime import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.errors import (
     NOT_FOUND_ERROR,
@@ -21,9 +24,6 @@ from templates.api_gateway_starter.utils.validation import (
     validate_create_request,
     validate_pagination_params,
 )
-
-from kailash.runtime import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 def create_user_router(db: DataFlow) -> APIRouter:
@@ -63,12 +63,13 @@ def create_user_router(db: DataFlow) -> APIRouter:
             # Validate request
             validated = validate_create_request("User", user_data)
 
-            # Execute DataFlow workflow
+            # Execute DataFlow workflow. Context-managed runtime per
+            # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
             workflow.add_node("UserCreateNode", "create", validated)
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
             user = results.get("create")
             if not user:
@@ -126,8 +127,11 @@ def create_user_router(db: DataFlow) -> APIRouter:
                 },
             )
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            # Context-managed runtime per round-5 redteam F1 — bare
+            # LocalRuntime() leaks connections + background tasks until
+            # GC and triggers the kailash v0.12 hard-removal warning.
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
             users = results.get("list", [])
 
@@ -175,8 +179,9 @@ def create_user_router(db: DataFlow) -> APIRouter:
             {"id": user_id, "raise_on_not_found": False},
         )
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        # Context-managed runtime per round-5 redteam F1 sibling sweep.
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         user = results.get("read")
         if not user or user.get("found") is False or user.get("failed"):
@@ -218,14 +223,18 @@ def create_user_router(db: DataFlow) -> APIRouter:
         # by dialect (PostgreSQL RETURNING gives the full row; SQLite /
         # MySQL without RETURNING give only ``{updated, rows_affected,
         # id}``). Reading back makes the response body dialect-invariant.
+        # Context-managed runtimes per round-5 redteam F1 sibling sweep —
+        # the two sequential workflows (update + read-back) get their own
+        # context manager each since they're already separated for DAG
+        # ordering reasons; each MUST close its pool deterministically.
         update_workflow = WorkflowBuilder()
         update_workflow.add_node(
             "UserUpdateNode",
             "update",
             {"filter": {"id": user_id}, "fields": update_data},
         )
-        update_runtime = LocalRuntime()
-        update_results, _ = update_runtime.execute(update_workflow.build())
+        with LocalRuntime() as update_runtime:
+            update_results, _ = update_runtime.execute(update_workflow.build())
 
         update_result = update_results.get("update")
         if not update_result or update_result.get("failed"):
@@ -243,8 +252,8 @@ def create_user_router(db: DataFlow) -> APIRouter:
             "read",
             {"id": user_id, "raise_on_not_found": False},
         )
-        read_runtime = LocalRuntime()
-        read_results, _ = read_runtime.execute(read_workflow.build())
+        with LocalRuntime() as read_runtime:
+            read_results, _ = read_runtime.execute(read_workflow.build())
 
         user = read_results.get("read") or update_result
         return success_response(user)
@@ -264,12 +273,13 @@ def create_user_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error (non-admin)
         """
-        # Execute DataFlow workflow
+        # Execute DataFlow workflow. Context-managed runtime per round-5
+        # redteam F1 sibling sweep.
         workflow = WorkflowBuilder()
         workflow.add_node("UserDeleteNode", "delete", {"id": user_id})
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         deleted = results.get("delete")
         if not deleted or deleted.get("failed"):

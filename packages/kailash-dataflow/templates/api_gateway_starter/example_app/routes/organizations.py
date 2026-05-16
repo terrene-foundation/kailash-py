@@ -4,8 +4,11 @@ Organization CRUD routes with authentication.
 All endpoints require JWT authentication.
 """
 
-from dataflow import DataFlow
 from fastapi import APIRouter, Request
+from kailash.runtime import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.errors import (
     NOT_FOUND_ERROR,
@@ -21,9 +24,6 @@ from templates.api_gateway_starter.utils.validation import (
     validate_create_request,
     validate_pagination_params,
 )
-
-from kailash.runtime import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 def create_organization_router(db: DataFlow) -> APIRouter:
@@ -59,12 +59,13 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             # Validate request
             validated = validate_create_request("Organization", org_data)
 
-            # Execute DataFlow workflow
+            # Execute DataFlow workflow. Context-managed runtime per
+            # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
             workflow.add_node("OrganizationCreateNode", "create", validated)
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
             org = results.get("create")
             if not org:
@@ -106,14 +107,15 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             # Validate pagination
             offset, limit = validate_pagination_params(page, limit, max_limit=100)
 
-            # Execute DataFlow workflow
+            # Execute DataFlow workflow. Context-managed runtime per
+            # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
             workflow.add_node(
                 "OrganizationListNode", "list", {"limit": limit, "offset": offset}
             )
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
             organizations = results.get("list", [])
 
@@ -156,8 +158,9 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             {"id": org_id, "raise_on_not_found": False},
         )
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        # Context-managed runtime per round-5 redteam F1 sibling sweep.
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         org = results.get("read")
         if not org or org.get("found") is False or org.get("failed"):
@@ -189,7 +192,8 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
-        # Execute DataFlow workflow
+        # Execute DataFlow workflow. Context-managed runtime per round-5
+        # redteam F1 sibling sweep.
         workflow = WorkflowBuilder()
         workflow.add_node(
             "OrganizationUpdateNode",
@@ -197,8 +201,8 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             {"filter": {"id": org_id}, "fields": update_data},
         )
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         org = results.get("update")
         if not org or org.get("failed"):
@@ -227,12 +231,13 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error (non-owner)
         """
-        # Execute DataFlow workflow
+        # Execute DataFlow workflow. Context-managed runtime per round-5
+        # redteam F1 sibling sweep.
         workflow = WorkflowBuilder()
         workflow.add_node("OrganizationDeleteNode", "delete", {"id": org_id})
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         deleted = results.get("delete")
         if not deleted or deleted.get("failed"):
