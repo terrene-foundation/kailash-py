@@ -2,6 +2,51 @@
 
 ## [Unreleased]
 
+## [2.9.12] — 2026-05-16 — migration-tracking NameError fix + #979 test hardening
+
+### Fixed
+
+- **`schema_state_manager` `NameError: async_safe_run` (#853)** — applying
+  numbered migrations against PostgreSQL raised
+  `NameError: name 'async_safe_run' is not defined` on the
+  migration-history audit-row insert. The DDL applied successfully but
+  the tracking write failed, so migrations were misreported as failed.
+  Root cause: `dataflow/migrations/schema_state_manager.py` called
+  `async_safe_run()` at two sync→async bridge sites but never imported
+  it. Fixed by adding the module-top import (no circular import —
+  `dataflow.core.async_utils` imports only stdlib). Cross-SDK: kailash-py
+  equivalent of HANA #90. Also removed 3 grep-confirmed-unused imports
+  (`asyncio`, `time`, `typing.Set`) in the same file. Tier-1 regression
+  test pins the module-namespace binding + AST-verifies every call site
+  is import-backed.
+
+### Added (test hardening — no wheel-content change beyond the #853 fix)
+
+- **5-layer regression scaffolding (#999)** —
+  `tests/regression/test_issue_979_layer{1..5}.py` permanently prevent
+  the PR-#976 5-layer CI failure (pytest-timeout pin, no-hypothesis-OOM,
+  no bare tier-1 runtime import, fabric gated/moved, no PG tier-1
+  import) from silently re-landing.
+- **`db.express` async tier-1 smoke (#998)** —
+  `tests/unit/test_db_express_async_smoke.py` closes the gap where the
+  express CRUD surface was integration-only; read-back verification of
+  every mutation.
+- **TDD-mode docs-pipeline Tier-2 regression (#1022)** —
+  `tests/regression/test_readme_tdd_mode_quickstart.py` exercises the
+  ADR-017 §2.1 `DataFlow(tdd_mode=True)` pipeline end-to-end against real
+  PostgreSQL. Also corrected an ADR-017 §2.1 doc bug
+  (`execute_workflow_async` `inputs=` was required but undocumented).
+
+### Changed
+
+- **Pyright orphan-cleanup cascade (#1026)** — deleted 4 orphan test
+  files importing `dataflow.validators.*` (deleted in DataFlow 2.0;
+  no replacement — verified absent from all of `src/`) + removed their
+  stale `conftest.py` `collect_ignore` parking (orphan-detection Rule 3
+  anti-pattern) + 3 `assert-not-None` guards + DataFlow-close test
+  teardown hygiene. Follow-up #1045 tracks the residual aiosqlite
+  test-side ResourceWarning (documented #1002/#1010 class).
+
 ## [2.9.11] — 2026-05-16 — api_gateway_starter template type-safety + rate-limit hardening
 
 Closes 6 basic-mode pyright findings in `templates/api_gateway_starter/` — real
