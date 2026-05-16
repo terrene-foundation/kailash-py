@@ -6,9 +6,12 @@
 
 Closes 6 basic-mode pyright findings in `templates/api_gateway_starter/` — real
 `Optional[X]` annotations + `Request.client` None-guards on production middleware
-code paths. Templates ship inside the wheel; no SDK runtime API change. Surfaced
-during issue #1037 baseline audit (the 13 strict-only findings in #1037's body
-do not surface under the project's enforced pyright config and are out of scope).
+code paths. Templates are reference scaffolding in the source tree (NOT packaged
+into the wheel — `[tool.setuptools.packages.find]` only picks up `src/`); users
+consuming them via git clone or GitHub browsing get the hardened versions on this
+release SHA. No SDK runtime API change. Surfaced during issue #1037 baseline
+audit (the 13 strict-only findings in #1037's body do not surface under the
+project's enforced pyright config and are out of scope).
 
 Security-reviewer surfaced a MED finding (rate-limit shared-bucket DoS) + LOW
 finding (CORS wildcard + credentials default) on the touched middleware sites;
