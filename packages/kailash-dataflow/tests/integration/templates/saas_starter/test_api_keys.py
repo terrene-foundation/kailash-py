@@ -597,7 +597,16 @@ class TestAPIKeyExpirationTimezoneSafety:
         suffix. Pre-fix, comparing naive < datetime.now(UTC) raised
         TypeError; post-fix the naive value is upgraded to UTC via
         replace(tzinfo=timezone.utc) before comparison.
+
+        Production contract: the fix treats naive expires_at values
+        as UTC (per the brief: "Normalize naive aiosqlite-returned
+        strings to UTC for safe comparison"). Storing a NAIVE datetime
+        that was computed in LOCAL time would mis-shift the comparison;
+        the canonical store form is therefore UTC naive
+        (``datetime.utcnow() - timedelta``).
         """
+        from datetime import timezone as _timezone
+
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -610,18 +619,21 @@ class TestAPIKeyExpirationTimezoneSafety:
         plain_key = created["key"]
         key_id = created["record"]["id"]
 
-        # Stamp a NAIVE datetime in the past. On SQLite this stores as
-        # an ISO string with no tz suffix and round-trips back as a
-        # naive datetime (or as the same ISO string, depending on the
-        # adapter — verify_api_key handles both cases).
-        naive_past = datetime.now() - timedelta(hours=2)
+        # Stamp a NAIVE-UTC datetime in the past. We compute the value
+        # tz-aware in UTC then strip the tzinfo — this models the
+        # storage shape SQLite returns from a column that was originally
+        # written as tz-aware UTC but round-tripped through TEXT storage
+        # without tz suffix (the exact production failure mode).
+        naive_utc_past = (datetime.now(_timezone.utc) - timedelta(hours=2)).replace(
+            tzinfo=None
+        )
         workflow = WorkflowBuilder()
         workflow.add_node(
             "APIKeyUpdateNode",
             "expire_key",
             {
                 "filter": {"id": key_id},
-                "fields": {"expires_at": naive_past},
+                "fields": {"expires_at": naive_utc_past},
             },
         )
         with LocalRuntime() as runtime:
