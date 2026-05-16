@@ -4,8 +4,11 @@ User CRUD routes with authentication and RBAC.
 All endpoints require JWT authentication and enforce role-based access control.
 """
 
-from dataflow import DataFlow
 from fastapi import APIRouter, HTTPException, Request
+from kailash.runtime import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.errors import (
     NOT_FOUND_ERROR,
@@ -21,9 +24,6 @@ from templates.api_gateway_starter.utils.validation import (
     validate_create_request,
     validate_pagination_params,
 )
-
-from kailash.runtime import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 def create_user_router(db: DataFlow) -> APIRouter:
@@ -126,8 +126,11 @@ def create_user_router(db: DataFlow) -> APIRouter:
                 },
             )
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            # Context-managed runtime per round-5 redteam F1 — bare
+            # LocalRuntime() leaks connections + background tasks until
+            # GC and triggers the kailash v0.12 hard-removal warning.
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
             users = results.get("list", [])
 
