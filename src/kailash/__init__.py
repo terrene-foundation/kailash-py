@@ -19,12 +19,18 @@ from kailash.workflow.builder import WorkflowBuilder
 # Import key components for easier access
 from kailash.workflow.graph import Connection, NodeInstance, Workflow
 
-# Eagerly register the EventBus workflow node. Imported here — AFTER the
-# runtime + WorkflowBuilder chain is fully initialized — to avoid the
-# circular import that occurs if it loads during kailash.nodes.__init__
-# (the node imports base_async -> runtime -> nodes.base_async). This
-# guarantees EventPublishNode resolves via NodeRegistry.get() on plain
-# `import kailash` for every install profile (issue #1054).
+# isort: split
+# Eagerly register the EventBus workflow node. MUST be imported AFTER the
+# runtime chain above so kailash.runtime.async_local -> kailash.nodes.base_async
+# is fully loaded first. Otherwise:
+#   EventPublishNode -> AsyncNode -> kailash.runtime.template_resolver
+#   -> kailash.runtime.__init__ -> async_local -> AsyncNode
+# triggers a partially-initialized-module ImportError on plain `import kailash`.
+# The `# isort: split` directive above is load-bearing: it tells isort to treat
+# this import as a separate sort block so the alphabetical-order pass does
+# NOT reorder it back before `runtime.local` (which would re-introduce the
+# circular import). Verified by `import kailash` + pre-commit Tier-1
+# collection (issue #1054).
 from kailash.nodes.events import EventPublishNode  # noqa: E402,F401
 
 
