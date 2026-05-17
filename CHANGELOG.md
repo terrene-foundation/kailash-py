@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.2] - 2026-05-18
+
+### Fixed
+
+- **aiosqlite `:memory:` connection leaked on `DataFlow`/`ProtectedDataFlow` `close()` (#1051)** — multi-sited fix: untracked per-query `:memory:` connection is now reused and closed; `ProductionSQLiteAdapter.disconnect` handles both branches; node `_owned_adapters` teardown; engine cached-node teardown resolved `cleanup()` vs the dead `hasattr(close)` guard. Fixes #1051.
+
 ## [2.21.1] - 2026-05-16
 
 ### Fixed
