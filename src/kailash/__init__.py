@@ -11,12 +11,21 @@ disabled because it does not follow ``__getattr__`` fallbacks.
 
 import warnings
 
+from kailash.events import DomainEvent, EventBus, Subscription
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 # Import key components for easier access
 from kailash.workflow.graph import Connection, NodeInstance, Workflow
+
+# Eagerly register the EventBus workflow node. Imported here — AFTER the
+# runtime + WorkflowBuilder chain is fully initialized — to avoid the
+# circular import that occurs if it loads during kailash.nodes.__init__
+# (the node imports base_async -> runtime -> nodes.base_async). This
+# guarantees EventPublishNode resolves via NodeRegistry.get() on plain
+# `import kailash` for every install profile (issue #1054).
+from kailash.nodes.events import EventPublishNode  # noqa: E402,F401
 
 
 def __getattr__(name):
@@ -93,6 +102,10 @@ __all__ = [
     "NodeParameter",
     "NodeMetadata",
     "LocalRuntime",
+    # Domain-event primitive (issue #1054)
+    "EventBus",
+    "Subscription",
+    "DomainEvent",
     # Server classes (lazy, require kailash[server])
     "WorkflowServer",
     "DurableWorkflowServer",

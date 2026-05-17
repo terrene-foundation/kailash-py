@@ -29,6 +29,7 @@ _NODE_CATEGORIES = [
     "data",
     "edge",
     "enterprise",
+    "events",
     "logic",
     "mixins",
     "monitoring",
