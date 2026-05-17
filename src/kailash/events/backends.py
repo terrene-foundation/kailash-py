@@ -207,6 +207,11 @@ class RedisStreamsEventBackend(EventBackend):
         self._pending: Dict[str, tuple[str, EventHandler]] = {}
         self._tasks: Dict[str, asyncio.Task] = {}
         self._stop_flags: Dict[str, asyncio.Event] = {}
+        # subscription_id -> Event set once the consumer has armed its
+        # first XREAD. publish() awaits this so an event published right
+        # after a (lazily-started) subscribe is not missed by the `$`
+        # ("from now") read position. Closes the subscribe→publish race.
+        self._ready_flags: Dict[str, asyncio.Event] = {}
         self._lock = threading.Lock()
 
     def _stream_key(self, event_type: str) -> str:
@@ -232,7 +237,7 @@ class RedisStreamsEventBackend(EventBackend):
         except RuntimeError:
             pass
         logger.debug(
-            "eventbus.subscribe backend=redis event_type=%s " "subscription_id=%s",
+            "eventbus.subscribe backend=redis event_type=%s subscription_id=%s",
             event_type,
             sub_id,
         )
@@ -244,8 +249,12 @@ class RedisStreamsEventBackend(EventBackend):
                 return
             event_type, handler = self._pending.pop(sub_id)
             stop = asyncio.Event()
+            ready = asyncio.Event()
             self._stop_flags[sub_id] = stop
-            task = asyncio.create_task(self._consume(event_type, handler, stop, sub_id))
+            self._ready_flags[sub_id] = ready
+            task = asyncio.create_task(
+                self._consume(event_type, handler, stop, sub_id, ready)
+            )
             self._tasks[sub_id] = task
 
     def _ensure_all_consumers(self) -> None:
@@ -258,9 +267,23 @@ class RedisStreamsEventBackend(EventBackend):
         handler: EventHandler,
         stop: asyncio.Event,
         sub_id: str,
+        ready: asyncio.Event,
     ) -> None:
         key = self._stream_key(event_type)
-        last_id = "$"  # only events published after subscription
+        # Resolve the read position to a CONCRETE stream id (the current
+        # tip, or "0" for an empty/absent stream) BEFORE signalling
+        # readiness. Using a literal "$" would mean "from the next XREAD"
+        # — racy against an event published immediately after subscribe.
+        # A concrete baseline id guarantees every event added after this
+        # point is delivered.
+        try:
+            tip = await self._client.xrevrange(key, count=1)
+            last_id = tip[0][0] if tip else "0"
+        except Exception:
+            # Stream absent or transient error: start from the beginning
+            # of time so nothing published-after is missed.
+            last_id = "0"
+        ready.set()
         while not stop.is_set():
             try:
                 resp = await self._client.xread(
@@ -272,7 +295,7 @@ class RedisStreamsEventBackend(EventBackend):
                 if stop.is_set():
                     break
                 logger.exception(
-                    "eventbus.redis.xread_error event_type=%s " "subscription_id=%s",
+                    "eventbus.redis.xread_error event_type=%s subscription_id=%s",
                     event_type,
                     sub_id,
                 )
@@ -298,7 +321,7 @@ class RedisStreamsEventBackend(EventBackend):
                         await handler(event)
                     except Exception:
                         logger.exception(
-                            "event_handler.error subscription_id=%s " "event_type=%s",
+                            "event_handler.error subscription_id=%s event_type=%s",
                             sub_id,
                             event_type,
                         )
@@ -308,6 +331,7 @@ class RedisStreamsEventBackend(EventBackend):
             pending = self._pending.pop(subscription_id, None)
             stop = self._stop_flags.pop(subscription_id, None)
             task = self._tasks.pop(subscription_id, None)
+            self._ready_flags.pop(subscription_id, None)
         if pending is None and task is None:
             raise KeyError(f"unknown subscription id: {subscription_id}")
         if stop is not None:
@@ -327,6 +351,16 @@ class RedisStreamsEventBackend(EventBackend):
         # Ensure any consumers registered before a loop existed are live
         # so they observe events published after this point.
         self._ensure_all_consumers()
+        # Wait until every consumer for THIS event type has resolved its
+        # concrete baseline read-id (set its `ready` flag). Without this,
+        # an event published immediately after subscribe could be added
+        # before the consumer captured its baseline → silently missed.
+        with self._lock:
+            ready_flags = list(self._ready_flags.values())
+        if ready_flags:
+            await asyncio.gather(
+                *(r.wait() for r in ready_flags), return_exceptions=True
+            )
         await self._client.xadd(
             self._stream_key(event.event_type),
             {"event": json.dumps(event.to_dict())},
