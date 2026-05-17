@@ -97,7 +97,7 @@ _BACKENDS = ["sqlite_file", "postgresql"]
 _RUNTIMES = ["local_runtime", "async_local_runtime"]
 
 
-def _resolve_backend_url(backend: str, request):
+def _resolve_backend_url(backend: str):
     """Return a real DB URL for ``backend``.
 
     For PostgreSQL the URL comes from the shared ``test_suite``
@@ -113,15 +113,17 @@ def _resolve_backend_url(backend: str, request):
     if backend == "sqlite_file":
         tmpdir = tempfile.mkdtemp(prefix="df_issue1050_")
         db_path = Path(tmpdir) / "test.db"
-        return f"sqlite:///{db_path}", None
+        return f"sqlite:///{db_path}"
 
     if backend == "postgresql":
-        # Real reachability probe (a genuine TCP connect — NOT a mock) BEFORE
-        # touching the async `test_suite` fixture. Requesting the async-gen
-        # fixture only to `pytest.skip` inside it leaks an un-awaited
-        # coroutine (RuntimeWarning — zero-tolerance.md Rule 1). Probing the
-        # port first means the async fixture is only instantiated when PG is
-        # genuinely up.
+        # Real reachability probe (a genuine TCP connect — NOT a mock).
+        # The URL comes from DatabaseConfig.from_environment() directly —
+        # the test creates its own ProtectedDataFlow against this URL, so
+        # we do NOT need the IntegrationTestSuite async-gen fixture for
+        # URL-only resolution. Materializing that fixture from a sync helper
+        # called inside an already-running async test loop triggers
+        # `Runner.run() cannot be called from a running event loop`
+        # (pytest_asyncio plugin.py `_asyncgen_fixture_wrapper`).
         import socket
 
         from tests.infrastructure.test_harness import DatabaseConfig
@@ -135,8 +137,7 @@ def _resolve_backend_url(backend: str, request):
                 f"PostgreSQL not reachable at {cfg.host}:{cfg.port} — PG "
                 f"parametrization infra-gated (NOT mocked): {exc}"
             )
-        test_suite = request.getfixturevalue("test_suite")
-        return test_suite.config.url, test_suite
+        return cfg.url
 
     raise AssertionError(f"unknown backend {backend!r}")  # pragma: no cover
 
@@ -233,7 +234,7 @@ def _assert_node_boundary_is_protection_violation(exc: BaseException) -> None:
 @pytest.mark.parametrize("backend", _BACKENDS)
 @pytest.mark.parametrize("runtime_kind", _RUNTIMES)
 async def test_issue_1050_workflow_runtime_protection_blocks_and_keeps_type(
-    backend, runtime_kind, request, caplog
+    backend, runtime_kind, caplog
 ):
     """Write protection enforces on the workflow-runtime path AND
     ``ProtectionViolation`` survives ``execute_async``'s re-wrap.
@@ -242,7 +243,7 @@ async def test_issue_1050_workflow_runtime_protection_blocks_and_keeps_type(
     {LocalRuntime, AsyncLocalRuntime} matrix. The PG slot is infra-gated
     (skip, never mock) when PostgreSQL is unreachable.
     """
-    db_url, _suite = _resolve_backend_url(backend, request)
+    db_url = _resolve_backend_url(backend)
 
     db = ProtectedDataFlow(database_url=db_url, enable_protection=True)
     try:
