@@ -2,6 +2,82 @@
 
 ## [Unreleased]
 
+## [2.9.16] — 2026-05-17 — protection ordering + UPSERT enum + import_file swallow (#1058 Shards 2 + 3 + 4)
+
+### Fixed
+
+- **Express protection check fires BEFORE `_validate_if_enabled` on every
+  mutation surface (#1058 Shard 2, PR #1064)** — `_validate_if_enabled`
+  previously ran ahead of `node.async_run` (where `check_operation`
+  lived) on every `db.express.*` mutation. A blocked-write attacker
+  could trigger field-validator side effects (custom-validator logs,
+  metrics, external calls) before the protection block fired.
+  Invariant I2 ("a blocked write never takes a connection") still held —
+  validation is in-process, no DB connection — so this was a defense-
+  in-depth ordering tightening, not a bypass. Every Express mutation
+  (`create` / `update` / `delete` / `upsert` / `upsert_advanced` /
+  `bulk_create` / `bulk_delete` / `bulk_upsert`) now routes through
+  `DataFlowExpress._check_protection_if_enabled` BEFORE validation /
+  trust / node construction. A sentinel on the node
+  (`_express_protection_precheck_done`) skips the inner
+  `ProtectedNode.async_run` check on the Express path — preserving
+  spec invariant I1 (single check per logical user operation) and
+  avoiding double `auditor.log_allowed` entries on the happy path.
+  `bulk_update` is intentionally NOT prechecked at the outer level —
+  it delegates per-row to `update()` which does its own precheck;
+  outer precheck would create a per-row double-check.
+
+- **`Express.import_file` re-raises `ProtectionViolation` on both upsert
+  AND bulk_create branches (#1058 Shard 4, PR #1065)** — the per-record
+  upsert loop AND the non-upsert bulk_create branch wrapped the call in
+  a generic `except Exception as exc: errors.append(...)`. A write-
+  protection block surfaced as `ProtectionViolation`, got silently
+  folded into the `errors` list with no exception propagating to the
+  caller — silently bypassing write-protection at the `import_file`
+  Express surface (same I5-bypass shape as the `bulk_update` swallow
+  closed in 2.9.14). Both branches now `except ProtectionViolation:
+raise` ahead of the generic catch (spec
+  `specs/dataflow-protection.md` §2 path 1 + I5).
+
+### Changed
+
+- **Single-record `upsert` promoted to `OperationType.UPSERT` (#1058
+  Shard 3, PR #1065)** — pre-2.9.16, the generated `UpsertNode` ran
+  with `self.operation == "upsert"` but no `OperationType.UPSERT`
+  member existed in `dataflow.core.protection`, so
+  `_operation_mapping.get("upsert", OperationType.CUSTOM_QUERY)`
+  returned `CUSTOM_QUERY`. Under `read_only_global` /
+  `production_safe` (allow only `{READ}`) it was correctly BLOCKED,
+  but only because those configs also block `CUSTOM_QUERY`. A
+  configuration that allow-listed specific write ops without
+  `CUSTOM_QUERY` over-blocked `upsert`. `OperationType.UPSERT` is now
+  a first-class write op member and `_operation_mapping["upsert"]`
+  points at it. The READ-only defaults / classmethods are unchanged
+  (UPSERT is a write, correctly excluded from the default
+  `{OperationType.READ}` sets on every protection level). Visible
+  enum-modeling gap documented inline since #1050; closed here.
+
+### Added
+
+- **Tier-2 regression tests for Shards 2 + 3 + 4** —
+  `tests/regression/test_issue_1058_shard2_protection_before_validation.py`
+  (4 cases: blocked create/update/upsert MUST NOT invoke a side-
+  effecting field validator; allowed create MUST produce exactly one
+  audit entry); `tests/regression/test_issue_1058_shards_3_4_upsert_enum_and_seed_swallow.py`
+  (6 cases: UPSERT enum existence + mapping route, read-only blocks
+  upsert with read-back, `{READ, UPSERT}` allowlist permits upsert +
+  blocks create, `import_file` upsert + bulk_create branches re-raise
+  `ProtectionViolation` with read-back zero rows written).
+
+### Spec
+
+- `specs/dataflow-protection.md` updated to record (a) UPSERT promoted
+  from `CUSTOM_QUERY` fall-through to first-class enum member, (b) the
+  two-call-site Express precheck shape with sentinel discipline
+  (Shard 2), and (c) the I5 propagation discipline for every Express
+  mutation surface that wraps a nested mutation in `try / except`
+  (Shards 1 + 4).
+
 ## [2.9.15] — 2026-05-17 — remove dead AsyncSQLProtectionWrapper + global monkeypatch (#1058 Shard 1)
 
 ### Removed
