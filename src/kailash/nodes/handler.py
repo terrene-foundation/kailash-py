@@ -287,7 +287,12 @@ def make_handler_workflow(
     params = _derive_params_from_signature(handler)
 
     builder = WorkflowBuilder()
-    builder.add_node_instance(node, node_id)
+    # _internal=True: this is the SDK's own @app.handler() / register_handler()
+    # registration path wrapping a user function in a HandlerNode. The consumer
+    # wrote zero instance add_node() calls, so the instance-API advisory would
+    # be a false positive (issue #1071 Gap B). Genuine consumer instance-API
+    # misuse never reaches this path and still warns.
+    builder.add_node_instance(node, node_id, _internal=True)
 
     # Build identity input mapping if not provided
     if input_mapping is None:

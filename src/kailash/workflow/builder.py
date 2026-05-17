@@ -363,21 +363,38 @@ class WorkflowBuilder:
         logger.info(f"Added node '{node_id}' of type '{node_class.__name__}'")
         return node_id
 
-    def _add_node_instance(self, node_instance: "Node", node_id: str | None) -> str:
-        """Handle instance pattern: add_node(node_instance, 'node_id')"""
+    def _add_node_instance(
+        self,
+        node_instance: "Node",
+        node_id: str | None,
+        *,
+        _internal: bool = False,
+    ) -> str:
+        """Handle instance pattern: add_node(node_instance, 'node_id').
+
+        ``_internal`` suppresses the consumer-facing instance-API advisory.
+        It is set ONLY by SDK-internal registration paths (e.g. Nexus's
+        ``@app.handler()`` decorator, which wraps a user function in a
+        ``HandlerNode`` and registers it via this method). For those paths the
+        consumer wrote ZERO instance ``add_node`` calls — the advisory would be
+        a false positive, scaling to hundreds of spurious warnings per process
+        for correct decorator use (issue #1071 Gap B). Genuine consumer
+        instance-API misuse never sets ``_internal`` and still warns.
+        """
         import warnings
 
         # Generate ID if not provided
         if node_id is None:
             node_id = f"node_{uuid.uuid4().hex[:8]}"
 
-        warnings.warn(
-            f"Instance-based API usage detected. Consider using preferred pattern:\n"
-            f"  CURRENT: add_node(<instance>, '{node_id}')\n"
-            f"  PREFERRED: add_node('{node_instance.__class__.__name__}', '{node_id}', {{'param': value}})",
-            UserWarning,
-            stacklevel=3,
-        )
+        if not _internal:
+            warnings.warn(
+                f"Instance-based API usage detected. Consider using preferred pattern:\n"
+                f"  CURRENT: add_node(<instance>, '{node_id}')\n"
+                f"  PREFERRED: add_node('{node_instance.__class__.__name__}', '{node_id}', {{'param': value}})",
+                UserWarning,
+                stacklevel=3,
+            )
 
         # Store the instance
         self.nodes[node_id] = {
@@ -491,7 +508,13 @@ class WorkflowBuilder:
 
         return False
 
-    def add_node_instance(self, node_instance: Any, node_id: str | None = None) -> str:
+    def add_node_instance(
+        self,
+        node_instance: Any,
+        node_id: str | None = None,
+        *,
+        _internal: bool = False,
+    ) -> str:
         """
         Add a node instance to the workflow.
 
@@ -500,6 +523,12 @@ class WorkflowBuilder:
         Args:
             node_instance: Pre-configured node instance
             node_id: Unique identifier for this node (auto-generated if not provided)
+            _internal: Keyword-only internal flag — when True, suppresses the
+                consumer-facing instance-API advisory. Set ONLY by SDK-internal
+                registration paths (e.g. Nexus ``@app.handler()``); consumer
+                code MUST NOT pass this. Keyword-only (after ``*``) so a
+                positional True cannot accidentally suppress the warning.
+                Genuine consumer instance-API usage still warns.
 
         Returns:
             Node ID
@@ -507,7 +536,7 @@ class WorkflowBuilder:
         Raises:
             WorkflowValidationError: If node_id is already used or instance is invalid
         """
-        return self._add_node_instance(node_instance, node_id)
+        return self._add_node_instance(node_instance, node_id, _internal=_internal)
 
     def add_node_type(
         self,
