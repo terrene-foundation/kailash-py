@@ -11,6 +11,7 @@ disabled because it does not follow ``__getattr__`` fallbacks.
 
 import warnings
 
+from kailash.events import DomainEvent, EventBus, Subscription
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -93,6 +94,10 @@ __all__ = [
     "NodeParameter",
     "NodeMetadata",
     "LocalRuntime",
+    # Domain-event primitive (issue #1054)
+    "EventBus",
+    "Subscription",
+    "DomainEvent",
     # Server classes (lazy, require kailash[server])
     "WorkflowServer",
     "DurableWorkflowServer",
