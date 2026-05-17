@@ -46,6 +46,11 @@ class TestProtectionConfiguration:
         assert OperationType.READ.value == "read"
         assert OperationType.UPDATE.value == "update"
         assert OperationType.DELETE.value == "delete"
+        # Issue #1058 Shard 3 — UPSERT promoted from CUSTOM_QUERY fall-through
+        # to a first-class write op. Pre-Shard-3, single-record upsert mapped
+        # to CUSTOM_QUERY (.get default) which over-blocked under any config
+        # that allow-listed specific write ops without CUSTOM_QUERY.
+        assert OperationType.UPSERT.value == "upsert"
 
     def test_time_window_validation(self):
         """Test time window functionality."""

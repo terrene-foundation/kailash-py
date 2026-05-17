@@ -34,6 +34,7 @@ class OperationType(Enum):
     READ = "read"
     UPDATE = "update"
     DELETE = "delete"
+    UPSERT = "upsert"  # Issue #1058 Shard 3 — single-record upsert is a write
     BULK_CREATE = "bulk_create"
     BULK_UPDATE = "bulk_update"
     BULK_DELETE = "bulk_delete"
@@ -328,19 +329,19 @@ class WriteProtectionEngine:
             "bulk_update": OperationType.BULK_UPDATE,
             "bulk_delete": OperationType.BULK_DELETE,
             "bulk_upsert": OperationType.BULK_UPSERT,
-            # NOTE (scope): the generated UpsertNode runs with
-            # self.operation == "upsert"; there is no OperationType.UPSERT
-            # member, so "upsert" falls through to CUSTOM_QUERY. Under
-            # read_only_global / production_safe (allow only {READ}) a
-            # single-record upsert is therefore correctly BLOCKED (it IS a
-            # write). A config that allow-lists specific write ops but not
-            # CUSTOM_QUERY would over-block upsert — a pre-existing engine
-            # modeling gap that adding an OperationType.UPSERT member would
-            # close, but that is a public-enum API change (touching
-            # _handle_violation + every default allowed_operations set +
-            # every WriteProtectionConfig classmethod) — a distinct bug
-            # class out of #1050's shard scope, not a continuation. Not
-            # exercised by I7 (read/list/count only).
+            # Issue #1058 Shard 3 — close the pre-existing UpsertNode enum
+            # modeling gap. The generated UpsertNode runs with
+            # self.operation == "upsert". Pre-Shard-3, no OperationType.UPSERT
+            # existed, so "upsert" fell through to CUSTOM_QUERY (.get default).
+            # Under read_only_global / production_safe (allow only {READ}) a
+            # single-record upsert was correctly BLOCKED — but ONLY because
+            # those configs don't allow CUSTOM_QUERY. A config that allow-
+            # listed specific write ops without CUSTOM_QUERY over-blocked
+            # upsert. UPSERT is now a first-class write op, mapping per
+            # operation name. The READ-only defaults / classmethods are
+            # unchanged (UPSERT is a write, correctly excluded from the
+            # default {OperationType.READ} sets on every protection level).
+            "upsert": OperationType.UPSERT,
         }
 
     def check_operation(
