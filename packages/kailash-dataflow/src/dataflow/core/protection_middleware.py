@@ -437,10 +437,13 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
             # async_run. original_class is ALWAYS a concrete generated
             # DataFlow node at runtime (the decorator only wraps concrete
             # *Node classes); the Type[Node] parameter annotation makes
-            # pyright treat the base method as abstract. Static-analysis
-            # expressiveness gap, not a real bug.
-            return await super().async_run(  # pyright: ignore[reportAbstractUsage]
-                **kwargs
+            # pyright resolve super() to `object`, so it cannot see
+            # async_run. Static-analysis expressiveness gap, not a real
+            # bug (runtime MRO resolves to DataFlowNode.async_run).
+            return (
+                await super().async_run(  # pyright: ignore[reportAttributeAccessIssue]
+                    **kwargs
+                )
             )
 
     # Preserve class metadata
