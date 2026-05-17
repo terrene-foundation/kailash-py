@@ -243,6 +243,46 @@ class DataFlowExpress:
     # Validation Helper (TSG-103)
     # ========================================================================
 
+    async def _check_protection_if_enabled(
+        self, model: str, operation: str, inputs: Dict[str, Any]
+    ) -> None:
+        """Express-layer write-protection pre-check (issue #1058 Shard 2).
+
+        Fires the same ``protection_engine.check_operation(...)`` call
+        that ``ProtectedNode.async_run`` runs inside the node, BUT BEFORE
+        ``_validate_if_enabled`` / ``_trust_check_write`` / ``_create_node``.
+        Closes the defense-in-depth gap where a blocked-write attacker
+        could trigger field-validator side effects (custom validators may
+        log, emit events, hit external services) before the protection
+        block fired.
+
+        Invariant I2 ("a blocked write never takes a connection") was
+        already held by the inner check (validation is in-process, no DB
+        connection acquired). This pre-check tightens the ordering so
+        validation never runs on a blocked write either.
+
+        Sentinel discipline (preserves spec invariant I1, single-check):
+        after this method returns without raising, the caller MUST set
+        ``node._express_protection_precheck_done = True`` on the
+        freshly-created node before invoking ``node.async_run`` — the
+        inner check in ``ProtectedNode.async_run`` honors that sentinel
+        and skips the duplicate ``check_operation`` call (avoiding double
+        ``auditor.log_allowed`` entries on the happy path).
+        """
+        protection_engine = getattr(self._db, "_protection_engine", None)
+        if protection_engine is None:
+            return
+        connection_string = getattr(self._db, "database_url", None)
+        # Context shape mirrors ProtectedNode.async_run (node_id / model_fields
+        # are not yet available pre-construction; auditor handles missing keys).
+        context = {"inputs": inputs}
+        protection_engine.check_operation(
+            operation=operation,
+            model_name=model,
+            connection_string=connection_string,
+            context=context,
+        )
+
     async def _validate_if_enabled(self, model: str, data: Dict[str, Any]) -> None:
         """Validate data against model field validators if enabled.
 
@@ -616,11 +656,20 @@ class DataFlowExpress:
         """
 
         async def _create():
+            # Issue #1058 Shard 2: protection precheck fires BEFORE
+            # _validate_if_enabled to prevent field-validator side
+            # effects on blocked writes. See _check_protection_if_enabled
+            # for the sentinel-discipline contract that preserves spec
+            # invariant I1 (single check, no double-audit) end-to-end.
+            await self._check_protection_if_enabled(model, "create", data)
             await self._validate_if_enabled(model, data)
             # Phase 5.11: trust access check before the write.
             plan = await self._trust_check_write(model, "create")
             try:
                 node = self._create_node(model, "Create")
+                # Sentinel honored by ProtectedNode.async_run to skip the
+                # duplicate check_operation call on the Express path.
+                node._express_protection_precheck_done = True
                 result = await node.async_run(**data)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -801,11 +850,17 @@ class DataFlowExpress:
 
         async def _update():
             self._check_append_only(model, "update")
+            # Issue #1058 Shard 2: protection precheck fires BEFORE
+            # _validate_if_enabled (see create() for the contract).
+            await self._check_protection_if_enabled(
+                model, "update", {"id": id, "fields": fields}
+            )
             await self._validate_if_enabled(model, fields)
             # Phase 5.11: trust access check before the write.
             plan = await self._trust_check_write(model, "update")
             try:
                 node = self._create_node(model, "Update")
+                node._express_protection_precheck_done = True
                 result = await node.async_run(filter={"id": id}, fields=fields)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -888,10 +943,14 @@ class DataFlowExpress:
 
         async def _delete():
             self._check_append_only(model, "delete")
+            # Issue #1058 Shard 2: protection precheck fires BEFORE any
+            # other side-effecting work (see create() for the contract).
+            await self._check_protection_if_enabled(model, "delete", {"id": id})
             # Phase 5.11: trust access check before the write.
             plan = await self._trust_check_write(model, "delete")
             try:
                 node = self._create_node(model, "Delete")
+                node._express_protection_precheck_done = True
                 result = await node.async_run(id=id)
             except Exception as exc:
                 await self._trust_record_failure(
@@ -1219,8 +1278,12 @@ class DataFlowExpress:
 
         async def _upsert():
             self._check_append_only(model, "upsert")
+            # Issue #1058 Shard 2: protection precheck fires BEFORE
+            # _validate_if_enabled (see create() for the contract).
+            await self._check_protection_if_enabled(model, "upsert", data)
             await self._validate_if_enabled(model, data)
             node = self._create_node(model, "Upsert")
+            node._express_protection_precheck_done = True
 
             # Simple upsert: use data as both create and update
             # Use id field for where clause by default
@@ -1304,7 +1367,12 @@ class DataFlowExpress:
 
         async def _upsert():
             self._check_append_only(model, "upsert")
+            # Issue #1058 Shard 2: protection precheck (see create()).
+            await self._check_protection_if_enabled(
+                model, "upsert", {"where": where, "create": create, "update": update}
+            )
             node = self._create_node(model, "Upsert")
+            node._express_protection_precheck_done = True
 
             params = {"where": where, "create": create, "update": update or create}
             if conflict_on:
@@ -1374,7 +1442,15 @@ class DataFlowExpress:
         """
 
         async def _bulk_create():
+            # Issue #1058 Shard 2: protection precheck (see create()).
+            # bulk_create has no _validate_if_enabled call today, but the
+            # precheck still lands here so a blocked bulk_create raises
+            # ProtectionViolation BEFORE _create_node / node.async_run.
+            await self._check_protection_if_enabled(
+                model, "bulk_create", {"data": records}
+            )
             node = self._create_node(model, "BulkCreate")
+            node._express_protection_precheck_done = True
             result = await node.async_run(data=records)
 
             # Model-scoped cache invalidation (TSG-104)
@@ -1518,7 +1594,10 @@ class DataFlowExpress:
 
         async def _bulk_delete():
             self._check_append_only(model, "bulk_delete")
+            # Issue #1058 Shard 2: protection precheck (see create()).
+            await self._check_protection_if_enabled(model, "bulk_delete", {"ids": ids})
             node = self._create_node(model, "BulkDelete")
+            node._express_protection_precheck_done = True
             # Convert IDs list to filter format expected by BulkDeleteNode
             result = await node.async_run(filter={"id": {"$in": ids}})
 
@@ -1595,7 +1674,12 @@ class DataFlowExpress:
             # entry point) also fail closed with AppendOnlyViolationError.
             # Removing this line would silently re-open the bypass.
             self._check_append_only(model, "bulk_upsert")
+            # Issue #1058 Shard 2: protection precheck (see create()).
+            await self._check_protection_if_enabled(
+                model, "bulk_upsert", {"data": records}
+            )
             node = self._create_node(model, "BulkUpsert")
+            node._express_protection_precheck_done = True
             # BulkUpsertNode accepts conflict_columns in its config.
             node.conflict_columns = conflict_fields
             node.batch_size = batch_size
