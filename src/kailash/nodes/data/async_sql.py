@@ -46,7 +46,6 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.exceptions import PoolExhaustedError
@@ -1692,6 +1691,24 @@ class SQLiteAdapter(DatabaseAdapter):
         for connection reuse and bounded thread count.
         """
         assert self._aiosqlite is not None
+        if self._is_memory_db:
+            # Issue #1051: one reused connection per adapter instance for
+            # :memory:. The non-pool memory path (execute/execute_many/
+            # begin_transaction) calls _get_connection() per query; creating
+            # a fresh aiosqlite.connect() each time leaked every one of them
+            # because disconnect() only closes self._pool, which is None for
+            # :memory: by design. The "shared connection for memory databases"
+            # comments and the "don't close shared memory connections"
+            # transaction paths already assume a single reused connection —
+            # self._connection (set None at __init__) is the tracking slot
+            # this completes. disconnect() now owns its lifecycle.
+            if self._connection is None:
+                self._connection = await self._aiosqlite.connect(
+                    self._db_path, **self._connect_kwargs
+                )
+                self._connection.row_factory = self._aiosqlite.Row
+                await self._configure_connection(self._connection)
+            return self._connection
         conn = await self._aiosqlite.connect(self._db_path, **self._connect_kwargs)
         conn.row_factory = self._aiosqlite.Row
         await self._configure_connection(conn)
@@ -1702,6 +1719,14 @@ class SQLiteAdapter(DatabaseAdapter):
         if self._pool is not None:
             await self._pool.close()
             self._pool = None
+        # Issue #1051: close the reused :memory: connection (untracked by the
+        # pool path, which is None for :memory:). Without this it survives to
+        # GC and aiosqlite.Connection.__del__ emits a ResourceWarning.
+        if self._connection is not None:
+            try:
+                await self._connection.close()
+            finally:
+                self._connection = None
 
     async def execute(
         self,
@@ -2384,10 +2409,21 @@ class ProductionSQLiteAdapter(SQLiteAdapter):
 
     async def disconnect(self) -> None:
         """Disconnect enterprise pool."""
-        if self._enterprise_pool:
-            await self._enterprise_pool.close()
-            self._enterprise_pool = None
-        else:
+        try:
+            if self._enterprise_pool:
+                await self._enterprise_pool.close()
+                self._enterprise_pool = None
+        finally:
+            # Issue #1051: ProductionSQLiteAdapter inherits SQLiteAdapter's
+            # _get_connection()/begin_transaction(), so the :memory:
+            # transaction path populates the inherited self._connection
+            # slot — which _enterprise_pool does NOT own. The pre-fix
+            # if/else only reached super().disconnect() (the connection
+            # close) when _enterprise_pool was None; on a connected adapter
+            # it is always set, so the inherited :memory: connection leaked
+            # to GC. super().disconnect() is idempotent (guards on
+            # self._connection is not None), so calling it unconditionally
+            # is safe.
             await super().disconnect()
 
 
@@ -3668,6 +3704,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
     def __init__(self, **config):
         self._adapter: Optional[DatabaseAdapter] = None
+        # Issue #1051: a single node can create more than one adapter over
+        # its lifetime (retry path, runtime-pool fallback). close() used to
+        # disconnect only self._adapter (the last), orphaning the prior
+        # adapters — each holding an open :memory: connection that leaked to
+        # GC. Every adapter built by _create_adapter() is registered here so
+        # close() can tear all of them down.
+        self._owned_adapters: list[DatabaseAdapter] = []
         self._connected = False
         # Extract access control manager before passing to parent
         self.access_control_manager = config.pop("access_control_manager", None)
@@ -4350,6 +4393,31 @@ class AsyncSQLDatabaseNode(AsyncNode):
             adapter = ProductionSQLiteAdapter(db_config)
         else:
             raise NodeExecutionError(f"Unsupported database type: {db_type}")
+
+        # Issue #1051: register every adapter this node builds so close()
+        # can disconnect ALL of them (not just the last self._adapter).
+        # Tracked before connect() so a connect-retry that discards this
+        # adapter and builds another still leaves this one reachable for
+        # teardown.
+        #
+        # Bounded growth (#1051 redteam MEDIUM-1): a long-lived *cached*
+        # node under connect-retry / pool churn calls _create_adapter()
+        # repeatedly while cleanup() only runs at engine close — an
+        # unbounded reference accumulation. Dedupe by identity (the
+        # runtime-coordination path delegates here, so the same adapter
+        # can arrive twice) and cap the retained list; when over cap the
+        # oldest entries are stale retry-discards — best-effort disconnect
+        # (idempotent) + drop so a reference bound never becomes a handle
+        # leak.
+        if not any(a is adapter for a in self._owned_adapters):
+            self._owned_adapters.append(adapter)
+        _OWNED_ADAPTERS_CAP = 32
+        while len(self._owned_adapters) > _OWNED_ADAPTERS_CAP:
+            stale = self._owned_adapters.pop(0)
+            try:
+                await asyncio.wait_for(stale.disconnect(), timeout=1.0)
+            except (Exception, asyncio.TimeoutError):
+                pass  # Best effort — stale retry-discard; never block create
 
         # Retry connection with exponential backoff
         last_error = None
@@ -6030,6 +6098,28 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             self._connected = False
             self._adapter = None
+
+        # Issue #1051: disconnect every adapter this node created, not just
+        # the last self._adapter handled above. Connect-retry / runtime-pool
+        # fallback can build several ProductionSQLiteAdapters, each holding
+        # an open inherited :memory: connection; only one ever became
+        # self._adapter. Best-effort, guarded, idempotent (disconnect()
+        # guards on its own state). Runs regardless of self._connected so
+        # orphaned adapters are still torn down.
+        if self._owned_adapters:
+            for _adapter in self._owned_adapters:
+                try:
+                    await asyncio.wait_for(_adapter.disconnect(), timeout=1.0)
+                except (Exception, asyncio.TimeoutError) as e:
+                    # Best effort cleanup — but log at DEBUG for parity with
+                    # the sibling cached-node teardown in engine.py
+                    # (observability.md Rule 5: teardown swallows still emit
+                    # a DEBUG breadcrumb so a stuck disconnect is diagnosable).
+                    logger.debug(
+                        "async_sql.owned_adapter_disconnect_failed",
+                        extra={"error": str(e)},
+                    )
+            self._owned_adapters.clear()
 
     def __del__(self, _warnings=warnings):
         """Warn and attempt sync cleanup if node is GC'd while still connected."""
