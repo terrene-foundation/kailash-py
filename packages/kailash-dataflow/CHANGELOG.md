@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.9.18] — 2026-05-18 — sanitizer set/tuple type-confusion fix (#1047)
+
+### Fixed
+
+- **set/tuple type-confusion bypass in the input sanitizer (#1047)** — a str-declared field receiving a `set`/`tuple` was silently `str()`-coerced (bypassing the type-confusion gate) instead of raising `ValueError` per the security Sanitizer Contract Rule 2. `dict`/`list` already conformed; `set`/`tuple` were the only violators. Fixed on both the single-value and bulk paths by adding `set, tuple` to `sanitize_sql_input`'s `safe_types` so the existing type-confusion gate sees the real container and raises. Added tier-1 sanitizer-contract test coverage (Rules 1+2+3). Fixes #1047.
+
 ## [2.9.17] — 2026-05-18 — aiosqlite :memory: connection leak fix (#1051)
 
 ### Fixed
