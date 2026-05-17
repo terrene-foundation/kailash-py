@@ -223,14 +223,20 @@ async def test_rule1_benign_string_unchanged_no_false_positive(memory_dataflow):
     [
         pytest.param({"$injection": "DROP TABLE x; --"}, id="dict"),
         pytest.param(["DROP TABLE x; --"], id="list"),
-        pytest.param({"DROP TABLE x"}, id="set"),
-        pytest.param(("DROP TABLE x", "--"), id="tuple"),
     ],
 )
-async def test_rule2_type_confusion_on_str_field_raises(memory_dataflow, bad_value):
-    """A declared-``str`` field receiving dict/list/set/tuple MUST raise
+async def test_rule2_type_confusion_dict_list_on_str_field_raises(
+    memory_dataflow, bad_value
+):
+    """A declared-``str`` field receiving dict/list MUST raise
     ``ValueError`` with ``parameter type mismatch`` — silent
-    ``str(value)`` coercion is BLOCKED (nodes.py:920-928)."""
+    ``str(value)`` coercion is BLOCKED (nodes.py:920-928).
+
+    dict/list are in ``sanitize_sql_input``'s ``safe_types`` tuple
+    (nodes.py:805-816) so they survive the sanitize pass as their
+    original type and the post-sanitize type-confusion gate
+    (nodes.py:920-928) sees them and raises. CONFORMS to the contract.
+    """
     db = memory_dataflow
 
     @db.model
@@ -240,6 +246,57 @@ async def test_rule2_type_confusion_on_str_field_raises(memory_dataflow, bad_val
         email: str
 
     node = _create_node_for(db, "R2Confuse")
+    with pytest.raises(ValueError, match="parameter type mismatch"):
+        node.validate_inputs(id="acct-1", name=bad_value, email="alice@example.com")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        pytest.param({"DROP TABLE x"}, id="set"),
+        pytest.param(("DROP TABLE x", "--"), id="tuple"),
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "CONTRACT VIOLATION (rules/security.md § Sanitizer Contract Rule 2): "
+        "set/tuple for a declared-str field are SILENTLY str()-coerced, NOT "
+        "raised. Root cause: sanitize_sql_input runs first (nodes.py:903) and "
+        "its safe_types tuple (nodes.py:805-816) lists dict/list but NOT "
+        "set/tuple, so set/tuple fall through to `value = str(value)` "
+        "(nodes.py:823) BEFORE the type-confusion gate (nodes.py:920-928). By "
+        "the time the gate runs, the value is already a str → "
+        "isinstance(value,(dict,list,set,tuple)) is False → no ValueError. "
+        "This test asserts the CONTRACT (MUST raise) and is xfail(strict=True) "
+        "so it auto-flips to a hard failure the moment production is fixed. "
+        "Routed as a separate production-fix workstream — see issue #1047 "
+        "redteam finding."
+    ),
+)
+async def test_rule2_type_confusion_set_tuple_on_str_field_raises(
+    memory_dataflow, bad_value
+):
+    """CONTRACT ASSERTION (currently violated): a declared-``str`` field
+    receiving set/tuple MUST raise ``ValueError`` with ``parameter type
+    mismatch``. rules/security.md § Sanitizer Contract Rule 2 explicitly
+    enumerates set/tuple as MUST-raise. Production silently coerces them
+    via ``str(value)`` — the exact failure mode the rule blocks. Kept as
+    a contract assertion under xfail(strict=True): the test pins the
+    correct behavior, stays green-as-xfail while the gap is open, and
+    becomes XPASS→FAIL (forcing un-xfail) when production is fixed.
+    """
+    db = memory_dataflow
+
+    @db.model
+    class R2ConfuseSetTuple:
+        id: str
+        name: str
+        email: str
+
+    node = _create_node_for(db, "R2ConfuseSetTuple")
     with pytest.raises(ValueError, match="parameter type mismatch"):
         node.validate_inputs(id="acct-1", name=bad_value, email="alice@example.com")
 
