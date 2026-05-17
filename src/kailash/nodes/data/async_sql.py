@@ -1911,21 +1911,114 @@ class SQLiteAdapter(DatabaseAdapter):
             db.row_factory = self._aiosqlite.Row
             await self._configure_connection(db)
 
+        # Issue #1070: capture pre-call state so the abort path can restore it
+        # exactly. Without a try/except here, a caller cancelled/raising
+        # *between* begin_transaction() and its paired commit/rollback leaves
+        # _transaction_depth > 0 and the underlying :memory: connection
+        # mid-BEGIN. Because :memory: reuses one per-adapter connection, the
+        # NEXT begin_transaction() then observes depth > 0, takes the SAVEPOINT
+        # branch, and issues SAVEPOINT against a poisoned outer transaction.
+        depth_before = self._transaction_depth
+        savepoint_counter_before = self._savepoint_counter
+
         # Check current transaction depth
         if self._transaction_depth == 0:
             # First transaction - use BEGIN IMMEDIATE to acquire write lock
             # immediately, preventing "database is locked" under concurrency.
             # Mirrors the Rust SDK's begin_immediate() API.
-            await db.execute("BEGIN IMMEDIATE")
-            self._transaction_depth += 1
-            return (db, None, self._transaction_depth)
+            try:
+                await db.execute("BEGIN IMMEDIATE")
+                self._transaction_depth += 1
+                return (db, None, self._transaction_depth)
+            except BaseException:
+                # BaseException (not Exception) so asyncio.CancelledError is
+                # also caught — cancellation is the primary trigger for #1070.
+                await self._abort_begin(
+                    db,
+                    savepoint_name=None,
+                    depth_before=depth_before,
+                    savepoint_counter_before=savepoint_counter_before,
+                )
+                raise
         else:
             # Nested transaction - use SAVEPOINT
-            self._savepoint_counter += 1
-            savepoint_name = f"sp_{self._savepoint_counter}"
-            await db.execute(f"SAVEPOINT {savepoint_name}")
-            self._transaction_depth += 1
-            return (db, savepoint_name, self._transaction_depth)
+            savepoint_name = f"sp_{self._savepoint_counter + 1}"
+            try:
+                self._savepoint_counter += 1
+                await db.execute(f"SAVEPOINT {savepoint_name}")
+                self._transaction_depth += 1
+                return (db, savepoint_name, self._transaction_depth)
+            except BaseException:
+                await self._abort_begin(
+                    db,
+                    savepoint_name=savepoint_name,
+                    depth_before=depth_before,
+                    savepoint_counter_before=savepoint_counter_before,
+                )
+                raise
+
+    async def _abort_begin(
+        self,
+        db: Any,
+        *,
+        savepoint_name: Optional[str],
+        depth_before: int,
+        savepoint_counter_before: int,
+    ) -> None:
+        """Restore transaction state after begin_transaction() is aborted.
+
+        Issue #1070: invoked when a caller is cancelled or raises *between*
+        begin_transaction() and its paired commit/rollback. Resets the
+        instance nesting counters to their pre-call values AND rolls back the
+        underlying connection so the NEXT begin_transaction() on the same
+        adapter starts from a clean outer-transaction state.
+
+        For the :memory: shared-connection path the connection MUST NOT be
+        closed — closing destroys the in-memory database (per the SQLite
+        connection-management contract). Only the transaction state is
+        unwound: ROLLBACK TO / RELEASE for the nested SAVEPOINT case, or
+        ROLLBACK of the outer transaction for the first-transaction case.
+
+        This method MUST NOT mask the original cancellation/exception — the
+        caller re-raises immediately after this returns. Any failure while
+        unwinding the connection is logged at WARN and swallowed (the
+        connection is already in an error/aborting state; the original
+        exception is the one that matters).
+        """
+        # 1. Restore the instance nesting counters to pre-call values so the
+        #    next begin_transaction() takes the correct (BEGIN vs SAVEPOINT)
+        #    branch.
+        self._transaction_depth = depth_before
+        self._savepoint_counter = savepoint_counter_before
+
+        # 2. Unwind the underlying connection so it is no longer mid-BEGIN /
+        #    mid-SAVEPOINT. Closing is deliberately NOT done here: for
+        #    :memory: it would destroy the shared in-memory DB; for file DBs
+        #    the per-call connection is discarded by the caller's failure path
+        #    and GC, and ROLLBACK leaves it in a consistent state regardless.
+        try:
+            if savepoint_name is not None:
+                # Nested abort: undo just the savepoint we created, leaving
+                # the outer transaction (owned by an outer caller) intact.
+                await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            else:
+                # Outer abort: roll back the transaction this aborted
+                # begin_transaction() opened (or attempted to open).
+                await db.rollback()
+        except BaseException as unwind_error:  # noqa: BLE001
+            # The connection may already be in an aborted state (e.g. the
+            # BEGIN itself failed). Surface it at WARN for observability but
+            # do NOT raise — the original exception is re-raised by the
+            # caller and is the one operators must see.
+            logger.warning(
+                "sqlite.begin_transaction.abort_unwind_failed",
+                extra={
+                    "savepoint_name": savepoint_name,
+                    "depth_restored_to": depth_before,
+                    "unwind_error": str(unwind_error),
+                },
+            )
 
     async def commit_transaction(self, transaction: Any) -> None:
         """
@@ -5030,7 +5123,14 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 await adapter.execute_many(query, params_list, transaction)
                 await adapter.commit_transaction(transaction)
                 return len(params_list)
-            except Exception:
+            except BaseException:
+                # Issue #1070: BaseException (not Exception) so a cancelled
+                # coroutine (asyncio.CancelledError is BaseException, not
+                # Exception, on Py3.8+) ALSO runs rollback_transaction —
+                # which resets _transaction_depth. Without this, a
+                # cancellation between begin and commit skips the rollback,
+                # leaves depth > 0, and poisons the next begin_transaction()
+                # on the same (e.g. :memory: shared-connection) adapter.
                 await adapter.rollback_transaction(transaction)
                 raise
         else:
@@ -5086,7 +5186,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 )
                 await adapter.commit_transaction(transaction)
                 return result
-            except Exception:
+            except BaseException:
+                # Issue #1070: see _execute_many_with_transaction — catch
+                # BaseException so an asyncio.CancelledError between begin and
+                # commit still runs rollback_transaction (which resets
+                # _transaction_depth) instead of leaking a poisoned state into
+                # the next begin_transaction() on the same adapter.
                 await adapter.rollback_transaction(transaction)
                 raise
         else:
