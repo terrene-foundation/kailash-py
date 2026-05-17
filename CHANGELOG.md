@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-05-18
+
+### Added
+
+- **`kailash.EventBus` domain-event primitive with pluggable backends (#1054)** — new public surface for in-process and broker-backed event publication. Exports: `EventBus`, `Subscription`, `DomainEvent`, `EventPublishNode`. Backends: `InMemoryEventBackend` (default, zero external dep) and `RedisStreamsEventBackend` (behind the existing `[redis]` optional extra). Backend selectable via constructor `backend=` arg or `KAILASH_EVENTBUS_BACKEND` env var (closed-list lookup, no arbitrary-import vector). `publish` + `subscribe` API supports `correlation_id` for trace propagation (auto-generated via `uuid.uuid4()` when omitted, round-trips to subscriber). `EventPublishNode` integrates publication into `WorkflowBuilder` steps. Type stub (`.pyi`) + `py.typed` marker shipped. Tier-2 round-trip suite at `tests/integration/events/test_eventbus_wiring.py` (16 passed + 1 documented xfail for live Redis). Fixes #1054.
+
+### Fixed
+
+- **`@app.handler()` decorator no longer emits the SDK's own instance-API advisory (#1071 Gap B)** — the decorator's internal `make_handler_workflow` registers via `WorkflowBuilder.add_node_instance`, which historically warned the consumer about instance-API misuse — once per registered handler, scaling to hundreds of spurious `UserWarning`s per process for correct decorator use. Added keyword-only `_internal: bool = False` flag to `_add_node_instance` and `add_node_instance`; `make_handler_workflow` passes `_internal=True`. Genuine consumer instance-API misuse never sets the flag and still warns. `_internal` is keyword-only (after `*`) so a positional `True` cannot accidentally suppress the warning. Fixes #1071 Gap B.
+
 ## [2.21.3] - 2026-05-18
 
 ### Fixed

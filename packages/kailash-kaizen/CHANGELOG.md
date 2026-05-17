@@ -4,6 +4,8 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.21.1] — 2026-05-18 — restore `kaizen.api` deprecation shim (#1071)
+
 ### Fixed
 
 - **`kaizen.api` restored as a deprecation shim (#1071)** — the structural-split refactor (#75) relocated the unified Agent API from `kaizen.api` to `kaizen_agents.api` and removed `kaizen.api` outright with no deprecation cycle. `from kaizen.api import Agent` raised `ModuleNotFoundError` on every published release — a hard break for every downstream caller on first `pip install --upgrade`. `kaizen.api` is now restored as a PEP 562 deprecation shim: every public symbol that historically lived under `kaizen.api` resolves through it and emits a `DeprecationWarning` naming the new import path on attribute access. The shim will be removed in a future major release.
