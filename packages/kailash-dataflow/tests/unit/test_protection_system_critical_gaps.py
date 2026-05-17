@@ -361,43 +361,40 @@ class TestProtectionSystemCriticalGaps:
 
             runtime.execute = mock_execute
 
-            # Test 3: Execute through the protected runtime — interception
-            # MUST run.
-            try:
+            # Test 3 + 4 (issue #1050 — END-TO-END runtime-path enforcement,
+            # restored): execute the write workflow through the protected
+            # runtime. With the #1050 engine-wiring fix landed
+            # (protect_dataflow_node now overrides async_run, and every
+            # runtime/express path converges on async_run), the create node
+            # invokes WriteProtectionEngine.check_operation BEFORE the DB
+            # write while global read-only mode is on, so the
+            # ProtectedDataFlowRuntime's results-scan re-raises a genuine
+            # ProtectionViolation. This is the real hot-path assertion the
+            # prior "KNOWN COVERAGE GAP — tracked: issue #1050" block said
+            # MUST be restored once the fix lands — it replaces the
+            # isolated check_operation() call that only proved the engine
+            # works in a vacuum, NOT that the runtime invokes it.
+            #
+            # ProtectionViolation IS-A NodeExecutionError (Shard 1a,
+            # issue #1050) so pytest.raises(ProtectionViolation) is the
+            # strictest correct assertion on every path — the subclass
+            # relationship makes AsyncNode.execute_async's
+            # `except NodeExecutionError: raise` re-raise the genuine type
+            # without wrapping. The isinstance() assertion pins the
+            # taxonomy contract: if a future refactor un-bases
+            # ProtectionViolation from NodeExecutionError, execute_async
+            # would re-wrap it and this line fails loudly.
+            from kailash.sdk_exceptions import NodeExecutionError
+
+            with pytest.raises(ProtectionViolation) as exc_info:
                 runtime.execute(workflow.build())
-            except Exception:
-                # A raised exception (ProtectionViolation OR a DB error) is
-                # one tolerated outcome; a clean return is the other
-                # (file-backed creates the table). Either way the
-                # interception wrapper MUST have been entered — that is the
-                # gap this test guards.
-                pass
 
             assert execution_intercepted, "Runtime execute method was not called"
-
-            # Test 4: Protection enforcement — the protection engine MUST
-            # block the create operation while global read-only mode is on.
-            # This is the deterministic, file-backed-correct assertion of
-            # the protection contract (replaces the ":memory:"-only "no
-            # such table" fallback).
-            #
-            # KNOWN COVERAGE GAP — tracked: issue #1050 (CRITICAL). The
-            # mock-wrapped runtime.execute above proves interception ran,
-            # NOT that the runtime hot path enforces protection. The
-            # protection ENGINE is an orphan on the async path
-            # (ProtectedDataFlowRuntime / db.express never invoke
-            # check_operation for generated CRUD nodes). End-to-end
-            # runtime-path enforcement assertion MUST be restored here once
-            # #1050's engine-wiring fix lands.
-            protection_engine = db._protection_engine
-            with pytest.raises(ProtectionViolation) as exc_info:
-                protection_engine.check_operation(
-                    operation="create",
-                    model_name="TestModel",
-                    connection_string=db.config.database.get_connection_url(
-                        db.config.environment
-                    ),
-                )
+            assert isinstance(exc_info.value, NodeExecutionError), (
+                "ProtectionViolation MUST remain a NodeExecutionError "
+                "subclass (issue #1050 Shard 1a) so it survives "
+                "AsyncNode.execute_async's re-raise allowlist"
+            )
             assert "Global protection blocks" in str(
                 exc_info.value
             ), f"Expected 'Global protection blocks' in: {exc_info.value}"
@@ -408,53 +405,47 @@ class TestProtectionSystemCriticalGaps:
         """Test: Protection violations or database errors are properly propagated."""
         db, test_model = protected_readonly_dataflow
 
-        # The protected runtime is the propagation surface the original
-        # test exercised; assert it is constructible + the protected type,
-        # then close it immediately (ProtectedDataFlowRuntime extends
-        # LocalRuntime → ResourceWarning from __del__ if GC'd unclosed).
-        runtime = db.create_protected_runtime()
-        try:
-            assert isinstance(runtime, ProtectedDataFlowRuntime)
-        finally:
-            runtime.close()
-
-        # The original workflow is retained for documentation parity with
-        # the prior test (it drove the now-removed sync runtime.execute()).
+        # The original workflow drives the END-TO-END propagation surface:
+        # a write node executed through ProtectedDataFlowRuntime while
+        # global read-only mode is on.
         workflow = WorkflowBuilder()
         workflow.add_node(
             "TestModelCreateNode", "create_test", {"name": "test item", "value": 42}
         )
 
-        # The original test ran the *sync* runtime.execute() and accepted a
-        # raised exception whose chain contained EITHER a ProtectionViolation
-        # OR a ":memory:"-table-isolation "no such table" DB error. On the
-        # #998 FILE-BACKED fixture the table IS created, so the "no such
-        # table" fallback the original tolerated for ":memory:" cannot fire.
-        # The test's intent — "protection violations are properly propagated
-        # with the correct operation/level metadata and are examinable via
-        # the exception chain" — is preserved by asserting the protection
-        # ENGINE raises a ProtectionViolation carrying operation==CREATE +
-        # level==BLOCK. That is exactly the metadata the original "Test 1"
-        # branch asserted; the ":memory:" "no such table" branch was a
-        # table-isolation accident that masked, not exercised, this contract.
-        #
-        # KNOWN COVERAGE GAP — tracked: issue #1050 (CRITICAL). This asserts
-        # the protection ENGINE in isolation, NOT that the runtime hot path
-        # invokes it. ProtectedDataFlowRuntime / db.express do NOT enforce
-        # write-protection on generated CRUD nodes (the engine is an orphan
-        # on the async path). End-to-end runtime-path enforcement assertion
-        # MUST be restored here once #1050's engine-wiring fix lands.
-        protection_engine = db._protection_engine
-        with pytest.raises(ProtectionViolation) as exc_info:
-            protection_engine.check_operation(
-                operation="create",
-                model_name="TestModel",
-                connection_string=db.config.database.get_connection_url(
-                    db.config.environment
-                ),
-            )
+        # Issue #1050 — END-TO-END propagation, restored. The prior "KNOWN
+        # COVERAGE GAP — tracked: issue #1050" block asserted the engine in
+        # isolation (proving the engine raises a ProtectionViolation in a
+        # vacuum, NOT that the runtime hot path invokes it). With the
+        # engine-wiring fix landed, protect_dataflow_node overrides
+        # async_run; ProtectedDataFlowRuntime.execute runs the write node,
+        # the protected async_run invokes check_operation BEFORE the DB
+        # write, _handle_violation raises, and the runtime's results-scan
+        # re-raises a genuine ProtectionViolation. The test's intent —
+        # "protection violations are properly propagated with the correct
+        # operation/level metadata and are examinable via the exception
+        # chain" — is now asserted against the REAL hot path, not the
+        # engine in isolation.
+        from kailash.sdk_exceptions import NodeExecutionError
+
+        runtime = db.create_protected_runtime()
+        try:
+            assert isinstance(runtime, ProtectedDataFlowRuntime)
+            with pytest.raises(ProtectionViolation) as exc_info:
+                runtime.execute(workflow.build())
+        finally:
+            runtime.close()
 
         exception = exc_info.value
+
+        # Taxonomy contract (issue #1050 Shard 1a): ProtectionViolation
+        # MUST remain a NodeExecutionError subclass so it survives
+        # AsyncNode.execute_async's `except NodeExecutionError: raise`
+        # allowlist without being re-wrapped on the workflow-runtime path.
+        assert isinstance(exception, NodeExecutionError), (
+            "ProtectionViolation MUST be a NodeExecutionError subclass "
+            "(issue #1050 Shard 1a / spec invariant I5)"
+        )
 
         # Propagated metadata MUST be intact (the original Test 1 invariant).
         assert exception.operation == OperationType.CREATE

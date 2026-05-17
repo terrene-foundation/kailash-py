@@ -291,78 +291,130 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
         # is still hasattr()-guarded because it is absent until injection.
         dataflow_instance: Any
 
-        def run(self, **kwargs) -> Dict[str, Any]:
-            """Override run to add protection checks."""
-            logger.debug(
-                "protection_middleware.protectednode_run_called_for",
-                extra={"class_name": self.__class__.__name__},
-            )
-            logger.debug(
-                "protection_middleware.has_dataflow_instance",
-                extra={"hasattr": hasattr(self, "dataflow_instance")},
-            )
+        # Issue #1050: the protection check is wired into async_run(), NOT
+        # the sync run() override that previously lived here. The generated
+        # DataFlowNode is an AsyncNode subclass; EVERY real path converges
+        # on async_run():
+        #   - db.express.* calls `await node.async_run(**data)` directly
+        #     (features/express.py).
+        #   - LocalRuntime / AsyncLocalRuntime dispatch prefers
+        #     execute_async() over sync run() (runtime/local.py); AsyncNode.
+        #     execute_async() calls `await self.async_run()`.
+        #   - A raw sync `node.execute()` caller still routes through
+        #     AsyncNode.execute() -> execute_async() -> async_run()
+        #     (AsyncNode.run() itself raises NotImplementedError).
+        # The old sync run() override (deleted in this commit) was NEVER
+        # invoked on any real path — it was a facade orphan
+        # (orphan-detection.md §1). It is intentionally NOT replaced with a
+        # sync run() override: DataFlowNode.run() is already a correct
+        # async_safe_run(self.async_run(**kwargs)) bridge, so it reaches
+        # this protected async_run() with exactly ONE check. Adding a sync
+        # run() override here would re-introduce a double-check
+        # (sync run() check -> async_safe_run -> async_run() check again).
+        # This satisfies spec invariant I1 (single-check, no double-check).
 
-            # Get protection engine from DataFlow instance
+        async def async_run(self, **kwargs) -> Dict[str, Any]:
+            """Run the write-protection check, then delegate to async_run.
+
+            The check runs BEFORE ``super().async_run(**kwargs)`` — i.e.
+            before lazy table-existence DDL and before any connection-pool
+            acquisition (spec invariant I2: a blocked write never takes a
+            connection). Arguments are built from ``self.operation`` /
+            ``self.model_name`` (the canonical lowercase strings set in
+            ``DataFlowNode.__init__``), NOT a brittle class-name parse —
+            spec invariant I3. ``self.model_name`` reaching
+            ``check_operation`` is what makes ``add_model_protection`` /
+            ``add_field_protection`` enforce (spec invariant I4).
+            ``check_operation`` routes a block through
+            ``WriteProtectionEngine._handle_violation``, which raises for
+            BLOCK/AUDIT and only logs for WARN (spec invariant I6) AND
+            emits the audit record before the raise (spec invariant I9) —
+            both are automatic by going through ``check_operation`` rather
+            than a hand-rolled level check. A raised ``ProtectionViolation``
+            propagates to the caller (spec invariant I5): on the Express
+            path directly (Express does not swallow it into a result
+            dict); on the workflow-runtime path it survives
+            ``AsyncNode.execute_async``'s re-raise allowlist because
+            ``ProtectionViolation`` is a ``NodeExecutionError`` subclass
+            (Shard 1a, issue #1050).
+            """
+            # Get protection engine from DataFlow instance. Carried over
+            # verbatim from the removed sync override: dataflow_instance is
+            # injected post-construction (Express _create_node binds it;
+            # the workflow node generator binds it in __init__), so the
+            # hasattr guard is the documented fail-open posture when the
+            # node is constructed before binding — NOT introduced here.
             if hasattr(self, "dataflow_instance"):
                 df = self.dataflow_instance
-                logger.debug(
-                    f"Has _protection_engine: {hasattr(df, '_protection_engine')}"
-                )
 
                 if hasattr(df, "_protection_engine"):
                     protection_engine = df._protection_engine
-                    logger.debug(
-                        f"Protection engine found: {protection_engine is not None}"
-                    )
 
-                    # Only check if protection engine is actually enabled
+                    # Only check if a protection engine is actually wired
+                    # (ProtectedDataFlow with enable_protection=False sets
+                    # _protection_engine = None).
                     if protection_engine is not None:
-                        # Detect operation from node class name
-                        class_name = self.__class__.__name__
-                        operation = "unknown"
-                        if "Create" in class_name:
-                            operation = "create"
-                        elif "Update" in class_name:
-                            operation = "update"
-                        elif "Delete" in class_name:
-                            operation = "delete"
-                        elif "Read" in class_name or "List" in class_name:
-                            operation = "read"
+                        # I3: canonical operation string set in
+                        # DataFlowNode.__init__ (self.operation), e.g.
+                        # "create" / "read" / "update" / "delete" / "list"
+                        # / "count" / "upsert" / "bulk_create" / ... It maps
+                        # directly through WriteProtectionEngine.
+                        # _operation_mapping. This REPLACES the removed
+                        # override's class-name if-ladder, which mis-mapped
+                        # upsert/count/bulk_* to "unknown" -> CUSTOM_QUERY
+                        # (over-blocking count under read-only, never
+                        # enforcing bulk_*).
+                        operation = getattr(self, "operation", None) or "custom_query"
 
-                        # Extract model name from class name (e.g., "TestUserCreateNode" -> "TestUser")
+                        # I4: model name from the instance attribute (set in
+                        # DataFlowNode.__init__), with the class-name strip
+                        # retained ONLY as a defensive fallback for the
+                        # (not-expected-on-real-paths) case where the
+                        # attribute is absent.
                         model_name = getattr(self, "model_name", None)
-                        if not model_name and "Node" in class_name:
-                            # Remove operation suffix and "Node"
-                            for op in [
-                                "Create",
-                                "Update",
-                                "Delete",
-                                "Read",
-                                "List",
-                                "BulkCreate",
-                                "BulkUpdate",
-                                "BulkDelete",
-                                "BulkUpsert",
-                            ]:
-                                if op + "Node" in class_name:
-                                    model_name = class_name.replace(op + "Node", "")
-                                    break
+                        if not model_name:
+                            class_name = self.__class__.__name__
+                            if "Node" in class_name:
+                                for op in [
+                                    "BulkCreate",
+                                    "BulkUpdate",
+                                    "BulkDelete",
+                                    "BulkUpsert",
+                                    "Create",
+                                    "Update",
+                                    "Delete",
+                                    "Read",
+                                    "List",
+                                    "Count",
+                                ]:
+                                    if op + "Node" in class_name:
+                                        model_name = class_name.replace(op + "Node", "")
+                                        break
 
-                        # Extract context
+                        # Context for dynamic protection conditions /
+                        # auditing. Same shape the removed sync override
+                        # built.
                         context = {
                             "node_id": getattr(self, "node_id", "unknown"),
                             "model_fields": getattr(self, "model_fields", {}),
                             "inputs": kwargs,
                         }
 
-                        # Get connection string
+                        # Connection-string resolution identical to the
+                        # removed sync override: explicit database_url kwarg
+                        # first, then the bound DataFlow instance's
+                        # database_url (drives connection-level protection,
+                        # e.g. production_safe's r".*prod.*" pattern).
                         connection_string = kwargs.get("database_url")
-                        if not connection_string and hasattr(self, "dataflow_instance"):
-                            df = self.dataflow_instance
-                            if hasattr(df, "database_url"):
-                                connection_string = df.database_url
+                        if not connection_string and hasattr(df, "database_url"):
+                            connection_string = df.database_url
 
-                        # Perform protection check
+                        # I6 + I9: check_operation -> _handle_violation
+                        # raises for BLOCK/AUDIT, logs+allows for WARN, and
+                        # emits the auditor.log_violation record BEFORE the
+                        # raise. Do NOT hand-roll the level check here — the
+                        # single routing point is the structural guarantee
+                        # the audit record always fires.
                         try:
                             protection_engine.check_operation(
                                 operation=operation,
@@ -372,16 +424,24 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
                             )
                         except ProtectionViolation as e:
                             logger.error(
-                                f"Protection violation in node {getattr(self, 'node_id', 'unknown')}: {e}"
+                                "protection_middleware.protection_violation",
+                                extra={
+                                    "node_id": getattr(self, "node_id", "unknown"),
+                                    "operation": operation,
+                                    "error": str(e),
+                                },
                             )
                             raise
 
-            # Execute original method if protection passes.
-            # original_class is ALWAYS a concrete generated DataFlow node at
-            # runtime (the decorator only wraps concrete *Node classes); the
-            # Type[Node] parameter annotation makes pyright treat Node.run as
-            # abstract. Static-analysis expressiveness gap, not a real bug.
-            return super().run(**kwargs)  # pyright: ignore[reportAbstractUsage]
+            # I5: protection passed — delegate to the generated node's
+            # async_run. original_class is ALWAYS a concrete generated
+            # DataFlow node at runtime (the decorator only wraps concrete
+            # *Node classes); the Type[Node] parameter annotation makes
+            # pyright treat the base method as abstract. Static-analysis
+            # expressiveness gap, not a real bug.
+            return await super().async_run(  # pyright: ignore[reportAbstractUsage]
+                **kwargs
+            )
 
     # Preserve class metadata
     ProtectedNode.__name__ = original_class.__name__
