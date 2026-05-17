@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+## [2.9.15] — 2026-05-17 — remove dead AsyncSQLProtectionWrapper + global monkeypatch (#1058 Shard 1)
+
+### Removed
+
+- **`AsyncSQLProtectionWrapper` class deleted from `dataflow.core.protection_middleware` (#1058 Shard 1)** —
+  the class did `node_class.execute = protected_execute` on the core
+  `kailash.nodes.data.AsyncSQLDatabaseNode` class, a Python-process-wide
+  global side effect with last-wins binding semantics. Every consumer of
+  `AsyncSQLDatabaseNode` in the process (including non-protected DataFlow
+  instances and direct SDK users) had its `execute` rebound against
+  whichever `ProtectedDataFlow` was constructed most recently — so only
+  the latest instance's protection engine actually fired. After the #1050
+  fix wired protection into `ProtectedNode.async_run`, every real path
+  (`db.express.*`, `LocalRuntime.execute`, `AsyncLocalRuntime.execute_async`,
+  raw `node.execute()` against generated nodes) converges on `async_run()`
+  and hits one `check_operation` call there — making the AsyncSQL wrapper
+  both dead and harmful. Removed per `orphan-detection.md` §3 ("removed =
+  deleted, not deprecated"). No deprecation cycle: the wrapper carried no
+  contract any caller could have correctly relied on; the global monkeypatch
+  shape was the failure mode the deletion fixes.
+- The `_wrap_async_sql_node()` method on `ProtectedDataFlow` and the
+  unconditional invocation from `ProtectedDataFlow.__init__` are removed
+  in the same commit.
+
+### Added
+
+- **Standalone regression test for `bulk_update` protection propagation
+  (`tests/regression/test_issue_1058_bulk_update_propagates_not_swallowed.py`)** —
+  isolates the swallow-vs-propagate failure mode the 2.9.14 `bulk_update`
+  fix at `express.py:1461-1477` prevents. The per-mutation matrix at
+  `tests/integration/test_issue_1050_protection_mutation_matrix.py` covers
+  `bulk_update` parametrically; this test gives the contract its own named,
+  grep-able owner so a future regression has one obvious place to fail.
+
+### Changed
+
+- `specs/dataflow-protection.md` updated to describe the
+  single-call-site invariant `check_operation` now upholds
+  (`ProtectedNode.async_run` is the one and only production call site),
+  replacing the stale paragraph that acknowledged the now-removed
+  `AsyncSQLProtectionWrapper` as "dead code on the protected-write path".
+
+### Impact
+
+No user-visible API change. The removal eliminates a correctness hazard
+for any deployment that constructs more than one `ProtectedDataFlow` in
+the same Python process (the prior global monkeypatch meant only the
+most recently constructed instance's protection rules were enforced
+through the AsyncSQL path).
+
 ## [2.9.14] — 2026-05-17 — write-protection enforcement on async hot path + bulk_update bypass closure (#1050)
 
 ### Changed
