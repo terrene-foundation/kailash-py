@@ -59,6 +59,7 @@ from dataflow.classification.event_payload import format_record_id_for_event
 from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
 from dataflow.core.exceptions import DDLFailedError
 from dataflow.core.multi_tenancy import TenantRequiredError
+from dataflow.core.protection import ProtectionViolation
 from dataflow.core.tenant_context import get_current_tenant_id
 
 if TYPE_CHECKING:
@@ -1457,6 +1458,23 @@ class DataFlowExpress:
                 try:
                     updated = await self.update(model, str(record_id), fields)
                     results.append(updated)
+                except ProtectionViolation:
+                    # Issue #1050 / spec I5: a write-protection block is a
+                    # HARD STOP, not a countable per-row data failure. The
+                    # per-record `except Exception` below would otherwise
+                    # swallow it into `failed_count`, returning an empty
+                    # results list with NO exception — silently bypassing
+                    # write-protection at the bulk_update Express surface
+                    # (specs/dataflow-protection.md §2 path 1 + I5: "Express
+                    # MUST surface it as an exception, not fold it into a
+                    # result dict"). Re-raise so the violation propagates to
+                    # the caller exactly as the sibling bulk_* surfaces
+                    # (bulk_create/bulk_delete/bulk_upsert) already do (they
+                    # call node.async_run once, so the protection raise
+                    # propagates directly). Same hard-stop class as the
+                    # _check_append_only / AppendOnlyViolationError guard
+                    # that fires before this loop.
+                    raise
                 except Exception:
                     failed_count += 1
 
