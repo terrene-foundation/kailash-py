@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.9.17] — 2026-05-18 — aiosqlite :memory: connection leak fix (#1051)
+
+### Fixed
+
+- **aiosqlite `:memory:` connection leaked on `DataFlow`/`ProtectedDataFlow` `close()` (#1051)** — multi-sited fix in `engine.py`: untracked per-query `:memory:` connection is now reused and closed; `ProductionSQLiteAdapter.disconnect` handles both branches; node `_owned_adapters` teardown; engine cached-node teardown resolved `cleanup()` vs the dead `hasattr(close)` guard. Fixes #1051.
+
 ## [2.9.16] — 2026-05-17 — protection ordering + UPSERT enum + import_file swallow (#1058 Shards 2 + 3 + 4)
 
 ### Fixed
