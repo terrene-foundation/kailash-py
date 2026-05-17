@@ -11,11 +11,7 @@ from typing import Any, Dict, Optional, Type
 from .engine import DataFlow
 from .nodes import NodeGenerator
 from .protection import WriteProtectionConfig, WriteProtectionEngine
-from .protection_middleware import (
-    AsyncSQLProtectionWrapper,
-    DataFlowProtectionMixin,
-    ProtectedDataFlowRuntime,
-)
+from .protection_middleware import DataFlowProtectionMixin, ProtectedDataFlowRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +110,6 @@ class ProtectedDataFlow(DataFlowProtectionMixin, DataFlow):
             # Replace node generator with protected version
             self._node_generator = ProtectedNodeGenerator(self)
 
-            # Wrap AsyncSQLDatabaseNode if available
-            self._wrap_async_sql_node()
-
             logger.info("DataFlow write protection enabled")
         else:
             self._protection_config = None
@@ -159,18 +152,6 @@ class ProtectedDataFlow(DataFlowProtectionMixin, DataFlow):
                     )
 
         return result
-
-    def _wrap_async_sql_node(self):
-        """Wrap AsyncSQLDatabaseNode with protection checks."""
-        try:
-            from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-
-            if self._protection_engine:
-                wrapper = AsyncSQLProtectionWrapper(self._protection_engine)
-                wrapper.wrap_async_sql_node(AsyncSQLDatabaseNode)
-                logger.debug("AsyncSQLDatabaseNode wrapped with protection")
-        except ImportError:
-            logger.warning("AsyncSQLDatabaseNode not available for protection wrapping")
 
     def create_workflow(self, workflow_id: str = None, **kwargs):
         """

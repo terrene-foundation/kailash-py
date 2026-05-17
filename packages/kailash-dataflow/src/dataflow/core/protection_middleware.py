@@ -6,7 +6,6 @@ Provides runtime enforcement through node execution interception.
 """
 
 import logging
-from functools import wraps
 from typing import Any, Dict, Optional, Type
 
 from kailash.nodes.base import Node
@@ -452,63 +451,3 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
     ProtectedNode.__module__ = original_class.__module__
 
     return ProtectedNode
-
-
-class AsyncSQLProtectionWrapper:
-    """
-    Wrapper for AsyncSQLDatabaseNode to add write protection.
-
-    This wrapper intercepts AsyncSQLDatabaseNode creation and execution
-    to enforce write protection at the lowest level.
-    """
-
-    def __init__(self, protection_engine: WriteProtectionEngine):
-        self.protection_engine = protection_engine
-
-    def wrap_async_sql_node(self, node_class: Type):
-        """Wrap AsyncSQLDatabaseNode with protection checks."""
-        original_execute = node_class.execute
-        protection_engine = self.protection_engine  # Capture in closure
-        detect_operation = self._detect_operation_from_sql  # Capture in closure
-
-        @wraps(original_execute)
-        def protected_execute(node_self, **kwargs):
-            # Analyze SQL to determine operation type
-            query = kwargs.get("query", "")
-            operation = detect_operation(query)  # Use captured function
-
-            # Extract connection information
-            connection_string = kwargs.get("connection_string", "")
-
-            # Check protection
-            try:
-                protection_engine.check_operation(  # Use captured engine
-                    operation=operation,
-                    connection_string=connection_string,
-                    context={"query": query, "params": kwargs.get("params", {})},
-                )
-            except ProtectionViolation:
-                raise
-
-            # Execute if protection passes
-            return original_execute(node_self, **kwargs)
-
-        node_class.execute = protected_execute
-        return node_class
-
-    def _detect_operation_from_sql(self, query: str) -> str:
-        """Detect operation type from SQL query."""
-        query = query.strip().upper()
-
-        if query.startswith("SELECT") or query.startswith("WITH"):
-            return "read"
-        elif query.startswith("INSERT"):
-            return "create"
-        elif query.startswith("UPDATE"):
-            return "update"
-        elif query.startswith("DELETE"):
-            return "delete"
-        elif any(query.startswith(stmt) for stmt in ["CREATE", "ALTER", "DROP"]):
-            return "custom_query"
-        else:
-            return "custom_query"
