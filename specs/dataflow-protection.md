@@ -120,7 +120,11 @@ Conformance to I1–I9 is verified by the Tier-1/2 suite at
 `packages/kailash-dataflow/tests/unit/test_protection_system_critical_gaps.py`
 (end-to-end `runtime.execute(workflow.build())` enforcement +
 `isinstance(exc, NodeExecutionError)` taxonomy pin) and the per-mutation
-Tier-2 matrix. The `AsyncSQLProtectionWrapper` sync closure
-(`protection_middleware.py:485`) is now dead code on the protected-write
-path; its removal is tracked as a separate follow-up (distinct bug
-class, not part of the enforcement-wiring contract).
+Tier-2 matrix.
+
+Single-call-site invariant: `WriteProtectionEngine.check_operation` is
+invoked from exactly one production site — `ProtectedNode.async_run`
+(`protection_middleware.py`). Every real path (`db.express.*`,
+`LocalRuntime.execute`, `AsyncLocalRuntime.execute_async`, raw
+`node.execute()` against generated nodes) converges on `async_run()`
+and hits that single call. No parallel enforcement surface exists.
