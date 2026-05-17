@@ -2,6 +2,21 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **`kaizen.api` restored as a deprecation shim (#1071)** — the structural-split refactor (#75) relocated the unified Agent API from `kaizen.api` to `kaizen_agents.api` and removed `kaizen.api` outright with no deprecation cycle. `from kaizen.api import Agent` raised `ModuleNotFoundError` on every published release — a hard break for every downstream caller on first `pip install --upgrade`. `kaizen.api` is now restored as a PEP 562 deprecation shim: every public symbol that historically lived under `kaizen.api` resolves through it and emits a `DeprecationWarning` naming the new import path on attribute access. The shim will be removed in a future major release.
+
+### Migration — `kaizen.api` → `kaizen`
+
+| Old (deprecated)                  | New                                      |
+| --------------------------------- | ---------------------------------------- |
+| `from kaizen.api import Agent`    | `from kaizen import Agent`               |
+| `from kaizen.api import <symbol>` | `from kaizen_agents.api import <symbol>` |
+
+Where `<symbol>` is any of the historical secondary surface: `AgentConfig`, `AgentResult`, `ToolCallRecord`, `CapabilityPresets`, `AgentCapabilities`, `ExecutionMode`, `MemoryDepth`, `ToolAccess`, `ConfigurationError`, `validate_configuration`, `validate_model_runtime_compatibility`, `resolve_memory_shortcut`, `resolve_runtime_shortcut`, `resolve_tool_access_shortcut`. `Agent` resolves through `kaizen` so the `kaizen_agents` → `kaizen.core.agents` fallback chain is preserved on installs without the optional `kaizen-agents` package.
+
 ## [2.21.0] — 2026-05-09 — slim-core decoupling: 9 core deps + provider/observability/db/cache/rag extras (#890)
 
 Minor release shipping the kailash-kaizen side of the kailash 2.18.0 / #890 slim-core decoupling. **Install-shape breaking change** — kaizen drops from 29 → 9 core dependencies. Provider SDKs (Azure, Google, token counters), observability (Prometheus/OpenTelemetry/structlog), database (aiosqlite/asyncpg), cache (Redis), RAG (numpy/Pillow), research-validator (GitPython), and HTTP server (FastAPI/uvicorn) all move to opt-in extras. The new `[all]` umbrella preserves the pre-2.21.0 default install for users who do not want to enumerate which subsystem they consume.
