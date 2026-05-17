@@ -337,13 +337,26 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
             ``ProtectionViolation`` is a ``NodeExecutionError`` subclass
             (Shard 1a, issue #1050).
             """
+            # Issue #1058 Shard 2 — Express-path single-check discipline.
+            # When this sentinel is True, DataFlowExpress already ran the
+            # SAME ``protection_engine.check_operation(...)`` call via
+            # ``_check_protection_if_enabled`` BEFORE field validation /
+            # trust check / node construction. Skipping the inner check
+            # here preserves spec invariant I1 (single check per call) AND
+            # avoids double ``auditor.log_allowed`` entries on the happy
+            # path. The workflow-runtime path never sets this sentinel
+            # (Express owns node construction; the runtime instantiates
+            # generated nodes directly), so the inner check still fires
+            # there — workflow-path enforcement unchanged.
+            if getattr(self, "_express_protection_precheck_done", False):
+                pass
             # Get protection engine from DataFlow instance. Carried over
             # verbatim from the removed sync override: dataflow_instance is
             # injected post-construction (Express _create_node binds it;
             # the workflow node generator binds it in __init__), so the
             # hasattr guard is the documented fail-open posture when the
             # node is constructed before binding — NOT introduced here.
-            if hasattr(self, "dataflow_instance"):
+            elif hasattr(self, "dataflow_instance"):
                 df = self.dataflow_instance
 
                 if hasattr(df, "_protection_engine"):

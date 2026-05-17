@@ -122,9 +122,21 @@ Conformance to I1–I9 is verified by the Tier-1/2 suite at
 `isinstance(exc, NodeExecutionError)` taxonomy pin) and the per-mutation
 Tier-2 matrix.
 
-Single-call-site invariant: `WriteProtectionEngine.check_operation` is
-invoked from exactly one production site — `ProtectedNode.async_run`
-(`protection_middleware.py`). Every real path (`db.express.*`,
-`LocalRuntime.execute`, `AsyncLocalRuntime.execute_async`, raw
-`node.execute()` against generated nodes) converges on `async_run()`
-and hits that single call. No parallel enforcement surface exists.
+Call-site map (issue #1058 Shard 2):
+`WriteProtectionEngine.check_operation` is invoked from exactly two
+production sites — `DataFlowExpress._check_protection_if_enabled`
+(`features/express.py`) for the Express path AND
+`ProtectedNode.async_run` (`protection_middleware.py`) for the
+workflow-runtime and raw-node paths. The Express precheck fires BEFORE
+field validation, trust check, and node construction — closing the
+defense-in-depth ordering gap where a blocked write could trigger
+field-validator side effects (custom validators may log, emit metrics,
+hit external services). The sentinel
+`node._express_protection_precheck_done`, set by Express after a
+successful precheck, signals `ProtectedNode.async_run` to skip the
+inner call — preserving spec invariant I1 (exactly one
+`check_operation` per logical user operation, with one
+`auditor.log_allowed` entry per allow on the happy path). The
+workflow-runtime path never sets the sentinel (the runtime instantiates
+generated nodes directly), so the inner check still fires there —
+workflow-path enforcement unchanged.
