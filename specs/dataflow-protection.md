@@ -97,16 +97,30 @@ The enforcement point (the method that invokes `check_operation`) MUST:
 
 ## 4. Current conformance
 
-`check_operation` is invoked only from synchronous call sites
-(`protection_middleware.py:367` in `ProtectedNode.run()`; `:422` in
-`AsyncSQLProtectionWrapper`'s sync closure). `ProtectedNode`
-(`protect_dataflow_node()`) overrides only synchronous `run()`. All three
-§2 paths dispatch through `AsyncNode.execute_async` → `async_run`, which
-`ProtectedNode` does not override — so enforcement of §1's promise does
-not currently reach those paths. Tracked: issue #1050. Root-cause
-evidence (independent 2-agent verification) and the fix design /
-acceptance criteria are workstream artifacts, not spec content — see
-`workspaces/issue-1050-protection-orphan-async/` (`01-analysis/`,
-`02-plans/`). This spec describes the contract (§1–3) the fix must
-satisfy; it is updated to "enforced on all §2 paths" when that lands on
-`main` (per `specs-authority.md` §5).
+Enforcement reaches all three §2 paths. `protect_dataflow_node()`
+overrides `async def async_run()` on `ProtectedNode`
+(`protection_middleware.py:316`), which invokes
+`protection_engine.check_operation` (`:419`) before
+`await super().async_run()` — so the Express path, the
+workflow-runtime path, and the raw-node path (all of which converge on
+`DataFlowNode.async_run` via `AsyncNode.execute_async`) are protected.
+The single-check invariant (I1) holds: the synchronous `run()` override
+no longer exists, so a sync caller bridges through
+`DataFlowNode.run()` → `async_safe_run` → `ProtectedNode.async_run`
+(exactly one `check_operation` call, no double-fire).
+
+`ProtectionViolation` subclasses `NodeExecutionError`
+(`protection.py:165`), so it survives `AsyncNode.execute_async`'s
+re-raise allowlist (`base_async.py:274`) and propagates typed to the
+caller on the workflow-runtime path (I5). Blocks route through
+`check_operation` → `_handle_violation`, which emits the audit record
+before raising (I9) and logs-and-allows at WARN level (I6).
+
+Conformance to I1–I9 is verified by the Tier-1/2 suite at
+`packages/kailash-dataflow/tests/unit/test_protection_system_critical_gaps.py`
+(end-to-end `runtime.execute(workflow.build())` enforcement +
+`isinstance(exc, NodeExecutionError)` taxonomy pin) and the per-mutation
+Tier-2 matrix. The `AsyncSQLProtectionWrapper` sync closure
+(`protection_middleware.py:485`) is now dead code on the protected-write
+path; its removal is tracked as a separate follow-up (distinct bug
+class, not part of the enforcement-wiring contract).
