@@ -13,6 +13,8 @@ from datetime import datetime, time
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
+from kailash.sdk_exceptions import NodeExecutionError
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,8 +162,27 @@ class GlobalProtection:
     time_window: Optional[TimeWindow] = None
 
 
-class ProtectionViolation(Exception):
-    """Exception raised when protection rules are violated."""
+class ProtectionViolation(NodeExecutionError):
+    """Exception raised when protection rules are violated.
+
+    Issue #1050: based on ``kailash.sdk_exceptions.NodeExecutionError`` (NOT
+    bare ``Exception``) so that it SURVIVES ``AsyncNode.execute_async``'s
+    re-raise allowlist. ``execute_async`` (``kailash/nodes/base_async.py``)
+    re-raises ``NodeValidationError`` / ``NodeExecutionError`` instances
+    as-is but WRAPS every other ``Exception`` subclass in a fresh
+    ``NodeExecutionError``. A bare-``Exception`` ``ProtectionViolation``
+    raised from the async write-protection hot path on the
+    workflow-runtime path (``runtime.execute(workflow.build())`` /
+    ``AsyncLocalRuntime.execute_workflow_async``) would be re-wrapped,
+    losing the typed ``ProtectionViolation`` the caller (and every
+    ``except ProtectionViolation`` site) expects. Sub-classing
+    ``NodeExecutionError`` makes ``execute_async``'s
+    ``except NodeExecutionError: raise`` re-raise the genuine instance
+    with type intact. ``except ProtectionViolation`` callers still match
+    (subclass IS-A). Dependency direction is dataflow→core (correct;
+    core MUST NOT import dataflow). See ``specs/dataflow-protection.md``
+    invariant I5.
+    """
 
     def __init__(
         self,
@@ -293,10 +314,33 @@ class WriteProtectionEngine:
             "update": OperationType.UPDATE,
             "delete": OperationType.DELETE,
             "list": OperationType.READ,
+            # Issue #1050 (spec invariant I7): the generated CountNode runs
+            # with self.operation == "count". Before wiring, check_operation
+            # was unreachable so the missing "count" key never mattered;
+            # once async_run() invokes check_operation, an unmapped "count"
+            # fell through to CUSTOM_QUERY (.get default) and was BLOCKED by
+            # read_only_global / production_safe (which allow only {READ}).
+            # count is a derived-scalar READ — it mutates nothing — so it
+            # MUST map to READ. Pre-existing engine modeling gap exposed by
+            # the wiring fix, fixed at the SDK source (zero-tolerance R4).
+            "count": OperationType.READ,
             "bulk_create": OperationType.BULK_CREATE,
             "bulk_update": OperationType.BULK_UPDATE,
             "bulk_delete": OperationType.BULK_DELETE,
             "bulk_upsert": OperationType.BULK_UPSERT,
+            # NOTE (scope): the generated UpsertNode runs with
+            # self.operation == "upsert"; there is no OperationType.UPSERT
+            # member, so "upsert" falls through to CUSTOM_QUERY. Under
+            # read_only_global / production_safe (allow only {READ}) a
+            # single-record upsert is therefore correctly BLOCKED (it IS a
+            # write). A config that allow-lists specific write ops but not
+            # CUSTOM_QUERY would over-block upsert — a pre-existing engine
+            # modeling gap that adding an OperationType.UPSERT member would
+            # close, but that is a public-enum API change (touching
+            # _handle_violation + every default allowed_operations set +
+            # every WriteProtectionConfig classmethod) — a distinct bug
+            # class out of #1050's shard scope, not a continuation. Not
+            # exercised by I7 (read/list/count only).
         }
 
     def check_operation(
