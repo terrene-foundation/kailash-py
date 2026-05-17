@@ -5,12 +5,14 @@
 Nexus allows you to register custom REST endpoints using the `@app.endpoint()` decorator. These endpoints are API-channel only (not available in CLI or MCP) and provide full FastAPI functionality including path parameters, query parameters, request validation, and automatic OpenAPI documentation.
 
 Custom endpoints enable you to:
+
 - Create specialized API routes beyond standard workflow execution
 - Integrate with external systems using familiar REST patterns
 - Build CRUD operations for resources
 - Implement custom business logic with workflow integration
 
 **When to use custom endpoints:**
+
 - Resource-specific operations (e.g., `/api/conversations/{id}`)
 - Complex query patterns not suited for standard workflow input
 - Integration with existing REST APIs
@@ -54,6 +56,7 @@ app.run()
 ```
 
 **Usage:**
+
 ```bash
 curl http://localhost:8000/api/users/u123
 # Response: {"user_id": "u123", "name": "John Doe", "email": "u123@example.com"}
@@ -118,6 +121,7 @@ app.run()
 ```
 
 **Usage:**
+
 ```bash
 # Create conversation
 curl -X POST http://localhost:8000/api/conversations \
@@ -161,6 +165,7 @@ app.run()
 ```
 
 **Usage:**
+
 ```bash
 # Valid request
 curl http://localhost:8000/api/items/abc123/versions/5
@@ -227,6 +232,7 @@ app.run()
 ```
 
 **Usage:**
+
 ```bash
 curl -X POST http://localhost:8000/api/chat/conv123/message \
   -H "Content-Type: application/json" \
@@ -262,6 +268,7 @@ app.run()
 ```
 
 **Rate limit behavior:**
+
 - Rate limits are per-client IP address
 - Uses 1-minute rolling window
 - Returns 429 status code when exceeded
@@ -324,6 +331,7 @@ app.run()
 ```
 
 **Usage:**
+
 ```bash
 # Set preferences
 curl -X POST http://localhost:8000/api/preferences \
@@ -588,9 +596,11 @@ def endpoint(
   - `deprecated` (bool): Mark endpoint as deprecated
 
 **Returns:**
+
 - Decorator function that registers the endpoint with FastAPI
 
 **Raises:**
+
 - `RuntimeError`: If gateway not initialized (called before `app.run()`)
 - `ValueError`: If invalid HTTP method provided
 
@@ -604,19 +614,23 @@ async def _execute_workflow(
 ```
 
 **Parameters:**
+
 - **workflow_name** (str): Name of registered workflow
 - **inputs** (Dict[str, Any]): Input data for workflow execution
 
 **Returns:**
+
 - Dict[str, Any]: Workflow execution results
 
 **Raises:**
+
 - `HTTPException(404)`: If workflow not found
 - `HTTPException(413)`: If input data exceeds 10MB
 - `HTTPException(400)`: If input contains dangerous keys
 - `HTTPException(500)`: If workflow execution fails
 
 **Security Features:**
+
 - Input size validation (max 10MB)
 - Dangerous key filtering (prevents code injection)
 - Key length validation (max 256 chars)
@@ -641,6 +655,7 @@ async def authenticated_endpoint():
 ```
 
 **Rate limiting features:**
+
 - Per-client IP address tracking
 - 1-minute rolling window
 - Automatic cleanup (prevents memory leaks)
@@ -865,11 +880,21 @@ async def get_users_v2():
 ### 5. Leverage FastAPI Dependency Injection
 
 ```python
+import os
+import secrets
+
 from fastapi import Depends, Header, HTTPException
 
+EXPECTED_API_KEY = os.environ["SERVICE_API_KEY"]
+
 async def verify_api_key(x_api_key: str = Header(...)):
-    """Dependency to verify API key."""
-    if x_api_key != "secret-key":
+    """Dependency to verify API key.
+
+    Uses ``secrets.compare_digest`` for a constant-time comparison: a plain
+    ``x_api_key != EXPECTED_API_KEY`` short-circuits on the first differing
+    byte, which is a remote-timing oracle for byte-by-byte key recovery.
+    """
+    if not secrets.compare_digest(x_api_key, EXPECTED_API_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key
 
