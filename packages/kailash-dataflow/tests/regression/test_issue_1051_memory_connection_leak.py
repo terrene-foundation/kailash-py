@@ -40,7 +40,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 
 def _live_aiosqlite_connections():
-    """Structural probe: count live aiosqlite Connection objects."""
+    """Structural probe: live aiosqlite Connection objects."""
     return [
         o
         for o in gc.get_objects()
@@ -48,10 +48,25 @@ def _live_aiosqlite_connections():
     ]
 
 
+def _live_aiosqlite_ids():
+    """Set of id()s of currently-live aiosqlite Connection objects.
+
+    The assertion is a BEFORE/AFTER delta (Security LOW-4): a global
+    "zero live connections" assertion is contaminated by any OTHER test
+    in the same process that leaves an aiosqlite Connection alive (false
+    failure here, or another test's leak masking this one). Counting only
+    Connections that did NOT exist before this test ran isolates the
+    regression to THIS test's lifecycle.
+    """
+    return {id(o) for o in _live_aiosqlite_connections()}
+
+
 @pytest.mark.regression
 def test_issue_1051_dataflow_memory_no_aiosqlite_resourcewarning():
     """DataFlow(:memory:) + workflow + close() leaks zero aiosqlite conns."""
     from dataflow import DataFlow
+
+    before_ids = _live_aiosqlite_ids()
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", ResourceWarning)
@@ -78,11 +93,11 @@ def test_issue_1051_dataflow_memory_no_aiosqlite_resourcewarning():
         del db, Widget1051
         gc.collect()  # ResourceWarning->error escalates here if leak present
 
-    leaked = _live_aiosqlite_connections()
-    assert not leaked, (
-        f"{len(leaked)} aiosqlite Connection(s) leaked past DataFlow.close() "
-        f"(#1051). _get_connection() must reuse one tracked :memory: "
-        f"connection and disconnect() must await-close it."
+    new_leaked = [c for c in _live_aiosqlite_connections() if id(c) not in before_ids]
+    assert not new_leaked, (
+        f"{len(new_leaked)} NEW aiosqlite Connection(s) leaked past "
+        f"DataFlow.close() (#1051). _get_connection() must reuse one tracked "
+        f":memory: connection and disconnect() must await-close it."
     )
 
 
@@ -94,6 +109,8 @@ def test_issue_1051_protecteddataflow_memory_no_aiosqlite_resourcewarning():
     body's `from dataflow import ProtectedDataFlow` was wrong).
     """
     from dataflow.core.protected_engine import ProtectedDataFlow
+
+    before_ids = _live_aiosqlite_ids()
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", ResourceWarning)
@@ -116,9 +133,9 @@ def test_issue_1051_protecteddataflow_memory_no_aiosqlite_resourcewarning():
         del db, Gadget1051
         gc.collect()
 
-    leaked = _live_aiosqlite_connections()
-    assert not leaked, (
-        f"{len(leaked)} aiosqlite Connection(s) leaked past "
+    new_leaked = [c for c in _live_aiosqlite_connections() if id(c) not in before_ids]
+    assert not new_leaked, (
+        f"{len(new_leaked)} NEW aiosqlite Connection(s) leaked past "
         f"ProtectedDataFlow.close() (#1051)."
     )
 

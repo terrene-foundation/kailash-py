@@ -4399,7 +4399,25 @@ class AsyncSQLDatabaseNode(AsyncNode):
         # Tracked before connect() so a connect-retry that discards this
         # adapter and builds another still leaves this one reachable for
         # teardown.
-        self._owned_adapters.append(adapter)
+        #
+        # Bounded growth (#1051 redteam MEDIUM-1): a long-lived *cached*
+        # node under connect-retry / pool churn calls _create_adapter()
+        # repeatedly while cleanup() only runs at engine close — an
+        # unbounded reference accumulation. Dedupe by identity (the
+        # runtime-coordination path delegates here, so the same adapter
+        # can arrive twice) and cap the retained list; when over cap the
+        # oldest entries are stale retry-discards — best-effort disconnect
+        # (idempotent) + drop so a reference bound never becomes a handle
+        # leak.
+        if not any(a is adapter for a in self._owned_adapters):
+            self._owned_adapters.append(adapter)
+        _OWNED_ADAPTERS_CAP = 32
+        while len(self._owned_adapters) > _OWNED_ADAPTERS_CAP:
+            stale = self._owned_adapters.pop(0)
+            try:
+                await asyncio.wait_for(stale.disconnect(), timeout=1.0)
+            except (Exception, asyncio.TimeoutError):
+                pass  # Best effort — stale retry-discard; never block create
 
         # Retry connection with exponential backoff
         last_error = None
@@ -6092,8 +6110,15 @@ class AsyncSQLDatabaseNode(AsyncNode):
             for _adapter in self._owned_adapters:
                 try:
                     await asyncio.wait_for(_adapter.disconnect(), timeout=1.0)
-                except (Exception, asyncio.TimeoutError):
-                    pass  # Best effort cleanup
+                except (Exception, asyncio.TimeoutError) as e:
+                    # Best effort cleanup — but log at DEBUG for parity with
+                    # the sibling cached-node teardown in engine.py
+                    # (observability.md Rule 5: teardown swallows still emit
+                    # a DEBUG breadcrumb so a stuck disconnect is diagnosable).
+                    logger.debug(
+                        "async_sql.owned_adapter_disconnect_failed",
+                        extra={"error": str(e)},
+                    )
             self._owned_adapters.clear()
 
     def __del__(self, _warnings=warnings):
