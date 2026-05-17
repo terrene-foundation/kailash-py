@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.9.14] — 2026-05-17 — write-protection enforcement on async hot path + bulk_update bypass closure (#1050)
+
 ### Changed
 
 - **`ProtectionViolation` now subclasses `kailash.sdk_exceptions.NodeExecutionError` (#1050)** —
@@ -54,6 +56,38 @@ ProtectionViolation)` site continues to match unchanged (subclass
   fix; blocking-where-it-should-block is the contract
   (`specs/dataflow-protection.md` §1). Operators relying on the broken
   no-op state MUST review their protection configs before upgrading.
+- **CRITICAL: `db.express.bulk_update` silently bypassed write-protection
+  (#1050, PR #1060)** — surfaced by the per-mutation Tier-2 enforcement
+  matrix added alongside the #1050 fix. `bulk_update` runs a per-record
+  loop calling `self.update(...)` inside `except Exception: failed_count
++= 1`. Once the #1050 wiring landed (this same release), the now-
+  correctly-raised `ProtectionViolation` was caught by that generic
+  per-row handler and folded into the silent `failed_count` — a read-
+  only-blocked `bulk_update` returned an empty `results` list with NO
+  exception, bypassing write-protection at the bulk_update Express
+  surface (spec invariant I5). Fixed by `except ProtectionViolation:
+raise` BEFORE the generic per-row catch, mirroring the sibling bulk
+  surfaces (`bulk_create` / `bulk_delete` / `bulk_upsert` already
+  propagate cleanly because they call `node.async_run` once, so the raise
+  propagates directly). Genuine per-row data failures still count into
+  `failed_count` and emit the WARN-level partial-failure log unchanged.
+  Same behavior-change framing as the #1050 fix above: code that
+  "worked" only because bulk_update silently dropped blocked rows will
+  now correctly raise `ProtectionViolation`. Tier-2 coverage:
+  `tests/integration/test_issue_1050_protection_mutation_matrix.py`
+  (14 file-SQLite + 14 PostgreSQL).
+
+### Fixed
+
+- **`count` operation over-blocked under read-only protection (#1050)**
+  — surfaced while wiring `check_operation` into the async hot path.
+  `WriteProtectionEngine._operation_mapping` had no entry for `count`,
+  so the generated `*CountNode` (`self.operation == "count"`) fell
+  through to `OperationType.CUSTOM_QUERY`, which `read_only_global` /
+  `production_safe` (allow only `{READ}`) block. `count` is a derived
+  scalar READ. Added `"count": OperationType.READ` to the mapping;
+  pinned by the matrix's NOT-blocked assertions for `read`/`list`/`count`
+  under read-only (spec invariant I7).
 
 ## [2.9.13] — 2026-05-17 — protection-middleware LocalRuntime CM deprecation + event-loop drain (#1045)
 
