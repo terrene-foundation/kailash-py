@@ -2,6 +2,59 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`ProtectionViolation` now subclasses `kailash.sdk_exceptions.NodeExecutionError` (#1050)** —
+  previously a bare `Exception`. This is a public exception-taxonomy
+  change with two consequences downstream code MUST be aware of:
+  - **Behavior change (R7):** any caller doing `except NodeExecutionError`
+    in its OWN code will now ALSO catch `ProtectionViolation` (it
+    previously escaped that handler as a bare-`Exception` subclass).
+    This is the _correct_ taxonomy — a write-protection block IS a
+    node-execution failure. Callers that need to special-case
+    "blocked by policy" separately MUST place `except ProtectionViolation`
+    BEFORE `except NodeExecutionError` (Python MRO precedence): the
+    narrower handler runs first. Every existing `except ProtectionViolation`
+    / `pytest.raises(ProtectionViolation)` / `isinstance(x,
+ProtectionViolation)` site continues to match unchanged (subclass
+    IS-A relationship preserved).
+  - **Why:** `AsyncNode.execute_async` re-raises `NodeExecutionError`
+    instances as-is but WRAPS every other `Exception` in a fresh
+    `NodeExecutionError`. On the workflow-runtime path
+    (`runtime.execute(workflow.build())` /
+    `AsyncLocalRuntime.execute_workflow_async`) a bare-`Exception`
+    `ProtectionViolation` raised by the now-wired async write-protection
+    hot path would be re-wrapped, and the caller would receive an opaque
+    `NodeExecutionError` instead of the typed `ProtectionViolation` with
+    its `.operation` / `.level` / `.model` / `.field` attributes. Basing
+    on `NodeExecutionError` makes the genuine instance survive the
+    re-raise allowlist with type intact. Blast-radius audited clean:
+    9 production `except NodeExecutionError` sites — all are by-design
+    re-raise allowlists (behavior strictly improves: genuine type
+    instead of wrap) or node types that never raise `ProtectionViolation`;
+    zero incorrect-swallow sites. Dependency direction is dataflow→core
+    (correct; core MUST NOT import dataflow). No deprecation shim: a
+    write-protection gate that never enforced (the #1050 orphan) being
+    made real is not a public-API removal — it is a fake safety gate
+    made real (zero-tolerance Rule 2). See `specs/dataflow-protection.md`
+    invariant I5.
+
+### Security
+
+- **CRITICAL: write protection was never enforced on any real path (#1050)** —
+  `ProtectedDataFlow`'s `enable_read_only_mode()` / `production_safe` /
+  `add_model_protection()` / `add_field_protection()` /
+  business-hours protection configured a `WriteProtectionEngine` whose
+  `check_operation()` had ZERO reachable production call sites. Every
+  write that a protection config was supposed to block was silently
+  performed. Code that "worked" only because protection was a no-op
+  (e.g. writes against a `production_safe`-configured production
+  database that silently slipped through) will now correctly raise
+  `ProtectionViolation`. This is the intended behavior — a security
+  fix; blocking-where-it-should-block is the contract
+  (`specs/dataflow-protection.md` §1). Operators relying on the broken
+  no-op state MUST review their protection configs before upgrading.
+
 ## [2.9.13] — 2026-05-17 — protection-middleware LocalRuntime CM deprecation + event-loop drain (#1045)
 
 ### Fixed

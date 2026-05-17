@@ -13,6 +13,8 @@ from datetime import datetime, time
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
+from kailash.sdk_exceptions import NodeExecutionError
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,8 +162,27 @@ class GlobalProtection:
     time_window: Optional[TimeWindow] = None
 
 
-class ProtectionViolation(Exception):
-    """Exception raised when protection rules are violated."""
+class ProtectionViolation(NodeExecutionError):
+    """Exception raised when protection rules are violated.
+
+    Issue #1050: based on ``kailash.sdk_exceptions.NodeExecutionError`` (NOT
+    bare ``Exception``) so that it SURVIVES ``AsyncNode.execute_async``'s
+    re-raise allowlist. ``execute_async`` (``kailash/nodes/base_async.py``)
+    re-raises ``NodeValidationError`` / ``NodeExecutionError`` instances
+    as-is but WRAPS every other ``Exception`` subclass in a fresh
+    ``NodeExecutionError``. A bare-``Exception`` ``ProtectionViolation``
+    raised from the async write-protection hot path on the
+    workflow-runtime path (``runtime.execute(workflow.build())`` /
+    ``AsyncLocalRuntime.execute_workflow_async``) would be re-wrapped,
+    losing the typed ``ProtectionViolation`` the caller (and every
+    ``except ProtectionViolation`` site) expects. Sub-classing
+    ``NodeExecutionError`` makes ``execute_async``'s
+    ``except NodeExecutionError: raise`` re-raise the genuine instance
+    with type intact. ``except ProtectionViolation`` callers still match
+    (subclass IS-A). Dependency direction is dataflow→core (correct;
+    core MUST NOT import dataflow). See ``specs/dataflow-protection.md``
+    invariant I5.
+    """
 
     def __init__(
         self,
