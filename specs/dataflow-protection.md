@@ -25,11 +25,15 @@ database** — on every path a real user exercises. WARN-level configs log
 and allow (do not raise); BLOCK/AUDIT-level configs raise.
 
 The protection engine (`WriteProtectionEngine.check_operation`,
-`protection.py:302-392`) maps an operation string → `OperationType`
-(`protection.py:290-300`: create/read/update/delete/list/count/upsert/
+`protection.py:346-392`) maps an operation string → `OperationType`
+(`protection.py:311-345`: create/read/update/delete/list/count/upsert/
 bulk\_\*), evaluates global → connection → model → field rules, and
 delegates a block to `_handle_violation` (`protection.py:414-425`) which
-raises for BLOCK/AUDIT.
+raises for BLOCK/AUDIT. Each operation name maps to a discrete
+`OperationType` member: single-record `upsert` maps to
+`OperationType.UPSERT` (issue #1058 Shard 3 — promoted from the
+`CUSTOM_QUERY` fall-through that over-blocked allowlists naming
+specific write ops without `CUSTOM_QUERY`).
 
 ## 2. Paths that MUST enforce (the contract surface)
 
@@ -140,3 +144,16 @@ inner call — preserving spec invariant I1 (exactly one
 workflow-runtime path never sets the sentinel (the runtime instantiates
 generated nodes directly), so the inner check still fires there —
 workflow-path enforcement unchanged.
+
+Express I5 propagation surfaces (issue #1058 Shards 1 + 4): every
+Express mutation surface whose body wraps a nested mutation call in
+`try / except Exception` MUST re-raise `ProtectionViolation` ahead of
+the generic clause — otherwise the generic catch swallows the violation
+into a per-row data-failure counter and the caller sees no exception.
+The shipped sites are: `Express.bulk_update`'s per-record loop
+(Shard 1, `features/express.py` ~line 1537), `Express.import_file`'s
+per-record `upsert=True` loop AND its `bulk_create` branch (Shard 4,
+`features/express.py` ~line 2007 and ~line 2014). New mutation surfaces
+that add a `try / except Exception` around a sibling Express mutation
+MUST add the same `except ProtectionViolation: raise` shim ahead of
+the generic catch (the I5 hard-stop discipline).

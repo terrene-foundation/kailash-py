@@ -2003,12 +2003,27 @@ class DataFlowExpress:
                     try:
                         await self.upsert(model_name, record)
                         imported += 1
+                    except ProtectionViolation:
+                        # Issue #1058 Shard 4 — same hard-stop class as the
+                        # bulk_update propagation fix (Shard 1, ~line 1537).
+                        # A write-protection block is NOT a per-row data
+                        # failure to fold into the `errors` list; it MUST
+                        # propagate so the caller learns the import is
+                        # blocked (specs/dataflow-protection.md §2 path 1 +
+                        # I5: "Express MUST surface it as an exception, not
+                        # fold it into a result dict"). Re-raise BEFORE the
+                        # generic `except Exception` swallow below.
+                        raise
                     except Exception as exc:
                         errors.append(f"Upsert failed for record: {exc}")
             else:
                 try:
                     await self.bulk_create(model_name, records)
                     imported = len(records)
+                except ProtectionViolation:
+                    # Issue #1058 Shard 4 — see commentary on the upsert
+                    # branch above. Same I5 hard-stop discipline.
+                    raise
                 except Exception as exc:
                     errors.append(f"Bulk create failed: {exc}")
 
