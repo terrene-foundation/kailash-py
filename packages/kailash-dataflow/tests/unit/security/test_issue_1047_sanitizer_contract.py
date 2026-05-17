@@ -259,34 +259,24 @@ async def test_rule2_type_confusion_dict_list_on_str_field_raises(
         pytest.param(("DROP TABLE x", "--"), id="tuple"),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "CONTRACT VIOLATION (rules/security.md § Sanitizer Contract Rule 2): "
-        "set/tuple for a declared-str field are SILENTLY str()-coerced, NOT "
-        "raised. Root cause: sanitize_sql_input runs first (nodes.py:903) and "
-        "its safe_types tuple (nodes.py:805-816) lists dict/list but NOT "
-        "set/tuple, so set/tuple fall through to `value = str(value)` "
-        "(nodes.py:823) BEFORE the type-confusion gate (nodes.py:920-928). By "
-        "the time the gate runs, the value is already a str → "
-        "isinstance(value,(dict,list,set,tuple)) is False → no ValueError. "
-        "This test asserts the CONTRACT (MUST raise) and is xfail(strict=True) "
-        "so it auto-flips to a hard failure the moment production is fixed. "
-        "Routed as a separate production-fix workstream — see issue #1047 "
-        "redteam finding."
-    ),
-)
 async def test_rule2_type_confusion_set_tuple_on_str_field_raises(
     memory_dataflow, bad_value
 ):
-    """CONTRACT ASSERTION (currently violated): a declared-``str`` field
-    receiving set/tuple MUST raise ``ValueError`` with ``parameter type
-    mismatch``. rules/security.md § Sanitizer Contract Rule 2 explicitly
-    enumerates set/tuple as MUST-raise. Production silently coerces them
-    via ``str(value)`` — the exact failure mode the rule blocks. Kept as
-    a contract assertion under xfail(strict=True): the test pins the
-    correct behavior, stays green-as-xfail while the gap is open, and
-    becomes XPASS→FAIL (forcing un-xfail) when production is fixed.
+    """CONTRACT ASSERTION (now enforced — issue #1047 production fix):
+    a declared-``str`` field receiving set/tuple MUST raise ``ValueError``
+    with ``parameter type mismatch``. rules/security.md § Sanitizer
+    Contract Rule 2 explicitly enumerates set/tuple as MUST-raise.
+
+    The fix added ``set``/``tuple`` to ``sanitize_sql_input``'s
+    ``safe_types`` tuple (nodes.py) so they pass through the sanitizer
+    UNCHANGED (not ``str()``-coerced) — exactly the mechanism dict/list
+    already used. The downstream type-confusion gate then sees the real
+    ``set``/``tuple`` and raises, on BOTH the create/update path
+    (single-value) AND the bulk_* path (via ``sanitize_nested_structure``
+    leaf → ``sanitize_sql_input`` returning the container unchanged).
+    The ``xfail(strict=True)`` marker was removed in the SAME commit as
+    the production fix (orphan-detection Rule 4a — implement-the-deferral
+    sweeps its own deferral marker).
     """
     db = memory_dataflow
 
