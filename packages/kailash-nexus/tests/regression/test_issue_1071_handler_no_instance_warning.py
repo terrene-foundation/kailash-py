@@ -141,3 +141,32 @@ def test_internal_flag_suppresses_only_when_explicitly_set():
         builder.add_node_instance(_N(), "n_internal", _internal=True)
 
     assert _instance_warnings(caught) == []
+
+
+def test_internal_flag_is_keyword_only_positional_rejected() -> None:
+    """`_internal` MUST be keyword-only — positional True cannot suppress.
+
+    Defense against a misguided caller writing
+    ``builder.add_node_instance(node, "id", True)`` to silence the warning
+    positionally. The flag is documented as SDK-internal; making it
+    keyword-only converts "the underscore prefix is convention" into a
+    structural Python signature constraint enforced at call time, closing
+    the security-reviewer HIGH MUST-VERIFY surfaced in the #1071 gate.
+    """
+    from kailash.nodes.base import Node, NodeParameter
+    from kailash.workflow.builder import WorkflowBuilder
+
+    class _N(Node):
+        def get_parameters(self) -> dict[str, NodeParameter]:
+            return {}
+
+        def run(self, **kwargs):
+            return {}
+
+        async def async_run(self, **kwargs):
+            return {}
+
+    builder = WorkflowBuilder()
+    with pytest.raises(TypeError):
+        # Positional True for _internal MUST raise — keyword-only enforces this.
+        builder.add_node_instance(_N(), "n_positional", True)  # type: ignore[misc]

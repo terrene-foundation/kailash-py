@@ -364,7 +364,11 @@ class WorkflowBuilder:
         return node_id
 
     def _add_node_instance(
-        self, node_instance: "Node", node_id: str | None, _internal: bool = False
+        self,
+        node_instance: "Node",
+        node_id: str | None,
+        *,
+        _internal: bool = False,
     ) -> str:
         """Handle instance pattern: add_node(node_instance, 'node_id').
 
@@ -508,6 +512,7 @@ class WorkflowBuilder:
         self,
         node_instance: Any,
         node_id: str | None = None,
+        *,
         _internal: bool = False,
     ) -> str:
         """
@@ -518,10 +523,12 @@ class WorkflowBuilder:
         Args:
             node_instance: Pre-configured node instance
             node_id: Unique identifier for this node (auto-generated if not provided)
-            _internal: Internal flag — when True, suppresses the consumer-facing
-                instance-API advisory. Set ONLY by SDK-internal registration
-                paths (e.g. Nexus ``@app.handler()``); consumer code MUST NOT
-                pass this. Genuine consumer instance-API usage still warns.
+            _internal: Keyword-only internal flag — when True, suppresses the
+                consumer-facing instance-API advisory. Set ONLY by SDK-internal
+                registration paths (e.g. Nexus ``@app.handler()``); consumer
+                code MUST NOT pass this. Keyword-only (after ``*``) so a
+                positional True cannot accidentally suppress the warning.
+                Genuine consumer instance-API usage still warns.
 
         Returns:
             Node ID
