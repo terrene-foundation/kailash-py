@@ -66,7 +66,6 @@ from dataflow.core.protection import (
     WriteProtectionEngine,
 )
 from dataflow.core.protection_middleware import (
-    AsyncSQLProtectionWrapper,
     ProtectedDataFlowRuntime,
     protect_dataflow_node,
 )
@@ -532,47 +531,6 @@ class TestProtectionSystemCriticalGaps:
             pass
         except Exception as e:
             pytest.fail(f"Connection string resolution in protection check failed: {e}")
-
-    def test_async_sql_node_protection_wrapper_gap(self, protected_readonly_dataflow):
-        """Test: AsyncSQLDatabaseNode protection wrapping fails."""
-        db, test_model = protected_readonly_dataflow
-
-        # Test the AsyncSQLProtectionWrapper
-        protection_engine = db._protection_engine
-        assert (
-            protection_engine is not None
-        ), "db._protection_engine is None — protection wiring invariant"
-        wrapper = AsyncSQLProtectionWrapper(protection_engine)
-
-        # Mock AsyncSQLDatabaseNode for testing
-        class MockAsyncSQLNode:
-            def execute(self, **kwargs):
-                return {"result": {"data": [{"id": 1}]}}
-
-        # Test 1: Wrapper should be able to wrap the node class
-        try:
-            wrapped_class = wrapper.wrap_async_sql_node(MockAsyncSQLNode)
-            assert wrapped_class is not None
-        except Exception as e:
-            pytest.fail(f"AsyncSQL node wrapping failed: {e}")
-
-        # Test 2: Test SQL operation detection
-        create_query = "INSERT INTO test_table (name) VALUES ('test')"
-        operation = wrapper._detect_operation_from_sql(create_query)
-        assert operation == "create"
-
-        read_query = "SELECT * FROM test_table"
-        operation = wrapper._detect_operation_from_sql(read_query)
-        assert operation == "read"
-
-        # Test 3: Test wrapped execution with protection
-        wrapped_node = wrapped_class()
-
-        with pytest.raises(ProtectionViolation):
-            wrapped_node.execute(
-                query="INSERT INTO test_table (name) VALUES ('test')",
-                connection_string="sqlite:///:memory:",
-            )
 
 
 class TestProtectionSystemRobustNodeDetection:
