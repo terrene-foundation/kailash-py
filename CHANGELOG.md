@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.3] - 2026-05-18
+
+### Fixed
+
+- **`SQLiteAdapter` transaction state not reset on aborted `begin_transaction()` (#1070)** — `asyncio.CancelledError` is a `BaseException`, not an `Exception`; the auto-transaction wrappers caught `except Exception:`, so a coroutine cancelled between `begin_transaction()` and `commit_transaction()` skipped `rollback_transaction()`, leaving `_transaction_depth` unreset. The next `begin_transaction()` on the shared `:memory:` connection then took a poisoned SAVEPOINT branch (reproduced: an aborted transaction's uncommitted row leaked into the next transaction). Added `_abort_begin()` (resets depth/savepoint-counter + `ROLLBACK`, never closes the `:memory:` connection) and switched both auto-transaction wrappers to `except BaseException:`. Fixes #1070.
+
+### Documentation
+
+- Documented the constant-time-comparison expectation for caller-supplied `JWTConfig.api_key_validator` (docstring + `specs/security-auth.md` §2.2; no behavior change). Fixes #1068.
+
 ## [2.21.2] - 2026-05-18
 
 ### Fixed
