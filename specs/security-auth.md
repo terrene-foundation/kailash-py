@@ -190,6 +190,21 @@ API keys are generated and managed through the `MiddlewareAuthManager` (`kailash
 - API keys are disabled when `enable_api_keys=False` in the auth manager -- calls to `create_api_key()` or `verify_api_key()` return HTTP 400.
 - API key rotation is handled by `RotatingCredentialNode` which supports configurable rotation intervals.
 
+**Caller-supplied validator contract:** The Nexus header path (`X-API-Key`) authenticates keys through a caller-supplied callable, `kailash.trust.auth.jwt.JWTConfig.api_key_validator`, consumed by `nexus.auth.jwt.JWTMiddleware`. Its signature is `(api_key: str) -> bool | dict` (an awaitable is also accepted): a falsey return rejects the key (HTTP 401), `True` accepts it, and a claims dict accepts it and populates the authenticated user.
+
+The validator MUST compare the presented key against the stored/expected key in **constant time** using `secrets.compare_digest` (or `hmac.compare_digest`) -- never the `==` / `!=` operator. A plain `==` comparison short-circuits on the first differing byte, leaking key-prefix length under a remote-timing oracle and allowing byte-by-byte key recovery. The SDK delegates the comparison to the caller's callable and cannot enforce it; the constant-time requirement is the caller's responsibility. Canonical form:
+
+```python
+import secrets
+
+STORED_API_KEY = os.environ["SERVICE_API_KEY"]
+
+def validate(api_key: str) -> bool:
+    return secrets.compare_digest(api_key, STORED_API_KEY)
+```
+
+`secrets.compare_digest` is also length-safe -- it does not reveal, via timing, whether the presented key matched the expected length.
+
 ### 2.3 SSO Integration
 
 The trust-plane SSO layer (`kailash.trust.auth.sso`) provides pluggable OAuth2/OIDC integration.
@@ -495,4 +510,3 @@ Default strategy is `hybrid`.
 `kailash.trust.auth.session` provides the SSO CSRF state store. See Section 2.3 for details.
 
 ---
-

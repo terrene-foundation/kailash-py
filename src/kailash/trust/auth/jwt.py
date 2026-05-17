@@ -67,6 +67,46 @@ class JWTConfig:
         jwks_cache_ttl: JWKS cache TTL in seconds (default: 3600)
         verify_exp: Verify token expiration (default: True)
         leeway: Leeway in seconds for exp/nbf claims (default: 0)
+        api_key_header: Header name for API key auth (default: X-API-Key)
+        api_key_enabled: Enable API key authentication (default: False)
+        api_key_validator: Caller-supplied callable invoked to authenticate
+            an API key presented in the ``api_key_header``. Signature is
+            ``(api_key: str) -> bool | dict`` (an awaitable is also accepted);
+            return a falsey value to reject, ``True`` to accept, or a claims
+            dict to accept and populate the authenticated user.
+
+            SECURITY -- the validator MUST compare the presented key against
+            the stored/expected key in **constant time** using
+            ``secrets.compare_digest`` (or ``hmac.compare_digest``), NOT the
+            ``==`` operator. A plain ``==`` (or ``!=``) comparison
+            short-circuits on the first differing byte, leaking key-prefix
+            length under a remote-timing oracle and letting an attacker
+            recover the key one byte at a time. The SDK delegates the
+            comparison to this callable and cannot enforce it; the caller is
+            responsible for using a constant-time comparison::
+
+                import secrets
+
+                STORED_API_KEY = os.environ["SERVICE_API_KEY"]
+
+                def validate(api_key: str) -> bool:
+                    # constant-time: does NOT short-circuit on first
+                    # differing byte (unlike ``api_key == STORED_API_KEY``)
+                    return secrets.compare_digest(api_key, STORED_API_KEY)
+
+                config = JWTConfig(
+                    secret="your-secret-key-at-least-32-chars!",
+                    api_key_enabled=True,
+                    api_key_validator=validate,
+                )
+
+            ``secrets.compare_digest`` is also length-safe: it does not
+            reveal, via timing, whether the presented key matched the
+            expected length.
+        max_token_age_seconds: Absolute token age cap independent of the
+            ``exp`` claim (optional)
+        on_token_validated: Post-validation hook for stale detection / audit
+            (optional)
     """
 
     secret: Optional[str] = None
