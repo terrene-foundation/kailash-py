@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [2.9.13] — 2026-05-17 — protection-middleware LocalRuntime CM deprecation + event-loop drain (#1045)
+
+### Fixed
+
+- **`ProtectedDataFlowRuntime` LocalRuntime context-manager deprecation
+  (#1045)** — every protection-enforced run emitted
+  `DeprecationWarning: LocalRuntime.execute() without context manager …
+error in v0.12.0`. `ProtectedDataFlowRuntime` is a long-lived,
+  framework-held runtime; fixed via the SDK-blessed
+  `LocalRuntime.mark_externally_managed()` opt-out (the established
+  convention at 6 sibling DataFlow call sites; issue #478). Without this
+  the protection hot path becomes a hard runtime error in v0.12.0. The
+  `execute()` override now also forwards `*args/**kwargs` to the parent
+  (the prior signature silently dropped `idempotency_key` /
+  `time_limit` / `cancellation_token` on the protection path).
+- **Per-protected-runtime event-loop leak (#1045)** —
+  `mark_externally_managed()` deliberately skips the atexit cleanup,
+  transferring teardown to the owner. `ProtectedDataFlow` now tracks
+  every `create_protected_runtime()` and drains them in
+  `close()` / `close_async()` (owner-tracks-then-drains, matching the
+  existing `engine.py` / `auto_migration_system.py` pattern). The drain
+  is idempotent, per-runtime exception-isolated (WARN-logged, never
+  swallowed), and never aborts `DataFlow`'s own teardown.
+
+### Notes
+
+- Surfaced + filed as separate tracked workstreams (distinct bug
+  classes, out of this fix's scope): **#1050** (CRITICAL — write
+  protection not enforced on the async `db.express` / workflow hot
+  path; `check_operation` is an orphan there) and **#1051** (a
+  pre-existing aiosqlite `:memory:` Connection teardown leak in
+  `DataFlow.close()` core lifecycle).
+
 ## [2.9.12] — 2026-05-16 — migration-tracking NameError fix + #979 test hardening
 
 ### Fixed
