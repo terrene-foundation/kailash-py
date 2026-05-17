@@ -5883,23 +5883,46 @@ class DataFlow(DataFlowEventMixin):
                         fetch_mode="all",
                         validate_queries=False,
                     )
-                    result = node.execute()
-                    # AsyncSQLDatabaseNode returns {"result": {"data": [...], ...}}.
-                    # Unwrap "data" for fetchall() and convert each dict row to a
-                    # tuple to match the DB-API 2.0 contract that most callers
-                    # expect from cursor.fetchall().
-                    self._last_rows = []
                     try:
-                        data = (result or {}).get("result", {}).get("data", [])
-                        if isinstance(data, list):
-                            for row in data:
-                                if isinstance(row, dict):
-                                    self._last_rows.append(tuple(row.values()))
-                                else:
-                                    self._last_rows.append(row)
-                    except Exception:
+                        result = node.execute()
+                        # AsyncSQLDatabaseNode returns
+                        # {"result": {"data": [...], ...}}. Unwrap "data" for
+                        # fetchall() and convert each dict row to a tuple to
+                        # match the DB-API 2.0 contract that most callers
+                        # expect from cursor.fetchall().
                         self._last_rows = []
-                    return result
+                        try:
+                            data = (result or {}).get("result", {}).get("data", [])
+                            if isinstance(data, list):
+                                for row in data:
+                                    if isinstance(row, dict):
+                                        self._last_rows.append(tuple(row.values()))
+                                    else:
+                                        self._last_rows.append(row)
+                        except Exception:
+                            self._last_rows = []
+                        return result
+                    finally:
+                        # Issue #1051: this wrapper spins a FRESH node per
+                        # execute() and discards it. The node's :memory:
+                        # adapter connection would otherwise survive to GC
+                        # and emit aiosqlite ResourceWarning. The node's
+                        # async teardown is cleanup() (NOT close — close is
+                        # on EnterpriseConnectionPool, a different class);
+                        # cleanup() tears down every adapter the node owns
+                        # (#1051 Change C _owned_adapters). Resolve cleanup()
+                        # first, fall back to close(); bridge to this sync
+                        # method via async_safe_run, matching engine.close().
+                        # Best-effort: a teardown failure must never mask
+                        # the query result/error this method returns/raises.
+                        try:
+                            teardown = getattr(node, "cleanup", None) or getattr(
+                                node, "close", None
+                            )
+                            if callable(teardown):
+                                async_safe_run(teardown())
+                        except Exception:
+                            pass
 
                 def fetchall(self):
                     return list(self._last_rows)
@@ -10015,15 +10038,26 @@ class DataFlow(DataFlowEventMixin):
                 pass
             self._lightweight_pool = None
 
-        # Issue #1002 — clean up cached AsyncSQLDatabaseNode instances (Express API uses these).
-        # Mirrors close_async() lines 10116-10127. node.close() is async; bridge via async_safe_run
-        # so the sync DataFlow.close() path (e.g. `with DataFlow(...) as db:` __exit__) does not
-        # leak nodes whose __del__ would emit PytestUnraisableExceptionWarning at GC.
+        # Issue #1002 / #1051 — clean up cached AsyncSQLDatabaseNode instances
+        # (Express API uses these). The node's async teardown method is
+        # cleanup() (NOT close — close lives on EnterpriseConnectionPool, a
+        # different class). The pre-#1051 guard `hasattr(node, "close")` was
+        # always False for AsyncSQLDatabaseNode, so this teardown was a silent
+        # no-op since #1002 and the node's _owned_adapters (#1051 Change C)
+        # never disconnected — every cached :memory: adapter connection leaked
+        # to GC. Resolve cleanup() first (the real method); fall back to
+        # close() for any other cached object that legitimately has one.
+        # cleanup() is async; bridge via async_safe_run so the sync
+        # DataFlow.close() path (`with DataFlow(...) as db:` __exit__) does
+        # not leak nodes whose __del__ emits PytestUnraisableExceptionWarning.
         if hasattr(self, "_async_sql_node_cache") and self._async_sql_node_cache:
             for db_type, (node, _) in list(self._async_sql_node_cache.items()):
                 try:
-                    if hasattr(node, "close") and callable(node.close):
-                        async_safe_run(node.close())
+                    teardown = getattr(node, "cleanup", None) or getattr(
+                        node, "close", None
+                    )
+                    if callable(teardown):
+                        async_safe_run(teardown())
                 except Exception as e:
                     logger.debug(
                         "engine.error_closing_cached_sql_node_for",
@@ -10158,12 +10192,20 @@ class DataFlow(DataFlowEventMixin):
                 pass
             self._lightweight_pool = None
 
-        # Clean up cached AsyncSQLDatabaseNode instances (Express API uses these)
+        # Clean up cached AsyncSQLDatabaseNode instances (Express API uses
+        # these). #1051: the node's async teardown is cleanup(), not close()
+        # — resolve cleanup() first, fall back to close() for other cached
+        # objects. The pre-#1051 hasattr(node,"close") guard silently skipped
+        # AsyncSQLDatabaseNode teardown (#1051 Change C's _owned_adapters
+        # disconnect never ran → cached :memory: connection leaked to GC).
         if hasattr(self, "_async_sql_node_cache") and self._async_sql_node_cache:
             for db_type, (node, _) in list(self._async_sql_node_cache.items()):
                 try:
-                    if hasattr(node, "close") and callable(node.close):
-                        await node.close()
+                    teardown = getattr(node, "cleanup", None) or getattr(
+                        node, "close", None
+                    )
+                    if callable(teardown):
+                        await teardown()
                 except Exception as e:
                     logger.debug(
                         "engine.error_closing_cached_sql_node_for",
