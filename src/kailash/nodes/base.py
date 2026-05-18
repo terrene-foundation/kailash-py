@@ -2384,6 +2384,10 @@ class NodeRegistry:
                     # Cross-module collision: two distinct classes from
                     # different modules claiming one registry name —
                     # import-order-dependent dispatch (issue #891). BLOCKED.
+                    _logger.error(
+                        f"Node name collision for '{node_name}': "
+                        f"{existing_module} vs {new_module} — registration refused"
+                    )
                     raise NodeConfigurationError(
                         f"Node name collision for '{node_name}': already "
                         f"registered by {existing_module}."
