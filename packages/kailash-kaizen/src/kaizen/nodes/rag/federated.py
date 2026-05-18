@@ -21,12 +21,11 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from kailash.nodes.api.rest import RESTClientNode
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
-
-from ..api.rest import RESTClientNode
-from ..base import Node, NodeParameter, register_node
-from ..code.python import PythonCodeNode
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 

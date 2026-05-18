@@ -16,11 +16,11 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..ai.llm_agent import LLMAgentNode
-from ..base import Node, NodeParameter, register_node
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 

@@ -20,12 +20,12 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..ai.llm_agent import LLMAgentNode
-from ..base import Node, NodeParameter, register_node
-from ..code.python import PythonCodeNode
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 

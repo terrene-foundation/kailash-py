@@ -4,6 +4,30 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.23.0] — 2026-05-19 — resurrect `kaizen.nodes.rag` (#891 follow-up)
+
+### Fixed
+
+- **`kaizen.nodes.rag` is importable again** — the 17-module RAG package
+  (~53 node classes: GraphRAG, AgenticRAG, FederatedRAG, MultimodalRAG,
+  privacy-preserving RAG, ColBERT/HyDE retrieval, RAG evaluation, etc.) was
+  **un-importable from the 2026-03-11 monorepo move (`b553104c`) until now** —
+  every module's relative imports pointed at a non-existent
+  `kaizen.nodes.{base,code,data,logic,security}` / `kaizen.runtime` /
+  `kaizen.workflow` tree. All ~40 broken imports across 14 modules are
+  repointed to their real `kailash.*` locations. The package now imports clean.
+
+### Changed
+
+- **`rag.realtime.StreamingRAGNode` → `RealtimeStreamingRAGNode`** — once the
+  package became importable, `rag.realtime` and `rag.optimized` both registered
+  the global name `StreamingRAGNode`, which the kailash 2.23.0 cross-module
+  collision guard (#891) rejects at import. The realtime node is renamed
+  (`rag/__init__.py` already aliased it `as RealtimeStreamingRAGNode`);
+  `rag.optimized` keeps `StreamingRAGNode`. Migration for the realtime node:
+  `add_node("StreamingRAGNode", ...)` → `add_node("RealtimeStreamingRAGNode", ...)`.
+  Requires `kailash>=2.23.0`.
+
 ## [2.22.0] — 2026-05-19 — node-registry collision fix (#891)
 
 ### Changed

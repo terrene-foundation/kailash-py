@@ -19,13 +19,14 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Deque, Dict, List, Optional, Union
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.workflow import WorkflowNode
+
 # from ..data.cache import CacheNode  # TODO: Implement CacheNode
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..ai.llm_agent import LLMAgentNode
-from ..base import Node, NodeParameter, register_node
-from ..code.python import PythonCodeNode
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 
@@ -862,9 +863,9 @@ class ConversationMemoryNode(Node):
                 key = fact_update.get("key")
                 if key in user_memory["semantic"]:
                     user_memory["semantic"][key].update(fact_update.get("updates", {}))
-                    user_memory["semantic"][key]["timestamp"] = (
-                        datetime.now().isoformat()
-                    )
+                    user_memory["semantic"][key][
+                        "timestamp"
+                    ] = datetime.now().isoformat()
                     updated["semantic"] += 1
 
         # Update preferences

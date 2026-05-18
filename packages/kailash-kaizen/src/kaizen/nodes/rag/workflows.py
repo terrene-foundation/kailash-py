@@ -8,11 +8,11 @@ and operations into reusable workflow patterns.
 import logging
 from typing import Any, Dict, Optional
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.logic import SwitchNode
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
-from ..base import Node, NodeParameter, register_node
-from ..logic import SwitchNode
-from ..logic.workflow import WorkflowNode
 from .strategies import (
     RAGConfig,
     create_hierarchical_rag_workflow,
