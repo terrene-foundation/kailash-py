@@ -1,0 +1,6 @@
+2026-05-15T09:37:41.440Z <journal-skip>commit=b518c1587892 reason=merge-commit subject="Merge pull request #1018 from terrene-foundation/release/v2.9.9"</journal-skip>
+2026-05-15T09:37:41.441Z <journal-skip>commit=c627777706e6 reason=no-match subject="release(dataflow): cut v2.9.9 — _Py_Finalize CI hang fully closed; setsid wrapper removed (#1000/#1002/#1010)"</journal-skip>
+2026-05-15T09:37:41.441Z <journal-skip>commit=4238b49f0846 reason=merge-commit subject="Merge pull request #1017 from terrene-foundation/fix/issue-1002-shard4b-remove-setsid-v2"</journal-skip>
+2026-05-15T09:37:41.441Z <journal-skip>commit=512fc4a5ee90 reason=fix-routine subject="fix(ci): remove setsid wrapper from test-dataflow step (closes #1000 AC#3)"</journal-skip>
+2026-05-15T09:37:41.441Z <journal-skip>commit=1e7e073f041e reason=merge-commit subject="Merge pull request #1016 from terrene-foundation/fix/issue-1010-aiosqlite-daemon-thread-monkeypatch"</journal-skip>
+2026-05-15T09:37:41.442Z <journal-skip>commit=a9bc2c7c82c6 reason=fix-routine subject="fix(dataflow): force aiosqlite worker threads to daemon=True in tests (#1010)"</journal-skip>
