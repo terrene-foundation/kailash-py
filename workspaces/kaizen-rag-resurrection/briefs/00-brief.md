@@ -43,6 +43,19 @@ clean-import gate is the structural floor; exhaustive behavioral validation of
 53 never-exercised nodes is a large incremental test workstream appropriately
 filed as a follow-up, not gating the package becoming importable + collision-free.
 
+**Value-anchor (per `rules/value-prioritization.md` MUST-2):** the user-anchored
+source is the user's in-session directive 2026-05-19 — "Resurrect as separate
+PR this session" — selecting resurrection over deletion of the 53-class RAG
+toolkit (GraphRAG, AgenticRAG, FederatedRAG, MultimodalRAG, ColBERT/HyDE, …),
+explicitly because it is unreplaced capability the user did not want lost
+(see `workspaces/issue-891-hybridsearch-collision/journal/0004`). The deferred
+deep-behavioral-coverage shard therefore delivers user value = "the RAG
+capability the user chose to preserve is provably correct, not merely
+importable." Re-validation gate before pickup: confirm the user still wants the
+RAG toolkit live (not since-superseded) before investing the large
+behavioral-coverage effort. NOT auto-filed as an issue and NOT closed —
+surfaced here for the user's disposition (no OR-escape-hatch).
+
 ## Success criteria
 
 - All 17 `kaizen.nodes.rag.*` modules import clean under kailash 2.23.0.

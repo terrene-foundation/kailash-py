@@ -99,3 +99,17 @@ def test_representative_rag_nodes_register():
         "RAGEvaluationNode",
     ):
         assert name in reg, f"{name} not registered after rag import"
+
+
+@pytest.mark.regression
+def test_rag_coexists_with_broader_kaizen_node_surface():
+    """No rag class name collides cross-module with the wider kaizen registry.
+
+    The kailash 2.23.0 cross-module guard raises NodeConfigurationError at
+    import on ANY two distinct modules registering the same name. Importing
+    the broader kaizen node surface AND kaizen.nodes.rag in one process is the
+    definitive check that no rag node name collides with a non-rag node — the
+    gap the rag-only smoke test cannot see.
+    """
+    import kaizen.nodes.ai  # noqa: F401  — large non-rag kaizen node package
+    import kaizen.nodes.rag  # noqa: F401  — must not raise under the guard

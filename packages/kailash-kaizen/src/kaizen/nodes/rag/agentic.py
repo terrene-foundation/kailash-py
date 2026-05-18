@@ -158,7 +158,7 @@ Maximum steps: {self.max_reasoning_steps}""",
             "PythonCodeNode",
             node_id="tool_executor",
             config={
-                "code": """
+                "code": r"""
 import re
 import json
 from datetime import datetime
@@ -211,73 +211,67 @@ def execute_tool(action_string, documents, context):
         }
 
     elif tool_name == "calculate":
-        # Safe calculation
-        try:
-            # Only allow basic math operations
-            safe_dict = {"__builtins__": None}
-            safe_dict.update({
-                "abs": abs, "round": round, "min": min, "max": max,
-                "sum": sum, "len": len, "pow": pow
-            })
+        # Safe calculation — AST-walked arithmetic only. `params` is
+        # LLM-generated; eval()/regex-substitution sandboxes are bypassable, so
+        # this whitelists ast node types instead (no eval, no exec, no regex).
+        import ast
+        import math
+        import operator
 
-            # Enterprise security: Use ast.literal_eval for safe mathematical expressions
-            import ast
+        _BINOPS = {
+            ast.Add: operator.add, ast.Sub: operator.sub,
+            ast.Mult: operator.mul, ast.Div: operator.truediv,
+            ast.Pow: operator.pow, ast.Mod: operator.mod,
+            ast.FloorDiv: operator.floordiv,
+        }
+        _UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+        _FUNCS = {
+            "abs": abs, "round": round, "min": min, "max": max, "pow": pow,
+            "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
+            "tan": math.tan, "log": math.log, "exp": math.exp,
+        }
+        _CONSTS = {"pi": math.pi, "e": math.e}
+
+        def _safe_arith(node):
+            if isinstance(node, ast.Expression):
+                return _safe_arith(node.body)
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                    return node.value
+                raise ValueError("non-numeric constant")
+            if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
+                return _BINOPS[type(node.op)](
+                    _safe_arith(node.left), _safe_arith(node.right)
+                )
+            if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
+                return _UNARYOPS[type(node.op)](_safe_arith(node.operand))
+            if isinstance(node, ast.Name) and node.id in _CONSTS:
+                return _CONSTS[node.id]
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in _FUNCS
+                and not node.keywords
+            ):
+                return _FUNCS[node.func.id](
+                    *[_safe_arith(a) for a in node.args]
+                )
+            raise ValueError("disallowed expression element")
+
+        try:
             try:
-                # Try ast.literal_eval first for simple mathematical expressions
                 result = ast.literal_eval(params)
             except (ValueError, SyntaxError):
-                # Fallback to safe mathematical evaluation
-                import operator
-                import math
-
-                # Define safe operators and functions
-                safe_ops = {
-                    '+': operator.add,
-                    '-': operator.sub,
-                    '*': operator.mul,
-                    '/': operator.truediv,
-                    '**': operator.pow,
-                    'abs': abs,
-                    'max': max,
-                    'min': min,
-                    'round': round,
-                    'sqrt': math.sqrt,
-                    'sin': math.sin,
-                    'cos': math.cos,
-                    'tan': math.tan,
-                    'log': math.log,
-                    'exp': math.exp,
-                    'pi': math.pi,
-                    'e': math.e,
-                }
-                safe_ops.update(safe_dict)
-
-                # Parse and evaluate safely
-                try:
-                    # Simple expression parser for basic math
-                    import re
-                    # Replace function calls and operators with safe alternatives
-                    safe_expr = params
-                    for func in ['sqrt', 'sin', 'cos', 'tan', 'log', 'exp']:
-                        safe_expr = re.sub(rf'\b{func}\(([^)]+)\)', rf'safe_ops["{func}"](\1)', safe_expr)
-
-                    # Only evaluate if it's a simple mathematical expression
-                    if re.match(r'^[0-9+\-*/.() \w]+$', safe_expr.replace('safe_ops', '')):
-                        result = eval(safe_expr, {"__builtins__": {}}, {"safe_ops": safe_ops})
-                    else:
-                        result = f"Cannot evaluate complex expression: {params}"
-                except Exception:
-                    # Fallback for invalid expressions (sandboxed - no logging available)
-                    result = f"Invalid mathematical expression: {params}"
+                result = _safe_arith(ast.parse(params, mode="eval"))
             results = {
                 "tool": "calculate",
                 "expression": params,
-                "result": result
+                "result": result,
             }
-        except Exception as e:
+        except Exception:
             results = {
                 "tool": "calculate",
-                "error": str(e)
+                "error": f"Cannot evaluate expression: {params}",
             }
 
     elif tool_name == "database":
