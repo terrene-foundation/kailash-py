@@ -4,6 +4,10 @@
 
 ## [2.10.0] — 2026-05-19 — node-registry collision fix (#891)
 
+**Requires `kailash>=2.23.0`** — generated CRUD-node registration now passes
+`NodeRegistry.register(..., allow_override=True)`, an argument introduced in
+kailash 2.23.0.
+
 ### Changed
 
 - **`HybridSearchNode` renamed to `PgVectorHybridSearchNode` (#891)** — the
