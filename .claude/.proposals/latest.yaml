@@ -1,269 +1,161 @@
 source_repo: kailash-py
-codify_date: "2026-05-06"
+codify_date: "2026-05-18"
+status: pending_review
 codify_session: |
-  Session 2026-05-06 (later in day) — kailash-coc-claude-py#64 surfaced
-  that skill 15-enterprise-infrastructure was missing scheduler +
-  durable-execution primitives that already ship in kailash 2.13.4
-  (WorkflowScheduler, FabricScheduler, ExecutionTracker, Checkpoint,
-  ExecutionJournal, DurableRequest, CheckpointManager, DBCheckpointStore,
-  DurableWorkflowServer). Empirical evidence: an agent grepped
-  `.venv/lib/python3.13/site-packages/kailash/` and found all 6 within
-  minutes — the skill should surface them without requiring a
-  grep-the-source agent.
+  Session 2026-05-18 — /codify of issue #1086 ("4 root-cause fixes from
+  Wave C SessionEnd hook noise audit"). Originating evidence:
+  workspaces/_hygiene-2026-05-18/02-issue-835-journal-triage.md — the
+  triage of issue-835's 33 .pending/ journal entries found 28 of 33 were
+  SessionEnd-hook auto-captures of commits unrelated to #835 (the hook
+  captures into whatever workspace is the session CWD, regardless of the
+  commit's Closes/Refs #N).
 
-  This codify cycle does NOT introduce new rules; it extends an existing
-  skill (15-enterprise-infrastructure) with a primitive-inventory table,
-  Quick Start additions, two new sub-files (scheduler-patterns.md,
-  durability-patterns.md), and a cross-link from 01-core-sdk. Per
-  trust-posture wiring the gate fires only on NEW rule files; skill
-  updates are exempt.
+  Scope decision (user-gated this session): codify ONLY issue #1086's
+  candidates 1, 2, 4 (rule changes, BUILD->loom). Candidate 3 (SessionEnd
+  hook dedup-by-source_commit — hook CODE) is deferred to a loom-side
+  change per the issue's own acceptance criteria; it is NOT in this
+  proposal. A separate deployment.md "split-version" rule mentioned in
+  the prior session's .session-notes was also user-scoped OUT of this
+  codify and will be filed as its own issue with its own evidence.
 
-  Verified primitive existence at this session via direct file reads:
-    - src/kailash/runtime/scheduler.py::WorkflowScheduler (class @ line 108)
-    - src/kailash/runtime/execution_tracker.py::ExecutionTracker (line 19)
-    - src/kailash/middleware/gateway/durable_request.py::Checkpoint (line 78)
-        ::ExecutionJournal (line 122) ::DurableRequest (line 146)
-    - src/kailash/middleware/gateway/checkpoint_manager.py::CheckpointManager (line 167)
-    - src/kailash/infrastructure/checkpoint_store.py::DBCheckpointStore (line 37)
-    - src/kailash/servers/durable_workflow_server.py::DurableWorkflowServer (line 37)
-    - packages/kailash-dataflow/src/dataflow/fabric/scheduler.py::FabricScheduler (line 45)
+  This codify ADDS three MUST clauses to two existing rules. Each carries
+  a Trust Posture Wiring section per trust-posture.md MUST Rule 7 +
+  codify Step 6b. No new agents/skills. No new rule FILES (clauses added
+  to existing files), so no self-referential-codify.md gate applies
+  (deployment.md and journal.md are not on that rule's allowlist).
 
-  The previous distributed proposal (status=distributed at codify_date
-  2026-05-06 morning, kaizen 2.20.0 amendments) was archived to
-  .claude/.proposals/archive/2026-05-06-kailash-py.yaml per
-  artifact-flow.md MUST: Archive Before Fresh.
+  Gate-1 finding for loom (NOT blocking this proposal): deployment.md is
+  now 296 lines, over rule-authoring.md's 200-line limit. deployment.md
+  never adopted the .claude/guides/rule-extracts/<rule>.md extract
+  pattern that git.md / zero-tolerance.md / agents.md use. The candidate-1
+  clause is authored compactly, but the file was already ~240 lines
+  before this codify. RECOMMENDATION: loom partitions deployment.md into
+  a neutral body + a rule-extracts/deployment.md guide as a separate
+  artifact-quality change (loom-side; out of #1086 scope).
+
+  The previous distributed proposal (codify_date 2026-05-06, skill-15
+  enterprise-infrastructure) was archived to
+  .claude/.proposals/archive/2026-05-06-kailash-py-skill15-enterprise-infra.yaml
+  per artifact-flow.md MUST: Archive Before Fresh.
 
 changes:
-  - type: skill_update
-    artifact: 15-enterprise-infrastructure
+  - type: rule_update
+    artifact: deployment
     files:
-      - .claude/skills/15-enterprise-infrastructure/SKILL.md
-      - .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
-      - .claude/skills/15-enterprise-infrastructure/durability-patterns.md
-      - .claude/skills/01-core-sdk/SKILL.md
+      - .claude/rules/deployment.md
+    classification_suggestion: global
     context: |
-      Resolves kailash-coc-claude-py#64. Skill 15-enterprise-infrastructure
-      was missing scheduler + durable-execution primitives that ship in
-      kailash 2.13.4 (WorkflowScheduler, FabricScheduler, ExecutionTracker,
-      Checkpoint, ExecutionJournal, DurableRequest, CheckpointManager,
-      DBCheckpointStore, DurableWorkflowServer). Empirical session
-      2026-05-06 surfaced the gap when an agent claimed kailash had no
-      scheduler primitive and grep proved it had six.
+      Issue #1086 candidate 1. ADDS one MUST clause:
+      "## MUST: Eagerly-Imported Transitive Dependencies Are Declared By
+      The Importing Package".
 
-      Changes:
-      1. SKILL.md: add Primitive Inventory table near the top so users
-         see WorkflowScheduler / FabricScheduler / ExecutionTracker /
-         Checkpoint / CheckpointManager / DurableRequest /
-         DurableWorkflowServer in one glance with module + purpose.
-         Update description: line to reflect scheduler + durability
-         coverage (within ≤200 char budget). Extend Features list,
-         Quick Start (cron/interval scheduler example +
-         DurableWorkflowServer wiring), Reference Documentation index
-         (link new sub-files), and "When to Use This Skill"
-         (failure-mode triggers: replace cron daemon, resume on
-         restart, per-node checkpointing, execution journal/audit,
-         server-mode wiring).
-      2. scheduler-patterns.md (NEW, 177 lines): WorkflowScheduler
-         engagement (cron/interval/one-shot, jobstore persistence),
-         migration from external cron, FabricScheduler scope-limitation
-         (DataFlow product refresh only), multi-instance hazards
-         (single-leader vs queue-dispatch deduplication), test-tier
-         recommendation. References kailash-py#859 as in-flight
-         multi-instance integration work.
-      3. durability-patterns.md (NEW, 167 lines): ExecutionTracker
-         per-node primitive, Checkpoint+ExecutionJournal+DurableRequest
-         resume contract, CheckpointManager + DBCheckpointStore wiring
-         against shared ConnectionManager, compression-threshold
-         operational signal, DurableWorkflowServer trade-off
-         (full-server vs piecemeal), Independence Note (no commercial
-         comparisons per rules/independence.md), test-tier
-         recommendation. References kailash-py#860 (LocalRuntime
-         integration) and kailash-py#861 (resume-path integration) as
-         in-flight workstreams.
-      4. 01-core-sdk/SKILL.md: cross-link "Recurring + Durable
-         Execution" subsection pointing to the two new sub-files in
-         15-enterprise-infrastructure (since WorkflowScheduler +
-         ExecutionTracker live in kailash.runtime).
+      Lesson: a package whose import graph eagerly pulls in a third-party
+      library — directly OR transitively via an upstream Kailash package's
+      __init__.py re-export — MUST declare that library in its own
+      [project.dependencies]. Assuming an upstream optional extra will
+      install it is BLOCKED.
 
-      Constraint compliance verified:
-      - All sub-files within 200-line budget (177, 167)
-      - DO/DO NOT examples + Why: lines per rule-authoring.md Rule 4
-      - No commercial references per independence.md (Independence Note
-        added to durability-patterns.md explicitly)
-      - Primitive existence verified via file reads (see codify_session
-        block above) per specs-authority.md "verify code matches plan
-        via AST/grep"
-      - Skill description ≤200 chars per cc-artifacts.md Rule 1b
-        (current: ~165 chars)
-      - description: line uses failure-mode framing, not keyword dump
+      Evidence: kailash-ml clean-venv `pip install` failed at `import`
+      because kailash.core.pool.__init__ eagerly re-exported `aiosqlite`
+      (a `kailash` extra, undeclared by ml). `pip install <pkg>` installs
+      declared deps + their core deps — never optional extras — so a
+      clean-venv user of bare `kailash-ml` got no aiosqlite. The same
+      pattern hit kailash-mcp 0.2.13 -> 0.2.14 the same day.
 
-      Cross-SDK note (rules/cross-sdk-inspection.md MUST Rule 1):
-      kailash-rs has analogous primitives (Rust scheduler / durable
-      execution traits) — sibling skill update on kailash-rs/.claude/
-      should follow the same shape; defer to a kailash-rs codify
-      cycle to author the Rust-variant overlay.
+      Sibling to the existing "MUST: All Files Imported By package
+      __init__.py Tracked In Git" rule — same failure family
+      (clean-venv import failures invisible to editable-install CI).
 
-    classification_hint: global
-    classification_reason: |
-      Both kailash-py and kailash-rs ship analogous scheduler +
-      durable-execution primitives. The neutral skill body
-      (primitive-inventory framing, when-to-engage triggers,
-      multi-instance hazards, resume contract) is language-invariant.
-      Code examples in the sub-files are Python-specific but use slot
-      patterns the loom variant system can overlay for rs/rb if
-      kailash-rs lands sibling primitives at the same conceptual
-      layer.
+      Trust Posture Wiring (in-clause): severity halt-and-report at
+      /release gate; 7-day grace; cumulative per trust-posture MUST-4;
+      regression-within-grace -> emergency downgrade; receipt
+      [ack: deployment-transitive-deps]; detection = mechanical
+      /release-time eager-import sweep; origin 2026-05-18.
 
-    origin_pr: TBD
-    origin_session: 2026-05-06
-    origin_issue: kailash-coc-claude-py#64
+      Classification rationale: GLOBAL — the failure mode (extras are not
+      transitive, eager imports of extra-only libs fail clean-venv) is
+      language- and CLI-invariant. Applies to every BUILD repo's release
+      pipeline.
 
-    trust_posture_wiring: NOT_REQUIRED
-    trust_posture_reason: |
-      Skill update, not a new rule file. Step 6b enforcement (Trust
-      Posture Wiring required) fires only on NEW rule files per
-      rules/trust-posture.md MUST Rule 7.
+  - type: rule_update
+    artifact: journal
+    files:
+      - .claude/rules/journal.md
+    classification_suggestion: global
+    context: |
+      Issue #1086 candidate 2. ADDS a "## SessionEnd Auto-Capture &
+      Pending-Journal Hygiene" section, clause 1:
+      "### 1. Workspace journal/.pending/ MUST Be Gitignored At Repo Root".
 
-status: distributed
-reviewed_date: 2026-05-07
-distributed_date: 2026-05-07
-distributed_to:
-  - kailash-coc-claude-py (template_version 3.14.1)
-  - kailash-coc-py        (template_version 1.5.1, multi-cli skills emitted to .codex/.gemini)
-distributed_loom_sha: c9dfa54
+      Lesson: every repo running the SessionEnd auto-capture hook MUST
+      carry a `**/journal/.pending/` ignore pattern in the repo-root
+      .gitignore. .pending/ is session-local auto-capture staging;
+      without the root ignore pattern every /wrapup sweeps it into the
+      working tree and it leaks as dirty-tree noise into unrelated PRs.
 
-gate1_classification:
-  reviewer: sync-reviewer (Gate 1)
-  reviewed_at: 2026-05-07
-  classification_summary: 4 global, 0 variant-py, 0 skip; +4 unclassified BUILD-side drift in 01-core-sdk SKILL.md, all classified GLOBAL.
+      Evidence: the .gitignore pattern fix already landed in kailash-py
+      (.gitignore:205 `**/journal/.pending/`), but no rule enforced it —
+      a fresh consumer repo re-creates the un-ignored directory. This
+      clause codifies the requirement so the fix is durable across repos.
 
-  per_file:
-    - file: .claude/skills/15-enterprise-infrastructure/SKILL.md
-      classification: global
-      destination: .claude/skills/15-enterprise-infrastructure/SKILL.md
-      rationale: |
-        Primitive-inventory framing is language-invariant. Module-path table
-        labels (`kailash.runtime.scheduler` etc.) are package-prefix tokens
-        of the same shape Rust would use (`kailash::runtime::scheduler`)
-        when sibling primitives land. Description ≤200 chars, failure-mode
-        framed per cc-artifacts.md Rule 1b. Placed verbatim from BUILD.
+      Trust Posture Wiring (shared with clause 2, in-clause): severity
+      advisory; 7-day grace; cumulative per trust-posture MUST-4;
+      regression-within-grace -> emergency downgrade; receipt
+      [ack: pending-journal-hygiene]; detection = `git check-ignore`
+      exit-0 check; origin 2026-05-18.
 
-    - file: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
-      classification: global
-      destination: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
-      rationale: |
-        Conceptual content (multi-instance hazards, single-leader vs
-        queue-dispatch dedup, cron expression contract, jobstore
-        persistence) is language-invariant. Code examples are Python-
-        specific but kailash-rs has no analog yet (per proposal cross-SDK
-        note); when a Rust scheduler trait lands, a variant overlay can
-        replace the body. BUILD-internal issue numbers (#859) stripped
-        and replaced with neutral phrasing per the global-placement
-        BUILD-reference inspection step.
+      Classification rationale: GLOBAL — every COC repo runs the
+      SessionEnd hook; the ignore pattern requirement is universal.
 
-    - file: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
-      classification: global
-      destination: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
-      rationale: |
-        Same shape as scheduler-patterns — language-invariant resume
-        contract + Independence Note (preserved verbatim per
-        rules/independence.md). BUILD-internal issue numbers (#860, #861)
-        stripped. Independence Note retained per Foundation independence
-        directive.
+  - type: rule_update
+    artifact: journal
+    files:
+      - .claude/rules/journal.md
+    classification_suggestion: global
+    context: |
+      Issue #1086 candidate 4. ADDS clause 2 to the same new section:
+      "### 2. SessionEnd Auto-Capture Routes By The Commit's Issue
+      Trailer, Not The CWD Workspace".
 
-    - file: .claude/skills/01-core-sdk/SKILL.md
-      classification: global
-      destination: .claude/skills/01-core-sdk/SKILL.md
-      rationale: |
-        Cross-link section (Recurring + Durable Execution) is the
-        proposal's documented change. Placed plus four BUILD-side drift
-        hunks NOT covered by current proposal — all four align with
-        existing loom rules and were classified as GLOBAL hygiene
-        upgrades; see unclassified_drift_findings below.
+      Lesson: the SessionEnd auto-capture hook MUST write a commit's
+      .pending/ entry into the workspace whose issue number matches the
+      commit's `Closes #N` / `Refs #N` trailer — NOT the session CWD
+      workspace. Commits with no trailer route to a shared `_unrouted/`
+      staging area.
 
-  unclassified_drift_findings:
-    description: |
-      Diff sweep of BUILD-side .claude/skills/01-core-sdk/SKILL.md vs
-      loom-side surfaced 4 hunks NOT documented in the proposal. All
-      four align with established loom rules and represent BUILD-side
-      ahead-of-loom hygiene. Classified GLOBAL and placed.
-    hunks:
-      - hunk: description-line-rewrite
-        loom_before: |
-          "Kailash Core SDK — WorkflowBuilder, nodes, runtime, async, cycles, MCP, tracing."
-        build_after: |
-          "Kailash Core SDK — workflows, 110+ nodes, runtime, async, cycles, MCP, OpenTelemetry. Use for WorkflowBuilder + connections + runtime patterns."
-        classification: global
-        rationale: |
-          BUILD version uses failure-mode framing per cc-artifacts.md
-          Rule 1b ("Use for ..." trigger). 185 chars (≤200 budget).
-          Loom version is keyword-listy and lacks the "Use for ..."
-          activation hook.
+      Evidence: one session working in the issue-835 CWD auto-captured a
+      cluster of unrelated .pending/ files (the `1778398316957-*`
+      timestamp cluster spans issues #911/#912/#917) because the hook
+      routed by CWD. Across the full triage, 28 of issue-835's 33
+      .pending/ entries were discarded as unrelated auto-captures.
+      Institutional value diffuses away from the issue that earned it;
+      triage cost concentrates in whichever workspace was the CWD.
 
-      - hunk: when-to-use-removal
-        loom_before: |
-          ## When to Use
-          Use Core SDK when asking about workflow basics, core sdk, create workflow, workflow builder, ... [keyword dump]
-        build_after: |
-          (section removed)
-        classification: global
-        rationale: |
-          The keyword-dump pattern violates cc-artifacts.md Rule 1b
-          ("keyword-dump patterns ... are BLOCKED ... defeat semantic
-          activation"). BUILD removed it; the trigger phrase moved into
-          the description: line per Rule 1b. Net token savings on every
-          turn.
+      This clause is the behavioral CONTRACT; the hook IMPLEMENTATION is
+      issue #1086 candidate 3, which lands loom-side (loom does not
+      originate per artifact-flow.md; the hook + its cc-artifacts Rule 9
+      audit fixtures attach in that loom-side change). This rule clause
+      can ship ahead of the hook — it documents the contract the hook
+      must satisfy.
 
-      - hunk: fastapi-to-nexus-rename
-        loom_before: |
-          AsyncLocalRuntime: For Docker/FastAPI (async contexts) ...
-          AsyncLocalRuntime (Docker/FastAPI) ...
-          Docker/FastAPI: Use AsyncLocalRuntime (mandatory)
-        build_after: |
-          AsyncLocalRuntime: For Docker/Nexus (async contexts) ...
-          AsyncLocalRuntime (Docker/Nexus) ...
-          Docker/Nexus: Use AsyncLocalRuntime (mandatory)
-        classification: global
-        rationale: |
-          Per feedback_nexus_no_fastapi.md (user memory 2026-04-05):
-          "Nexus fully replaces FastAPI; never use comparative framing."
-          BUILD is correct. 4 occurrences renamed.
+      Trust Posture Wiring: shared with clause 1 above (advisory, 7-day
+      grace, [ack: pending-journal-hygiene]); detection for this clause
+      specifically = the SessionEnd hook's Closes/Refs #N parser
+      (candidate 3, loom-side).
 
-      - hunk: emoji-removal-from-critical-rules
-        loom_before: |
-          - ✅ ALWAYS: ...
-          - ❌ NEVER: ...
-        build_after: |
-          - ALWAYS: ...
-          - NEVER: ...
-        classification: global
-        rationale: |
-          Per rules/communication.md "Only use emojis if the user
-          explicitly requests it. Avoid writing emojis to files unless
-          asked." BUILD removed emojis; the ALWAYS/NEVER prose alone
-          carries the directive without decorative tokens.
+      Classification rationale: GLOBAL — the CWD-misrouting failure mode
+      is inherent to the shared SessionEnd hook; the routing contract is
+      universal.
 
-  cross_sdk_alignment:
-    note: |
-      Per proposal cross-SDK note: kailash-rs has analogous scheduler +
-      durable-execution primitives that should sibling-update on a
-      kailash-rs codify cycle. No rs variant overlay authored in this
-      Gate 1 — defer to a kailash-rs codify cycle when the Rust
-      scheduler/durability primitives stabilize. The variant overlay
-      slot under .claude/variants/rs/skills/15-enterprise-infrastructure/
-      remains available.
-
-  manifest_updates:
-    additions: none
-    removals: none
-    reclassifications: none
-    rationale: |
-      All four files placed at global tier. No manifest changes needed —
-      the global skill 15-enterprise-infrastructure/ already exists in
-      sync-manifest.yaml; the two new sub-files inherit global membership
-      automatically (skills/* directory is globally-included).
-
-  open_questions:
-    - none
-
-  ready_for: gate2_distribute
+deferred:
+  - id: "issue-1086-candidate-3"
+    summary: |
+      SessionEnd hook dedup-by-source_commit. Two .pending/ files for
+      commit 1fa3311e63c9 differed only in session_id; the hook re-fires
+      on every session re-entry whose HEAD matches, so triage cost
+      compounds linearly. This is hook CODE (.claude/hooks/lib/) —
+      per issue #1086 acceptance criteria it lands loom-side, not in this
+      BUILD->loom proposal. Candidate 4's rule clause (above) is the
+      paired contract for the same hook; candidate 3 implements both the
+      routing and the dedup.
+    disposition: "loom-side change — tracked by issue #1086 acceptance criterion 2"
