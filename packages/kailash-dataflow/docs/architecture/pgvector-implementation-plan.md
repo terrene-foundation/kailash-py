@@ -273,10 +273,10 @@ class CreateVectorIndexNode(AsyncNode):
         return {"success": True, "index_created": True}
 ```
 
-### 3. HybridSearchNode
+### 3. PgVectorHybridSearchNode
 
 ```python
-class HybridSearchNode(AsyncNode):
+class PgVectorHybridSearchNode(AsyncNode):
     """Hybrid search combining vector similarity and full-text search."""
 
     parameters = {

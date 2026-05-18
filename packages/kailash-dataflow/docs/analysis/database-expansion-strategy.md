@@ -231,7 +231,7 @@ async def create_collection(self, collection_name: str, schema: Dict[str, Dict])
 
 - **EmbedNode**: Generate embeddings from text/images (integration with Kaizen)
 - **SimilaritySearchNode**: KNN/ANN search by vector
-- **HybridSearchNode**: Combine vector + metadata filtering
+- **PgVectorHybridSearchNode**: Combine vector + metadata filtering
 - **IndexBuildNode**: Build HNSW/IVF indexes
 
 **Fit Score Analysis**:
