@@ -4,6 +4,23 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.23.1] — 2026-05-19 — complete the `[rag]` extra (#891 follow-up)
+
+### Fixed
+
+- **`pip install "kailash-kaizen[rag]"` now imports `kaizen.nodes.rag`.**
+  2.23.0 resurrected the package but its `[rag]` extra declared only
+  `numpy`/`Pillow`; the resurrected import graph also needs `networkx`
+  (graph RAG — was undeclared anywhere) plus `requests` + `aiosqlite`
+  (pulled transitively via `kailash.nodes.api.rest` and the kailash data
+  path the rag modules import). `pip install "kailash-kaizen[rag]==2.23.0";
+import kaizen.nodes.rag` raised `ModuleNotFoundError: networkx`. The
+  `[rag]` extra is now the complete dependency set:
+  `numpy, Pillow, networkx, requests, aiosqlite`. **`kaizen.nodes.rag`
+  requires `pip install "kailash-kaizen[rag]"`** (its node-functional deps
+  are intentionally behind the extra per the issue #890 core-dep audit;
+  bare `import kaizen` is unaffected — the rag package is deep-import-only).
+
 ## [2.23.0] — 2026-05-19 — resurrect `kaizen.nodes.rag` (#891 follow-up)
 
 ### Fixed
