@@ -28,13 +28,14 @@ from collections import OrderedDict
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
+from pydantic import BaseModel, Field, ValidationError
+
 from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
-from pydantic import BaseModel, Field, ValidationError
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -1413,8 +1414,9 @@ class Node(ABC):
 
         # Then validate JSON-serializability
         # Skip JSON validation for state management objects
-        from kailash.workflow.state import WorkflowStateWrapper
         from pydantic import BaseModel
+
+        from kailash.workflow.state import WorkflowStateWrapper
 
         non_serializable = []
         for k, v in outputs.items():
@@ -2296,11 +2298,13 @@ class NodeRegistry:
 
     _instance = None
     _nodes: dict[str, type[Node]] = {}
-    # Registry names ever registered with allow_override=True. DataFlow
-    # @db.model generates CRUD node classes whose names may coincide with
-    # static nodes; such names are exempt from the cross-module collision
-    # guard (issue #891) in either registration order. See register().
-    _override_names: set[str] = set()
+    # Names whose CURRENT incumbent was registered with allow_override=True
+    # (DataFlow @db.model generates CRUD node classes). Updated on every
+    # registration to track the live incumbent — added on a dynamic
+    # registration, removed on a static one — so the cross-module collision
+    # guard (issue #891) is exempted only while a dynamic node holds the
+    # slot, never permanently. See register().
+    _dynamic_names: set[str] = set()
 
     def __new__(cls):
         """Ensure singleton instance.
@@ -2386,7 +2390,7 @@ class NodeRegistry:
             # fresh CRUD node class per decoration) OR the incumbent name was
             # itself registered dynamically — in either order the overwrite is
             # intentional, not the #891 import-order-dependent dispatch bug.
-            dynamic = allow_override or node_name in cls._override_names
+            dynamic = allow_override or node_name in cls._dynamic_names
             if not dynamic and existing_module != new_module:
                 # __module__ strings differ — but a package reachable both as
                 # `pkg.*` and `src.pkg.*` (src/ on sys.path) yields two module
@@ -2418,8 +2422,13 @@ class NodeRegistry:
             # classes (fresh class objects, same __module__) per @db.model call.
             _logger.info(f"Overwriting existing node registration for '{node_name}'")
 
+        # Track the LIVE incumbent's dynamic-ness: a dynamic registration marks
+        # the name exempt; a subsequent static registration un-marks it, so the
+        # exemption never outlives the dynamic node that earned it (issue #891).
         if allow_override:
-            cls._override_names.add(node_name)
+            cls._dynamic_names.add(node_name)
+        else:
+            cls._dynamic_names.discard(node_name)
         cls._nodes[node_name] = node_class
         _logger.debug(f"Registered node '{node_name}'")
 
@@ -2649,6 +2658,7 @@ class NodeRegistry:
             >>> # - Should re-register needed nodes
         """
         cls._nodes.clear()
+        cls._dynamic_names.clear()
         logging.info("Cleared all registered nodes")
 
 

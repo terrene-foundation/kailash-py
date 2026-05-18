@@ -23,19 +23,19 @@ from __future__ import annotations
 import inspect
 
 import pytest
+
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import NodeConfigurationError
 
 
 def _force_import_node_modules() -> None:
     """Import the node modules so their @register_node decorators run."""
-    import kailash.nodes.data.bulk_operations  # noqa: F401
-    import kaizen.nodes.ai.hybrid_search  # noqa: F401
-
     import dataflow.nodes.aggregate_operations  # noqa: F401
     import dataflow.nodes.bulk_upsert  # noqa: F401
     import dataflow.nodes.mongodb_nodes  # noqa: F401
     import dataflow.nodes.vector_nodes  # noqa: F401
+    import kailash.nodes.data.bulk_operations  # noqa: F401
+    import kaizen.nodes.ai.hybrid_search  # noqa: F401
 
 
 @pytest.mark.regression
@@ -158,7 +158,7 @@ def test_issue_891_allow_override_exempts_dynamic_registration():
         assert NodeRegistry._nodes[alias] is static_probe
     finally:
         NodeRegistry._nodes.pop(alias, None)
-        NodeRegistry._override_names.discard(alias)
+        NodeRegistry._dynamic_names.discard(alias)
 
     # Order B — static registers first; a later dynamic registration
     # (allow_override=True) of the same name must NOT raise.
@@ -168,4 +168,36 @@ def test_issue_891_allow_override_exempts_dynamic_registration():
         assert NodeRegistry._nodes[alias] is dynamic_probe
     finally:
         NodeRegistry._nodes.pop(alias, None)
-        NodeRegistry._override_names.discard(alias)
+        NodeRegistry._dynamic_names.discard(alias)
+
+
+@pytest.mark.regression
+def test_issue_891_dynamic_exemption_does_not_outlive_the_dynamic_node():
+    """The allow_override exemption tracks the LIVE incumbent, not the name.
+
+    Once a static node takes a slot previously held by a dynamic node, a
+    genuine static-vs-static cross-module collision on that name MUST still
+    raise — the exemption must not be permanently sticky (issue #891).
+    """
+    dynamic_probe = _probe_node_class("_Issue891StickyDynamic")
+    static_a = _probe_node_class("_Issue891StickyStaticA")
+    static_b = _probe_node_class("_Issue891StickyStaticB")
+    dynamic_probe.__module__ = "json.decoder"
+    static_a.__module__ = "json.encoder"
+    static_b.__module__ = "json.scanner"  # third distinct real file
+    alias = "_Issue891StickyProbe"
+
+    try:
+        # 1. dynamic registers — name is now exempt
+        NodeRegistry.register(dynamic_probe, alias=alias, allow_override=True)
+        assert alias in NodeRegistry._dynamic_names
+        # 2. a static node takes the slot — exemption must be revoked
+        NodeRegistry.register(static_a, alias=alias)
+        assert alias not in NodeRegistry._dynamic_names
+        # 3. a second static node, different module — genuine #891 collision,
+        #    MUST raise even though the name was once dynamic
+        with pytest.raises(NodeConfigurationError, match="collision"):
+            NodeRegistry.register(static_b, alias=alias)
+    finally:
+        NodeRegistry._nodes.pop(alias, None)
+        NodeRegistry._dynamic_names.discard(alias)
