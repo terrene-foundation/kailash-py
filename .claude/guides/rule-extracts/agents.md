@@ -140,3 +140,35 @@ See `skills/30-claude-code-patterns/worktree-orchestration.md` § Rule 5 for the
 - **Custom API when Nexus exists** — misses Nexus's session management, rate limiting, multi-channel deployment
 - **Custom agents when Kaizen exists** — bypasses Kaizen's signature validation, tool safety, structured reasoning
 - **Custom governance when PACT exists** — lacks PACT's D/T/R accountability grammar and verification gradient
+
+## Post-mortem 2026-05-16 — non-isolated shared-source editor vs concurrent readers
+
+Origin for "MUST: Worktree-Isolate Parallel Agents That Edit Shared Source; Concurrent Readers Read Committed HEAD".
+
+### Incident
+
+During a long session resolving template drift, three agents ran against the SAME loom checkout (not worktree-isolated):
+
+- a background agent resolving issue #243 (consumer variant boundary) that EDITED `.claude/sync-manifest.yaml`, and
+- two `/sync` catch-up agents (py, then rs) that READ loom source (`emit.mjs`, rules) to copy genuine-lag files into USE templates.
+
+The #243 agent's mid-edit WIP left `sync-manifest.yaml` with a transient YAML syntax error (a list scalar with an embedded `: `). The py catch-up agent, reading the shared working tree, flagged "the manifest is broken repo-wide" — correct, but it was another workstream's in-flight WIP, not a real defect at HEAD. The rs catch-up agent hit the same confusion. Net: ~2 agents' analysis cycles spent reconciling a transient state that did not exist at committed HEAD.
+
+### Root cause
+
+`agents.md` had a worktree-isolation MUST, but its title + rationale scoped it to **compiling** agents (cargo `target/` lock contention). A non-compiling agent that edits shared source in a shared checkout is the SAME structural hazard — its uncommitted WIP is visible to every concurrent reader — but the rule's compiling-only framing left it uncovered. The orchestrator (this session) launched the #243 agent without `isolation: "worktree"` precisely because "it doesn't compile."
+
+### Resolution
+
+Two structural halves, both now in the rule:
+
+1. **Editor isolation**: any background/parallel agent that edits shared source MUST be worktree-isolated, compiling or not.
+2. **Reader discipline**: concurrent readers MUST read committed HEAD (`git show HEAD:<path>`), never the working tree. This is the isolation that actually saved the cycle here — once the py/rs catch-up agents were explicitly instructed to read committed HEAD, they produced correct plans despite the broken WIP in the shared tree.
+
+### Secondary lesson (behavioral, journaled not ruled)
+
+The same session twice used `git -c core.hooksPath=/dev/null commit` reflexively (both times inert — the target repos had no pre-commit framework, nothing masked). `git.md` already blocks silent hook-bypass; the lesson is behavioral (don't reach for the bypass by reflex) and is recorded in the bundle's journal DECISION entry rather than as a new rule clause, since git.md already covers the structural case.
+
+### Counterfactual
+
+Had the #243 agent been worktree-isolated (or had the catch-up agents been told to read committed HEAD from the start), zero reader cycles would have been spent on a phantom defect. The reader-reads-committed-HEAD instruction was added mid-session and worked — it is now the codified default, not an ad-hoc save.

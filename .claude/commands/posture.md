@@ -88,7 +88,7 @@ For Steps 1/2 nonce flow, write nonce to file with mode 0600. Hooks read the fil
 
 ```
 === /posture: L4_CONTINUOUS_INSIGHT ===
-Repo:    /Users/esperie/repos/loom
+Repo:    <repo-root>
 Since:   2026-05-06T09:14:00Z (1 day 23h)
 
 Pending Verification:

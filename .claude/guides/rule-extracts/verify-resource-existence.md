@@ -9,7 +9,7 @@ Reference for `rules/verify-resource-existence.md`. The main rule keeps the load
 ```bash
 # DO — existence check first
 $ gh api orgs/<org>/actions/hosted-runners
-{"total_count":1,"runners":[{"name":"esperie-linux-arm",...}]}
+{"total_count":1,"runners":[{"name":"<runner-name>","labels":["self-hosted","linux","arm64"],...}]}
 # → no 16-core runner exists; the workflow step targeting it can never succeed
 # → recommendation: delete the dead step (no PAT, no rotation, no debugging)
 

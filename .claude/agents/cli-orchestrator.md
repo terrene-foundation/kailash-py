@@ -72,6 +72,8 @@ The audit runs against `parity_enforcement.cross_cli_drift_audit` config at `.cl
 - `warn_on_drift_in_slots`: `examples`
 - `scrub_tokens`: syntactic delegation primitives only — extending to semantic tokens is BLOCKED per `rules/cross-cli-parity.md` Rule 4
 
+The executor for this verb is `tools/cli-drift-audit.mjs` (landed E6c, 2026-05-14). It is invoked by `/cli-audit` Phase 3; standalone usage is `node tools/cli-drift-audit.mjs --json <path>`. Acceptance fixtures at `.claude/audit-fixtures/cross-cli-drift/`.
+
 ## Related Agents
 
 - **cc-architect** — OWNER of `.claude/**` source tree

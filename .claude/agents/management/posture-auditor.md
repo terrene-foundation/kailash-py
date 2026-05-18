@@ -68,7 +68,7 @@ For each finding:
 
 ```
 === posture-auditor report — 2026-05-12 ===
-Repo: /Users/esperie/repos/loom
+Repo: <repo-root>
 
 1. Current State
    Posture: L4_CONTINUOUS_INSIGHT (since 2026-05-06, 6 days 23h)

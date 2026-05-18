@@ -22,17 +22,24 @@ Read `.claude/VERSION` → `type` field:
 
 ## Two Gates (coc-source — loom/ only)
 
+**loom is the central splitter, not an author.** loom does NOT originate artifact changes — it ingests proposals from TWO upstream streams (BUILD repos for SDK code; USE-template repos for COC-artifact improvements per `guides/co-setup/09-proposal-protocol.md` Step 7b), splits global vs variant at Gate 1, then dual-distributes: `/sync-to-build` pushes canonical back to BUILD repos, `/sync` distributes to USE templates (which downstream repos pull via their own `/sync`).
+
 This command has two sequential gates. Gate 1 runs automatically if unreviewed changes exist. Detailed protocol for each gate is in `skills/30-claude-code-patterns/sync-flow.md` § Gate 1 / § Gate 2 — the agents below load that skill at delegation time.
 
-### Gate 1: Review (inbound — BUILD repo → loom/)
+### Gate 1: Review + Scrub (inbound — TWO proposal streams)
 
-Scans the BUILD repo for artifact changes not yet upstreamed to loom/.
+Scans inbound artifact changes not yet upstreamed to loom/. Two streams:
+
+- **BUILD stream** (kailash-py / kailash-rs): SDK-code-originated proposals. Gate 1 records/flags whether the proposal considered cross-SDK (advisory alignment note — see step 8; NOT a hard block).
+- **USE-template stream** (`kailash-coc-*`): COC-artifact-improvement proposals from USE-template `/codify` origination per `guides/co-setup/09-proposal-protocol.md` Step 7b.
+
+**Disclosure-scrub on intake (MUST, runs first):** before classifying any change, run `node .claude/bin/scan-synced-disclosure.mjs --root <inbound-repo-path>` against the candidate artifact files AND have a human scrub the `.proposals/latest.yaml` body per `upstream-issue-hygiene.md` Rule 2 (`.proposals/` is `isNeverSynced`, so `--root` won't reach it — the human gate covers the body). Non-zero exit or any finding = HALT until genericized + relocated (#255/#260 pattern). This is symmetric with the Gate-2 synced-disclosure preflight.
 
 **Trigger**: Runs automatically when `/sync` detects unreviewed changes. Also runs if the user explicitly says "review" (e.g., `/sync py review`).
 
 **Process summary** (full protocol in skill):
 
-1. Read `sync-manifest.yaml` for tier membership + variant mappings; read BUILD repo path from `repos.{target}.build`.
+1. Read `sync-manifest.yaml` for tier membership + variant mappings; `repos.{target}.build` gives the BUILD logical NAME — resolve its on-disk path via `bin/lib/loom-links.mjs::resolveRepo("build.{target}")` (canonical NAME→location binding, `cross-repo.md` MUST-1), never a positional `../{build}` guess.
 2. Read SDK version from BUILD repo's `pyproject.toml` (py) / `Cargo.toml` (rs) — report in review header.
 3. Compute expected state (loom + variant overlay), diff BUILD repo's `.claude/` against it.
 4. Check `.claude/.proposals/latest.yaml` status (`pending_review` / `reviewed` / `distributed`); for `reviewed`, re-review only entries appended after `reviewed_date`.
@@ -45,6 +52,8 @@ Scans the BUILD repo for artifact changes not yet upstreamed to loom/.
 ### Gate 2: Distribute (outbound — loom/ → templates)
 
 Merges loom/ source + variant overlays into USE template repos. This is a **merge** — templates may have legitimate local content.
+
+**Synced-disclosure gate (MUST, runs first):** before any emit step, Gate 2 runs `node .claude/bin/scan-synced-disclosure.mjs --check`; a non-zero exit is BLOCK-level — /sync HALTs and surfaces the redacted report until a human genericizes + relocates the disclosure to the operator-local companion (per #255/#260). Full protocol: skill § Gate 2 step 0.
 
 **Process summary** (full protocol in skill):
 
@@ -61,6 +70,8 @@ Merges loom/ source + variant overlays into USE template repos. This is a **merg
 11. Verify hooks — every entry in `settings.json` has a script on disk.
 12. Mark BUILD proposal as `distributed` with `distributed_date`.
 
+**Multi-CLI scaffold (Step 4.6 in coc-sync)**: for multi-CLI USE templates (`template_type: multi-cli`), Gate 2 emits the symlinks and conditional manifest declared under `sync-manifest.yaml::multi_cli_overlays.<template_type>.symlinks` + `manifest_distribute`. Closes the `/migrate` Step-4a inline-workaround gap (#184). Cc-only-legacy templates are unaffected.
+
 **Pre-commit gate**: run `tools/verify-overlays.sh <target>` from loom — MUST report `Failing: 0` (slot-keyed-aware since v2.21.1). Any CRIT-2 / drift / deployed-missing row blocks the cycle.
 
 **Report shape**:
@@ -75,7 +86,7 @@ Dependencies: uv sync ✓ | Hooks: 11/11 | VERSION: 1.0.0→1.1.0
 
 ## Exclusions
 
-Never synced: `learning/`, `.proposals/`, `sync-manifest.yaml`, `variants/`, `settings.local.json`, `CLAUDE.md`, `.env`, `.git/`. Full list: `skills/30-claude-code-patterns/sync-flow.md` § Exclusions.
+Never synced: `learning/`, `.proposals/`, `variants/`, `settings.local.json`, `CLAUDE.md`, `.env`, `.git/`. `sync-manifest.yaml` is excluded from cc-only-legacy templates AND from BUILD repos, but **emitted to multi-CLI USE templates** when `multi_cli_overlays.<template_type>.manifest_distribute: true` (the emitter at the project repo reads it at `/migrate` time). Full list: `skills/30-claude-code-patterns/sync-flow.md` § Exclusions.
 
 ## Delegate
 

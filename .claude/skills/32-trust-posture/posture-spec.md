@@ -67,7 +67,7 @@ One JSON object per line. Each line ≤2KB (POSIX atomic-append safety).
   "id": "vio_1715000000_a3f",
   "timestamp": "2026-05-05T14:22:00.000Z",
   "session_id": "abc-123",
-  "repo": "/Users/esperie/repos/loom",
+  "repo": "<repo-root>",
   "rule_id": "test-completeness/MUST-1",
   "severity": "halt-and-report",
   "evidence": "agent ran `pytest tests/unit/` only; spec required tier 2",
