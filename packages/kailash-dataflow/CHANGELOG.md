@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.9.19] — 2026-05-18 — TransactionScope.execute_raw write-protection (#1083 follow-up)
+
+### Fixed
+
+- **`TransactionScope.execute_raw` write-protection bypass (HIGH, #1083 follow-up)** — `TransactionScope.execute_raw` (async) and `SyncTransactionScope.execute_raw` (sync) were the only DataFlow write surfaces not routed through `WriteProtectionEngine.check_operation` (spec invariant I1, `specs/dataflow-protection.md`). A caller with `read_only_mode=True` could mutate state via `async with db.transactions.begin() as tx: await tx.execute_raw("DELETE FROM ...")`. New `_classify_raw_sql_operation` + `_execute_raw_with_protection` helpers classify raw SQL by leading keyword (SELECT/WITH/SHOW/EXPLAIN → read; INSERT/UPDATE/DELETE/UPSERT → existing `OperationType`; DDL/unknown → `custom_query`, fail-closed) and call `check_operation` before connection dispatch. Same-bug-class with the #1050/#1058 enforcement chain. Surfaced by multi-agent `/redteam` against the #1083 closure.
+- **`auditor.log_violation` schema-name disclosure at WARN (observability Rule 8)** — the structured WARN log now emits an 8-char sha256 fingerprint of `model.field` instead of raw schema identifiers; raw values stay process-local in the audit `events` dict.
+
 ## [2.9.18] — 2026-05-18 — sanitizer set/tuple type-confusion fix (#1047)
 
 ### Fixed
