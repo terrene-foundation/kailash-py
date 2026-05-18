@@ -13,12 +13,13 @@ Domain truth for the Kailash platform. Each file is authoritative for its domain
 
 ## DataFlow
 
-| File                                       | Description                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| [dataflow-core.md](dataflow-core.md)       | DataFlow class, constructor, configuration, connection URL, engine, exceptions |
-| [dataflow-express.md](dataflow-express.md) | Express API (create/read/update/delete/list/count/bulk), Express Sync          |
-| [dataflow-models.md](dataflow-models.md)   | @db.model, field types, validation, classification, multi-tenant               |
-| [dataflow-cache.md](dataflow-cache.md)     | Cache layer, dialect, record ID coercion, transactions, pooling                |
+| File                                             | Description                                                                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [dataflow-core.md](dataflow-core.md)             | DataFlow class, constructor, configuration, connection URL, engine, exceptions                                                                         |
+| [dataflow-express.md](dataflow-express.md)       | Express API (create/read/update/delete/list/count/bulk), Express Sync                                                                                  |
+| [dataflow-models.md](dataflow-models.md)         | @db.model, field types, validation, classification, multi-tenant                                                                                       |
+| [dataflow-cache.md](dataflow-cache.md)           | Cache layer, dialect, record ID coercion, transactions, pooling                                                                                        |
+| [dataflow-protection.md](dataflow-protection.md) | ProtectedDataFlow write-protection invariants I1-I9, OperationType enum, check_operation routing, async-hot-path wiring (#1050/#1058 closure baseline) |
 
 ## Nexus
 

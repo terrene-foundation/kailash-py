@@ -5,6 +5,7 @@ Comprehensive write protection that integrates with Core SDK workflow execution.
 Provides multi-level protection: Global, Connection, Model, Operation, Field, and Runtime.
 """
 
+import hashlib
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -212,7 +213,18 @@ class ProtectionAuditor:
     def log_violation(
         self, violation: ProtectionViolation, context: Optional[Dict[str, Any]] = None
     ):
-        """Log a protection violation."""
+        """Log a protection violation.
+
+        Per `rules/observability.md` Rule 8: schema-revealing field names
+        (model + field) bleed to log aggregators when emitted at WARN
+        because aggregators (Datadog/Splunk/CloudWatch) typically have a
+        wider audience than the production database — operators see
+        ``users.ssn`` schema even though VALUES never leak. The structured
+        WARN line therefore emits an 8-char sha256 fingerprint of
+        ``model.field`` instead of the raw names; the in-memory
+        ``events`` dict (process-local audit trail, not shipped to the
+        aggregator) keeps the raw value for forensic queries.
+        """
         event = {
             "timestamp": violation.timestamp,
             "message": str(violation),
@@ -224,7 +236,20 @@ class ProtectionAuditor:
             "context": context or {},
         }
         self.events.append(event)
-        logger.warning("protection.protection_violation", extra={"event": event})
+        # Compose a stable 8-char fingerprint of the schema identifier so
+        # the WARN line is grep-correlatable across events without
+        # exposing the raw schema name (observability.md Rule 8).
+        schema_identifier = f"{violation.model or ''}.{violation.field or ''}"
+        schema_hash = hashlib.sha256(schema_identifier.encode("utf-8")).hexdigest()[:8]
+        logger.warning(
+            "protection.protection_violation",
+            extra={
+                "operation": violation.operation.value,
+                "level": violation.level.value,
+                "schema_hash": schema_hash,
+                "connection": violation.connection,
+            },
+        )
 
     def log_allowed(
         self,
