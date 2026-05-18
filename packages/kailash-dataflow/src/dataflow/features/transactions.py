@@ -38,6 +38,101 @@ _active_transaction: ContextVar[Optional[Any]] = ContextVar(
 _savepoint_depth: ContextVar[int] = ContextVar("_savepoint_depth", default=0)
 
 
+def _classify_raw_sql_operation(sql: str) -> str:
+    """Classify raw SQL into a `WriteProtectionEngine.check_operation` name.
+
+    Closes the same-bug-class gap surfaced by /redteam against the #1050
+    chain: `TransactionScope.execute_raw` and `SyncTransactionScope.
+    execute_raw` were the only DataFlow write surfaces not routed through
+    `check_operation` (spec invariant I1). Without this classifier a
+    caller with `read_only_mode=True` could `DELETE FROM users` through
+    `async with db.transactions.begin()`.
+
+    The classifier reads the leading SQL keyword and maps to an existing
+    operation name so the protection engine's `_operation_mapping` decides
+    BLOCK / AUDIT / WARN per its existing semantics (no new enum needed).
+
+    Mapping:
+    - `SELECT` / `WITH` / `SHOW` / `EXPLAIN` → "read" (READ tier — always
+      allowed under read_only_global / production_safe).
+    - `INSERT` → "create"; `UPDATE` → "update"; `DELETE` → "delete";
+      `UPSERT` (PostgreSQL `INSERT ... ON CONFLICT` is technically INSERT,
+      caught above) → "upsert".
+    - DDL (`CREATE` / `DROP` / `ALTER` / `TRUNCATE`) → falls through to
+      `custom_query` which the engine maps to `OperationType.CUSTOM_QUERY`
+      and BLOCKS under read_only_global / production_safe defaults.
+    - Anything unrecognized → "custom_query" (fail-closed in protected mode).
+    """
+    stripped = sql.lstrip()
+    if not stripped:
+        return "custom_query"
+    head = stripped[:8].upper().split()[0] if stripped else ""
+    if head in ("SELECT", "WITH", "SHOW", "EXPLAIN", "VALUES", "TABLE"):
+        return "read"
+    if head == "INSERT":
+        return "create"
+    if head == "UPDATE":
+        return "update"
+    if head == "DELETE":
+        return "delete"
+    if head == "UPSERT":  # MySQL UPSERT keyword if exposed
+        return "upsert"
+    # DDL + everything else falls through to CUSTOM_QUERY (engine BLOCKS
+    # under read_only_global / production_safe by default).
+    return "custom_query"
+
+
+async def _execute_raw_with_protection(
+    sql: str,
+    params: Optional[List[Any]],
+    *,
+    dataflow_instance: Optional[Any],
+    conn: Any,
+) -> Any:
+    """Run protection check then dispatch raw SQL on the pinned connection.
+
+    Single helper used by both `TransactionScope.execute_raw` (async) and
+    `SyncTransactionScope.execute_raw` (sync, via the BG loop). Pulls the
+    protection engine off the DataFlow instance the same way Express does
+    (`packages/kailash-dataflow/src/dataflow/features/express.py::
+    DataFlowExpress._check_protection_if_enabled`); on a non-protected
+    DataFlow the check is a no-op.
+    """
+    if dataflow_instance is not None:
+        protection_engine = getattr(dataflow_instance, "_protection_engine", None)
+        if protection_engine is not None:
+            connection_string = getattr(dataflow_instance, "database_url", None)
+            operation = _classify_raw_sql_operation(sql)
+            # context mirrors DataFlowExpress._check_protection_if_enabled —
+            # auditor accepts missing keys.
+            protection_engine.check_operation(
+                operation=operation,
+                model_name=None,
+                connection_string=connection_string,
+                context={"surface": "transactions.execute_raw"},
+            )
+    # asyncpg: connection.fetch / .execute take *params positional.
+    # aiosqlite: connection.execute takes a single tuple/list arg.
+    # Dispatch by connection type to bind correctly. asyncpg connections
+    # have a `fetch` method; aiosqlite connections do not.
+    is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
+    sql_stripped = sql.lstrip()
+    is_select = (
+        sql_stripped[:6].upper() == "SELECT" or sql_stripped[:4].upper() == "WITH"
+    )
+    if is_asyncpg:
+        if params is None:
+            if is_select:
+                return await conn.fetch(sql)
+            return await conn.execute(sql)
+        if is_select:
+            return await conn.fetch(sql, *params)
+        return await conn.execute(sql, *params)
+    if params is None:
+        return await conn.execute(sql)
+    return await conn.execute(sql, params)
+
+
 class TransactionScope:
     """The yielded scope inside an ``async with db.transactions.begin()`` block.
 
@@ -56,7 +151,14 @@ class TransactionScope:
     (``txn["id"]``) — ``__getitem__`` maps the canonical attributes through.
     """
 
-    __slots__ = ("id", "isolation_level", "status", "type", "depth")
+    __slots__ = (
+        "id",
+        "isolation_level",
+        "status",
+        "type",
+        "depth",
+        "_dataflow_instance",
+    )
 
     def __init__(
         self,
@@ -66,12 +168,16 @@ class TransactionScope:
         status: str = "active",
         type: str = "transaction",
         depth: Optional[int] = None,
+        dataflow_instance: Optional[Any] = None,
     ) -> None:
         self.id = id
         self.isolation_level = isolation_level
         self.status = status
         self.type = type
         self.depth = depth
+        # Held so execute_raw can route through _protection_engine the same
+        # way DataFlowExpress does. See _execute_raw_with_protection.
+        self._dataflow_instance = dataflow_instance
 
     def __getitem__(self, key: str) -> Any:
         """Backward-compat dict-style access.
@@ -150,6 +256,12 @@ class TransactionScope:
         Raises:
             RuntimeError: When called outside the ``async with`` body —
                 the pinned connection only exists while the scope is active.
+            ProtectionViolation: When the DataFlow instance has write
+                protection enabled and the SQL is classified as a write
+                under the current protection level (spec invariant I1 —
+                single-check discipline extended to the raw-SQL surface,
+                closes the same-bug-class gap surfaced post-#1050 by the
+                multi-agent /redteam against the closure of #1083).
         """
         conn = _active_transaction.get()
         if conn is None:
@@ -159,31 +271,12 @@ class TransactionScope:
                 "`async with db.transactions.begin()` scope. "
                 "The pinned connection is only valid while the scope is active."
             )
-
-        # asyncpg: connection.fetch / .execute take *params positional.
-        # aiosqlite: connection.execute takes a single tuple/list arg.
-        # Dispatch by connection type to bind correctly. asyncpg connections
-        # have a `fetch` method; aiosqlite connections do not.
-        is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
-
-        sql_stripped = sql.lstrip()
-        is_select = (
-            sql_stripped[:6].upper() == "SELECT" or sql_stripped[:4].upper() == "WITH"
+        return await _execute_raw_with_protection(
+            sql,
+            params,
+            dataflow_instance=self._dataflow_instance,
+            conn=conn,
         )
-
-        if is_asyncpg:
-            if params is None:
-                if is_select:
-                    return await conn.fetch(sql)
-                return await conn.execute(sql)
-            # asyncpg: positional unpacking
-            if is_select:
-                return await conn.fetch(sql, *params)
-            return await conn.execute(sql, *params)
-        # aiosqlite-style: single tuple param
-        if params is None:
-            return await conn.execute(sql)
-        return await conn.execute(sql, params)
 
 
 class TransactionManager:
@@ -308,6 +401,7 @@ class TransactionManager:
                 isolation_level=isolation_level,
                 status="active",
                 type="transaction",
+                dataflow_instance=self.dataflow,
             )
 
             yield scope
@@ -369,6 +463,7 @@ class TransactionManager:
                 status="active",
                 type="savepoint",
                 depth=depth,
+                dataflow_instance=self.dataflow,
             )
 
             yield scope
@@ -573,6 +668,7 @@ class SyncTransactionScope:
         "_status",
         "_type",
         "_depth",
+        "_dataflow_instance",
     )
 
     def __init__(
@@ -585,6 +681,7 @@ class SyncTransactionScope:
         status: str = "active",
         type: str = "transaction",
         depth: Optional[int] = None,
+        dataflow_instance: Optional[Any] = None,
     ) -> None:
         # ``conn`` is the pinned asyncpg/aiosqlite connection (NOT a pool)
         # bound to the manager's BG event loop. Set to ``_SCOPE_INACTIVE``
@@ -599,6 +696,9 @@ class SyncTransactionScope:
         self._status = status
         self._type = type
         self._depth = depth
+        # Held so execute_raw can route through _protection_engine the same
+        # way the async scope does. See _execute_raw_with_protection.
+        self._dataflow_instance = dataflow_instance
 
     # --- Metadata mirror of the async scope (read-only attribute proxies) ---
 
@@ -649,9 +749,22 @@ class SyncTransactionScope:
             rows (use ``dict(row)`` to materialize). For
             INSERT/UPDATE/DELETE on asyncpg: the command-tag string. For
             aiosqlite: the cursor object after ``execute()``.
+
+        Raises:
+            ProtectionViolation: When the DataFlow instance has write
+                protection enabled and the SQL is classified as a write
+                under the current protection level — same routing as
+                :meth:`TransactionScope.execute_raw`.
         """
         conn = self._guarded_conn()
-        return self._run_sync(_execute_raw_on_conn(conn, sql, params))
+        return self._run_sync(
+            _execute_raw_with_protection(
+                sql,
+                params,
+                dataflow_instance=self._dataflow_instance,
+                conn=conn,
+            )
+        )
 
     # --- Internal: typed guard for out-of-scope access ---
 
@@ -681,10 +794,11 @@ async def _execute_raw_on_conn(
 ) -> Any:
     """Execute a raw SQL statement on an asyncpg/aiosqlite connection.
 
-    Mirrors :meth:`TransactionScope.execute_raw`'s connection-type
-    dispatch — asyncpg takes positional ``*params``, aiosqlite takes a
-    single tuple/list. SELECT vs INSERT/UPDATE/DELETE chooses
-    ``fetch`` vs ``execute`` for asyncpg.
+    Connection-type dispatch only — does NOT route through the protection
+    engine. Prefer :func:`_execute_raw_with_protection` from the
+    `TransactionScope` / `SyncTransactionScope` entry points; this helper
+    remains for callers that have already done the protection check OR
+    are operating on a non-DataFlow-owned connection.
     """
     is_asyncpg = hasattr(conn, "fetch") and hasattr(conn, "fetchrow")
     sql_stripped = sql.lstrip()
@@ -902,6 +1016,7 @@ class SyncTransactionManager:
             isolation_level=isolation_level,
             status="active",
             type="transaction",
+            dataflow_instance=self._transactions.dataflow,
         )
 
         try:
