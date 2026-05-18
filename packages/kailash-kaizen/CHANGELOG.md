@@ -4,6 +4,20 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.22.0] — 2026-05-19 — node-registry collision fix (#891)
+
+### Changed
+
+- **`HybridSearchNode` renamed to `SemanticHybridSearchNode` (#891)** — the RAG
+  hybrid-search node (`kaizen.nodes.ai.hybrid_search`) registered the same global
+  registry name as kailash-dataflow's pgvector `HybridSearchNode`, making
+  `add_node("HybridSearchNode")` resolve import-order-dependently. The class is
+  internal-only (not on the package's public `__init__` surface), so no
+  deprecation shim is provided. Deep importers migrate:
+  `from kaizen.nodes.ai.hybrid_search import HybridSearchNode` →
+  `import SemanticHybridSearchNode`; `add_node("HybridSearchNode", ...)` →
+  `add_node("SemanticHybridSearchNode", ...)`.
+
 ## [2.21.1] — 2026-05-18 — restore `kaizen.api` deprecation shim (#1071)
 
 ### Fixed

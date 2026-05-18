@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-05-19
+
+### Changed
+
+- **Node-registry cross-module collision guard (#891)** — `NodeRegistry.register`
+  now raises `NodeConfigurationError` when a node name is re-registered by a
+  class from a different source file. Previously such collisions only emitted an
+  INFO log and the last import silently won, so `add_node("<name>")` resolved
+  import-order-dependently. Same-module re-registration (DataFlow model
+  decoration regenerating CRUD node classes per `@db.model`) stays non-fatal
+  per ADR-002.
+- **`BulkUpsertNode` renamed to `SQLBulkUpsertNode` (#891)** — the core bulk
+  upsert node registered the same global name as kailash-dataflow's
+  `BulkUpsertNode`. Migration: `add_node("BulkUpsertNode", ...)` →
+  `add_node("SQLBulkUpsertNode", ...)`.
+
 ## [2.22.1] - 2026-05-18
 
 ### Fixed
