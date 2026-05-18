@@ -15,7 +15,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus, create_nexus
 
 # Import DataFlow nodes
-from .nodes.bulk_upsert import BulkUpsertNode
+from .nodes.bulk_upsert import DataFlowBulkUpsertNode
 from .nodes.monitoring_integration import (
     DataFlowComprehensiveMonitoringNode,
     DataFlowDeadlockDetectorNode,
@@ -322,7 +322,7 @@ class DataFlowGateway:
         else:
             bulk_upsert_config.update(self.default_database_config)
 
-        workflow.add_node("BulkUpsertNode", "bulk_upsert", bulk_upsert_config)
+        workflow.add_node("DataFlowBulkUpsertNode", "bulk_upsert", bulk_upsert_config)
 
         return {
             "workflow": workflow.build(),

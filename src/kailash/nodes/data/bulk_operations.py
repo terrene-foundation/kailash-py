@@ -701,8 +701,8 @@ class BulkDeleteNode(AsyncSQLDatabaseNode, BulkOperationMixin):
         return operator_map.get(mongo_op, "=")
 
 
-@register_node()
-class BulkUpsertNode(AsyncSQLDatabaseNode, BulkOperationMixin):
+@register_node(alias="SQLBulkUpsertNode")
+class SQLBulkUpsertNode(AsyncSQLDatabaseNode, BulkOperationMixin):
     """Bulk insert or update (upsert) operations."""
 
     def __init__(self, **config):

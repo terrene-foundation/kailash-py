@@ -1,4 +1,4 @@
-"""Integration tests for BulkUpsertNode conflict_on with real PostgreSQL.
+"""Integration tests for DataFlowBulkUpsertNode conflict_on with real PostgreSQL.
 
 Tests real database operations with custom conflict fields including:
 - Natural keys (email, SKU)
@@ -9,7 +9,7 @@ Tests real database operations with custom conflict fields including:
 
 import pytest
 
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -91,7 +91,7 @@ class TestBulkUpsertSingleConflictField:
 
     async def test_bulk_upsert_on_email(self, test_suite, users_table):
         """Test bulk upsert using email as conflict field."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -140,7 +140,7 @@ class TestBulkUpsertSingleConflictField:
 
     async def test_bulk_upsert_on_sku(self, test_suite, products_table):
         """Test bulk upsert using SKU as conflict field."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="products",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -192,7 +192,7 @@ class TestBulkUpsertCompositeConflictFields:
 
     async def test_bulk_upsert_on_composite_key(self, test_suite, order_items_table):
         """Test bulk upsert using composite key (order_id + product_id)."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="order_items",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -276,7 +276,7 @@ class TestBulkUpsertCompositeConflictFields:
         self, test_suite, order_items_table
     ):
         """Test that duplicates within batch are deduplicated by composite key."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="order_items",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -336,7 +336,7 @@ class TestBulkUpsertBackwardCompatibility:
         self, test_suite, users_table
     ):
         """Test that omitting conflict_on uses config conflict_columns."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -363,7 +363,7 @@ class TestBulkUpsertBackwardCompatibility:
         async with test_suite.get_connection() as conn:
             await conn.execute("ALTER TABLE users ADD COLUMN username TEXT UNIQUE")
 
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -398,7 +398,7 @@ class TestBulkUpsertMergeStrategies:
 
     async def test_merge_strategy_update(self, test_suite, users_table):
         """Test that update strategy modifies existing records."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -438,7 +438,7 @@ class TestBulkUpsertMergeStrategies:
 
     async def test_merge_strategy_ignore(self, test_suite, users_table):
         """Test that ignore strategy keeps existing records unchanged."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -484,7 +484,7 @@ class TestBulkUpsertLargeDatasets:
 
     async def test_bulk_upsert_1000_records(self, test_suite, users_table):
         """Test bulk upsert with 1000 records using email conflict."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -522,7 +522,7 @@ class TestBulkUpsertLargeDatasets:
         self, test_suite, users_table
     ):
         """Test bulk upsert with mix of inserts and updates in large dataset."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",

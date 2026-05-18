@@ -5,15 +5,14 @@ from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.data.bulk_operations import (
     BulkCreateNode,
     BulkDeleteNode,
     BulkErrorStrategy,
     BulkOperationResult,
     BulkUpdateNode,
-    BulkUpsertNode,
     DatabaseType,
+    SQLBulkUpsertNode,
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
@@ -497,7 +496,7 @@ class TestBulkDeleteNode:
 
 
 class TestBulkUpsertNode:
-    """Test BulkUpsertNode functionality."""
+    """Test SQLBulkUpsertNode functionality."""
 
     @pytest.mark.asyncio
     async def test_upsert_postgresql(self):
@@ -505,7 +504,7 @@ class TestBulkUpsertNode:
         mock_adapter = AsyncMock()
         mock_adapter.execute = AsyncMock()
 
-        node = BulkUpsertNode(
+        node = SQLBulkUpsertNode(
             database_type="postgresql",
             host="localhost",
             database="test",
@@ -536,7 +535,7 @@ class TestBulkUpsertNode:
         mock_adapter = AsyncMock()
         mock_adapter.execute = AsyncMock()
 
-        node = BulkUpsertNode(
+        node = SQLBulkUpsertNode(
             database_type="mysql",
             host="localhost",
             database="test",
@@ -563,7 +562,7 @@ class TestBulkUpsertNode:
         mock_adapter = AsyncMock()
         mock_adapter.execute = AsyncMock()
 
-        node = BulkUpsertNode(
+        node = SQLBulkUpsertNode(
             database_type="sqlite",
             database=":memory:",
             table_name="products",
@@ -587,7 +586,7 @@ class TestBulkUpsertNode:
         mock_adapter = AsyncMock()
         mock_adapter.execute = AsyncMock()
 
-        node = BulkUpsertNode(
+        node = SQLBulkUpsertNode(
             database_type="postgresql",
             host="localhost",
             database="test",
@@ -613,7 +612,7 @@ class TestBulkUpsertNode:
         mock_adapter = AsyncMock()
         mock_adapter.execute = AsyncMock()
 
-        node = BulkUpsertNode(
+        node = SQLBulkUpsertNode(
             database_type="postgresql",
             host="localhost",
             database="test",
@@ -724,8 +723,8 @@ class TestNodeParameters:
         assert "require_filter" in param_names
 
     def test_bulk_upsert_parameters(self):
-        """Test BulkUpsertNode parameters."""
-        node = BulkUpsertNode(
+        """Test SQLBulkUpsertNode parameters."""
+        node = SQLBulkUpsertNode(
             database_type="postgresql",
             host="localhost",
             database="test",

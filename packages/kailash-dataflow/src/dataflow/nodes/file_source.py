@@ -3,7 +3,7 @@
 """FileSourceNode -- CSV, Excel, Parquet, JSON/JSONL ingestion.
 
 Reads tabular data from files and produces records compatible with
-``BulkCreateNode`` and ``BulkUpsertNode``.  Registered as a standalone
+``BulkCreateNode`` and ``DataFlowBulkUpsertNode``.  Registered as a standalone
 utility node (not per-model).
 
 Lazy imports for ``openpyxl`` (Excel) and ``pyarrow`` (Parquet) ensure
@@ -72,7 +72,7 @@ class DataFlowDependencyError(ImportError):
 class FileSourceNode(AsyncNode):
     """Read tabular data from CSV, Excel, Parquet, or JSON files.
 
-    Produces output compatible with ``BulkCreateNode`` / ``BulkUpsertNode``::
+    Produces output compatible with ``BulkCreateNode`` / ``DataFlowBulkUpsertNode``::
 
         {"records": [...], "count": N, "errors": [...]}
 

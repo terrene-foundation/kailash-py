@@ -1,7 +1,7 @@
 """
-Comprehensive integration tests for BulkUpsertNode following NO MOCKING policy.
+Comprehensive integration tests for DataFlowBulkUpsertNode following NO MOCKING policy.
 
-This test suite validates BulkUpsertNode functionality with REAL database operations:
+This test suite validates DataFlowBulkUpsertNode functionality with REAL database operations:
 - Insert new records (no conflicts)
 - Update existing records (conflict exists)
 - Mixed insert + update in same batch
@@ -26,9 +26,9 @@ import time
 from typing import Any, Dict, List
 
 import pytest
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -169,8 +169,8 @@ async def test_bulk_upsert_insert_only_new_records(setup_bulk_upsert_table):
     initial_count = await _count_records(connection_string, table_name)
     assert initial_count == 0, "Table should start empty"
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -213,16 +213,16 @@ async def test_bulk_upsert_insert_only_new_records(setup_bulk_upsert_table):
     actual_records = await _verify_database_state(connection_string, table_name)
 
     # VERIFICATION 1: Correct number of records inserted
-    assert len(actual_records) == 3, (
-        f"Expected 3 records in database, found {len(actual_records)}"
-    )
+    assert (
+        len(actual_records) == 3
+    ), f"Expected 3 records in database, found {len(actual_records)}"
 
     # VERIFICATION 2: All records are present with correct data
     emails_in_db = {r["email"] for r in actual_records}
     expected_emails = {"alice@example.com", "bob@example.com", "charlie@example.com"}
-    assert emails_in_db == expected_emails, (
-        f"Email mismatch: expected {expected_emails}, got {emails_in_db}"
-    )
+    assert (
+        emails_in_db == expected_emails
+    ), f"Email mismatch: expected {expected_emails}, got {emails_in_db}"
 
     # VERIFICATION 3: Data integrity - check specific record values
     alice = next(r for r in actual_records if r["id"] == "user-001")
@@ -252,8 +252,8 @@ async def test_bulk_upsert_empty_table_large_batch(setup_bulk_upsert_table):
     connection_string = config["connection_string"]
     table_name = config["table_name"]
 
-    # Create BulkUpsertNode with batch size
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode with batch size
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -283,9 +283,9 @@ async def test_bulk_upsert_empty_table_large_batch(setup_bulk_upsert_table):
     actual_count = await _count_records(connection_string, table_name)
 
     # VERIFICATION: All 1000 records inserted
-    assert actual_count == 1000, (
-        f"Expected 1000 records in database, found {actual_count}"
-    )
+    assert (
+        actual_count == 1000
+    ), f"Expected 1000 records in database, found {actual_count}"
 
     # Verify batch processing metrics
     assert result["performance_metrics"]["batches_processed"] == 4  # 1000/250 = 4
@@ -344,8 +344,8 @@ async def test_bulk_upsert_update_only_existing_records(setup_bulk_upsert_table)
     initial_count = await _count_records(connection_string, table_name)
     assert initial_count == 3, "Should have 3 initial records"
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -387,9 +387,9 @@ async def test_bulk_upsert_update_only_existing_records(setup_bulk_upsert_table)
     actual_records = await _verify_database_state(connection_string, table_name)
 
     # VERIFICATION 1: Record count unchanged (no inserts)
-    assert len(actual_records) == 3, (
-        f"Expected 3 records (no new inserts), found {len(actual_records)}"
-    )
+    assert (
+        len(actual_records) == 3
+    ), f"Expected 3 records (no new inserts), found {len(actual_records)}"
 
     # VERIFICATION 2: All records updated with new values
     alice = next(r for r in actual_records if r["id"] == "user-001")
@@ -436,8 +436,8 @@ async def test_bulk_upsert_update_preserves_unmodified_fields(setup_bulk_upsert_
         ],
     )
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -519,8 +519,8 @@ async def test_bulk_upsert_mixed_insert_and_update(setup_bulk_upsert_table):
 
     initial_records_state = await _verify_database_state(connection_string, table_name)
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -582,9 +582,9 @@ async def test_bulk_upsert_mixed_insert_and_update(setup_bulk_upsert_table):
     final_count = len(final_records)
 
     # VERIFICATION 1: Total count = 2 existing + 3 new = 5 records
-    assert final_count == 5, (
-        f"Expected 5 total records (2 updated + 3 inserted), found {final_count}"
-    )
+    assert (
+        final_count == 5
+    ), f"Expected 5 total records (2 updated + 3 inserted), found {final_count}"
 
     # VERIFICATION 2: Updates were applied
     alice = next(r for r in final_records if r["id"] == "user-001")
@@ -614,9 +614,9 @@ async def test_bulk_upsert_mixed_insert_and_update(setup_bulk_upsert_table):
     updated_ids = final_ids & initial_ids
 
     assert len(new_ids) == 3, f"Expected 3 new records, found {len(new_ids)}"
-    assert len(updated_ids) == 2, (
-        f"Expected 2 updated records, found {len(updated_ids)}"
-    )
+    assert (
+        len(updated_ids) == 2
+    ), f"Expected 2 updated records, found {len(updated_ids)}"
 
 
 @pytest.mark.asyncio
@@ -654,8 +654,8 @@ async def test_bulk_upsert_large_mixed_batch(setup_bulk_upsert_table):
     initial_count = await _count_records(connection_string, table_name)
     assert initial_count == 500
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -751,8 +751,8 @@ async def test_bulk_upsert_strategy_update(setup_bulk_upsert_table):
         ],
     )
 
-    # Create BulkUpsertNode with UPDATE strategy
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode with UPDATE strategy
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -781,9 +781,9 @@ async def test_bulk_upsert_strategy_update(setup_bulk_upsert_table):
     actual_records = await _verify_database_state(connection_string, table_name)
 
     # VERIFICATION 1: Only 1 record (no duplicate)
-    assert len(actual_records) == 1, (
-        "Should have exactly 1 record (updated, not duplicated)"
-    )
+    assert (
+        len(actual_records) == 1
+    ), "Should have exactly 1 record (updated, not duplicated)"
 
     # VERIFICATION 2: Record was updated
     alice = actual_records[0]
@@ -823,8 +823,8 @@ async def test_bulk_upsert_strategy_ignore(setup_bulk_upsert_table):
         ],
     )
 
-    # Create BulkUpsertNode with IGNORE strategy
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode with IGNORE strategy
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -895,8 +895,8 @@ async def test_bulk_upsert_batch_processing_large_dataset(setup_bulk_upsert_tabl
     connection_string = config["connection_string"]
     table_name = config["table_name"]
 
-    # Create BulkUpsertNode with specific batch size
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode with specific batch size
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -952,8 +952,8 @@ async def test_bulk_upsert_duplicate_handling_in_batch(setup_bulk_upsert_table):
     connection_string = config["connection_string"]
     table_name = config["table_name"]
 
-    # Create BulkUpsertNode with duplicate handling
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode with duplicate handling
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -1043,9 +1043,9 @@ async def test_bulk_upsert_multi_tenant_isolation(setup_bulk_upsert_table):
     await alter_node.async_run()
     await alter_node.cleanup()
 
-    # Create BulkUpsertNode with multi-tenant support
+    # Create DataFlowBulkUpsertNode with multi-tenant support
     # Note: conflict_columns must include tenant_id for proper isolation
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -1129,9 +1129,9 @@ async def test_bulk_upsert_multi_tenant_isolation(setup_bulk_upsert_table):
     )
 
     tenant1_final = next(r for r in final_records if r["tenant_id"] == "tenant_001")
-    assert tenant1_final["name"] == "Alice Tenant 1 UPDATED", (
-        "Tenant 1 should be updated"
-    )
+    assert (
+        tenant1_final["name"] == "Alice Tenant 1 UPDATED"
+    ), "Tenant 1 should be updated"
 
     tenant2_final = next(r for r in final_records if r["tenant_id"] == "tenant_002")
     assert tenant2_final["name"] == "Alice Tenant 2", "Tenant 2 should be unchanged"
@@ -1150,7 +1150,7 @@ async def test_bulk_upsert_bug_reproduction_zero_records(setup_bulk_upsert_table
     CRITICAL BUG REPRODUCTION TEST
 
     Reproduces the reported bug scenario:
-    - BulkUpsertNode reports success=True
+    - DataFlowBulkUpsertNode reports success=True
     - But ZERO records are actually inserted into database
     - Parameter conflict_fields transformed from list to JSON string
 
@@ -1169,8 +1169,8 @@ async def test_bulk_upsert_bug_reproduction_zero_records(setup_bulk_upsert_table
     initial_count = await _count_records(connection_string, table_name)
     assert initial_count == 0, "Table should start empty"
 
-    # Create BulkUpsertNode (matching bug report scenario)
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode (matching bug report scenario)
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -1208,14 +1208,14 @@ async def test_bulk_upsert_bug_reproduction_zero_records(setup_bulk_upsert_table
     actual_count = len(actual_records)
 
     # CRITICAL ASSERTION: Records should be inserted (not zero)
-    assert actual_count > 0, (
-        "BUG REPRODUCTION FAILED: Zero records inserted despite success=True"
-    )
+    assert (
+        actual_count > 0
+    ), "BUG REPRODUCTION FAILED: Zero records inserted despite success=True"
 
     # VERIFICATION: Correct number of records
-    assert actual_count == 2, (
-        f"Expected 2 records, found {actual_count} (BUG: silent failure)"
-    )
+    assert (
+        actual_count == 2
+    ), f"Expected 2 records, found {actual_count} (BUG: silent failure)"
 
     # VERIFICATION: Data integrity
     emails_in_db = {r["email"] for r in actual_records}
@@ -1241,8 +1241,8 @@ async def test_bulk_upsert_return_records(setup_bulk_upsert_table):
     connection_string = config["connection_string"]
     table_name = config["table_name"]
 
-    # Create BulkUpsertNode
-    node = BulkUpsertNode(
+    # Create DataFlowBulkUpsertNode
+    node = DataFlowBulkUpsertNode(
         node_id="test_bulk_upsert",
         table_name=table_name,
         database_type="postgresql",
@@ -1282,6 +1282,6 @@ async def test_bulk_upsert_return_records(setup_bulk_upsert_table):
     actual_records = await _verify_database_state(connection_string, table_name)
 
     # Compare returned records with database state
-    assert len(returned_records) == len(actual_records), (
-        "Returned records count should match database"
-    )
+    assert len(returned_records) == len(
+        actual_records
+    ), "Returned records count should match database"
