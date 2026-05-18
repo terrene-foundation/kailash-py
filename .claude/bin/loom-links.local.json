@@ -1,0 +1,25 @@
+{
+  "_README": [
+    "Operator-local linked-repo registry for loom's linkage system.",
+    "Resolved through .claude/bin/lib/loom-links.mjs.",
+    "GITIGNORED + NEVER SYNCED. See loom-links.local.example.json for full schema.",
+    "",
+    "Layout: all BUILD + USE-template repos live INSIDE this loom checkout",
+    "(~/repos/loom/<slug>) on this machine. reposRoot is set absolute via",
+    "the per-entry 'absolute: true' flag so paths are unambiguous."
+  ],
+  "reposRoot": "~/repos",
+  "links": {
+    "build.py":                  { "path": "/Users/esperie/repos/loom/kailash-py",                 "absolute": true },
+    "build.rs":                  { "path": "/Users/esperie/repos/loom/kailash-rs",                 "absolute": true },
+    "build.prism":               { "path": "/Users/esperie/repos/loom/kailash-prism",              "absolute": true },
+    "use-template.py":           { "path": "/Users/esperie/repos/loom/kailash-coc-py",             "absolute": true },
+    "use-template.rs":           { "path": "/Users/esperie/repos/loom/kailash-coc-rs",             "absolute": true },
+    "use-template.claude-py":    { "path": "/Users/esperie/repos/loom/kailash-coc-claude-py",      "absolute": true },
+    "use-template.claude-rs":    { "path": "/Users/esperie/repos/loom/kailash-coc-claude-rs",      "absolute": true },
+    "use-template.claude-rb":    { "path": "/Users/esperie/repos/loom/kailash-coc-claude-rb",      "absolute": true },
+    "use-template.claude-prism": { "path": "/Users/esperie/repos/loom/kailash-coc-claude-prism",   "absolute": true },
+    "loom":                      { "path": "/Users/esperie/repos/loom",                            "absolute": true },
+    "atelier":                   { "path": "/Users/esperie/repos/atelier",                         "absolute": true }
+  }
+}

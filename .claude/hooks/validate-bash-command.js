@@ -95,10 +95,104 @@ function validateBashCommand(data) {
     }
   }
 
+  // HALT-AND-REPORT (loom #263): synced-artifact disclosure scan on
+  // `git commit` invocations that stage any `.claude/**` path. Mirrors
+  // the pre-commit-branch-scope.js delegation above. The scanner-on-
+  // content is content-regex, so per rules/hook-output-discipline.md
+  // MUST-2 (lexical signals MUST NOT carry severity:block) this returns
+  // `halt-and-report`, NOT `block`. Scanner-internal error MUST NOT
+  // block the commit (advisory-fail-open on tool error, exactly like
+  // the scope delegation above).
+  if (/^\s*git\s+commit\b/.test(command)) {
+    try {
+      const { spawnSync } = require("child_process");
+      // Only run when the commit stages a synced-surface path. Cheap
+      // pre-filter — avoids scanning on commits that touch only non-
+      // `.claude/**` files (the scanner already excludes never-synced
+      // subpaths internally, but skipping the spawn entirely is faster).
+      const staged = spawnSync("git", ["diff", "--cached", "--name-only"], {
+        cwd,
+        encoding: "utf8",
+        timeout: 3000,
+      });
+      const stagedFiles = (staged.stdout || "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const touchesSynced = stagedFiles.some(
+        (f) =>
+          f.startsWith(".claude/") || f === "AGENTS.md" || f === "GEMINI.md",
+      );
+      if (touchesSynced) {
+        const scanScript = path.join(
+          __dirname,
+          "..",
+          "bin",
+          "scan-synced-disclosure.mjs",
+        );
+        const r = spawnSync("node", [scanScript, "--check"], {
+          cwd,
+          encoding: "utf8",
+          timeout: 4000,
+        });
+        // r.status === null on spawn failure/timeout → fail-open.
+        // r.error set on ENOENT / timeout → fail-open.
+        // Exit 2 is a scanner usage error → fail-open (tool error, not
+        // a disclosure finding). Only a clean exit 1 (≥1 finding) halts.
+        if (!r.error && r.status === 1) {
+          const report = (r.stderr || r.stdout || "").trim();
+          const sample = report.split("\n").slice(0, 12).join("\n");
+          return {
+            severity: "halt-and-report",
+            what_happened:
+              "scan-synced-disclosure.mjs --check found ≥1 structural " +
+              "disclosure on the synced surface in the staged `.claude/**` " +
+              "changes:\n" +
+              sample,
+            why:
+              "loom #263 synced-artifact disclosure fence — a staged " +
+              "synced artifact contains an operator hostname / non-" +
+              "Foundation org slug / org-derived runner label / operator " +
+              "home path / launchd|systemd service-label stem. Committing " +
+              "it propagates the disclosure to 30+ downstream consumers " +
+              "(the #252 class) where it is permanently in their git " +
+              "history and correlatable across all of them.",
+            agent_must_report: [
+              "Quote the scanner's redacted path:line + [SHAPE:<id>] rows " +
+                "(the «REDACTED» context — never reconstruct the raw token)",
+              "For each finding: genericize the disclosure in the synced " +
+                "artifact, and RELOCATE the operator-specific value into " +
+                "the gitignored operator-local companion (the #255 / #260 " +
+                "pattern — *.operator.local.* / *.local.json)",
+              "Re-stage the genericized files and re-run " +
+                "`node .claude/bin/scan-synced-disclosure.mjs --check` " +
+                "(exit 0) before re-attempting the commit",
+              "Do NOT allowlist a real operator/org token to force the " +
+                "scan green — that IS the #264 leak the scanner prevents",
+            ],
+            agent_must_wait:
+              "Do not retry the commit until the scanner exits 0 on the " +
+              "re-staged tree. If a finding is a genuine shape over-match " +
+              "on a Foundation-public token, surface it to the user — the " +
+              "allowlist fix is a scoped scanner edit, not a commit bypass.",
+            user_summary:
+              "synced-disclosure scan blocked the commit (loom #263) — " +
+              "genericize + relocate to the operator-local companion",
+          };
+        }
+      }
+    } catch {
+      // Scanner-internal/spawn error MUST NOT block the commit.
+      // Advisory-fail-open on tool error, identical to the branch-scope
+      // delegation above. A real disclosure is still caught by the
+      // fail-closed /sync Gate 2 backstop (sync-flow.md § Gate 2 step 0).
+    }
+  }
+
   // BLOCK: Three-layer Bash mutation detection against trust-posture state files.
   // Mitigates the gap where `permissions.deny` on Edit/Write is bypassable via
   // bash redirects, file utils, or interpreter -c/-e/-m bodies. Pattern adopted
-  // from tpc_cash_treasury state-file-write-guard (issue #25, c0aeff73).
+  // from a downstream state-file-write-guard (issue #25, c0aeff73).
   //
   // Protected paths: .claude/learning/posture.json, posture.json.bak,
   // violations.jsonl, violations.jsonl.*, .initialized
@@ -108,7 +202,7 @@ function validateBashCommand(data) {
   // entirely for those (segment-anchor isn't sufficient — the body can span
   // many lines containing arbitrary shell-like syntax as documentation).
   const STATE_PATH_RX =
-    /\.claude\/learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|\.initialized|\.posture-upgrade-nonce)\b/;
+    /\.claude\/learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|\.initialized)\b/;
   const isGitCommitWithBody = /^\s*git\s+commit\b[^|;]*(?:\s-m\s|\s-F\s)/.test(
     command,
   );
@@ -390,7 +484,7 @@ function validateBashCommand(data) {
 /**
  * Three-layer mutation detection for trust-posture state files.
  *
- * Per issue #25 (esperie-enterprise/loom) — adopted from tpc_cash_treasury's
+ * Per issue #25 (esperie-enterprise/loom) — adopted from a downstream consumer's
  * state-file-write-guard (commit c0aeff73). Closes the bypass gap where
  * settings.json `permissions.deny` on Edit/Write does NOT cover bash-mediated
  * mutations (redirects, file utilities, interpreter -c/-e/-m bodies).

@@ -8,7 +8,6 @@ paths:
 
 # Framework-First: Use the Highest Abstraction Layer
 
-
 <!-- slot:neutral-body -->
 
 ## ABSOLUTE: Work-Domain → Framework Binding
@@ -38,7 +37,7 @@ Default to Engines. Drop to Primitives only when Engines can't express the behav
 ## Four-Layer Hierarchy
 
 ```
-Entrypoints  →  Applications (aegis, aether), CLI (cli-rs), others (kz-engage)
+Entrypoints  →  Applications (app-a, app-b), CLI (cli-app), others (app-c)
 Engines      →  DataFlowEngine, NexusEngine, DelegateEngine/SupervisorAgent, GovernanceEngine
 Primitives   →  DataFlow, @db.model, Nexus(), BaseAgent, Signature, envelopes
 Specs        →  CARE, EATP, CO, COC, PACT (standards/protocols/methodology)
@@ -46,14 +45,14 @@ Specs        →  CARE, EATP, CO, COC, PACT (standards/protocols/methodology)
 
 Specs define → Primitives implement building blocks → Engines compose into opinionated frameworks → Entrypoints are products users interact with.
 
-| Framework    | Raw (never ❌)      | Primitives                                          | Engine (default ✅)                                                     | Entrypoints              |
-| ------------ | ------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------ |
-| **DataFlow** | Raw SQL, SQLAlchemy | `DataFlow`, `@db.model`, `db.express`, nodes        | `DataFlowEngine.builder()` (validation, classification, query tracking) | aegis, aether, kz-engage |
-| **Nexus**    | Raw HTTP frameworks | `Nexus()`, handlers, channels                       | `NexusEngine` (middleware stack, auth, K8s)                             | aegis, aether            |
-| **Kaizen**   | Raw LLM API calls   | `BaseAgent`, `Signature`                            | `DelegateEngine`, `SupervisorAgent`                                     | kaizen-cli-rs            |
-| **PACT**     | Manual policy       | Envelopes, D/T/R addressing                         | `GovernanceEngine` (thread-safe, fail-closed)                           | aegis                    |
-| **ML**       | Raw sklearn/torch   | `FeatureStore`, `ModelRegistry`, `TrainingPipeline` | `AutoMLEngine`, `InferenceServer` (ONNX, drift, caching)                | aegis, aether            |
-| **Align**    | Raw TRL/PEFT        | `AlignmentConfig`, `AlignmentPipeline`              | `align.train()`, `align.deploy()` (GGUF, Ollama, vLLM)                  | —                        |
+| Framework    | Raw (never ❌)      | Primitives                                          | Engine (default ✅)                                                     | Entrypoints         |
+| ------------ | ------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
+| **DataFlow** | Raw SQL, SQLAlchemy | `DataFlow`, `@db.model`, `db.express`, nodes        | `DataFlowEngine.builder()` (validation, classification, query tracking) | app-a, app-b, app-c |
+| **Nexus**    | Raw HTTP frameworks | `Nexus()`, handlers, channels                       | `NexusEngine` (middleware stack, auth, K8s)                             | app-a, app-b        |
+| **Kaizen**   | Raw LLM API calls   | `BaseAgent`, `Signature`                            | `DelegateEngine`, `SupervisorAgent`                                     | cli-app             |
+| **PACT**     | Manual policy       | Envelopes, D/T/R addressing                         | `GovernanceEngine` (thread-safe, fail-closed)                           | app-a               |
+| **ML**       | Raw sklearn/torch   | `FeatureStore`, `ModelRegistry`, `TrainingPipeline` | `AutoMLEngine`, `InferenceServer` (ONNX, drift, caching)                | app-a, app-b        |
+| **Align**    | Raw TRL/PEFT        | `AlignmentConfig`, `AlignmentPipeline`              | `align.train()`, `align.deploy()` (GGUF, Ollama, vLLM)                  | —                   |
 
 **Note**: `db.express` is a primitive convenience for lightweight CRUD (~23x faster by bypassing workflow). `DataFlowEngine` wraps `DataFlow` with enterprise features (validation, classification, query engine, retention).
 

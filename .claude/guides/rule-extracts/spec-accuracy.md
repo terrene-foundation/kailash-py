@@ -2,51 +2,51 @@
 
 Companion reference for `.claude/rules/spec-accuracy.md`.
 
-## Origin Post-Mortem — 2026-04-21 Phantom Databricks Citations
+## Origin Post-Mortem — 2026-04-21 Phantom Data-Platform Citations
 
 ### Setup
 
-- Workspace: `tpc/tpc_cash_treasury-scenario`
+- Workspace: `example-workspace/financial-scenario`
 - Spec under draft: `specs/scenario-planning-northstar.md` §13 "Scenario Impact Surface" (full 3-statement view: Income Statement + Balance Sheet + Cash Flow + critical grid + Monte Carlo cascade).
-- Asks: cite the Databricks accessors that back each metric in the cascade.
+- Asks: cite the data-platform accessors that back each metric in the cascade.
 
 ### What the agent drafted
 
-The §13 draft cited 8 Databricks accessors as if they existed:
+The §13 draft cited 8 data-platform accessors as if they existed:
 
-1. shipyard COGS ratio
-2. contract book
-3. retention
-4. Pelita handling fee
-5. rental revenue
-6. Qingdao mix
-7. iron-ore anchor
-8. sweep inflows per BU
+1. metric_1
+2. metric_2
+3. metric_3
+4. metric_4
+5. metric_5
+6. metric_6
+7. metric_7
+8. metric_8
 
 ### What `/redteam` proved
 
-Audit ran against `treasury_refac/services/historical_average_service.py::SUPPORTED_METRICS` (lines 235-261). Empirical surface:
+Audit ran against `analytics_service.py::SUPPORTED_METRICS` (lines 235-261). Empirical surface:
 
 ```
 SUPPORTED_METRICS = {
-  "vessel_count", "villa_sales", "villa_price",
-  "fx_eurusd", "fx_audsgd", "fx_jpyusd", "fx_gbpusd", "fx_chfusd",
-  "transshipment_baltic_handysize", "transshipment_baltic_supramax",
-  "voyage_tce", "voyage_op_days", "voyage_running_cost",
+  "metric_a", "metric_b", "metric_c",
+  "fx_pair_1", "fx_pair_2", "fx_pair_3", "fx_pair_4", "fx_pair_5",
+  "rate_metric_1", "rate_metric_2",
+  "cost_metric_1", "cost_metric_2", "cost_metric_3",
 }
 ```
 
-**Zero of the 8 cited Databricks accessors existed.** Only vessel count, villa sales/price, FX (5 pairs), transshipment Baltic rates, and voyage TCE/op-days/running-cost were wired.
+**Zero of the 8 cited data-platform accessors existed.** Only 13 unrelated generic metrics (3 base metrics, 5 FX pairs, 2 rate metrics, 3 cost metrics) were actually wired — none matched the 8 cited accessors.
 
 ### Lookaway risk that the rule prevents
 
 Had the §13 draft landed:
 
-1. Downstream developers implement the cascade UI against the spec's split-state framing ("Databricks (Phase-2) / scaffold (Phase-1)").
-2. Each metric returns its scaffold value at runtime — `0.85` for shipyard COGS ratio, `0.0` for contract book, etc.
+1. Downstream developers implement the cascade UI against the spec's split-state framing ("data-platform (Phase-2) / scaffold (Phase-1)").
+2. Each metric returns its scaffold value at runtime — `0.85` for metric_1, `0.0` for metric_2, etc.
 3. UI renders fine — every cell has a number.
 4. The Phase-2 switch never gets flipped because nothing is visibly broken.
-5. Treasurers make scenario decisions on plugged-constant data thinking they're consuming Databricks-derived metrics.
+5. Decision-makers make scenario decisions on plugged-constant data thinking they're consuming data-platform-derived metrics.
 
 This is the **lookaway tombstone** failure mode the rule blocks. The cited symbols becoming a permanent gap-tracker normalizes "spec describes intent, code describes reality" — the exact divergence the rule exists to prevent.
 
@@ -55,15 +55,15 @@ This is the **lookaway tombstone** failure mode the rule blocks. The cited symbo
 Same audit surfaced 6 hardcoded volatility constants in `monte_carlo_engine.py`:
 
 ```
-fx_volatility = 0.08            # comment: "Baltic Dry Index"
-shipping_tce_volatility = 0.45  # comment: "shipping industry"
-capex_volatility = 0.10         # comment: "shipping industry"
+fx_volatility = 0.08            # comment: "industry index"
+sector_volatility = 0.45        # comment: "industry domain"
+capex_volatility = 0.10         # comment: "industry domain"
 ocf_volatility = 0.315
 revenue_volatility = 0.20
 cost_volatility = 0.15
 ```
 
-None of the comments derived from FCCS history or external research. The §13 draft cited these constants as evidence of "Monte Carlo cascade calibration" — same pattern as the phantom Databricks accessors but at the constants layer instead of the accessor layer.
+None of the comments derived from historical data or external research. The §13 draft cited these constants as evidence of "Monte Carlo cascade calibration" — same pattern as the phantom data-platform accessors but at the constants layer instead of the accessor layer.
 
 The rule's Rule 1 ("every citation resolves") covers both — phantom function references AND phantom data-source references.
 
@@ -75,7 +75,7 @@ Translated structurally: a spec acknowledging gaps is worse than a spec missing 
 
 ## Migration Playbook — Existing Gap Trackers
 
-When `/redteam` flags a spec section containing a gap tracker (e.g., the `tpc/tpc_cash_treasury-scenario` `§11.2 Phase-1 scaffolds + code-hygiene follow-ups` precedent), the migration is mechanical:
+When `/redteam` flags a spec section containing a gap tracker (e.g., the `example-workspace/financial-scenario` `§11.2 Phase-1 scaffolds + code-hygiene follow-ups` precedent), the migration is mechanical:
 
 ### Step 1: Extract gap-tracker content into the workstream surface
 
@@ -190,4 +190,4 @@ rg -in --color=never \
 - Stub-class companion: `.claude/rules/zero-tolerance.md` Rule 2
 - Origin issue: loom #18 (codify spec-accuracy rule)
 
-Origin: 2026-04-21 — `tpc/tpc_cash_treasury-scenario` `/redteam` of spec §13 + 2026-05-01 codification at loom (issue #18 / loom v2.12.0).
+Origin: 2026-04-21 — `example-workspace/financial-scenario` `/redteam` of spec §13 + 2026-05-01 codification at loom (issue #18 / loom v2.12.0).

@@ -21,7 +21,7 @@ Any session responding to a 403/401/permission-denied against a named external r
 
 The verification command MUST be a live read against the same API surface the failing operation targets — NOT a grep against documentation, source comments, spec files, or the script's own intent statements. Trusting documentation as a proxy for runtime existence is BLOCKED.
 
-**Why:** Documentation, source comments, and operator memory all describe INTENT. None are evidence of CURRENT runtime state. A spec can mandate a runner that operations never provisioned; a script can target a table left undefined by a half-finished migration; a workflow can read a secret that was rotated out of existence. The live API query is the only evidence; everything else is hearsay.
+**Why:** Documentation, source comments, and operator memory all describe INTENT — none are evidence of CURRENT runtime state. The live API query is the only evidence; everything else is hearsay. See guide for examples (mandated-but-unprovisioned runners, undefined tables, rotated-out secrets).
 
 ### 3. When Existence Check Fails, Default Disposition Is Delete-Or-Stub, Not Provision
 

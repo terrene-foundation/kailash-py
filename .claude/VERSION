@@ -6,10 +6,10 @@
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.29.4",
-    "build_version": "2.29.4",
-    "synced_at": "2026-05-12T02:39:19Z",
-    "loom_sha": "e9d2e331",
+    "version": "2.31.0",
+    "build_version": "2.31.0",
+    "synced_at": "2026-05-18T04:29:11Z",
+    "loom_sha": "a9d743f",
     "sdk_packages": {
       "kailash": "2.13.3",
       "kailash-dataflow": "2.7.5",
@@ -21,10 +21,38 @@
       "kailash-align": "0.7.0",
       "kaizen-agents": "0.9.4"
     },
-    "template_version": "2.29.4",
-    "source_commit": "e9d2e331"
+    "template_version": "2.31.0",
+    "source_commit": "a9d743f"
   },
   "changelog": [
+    {
+      "version": "1.0.10",
+      "date": "2026-05-18",
+      "summary": "Stage A safe-bulk sync loom 2.29.4 → 2.31.0. Adds: rules/self-referential-codify.md (NEW, 122 lines), rules/cross-repo.md (NEW), guides/rule-extracts/sync-completeness.md (NEW, paired with rules/sync-completeness.md trim 205→182). Updates rules/agents.md to slot-keyed #200 partition (262→330 lines). Refreshes 32-trust-posture/redteam-integration.md (48→170 lines). Ships .claude/hooks/coc-telemetry-autocommit.js content WITHOUT wiring it (settings.json preserved per BUILD ownership). Ships 251 audit-fixture sub-files for new violation-patterns hooks (forest-ledger, scan-synced-disclosure, session-end-hook, cross-cli-drift, cross-cli-artifact-hygiene, strip-build-internal, codex-mcp-guard, variant-overlay, coc-telemetry-autocommit). Adds 12 new bin scripts (loom-links resolver, scan-synced-disclosure, sync-tier-aware, sync-consumer-dryrun, validate-forest-ledger, etc.). Purges .claude/skills/management/ (obsoleted per manifest). Composes 1 file via slot-keyed compose: rules/deployment.md from variants/py/. Carve-outs honored: ci-runners.md scope-out per user; coc-telemetry-autocommit.js ship-no-wire; settings.json preserved. SKIPs: .claude/codex-mcp-guard/, .claude/gemini-templates/, .claude/codex-templates/, .claude/fixtures/ (loom-only USE-template emit infra). HARD constraint: working-tree only, NO commit, NO push, NO writes outside .claude/. Authorization: user-approved Stage A safe-bulk apply 2026-05-18.",
+      "changes": [
+        "loom commit a9d743f, v2.31.0",
+        "sync_plan total (within .claude/): NEW=296 MODIFIED=50 UNCHANGED=617 COMPOSED=1 PRESERVED=2 (settings.json, settings.local.json)",
+        "obsoleted purged: 1 (.claude/skills/management/)",
+        "NEW load-bearing: .claude/rules/self-referential-codify.md, .claude/rules/cross-repo.md, .claude/guides/rule-extracts/sync-completeness.md",
+        "NEW infrastructure: 12 .claude/bin/ scripts (loom-links resolver + scan-synced-disclosure + sync-tier-aware + sync-consumer-dryrun + validate-forest-ledger + 7 supporting libs/configs)",
+        "NEW audit fixtures: 251 files across .claude/audit-fixtures/{forest-ledger,scan-synced-disclosure,session-end-hook,cross-cli-drift,cross-cli-artifact-hygiene,strip-build-internal,codex-mcp-guard,variant-overlay,coc-telemetry-autocommit,violation-patterns}/",
+        "NEW guides: .claude/guides/co-setup/* (11 files), .claude/guides/deterministic-quality/* (10 files), .claude/guides/automated-maintenance.md, .claude/guides/rule-extracts/{git,independence-rs,sync-completeness}.md",
+        "MODIFIED rules: agents.md (slot-keyed #200), artifact-flow.md, autonomous-execution.md, cross-sdk-inspection.md, deployment.md (slot-keyed compose), framework-first.md, git.md, repo-scope-discipline.md, spec-accuracy.md, sweep-completeness.md, sync-completeness.md (trim), trust-posture.md, upstream-issue-hygiene.md, verify-resource-existence.md, worktree-isolation.md, zero-tolerance.md",
+        "MODIFIED commands: cli-audit.md, codify.md, migrate.md, posture.md, start.md, sync.md, wrapup.md",
+        "MODIFIED skills: 32-trust-posture/{posture-spec.md,redteam-integration.md}, 30-claude-code-patterns/{multi-cli-migration.md,sync-flow.md}, 02-dataflow/{dataflow-gotchas.md,dataflow-multi-tenancy.md,dataflow-queries.md}, 03-nexus/nexus-handler-support.md (legacy-overlay), spec-compliance/SKILL.md (legacy-overlay), test-skip-discipline/SKILL.md, 17-gold-standards/gold-parameter-passing.md",
+        "MODIFIED hooks: gitignored-claude-warn.js, lib/template-resolver.js, lib/violation-patterns.js, pre-commit-branch-scope.js, validate-bash-command.js, validate-prod-deploy.js (legacy-overlay)",
+        "MODIFIED bin: emit.mjs, emit-cli-artifacts.mjs, repin-downstream.mjs",
+        "MODIFIED agents: cli-orchestrator.md, management/posture-auditor.md",
+        "NEW variant-only (py legacy overlays as additions): .claude/rules/ci-runners.operator.local.example.md, .claude/rules/ci-runners.operator.local.md",
+        "SKIPPED (auto-decided): .claude/codex-mcp-guard/** (9 files), .claude/gemini-templates/** (6 files), .claude/codex-templates/** (3 files), .claude/fixtures/** (5 files) — loom-only USE-template multi-CLI emit infrastructure, absent in BUILD, no tier subscription",
+        "SCOPE CARVE-OUT (user-directed): .claude/rules/ci-runners.md NOT updated this cycle — py BUILD owns its local content; loom variants/py/rules/ci-runners.md is slot-keyed but use_excluded and user explicitly carved out for this sync",
+        "PRESERVED (BUILD-owned): .claude/settings.json (no .posture-upgrade-nonce perm grant, no coc-telemetry-autocommit.js SessionEnd hook wiring), .claude/settings.local.json",
+        "SHIP-NO-WIRE: .claude/hooks/coc-telemetry-autocommit.js content written to hooks dir; settings.json hook entry NOT added — file available but inactive until BUILD explicitly wires",
+        "EXCLUDED: .claude/rules/.env stub (matches **/.env exclude); variants/py/scripts/migrate.py (would land at obsoleted .claude/scripts/ or violate HARD constraint NO writes outside .claude/)",
+        "EXCLUDED tier-filtered (py subscribes [cc, co, coc], NOT onboarding): .claude/agents/onboarding/**, .claude/agents/generic/**, .claude/skills/40-stack-onboarding/**, .claude/commands/onboard-stack.md, .claude/rules/stack-detection.md",
+        "PRESERVED BUILD source: all .session-notes / docs/ / examples/ / packages/ / scripts/ / workspaces/ untouched (no writes outside .claude/)"
+      ]
+    },
     {
       "version": "1.0.9",
       "date": "2026-05-09",

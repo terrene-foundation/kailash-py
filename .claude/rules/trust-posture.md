@@ -73,6 +73,7 @@ Downgrades fire on detection — no human in the loop, per EATP "downgrade insta
 - 1× `time_pressure_procedure_drop` (procedure drop in response to user pressure framing per `rules/time-pressure-discipline.md`) → drop 1 posture
 - 1× `streetlight_selection` (fittability-pick over higher-value candidate without value-anchor / named trade-off per `rules/value-prioritization.md` MUST-1) → drop 1 posture
 - 1× `deferral_without_value_anchor` (deferred shard / "Carried-forward" / "tracked separately" / Phase-N reframing without adjacent value-anchor per `rules/value-prioritization.md` MUST-2) → drop 1 posture
+- 1× `self_referential_codify_without_redteam` (a `/codify` touching the self-referential surface allowlist per `rules/self-referential-codify.md` Rule 2 shipped without multi-agent redteam-with-tests per Rule 1) → drop 1 posture
 - 1× **critical**: destructive op without confirm (rm -rf, git reset --hard without porcelain check, force-push to main); secret leak; cross-repo write outside scope → drop to L1
 - 1× corrupt-state event (with init marker) → drop to L1
 

@@ -1,5 +1,4 @@
 ---
-name: spec-compliance
 description: "Spec compliance (Python) — verify via AST/grep, not file existence. Existence-only checks BLOCKED."
 ---
 

@@ -1,0 +1,63 @@
+{
+  "_README": [
+    "OPERATOR-LOCAL — gitignored, never committed, never synced.",
+    "This is the real downstream-repo registry for repin-downstream.mjs,",
+    "moved out of the synced script per issue #255 (#252 disclosure class).",
+    "Schema documented in repin-targets.local.example.json."
+  ],
+  "reposRoot": "~/repos",
+  "shards": {
+    "I1a": [
+      "terrene/foundation",
+      "terrene/publications",
+      "terrene/website",
+      "terrene/arbor",
+      "terrene/astra",
+      "terrene/care",
+      "terrene/pact",
+      "terrene/praxis"
+    ],
+    "I1b": [
+      "dev/aegis",
+      "dev/aerith",
+      "dev/aether",
+      "dev/astra",
+      "dev/coursewright",
+      "dev/flutter",
+      "dev/envoy"
+    ],
+    "I1c": [
+      "tpc/impact-verse",
+      "tpc/journeymate",
+      "tpc/talentverse",
+      "tpc/aspire-treasury",
+      "tpc/impact_week",
+      "tpc/stp",
+      "tpc/tpc_backend",
+      "tpc/tpc_cash_treasury"
+    ],
+    "I1d": [
+      "rr/agentic-os",
+      "rr/rr_helpcentre",
+      "rr/rr_lead_to_cash",
+      "rr/rr-aegis",
+      "rr/rr-agentic-os",
+      "hmi/hana",
+      "hmi/hmi-chatbot"
+    ],
+    "I1e": [
+      "projects/alex3",
+      "projects/gba",
+      "projects/byregot",
+      "projects/metis",
+      "projects/midas",
+      "projects/building-management",
+      "projects/motion",
+      "projects/portfolio-manager",
+      "projects/solar",
+      "projects/ideas",
+      "loom/kz-engage",
+      "loom/kaizen-cli-py"
+    ]
+  }
+}

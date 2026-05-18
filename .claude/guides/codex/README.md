@@ -81,10 +81,37 @@ args = ["./.codex-mcp-guard/server.js"]
 
 It ships with `POLICIES_POPULATED=false` and refuses to start (exit 2) until loom's emitter populates the POLICIES table from the hooks.js predicates. If you see "refusing to start with unpopulated POLICIES", `/sync` hasn't completed — that's a feature.
 
+## Specialist delegation in Codex (deterministic shim — 2026-05-15)
+
+Codex's runtime exposes only generic subagent roles (`default`, `explorer`, `worker`); it has no native callable equivalents of COC specialists by name. To close that gap, loom's `emit-cli-artifacts.mjs` emits one `.codex/prompts/specialist-<name>.md` per non-excluded `.claude/agents/**/<name>.md` (function: `emitCodexAgentPrompts`). Each emitted prompt wraps the specialist's full operating spec with a preamble describing three invocation patterns:
+
+1. **Inline persona — most reliable; works headless + interactive.**
+
+   ```text
+   /prompts:specialist-dataflow
+   ```
+
+   The slash command injects the operating spec into the current session. Provide the task in the same turn; the remainder operates as the named specialist.
+
+2. **Worker subagent delegation — interactive Codex only.**
+
+   ```text
+   Delegate to a worker subagent. Operating spec: /prompts:specialist-reviewer.
+   Task: ...
+   ```
+
+   Codex's native subagent spawn (natural-language, per developers.openai.com/codex/subagents) loads the spec at the spawn-prompt boundary.
+
+3. **Headless `codex exec` fallback.**
+
+   Native subagent spawning is unreliable in headless mode. Use pattern (1).
+
+The shim is the loom-side answer to the 2026-05-15 Codex follow-up that flagged the parity gap (specialists copied to disk but not natively executable). Specialist coverage mirrors Gemini's emitter (`emitGeminiAgents`) — same exclusion intent: peer-CLI architects (`cc-architect`, `codex-architect`, `gemini-architect`), `cli-orchestrator`, `management/**`, and `_README.md` are excluded. `/prompts` autocomplete shows the specialist name + description; type `/prompts:specialist-` as the prefix to filter.
+
 ## Known limitations (empirically verified 2026-04-22/23)
 
-- **Headless `codex exec` does not invoke subagents via any syntax.** Native subagents (per developers.openai.com/codex/subagents) use natural-language spawn in interactive sessions. Headless exec may not spawn them reliably.
-- **`paths:` YAML frontmatter is completely ignored.** Do not expect path-scoped rule injection. Directory-hierarchy AGENTS.md is the only scoping mechanism.
+- **Headless `codex exec` does not invoke subagents via any syntax.** Native subagents (per developers.openai.com/codex/subagents) use natural-language spawn in interactive sessions. Headless exec may not spawn them reliably. **Workaround**: use the inline-persona pattern above — `/prompts:specialist-<name>` works in both modes.
+- **`paths:` YAML frontmatter is completely ignored.** Do not expect path-scoped rule injection. Directory-hierarchy AGENTS.md is the only scoping mechanism. A loom-side pre-tool rule loader is the planned follow-up (Shard 2 of the parity-gap workstream).
 - **GitHub Copilot's `.github/instructions/*.instructions.md` with `applyTo:` glob is NOT supported by Codex.** Different tool. Don't expect it.
 
 ## Further reading
