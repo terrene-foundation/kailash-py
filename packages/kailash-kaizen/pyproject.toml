@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.23.0"
+version = "2.23.1"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -89,10 +89,16 @@ cache = [
     "redis>=5.0.0",
 ]
 
-# RAG / multimodal — numpy + Pillow for similarity, vision, hybrid search.
+# RAG / multimodal — the complete `import kaizen.nodes.rag` dependency set.
+# numpy/Pillow: similarity, vision, hybrid search. networkx: graph RAG.
+# requests + aiosqlite: pulled transitively via kailash.nodes.api.rest /
+# the kailash data path that the resurrected rag modules import.
 rag = [
     "numpy>=1.24.0",
     "Pillow>=10.0.0",
+    "networkx>=3.0",
+    "requests>=2.32",
+    "aiosqlite>=0.19.0",
 ]
 
 # Research validator — GitPython for repo introspection.
