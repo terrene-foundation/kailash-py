@@ -19,12 +19,11 @@ from collections import deque
 from datetime import datetime, timedelta
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.data.streaming import EventStreamNode
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
-
-from ..base import Node, NodeParameter, register_node
-from ..code.python import PythonCodeNode
-from ..data.streaming import EventStreamNode
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 
@@ -400,8 +399,8 @@ def format_realtime_results(retrieval_results, query, update_stats):
         self.monitoring_active = False
 
 
-@register_node()
-class StreamingRAGNode(Node):
+@register_node(alias="RealtimeStreamingRAGNode")
+class RealtimeStreamingRAGNode(Node):
     """
     Streaming RAG Response Node
 
@@ -414,7 +413,7 @@ class StreamingRAGNode(Node):
     - User experience: Immediate feedback
 
     Example:
-        streaming_rag = StreamingRAGNode()
+        streaming_rag = RealtimeStreamingRAGNode()
 
         async for chunk in streaming_rag.stream(
             query="Latest news on AI",
@@ -764,4 +763,4 @@ class IncrementalIndexNode(Node):
 
 
 # Export all real-time nodes
-__all__ = ["RealtimeRAGNode", "StreamingRAGNode", "IncrementalIndexNode"]
+__all__ = ["RealtimeRAGNode", "RealtimeStreamingRAGNode", "IncrementalIndexNode"]

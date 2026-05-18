@@ -9,8 +9,9 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+
 from ..ai.llm_agent import LLMAgentNode
-from ..base import Node, NodeParameter, register_node
 
 logger = logging.getLogger(__name__)
 

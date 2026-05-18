@@ -18,10 +18,9 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
-
-from ..base import Node, NodeParameter, register_node
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 

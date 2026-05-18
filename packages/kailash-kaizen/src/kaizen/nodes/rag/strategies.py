@@ -10,10 +10,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
-
-from ..base import Node, NodeParameter, register_node
-from ..logic.workflow import WorkflowNode
 
 logger = logging.getLogger(__name__)
 
