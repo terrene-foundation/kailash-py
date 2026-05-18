@@ -8,9 +8,9 @@ a real MongoDB instance (Tier 1 - Unit Tests).
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from dataflow.adapters.mongodb import MongoDBAdapter
 from dataflow.nodes.mongodb_nodes import (
-    AggregateNode,
     BulkDocumentInsertNode,
     CreateIndexNode,
     DocumentCountNode,
@@ -18,6 +18,7 @@ from dataflow.nodes.mongodb_nodes import (
     DocumentFindNode,
     DocumentInsertNode,
     DocumentUpdateNode,
+    MongoAggregateNode,
 )
 
 
@@ -367,17 +368,17 @@ class TestDocumentDeleteNode:
 
 
 class TestAggregateNode:
-    """Test AggregateNode."""
+    """Test MongoAggregateNode."""
 
     def test_node_initialization(self):
         """Test node initialization."""
-        node = AggregateNode()
+        node = MongoAggregateNode()
 
         assert node is not None
 
     def test_node_parameters(self):
         """Test node parameters are properly defined."""
-        node = AggregateNode()
+        node = MongoAggregateNode()
         params = node.get_parameters()
 
         assert "collection" in params
@@ -391,7 +392,7 @@ class TestAggregateNode:
     @pytest.mark.asyncio
     async def test_async_run_success(self):
         """Test successful aggregation."""
-        node = AggregateNode()
+        node = MongoAggregateNode()
 
         # Setup mock adapter
         mock_adapter = MagicMock(spec=MongoDBAdapter)
@@ -421,7 +422,7 @@ class TestAggregateNode:
     @pytest.mark.asyncio
     async def test_async_run_empty_results(self):
         """Test aggregation with no results."""
-        node = AggregateNode()
+        node = MongoAggregateNode()
 
         # Setup mock adapter
         mock_adapter = MagicMock(spec=MongoDBAdapter)

@@ -615,7 +615,7 @@ relevant_docs = results["search"]["results"]
 ```python
 from dataflow import DataFlow
 from dataflow.adapters import MongoDBAdapter
-from dataflow.nodes.mongodb_nodes import DocumentInsertNode, AggregateNode
+from dataflow.nodes.mongodb_nodes import DocumentInsertNode, MongoAggregateNode
 
 # Initialize MongoDB adapter (flexible schema, no models needed!)
 adapter = MongoDBAdapter("mongodb://localhost:27017/ecommerce")
@@ -644,7 +644,7 @@ users = await adapter.find(
 
 # Aggregation pipelines for analytics
 workflow = WorkflowBuilder()
-workflow.add_node("AggregateNode", "sales_by_category", {
+workflow.add_node("MongoAggregateNode", "sales_by_category", {
     "collection": "orders",
     "pipeline": [
         {"$match": {"status": "completed"}},

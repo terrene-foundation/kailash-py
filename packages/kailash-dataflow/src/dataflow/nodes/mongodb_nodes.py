@@ -470,8 +470,8 @@ class DocumentDeleteNode(AsyncNode):
             }
 
 
-@register_node()
-class AggregateNode(AsyncNode):
+@register_node(alias="MongoAggregateNode")
+class MongoAggregateNode(AsyncNode):
     """Execute MongoDB aggregation pipeline.
 
     This node executes a MongoDB aggregation pipeline for complex
@@ -489,7 +489,7 @@ class AggregateNode(AsyncNode):
             - collection (str): Collection name
 
     Example:
-        >>> workflow.add_node("AggregateNode", "sales_by_category", {
+        >>> workflow.add_node("MongoAggregateNode", "sales_by_category", {
         ...     "collection": "orders",
         ...     "pipeline": [
         ...         {"$match": {"status": "completed"}},
@@ -547,7 +547,7 @@ class AggregateNode(AsyncNode):
 
         if not isinstance(adapter, MongoDBAdapter):
             raise ValueError(
-                f"AggregateNode requires MongoDBAdapter, got {type(adapter).__name__}"
+                f"MongoAggregateNode requires MongoDBAdapter, got {type(adapter).__name__}"
             )
 
         try:

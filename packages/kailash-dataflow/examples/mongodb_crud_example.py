@@ -17,10 +17,12 @@ Prerequisites:
 import asyncio
 from datetime import datetime
 
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
 from dataflow import DataFlow
 from dataflow.adapters import MongoDBAdapter
 from dataflow.nodes.mongodb_nodes import (
-    AggregateNode,
     BulkDocumentInsertNode,
     CreateIndexNode,
     DocumentCountNode,
@@ -28,10 +30,8 @@ from dataflow.nodes.mongodb_nodes import (
     DocumentFindNode,
     DocumentInsertNode,
     DocumentUpdateNode,
+    MongoAggregateNode,
 )
-
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 async def setup_connection():
@@ -352,7 +352,7 @@ async def workflow_integration(adapter):
 
     # 4. Aggregate orders by status
     workflow.add_node(
-        "AggregateNode",
+        "MongoAggregateNode",
         "orders_by_status",
         {
             "collection": "orders",
@@ -368,7 +368,7 @@ async def workflow_integration(adapter):
             ],
         },
     )
-    print("  ✓ Added AggregateNode")
+    print("  ✓ Added MongoAggregateNode")
 
     # Execute workflow
     print("\n⚡ Executing Workflow:")

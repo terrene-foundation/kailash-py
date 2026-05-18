@@ -3,7 +3,6 @@
 try:
     from .aggregate_operations import AggregateNode
     from .file_source import FileSourceNode
-    from .mongodb_nodes import AggregateNode as MongoAggregateNode
     from .mongodb_nodes import BulkDocumentInsertNode
     from .mongodb_nodes import CreateIndexNode as MongoCreateIndexNode
     from .mongodb_nodes import (
@@ -12,6 +11,7 @@ try:
         DocumentFindNode,
         DocumentInsertNode,
         DocumentUpdateNode,
+        MongoAggregateNode,
     )
     from .natural_language_filter import NaturalLanguageFilterNode
     from .schema_nodes import MigrationNode, SchemaModificationNode
