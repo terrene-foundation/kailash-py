@@ -1,5 +1,5 @@
 """
-Integration tests for BulkUpsertNode with real database connections.
+Integration tests for DataFlowBulkUpsertNode with real database connections.
 Tests against PostgreSQL using Docker test environment.
 """
 
@@ -11,7 +11,7 @@ import pytest
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from pytest import approx
 
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -24,7 +24,7 @@ async def test_suite():
 
 
 class TestBulkUpsertNodeIntegration:
-    """Integration tests for BulkUpsertNode with real database."""
+    """Integration tests for DataFlowBulkUpsertNode with real database."""
 
     def _extract_result_data(self, result):
         """Extract data from AsyncSQLDatabaseNode result format."""
@@ -109,8 +109,8 @@ class TestBulkUpsertNodeIntegration:
         """Test bulk upsert updates existing records."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -174,8 +174,8 @@ class TestBulkUpsertNodeIntegration:
         """Test bulk upsert with ignore strategy."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode with ignore strategy
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode with ignore strategy
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -241,8 +241,8 @@ class TestBulkUpsertNodeIntegration:
         """Test bulk upsert with version checking for optimistic locking."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode with version checking
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode with version checking
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -288,8 +288,8 @@ class TestBulkUpsertNodeIntegration:
         """Test returning upserted records."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -335,8 +335,8 @@ class TestBulkUpsertNodeIntegration:
         """Test batch processing with larger dataset."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode with small batch size
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode with small batch size
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -442,8 +442,8 @@ class TestBulkUpsertNodeIntegration:
         await constraint_node.async_run()
         await constraint_node.cleanup()
 
-        # Create BulkUpsertNode with multi-tenant support
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode with multi-tenant support
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -503,8 +503,8 @@ class TestBulkUpsertNodeIntegration:
         """Test handling of duplicates within batch."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode with duplicate handling
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode with duplicate handling
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -561,8 +561,8 @@ class TestBulkUpsertNodeIntegration:
         """Test performance with large upsert operation."""
         connection_string = setup_test_table
 
-        # Create BulkUpsertNode
-        node = BulkUpsertNode(
+        # Create DataFlowBulkUpsertNode
+        node = DataFlowBulkUpsertNode(
             node_id="test_bulk_upsert",
             table_name="test_bulk_upsert_users",
             database_type="postgresql",
@@ -606,7 +606,7 @@ class TestBulkUpsertNodeIntegration:
         assert metrics["records_per_second"] > 100  # At least 100/sec in test env
 
         # For this performance test, we focus on throughput metrics
-        # The BulkUpsertNode should handle large volumes efficiently
+        # The DataFlowBulkUpsertNode should handle large volumes efficiently
 
         # Just assert that records_per_second is reasonable for integration test
         assert metrics["records_per_second"] > 100  # At least 100/sec in test env

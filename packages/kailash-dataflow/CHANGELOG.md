@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-05-19 — node-registry collision fix (#891)
+
+### Changed
+
+- **`HybridSearchNode` renamed to `PgVectorHybridSearchNode` (#891)** — the
+  pgvector hybrid-search node registered the same global registry name as
+  kailash-kaizen's RAG `HybridSearchNode`, making `add_node("HybridSearchNode")`
+  resolve import-order-dependently. The `HybridSearchNode` Python symbol remains
+  importable for one minor cycle as a deprecation alias (a plain module alias —
+  not re-registered). Migration: `add_node("HybridSearchNode", ...)` →
+  `add_node("PgVectorHybridSearchNode", ...)`.
+- **`BulkUpsertNode` renamed to `DataFlowBulkUpsertNode` (#891)** — the standalone
+  bulk-upsert node collided with the kailash core `BulkUpsertNode`. Migration:
+  `add_node("BulkUpsertNode", ...)` → `add_node("DataFlowBulkUpsertNode", ...)`.
+  Per-model generated `{Model}BulkUpsertNode` names are unaffected.
+- **`mongodb_nodes.AggregateNode` renamed to `MongoAggregateNode` (#891)** — the
+  MongoDB aggregation-pipeline node collided with `aggregate_operations`'s SQL
+  `AggregateNode`. The SQL node keeps the `AggregateNode` name; the MongoDB node
+  is renamed. Migration for the MongoDB pipeline node only:
+  `add_node("AggregateNode", ...)` → `add_node("MongoAggregateNode", ...)`.
+
 ## [2.9.19] — 2026-05-18 — TransactionScope.execute_raw write-protection (#1083 follow-up)
 
 ### Fixed

@@ -7,10 +7,10 @@ Workflow nodes for vector similarity search using PostgreSQLVectorAdapter.
 import logging
 from typing import Any, Dict, List, Optional
 
-from dataflow.adapters import PostgreSQLVectorAdapter
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
+
+from dataflow.adapters import PostgreSQLVectorAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -319,8 +319,8 @@ class CreateVectorIndexNode(AsyncNode):
             ) from e
 
 
-@register_node()
-class HybridSearchNode(AsyncNode):
+@register_node(alias="PgVectorHybridSearchNode")
+class PgVectorHybridSearchNode(AsyncNode):
     """
     Hybrid search combining vector similarity and full-text search.
 
@@ -330,7 +330,7 @@ class HybridSearchNode(AsyncNode):
     Requires PostgreSQLVectorAdapter with pgvector extension.
 
     Example:
-        workflow.add_node("HybridSearchNode", "search", {
+        workflow.add_node("PgVectorHybridSearchNode", "search", {
             "table_name": "documents",
             "query_vector": embedding,
             "text_query": "machine learning",
@@ -341,7 +341,7 @@ class HybridSearchNode(AsyncNode):
     """
 
     def __init__(self, **kwargs):
-        """Initialize HybridSearchNode."""
+        """Initialize PgVectorHybridSearchNode."""
         # Extract DataFlow-specific parameters
         self.table_name = kwargs.pop("table_name", None)
         self.dataflow_instance = kwargs.pop("dataflow_instance", None)
@@ -410,7 +410,7 @@ class HybridSearchNode(AsyncNode):
         # Get adapter from DataFlow instance
         if not self.dataflow_instance:
             raise ValueError(
-                "HybridSearchNode requires dataflow_instance. "
+                "PgVectorHybridSearchNode requires dataflow_instance. "
                 "This node must be used within a DataFlow workflow."
             )
 
@@ -419,7 +419,7 @@ class HybridSearchNode(AsyncNode):
         # Validate adapter type
         if not isinstance(adapter, PostgreSQLVectorAdapter):
             raise ValueError(
-                f"HybridSearchNode requires PostgreSQLVectorAdapter, "
+                f"PgVectorHybridSearchNode requires PostgreSQLVectorAdapter, "
                 f"got {type(adapter).__name__}. "
                 f"Initialize DataFlow with: "
                 f"db = DataFlow(adapter=PostgreSQLVectorAdapter(connection_string))"
@@ -427,7 +427,7 @@ class HybridSearchNode(AsyncNode):
 
         # Validate table_name
         if not self.table_name:
-            raise ValueError("table_name is required for HybridSearchNode")
+            raise ValueError("table_name is required for PgVectorHybridSearchNode")
 
         # Validate and get parameters from kwargs
         validated_inputs = self.validate_inputs(**kwargs)
@@ -456,7 +456,7 @@ class HybridSearchNode(AsyncNode):
             search_type = "hybrid" if text_query else "vector_only"
 
             logger.info(
-                f"HybridSearchNode: Found {len(results)} results for table "
+                f"PgVectorHybridSearchNode: Found {len(results)} results for table "
                 f"'{self.table_name}' using {search_type} search"
             )
 
@@ -469,8 +469,16 @@ class HybridSearchNode(AsyncNode):
 
         except Exception as e:
             logger.error(
-                f"HybridSearchNode failed for table '{self.table_name}': {str(e)}"
+                f"PgVectorHybridSearchNode failed for table '{self.table_name}': {str(e)}"
             )
             raise RuntimeError(
                 f"Hybrid search failed for table '{self.table_name}': {str(e)}"
             ) from e
+
+
+# Deprecation shim — `HybridSearchNode` was renamed to `PgVectorHybridSearchNode`
+# (issue #891: the bare name collided with kaizen's RAG node in the global
+# NodeRegistry). Plain module alias for direct Python importers; kept one minor
+# cycle. NOT re-decorated with @register_node — a decorated alias would re-create
+# the registry collision the rename closes.
+HybridSearchNode = PgVectorHybridSearchNode

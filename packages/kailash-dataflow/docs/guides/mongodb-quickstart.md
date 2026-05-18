@@ -610,7 +610,7 @@ from dataflow.nodes.mongodb_nodes import (
     DocumentInsertNode,
     DocumentFindNode,
     DocumentUpdateNode,
-    AggregateNode
+    MongoAggregateNode
 )
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import AsyncLocalRuntime
@@ -641,7 +641,7 @@ workflow.add_node("DocumentFindNode", "find_active", {
 })
 
 # Aggregate sales by category
-workflow.add_node("AggregateNode", "sales_by_category", {
+workflow.add_node("MongoAggregateNode", "sales_by_category", {
     "collection": "orders",
     "pipeline": [
         {"$match": {"status": "completed"}},
@@ -668,7 +668,7 @@ print(f"Sales results: {results['sales_by_category']['count']} categories")
 2. **DocumentFindNode** - Find documents with filters
 3. **DocumentUpdateNode** - Update documents
 4. **DocumentDeleteNode** - Delete documents
-5. **AggregateNode** - Aggregation pipelines
+5. **MongoAggregateNode** - Aggregation pipelines
 6. **BulkDocumentInsertNode** - Bulk insert
 7. **CreateIndexNode** - Create indexes
 8. **DocumentCountNode** - Count documents

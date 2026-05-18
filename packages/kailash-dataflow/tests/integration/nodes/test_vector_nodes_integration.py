@@ -1,21 +1,21 @@
 """
 Integration tests for vector workflow nodes with real PostgreSQL + pgvector.
 
-Tests VectorSearchNode, CreateVectorIndexNode, and HybridSearchNode
+Tests VectorSearchNode, CreateVectorIndexNode, and PgVectorHybridSearchNode
 with real database infrastructure and DataFlow integration.
 
 Following NO MOCKING policy for Tier 2 tests.
 """
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.adapters import PostgreSQLVectorAdapter
 from dataflow.nodes.vector_nodes import (
     CreateVectorIndexNode,
-    HybridSearchNode,
+    PgVectorHybridSearchNode,
     VectorSearchNode,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -274,14 +274,14 @@ class TestCreateVectorIndexNodeIntegration:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-class TestHybridSearchNodeIntegration:
-    """Integration tests for HybridSearchNode with real database."""
+class TestPgVectorHybridSearchNodeIntegration:
+    """Integration tests for PgVectorHybridSearchNode with real database."""
 
     async def test_hybrid_search_vector_only(self, vector_table_with_data):
-        """Test HybridSearchNode with vector-only search."""
+        """Test PgVectorHybridSearchNode with vector-only search."""
         dataflow, table_name = vector_table_with_data
 
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name=table_name,
             dataflow_instance=dataflow,
         )
@@ -298,7 +298,7 @@ class TestHybridSearchNodeIntegration:
         assert len(result["results"]) <= 5
 
     async def test_hybrid_search_combined(self, vector_table_with_data, test_suite):
-        """Test HybridSearchNode with combined vector and text search."""
+        """Test PgVectorHybridSearchNode with combined vector and text search."""
         dataflow, table_name = vector_table_with_data
 
         # Create full-text search index
@@ -311,7 +311,7 @@ class TestHybridSearchNodeIntegration:
             """
             )
 
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name=table_name,
             dataflow_instance=dataflow,
         )

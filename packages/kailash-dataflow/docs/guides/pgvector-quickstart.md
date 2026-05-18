@@ -182,7 +182,7 @@ distance="ip"  # Range: -infinity to +infinity
 Combine semantic similarity with PostgreSQL full-text search for best of both worlds:
 
 ```python
-from dataflow.nodes.vector_nodes import HybridSearchNode
+from dataflow.nodes.vector_nodes import PgVectorHybridSearchNode
 
 # Create full-text index first
 await db.execute_query("""
@@ -192,7 +192,7 @@ await db.execute_query("""
 """)
 
 # Hybrid search
-workflow.add_node("HybridSearchNode", "search", {
+workflow.add_node("PgVectorHybridSearchNode", "search", {
     "table_name": "documents",
     "query_vector": query_embedding,
     "text_query": "machine learning",  # Text search term

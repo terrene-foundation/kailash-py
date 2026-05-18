@@ -1,8 +1,8 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Tier 2 SQLi regression — BulkUpsertNode parameter binding (issue #492).
+"""Tier 2 SQLi regression — DataFlowBulkUpsertNode parameter binding (issue #492).
 
-Before this fix, ``BulkUpsertNode._build_upsert_query`` interpolated
+Before this fix, ``DataFlowBulkUpsertNode._build_upsert_query`` interpolated
 VALUES via ``value.replace("'", "''")`` and emitted a finished SQL
 string. Hand-rolled escapes are the classic SQLi vector: backslash-
 quote (``\\'``), null bytes (``\\x00``), Unicode quote homoglyphs
@@ -16,7 +16,7 @@ land in a separate flat list bound by the driver.
 
 These tests use the real PostgreSQL test infrastructure
 (``IntegrationTestSuite`` per ``tests/CLAUDE.md``) and exercise the
-classic SQLi payload set against the ``BulkUpsertNode`` public
+classic SQLi payload set against the ``DataFlowBulkUpsertNode`` public
 ``async_run`` surface. The contract: malicious payloads MUST land in
 the row as literal data; the side table that the payload tries to drop
 MUST remain intact.
@@ -38,7 +38,7 @@ import time
 import pytest
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -158,7 +158,7 @@ async def test_bulk_upsert_rejects_sql_injection_in_string_field(upsert_table, p
     """Issue #492: every classic SQLi payload MUST be bound as data, not SQL."""
     connection_string, upsert_name, canary_name = upsert_table
 
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_sqli",
         table_name=upsert_name,
         database_type="postgresql",
@@ -202,7 +202,7 @@ async def test_bulk_upsert_mixed_safe_and_malicious_batch(upsert_table):
     """Multi-row batch: safe rows MUST land normally, malicious rows MUST be data."""
     connection_string, upsert_name, canary_name = upsert_table
 
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_sqli_batch",
         table_name=upsert_name,
         database_type="postgresql",
@@ -247,7 +247,7 @@ async def test_bulk_upsert_emits_no_inlined_payload_in_query(upsert_table):
     """
     connection_string, upsert_name, _canary_name = upsert_table
 
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_placeholder",
         table_name=upsert_name,
         database_type="postgresql",
@@ -288,7 +288,7 @@ async def test_bulk_upsert_rejects_invalid_table_identifier(bad_identifier):
     contains shell/SQL meta-characters MUST raise at query-build time, not
     silently land in DDL.
     """
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_id",
         table_name=bad_identifier,
         database_type="postgresql",
@@ -311,7 +311,7 @@ async def test_bulk_upsert_rejects_invalid_column_identifier():
     """Identifier safety MUST extend to column names supplied via the
     runtime ``conflict_on`` parameter and the ``columns`` list.
     """
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_col",
         table_name="users",
         database_type="postgresql",
@@ -336,7 +336,7 @@ async def test_bulk_upsert_rejects_unsupported_dialect():
     """
     from kailash.sdk_exceptions import NodeValidationError
 
-    node = BulkUpsertNode(
+    node = DataFlowBulkUpsertNode(
         node_id="bulk_upsert_dialect",
         table_name="users",
         database_type="postgres",  # typo — should be 'postgresql'

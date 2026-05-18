@@ -12,7 +12,6 @@ from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
-
 # #499 finding 5 — PG/MySQL drivers embed raw column values in DETAIL /
 # Key(...)=(…) clauses. Strip them before any log or return-value echo so
 # PII / SECRET column values cannot leak through the observability layer.
@@ -40,8 +39,8 @@ _SUPPORTED_DIALECTS = frozenset({"postgresql", "mysql", "sqlite"})
 from .workflow_connection_manager import SmartNodeConnectionMixin
 
 
-@register_node()
-class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
+@register_node(alias="DataFlowBulkUpsertNode")
+class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
     """Node for bulk upsert (insert or update) operations in DataFlow.
 
     This node extends AsyncNode with SmartNodeConnectionMixin to provide
@@ -69,7 +68,7 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
     """
 
     def __init__(self, **kwargs):
-        """Initialize the BulkUpsertNode with configuration parameters."""
+        """Initialize the DataFlowBulkUpsertNode with configuration parameters."""
         # Extract configuration parameters before calling super()
         self.table_name = kwargs.pop("table_name", None)
         self.connection_string = kwargs.pop("connection_string", None)
@@ -98,7 +97,9 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
         # Validate required configuration
         if not self.table_name:
-            raise NodeValidationError("table_name is required for BulkUpsertNode")
+            raise NodeValidationError(
+                "table_name is required for DataFlowBulkUpsertNode"
+            )
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the runtime parameters this node accepts."""
@@ -643,14 +644,16 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         """
         if kwargs.get("use_pooled_connection"):
             raise NodeValidationError(
-                "BulkUpsertNode does not support use_pooled_connection. "
+                "DataFlowBulkUpsertNode does not support use_pooled_connection. "
                 "DataFlowConnectionManager.execute() has no 'execute' operation. "
                 "Use BulkCreatePoolNode for pool-routed inserts, or pass "
                 "connection_string for direct execution."
             )
 
         if not self.connection_string:
-            raise NodeValidationError("BulkUpsertNode requires connection_string")
+            raise NodeValidationError(
+                "DataFlowBulkUpsertNode requires connection_string"
+            )
 
         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
@@ -664,4 +667,4 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
 
 # For backward compatibility, also alias the old method name
-BulkUpsertNode.execute = BulkUpsertNode.async_run
+DataFlowBulkUpsertNode.execute = DataFlowBulkUpsertNode.async_run

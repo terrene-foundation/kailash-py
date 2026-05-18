@@ -16,7 +16,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 from .a2a import A2AAgentCard
@@ -299,8 +298,8 @@ class ContextualScorer:
         return min(1.0, overlap / len(req_set) + 0.2)
 
 
-@register_node()
-class HybridSearchNode(Node):
+@register_node(alias="SemanticHybridSearchNode")
+class SemanticHybridSearchNode(Node):
     """Enhanced hybrid search for A2A agent matching."""
 
     def __init__(self, name: str = "hybrid_search", **kwargs):
@@ -762,7 +761,7 @@ class AdaptiveSearchNode(Node):
         self.weight_history = []
 
         # Initialize hybrid search
-        self.hybrid_search = HybridSearchNode(
+        self.hybrid_search = SemanticHybridSearchNode(
             name="internal_hybrid_search",
             semantic_weight=self.semantic_weight,
             keyword_weight=self.keyword_weight,

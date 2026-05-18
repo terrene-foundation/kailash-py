@@ -1,4 +1,4 @@
-"""Unit tests for BulkUpsertNode conflict_on parameter.
+"""Unit tests for DataFlowBulkUpsertNode conflict_on parameter.
 
 Tests parameter validation, deduplication logic, and query building
 with custom conflict fields (natural keys and composite keys).
@@ -6,15 +6,15 @@ with custom conflict fields (natural keys and composite keys).
 
 import pytest
 
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 
 
 class TestBulkUpsertConflictOnParameter:
-    """Test conflict_on parameter handling in BulkUpsertNode."""
+    """Test conflict_on parameter handling in DataFlowBulkUpsertNode."""
 
     def test_conflict_on_parameter_exists(self):
         """Test that conflict_on parameter is properly defined."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="test_table",
             connection_string="postgresql://localhost/test",
         )
@@ -27,7 +27,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_conflict_on_parameter_description(self):
         """Test that conflict_on parameter has descriptive documentation."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="test_table",
             connection_string="postgresql://localhost/test",
         )
@@ -40,7 +40,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_deduplicate_with_single_conflict_field(self):
         """Test deduplication using single conflict field (email)."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
         )
@@ -66,7 +66,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_deduplicate_with_composite_conflict_fields(self):
         """Test deduplication using composite key (order_id + product_id)."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="order_items",
             connection_string="postgresql://localhost/test",
         )
@@ -93,7 +93,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_deduplicate_keep_last_strategy(self):
         """Test deduplication with handle_duplicates='last' strategy."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             handle_duplicates="last",
@@ -115,7 +115,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_build_query_with_single_conflict_field(self):
         """Test query building with single conflict field."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             database_type="postgresql",
@@ -141,7 +141,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_build_query_with_composite_conflict_fields(self):
         """Test query building with composite conflict fields."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="order_items",
             connection_string="postgresql://localhost/test",
             database_type="postgresql",
@@ -171,7 +171,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_build_query_ignores_immutable_fields(self):
         """Test that id and created_at are never updated, regardless of conflict_on."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             database_type="postgresql",
@@ -202,7 +202,7 @@ class TestBulkUpsertConflictOnParameter:
 
     def test_empty_conflict_on_uses_all_columns(self):
         """Test that empty conflict_on list is handled gracefully."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             database_type="postgresql",
@@ -228,7 +228,7 @@ class TestBulkUpsertConflictOnParameter:
         This means NULL values WILL deduplicate in batch preprocessing.
         The database will handle NULL != NULL semantics during INSERT.
         """
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
         )
@@ -251,7 +251,7 @@ class TestBulkUpsertConflictOnParameter:
         """Test that result metadata includes the resolved conflict_on value."""
         # This is tested in integration tests since it requires async execution
         # Here we just verify the metadata structure is correct
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             conflict_columns=["email"],  # Config default
@@ -266,7 +266,7 @@ class TestBulkUpsertBackwardCompatibility:
 
     def test_defaults_to_config_conflict_columns(self):
         """Test that omitting conflict_on uses config conflict_columns."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             conflict_columns=["email"],  # Config default
@@ -291,7 +291,7 @@ class TestBulkUpsertBackwardCompatibility:
 
     def test_runtime_conflict_on_overrides_config(self):
         """Test that runtime conflict_on overrides config conflict_columns."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string="postgresql://localhost/test",
             conflict_columns=["email"],  # Config default

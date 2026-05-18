@@ -440,7 +440,10 @@ class NodeGenerator:
 
         # Register nodes with Kailash's NodeRegistry system
         for node_name, node_class in nodes.items():
-            NodeRegistry.register(node_class, alias=node_name)
+            # allow_override: @db.model regenerates CRUD node classes per
+            # decoration; their names may coincide with static nodes — the
+            # overwrite is intentional, exempt from the issue-#891 guard.
+            NodeRegistry.register(node_class, alias=node_name, allow_override=True)
             # Also register in module namespace for direct imports
             globals()[node_name] = node_class
             # Store in DataFlow instance for testing
@@ -478,7 +481,10 @@ class NodeGenerator:
 
         # Register nodes with Kailash's NodeRegistry system
         for node_name, node_class in nodes.items():
-            NodeRegistry.register(node_class, alias=node_name)
+            # allow_override: @db.model regenerates CRUD node classes per
+            # decoration; their names may coincide with static nodes — the
+            # overwrite is intentional, exempt from the issue-#891 guard.
+            NodeRegistry.register(node_class, alias=node_name, allow_override=True)
             globals()[node_name] = node_class
             # Store in DataFlow instance for testing
             self.dataflow_instance._nodes[node_name] = node_class

@@ -14,16 +14,16 @@ Prerequisites:
 
 import asyncio
 
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
 from dataflow import DataFlow
 from dataflow.adapters import PostgreSQLVectorAdapter
 from dataflow.nodes.vector_nodes import (
     CreateVectorIndexNode,
-    HybridSearchNode,
+    PgVectorHybridSearchNode,
     VectorSearchNode,
 )
-
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 
 # Mock embedding function (replace with real embedding model)
@@ -258,7 +258,7 @@ async def hybrid_search_example(db, adapter):
 
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "HybridSearchNode",
+        "PgVectorHybridSearchNode",
         "search",
         {
             "table_name": "knowledge_base",

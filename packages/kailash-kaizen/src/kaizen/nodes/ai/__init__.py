@@ -16,7 +16,7 @@ from kaizen.providers.registry import PROVIDERS, get_available_providers, get_pr
 from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
 from .embedding_generator import EmbeddingGeneratorNode
-from .hybrid_search import AdaptiveSearchNode, HybridSearchNode
+from .hybrid_search import AdaptiveSearchNode, SemanticHybridSearchNode
 
 # Import intelligent orchestration nodes
 from .intelligent_agent_orchestrator import (
@@ -70,7 +70,7 @@ __all__ = [
     "SemanticMemoryStoreNode",
     "SemanticMemorySearchNode",
     "SemanticAgentMatchingNode",
-    "HybridSearchNode",
+    "SemanticHybridSearchNode",
     "AdaptiveSearchNode",
     "StreamingAnalyticsNode",
     "A2AMonitoringNode",

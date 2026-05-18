@@ -1,16 +1,16 @@
-"""Consistency tests for BulkUpsertNode with conflict_on parameter.
+"""Consistency tests for DataFlowBulkUpsertNode with conflict_on parameter.
 
-Verifies that the standalone BulkUpsertNode behaves consistently with expected
+Verifies that the standalone DataFlowBulkUpsertNode behaves consistently with expected
 upsert semantics when using custom conflict fields.
 
-NOTE: These tests use the standalone BulkUpsertNode from dataflow.nodes.bulk_upsert.
+NOTE: These tests use the standalone DataFlowBulkUpsertNode from dataflow.nodes.bulk_upsert.
 The DataFlow-generated nodes use a different implementation which is being
 enhanced separately in features/bulk.py.
 """
 
 import pytest
 
-from dataflow.nodes.bulk_upsert import BulkUpsertNode
+from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -88,11 +88,11 @@ async def order_items_table(test_suite):
 @pytest.mark.integration
 @pytest.mark.timeout(15)
 class TestBulkUpsertConflictOnConsistency:
-    """Test standalone BulkUpsertNode behaves consistently with expected upsert semantics."""
+    """Test standalone DataFlowBulkUpsertNode behaves consistently with expected upsert semantics."""
 
     async def test_email_conflict_insert_then_update(self, test_suite, users_table):
-        """Test that BulkUpsertNode correctly handles INSERT then UPDATE on email."""
-        node = BulkUpsertNode(
+        """Test that DataFlowBulkUpsertNode correctly handles INSERT then UPDATE on email."""
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -150,8 +150,8 @@ class TestBulkUpsertConflictOnConsistency:
             assert record["name"] == "Alice Updated"  # Name changed
 
     async def test_sku_conflict_consistency(self, test_suite, products_table):
-        """Test that BulkUpsertNode handles SKU conflict correctly."""
-        node = BulkUpsertNode(
+        """Test that DataFlowBulkUpsertNode handles SKU conflict correctly."""
+        node = DataFlowBulkUpsertNode(
             table_name="products",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -199,8 +199,8 @@ class TestBulkUpsertConflictOnConsistency:
             assert float(record["price"]) == 99.99
 
     async def test_composite_key_consistency(self, test_suite, order_items_table):
-        """Test that BulkUpsertNode handles composite key conflicts correctly."""
-        node = BulkUpsertNode(
+        """Test that DataFlowBulkUpsertNode handles composite key conflicts correctly."""
+        node = DataFlowBulkUpsertNode(
             table_name="order_items",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -254,7 +254,7 @@ class TestBulkUpsertConflictOnConsistency:
     async def test_conflict_on_overrides_config_default(self, test_suite, users_table):
         """Test that runtime conflict_on overrides config conflict_columns."""
         # Create node with email as config default
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",
@@ -312,7 +312,7 @@ class TestBulkUpsertConflictOnConsistency:
 
     async def test_merge_strategy_consistency(self, test_suite, users_table):
         """Test that merge strategy (update vs ignore) works consistently."""
-        node = BulkUpsertNode(
+        node = DataFlowBulkUpsertNode(
             table_name="users",
             connection_string=test_suite.config.url,
             database_type="postgresql",

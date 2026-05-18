@@ -1,16 +1,17 @@
 """
 Unit tests for vector search nodes.
 
-Tests for VectorSearchNode, CreateVectorIndexNode, and HybridSearchNode.
+Tests for VectorSearchNode, CreateVectorIndexNode, and PgVectorHybridSearchNode.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from dataflow.adapters import PostgreSQLVectorAdapter
 from dataflow.nodes.vector_nodes import (
     CreateVectorIndexNode,
-    HybridSearchNode,
+    PgVectorHybridSearchNode,
     VectorSearchNode,
 )
 
@@ -338,12 +339,12 @@ class TestCreateVectorIndexNode:
 
 
 @pytest.mark.unit
-class TestHybridSearchNode:
-    """Test HybridSearchNode initialization and configuration."""
+class TestPgVectorHybridSearchNode:
+    """Test PgVectorHybridSearchNode initialization and configuration."""
 
     def test_node_initialization(self):
-        """HybridSearchNode initializes correctly."""
-        node = HybridSearchNode(
+        """PgVectorHybridSearchNode initializes correctly."""
+        node = PgVectorHybridSearchNode(
             table_name="documents",
             dataflow_instance=MagicMock(),
         )
@@ -352,8 +353,8 @@ class TestHybridSearchNode:
         assert node.dataflow_instance is not None
 
     def test_get_parameters(self):
-        """HybridSearchNode defines correct parameters."""
-        node = HybridSearchNode(table_name="documents")
+        """PgVectorHybridSearchNode defines correct parameters."""
+        node = PgVectorHybridSearchNode(table_name="documents")
         params = node.get_parameters()
 
         # Required parameters
@@ -381,8 +382,8 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_requires_dataflow_instance(self):
-        """HybridSearchNode requires dataflow_instance."""
-        node = HybridSearchNode(table_name="documents")
+        """PgVectorHybridSearchNode requires dataflow_instance."""
+        node = PgVectorHybridSearchNode(table_name="documents")
         node.query_vector = [0.1] * 1536
 
         with pytest.raises(ValueError, match="requires dataflow_instance"):
@@ -390,11 +391,11 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_requires_vector_adapter(self):
-        """HybridSearchNode requires PostgreSQLVectorAdapter."""
+        """PgVectorHybridSearchNode requires PostgreSQLVectorAdapter."""
         mock_dataflow = MagicMock()
         mock_dataflow.adapter = MagicMock()  # Not PostgreSQLVectorAdapter
 
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name="documents",
             dataflow_instance=mock_dataflow,
         )
@@ -405,12 +406,12 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_requires_table_name(self):
-        """HybridSearchNode requires table_name."""
+        """PgVectorHybridSearchNode requires table_name."""
         mock_adapter = MagicMock(spec=PostgreSQLVectorAdapter)
         mock_dataflow = MagicMock()
         mock_dataflow.adapter = mock_adapter
 
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name=None,
             dataflow_instance=mock_dataflow,
         )
@@ -421,7 +422,7 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_hybrid_search(self):
-        """HybridSearchNode executes hybrid search successfully."""
+        """PgVectorHybridSearchNode executes hybrid search successfully."""
         # Mock adapter
         mock_adapter = MagicMock(spec=PostgreSQLVectorAdapter)
         mock_results = [
@@ -434,7 +435,7 @@ class TestHybridSearchNode:
         mock_dataflow.adapter = mock_adapter
 
         # Create node
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name="documents",
             dataflow_instance=mock_dataflow,
         )
@@ -470,7 +471,7 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_vector_only_search(self):
-        """HybridSearchNode executes vector-only search when text_query is None."""
+        """PgVectorHybridSearchNode executes vector-only search when text_query is None."""
         # Mock adapter
         mock_adapter = MagicMock(spec=PostgreSQLVectorAdapter)
         mock_results = [{"id": "1", "title": "Doc 1"}]
@@ -480,7 +481,7 @@ class TestHybridSearchNode:
         mock_dataflow.adapter = mock_adapter
 
         # Create node
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name="documents",
             dataflow_instance=mock_dataflow,
         )
@@ -497,7 +498,7 @@ class TestHybridSearchNode:
 
     @pytest.mark.asyncio
     async def test_async_run_handles_errors(self):
-        """HybridSearchNode handles adapter errors."""
+        """PgVectorHybridSearchNode handles adapter errors."""
         # Mock adapter that raises error
         mock_adapter = MagicMock(spec=PostgreSQLVectorAdapter)
         mock_adapter.hybrid_search = AsyncMock(
@@ -507,7 +508,7 @@ class TestHybridSearchNode:
         mock_dataflow = MagicMock()
         mock_dataflow.adapter = mock_adapter
 
-        node = HybridSearchNode(
+        node = PgVectorHybridSearchNode(
             table_name="documents",
             dataflow_instance=mock_dataflow,
         )
