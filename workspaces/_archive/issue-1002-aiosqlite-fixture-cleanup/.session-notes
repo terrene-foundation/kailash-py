@@ -1,0 +1,42 @@
+# Session Notes — 2026-05-15
+
+## Where we are
+
+v2.9.9 shipped to PyPI; brief AC#3 of #1000 / #1002 / #1010 is satisfied
+end-to-end and all three issues closed. Main is at `b518c158` (Merge
+#1018). Workspace can be retired — `todos/active/` is empty; only the
+deferred shard 4b was outstanding, and it shipped via PR #1017.
+
+## Read first
+
+1. `journal/0007-DISCOVERY-py-finalize-root-cause-aiosqlite-nondaemon-workers.md` — forensic root-cause record
+2. `packages/kailash-dataflow/tests/conftest.py` § "Issue #1010 — aiosqlite worker thread daemon-flag" — load-bearing patch
+3. `packages/kailash-dataflow/tests/regression/test_issue_1010_aiosqlite_worker_thread_cleanup.py` — three pins on the safety contract
+4. `packages/kailash-dataflow/CHANGELOG.md` § [2.9.9] — full ship-list with PR SHAs
+5. `CLAUDE.md` — project baseline
+
+## In-flight state
+
+- `packages/kailash-dataflow/uv.lock` has unstaged modifications carried since session-start — pre-dates today's work.
+- Debug branches preserved on remote (never merge): `debug/issue-1010-phase-a-diagnostics`, `debug/issue-1010-phase-a-prime-linux`.
+- Workspace-internal `.session-notes` and `.journal-skipped.log` files across multiple workspaces remain untracked — per-session records, never tracked.
+
+## Traps
+
+- aiosqlite monkey-patch is **TEST-SIDE ONLY**. Production code MUST still `await conn.close()`. Removing the patch reintroduces the hang. `test_aiosqlite_monkeypatch_active` pins activation.
+- Setsid wrapper is GONE. Future regressions hit the 10-min step timeout instead of being silently SIGKILLed. By design — wrapper masked real bugs.
+- PyPI cache lag on fresh release: `uv pip install --refresh` may need 60–120s; if still unresolved, fall back to `pip install --no-cache-dir` per `build-repo-release-discipline.md` MUST-2.
+- Local Mac/3.13 exits cleanly on its own; Linux/3.11 was the platform where the residual leak reproduced. Future test-resource hangs: re-run on Linux before declaring fixed.
+
+## Forest-vs-trees + value-anchored deferrals
+
+**Forest:** brief (`briefs/00-brief.md:5-7`) verbatim AC#3 — "Verify on CI: remove the setsid wrapper from `unified-ci.yml::test-dataflow` and confirm pytest exits cleanly" — **SATISFIED**. CI on PR #1017 ran bare pytest 78–81s end-to-end on Linux/3.11.
+
+**Trees this session:** Phase A diagnostic → Phase B fresh-loop disconnect (PR #1014) → Phase A-prime forensic re-run on Linux → Phase B-prime daemon-flag monkey-patch (PR #1016) → Shard 4b v2 setsid removal (PR #1017) → v2.9.9 release (PR #1018).
+
+**Deferred (value-anchored):**
+- **Upstream aiosqlite `daemon=True` default fix.** Value-anchor: ecosystem-wide remediation; aiosqlite ships in many consumers beyond Kailash, each susceptible to the same shutdown hang when `Connection.close()` is missed. The conftest monkey-patch handles Kailash; upstream is the structural answer. Source: `rules/upstream-issue-hygiene.md` mandates human-gated per-issue filing. Next session: ask user whether/when to draft the upstream body (test-side workaround is unblocking, not urgent).
+
+## Open questions for the human
+
+- File upstream aiosqlite issue requesting `Connection._thread.daemon = True` default? Human-gated per `rules/upstream-issue-hygiene.md`.

@@ -1,0 +1,44 @@
+2026-05-16T02:10:59.908Z <journal-skip>commit=dcfd626bf5f5 reason=merge-commit subject="Merge pull request #1021 from terrene-foundation/feat/issue-992-shard1-tier1-moves"</journal-skip>
+2026-05-16T02:10:59.909Z <journal-skip>commit=cf81fe7d246f reason=merge-commit subject="Merge pull request #1020 from terrene-foundation/feat/issue-992-shard2-file6-split"</journal-skip>
+2026-05-16T09:28:50.122Z <journal-skip>commit=0ea1f82dfdc5 reason=merge-commit subject="Merge pull request #1030 from terrene-foundation/feat/issue-996-redteam-r1-fixes-saas-starter"</journal-skip>
+2026-05-16T09:28:50.123Z <journal-skip>commit=157824ffcf97 reason=fix-routine subject="fix(dataflow): narrow JWT_SECRET to str + correct tenant.py return types"</journal-skip>
+2026-05-16T11:15:47.816Z <journal-skip>commit=d6d1d6229da9 reason=merge-commit subject="Merge pull request #1034 from terrene-foundation/fix/issue-996-c-api-gateway-token-type-validation"</journal-skip>
+2026-05-16T11:15:47.816Z <journal-skip>commit=edd7a2334946 reason=merge-commit subject="Merge pull request #1033 from terrene-foundation/feat/issue-996-b-2e-saas-auth-tier2-rewrite"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=c5fb1abdf0d7 reason=merge-commit subject="Merge pull request #1032 from terrene-foundation/feat/issue-996-b-2d-saas-webhooks-tier2-rewrite"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=a618eb83e469 reason=test-routine subject="test(dataflow): api_gateway_starter Tier-1 — sibling-fixture sweep adds type=access to test_jwt_auth mocks"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=f368a1b95194 reason=test-routine subject="test(saas_starter): rewrite auth/tenancy tests as Tier-2 integration"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=23968bc03a04 reason=fix-routine subject="fix(dataflow): saas_starter webhooks.py — DataFlow API contract violations"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=719a98af5fad reason=fix-routine subject="fix(dataflow): api_gateway_starter middleware — typing.Any not builtin any() for return annotation"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=a73e88e341c1 reason=test-routine subject="test(dataflow): api_gateway_starter — sibling-fixture sweep adds type=access claim"</journal-skip>
+2026-05-16T11:15:47.817Z <journal-skip>commit=7da19c0647d7 reason=test-routine subject="test(dataflow): api_gateway_starter — Tier-2 regression for issue #996 Shard C token-type check"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=6064e7afb4ff reason=feat-no-novel-body subject="feat(dataflow): Tier-2 rewrite of saas_starter webhooks tests + fix surfaced bugs"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=f4c69c6e6b02 reason=fix-routine subject="fix(dataflow): api_gateway_starter — reject non-access JWT token types at middleware"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=1edb4f44168e reason=no-match subject="probe(shard-a): map test_saas_starter_auth.py → templates/saas_starter/ surface"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=18f64a2b3845 reason=merge-commit subject="Merge pull request #1031 from terrene-foundation/feat/issue-996-r2-fix-api-gateway-jwt-secret"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=44096ddce007 reason=fix-routine subject="fix(dataflow): api_gateway_starter — sibling-sweep JWT_SECRET env-var + conftest"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=0ea1f82dfdc5 reason=merge-commit subject="Merge pull request #1030 from terrene-foundation/feat/issue-996-redteam-r1-fixes-saas-starter"</journal-skip>
+2026-05-16T11:15:47.818Z <journal-skip>commit=157824ffcf97 reason=fix-routine subject="fix(dataflow): narrow JWT_SECRET to str + correct tenant.py return types"</journal-skip>
+2026-05-16T12:29:55.191Z <journal-skip>commit=0362f00cac2e reason=merge-commit subject="Merge pull request #1038 from terrene-foundation/release/v2.9.10"</journal-skip>
+2026-05-16T12:29:55.192Z <journal-skip>commit=c3b20646b1d5 reason=version-bump subject="release(dataflow): 2.9.10 — #996 Round-5 tenant hardening + B-2 wave"</journal-skip>
+2026-05-16T12:29:55.192Z <journal-skip>commit=6997537efb6d reason=merge-commit subject="Merge pull request #1036 from terrene-foundation/fix/issue-996-round5-tenant-hardening"</journal-skip>
+2026-05-16T12:29:55.192Z <journal-skip>commit=77b19dac1c17 reason=test-routine subject="test(saas_starter): tier-1 mocks support context-managed LocalRuntime"</journal-skip>
+2026-05-16T12:29:55.192Z <journal-skip>commit=8d0686980c09 reason=test-routine subject="test(saas_starter): fix naive-string TZ test to seed canonical UTC-naive value"</journal-skip>
+2026-05-16T12:29:55.192Z <journal-skip>commit=223d9f655602 reason=fix-routine subject="fix(api_gateway_starter): wrap remaining 11 LocalRuntime sites in context managers"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=8f37cede1733 reason=test-routine subject="test(dataflow): Tier-2 regression tests for round-5 tenant hardening"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=75725efd5063 reason=fix-routine subject="fix(api_gateway_starter): users wrap LocalRuntime in context manager"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=a1704bc65e6a reason=fix-routine subject="fix(saas_starter): isolation wrap LocalRuntime in context manager"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=5b0cb927d942 reason=fix-routine subject="fix(saas_starter): api_keys use tz-aware datetime for expires_at comparison"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=7027b1d5ce20 reason=fix-routine subject="fix(saas_starter): webhooks add required organization_id to tenant mutation paths"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=d6d1d6229da9 reason=merge-commit subject="Merge pull request #1034 from terrene-foundation/fix/issue-996-c-api-gateway-token-type-validation"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=edd7a2334946 reason=merge-commit subject="Merge pull request #1033 from terrene-foundation/feat/issue-996-b-2e-saas-auth-tier2-rewrite"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=c5fb1abdf0d7 reason=merge-commit subject="Merge pull request #1032 from terrene-foundation/feat/issue-996-b-2d-saas-webhooks-tier2-rewrite"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=a618eb83e469 reason=test-routine subject="test(dataflow): api_gateway_starter Tier-1 — sibling-fixture sweep adds type=access to test_jwt_auth mocks"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=f368a1b95194 reason=test-routine subject="test(saas_starter): rewrite auth/tenancy tests as Tier-2 integration"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=23968bc03a04 reason=fix-routine subject="fix(dataflow): saas_starter webhooks.py — DataFlow API contract violations"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=719a98af5fad reason=fix-routine subject="fix(dataflow): api_gateway_starter middleware — typing.Any not builtin any() for return annotation"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=a73e88e341c1 reason=test-routine subject="test(dataflow): api_gateway_starter — sibling-fixture sweep adds type=access claim"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=7da19c0647d7 reason=test-routine subject="test(dataflow): api_gateway_starter — Tier-2 regression for issue #996 Shard C token-type check"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=6064e7afb4ff reason=feat-no-novel-body subject="feat(dataflow): Tier-2 rewrite of saas_starter webhooks tests + fix surfaced bugs"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=f4c69c6e6b02 reason=fix-routine subject="fix(dataflow): api_gateway_starter — reject non-access JWT token types at middleware"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=1edb4f44168e reason=no-match subject="probe(shard-a): map test_saas_starter_auth.py → templates/saas_starter/ surface"</journal-skip>
+2026-05-16T12:29:55.193Z <journal-skip>commit=18f64a2b3845 reason=merge-commit subject="Merge pull request #1031 from terrene-foundation/feat/issue-996-r2-fix-api-gateway-jwt-secret"</journal-skip>
