@@ -1,0 +1,269 @@
+source_repo: kailash-py
+codify_date: "2026-05-06"
+codify_session: |
+  Session 2026-05-06 (later in day) — kailash-coc-claude-py#64 surfaced
+  that skill 15-enterprise-infrastructure was missing scheduler +
+  durable-execution primitives that already ship in kailash 2.13.4
+  (WorkflowScheduler, FabricScheduler, ExecutionTracker, Checkpoint,
+  ExecutionJournal, DurableRequest, CheckpointManager, DBCheckpointStore,
+  DurableWorkflowServer). Empirical evidence: an agent grepped
+  `.venv/lib/python3.13/site-packages/kailash/` and found all 6 within
+  minutes — the skill should surface them without requiring a
+  grep-the-source agent.
+
+  This codify cycle does NOT introduce new rules; it extends an existing
+  skill (15-enterprise-infrastructure) with a primitive-inventory table,
+  Quick Start additions, two new sub-files (scheduler-patterns.md,
+  durability-patterns.md), and a cross-link from 01-core-sdk. Per
+  trust-posture wiring the gate fires only on NEW rule files; skill
+  updates are exempt.
+
+  Verified primitive existence at this session via direct file reads:
+    - src/kailash/runtime/scheduler.py::WorkflowScheduler (class @ line 108)
+    - src/kailash/runtime/execution_tracker.py::ExecutionTracker (line 19)
+    - src/kailash/middleware/gateway/durable_request.py::Checkpoint (line 78)
+        ::ExecutionJournal (line 122) ::DurableRequest (line 146)
+    - src/kailash/middleware/gateway/checkpoint_manager.py::CheckpointManager (line 167)
+    - src/kailash/infrastructure/checkpoint_store.py::DBCheckpointStore (line 37)
+    - src/kailash/servers/durable_workflow_server.py::DurableWorkflowServer (line 37)
+    - packages/kailash-dataflow/src/dataflow/fabric/scheduler.py::FabricScheduler (line 45)
+
+  The previous distributed proposal (status=distributed at codify_date
+  2026-05-06 morning, kaizen 2.20.0 amendments) was archived to
+  .claude/.proposals/archive/2026-05-06-kailash-py.yaml per
+  artifact-flow.md MUST: Archive Before Fresh.
+
+changes:
+  - type: skill_update
+    artifact: 15-enterprise-infrastructure
+    files:
+      - .claude/skills/15-enterprise-infrastructure/SKILL.md
+      - .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
+      - .claude/skills/15-enterprise-infrastructure/durability-patterns.md
+      - .claude/skills/01-core-sdk/SKILL.md
+    context: |
+      Resolves kailash-coc-claude-py#64. Skill 15-enterprise-infrastructure
+      was missing scheduler + durable-execution primitives that ship in
+      kailash 2.13.4 (WorkflowScheduler, FabricScheduler, ExecutionTracker,
+      Checkpoint, ExecutionJournal, DurableRequest, CheckpointManager,
+      DBCheckpointStore, DurableWorkflowServer). Empirical session
+      2026-05-06 surfaced the gap when an agent claimed kailash had no
+      scheduler primitive and grep proved it had six.
+
+      Changes:
+      1. SKILL.md: add Primitive Inventory table near the top so users
+         see WorkflowScheduler / FabricScheduler / ExecutionTracker /
+         Checkpoint / CheckpointManager / DurableRequest /
+         DurableWorkflowServer in one glance with module + purpose.
+         Update description: line to reflect scheduler + durability
+         coverage (within ≤200 char budget). Extend Features list,
+         Quick Start (cron/interval scheduler example +
+         DurableWorkflowServer wiring), Reference Documentation index
+         (link new sub-files), and "When to Use This Skill"
+         (failure-mode triggers: replace cron daemon, resume on
+         restart, per-node checkpointing, execution journal/audit,
+         server-mode wiring).
+      2. scheduler-patterns.md (NEW, 177 lines): WorkflowScheduler
+         engagement (cron/interval/one-shot, jobstore persistence),
+         migration from external cron, FabricScheduler scope-limitation
+         (DataFlow product refresh only), multi-instance hazards
+         (single-leader vs queue-dispatch deduplication), test-tier
+         recommendation. References kailash-py#859 as in-flight
+         multi-instance integration work.
+      3. durability-patterns.md (NEW, 167 lines): ExecutionTracker
+         per-node primitive, Checkpoint+ExecutionJournal+DurableRequest
+         resume contract, CheckpointManager + DBCheckpointStore wiring
+         against shared ConnectionManager, compression-threshold
+         operational signal, DurableWorkflowServer trade-off
+         (full-server vs piecemeal), Independence Note (no commercial
+         comparisons per rules/independence.md), test-tier
+         recommendation. References kailash-py#860 (LocalRuntime
+         integration) and kailash-py#861 (resume-path integration) as
+         in-flight workstreams.
+      4. 01-core-sdk/SKILL.md: cross-link "Recurring + Durable
+         Execution" subsection pointing to the two new sub-files in
+         15-enterprise-infrastructure (since WorkflowScheduler +
+         ExecutionTracker live in kailash.runtime).
+
+      Constraint compliance verified:
+      - All sub-files within 200-line budget (177, 167)
+      - DO/DO NOT examples + Why: lines per rule-authoring.md Rule 4
+      - No commercial references per independence.md (Independence Note
+        added to durability-patterns.md explicitly)
+      - Primitive existence verified via file reads (see codify_session
+        block above) per specs-authority.md "verify code matches plan
+        via AST/grep"
+      - Skill description ≤200 chars per cc-artifacts.md Rule 1b
+        (current: ~165 chars)
+      - description: line uses failure-mode framing, not keyword dump
+
+      Cross-SDK note (rules/cross-sdk-inspection.md MUST Rule 1):
+      kailash-rs has analogous primitives (Rust scheduler / durable
+      execution traits) — sibling skill update on kailash-rs/.claude/
+      should follow the same shape; defer to a kailash-rs codify
+      cycle to author the Rust-variant overlay.
+
+    classification_hint: global
+    classification_reason: |
+      Both kailash-py and kailash-rs ship analogous scheduler +
+      durable-execution primitives. The neutral skill body
+      (primitive-inventory framing, when-to-engage triggers,
+      multi-instance hazards, resume contract) is language-invariant.
+      Code examples in the sub-files are Python-specific but use slot
+      patterns the loom variant system can overlay for rs/rb if
+      kailash-rs lands sibling primitives at the same conceptual
+      layer.
+
+    origin_pr: TBD
+    origin_session: 2026-05-06
+    origin_issue: kailash-coc-claude-py#64
+
+    trust_posture_wiring: NOT_REQUIRED
+    trust_posture_reason: |
+      Skill update, not a new rule file. Step 6b enforcement (Trust
+      Posture Wiring required) fires only on NEW rule files per
+      rules/trust-posture.md MUST Rule 7.
+
+status: distributed
+reviewed_date: 2026-05-07
+distributed_date: 2026-05-07
+distributed_to:
+  - kailash-coc-claude-py (template_version 3.14.1)
+  - kailash-coc-py        (template_version 1.5.1, multi-cli skills emitted to .codex/.gemini)
+distributed_loom_sha: c9dfa54
+
+gate1_classification:
+  reviewer: sync-reviewer (Gate 1)
+  reviewed_at: 2026-05-07
+  classification_summary: 4 global, 0 variant-py, 0 skip; +4 unclassified BUILD-side drift in 01-core-sdk SKILL.md, all classified GLOBAL.
+
+  per_file:
+    - file: .claude/skills/15-enterprise-infrastructure/SKILL.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/SKILL.md
+      rationale: |
+        Primitive-inventory framing is language-invariant. Module-path table
+        labels (`kailash.runtime.scheduler` etc.) are package-prefix tokens
+        of the same shape Rust would use (`kailash::runtime::scheduler`)
+        when sibling primitives land. Description ≤200 chars, failure-mode
+        framed per cc-artifacts.md Rule 1b. Placed verbatim from BUILD.
+
+    - file: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/scheduler-patterns.md
+      rationale: |
+        Conceptual content (multi-instance hazards, single-leader vs
+        queue-dispatch dedup, cron expression contract, jobstore
+        persistence) is language-invariant. Code examples are Python-
+        specific but kailash-rs has no analog yet (per proposal cross-SDK
+        note); when a Rust scheduler trait lands, a variant overlay can
+        replace the body. BUILD-internal issue numbers (#859) stripped
+        and replaced with neutral phrasing per the global-placement
+        BUILD-reference inspection step.
+
+    - file: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
+      classification: global
+      destination: .claude/skills/15-enterprise-infrastructure/durability-patterns.md
+      rationale: |
+        Same shape as scheduler-patterns — language-invariant resume
+        contract + Independence Note (preserved verbatim per
+        rules/independence.md). BUILD-internal issue numbers (#860, #861)
+        stripped. Independence Note retained per Foundation independence
+        directive.
+
+    - file: .claude/skills/01-core-sdk/SKILL.md
+      classification: global
+      destination: .claude/skills/01-core-sdk/SKILL.md
+      rationale: |
+        Cross-link section (Recurring + Durable Execution) is the
+        proposal's documented change. Placed plus four BUILD-side drift
+        hunks NOT covered by current proposal — all four align with
+        existing loom rules and were classified as GLOBAL hygiene
+        upgrades; see unclassified_drift_findings below.
+
+  unclassified_drift_findings:
+    description: |
+      Diff sweep of BUILD-side .claude/skills/01-core-sdk/SKILL.md vs
+      loom-side surfaced 4 hunks NOT documented in the proposal. All
+      four align with established loom rules and represent BUILD-side
+      ahead-of-loom hygiene. Classified GLOBAL and placed.
+    hunks:
+      - hunk: description-line-rewrite
+        loom_before: |
+          "Kailash Core SDK — WorkflowBuilder, nodes, runtime, async, cycles, MCP, tracing."
+        build_after: |
+          "Kailash Core SDK — workflows, 110+ nodes, runtime, async, cycles, MCP, OpenTelemetry. Use for WorkflowBuilder + connections + runtime patterns."
+        classification: global
+        rationale: |
+          BUILD version uses failure-mode framing per cc-artifacts.md
+          Rule 1b ("Use for ..." trigger). 185 chars (≤200 budget).
+          Loom version is keyword-listy and lacks the "Use for ..."
+          activation hook.
+
+      - hunk: when-to-use-removal
+        loom_before: |
+          ## When to Use
+          Use Core SDK when asking about workflow basics, core sdk, create workflow, workflow builder, ... [keyword dump]
+        build_after: |
+          (section removed)
+        classification: global
+        rationale: |
+          The keyword-dump pattern violates cc-artifacts.md Rule 1b
+          ("keyword-dump patterns ... are BLOCKED ... defeat semantic
+          activation"). BUILD removed it; the trigger phrase moved into
+          the description: line per Rule 1b. Net token savings on every
+          turn.
+
+      - hunk: fastapi-to-nexus-rename
+        loom_before: |
+          AsyncLocalRuntime: For Docker/FastAPI (async contexts) ...
+          AsyncLocalRuntime (Docker/FastAPI) ...
+          Docker/FastAPI: Use AsyncLocalRuntime (mandatory)
+        build_after: |
+          AsyncLocalRuntime: For Docker/Nexus (async contexts) ...
+          AsyncLocalRuntime (Docker/Nexus) ...
+          Docker/Nexus: Use AsyncLocalRuntime (mandatory)
+        classification: global
+        rationale: |
+          Per feedback_nexus_no_fastapi.md (user memory 2026-04-05):
+          "Nexus fully replaces FastAPI; never use comparative framing."
+          BUILD is correct. 4 occurrences renamed.
+
+      - hunk: emoji-removal-from-critical-rules
+        loom_before: |
+          - ✅ ALWAYS: ...
+          - ❌ NEVER: ...
+        build_after: |
+          - ALWAYS: ...
+          - NEVER: ...
+        classification: global
+        rationale: |
+          Per rules/communication.md "Only use emojis if the user
+          explicitly requests it. Avoid writing emojis to files unless
+          asked." BUILD removed emojis; the ALWAYS/NEVER prose alone
+          carries the directive without decorative tokens.
+
+  cross_sdk_alignment:
+    note: |
+      Per proposal cross-SDK note: kailash-rs has analogous scheduler +
+      durable-execution primitives that should sibling-update on a
+      kailash-rs codify cycle. No rs variant overlay authored in this
+      Gate 1 — defer to a kailash-rs codify cycle when the Rust
+      scheduler/durability primitives stabilize. The variant overlay
+      slot under .claude/variants/rs/skills/15-enterprise-infrastructure/
+      remains available.
+
+  manifest_updates:
+    additions: none
+    removals: none
+    reclassifications: none
+    rationale: |
+      All four files placed at global tier. No manifest changes needed —
+      the global skill 15-enterprise-infrastructure/ already exists in
+      sync-manifest.yaml; the two new sub-files inherit global membership
+      automatically (skills/* directory is globally-included).
+
+  open_questions:
+    - none
+
+  ready_for: gate2_distribute
