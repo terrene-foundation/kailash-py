@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.1] - 2026-05-18
+
+### Fixed
+
+- **`import kailash` failed on clean-venv install of 2.22.0 (CRITICAL)** — an `EventPublishNode` circular import surfaced on every fresh `pip install kailash==2.22.0`; resolved by an isort-driven split of the import block in `src/kailash/__init__.py`. No API change. Catch-up patch for a fix that landed on `main` after the 2.22.0 release tag (`build-repo-release-discipline.md` Rule 2 — clean-venv installability is the done gate).
+
 ## [2.22.0] - 2026-05-18
 
 ### Added
