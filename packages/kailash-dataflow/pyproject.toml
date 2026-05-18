@@ -33,7 +33,7 @@ dependencies = [
     # MySQL / SQLite / Mongo / Redis drivers move behind their per-DB
     # extras since their imports are function-local.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.22.1",
+    "kailash>=2.23.0",
     "sqlalchemy>=2.0.0",   # decorators.py + multi_tenancy + model_registry
     "asyncpg>=0.28.0",     # migrations/* (17 files, module-scope) — PG canonical async driver
     "click>=8.0.0",        # CLI: dataflow.cli.{validate,analyze,generate,perf,commands}
