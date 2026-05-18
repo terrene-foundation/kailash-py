@@ -23,19 +23,19 @@ from __future__ import annotations
 import inspect
 
 import pytest
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import NodeConfigurationError
 
 
 def _force_import_node_modules() -> None:
     """Import the node modules so their @register_node decorators run."""
+    import kailash.nodes.data.bulk_operations  # noqa: F401
+    import kaizen.nodes.ai.hybrid_search  # noqa: F401
+
     import dataflow.nodes.aggregate_operations  # noqa: F401
     import dataflow.nodes.bulk_upsert  # noqa: F401
     import dataflow.nodes.mongodb_nodes  # noqa: F401
     import dataflow.nodes.vector_nodes  # noqa: F401
-    import kailash.nodes.data.bulk_operations  # noqa: F401
-    import kaizen.nodes.ai.hybrid_search  # noqa: F401
 
 
 @pytest.mark.regression
@@ -133,3 +133,39 @@ def test_issue_891_same_module_reregistration_allowed():
         assert NodeRegistry._nodes[alias] is probe_b
     finally:
         NodeRegistry._nodes.pop(alias, None)
+
+
+@pytest.mark.regression
+def test_issue_891_allow_override_exempts_dynamic_registration():
+    """allow_override=True exempts the cross-module guard, in either order.
+
+    DataFlow @db.model regenerates CRUD node classes whose names may coincide
+    with static nodes (e.g. a `Document` model's generated `DocumentCountNode`
+    vs the static `mongodb_nodes.DocumentCountNode`). The overwrite is
+    intentional — the guard must not fire on it.
+    """
+    static_probe = _probe_node_class("_Issue891OvStatic")
+    dynamic_probe = _probe_node_class("_Issue891OvDynamic")
+    static_probe.__module__ = "json.decoder"
+    dynamic_probe.__module__ = "json.encoder"  # different file → would collide
+    alias = "_Issue891OverrideProbe"
+
+    # Order A — dynamic registers first; a later static registration of the
+    # same name from a different module must NOT raise (incumbent is dynamic).
+    NodeRegistry.register(dynamic_probe, alias=alias, allow_override=True)
+    try:
+        NodeRegistry.register(static_probe, alias=alias)
+        assert NodeRegistry._nodes[alias] is static_probe
+    finally:
+        NodeRegistry._nodes.pop(alias, None)
+        NodeRegistry._override_names.discard(alias)
+
+    # Order B — static registers first; a later dynamic registration
+    # (allow_override=True) of the same name must NOT raise.
+    NodeRegistry.register(static_probe, alias=alias)
+    try:
+        NodeRegistry.register(dynamic_probe, alias=alias, allow_override=True)
+        assert NodeRegistry._nodes[alias] is dynamic_probe
+    finally:
+        NodeRegistry._nodes.pop(alias, None)
+        NodeRegistry._override_names.discard(alias)

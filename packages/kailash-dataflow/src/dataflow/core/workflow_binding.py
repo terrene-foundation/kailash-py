@@ -57,7 +57,7 @@ class DataFlowWorkflowBinder:
         "BulkCreate": "BulkCreateNode",
         "BulkUpdate": "BulkUpdateNode",
         "BulkDelete": "BulkDeleteNode",
-        "BulkUpsert": "DataFlowBulkUpsertNode",
+        "BulkUpsert": "BulkUpsertNode",
     }
 
     def __init__(self, dataflow_instance: "DataFlow"):
