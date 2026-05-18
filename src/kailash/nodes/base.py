@@ -2368,8 +2368,34 @@ class NodeRegistry:
         node_name = alias or node_class.__name__
 
         if node_name in cls._nodes:
-            # ADR-002: Changed from WARNING to INFO and use named logger
-            # This is expected behavior in DataFlow where model decoration re-registers nodes
+            existing = cls._nodes[node_name]
+            existing_module = getattr(existing, "__module__", None)
+            new_module = getattr(node_class, "__module__", None)
+            if existing_module != new_module:
+                # __module__ strings differ — but a package reachable both as
+                # `pkg.*` and `src.pkg.*` (src/ on sys.path) yields two module
+                # spellings for ONE source file. A genuine collision is two
+                # DIFFERENT files; compare source files to tell them apart.
+                try:
+                    same_file = inspect.getfile(existing) == inspect.getfile(node_class)
+                except (TypeError, OSError):
+                    same_file = False
+                if not same_file:
+                    # Cross-module collision: two distinct classes from
+                    # different modules claiming one registry name —
+                    # import-order-dependent dispatch (issue #891). BLOCKED.
+                    raise NodeConfigurationError(
+                        f"Node name collision for '{node_name}': already "
+                        f"registered by {existing_module}."
+                        f"{getattr(existing, '__name__', existing)}; "
+                        f"{new_module}.{node_class.__name__} cannot re-register "
+                        f"the same name from a different module. Register one "
+                        f"under an explicit @register_node(alias=...) with a "
+                        f"distinct name."
+                    )
+            # ADR-002: same-module (or same-file dual-import) re-registration
+            # stays non-fatal — DataFlow model decoration regenerates CRUD node
+            # classes (fresh class objects, same __module__) per @db.model call.
             _logger.info(f"Overwriting existing node registration for '{node_name}'")
 
         cls._nodes[node_name] = node_class
