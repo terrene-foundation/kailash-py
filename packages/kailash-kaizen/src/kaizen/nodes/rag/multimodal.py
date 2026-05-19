@@ -470,12 +470,37 @@ class VisualQuestionAnsweringNode(Node):
         model: str = "blip2-base",
         enable_captioning: bool = True,
     ):
+        super().__init__(
+            name=name,
+            model=model,
+            enable_captioning=enable_captioning,
+        )
         self.model = model
         self.enable_captioning = enable_captioning
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="vqa_node",
+                description="Node instance name",
+            ),
+            "model": NodeParameter(
+                name="model",
+                type=str,
+                required=False,
+                default="blip2-base",
+                description="Vision-language model for VQA",
+            ),
+            "enable_captioning": NodeParameter(
+                name="enable_captioning",
+                type=bool,
+                required=False,
+                default=True,
+                description="Generate an image caption alongside the answer",
+            ),
             "image_path": NodeParameter(
                 name="image_path",
                 type=str,
@@ -592,12 +617,37 @@ class ImageTextMatchingNode(Node):
         matching_model: str = "clip",
         bidirectional: bool = True,
     ):
+        super().__init__(
+            name=name,
+            matching_model=matching_model,
+            bidirectional=bidirectional,
+        )
         self.matching_model = matching_model
         self.bidirectional = bidirectional
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="image_text_matcher",
+                description="Node instance name",
+            ),
+            "matching_model": NodeParameter(
+                name="matching_model",
+                type=str,
+                required=False,
+                default="clip",
+                description="Image-text matching model",
+            ),
+            "bidirectional": NodeParameter(
+                name="bidirectional",
+                type=bool,
+                required=False,
+                default=True,
+                description="Match in both image->text and text->image directions",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=Union[str, dict],
