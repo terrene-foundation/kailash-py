@@ -424,12 +424,12 @@ from collections import Counter, defaultdict
 def calculate_bm25_scores(query_terms, documents, k1=1.2, b=0.75):
     '''BM25 scoring implementation'''
     doc_count = len(documents)
-    avg_doc_length = sum(len(doc.get("content", "").split()) for doc in documents) / doc_count
+    avg_doc_length = sum(len((doc.get("content") or "").split()) for doc in documents) / doc_count
 
     # Calculate document frequencies
     df = defaultdict(int)
     for doc in documents:
-        terms = set(doc.get("content", "").lower().split())
+        terms = set((doc.get("content") or "").lower().split())
         for term in query_terms:
             if term.lower() in terms:
                 df[term] += 1
@@ -443,7 +443,7 @@ def calculate_bm25_scores(query_terms, documents, k1=1.2, b=0.75):
     # Calculate document scores
     scores = []
     for doc in documents:
-        content = doc.get("content", "").lower()
+        content = (doc.get("content") or "").lower()
         doc_length = len(content.split())
         term_freq = Counter(content.split())
 
@@ -461,7 +461,7 @@ def calculate_tfidf_scores(query_terms, documents):
     # Simple TF-IDF for demonstration
     scores = []
     for doc in documents:
-        content = doc.get("content", "").lower()
+        content = (doc.get("content") or "").lower()
         term_freq = Counter(content.split())
 
         score = 0
@@ -722,7 +722,7 @@ query_tokens = get_token_embeddings(query)
 doc_token_embeddings = []
 
 for doc in documents:
-    doc_tokens = get_token_embeddings(doc.get("content", ""))
+    doc_tokens = get_token_embeddings(doc.get("content") or "")
     doc_token_embeddings.append(doc_tokens)
 
 result = {{
@@ -965,7 +965,7 @@ def create_multi_representations(documents):
     multi_docs = []
 
     for doc in documents:
-        content = doc.get("content", "")
+        content = doc.get("content") or ""
 
         # Create summary (first 200 chars for demo)
         summary = content[:200] + "..." if len(content) > 200 else content
@@ -1881,7 +1881,7 @@ for i, doc in enumerate(documents):
             "proposition_index": j,
             "metadata": {
                 "type": "proposition",
-                "source_length": len(doc.get("content", "")),
+                "source_length": len(doc.get("content") or ""),
                 "proposition_count": len(doc_propositions)
             }
         })
@@ -1944,7 +1944,7 @@ for doc_id, props in doc_propositions.items():
         avg_score = sum(p["score"] for p in props) / len(props)
 
         results.append({
-            "content": source_doc.get("content", ""),
+            "content": source_doc.get("content") or "",
             "title": source_doc.get("title", ""),
             "id": doc_id,
             "matched_propositions": props,
