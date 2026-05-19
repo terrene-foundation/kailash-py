@@ -11,20 +11,23 @@ Implements RAG across distributed data sources without centralization:
 Based on federated learning and distributed systems research.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import random
 import re
-from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-from kailash.nodes.api.rest import RESTClientNode
+from kailash.nodes.api.rest import (  # noqa: F401  (registers "RESTClientNode" for builder.add_node)
+    RESTClientNode,
+)
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.code.python import (  # noqa: F401  (registers "PythonCodeNode" for builder.add_node)
+    PythonCodeNode,
+)
 from kailash.nodes.logic.workflow import WorkflowNode
+from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -88,7 +91,7 @@ class FederatedRAGNode(WorkflowNode):
     def __init__(
         self,
         name: str = "federated_rag",
-        federation_nodes: List[str] = None,
+        federation_nodes: Optional[List[str]] = None,
         aggregation_strategy: str = "weighted_average",
         min_participating_nodes: int = 2,
         timeout_per_node: float = 5.0,
@@ -101,9 +104,12 @@ class FederatedRAGNode(WorkflowNode):
         self.enable_caching = enable_caching
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create federated RAG workflow"""
         builder = WorkflowBuilder()
+        # Assigned only when caching is enabled; pre-bind so the later
+        # ``if self.enable_caching`` connection block has a defined name.
+        cache_coordinator_id: Optional[str] = None
 
         # Query distributor
         query_distributor_id = builder.add_node(
@@ -319,7 +325,15 @@ def aggregate_federated_results(federated_responses):
 
         # Add results with node information
         for result in node_response["results"]:
+            # A node's results list is data from a federated peer — a non-dict
+            # element has no .copy(); a present-but-None content reaches a
+            # [:50] slice and a str-keyed group. Guard once at intake so every
+            # downstream aggregation strategy sees only well-formed dicts.
+            if not isinstance(result, dict):
+                continue
             result_with_node = result.copy()
+            if result_with_node.get("content") is None:
+                result_with_node["content"] = ""
             result_with_node["source_node"] = node_id
             result_with_node["node_weight"] = weight
             all_results.append(result_with_node)
@@ -437,8 +451,13 @@ def coordinate_caching(aggregated_results, distribution_plan):
 
     for result in aggregated_results["results"][:5]:  # Top 5 results
         if result["score"] > 0.8 and result.get("node_agreement", 0) > 0.5:
+            # A present-but-None content bypasses an upstream "" default and
+            # reaches .encode() — coerce before hashing.
+            content_hash = hashlib.sha256(
+                (result.get("content") or "").encode()
+            ).hexdigest()[:16]
             cache_candidates.append({
-                "content_hash": hashlib.sha256(result["content"].encode()).hexdigest()[:16],
+                "content_hash": content_hash,
                 "result": result,
                 "cache_priority": result["score"] * result.get("node_agreement", 1),
                 "ttl": 3600  # 1 hour
@@ -544,6 +563,9 @@ def format_federated_results(aggregated_results, federated_responses, cache_coor
         )
 
         if self.enable_caching:
+            # cache_coordinator_id is assigned in the matching enable_caching
+            # block above; narrow it from Optional[str] for the connections.
+            assert cache_coordinator_id is not None
             builder.add_connection(
                 result_aggregator_id,
                 "aggregated_results",
@@ -695,8 +717,10 @@ class EdgeRAGNode(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute edge-optimized RAG"""
-        query = kwargs.get("query", "")
-        local_data = kwargs.get("local_data", [])
+        # ``.get(key, default)`` only applies the default to a MISSING key; an
+        # explicit ``query=None`` returns ``None`` and ``None.encode()`` raises.
+        query = kwargs.get("query") or ""
+        local_data = kwargs.get("local_data") or []
         sync_with_cloud = kwargs.get("sync_with_cloud", False)
 
         # Check cache first
@@ -758,7 +782,11 @@ class EdgeRAGNode(Node):
         max_docs = 50 if self.power_mode == "low_power" else 200
 
         for doc in local_data[:max_docs]:
-            content = doc.get("content", "").lower()
+            # local_data is arbitrary user input — a non-dict element has no
+            # ``.get``; a present-but-None ``content`` bypasses the "" default.
+            if not isinstance(doc, dict):
+                continue
+            content = (doc.get("content") or "").lower()
             doc_words = set(content.split())
 
             # Quick scoring
@@ -785,14 +813,18 @@ class EdgeRAGNode(Node):
         elif self.model_size == "small":
             # Slightly better response
             if results:
-                top_content = results[0]["document"].get("content", "")[:100]
+                # A present-but-None ``content`` bypasses the "" default and
+                # ``None[:100]`` raises — coerce before slicing.
+                top_content = (results[0]["document"].get("content") or "")[:100]
                 response = f"Based on local data: {top_content}..."
             else:
                 response = "No relevant local data found. Consider syncing with cloud."
         else:  # medium
             # Best edge response
             if results:
-                contents = [r["document"].get("content", "")[:200] for r in results[:2]]
+                contents = [
+                    (r["document"].get("content") or "")[:200] for r in results[:2]
+                ]
                 response = f"Local analysis for '{query}': " + " ".join(contents)
             else:
                 response = f"No local matches for '{query}'. Cloud sync recommended."
@@ -910,10 +942,10 @@ class CrossSiloRAGNode(Node):
     def __init__(
         self,
         name: str = "cross_silo_rag",
-        silos: List[str] = None,
+        silos: Optional[List[str]] = None,
         data_sharing_agreement: str = "minimal",
         audit_mode: str = "standard",
-        governance_rules: Dict[str, Any] = None,
+        governance_rules: Optional[Dict[str, Any]] = None,
     ):
         resolved_silos = silos or []
         resolved_governance_rules = governance_rules or {}
@@ -988,10 +1020,13 @@ class CrossSiloRAGNode(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute cross-silo federated RAG"""
-        query = kwargs.get("query", "")
-        requester_org = kwargs.get("requester_org", "")
-        access_permissions = kwargs.get("access_permissions", [])
-        purpose = kwargs.get("purpose", "analysis")
+        # ``.get(key, default)`` only applies the default to a MISSING key; an
+        # explicit ``query=None`` reaches ``query.encode()`` in the audit-trail
+        # hash, and ``access_permissions=None`` reaches ``perm in None``.
+        query = kwargs.get("query") or ""
+        requester_org = kwargs.get("requester_org") or ""
+        access_permissions = kwargs.get("access_permissions") or []
+        purpose = kwargs.get("purpose") or "analysis"
 
         # Validate access
         access_valid = self._validate_cross_silo_access(
@@ -1006,9 +1041,7 @@ class CrossSiloRAGNode(Node):
             }
 
         # Execute query across silos
-        silo_results = self._execute_cross_silo_query(
-            query, requester_org, access_permissions
-        )
+        silo_results = self._execute_cross_silo_query(query, requester_org)
 
         # Apply data governance rules
         governed_results = self._apply_governance(
@@ -1087,9 +1120,16 @@ class CrossSiloRAGNode(Node):
         return {"granted": True, "reason": "Access approved"}
 
     def _execute_cross_silo_query(
-        self, query: str, requester: str, permissions: List[str]
+        self, query: str, requester: str
     ) -> List[Dict[str, Any]]:
-        """Execute query across organizational silos"""
+        """Execute query across organizational silos.
+
+        The caller's permission list is validated upstream by
+        ``_validate_cross_silo_access`` before this runs; per-silo
+        ``access_level`` here is an organization-relationship decision
+        (own silo → full, peer silo → the data-sharing agreement), not a
+        re-check of the already-gated permission list.
+        """
         silo_results = []
 
         for silo in self.silos:
@@ -1161,8 +1201,17 @@ class CrossSiloRAGNode(Node):
                 governed_results.append(silo_result)
                 continue
 
-            # Apply governance based on agreement
+            # Apply governance based on agreement. ``dict.copy()`` is shallow —
+            # the nested ``results`` list would stay shared with silo_result,
+            # so the in-place content mutation below would silently govern the
+            # pre-governance record too. Rebuild ``results`` with independent
+            # per-result dicts so silo_results stays a true pre-governance
+            # record and governed_results is the only mutated structure.
             governed_silo_result = silo_result.copy()
+            governed_silo_result["results"] = [
+                dict(r) if isinstance(r, dict) else r
+                for r in silo_result.get("results", [])
+            ]
 
             if silo_result["silo"] != requester:
                 # Apply restrictions for other silos
@@ -1223,14 +1272,19 @@ class CrossSiloRAGNode(Node):
             "data_flow": [],
         }
 
-        # Track data flow
+        # Track data flow. The governance markers are read from
+        # governed_results (the actual post-governance output returned to the
+        # requester) so the audit records what governance produced, not the
+        # pre-governance silo response.
+        governed_by_silo = {gr["silo"]: gr for gr in governed_results}
         for silo_result in silo_results:
+            governed = governed_by_silo.get(silo_result["silo"], silo_result)
             flow = {
                 "silo": silo_result["silo"],
                 "data_shared": silo_result["participated"],
                 "access_level": silo_result.get("access_level", "none"),
                 "governance_applied": any(
-                    r.get("governance_applied") for r in silo_result.get("results", [])
+                    r.get("governance_applied") for r in governed.get("results", [])
                 ),
             }
             audit["data_flow"].append(flow)
@@ -1249,11 +1303,37 @@ class CrossSiloRAGNode(Node):
     def _generate_compliance_report(
         self, requester: str, permissions: List[str], results: List[Dict]
     ) -> Dict[str, Any]:
-        """Generate compliance report"""
+        """Generate a compliance report derived from the actual request.
+
+        The verdict reflects the real ``requester``, the ``permissions`` that
+        were granted, and the governed ``results`` that crossed the boundary —
+        it is NOT a fixed "compliant" stamp. ``data_minimization`` is True only
+        when every peer silo's result actually carries a governance marker;
+        ``compliance_status`` degrades to "non_compliant" when a peer silo's
+        data crossed without governance applied.
+        """
+        # A peer silo is any participating silo other than the requester's own.
+        peer_results = [
+            r for r in results if r.get("participated") and r.get("silo") != requester
+        ]
+        # Every peer silo's content must carry a governance marker.
+        ungoverned_peers = [
+            r
+            for r in peer_results
+            if not all(item.get("governance_applied") for item in r.get("results", []))
+        ]
+        data_minimization = len(ungoverned_peers) == 0
+
         return {
-            "compliance_status": "compliant",
+            "compliance_status": (
+                "compliant" if data_minimization else "non_compliant"
+            ),
             "regulations_checked": ["GDPR", "CCPA", "Industry Standards"],
-            "data_minimization": True,
+            "requester": requester,
+            "permissions_granted": list(permissions),
+            "peer_silos_governed": len(peer_results) - len(ungoverned_peers),
+            "peer_silos_total": len(peer_results),
+            "data_minimization": data_minimization,
             "purpose_limitation": True,
             "access_controls": "enforced",
             "audit_trail": "maintained",

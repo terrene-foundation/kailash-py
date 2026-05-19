@@ -452,3 +452,132 @@ against a query on a deterministic rule-based scoring path.
   end-to-end, which the `[rag]` extra does not carry; the `PythonCodeNode`
   `code` templates are deterministic and exercised directly in the
   integration tests.
+
+## Federated RAG
+
+`kaizen/nodes/rag/federated.py` defines three nodes for retrieval across
+distributed data sources without centralization: `EdgeRAGNode`,
+`CrossSiloRAGNode`, and `FederatedRAGNode`. `EdgeRAGNode` and
+`CrossSiloRAGNode` are `kailash.nodes.base.Node` subclasses with a direct
+`run()`; `FederatedRAGNode` is a `kailash.nodes.logic.workflow.WorkflowNode`.
+None of the three requires an LLM key or a network call on its shipped default
+path — `federated.py` marks the federated executor explicitly as "simulated -
+would use actual network calls". The federated aggregation, the cross-silo
+governance, and the edge retrieval are all deterministic compute, and that
+deterministic path IS the shipped default.
+
+### `EdgeRAGNode`
+
+Resource-constrained RAG over a local document corpus. `get_parameters()`
+declares `query` (str, required) and `local_data` (list, required), plus
+`sync_with_cloud` (bool, optional) and the constructor profile parameters
+(`model_size`, `max_cache_size_mb`, `update_strategy`, `power_mode`).
+
+`run()` returns a dict with four keys: `results`, `resource_usage`,
+`sync_recommendations`, and `edge_metadata`. `_edge_optimized_retrieval`
+keyword-matches the query words against each document's `content` and returns
+the top five scored documents; `_generate_edge_response` builds an answer
+whose detail scales with `model_size` (`tiny` reports a match count, `small`
+echoes the top document, `medium` joins the top two). A repeated identical
+query returns the cached result object unless `power_mode` is `"performance"`,
+which bypasses the cache. `sync_recommendations` flags `should_sync` when the
+local corpus has fewer than ten documents, when the cache nears capacity, or
+when `sync_with_cloud` was requested.
+
+`local_data` is arbitrary user input: a non-dict element is skipped, and a
+present-but-`None` `content` is coerced to an empty string in both
+`_edge_optimized_retrieval` and the `_generate_edge_response` content slices.
+A `None` or missing `query` is coerced to an empty string before the cache-key
+`hashlib.sha256(...).encode()`.
+
+### `CrossSiloRAGNode`
+
+RAG across organizational silos with data-governance enforcement.
+`get_parameters()` declares `query`, `requester_org`, and `access_permissions`
+(all required), plus `purpose` (optional) and the constructor parameters
+(`silos`, `data_sharing_agreement`, `audit_mode`, `governance_rules`).
+
+`run()` first calls `_validate_cross_silo_access`: the requester must be a
+member of `silos`, must hold the permissions the `data_sharing_agreement` tier
+requires (`minimal` → `read_aggregated`; `standard` adds `read_anonymized`;
+`full` adds `read_samples`), and must state a `purpose` in the governance
+allow-list. A failed check returns `{"error": "Access denied", "reason": ...,
+"required_permissions": ...}`. On the granted path `run()` returns
+`silo_results`, `audit_trail`, `compliance_report`, and `federation_metadata`.
+
+`_execute_cross_silo_query` produces a per-silo result. `_apply_governance` is
+the cross-organization data boundary: the requester's OWN silo keeps `full`
+content; for every OTHER silo, a `minimal` agreement calls `_minimize_content`
+(truncates to the first twenty words and appends "[Details restricted by data
+sharing agreement]") and a `standard` agreement calls `_anonymize_content`
+(replaces each silo name with `[Organization]` and redacts numeric and
+all-caps identifiers). The governed result carries a `governance_applied`
+marker (`"minimal_sharing"` or `"anonymized"`); the requester's own result
+carries none. `audit_mode="minimal"` returns the string "Audit available on
+request" in place of the structured `audit_trail` dict.
+
+A `None` or missing `query` is coerced to an empty string before the
+audit-trail `query.encode()` hash; a `None` or missing `access_permissions` is
+coerced to an empty list before the membership check.
+
+### `FederatedRAGNode`
+
+Federated RAG as a `WorkflowNode`. The constructor accepts `federation_nodes`,
+`aggregation_strategy` (`"weighted_average"`, `"voting"`, or simple merge),
+`min_participating_nodes`, `timeout_per_node`, and `enable_caching`; the values
+are stored as instance attributes and interpolated into the generated
+workflow. `run()` is inherited from `WorkflowNode` and executes the sub-workflow
+built by `_create_workflow()`.
+
+`_create_workflow()` returns a `kailash.workflow.Workflow` built by
+`WorkflowBuilder`. With `enable_caching=True` the workflow has five
+`PythonCodeNode` steps — `query_distributor`, `federated_executor`,
+`result_aggregator`, `cache_coordinator`, and `result_formatter`; with
+`enable_caching=False` the `cache_coordinator` node is omitted.
+`min_participating_nodes` is interpolated into the `federated_executor`
+template's quorum check and `aggregation_strategy` into the `result_aggregator`
+template's strategy branch.
+
+Each step carries a `code` template (read off a built workflow node via
+`workflow.get_node(node_id).code`). `query_distributor` builds one
+target-node entry per endpoint. `federated_executor` is the simulated
+federated path — it generates a per-node response with deterministic
+`random`-seeded content and a quorum statistic. `result_aggregator` combines
+the per-node results under the configured strategy; its result-intake loop
+skips a non-dict peer result and coerces a present-but-`None` `content` to an
+empty string before the grouping key, so every downstream strategy sees only
+well-formed dicts. `cache_coordinator` selects high-score, high-agreement
+results and coerces a `None` `content` to an empty string before the
+`content_hash`. `result_formatter` builds the final `federated_rag_output`.
+
+### What crosses the federated boundary
+
+The federated RAG nodes advertise data locality — `FederatedRAGNode`'s
+docstring states "Data never leaves source organizations" and
+`CrossSiloRAGNode`'s states "strict data governance". The shipped contract,
+precisely:
+
+- `FederatedRAGNode` has no document-corpus input. Its workflow entry point
+  (`query_distributor`, `def distribute_query(query, node_endpoints,
+  federation_config)`) reads only a query and per-node endpoints — there is no
+  raw local document for the node to leak. The aggregate produced by
+  `result_aggregator` carries per-result `content`, `score`, and `metadata`
+  (source-node ids, weights, agreement) plus an `aggregation_metadata` block of
+  `strategy`, `node_weights`, and `participating_nodes` — counts and scores,
+  not a caller-supplied raw corpus.
+- `CrossSiloRAGNode` is the real cross-organization boundary. The requester's
+  own silo returns full content (its own data); every other silo's content is
+  governed before it crosses — truncated and stamped under `minimal`,
+  anonymized under `standard`.
+- `EdgeRAGNode` is local-only by construction: there is no federated boundary,
+  and its output legitimately contains the local document text because nothing
+  is shared with any peer.
+
+### Codegen-template runtime boundary
+
+The `FederatedRAGNode` `_create_workflow()` codegen functions build a local
+`result` dict as their final statement but do not `return` it; the integration
+tests exercise each template by exec-ing the rendered function with an appended
+`return result`. End-to-end runtime execution of the assembled sub-workflow is
+not covered by the `[rag]` extra alone — the `PythonCodeNode` `code` templates
+are deterministic and are covered directly.
