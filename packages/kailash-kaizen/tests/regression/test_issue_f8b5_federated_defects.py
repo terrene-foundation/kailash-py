@@ -372,3 +372,54 @@ def test_issue_f8b5_compliance_report_reflects_real_request_not_hardcoded():
     assert report_a["permissions_granted"] == ["read_aggregated"]
     # The two reports are NOT byte-identical (the pre-fix hardcoded dict was).
     assert report_a != report_b
+
+
+# --------------------------------------------------------------------------
+# Defect 11 — _apply_governance shallow-copied, mutating the input record
+# --------------------------------------------------------------------------
+
+
+def test_issue_f8b5_apply_governance_does_not_mutate_input_record():
+    """Defect 11: _apply_governance must not mutate its silo_results input.
+
+    Pre-fix ``governed_silo_result = silo_result.copy()`` was a SHALLOW copy:
+    the nested ``results`` list stayed shared between the pre-governance
+    record and the governed copy, so the in-place ``result["content"] =
+    self._minimize_content(...)`` mutation silently governed the input too.
+    The pre-governance ``silo_results`` is meant to be a true raw record
+    (read by ``_generate_audit_trail`` as the "what each silo actually
+    returned" side of the data-flow); a shared reference made it a lie.
+
+    Post-fix the governed copy rebuilds ``results`` with independent
+    per-result dicts, so the input record stays raw and un-marked.
+    """
+    node = CrossSiloRAGNode(silos=["org_a", "org_b"], data_sharing_agreement="minimal")
+    raw_content = "Detailed raw data from org_b: confidential protocol specifics"
+    silo_results = [
+        {
+            "silo": "org_b",
+            "participated": True,
+            "access_level": "minimal",
+            "results": [{"content": raw_content, "score": 0.7}],
+        }
+    ]
+    # _apply_governance is a private helper; @register_node type-erases the
+    # class to Node so the checker cannot see it.
+    governed = node._apply_governance(  # type: ignore[attr-defined]
+        silo_results, "org_a", "minimal"
+    )
+
+    # The input record is untouched — raw content preserved, no marker.
+    input_result = silo_results[0]["results"][0]
+    assert input_result["content"] == raw_content
+    assert "governance_applied" not in input_result
+
+    # The governed output IS restricted and carries the governance marker.
+    governed_result = governed[0]["results"][0]
+    assert governed_result["content"] != raw_content
+    assert "[Details restricted" in governed_result["content"]
+    assert governed_result["governance_applied"] == "minimal_sharing"
+
+    # The two results lists are independent objects, not a shared reference.
+    assert silo_results[0]["results"] is not governed[0]["results"]
+    assert input_result is not governed_result

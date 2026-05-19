@@ -1201,8 +1201,17 @@ class CrossSiloRAGNode(Node):
                 governed_results.append(silo_result)
                 continue
 
-            # Apply governance based on agreement
+            # Apply governance based on agreement. ``dict.copy()`` is shallow —
+            # the nested ``results`` list would stay shared with silo_result,
+            # so the in-place content mutation below would silently govern the
+            # pre-governance record too. Rebuild ``results`` with independent
+            # per-result dicts so silo_results stays a true pre-governance
+            # record and governed_results is the only mutated structure.
             governed_silo_result = silo_result.copy()
+            governed_silo_result["results"] = [
+                dict(r) if isinstance(r, dict) else r
+                for r in silo_result.get("results", [])
+            ]
 
             if silo_result["silo"] != requester:
                 # Apply restrictions for other silos
