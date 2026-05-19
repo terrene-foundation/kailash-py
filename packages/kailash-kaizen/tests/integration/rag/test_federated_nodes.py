@@ -390,8 +390,14 @@ class TestCrossSiloRAGNodeRun:
         assert meta["participating_silos"] >= 1
         assert meta["data_sharing_level"] == "minimal"
 
-    def test_run_compliance_report_marks_compliant(self):
-        """The compliance report is generated on the access-granted path."""
+    def test_run_compliance_report_reflects_real_request(self):
+        """The compliance report is derived from the actual request inputs.
+
+        The report echoes the real requester and the granted permissions, and
+        the verdict reflects per-peer governance state — it is NOT a fixed
+        "compliant" stamp. A single-silo request has zero peer silos, so
+        data-minimization holds vacuously.
+        """
         random.seed(0)
         result = CrossSiloRAGNode(silos=["org_a"]).run(
             query="trend",
@@ -401,6 +407,53 @@ class TestCrossSiloRAGNodeRun:
         report = result["compliance_report"]
         assert report["compliance_status"] == "compliant"
         assert report["data_minimization"] is True
+        # The report echoes the real request, not hardcoded values.
+        assert report["requester"] == "org_a"
+        assert report["permissions_granted"] == ["read_aggregated"]
+        # Single-silo request: the requester's own silo is not a peer.
+        assert report["peer_silos_total"] == 0
+
+    def test_run_compliance_report_counts_governed_peer_silos(self):
+        """With a peer silo present, the report counts how many were governed.
+
+        Under the default 'minimal' agreement, the peer silo's content is
+        governed (truncated + restricted-marker), so peer_silos_governed
+        equals peer_silos_total and the verdict is compliant.
+        """
+        random.seed(0)
+        result = CrossSiloRAGNode(silos=["org_a", "org_b"]).run(
+            query="trend",
+            requester_org="org_a",
+            access_permissions=["read_aggregated"],
+        )
+        report = result["compliance_report"]
+        # seed 0 — org_b participates as a governed peer.
+        assert report["peer_silos_total"] >= 1
+        assert report["peer_silos_governed"] == report["peer_silos_total"]
+        assert report["compliance_status"] == "compliant"
+        assert report["data_minimization"] is True
+
+    def test_run_audit_trail_reflects_governed_results(self):
+        """The audit-trail data_flow records the governed peer-silo output.
+
+        The audit reads governance markers from governed_results (the actual
+        post-governance output) — a peer silo under the 'minimal' agreement is
+        recorded as governance_applied=True; the requester's own silo, which
+        is not governed, as False.
+        """
+        random.seed(0)
+        result = CrossSiloRAGNode(silos=["org_a", "org_b"]).run(
+            query="trend",
+            requester_org="org_a",
+            access_permissions=["read_aggregated"],
+        )
+        flows = {f["silo"]: f for f in result["audit_trail"]["data_flow"]}
+        # The requester's own silo is full-access, not governed.
+        assert flows["org_a"]["governance_applied"] is False
+        assert flows["org_a"]["access_level"] == "full"
+        # seed 0 — org_b participates and is governed.
+        if flows["org_b"]["data_shared"]:
+            assert flows["org_b"]["governance_applied"] is True
 
 
 # ==========================================================================

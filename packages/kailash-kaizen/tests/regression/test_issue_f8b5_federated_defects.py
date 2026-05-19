@@ -331,3 +331,44 @@ def test_issue_f8b5_cache_coordinator_none_content_does_not_crash():
     aggregated = {"results": [{"content": None, "score": 0.95, "node_agreement": 0.9}]}
     out = fn(aggregated, {"query_id": "q1"})
     assert out["cache_coordination"]["candidates_identified"] == 1
+
+
+# --------------------------------------------------------------------------
+# Defect 10 — CrossSiloRAGNode._generate_compliance_report ignored its inputs
+# --------------------------------------------------------------------------
+
+
+def test_issue_f8b5_compliance_report_reflects_real_request_not_hardcoded():
+    """Defect 10: the compliance report must reflect the actual request.
+
+    Pre-fix ``_generate_compliance_report`` returned a fixed
+    ``{"compliance_status": "compliant", ...}`` dict regardless of the
+    requester, the granted permissions, or the governed results — a
+    zero-tolerance Rule 2 fake-data smell (a compliance verdict that ignores
+    its inputs). Post-fix the report echoes the real requester / permissions
+    and the verdict is derived from per-peer governance state.
+
+    Two distinct requests must produce distinguishable reports — a hardcoded
+    report would be byte-identical.
+    """
+    random.seed(0)
+    r_a = CrossSiloRAGNode(silos=["org_a", "org_b"]).run(
+        query="trend",
+        requester_org="org_a",
+        access_permissions=["read_aggregated"],
+    )
+    random.seed(0)
+    r_b = CrossSiloRAGNode(silos=["org_a", "org_b"]).run(
+        query="trend",
+        requester_org="org_b",
+        access_permissions=["read_aggregated"],
+    )
+    report_a = r_a["compliance_report"]
+    report_b = r_b["compliance_report"]
+    # The report carries the real requester — a hardcoded report could not.
+    assert report_a["requester"] == "org_a"
+    assert report_b["requester"] == "org_b"
+    # The granted permissions are echoed from the real input.
+    assert report_a["permissions_granted"] == ["read_aggregated"]
+    # The two reports are NOT byte-identical (the pre-fix hardcoded dict was).
+    assert report_a != report_b

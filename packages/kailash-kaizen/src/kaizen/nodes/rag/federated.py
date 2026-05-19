@@ -11,15 +11,13 @@ Implements RAG across distributed data sources without centralization:
 Based on federated learning and distributed systems research.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import random
 import re
-from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.api.rest import (  # noqa: F401  (registers "RESTClientNode" for builder.add_node)
     RESTClientNode,
@@ -1043,9 +1041,7 @@ class CrossSiloRAGNode(Node):
             }
 
         # Execute query across silos
-        silo_results = self._execute_cross_silo_query(
-            query, requester_org, access_permissions
-        )
+        silo_results = self._execute_cross_silo_query(query, requester_org)
 
         # Apply data governance rules
         governed_results = self._apply_governance(
@@ -1124,9 +1120,16 @@ class CrossSiloRAGNode(Node):
         return {"granted": True, "reason": "Access approved"}
 
     def _execute_cross_silo_query(
-        self, query: str, requester: str, permissions: List[str]
+        self, query: str, requester: str
     ) -> List[Dict[str, Any]]:
-        """Execute query across organizational silos"""
+        """Execute query across organizational silos.
+
+        The caller's permission list is validated upstream by
+        ``_validate_cross_silo_access`` before this runs; per-silo
+        ``access_level`` here is an organization-relationship decision
+        (own silo → full, peer silo → the data-sharing agreement), not a
+        re-check of the already-gated permission list.
+        """
         silo_results = []
 
         for silo in self.silos:
@@ -1260,14 +1263,19 @@ class CrossSiloRAGNode(Node):
             "data_flow": [],
         }
 
-        # Track data flow
+        # Track data flow. The governance markers are read from
+        # governed_results (the actual post-governance output returned to the
+        # requester) so the audit records what governance produced, not the
+        # pre-governance silo response.
+        governed_by_silo = {gr["silo"]: gr for gr in governed_results}
         for silo_result in silo_results:
+            governed = governed_by_silo.get(silo_result["silo"], silo_result)
             flow = {
                 "silo": silo_result["silo"],
                 "data_shared": silo_result["participated"],
                 "access_level": silo_result.get("access_level", "none"),
                 "governance_applied": any(
-                    r.get("governance_applied") for r in silo_result.get("results", [])
+                    r.get("governance_applied") for r in governed.get("results", [])
                 ),
             }
             audit["data_flow"].append(flow)
@@ -1286,11 +1294,37 @@ class CrossSiloRAGNode(Node):
     def _generate_compliance_report(
         self, requester: str, permissions: List[str], results: List[Dict]
     ) -> Dict[str, Any]:
-        """Generate compliance report"""
+        """Generate a compliance report derived from the actual request.
+
+        The verdict reflects the real ``requester``, the ``permissions`` that
+        were granted, and the governed ``results`` that crossed the boundary —
+        it is NOT a fixed "compliant" stamp. ``data_minimization`` is True only
+        when every peer silo's result actually carries a governance marker;
+        ``compliance_status`` degrades to "non_compliant" when a peer silo's
+        data crossed without governance applied.
+        """
+        # A peer silo is any participating silo other than the requester's own.
+        peer_results = [
+            r for r in results if r.get("participated") and r.get("silo") != requester
+        ]
+        # Every peer silo's content must carry a governance marker.
+        ungoverned_peers = [
+            r
+            for r in peer_results
+            if not all(item.get("governance_applied") for item in r.get("results", []))
+        ]
+        data_minimization = len(ungoverned_peers) == 0
+
         return {
-            "compliance_status": "compliant",
+            "compliance_status": (
+                "compliant" if data_minimization else "non_compliant"
+            ),
             "regulations_checked": ["GDPR", "CCPA", "Industry Standards"],
-            "data_minimization": True,
+            "requester": requester,
+            "permissions_granted": list(permissions),
+            "peer_silos_governed": len(peer_results) - len(ungoverned_peers),
+            "peer_silos_total": len(peer_results),
+            "data_minimization": data_minimization,
             "purpose_limitation": True,
             "access_controls": "enforced",
             "audit_trail": "maintained",
