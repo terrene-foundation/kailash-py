@@ -127,6 +127,18 @@ class MCPToolNode(Node):
             "executed_at": self.last_executed.isoformat(),
         }
 
+    def run(self, **kwargs: Any) -> Dict[str, Any]:
+        """Bridge the Node ``run(**kwargs)`` contract to the MCP
+        ``process(inputs)`` convention.
+
+        ``kailash.nodes.base.Node.run`` is abstract and keyword-only; the MCP
+        server's per-tool execution convention is ``process(inputs: dict)``.
+        This adapter collects the Node-graph keyword call into the ``inputs``
+        dict ``process`` expects (carrying ``tool_input`` per
+        ``get_parameters()``) and returns the real ``process`` result.
+        """
+        return self.process(kwargs)
+
 
 class MCPResourceNode(Node):
     """Kailash node representing an MCP resource."""
@@ -177,6 +189,18 @@ class MCPResourceNode(Node):
             "resource_type": self.resource_type,
             "access_count": self.access_count,
         }
+
+    def run(self, **kwargs: Any) -> Dict[str, Any]:
+        """Bridge the Node ``run(**kwargs)`` contract to the MCP
+        ``process(inputs)`` convention.
+
+        ``kailash.nodes.base.Node.run`` is abstract and keyword-only; the MCP
+        server's per-resource execution convention is ``process(inputs: dict)``.
+        This adapter collects the Node-graph keyword call into the ``inputs``
+        dict ``process`` expects (carrying ``resource_uri`` per
+        ``get_parameters()``) and returns the real ``process`` result.
+        """
+        return self.process(kwargs)
 
 
 class MiddlewareMCPServer:
