@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,11 @@ class DenseRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "").lower()
+                    # `doc.get("content", "")` returns None when the key
+                    # exists with a None value (default only applies to
+                    # missing keys), crashing `.lower()`. `or ""` coerces
+                    # a None content to an empty string.
+                    content = (doc.get("content") or "").lower()
                     doc_words = set(content.split())
 
                     # Calculate simple overlap score
@@ -316,14 +320,16 @@ class SparseRetrievalNode(Node):
             query_terms = query.lower().split()
             doc_count = len(documents)
             avg_doc_length = (
-                sum(len(doc.get("content", "").split()) for doc in documents)
+                # `or ""` coerces a None content (key present, value None)
+                # to an empty string; bare `.get(k, "")` would not.
+                sum(len((doc.get("content") or "").split()) for doc in documents)
                 / doc_count
                 if doc_count > 0
                 else 0
             )
 
             for i, doc in enumerate(documents):
-                content = doc.get("content", "").lower()
+                content = (doc.get("content") or "").lower()
                 doc_terms = content.split()
                 doc_length = len(doc_terms)
 
@@ -333,7 +339,9 @@ class SparseRetrievalNode(Node):
                     if tf > 0:
                         # Simple IDF calculation
                         df = sum(
-                            1 for d in documents if term in d.get("content", "").lower()
+                            1
+                            for d in documents
+                            if term in (d.get("content") or "").lower()
                         )
                         idf = np.log((doc_count - df + 0.5) / (df + 0.5) + 1)
 
@@ -380,11 +388,14 @@ class SparseRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create sparse retrieval workflow"""
         builder = WorkflowBuilder()
 
-        # Add query expansion if enabled
+        # Add query expansion if enabled. `expander_id` is initialised here
+        # so the later `if self.use_query_expansion` connection block has a
+        # bound name regardless of the branch taken.
+        expander_id = ""
         if self.use_query_expansion:
             expander_id = builder.add_node(
                 "LLMAgentNode",
@@ -610,7 +621,9 @@ class ColBERTRetrievalNode(Node):
                 query_tokens = query.lower().split()
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "").lower()
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string; `.get(k, "")` would not.
+                    content = (doc.get("content") or "").lower()
                     doc_tokens = content.split()
 
                     # Simplified late interaction scoring
@@ -660,7 +673,7 @@ class ColBERTRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create ColBERT-style retrieval workflow"""
         builder = WorkflowBuilder()
 
@@ -875,7 +888,9 @@ class MultiVectorRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "")
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string before `.lower()`/`[:200]`.
+                    content = doc.get("content") or ""
 
                     # Create multiple representations
                     full_content = content.lower()
@@ -930,7 +945,7 @@ class MultiVectorRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create multi-vector retrieval workflow"""
         builder = WorkflowBuilder()
 
@@ -1201,7 +1216,9 @@ class CrossEncoderRerankNode(Node):
             query_words = set(query.lower().split())
 
             for i, doc in enumerate(results_list[:20]):  # Rerank top 20
-                content = doc.get("content", "").lower()
+                # `or ""` coerces a None content (key present, value None)
+                # to an empty string; `.get(k, "")` would not.
+                content = (doc.get("content") or "").lower()
                 content_words = set(content.split())
 
                 # Enhanced scoring for reranking
@@ -1238,7 +1255,7 @@ class CrossEncoderRerankNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create cross-encoder reranking workflow"""
         builder = WorkflowBuilder()
 
@@ -1510,7 +1527,7 @@ class HybridFusionNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create hybrid fusion workflow"""
         builder = WorkflowBuilder()
 
@@ -1750,7 +1767,9 @@ class PropositionBasedRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "")
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string before `.split()`.
+                    content = doc.get("content") or ""
 
                     # Simple proposition extraction (split by sentences)
                     sentences = content.split(". ")
@@ -1809,7 +1828,7 @@ class PropositionBasedRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create proposition-based retrieval workflow"""
         builder = WorkflowBuilder()
 
