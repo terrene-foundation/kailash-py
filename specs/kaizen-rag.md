@@ -316,7 +316,7 @@ It augments retrieval by invoking registered tool callables.
 `_create_workflow(self) -> Workflow`.
 
 - Constructor config: `tools` (default `["search", "calculator",
-  "database"]`), `max_reasoning_steps` (default 5), `planning_strategy`
+"database"]`), `max_reasoning_steps` (default 5), `planning_strategy`
   (default `"react"`), and `verification_enabled` (default `True`).
 - `_create_workflow()` builds a `WorkflowBuilder` graph. With
   `verification_enabled=True` the workflow has six nodes — `planner_agent`,
@@ -357,3 +357,98 @@ sub-workflow built at construction time by
   prompt.
 - The `LLMAgentNode` steps require an LLM key to execute end-to-end, which
   the `[rag]` extra does not carry.
+
+## Multimodal RAG
+
+`kaizen.nodes.rag.multimodal` provides three node classes for retrieval and
+question-answering over text + image content. Their behavior is locked by
+`tests/unit/rag/test_multimodal_nodes.py` and
+`tests/integration/rag/test_multimodal_nodes.py`.
+
+### `VisualQuestionAnsweringNode`
+
+`VisualQuestionAnsweringNode` is a `Node` subclass; its `run()` answers a
+question about an image on a deterministic rule-based path — no LLM key is
+required.
+
+- `get_parameters()` declares `image_path` and `question` as required, and
+  `model` (default `"blip2-base"`), `enable_captioning` (default `True`),
+  `name`, and `context` as optional.
+- `run()` returns `answer`, `confidence`, `image_caption`, `detected_objects`,
+  and `model_used`. The answer and detected-objects list are selected by
+  matching the lower-cased question against keyword groups: a `"what"` +
+  `"components"`/`"parts"` question returns four interconnected-component
+  objects at confidence `0.85`; a `"how many"` question returns six elements;
+  a `"where"` question returns a central-location answer; an unmatched
+  question falls back to a generic answer at confidence `0.7`.
+- `image_caption` is non-empty only when `enable_captioning` is `True`;
+  `model_used` echoes the constructor `model`.
+- Edge handling: a missing `question` kwarg defaults to an empty string; a
+  `question` of `None` is coerced to an empty string before keyword matching
+  (`kwargs.get("question") or ""` — the `get` default applies only to a
+  missing key, not a present-but-`None` value); `image_path` is never
+  dereferenced as a string in `run()`, so a `None` or missing `image_path` is
+  tolerated.
+
+### `ImageTextMatchingNode`
+
+`ImageTextMatchingNode` is a `Node` subclass; its `run()` ranks a collection
+against a query on a deterministic rule-based scoring path.
+
+- `get_parameters()` declares `query` (a `str` or `dict`) and `collection`
+  (a `list`) as required, and `matching_model` (default `"clip"`),
+  `bidirectional` (default `True`), `top_k` (default 5), and `name` as
+  optional.
+- `run()` returns `matches`, `similarity_scores`, `match_type`, `model`, and
+  `total_searched`. A `str` query selects `match_type="text_to_image"`; any
+  non-`str` query selects `match_type="image_to_text"`. On the text path a
+  query containing `"architecture"` against a `"diagram"`-tagged item scores
+  `0.9`, a query-word overlap with the item caption scores `0.7`, and
+  everything else scores `0.3`; the image path scores a flat `0.5`. Results
+  are sorted by descending score and capped at `top_k`.
+- `total_searched` reports the raw `collection` length; `model` echoes the
+  constructor `matching_model`.
+- Edge handling: a missing or `None` `collection` defaults to an empty list;
+  a non-dict element in the `collection` is skipped (collection elements are
+  arbitrary user input and a non-dict element has no `.get`), while
+  `total_searched` still counts it; a present-but-`None` caption or tag is
+  tolerated by the `str()` coercion in scoring.
+
+### `MultimodalRAGNode`
+
+`MultimodalRAGNode` is a `WorkflowNode`. Its `run()` (inherited from
+`WorkflowNode`) executes a sub-workflow built at construction time by
+`_create_workflow(self) -> Workflow`.
+
+- Constructor config: `image_encoder` (default `"clip-base"`), `enable_ocr`
+  (default `True`), and `fusion_strategy` (default `"weighted"`); all three
+  are stored in the node `config`.
+- `_create_workflow()` builds a `WorkflowBuilder` graph with six nodes —
+  `query_analyzer`, `doc_preprocessor`, `multimodal_encoder`,
+  `cross_modal_retriever`, `response_generator`, and `result_formatter`.
+- `query_analyzer` and `response_generator` are `LLMAgentNode` steps;
+  `doc_preprocessor`, `multimodal_encoder`, `cross_modal_retriever`, and
+  `result_formatter` are `PythonCodeNode` steps carrying a `code` template.
+- The constructor config flows into the generated workflow: `enable_ocr` is
+  interpolated into the `doc_preprocessor` `code` template's OCR branch, and
+  `image_encoder` is interpolated into the `multimodal_encoder` template's
+  `encoding_method`.
+- The `doc_preprocessor` `code` template separates a mixed-media corpus into
+  text and image documents. A non-dict document element is skipped — in the
+  per-document loop body and in the stats-block `multimodal_docs` list
+  comprehension — and a present-but-`None` `content` is coerced to an empty
+  string.
+- The `multimodal_encoder` `code` template builds query / text / image
+  embeddings with numpy-backed math. Its `text_encoder` and `image_encoder`
+  helpers coerce a non-string input to an empty string at the boundary, and
+  the text-document and image-document concatenations coerce a
+  present-but-`None` `content` / `title` / `caption` / `ocr_text` to an empty
+  string before the `+`.
+- The `cross_modal_retriever` `code` template scores, sorts, and splits
+  retrieved results by text / image modality; its visual-term boost coerces a
+  `None` or non-string `query` workflow input to an empty string before
+  `.lower()`.
+- The `LLMAgentNode` steps require an LLM key to execute the sub-workflow
+  end-to-end, which the `[rag]` extra does not carry; the `PythonCodeNode`
+  `code` templates are deterministic and exercised directly in the
+  integration tests.
