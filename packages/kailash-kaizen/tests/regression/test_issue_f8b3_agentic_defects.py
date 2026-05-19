@@ -161,7 +161,7 @@ def test_tool_augmented_non_dict_tool_output_does_not_crash():
     """A registered tool returning a non-dict value (here a bare int) must
     not crash answer synthesis — non-dict outputs have no error key and are
     treated as successful results."""
-    result = ToolAugmentedRAGNode(tool_registry={"calculator": lambda q, c: 42}).run(
+    result = ToolAugmentedRAGNode(tool_registry={"calculator": lambda _q, _c: 42}).run(
         query="calculate the sum", documents=[]
     )
     assert result["tool_outputs"]["calculator"] == 42
@@ -171,7 +171,7 @@ def test_tool_augmented_non_dict_tool_output_does_not_crash():
 def test_tool_augmented_non_dict_tool_output_string_return():
     """A tool returning a bare string is likewise tolerated."""
     result = ToolAugmentedRAGNode(
-        tool_registry={"calculator": lambda q, c: "computed: ok"}
+        tool_registry={"calculator": lambda _q, _c: "computed: ok"}
     ).run(query="calculate the average", documents=[])
     assert result["tool_outputs"]["calculator"] == "computed: ok"
     assert "computed: ok" in result["answer"]

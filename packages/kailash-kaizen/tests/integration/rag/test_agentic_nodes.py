@@ -81,7 +81,7 @@ class TestToolAugmentedRAGIntegration:
         """A registered tool's real output is woven into the synthesized
         answer and lifts confidence to 0.9."""
 
-        def calculator(query, context):
+        def calculator(_query, _context):
             return {"tool": "calculator", "result": 168}
 
         result = ToolAugmentedRAGNode(tool_registry={"calculator": calculator}).run(
@@ -103,7 +103,7 @@ class TestToolAugmentedRAGIntegration:
         )
         endpoint = httpserver.url_for("/units")
 
-        def unit_converter(query, context):
+        def unit_converter(_query, _context):
             # Genuine outbound HTTP GET to the loopback server.
             with urllib.request.urlopen(endpoint, timeout=3) as resp:
                 return json.loads(resp.read().decode())
@@ -122,7 +122,7 @@ class TestToolAugmentedRAGIntegration:
         httpserver.expect_request("/broken").respond_with_data("boom", status=500)
         endpoint = httpserver.url_for("/broken")
 
-        def unit_converter(query, context):
+        def unit_converter(_query, _context):
             with urllib.request.urlopen(endpoint, timeout=3) as resp:
                 return json.loads(resp.read().decode())
 
@@ -242,7 +242,7 @@ class TestAgenticObservability:
         name — the observable contract for a tool failure
         (rules/observability.md Mandatory Log Points)."""
 
-        def boom(query, context):
+        def boom(_query, _context):
             raise RuntimeError("network down")
 
         with caplog.at_level(logging.ERROR, logger="kaizen.nodes.rag.agentic"):

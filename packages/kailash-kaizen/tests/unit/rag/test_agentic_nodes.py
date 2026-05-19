@@ -96,7 +96,7 @@ class TestToolAugmentedRAGNode:
 
     def test_confidence_higher_when_tools_produce_output(self):
         """Confidence is 0.9 when a registered tool produced output, else 0.7."""
-        registry = {"calculator": lambda q, c: {"value": 42}}
+        registry = {"calculator": lambda _q, _c: {"value": 42}}
         with_tool = ToolAugmentedRAGNode(tool_registry=registry).run(
             query="calculate sum", documents=[]
         )
@@ -118,7 +118,7 @@ class TestToolAugmentedRAGNode:
         """A registered tool that raises is captured as an {'error': ...}
         entry rather than crashing run()."""
 
-        def boom(query, context):
+        def boom(_query, _context):
             raise RuntimeError("tool exploded")
 
         result = ToolAugmentedRAGNode(tool_registry={"calculator": boom}).run(
