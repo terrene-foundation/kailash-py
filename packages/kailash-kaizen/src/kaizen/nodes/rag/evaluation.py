@@ -485,12 +485,39 @@ class RAGBenchmarkNode(Node):
         workload_sizes: List[int] = None,
         concurrent_users: List[int] = None,
     ):
-        self.workload_sizes = workload_sizes or [10, 100, 1000]
-        self.concurrent_users = concurrent_users or [1, 5, 10]
-        super().__init__(name)
+        resolved_workload_sizes = workload_sizes or [10, 100, 1000]
+        resolved_concurrent_users = concurrent_users or [1, 5, 10]
+        super().__init__(
+            name=name,
+            workload_sizes=resolved_workload_sizes,
+            concurrent_users=resolved_concurrent_users,
+        )
+        self.workload_sizes = resolved_workload_sizes
+        self.concurrent_users = resolved_concurrent_users
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_benchmark",
+                description="Node instance name",
+            ),
+            "workload_sizes": NodeParameter(
+                name="workload_sizes",
+                type=list,
+                required=False,
+                default=None,
+                description="Document-count workloads to benchmark",
+            ),
+            "concurrent_users": NodeParameter(
+                name="concurrent_users",
+                type=list,
+                required=False,
+                default=None,
+                description="Concurrency levels to benchmark",
+            ),
             "rag_systems": NodeParameter(
                 name="rag_systems",
                 type=dict,
@@ -697,12 +724,42 @@ class TestDatasetGeneratorNode(Node):
         categories: List[str] = None,
         include_adversarial: bool = True,
     ):
-        self.categories = categories or ["factual", "analytical", "comparative"]
+        resolved_categories = categories or [
+            "factual",
+            "analytical",
+            "comparative",
+        ]
+        super().__init__(
+            name=name,
+            categories=resolved_categories,
+            include_adversarial=include_adversarial,
+        )
+        self.categories = resolved_categories
         self.include_adversarial = include_adversarial
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="test_dataset_generator",
+                description="Node instance name",
+            ),
+            "categories": NodeParameter(
+                name="categories",
+                type=list,
+                required=False,
+                default=None,
+                description="Question categories to generate",
+            ),
+            "include_adversarial": NodeParameter(
+                name="include_adversarial",
+                type=bool,
+                required=False,
+                default=True,
+                description="Include adversarial test cases",
+            ),
             "num_samples": NodeParameter(
                 name="num_samples",
                 type=int,
