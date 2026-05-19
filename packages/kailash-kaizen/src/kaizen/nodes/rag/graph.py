@@ -10,18 +10,19 @@ Implements knowledge graph-based retrieval for complex reasoning:
 Based on Microsoft GraphRAG (2024) and knowledge graph research.
 """
 
-import json
 import logging
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import networkx as nx
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.code.python import (  # noqa: F401  registers "PythonCodeNode"
+    PythonCodeNode,
+)
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401  registers "LLMAgentNode"
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,8 @@ class GraphRAGNode(WorkflowNode):
     def __init__(
         self,
         name: str = "graph_rag",
-        entity_types: List[str] = None,
-        relationship_types: List[str] = None,
+        entity_types: Optional[List[str]] = None,
+        relationship_types: Optional[List[str]] = None,
         max_hops: int = 2,
         community_algorithm: str = "louvain",
         use_global_summary: bool = True,
@@ -105,9 +106,12 @@ class GraphRAGNode(WorkflowNode):
         self.use_global_summary = use_global_summary
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create knowledge graph RAG workflow"""
         builder = WorkflowBuilder()
+        # Bound before the conditional so the use site below is provably bound
+        # whether or not the optional summary node is added.
+        summary_generator_id: Optional[str] = None
 
         # Entity extraction
         entity_extractor_id = builder.add_node(
@@ -438,6 +442,9 @@ result = {
         )
 
         if self.use_global_summary:
+            # The same guard bound summary_generator_id above; assert pins the
+            # invariant for the type checker.
+            assert summary_generator_id is not None
             builder.add_connection(
                 graph_builder_id, "graph_data", summary_generator_id, "graph_data"
             )

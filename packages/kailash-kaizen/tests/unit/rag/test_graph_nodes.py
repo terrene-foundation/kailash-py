@@ -318,34 +318,40 @@ class TestGraphRAGNode:
     graph SHAPE, not end-to-end execution."""
 
     def test_constructs_with_defaults(self):
+        # type: ignore[attr-defined] on the constructor-attr reads below — the
+        # @register_node decorator erases the concrete GraphRAGNode type to
+        # base Node, which does not declare entity_types/max_hops/etc. The
+        # attributes exist at runtime (set in __init__); the static erasure is
+        # a known Core SDK decorator gap (out of B2 scope).
         node = GraphRAGNode()
-        assert node.entity_types == [
+        assert node.entity_types == [  # type: ignore[attr-defined]
             "person",
             "organization",
             "concept",
             "technology",
         ]
-        assert node.relationship_types == [
+        assert node.relationship_types == [  # type: ignore[attr-defined]
             "relates_to",
             "influences",
             "uses",
             "created_by",
         ]
-        assert node.max_hops == 2
-        assert node.community_algorithm == "louvain"
-        assert node.use_global_summary is True
+        assert node.max_hops == 2  # type: ignore[attr-defined]
+        assert node.community_algorithm == "louvain"  # type: ignore[attr-defined]
+        assert node.use_global_summary is True  # type: ignore[attr-defined]
 
     def test_constructs_with_custom_config(self):
+        # type: ignore[attr-defined] — see test_constructs_with_defaults.
         node = GraphRAGNode(
             entity_types=["gene", "protein"],
             relationship_types=["binds"],
             max_hops=5,
             use_global_summary=False,
         )
-        assert node.entity_types == ["gene", "protein"]
-        assert node.relationship_types == ["binds"]
-        assert node.max_hops == 5
-        assert node.use_global_summary is False
+        assert node.entity_types == ["gene", "protein"]  # type: ignore[attr-defined]
+        assert node.relationship_types == ["binds"]  # type: ignore[attr-defined]
+        assert node.max_hops == 5  # type: ignore[attr-defined]
+        assert node.use_global_summary is False  # type: ignore[attr-defined]
 
     def test_create_workflow_builds_expected_nodes_with_summary(self):
         """``_create_workflow()`` with ``use_global_summary=True`` builds the
