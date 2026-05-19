@@ -134,12 +134,13 @@ def create_statistical_rag_workflow(config: RAGConfig) -> WorkflowNode:
             "code": """
 import re
 def extract_keywords(text):
-    words = re.findall(r'\\b[a-zA-Z]{3,}\\b', text.lower())
+    # A present-but-None `content` key would otherwise crash text.lower().
+    words = re.findall(r'\\b[a-zA-Z]{3,}\\b', (text or "").lower())
     stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'}
     keywords = [word for word in set(words) if word not in stop_words]
     return keywords[:20]
 
-result = {"keywords": [extract_keywords(chunk["content"]) for chunk in chunks]}
+result = {"keywords": [extract_keywords(chunk.get("content")) for chunk in (chunks or []) if isinstance(chunk, dict)]}
 """
         },
     )
@@ -298,9 +299,10 @@ def create_hierarchical_rag_workflow(config: RAGConfig) -> WorkflowNode:
             "code": """
 levels = ["document", "section", "paragraph"]
 level_chunks = {}
+_chunks = [c for c in (chunks or []) if isinstance(c, dict)]
 
 for level in levels:
-    level_chunks[level] = [chunk for chunk in chunks if chunk.get("hierarchy_level") == level]
+    level_chunks[level] = [chunk for chunk in _chunks if chunk.get("hierarchy_level") == level]
 
 result = {"level_chunks": level_chunks, "levels": levels}
 """

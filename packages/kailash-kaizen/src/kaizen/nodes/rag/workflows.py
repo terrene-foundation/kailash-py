@@ -83,11 +83,19 @@ class AdvancedRAGWorkflowNode(WorkflowNode):
                 "code": """
 # Analyze document quality and determine best RAG strategy
 def analyze_documents(documents):
+    # `_content` is a nested local (PythonCodeNode execs the body in a scope
+    # where module-level defs are not visible to nested genexprs). A
+    # present-but-None `content` key returns None from dict.get(..., ""), so
+    # `or ""` is required; non-dict elements are filtered out first.
+    def _content(doc):
+        return (doc.get("content") or "") if isinstance(doc, dict) else ""
+
+    documents = [d for d in (documents or []) if isinstance(d, dict)]
     analysis = {
         "total_docs": len(documents),
-        "avg_length": sum(len(doc.get("content", "")) for doc in documents) / len(documents) if documents else 0,
+        "avg_length": sum(len(_content(doc)) for doc in documents) / len(documents) if documents else 0,
         "has_structure": any("section" in doc or "heading" in doc for doc in documents),
-        "is_technical": any(keyword in doc.get("content", "").lower()
+        "is_technical": any(keyword in _content(doc).lower()
                           for doc in documents
                           for keyword in ["code", "function", "algorithm", "api", "class"]),
         "recommended_strategy": "semantic"  # Default
@@ -282,6 +290,14 @@ Recommend the optimal RAG strategy:""",
 import re
 
 def analyze_for_llm(documents, query=""):
+    # `_content` is a nested local (PythonCodeNode execs the body in a scope
+    # where module-level defs are not visible to nested genexprs). A
+    # present-but-None `content` key returns None from dict.get(..., ""), so
+    # `or ""` is required; non-dict elements are filtered out first.
+    def _content(doc):
+        return (doc.get("content") or "") if isinstance(doc, dict) else ""
+
+    documents = [d for d in (documents or []) if isinstance(d, dict)]
     if not documents:
         return {
             "document_count": 0,
@@ -293,12 +309,12 @@ def analyze_for_llm(documents, query=""):
         }
 
     # Analyze documents
-    total_length = sum(len(doc.get("content", "")) for doc in documents)
+    total_length = sum(len(_content(doc)) for doc in documents)
     avg_length = total_length / len(documents)
 
     # Check for structure
     has_structure = any(
-        any(keyword in doc.get("content", "").lower()
+        any(keyword in _content(doc).lower()
             for keyword in ["# ", "## ", "### ", "heading", "section", "chapter"])
         for doc in documents
     )
@@ -306,7 +322,7 @@ def analyze_for_llm(documents, query=""):
     # Check for technical content
     technical_keywords = ["code", "function", "class", "algorithm", "api", "import", "def ", "return", "variable"]
     is_technical = any(
-        any(keyword in doc.get("content", "").lower()
+        any(keyword in _content(doc).lower()
             for keyword in technical_keywords)
         for doc in documents
     )
