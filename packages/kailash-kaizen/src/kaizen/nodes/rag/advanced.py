@@ -22,12 +22,26 @@ from kailash.workflow.builder import WorkflowBuilder
 
 from ..ai.llm_agent import LLMAgentNode
 
+# Side-effect import: registers DenseRetrievalNode / SparseRetrievalNode with
+# the Kailash NodeRegistry. create_hybrid_rag_workflow() looks these up by
+# string name at WorkflowBuilder.build() time, so the registration MUST have
+# run first regardless of rag-package import order.
+from . import similarity as _similarity  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 
-# Simple RAGConfig fallback to avoid circular import
+# Local RAGConfig to avoid a circular import with rag.strategies (which imports
+# nothing from this module, but advanced.py is imported very early in
+# rag/__init__.py). The field set is the subset the advanced nodes consume.
 class RAGConfig:
-    """Simple RAG configuration"""
+    """RAG configuration for the advanced techniques in this module.
+
+    ``retrieval_k`` is the only field that influences the hybrid workflow
+    built by :func:`create_hybrid_rag_workflow` (it caps the fused result
+    count); the remaining fields are carried for callers that pass a richer
+    config dict and inspect it downstream.
+    """
 
     def __init__(self, **kwargs):
         self.chunk_size = kwargs.get("chunk_size", 1000)
@@ -36,13 +50,162 @@ class RAGConfig:
         self.retrieval_k = kwargs.get("retrieval_k", 5)
 
 
-def create_hybrid_rag_workflow(config):
-    """Simple fallback workflow creator"""
-    # In a real implementation, this would create a proper workflow
-    # For now, return a simple mock workflow
-    from ...workflow.graph import Workflow
+def create_hybrid_rag_workflow(config: RAGConfig) -> WorkflowNode:
+    """Build a genuine hybrid-RAG retrieval workflow.
 
-    return Workflow(name="hybrid_rag_fallback", nodes=[], connections=[])
+    Hybrid RAG = dense (embedding-similarity) retrieval combined with sparse
+    (keyword / BM25-style) retrieval, fused with Reciprocal Rank Fusion (RRF).
+    This is the shared base workflow consumed by every advanced RAG node in
+    this module (``SelfCorrectingRAGNode``, ``RAGFusionNode``, ``HyDENode``,
+    ``StepBackRAGNode``) via ``self.base_rag_workflow.run(documents=...,
+    query=..., operation="retrieve")``.
+
+    Graph shape (4 nodes)::
+
+        source ──documents/query──┬──> dense  ──results──┐
+                                  └──> sparse ──results──┴──> fuse
+
+    - ``source`` (``PythonCodeNode``) — entry node; receives ``documents`` and
+      ``query`` via the WorkflowNode ``input_mapping`` and fans them out.
+    - ``dense`` (``DenseRetrievalNode``) — embedding-similarity retrieval; with
+      no LLM key configured it runs its deterministic keyword-overlap fallback.
+    - ``sparse`` (``SparseRetrievalNode``) — keyword / term-frequency retrieval.
+    - ``fuse`` (``PythonCodeNode``) — Reciprocal Rank Fusion over the dense and
+      sparse result lists; emits ``results`` / ``scores`` / ``metadata``.
+
+    The returned :class:`WorkflowNode` exposes the consumed contract: a
+    ``.run(documents=..., query=..., operation="retrieve")`` call returns a
+    dict with top-level ``results`` (fused document list), ``scores`` (fused
+    RRF scores), and ``metadata`` keys.
+
+    Args:
+        config: RAG configuration. ``config.retrieval_k`` caps the fused
+            result count.
+
+    Returns:
+        A ``WorkflowNode`` wrapping the hybrid dense+sparse+fusion workflow.
+    """
+    retrieval_k = int(getattr(config, "retrieval_k", 5) or 5)
+
+    builder = WorkflowBuilder()
+
+    # Entry node: holds documents + query, fans them out to both retrievers.
+    source_id = builder.add_node(
+        "PythonCodeNode",
+        node_id="source",
+        config={"code": 'result = {"documents": documents, "query": query}'},
+    )
+
+    # Dense retrieval (embedding similarity; deterministic fallback when no key).
+    dense_id = builder.add_node(
+        "DenseRetrievalNode",
+        node_id="dense",
+        config={},
+    )
+
+    # Sparse retrieval (keyword / term-frequency).
+    sparse_id = builder.add_node(
+        "SparseRetrievalNode",
+        node_id="sparse",
+        config={},
+    )
+
+    # Reciprocal Rank Fusion of the dense and sparse result lists.
+    fuse_id = builder.add_node(
+        "PythonCodeNode",
+        node_id="fuse",
+        config={
+            "code": f"""
+def _reciprocal_rank_fusion(doc_lists, k=60, top_k={retrieval_k}):
+    fused_scores = {{}}
+    doc_info = {{}}
+    for documents in doc_lists:
+        for rank, doc in enumerate(documents or []):
+            if not isinstance(doc, dict):
+                continue
+            doc_id = doc.get("id") or str(hash((doc.get("content") or "")[:50]))
+            fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
+            doc_info[doc_id] = doc
+    ordered = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+    docs = [doc_info[d] for d, _ in ordered[:top_k]]
+    scores_out = [s for _, s in ordered[:top_k]]
+    return docs, scores_out
+
+
+# dense_result / sparse_result are the `results` output lists of the
+# DenseRetrievalNode / SparseRetrievalNode (a list of document dicts).
+_dense = dense_result if isinstance(dense_result, list) else []
+_sparse = sparse_result if isinstance(sparse_result, list) else []
+_docs, _scores = _reciprocal_rank_fusion([_dense, _sparse])
+results = _docs
+scores = _scores
+# `results`, `scores`, `metadata` are surfaced as separate node outputs so
+# the WorkflowNode output_mapping can flatten them to the top level of the
+# consumed contract.
+metadata = {{
+    "fusion_method": "rrf",
+    "retrieval_modes": ["dense", "sparse"],
+    "retrieval_k": {retrieval_k},
+    "dense_count": len(_dense),
+    "sparse_count": len(_sparse),
+}}
+"""
+        },
+    )
+
+    # Fan documents + query from the source node to both retrievers.
+    builder.add_connection(source_id, "result.documents", dense_id, "documents")
+    builder.add_connection(source_id, "result.query", dense_id, "query")
+    builder.add_connection(source_id, "result.documents", sparse_id, "documents")
+    builder.add_connection(source_id, "result.query", sparse_id, "query")
+
+    # Feed both retrieval result lists into the fusion node.
+    builder.add_connection(dense_id, "results", fuse_id, "dense_result")
+    builder.add_connection(sparse_id, "results", fuse_id, "sparse_result")
+
+    workflow = builder.build(name="hybrid_rag_workflow")
+
+    return WorkflowNode(
+        workflow=workflow,
+        name="hybrid_rag_node",
+        description="Hybrid RAG combining dense and sparse retrieval with RRF fusion",
+        input_mapping={
+            "documents": {"node": "source", "parameter": "documents"},
+            "query": {"node": "source", "parameter": "query"},
+        },
+        output_mapping={
+            "results": {"node": "fuse", "output": "results"},
+            "scores": {"node": "fuse", "output": "scores"},
+            "metadata": {"node": "fuse", "output": "metadata"},
+        },
+    )
+
+
+def _doc_content(doc: Any) -> str:
+    """Return a document's text content as a string, never raising.
+
+    ``doc.get("content", "")`` returns ``None`` when the key is present with a
+    ``None`` value (the ``""`` default fires ONLY for a missing key); a
+    following slice / ``.lower()`` would then raise. This helper collapses a
+    missing key, a ``None`` value, and a non-dict element to ``""``.
+    """
+    if not isinstance(doc, dict):
+        return ""
+    return doc.get("content") or ""
+
+
+def _doc_dedup_key(doc: Any) -> str:
+    """Return a stable dedup key for a document dict.
+
+    Prefers an explicit ``id``; falls back to the first 50 chars of content.
+    Safe against present-but-None ``content`` and non-dict elements.
+    """
+    if not isinstance(doc, dict):
+        return _doc_content(doc)[:50]
+    doc_id = doc.get("id")
+    if doc_id:
+        return str(doc_id)
+    return _doc_content(doc)[:50]
 
 
 @register_node()
@@ -69,6 +232,10 @@ class SelfCorrectingRAGNode(Node):
             confidence_threshold=confidence_threshold,
             verification_model=verification_model,
         )
+        # kailash.nodes.base.Node stores constructor kwargs in self.config and
+        # does NOT set self.name; _initialize_components() references self.name
+        # when building the verifier LLMAgentNode, so bind it explicitly here.
+        self.name = name
         self.max_corrections = max_corrections
         self.confidence_threshold = confidence_threshold
         self.verification_model = verification_model
@@ -270,11 +437,15 @@ Respond with JSON only:
         if not retrieved_docs:
             return "No relevant documents found to answer the query."
 
-        # Simple response generation (can be enhanced with dedicated LLM)
+        # Simple response generation (can be enhanced with dedicated LLM).
+        # A present-but-None "content" (or a non-dict element) must not crash:
+        # doc.get("content", "") returns None when the key exists with value
+        # None — the "" default only fires for a MISSING key.
         context = "\n\n".join(
             [
-                f"Document {i + 1}: {doc.get('content', '')[:500]}..."
+                f"Document {i + 1}: {(doc.get('content') or '')[:500]}..."
                 for i, doc in enumerate(retrieved_docs[:3])
+                if isinstance(doc, dict)
             ]
         )
 
@@ -334,7 +505,10 @@ Assess the quality and provide improvement suggestions:
         """Format documents for verification prompt"""
         formatted = []
         for i, doc in enumerate(docs[:5]):  # Limit to 5 docs for prompt length
-            content = doc.get("content", "")[:300]  # Truncate for prompt
+            if not isinstance(doc, dict):
+                continue
+            # (doc.get("content") or "") guards a present-but-None content.
+            content = (doc.get("content") or "")[:300]  # Truncate for prompt
             formatted.append(f"Doc {i + 1}: {content}...")
         return "\n\n".join(formatted)
 
@@ -512,6 +686,9 @@ class RAGFusionNode(Node):
             fusion_method=fusion_method,
             query_generator_model=query_generator_model,
         )
+        # Node base class does not set self.name; _initialize_components()
+        # references it when naming the query-generator LLMAgentNode.
+        self.name = name
         self.num_query_variations = num_query_variations
         self.fusion_method = fusion_method
         self.query_generator_model = query_generator_model
@@ -635,7 +812,7 @@ class RAGFusionNode(Node):
                 "query_performances": query_performances,
                 "total_unique_documents": len(
                     set(
-                        doc.get("id", doc.get("content", "")[:50])
+                        _doc_dedup_key(doc)
                         for doc in fused_results.get("documents", [])
                     )
                 ),
@@ -803,7 +980,9 @@ Generate {self.num_query_variations} high-quality variations that will improve r
             documents = result.get("results", [])
 
             for rank, doc in enumerate(documents):
-                doc_id = doc.get("id", doc.get("content", "")[:50])  # Fallback ID
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = _doc_dedup_key(doc)  # Fallback ID
 
                 # RRF score calculation
                 rrf_score = 1 / (k + rank + 1)
@@ -862,7 +1041,9 @@ Generate {self.num_query_variations} high-quality variations that will improve r
             scores = result.get("scores", [])
 
             for rank, (doc, score) in enumerate(zip(documents, scores)):
-                doc_id = doc.get("id", doc.get("content", "")[:50])
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = _doc_dedup_key(doc)
 
                 weighted_score = score * weight
 
@@ -893,7 +1074,9 @@ Generate {self.num_query_variations} high-quality variations that will improve r
             scores = result.get("scores", [])
 
             for doc, score in zip(documents, scores):
-                doc_id = doc.get("id", doc.get("content", "")[:50])
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = _doc_dedup_key(doc)
 
                 if doc_id not in seen_ids:
                     all_docs.append(doc)
@@ -919,8 +1102,9 @@ Generate {self.num_query_variations} high-quality variations that will improve r
         context = "\n\n".join(
             [
                 f"Source {i + 1} (RRF Score: {doc.get('fusion_metadata', {}).get('rrf_score', 0.0):.3f}): "
-                f"{doc.get('content', '')[:400]}..."
+                f"{_doc_content(doc)[:400]}..."
                 for i, doc in enumerate(top_docs)
+                if isinstance(doc, dict)
             ]
         )
 
@@ -1017,6 +1201,9 @@ class HyDENode(Node):
             use_multiple_hypotheses=use_multiple_hypotheses,
             num_hypotheses=num_hypotheses,
         )
+        # Node base class does not set self.name; _initialize_components()
+        # references it when naming the hypothesis-generator LLMAgentNode.
+        self.name = name
         self.hypothesis_model = hypothesis_model
         self.use_multiple_hypotheses = use_multiple_hypotheses
         self.num_hypotheses = num_hypotheses
@@ -1124,7 +1311,7 @@ class HyDENode(Node):
                 ),
                 "total_unique_docs": len(
                     set(
-                        doc.get("id", doc.get("content", "")[:50])
+                        _doc_dedup_key(doc)
                         for doc in combined_results.get("documents", [])
                     )
                 ),
@@ -1255,7 +1442,9 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
             hypothesis_idx = result_info.get("hypothesis_index", 0)
 
             for doc, score in zip(documents, scores):
-                doc_id = doc.get("id", doc.get("content", "")[:50])
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = _doc_dedup_key(doc)
 
                 # Track source hypothesis
                 if doc_id not in doc_sources:
@@ -1269,7 +1458,7 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
 
         # Add source information to documents
         for doc in all_docs:
-            doc_id = doc.get("id", doc.get("content", "")[:50])
+            doc_id = _doc_dedup_key(doc)
             doc["hyde_sources"] = doc_sources.get(doc_id, [])
             doc["source_diversity"] = len(doc_sources.get(doc_id, []))
 
@@ -1301,8 +1490,9 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
 
         context_parts = []
         for i, doc in enumerate(top_docs):
-            content = doc.get("content", "")[:300]
-            source_info = doc.get("hyde_sources", [])
+            if not isinstance(doc, dict):
+                continue
+            content = _doc_content(doc)[:300]
             diversity = doc.get("source_diversity", 0)
 
             context_parts.append(
@@ -1371,6 +1561,9 @@ class StepBackRAGNode(Node):
 
     def __init__(self, name: str = "step_back_rag", abstraction_model: str = "gpt-4"):
         super().__init__(name=name, abstraction_model=abstraction_model)
+        # Node base class does not set self.name; _initialize_components()
+        # references it when naming the abstraction-generator LLMAgentNode.
+        self.name = name
         self.abstraction_model = abstraction_model
         self.abstraction_generator = None
         self.base_rag_workflow = None
@@ -1603,7 +1796,9 @@ Generate a broader, more abstract version that would help retrieve relevant back
         specific_scores = specific_results.get("scores", [])
 
         for doc, score in zip(specific_docs, specific_scores):
-            doc_id = doc.get("id", doc.get("content", "")[:50])
+            if not isinstance(doc, dict):
+                continue
+            doc_id = _doc_dedup_key(doc)
             weighted_score = score * specific_weight
 
             doc_with_metadata = doc.copy()
@@ -1622,7 +1817,9 @@ Generate a broader, more abstract version that would help retrieve relevant back
         abstract_scores = abstract_results.get("scores", [])
 
         for doc, score in zip(abstract_docs, abstract_scores):
-            doc_id = doc.get("id", doc.get("content", "")[:50])
+            if not isinstance(doc, dict):
+                continue
+            doc_id = _doc_dedup_key(doc)
 
             # Skip if already added from specific results
             if doc_id in doc_sources:
@@ -1671,16 +1868,19 @@ Generate a broader, more abstract version that would help retrieve relevant back
         if not documents:
             return f"No relevant documents found for query: {specific_query}"
 
-        # Separate background and specific information
+        # Separate background and specific information. isinstance(doc, dict)
+        # guards a non-dict element (documents is arbitrary upstream data).
         background_docs = [
             doc
             for doc in documents[:3]
-            if doc.get("step_back_metadata", {}).get("source_type") == "abstract"
+            if isinstance(doc, dict)
+            and doc.get("step_back_metadata", {}).get("source_type") == "abstract"
         ]
         specific_docs = [
             doc
             for doc in documents[:5]
-            if doc.get("step_back_metadata", {}).get("source_type") == "specific"
+            if isinstance(doc, dict)
+            and doc.get("step_back_metadata", {}).get("source_type") == "specific"
         ]
 
         # Build response with background context first
@@ -1689,13 +1889,13 @@ Generate a broader, more abstract version that would help retrieve relevant back
         if background_docs:
             response_parts.append("\nBackground Context:")
             for i, doc in enumerate(background_docs):
-                content = doc.get("content", "")[:250]
+                content = _doc_content(doc)[:250]
                 response_parts.append(f"Background {i + 1}: {content}...")
 
         if specific_docs:
             response_parts.append("\nSpecific Information:")
             for i, doc in enumerate(specific_docs):
-                content = doc.get("content", "")[:300]
+                content = _doc_content(doc)[:300]
                 response_parts.append(f"Specific {i + 1}: {content}...")
 
         response_parts.append(
