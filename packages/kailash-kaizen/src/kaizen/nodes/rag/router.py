@@ -31,13 +31,38 @@ class RAGStrategyRouterNode(Node):
         llm_model: str = "gpt-4",
         provider: str = "openai",
     ):
+        super().__init__(
+            name=name,
+            llm_model=llm_model,
+            provider=provider,
+        )
         self.llm_model = llm_model
         self.provider = provider
         self.llm_agent = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_strategy_router",
+                description="Node instance name",
+            ),
+            "llm_model": NodeParameter(
+                name="llm_model",
+                type=str,
+                required=False,
+                default="gpt-4",
+                description="LLM model for routing analysis",
+            ),
+            "provider": NodeParameter(
+                name="provider",
+                type=str,
+                required=False,
+                default="openai",
+                description="LLM provider for routing analysis",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -452,10 +477,17 @@ class RAGQualityAnalyzerNode(Node):
     """
 
     def __init__(self, name: str = "rag_quality_analyzer"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_quality_analyzer",
+                description="Node instance name",
+            ),
             "rag_results": NodeParameter(
                 name="rag_results",
                 type=dict,
@@ -666,11 +698,18 @@ class RAGPerformanceMonitorNode(Node):
     """
 
     def __init__(self, name: str = "rag_performance_monitor"):
+        super().__init__(name=name)
         self.performance_history = []
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_performance_monitor",
+                description="Node instance name",
+            ),
             "rag_results": NodeParameter(
                 name="rag_results",
                 type=dict,
