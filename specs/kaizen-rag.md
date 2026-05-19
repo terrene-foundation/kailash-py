@@ -186,3 +186,87 @@ each expose a private `_create_workflow(self) -> Workflow` method that builds a
 These helpers are not exercised by the `run()` default path; they are the
 workflow-composition surface for callers that want to run the retrieval logic
 through the Kailash runtime.
+
+## Graph RAG
+
+`kaizen/nodes/rag/graph.py` defines three knowledge-graph nodes. The toolkit
+ships `networkx` (via the `[rag]` extra) as the real graph backend — there is
+no separate graph database. `GraphBuilderNode` and `GraphQueryNode` compute
+their results entirely with deterministic `networkx` operations on the
+`run()` path. `GraphRAGNode` is a `kailash.nodes.logic.workflow.WorkflowNode`.
+
+### `GraphBuilderNode`
+
+Builds a knowledge graph from documents. `run(self, **kwargs) -> Dict[str, Any]`.
+
+- Inputs (`get_parameters()`): `documents` (`list`, required), `existing_graph`
+  (`dict`, optional — a prior graph to extend), `entity_types` (`list`,
+  optional), plus the constructor-config parameters `merge_similar_entities`,
+  `similarity_threshold`, `track_temporal`, `confidence_scoring`.
+- The graph is a `networkx.MultiDiGraph`. When `existing_graph` is supplied it
+  is reconstructed via `nx.node_link_graph` and extended; otherwise a fresh
+  graph is created.
+- Entity extraction is a simplified deterministic rule: a document whose
+  `content` contains the word `transformer` (case-insensitive) contributes a
+  `transformer` node (`type="technology"`) and an `attention` node
+  (`type="concept"`) joined by a `uses` edge. Documents without that word
+  contribute no nodes. Entity nodes are keyed by name, so multiple documents
+  naming the same entity collapse to one node.
+- A document may omit `content`, carry `content: None`, or be a non-dict
+  element of the `documents` list. None of these raises: a missing or `None`
+  content is coerced to an empty string, and a non-dict element is skipped.
+  `build_metadata["documents_processed"]` still counts every element of the
+  input list.
+- Returns: `graph` (a `nx.node_link_data` dict — JSON-shaped, round-trippable),
+  `entity_map` (a dict, currently empty), `statistics`
+  (`total_nodes`, `total_edges`, `density`, `components`, all computed by
+  `networkx`), and `build_metadata` (`documents_processed`, `merge_applied`,
+  `temporal_tracking`).
+
+### `GraphQueryNode`
+
+Queries a knowledge graph. `run(self, **kwargs) -> Dict[str, Any]`.
+
+- Inputs (`get_parameters()`): `graph` (`dict`, required — a node-link graph),
+  `query_type` (`str`, required), `query_params` (`dict`, required).
+- The result always carries `query_type`, `query_params`, `matches`, `paths`,
+  and `aggregations`. Three query types populate them:
+  - `path` — finds connections between `query_params["source_entity"]` and
+    `query_params["target_entity"]` (both lower-cased) via
+    `nx.all_simple_paths`, bounded by `max_length` (default 3), capped at 10
+    paths. Each path entry carries `path`, `length`, and `edges`. If either
+    endpoint is absent from the graph, `paths` is empty.
+  - `pattern` — returns nodes matching `query_params["pattern"]["node_type"]`
+    (or all nodes when no type is given), each with `entity`, `attributes`,
+    and `degree`; capped at 20 matches.
+  - `aggregate` — returns `node_count`, `edge_count`, `density`, `avg_degree`,
+    and `clustering_coefficient`. The clustering coefficient is computed over
+    `nx.Graph(G.to_undirected())` — the multigraph is collapsed to a simple
+    undirected graph because `nx.average_clustering` is undefined on a
+    multigraph. An empty graph yields zeroed statistics.
+- An unrecognised `query_type` returns the base result shape with empty
+  `matches`, `paths`, and `aggregations` — no exception.
+
+### `GraphRAGNode`
+
+`GraphRAGNode` is a `WorkflowNode`. Its `run()` (inherited from `WorkflowNode`)
+executes a sub-workflow built at construction time by
+`_create_workflow(self) -> Workflow`.
+
+- Constructor config: `entity_types` (default
+  `["person", "organization", "concept", "technology"]`), `relationship_types`
+  (default `["relates_to", "influences", "uses", "created_by"]`), `max_hops`
+  (default 2), `community_algorithm` (default `"louvain"`), and
+  `use_global_summary` (default `True`).
+- `_create_workflow()` builds a `WorkflowBuilder` graph. With
+  `use_global_summary=True` the workflow has six nodes — `entity_extractor`,
+  `graph_builder`, `query_processor`, `graph_retriever`, `summary_generator`,
+  `result_synthesizer`. With `use_global_summary=False` the `summary_generator`
+  node and its connections are omitted, leaving five nodes.
+- The constructor config flows into the generated workflow: `entity_types`
+  and `relationship_types` appear in the `entity_extractor` node's system
+  prompt, and `max_hops` is interpolated into the `graph_retriever` node's
+  `PythonCodeNode` code template as the BFS depth bound.
+- `entity_extractor`, `query_processor`, and `summary_generator` are
+  `LLMAgentNode` steps — executing the sub-workflow end-to-end requires an LLM
+  key, which the `[rag]` extra does not carry.

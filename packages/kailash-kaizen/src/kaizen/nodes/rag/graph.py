@@ -10,18 +10,19 @@ Implements knowledge graph-based retrieval for complex reasoning:
 Based on Microsoft GraphRAG (2024) and knowledge graph research.
 """
 
-import json
 import logging
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import networkx as nx
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.code.python import (  # noqa: F401  registers "PythonCodeNode"
+    PythonCodeNode,
+)
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401  registers "LLMAgentNode"
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,8 @@ class GraphRAGNode(WorkflowNode):
     def __init__(
         self,
         name: str = "graph_rag",
-        entity_types: List[str] = None,
-        relationship_types: List[str] = None,
+        entity_types: Optional[List[str]] = None,
+        relationship_types: Optional[List[str]] = None,
         max_hops: int = 2,
         community_algorithm: str = "louvain",
         use_global_summary: bool = True,
@@ -105,9 +106,12 @@ class GraphRAGNode(WorkflowNode):
         self.use_global_summary = use_global_summary
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create knowledge graph RAG workflow"""
         builder = WorkflowBuilder()
+        # Bound before the conditional so the use site below is provably bound
+        # whether or not the optional summary node is added.
+        summary_generator_id: Optional[str] = None
 
         # Entity extraction
         entity_extractor_id = builder.add_node(
@@ -438,6 +442,9 @@ result = {
         )
 
         if self.use_global_summary:
+            # The same guard bound summary_generator_id above; assert pins the
+            # invariant for the type checker.
+            assert summary_generator_id is not None
             builder.add_connection(
                 graph_builder_id, "graph_data", summary_generator_id, "graph_data"
             )
@@ -587,14 +594,19 @@ class GraphBuilderNode(Node):
 
         # Add sample graph building logic
         for doc in documents:
-            doc_id = doc.get("id", hash(doc.get("content", "")))
+            # Skip malformed (non-dict) entries rather than crashing on
+            # ``str.get`` — a document list may carry malformed elements.
+            if not isinstance(doc, dict):
+                continue
 
-            # Simplified entity extraction
-            # In production, would use proper NER
-            words = doc.get("content", "").split()
+            # ``doc.get("content", "")`` only defaults a MISSING key — a key
+            # present with value ``None`` returns ``None``. Coerce with
+            # ``or ""`` so the scoring path never calls a str method on None.
+            content = doc.get("content") or ""
+            doc_id = doc.get("id", hash(content))
 
             # Add some sample entities
-            if "transformer" in doc.get("content", "").lower():
+            if "transformer" in content.lower():
                 G.add_node("transformer", type="technology", documents={doc_id})
                 G.add_node("attention", type="concept", documents={doc_id})
                 G.add_edge("transformer", "attention", type="uses", confidence=0.9)
@@ -757,8 +769,14 @@ class GraphQueryNode(Node):
                 "avg_degree": (
                     sum(dict(G.degree()).values()) / len(G) if len(G) > 0 else 0
                 ),
+                # ``nx.average_clustering`` is undefined on a multigraph.
+                # ``GraphBuilderNode`` produces a ``MultiDiGraph`` whose
+                # node-link round-trip is also a multigraph, so collapse to a
+                # simple undirected ``Graph`` before computing clustering.
                 "clustering_coefficient": (
-                    nx.average_clustering(G.to_undirected()) if len(G) > 0 else 0
+                    nx.average_clustering(nx.Graph(G.to_undirected()))
+                    if len(G) > 0
+                    else 0
                 ),
             }
 
