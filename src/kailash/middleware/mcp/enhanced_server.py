@@ -69,10 +69,23 @@ class MCPToolNode(Node):
         description: str = "",
         parameters_schema: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(name)  # type: ignore[call-arg]
-        self.tool_name = tool_name
-        self.description = description
-        self.parameters_schema = parameters_schema or {}
+        # Route construction config through the Node config-bag contract
+        # (kailash.nodes.base.Node.__init__(self, **kwargs) is keyword-only;
+        # name/description and node-specific keys flow into validated
+        # self.config). Canonical keyword super-call form.
+        super().__init__(
+            name=name,
+            description=description,
+            tool_name=tool_name,
+            parameters_schema=parameters_schema or {},
+        )
+        # Config-derived read attributes sourced from the validated config bag
+        # (preserves existing attribute-read call sites; config is the source
+        # of truth, fixing the prior bare-instance-attr stash).
+        self.tool_name = self.config["tool_name"]
+        self.description = self.config.get("description", description)
+        self.parameters_schema = self.config["parameters_schema"]
+        # Mutable runtime state (NOT configuration).
         self.execution_count = 0
         self.last_executed = None
 
@@ -88,8 +101,11 @@ class MCPToolNode(Node):
             description="Input data for the MCP tool",
         )
 
-        # Add schema-specific parameters
-        for param_name, param_info in self.parameters_schema.items():
+        # Add schema-specific parameters. Read from the validated config bag,
+        # not the bare instance attribute: Node.__init__ invokes get_parameters()
+        # during super-init (before the subclass body sets self.parameters_schema),
+        # so the bare-attr read would AttributeError on that first call.
+        for param_name, param_info in self.config.get("parameters_schema", {}).items():
             params[param_name] = NodeParameter(
                 name=param_name,
                 type=param_info.get("type", str),
@@ -122,19 +138,31 @@ class MCPResourceNode(Node):
         resource_type: str = "text",
         description: str = "",
     ):
-        super().__init__(name)  # type: ignore[call-arg]
-        self.resource_uri = resource_uri
-        self.resource_type = resource_type
-        self.description = description
+        # Route construction config through the Node config-bag contract
+        # (keyword-only Node.__init__). Canonical keyword super-call form.
+        super().__init__(
+            name=name,
+            description=description,
+            resource_uri=resource_uri,
+            resource_type=resource_type,
+        )
+        # Config-derived read attributes sourced from the validated config bag.
+        self.resource_uri = self.config["resource_uri"]
+        self.resource_type = self.config["resource_type"]
+        self.description = self.config.get("description", description)
+        # Mutable runtime state (NOT configuration).
         self.access_count = 0
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
+        # Read the default from the config bag, not a bare instance attr:
+        # Node.__init__ calls get_parameters() during super-init (before this
+        # subclass body resumes), so self.config is the only reliable source.
         return {
             "resource_uri": NodeParameter(
                 name="resource_uri",
                 type=str,
                 required=False,
-                default=self.resource_uri,
+                default=getattr(self, "config", {}).get("resource_uri", ""),
                 description="URI of the resource to access",
             )
         }
