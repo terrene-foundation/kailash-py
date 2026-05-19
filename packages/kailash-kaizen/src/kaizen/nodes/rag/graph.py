@@ -587,14 +587,19 @@ class GraphBuilderNode(Node):
 
         # Add sample graph building logic
         for doc in documents:
-            doc_id = doc.get("id", hash(doc.get("content", "")))
+            # Skip malformed (non-dict) entries rather than crashing on
+            # ``str.get`` — a document list may carry malformed elements.
+            if not isinstance(doc, dict):
+                continue
 
-            # Simplified entity extraction
-            # In production, would use proper NER
-            words = doc.get("content", "").split()
+            # ``doc.get("content", "")`` only defaults a MISSING key — a key
+            # present with value ``None`` returns ``None``. Coerce with
+            # ``or ""`` so the scoring path never calls a str method on None.
+            content = doc.get("content") or ""
+            doc_id = doc.get("id", hash(content))
 
             # Add some sample entities
-            if "transformer" in doc.get("content", "").lower():
+            if "transformer" in content.lower():
                 G.add_node("transformer", type="technology", documents={doc_id})
                 G.add_node("attention", type="concept", documents={doc_id})
                 G.add_edge("transformer", "attention", type="uses", confidence=0.9)
@@ -757,8 +762,14 @@ class GraphQueryNode(Node):
                 "avg_degree": (
                     sum(dict(G.degree()).values()) / len(G) if len(G) > 0 else 0
                 ),
+                # ``nx.average_clustering`` is undefined on a multigraph.
+                # ``GraphBuilderNode`` produces a ``MultiDiGraph`` whose
+                # node-link round-trip is also a multigraph, so collapse to a
+                # simple undirected ``Graph`` before computing clustering.
                 "clustering_coefficient": (
-                    nx.average_clustering(G.to_undirected()) if len(G) > 0 else 0
+                    nx.average_clustering(nx.Graph(G.to_undirected()))
+                    if len(G) > 0
+                    else 0
                 ),
             }
 
