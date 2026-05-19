@@ -131,7 +131,11 @@ def _run_codegen_template(code: str, **inputs: object) -> dict:
 def test_sparse_codegen_template_handles_none_content():
     """SparseRetrievalNode._create_workflow()'s sparse_retriever PythonCodeNode
     template (calculate_bm25_scores) must not crash on None-content docs."""
-    wf = SparseRetrievalNode(use_query_expansion=False)._create_workflow()
+    # type: ignore[attr-defined] on the _create_workflow() calls below — the
+    # @register_node decorator erases the concrete subclass type to base `Node`,
+    # which does not declare the per-node `_create_workflow` helper. The method
+    # exists at runtime; the static-analysis erasure is a Core SDK decorator gap.
+    wf = SparseRetrievalNode(use_query_expansion=False)._create_workflow()  # type: ignore[attr-defined]
     code = wf.nodes["sparse_retriever"].config["code"]
     corpus = [_NONE_DOC, {"content": "machine learning models train", "id": "g"}]
     result = _run_codegen_template(
@@ -146,7 +150,7 @@ def test_sparse_codegen_template_handles_none_content():
 def test_colbert_codegen_template_handles_none_content():
     """ColBERTRetrievalNode._create_workflow()'s token_embedder PythonCodeNode
     template (get_token_embeddings) must not crash on None-content docs."""
-    wf = ColBERTRetrievalNode()._create_workflow()
+    wf = ColBERTRetrievalNode()._create_workflow()  # type: ignore[attr-defined]
     code = wf.nodes["token_embedder"].config["code"]
     corpus = [_NONE_DOC, {"content": "machine learning", "id": "g"}]
     result = _run_codegen_template(
@@ -160,7 +164,7 @@ def test_colbert_codegen_template_handles_none_content():
 def test_multivector_codegen_template_handles_none_content():
     """MultiVectorRetrievalNode._create_workflow()'s doc_processor PythonCodeNode
     template (create_multi_representations) must not crash on None-content."""
-    wf = MultiVectorRetrievalNode()._create_workflow()
+    wf = MultiVectorRetrievalNode()._create_workflow()  # type: ignore[attr-defined]
     code = wf.nodes["doc_processor"].config["code"]
     corpus = [_NONE_DOC, {"content": "machine learning models", "id": "g"}]
     result = _run_codegen_template(code, documents=corpus)
