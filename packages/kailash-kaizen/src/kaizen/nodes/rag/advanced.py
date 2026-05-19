@@ -239,8 +239,13 @@ class SelfCorrectingRAGNode(Node):
         self.max_corrections = max_corrections
         self.confidence_threshold = confidence_threshold
         self.verification_model = verification_model
-        self.base_rag_workflow = None
-        self.verifier_agent = None
+        # Lazily populated by _initialize_components(), which is the first
+        # statement of run(); typed as their concrete classes so the use
+        # sites in _perform_rag / _verify_result_quality do not each need a
+        # None-guard. The None initializer is the only place the Optional-ness
+        # is visible.
+        self.base_rag_workflow: WorkflowNode = None  # type: ignore[assignment]
+        self.verifier_agent: LLMAgentNode = None  # type: ignore[assignment]
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -692,8 +697,9 @@ class RAGFusionNode(Node):
         self.num_query_variations = num_query_variations
         self.fusion_method = fusion_method
         self.query_generator_model = query_generator_model
-        self.query_generator = None
-        self.base_rag_workflow = None
+        # Lazily populated by _initialize_components() before any use.
+        self.query_generator: LLMAgentNode = None  # type: ignore[assignment]
+        self.base_rag_workflow: WorkflowNode = None  # type: ignore[assignment]
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -1207,8 +1213,9 @@ class HyDENode(Node):
         self.hypothesis_model = hypothesis_model
         self.use_multiple_hypotheses = use_multiple_hypotheses
         self.num_hypotheses = num_hypotheses
-        self.hypothesis_generator = None
-        self.base_rag_workflow = None
+        # Lazily populated by _initialize_components() before any use.
+        self.hypothesis_generator: LLMAgentNode = None  # type: ignore[assignment]
+        self.base_rag_workflow: WorkflowNode = None  # type: ignore[assignment]
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -1565,8 +1572,9 @@ class StepBackRAGNode(Node):
         # references it when naming the abstraction-generator LLMAgentNode.
         self.name = name
         self.abstraction_model = abstraction_model
-        self.abstraction_generator = None
-        self.base_rag_workflow = None
+        # Lazily populated by _initialize_components() before any use.
+        self.abstraction_generator: LLMAgentNode = None  # type: ignore[assignment]
+        self.base_rag_workflow: WorkflowNode = None  # type: ignore[assignment]
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
@@ -1716,6 +1724,9 @@ Generate a broader, more abstract version that would help retrieve relevant back
 
     def _parse_abstract_query(self, response: Dict) -> str:
         """Parse abstract query from LLM response"""
+        # Bind content before the try so the except branch (which returns it)
+        # cannot reference an unbound name if response.get(...) itself raises.
+        content: Any = ""
         try:
             content = response.get("content", "")
             if isinstance(content, list):
