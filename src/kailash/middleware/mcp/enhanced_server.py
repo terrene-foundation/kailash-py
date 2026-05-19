@@ -101,8 +101,11 @@ class MCPToolNode(Node):
             description="Input data for the MCP tool",
         )
 
-        # Add schema-specific parameters
-        for param_name, param_info in self.parameters_schema.items():
+        # Add schema-specific parameters. Read from the validated config bag,
+        # not the bare instance attribute: Node.__init__ invokes get_parameters()
+        # during super-init (before the subclass body sets self.parameters_schema),
+        # so the bare-attr read would AttributeError on that first call.
+        for param_name, param_info in self.config.get("parameters_schema", {}).items():
             params[param_name] = NodeParameter(
                 name=param_name,
                 type=param_info.get("type", str),

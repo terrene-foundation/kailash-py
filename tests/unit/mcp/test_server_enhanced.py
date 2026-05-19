@@ -6,7 +6,6 @@ Tests for enhanced MCP server functionality without mocking external packages.
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash_mcp.server import MCPServer
 
 
@@ -175,3 +174,35 @@ class TestMCPServerIntegration:
         assert hasattr(server, "_tool_registry")
         assert hasattr(server, "_resource_registry")
         assert hasattr(server, "_prompt_registry")
+
+
+@pytest.mark.regression
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "MCPToolNode does not implement the abstract Node.run method, so the "
+        "class is currently uninstantiable (TypeError on construction). "
+        "Implementing run is shard A3's scope. Once A3 lands, this xfail flips "
+        "to a hard failure (strict=True) — remove the marker and confirm the "
+        "MED-1 get_parameters() config-bag fix is reachable at runtime."
+    ),
+)
+def test_mcp_tool_node_get_parameters_reads_config_bag():
+    """MED-1: MCPToolNode.get_parameters() reads parameters_schema from the
+    validated config bag, not the bare instance attribute.
+
+    Node.__init__ invokes get_parameters() during super-init — before the
+    subclass body sets self.parameters_schema. A bare-attr read would raise
+    AttributeError on that first call; routing through self.config fixes it.
+    Constructing the node exercises that first get_parameters() call.
+    """
+    from kailash.middleware.mcp.enhanced_server import MCPToolNode
+
+    node = MCPToolNode(
+        name="t",
+        tool_name="x",
+        parameters_schema={"foo": {"type": str, "required": True}},
+    )
+    params = node.get_parameters()
+    assert "tool_input" in params
+    assert "foo" in params
