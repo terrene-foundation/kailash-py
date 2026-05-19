@@ -159,11 +159,16 @@ class TestAgenticRAGNode:
     and the shape of the workflow ``_create_workflow()`` builds."""
 
     def test_constructs_with_defaults(self):
+        # The constructor resolves `tools or [...]` defaults onto instance
+        # attributes; node.config captures the *raw* kwarg (None for a default
+        # tools=), so the instance attrs are the canonical post-construction
+        # surface. The @register_node decorator erases the concrete type to
+        # the Node base, hence the targeted attr-defined ignores below.
         node = AgenticRAGNode()
-        assert node.tools == ["search", "calculator", "database"]
-        assert node.max_reasoning_steps == 5
-        assert node.planning_strategy == "react"
-        assert node.verification_enabled is True
+        assert node.tools == ["search", "calculator", "database"]  # type: ignore[attr-defined]
+        assert node.max_reasoning_steps == 5  # type: ignore[attr-defined]
+        assert node.planning_strategy == "react"  # type: ignore[attr-defined]
+        assert node.verification_enabled is True  # type: ignore[attr-defined]
 
     def test_constructor_config_overrides_apply(self):
         node = AgenticRAGNode(
@@ -172,10 +177,10 @@ class TestAgenticRAGNode:
             planning_strategy="tree-of-thought",
             verification_enabled=False,
         )
-        assert node.tools == ["search"]
-        assert node.max_reasoning_steps == 9
-        assert node.planning_strategy == "tree-of-thought"
-        assert node.verification_enabled is False
+        assert node.tools == ["search"]  # type: ignore[attr-defined]
+        assert node.max_reasoning_steps == 9  # type: ignore[attr-defined]
+        assert node.planning_strategy == "tree-of-thought"  # type: ignore[attr-defined]
+        assert node.verification_enabled is False  # type: ignore[attr-defined]
 
     def test_workflow_has_six_nodes_with_verification(self):
         """With verification enabled the sub-workflow has six nodes."""
@@ -261,14 +266,16 @@ class TestReasoningRAGNode:
     construction and the shape of the workflow ``_create_workflow()`` builds."""
 
     def test_constructs_with_defaults(self):
+        # Instance attrs are the canonical post-construction surface — see the
+        # AgenticRAGNode note above for the @register_node type-erasure.
         node = ReasoningRAGNode()
-        assert node.reasoning_depth == 3
-        assert node.strategy == "chain_of_thought"
+        assert node.reasoning_depth == 3  # type: ignore[attr-defined]
+        assert node.strategy == "chain_of_thought"  # type: ignore[attr-defined]
 
     def test_constructor_config_overrides_apply(self):
         node = ReasoningRAGNode(reasoning_depth=5, strategy="tree_of_thought")
-        assert node.reasoning_depth == 5
-        assert node.strategy == "tree_of_thought"
+        assert node.reasoning_depth == 5  # type: ignore[attr-defined]
+        assert node.strategy == "tree_of_thought"  # type: ignore[attr-defined]
 
     def test_workflow_has_three_nodes(self):
         """The reasoning sub-workflow always has three nodes."""
