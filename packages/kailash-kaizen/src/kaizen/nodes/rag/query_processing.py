@@ -16,9 +16,8 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode
 
@@ -160,7 +159,7 @@ class QueryExpansionNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create query expansion workflow"""
         builder = WorkflowBuilder()
 
@@ -339,7 +338,7 @@ class QueryDecompositionNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create query decomposition workflow"""
         builder = WorkflowBuilder()
 
@@ -561,7 +560,7 @@ class QueryRewritingNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create query rewriting workflow"""
         builder = WorkflowBuilder()
 
@@ -836,7 +835,7 @@ class QueryIntentClassifierNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create intent classification workflow"""
         builder = WorkflowBuilder()
 
@@ -1107,7 +1106,7 @@ class MultiHopQueryPlannerNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create multi-hop planning workflow"""
         builder = WorkflowBuilder()
 
@@ -1322,7 +1321,7 @@ class AdaptiveQueryProcessorNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create adaptive query processing workflow"""
         builder = WorkflowBuilder()
 
