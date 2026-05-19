@@ -319,7 +319,15 @@ def aggregate_federated_results(federated_responses):
 
         # Add results with node information
         for result in node_response["results"]:
+            # A node's results list is data from a federated peer — a non-dict
+            # element has no .copy(); a present-but-None content reaches a
+            # [:50] slice and a str-keyed group. Guard once at intake so every
+            # downstream aggregation strategy sees only well-formed dicts.
+            if not isinstance(result, dict):
+                continue
             result_with_node = result.copy()
+            if result_with_node.get("content") is None:
+                result_with_node["content"] = ""
             result_with_node["source_node"] = node_id
             result_with_node["node_weight"] = weight
             all_results.append(result_with_node)
@@ -437,8 +445,13 @@ def coordinate_caching(aggregated_results, distribution_plan):
 
     for result in aggregated_results["results"][:5]:  # Top 5 results
         if result["score"] > 0.8 and result.get("node_agreement", 0) > 0.5:
+            # A present-but-None content bypasses an upstream "" default and
+            # reaches .encode() — coerce before hashing.
+            content_hash = hashlib.sha256(
+                (result.get("content") or "").encode()
+            ).hexdigest()[:16]
             cache_candidates.append({
-                "content_hash": hashlib.sha256(result["content"].encode()).hexdigest()[:16],
+                "content_hash": content_hash,
                 "result": result,
                 "cache_priority": result["score"] * result.get("node_agreement", 1),
                 "ttl": 3600  # 1 hour
@@ -695,8 +708,10 @@ class EdgeRAGNode(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute edge-optimized RAG"""
-        query = kwargs.get("query", "")
-        local_data = kwargs.get("local_data", [])
+        # ``.get(key, default)`` only applies the default to a MISSING key; an
+        # explicit ``query=None`` returns ``None`` and ``None.encode()`` raises.
+        query = kwargs.get("query") or ""
+        local_data = kwargs.get("local_data") or []
         sync_with_cloud = kwargs.get("sync_with_cloud", False)
 
         # Check cache first
@@ -758,7 +773,11 @@ class EdgeRAGNode(Node):
         max_docs = 50 if self.power_mode == "low_power" else 200
 
         for doc in local_data[:max_docs]:
-            content = doc.get("content", "").lower()
+            # local_data is arbitrary user input — a non-dict element has no
+            # ``.get``; a present-but-None ``content`` bypasses the "" default.
+            if not isinstance(doc, dict):
+                continue
+            content = (doc.get("content") or "").lower()
             doc_words = set(content.split())
 
             # Quick scoring
@@ -785,14 +804,18 @@ class EdgeRAGNode(Node):
         elif self.model_size == "small":
             # Slightly better response
             if results:
-                top_content = results[0]["document"].get("content", "")[:100]
+                # A present-but-None ``content`` bypasses the "" default and
+                # ``None[:100]`` raises — coerce before slicing.
+                top_content = (results[0]["document"].get("content") or "")[:100]
                 response = f"Based on local data: {top_content}..."
             else:
                 response = "No relevant local data found. Consider syncing with cloud."
         else:  # medium
             # Best edge response
             if results:
-                contents = [r["document"].get("content", "")[:200] for r in results[:2]]
+                contents = [
+                    (r["document"].get("content") or "")[:200] for r in results[:2]
+                ]
                 response = f"Local analysis for '{query}': " + " ".join(contents)
             else:
                 response = f"No local matches for '{query}'. Cloud sync recommended."
@@ -988,10 +1011,13 @@ class CrossSiloRAGNode(Node):
 
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute cross-silo federated RAG"""
-        query = kwargs.get("query", "")
-        requester_org = kwargs.get("requester_org", "")
-        access_permissions = kwargs.get("access_permissions", [])
-        purpose = kwargs.get("purpose", "analysis")
+        # ``.get(key, default)`` only applies the default to a MISSING key; an
+        # explicit ``query=None`` reaches ``query.encode()`` in the audit-trail
+        # hash, and ``access_permissions=None`` reaches ``perm in None``.
+        query = kwargs.get("query") or ""
+        requester_org = kwargs.get("requester_org") or ""
+        access_permissions = kwargs.get("access_permissions") or []
+        purpose = kwargs.get("purpose") or "analysis"
 
         # Validate access
         access_valid = self._validate_cross_silo_access(
