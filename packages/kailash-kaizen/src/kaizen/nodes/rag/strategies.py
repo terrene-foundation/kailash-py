@@ -7,11 +7,19 @@ a workflow using WorkflowBuilder and delegates all execution to the SDK.
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.logic.workflow import WorkflowNode
+
+# Registering import: kailash uses a lazy module cache, so the
+# `@register_node()` decorators on SemanticChunkerNode / StatisticalChunkerNode /
+# HierarchicalChunkerNode fire only when `kailash.nodes.transform.chunkers` is
+# actually imported. The `create_*_rag_workflow` builders below reference those
+# node types by string in `add_node(...)`; importing the module here ensures the
+# registry is populated before any `_create_workflow()` runs.
+from kailash.nodes.transform import chunkers as _chunkers  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -126,12 +134,13 @@ def create_statistical_rag_workflow(config: RAGConfig) -> WorkflowNode:
             "code": """
 import re
 def extract_keywords(text):
-    words = re.findall(r'\\b[a-zA-Z]{3,}\\b', text.lower())
+    # A present-but-None `content` key would otherwise crash text.lower().
+    words = re.findall(r'\\b[a-zA-Z]{3,}\\b', (text or "").lower())
     stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'}
     keywords = [word for word in set(words) if word not in stop_words]
     return keywords[:20]
 
-result = {"keywords": [extract_keywords(chunk["content"]) for chunk in chunks]}
+result = {"keywords": [extract_keywords(chunk.get("content")) for chunk in (chunks or []) if isinstance(chunk, dict)]}
 """
         },
     )
@@ -186,17 +195,21 @@ def create_hybrid_rag_workflow(
     semantic_workflow = create_semantic_rag_workflow(config)
     statistical_workflow = create_statistical_rag_workflow(config)
 
-    # Add sub-workflows as nodes
+    # Add sub-workflows as nodes.
+    # `# type: ignore[attr-defined]` on each `.workflow` access below:
+    # @register_node erases the concrete WorkflowNode type to base Node, so a
+    # static checker does not see `.workflow` — but it IS a real read-only
+    # WorkflowNode property (added by shard A3) and resolves at runtime.
     semantic_id = builder.add_node(
         "WorkflowNode",
         node_id="semantic_rag",
-        config={"workflow": semantic_workflow.workflow},
+        config={"workflow": semantic_workflow.workflow},  # type: ignore[attr-defined]
     )
 
     statistical_id = builder.add_node(
         "WorkflowNode",
         node_id="statistical_rag",
-        config={"workflow": statistical_workflow.workflow},
+        config={"workflow": statistical_workflow.workflow},  # type: ignore[attr-defined]
     )
 
     # Add result fusion node
@@ -290,9 +303,10 @@ def create_hierarchical_rag_workflow(config: RAGConfig) -> WorkflowNode:
             "code": """
 levels = ["document", "section", "paragraph"]
 level_chunks = {}
+_chunks = [c for c in (chunks or []) if isinstance(c, dict)]
 
 for level in levels:
-    level_chunks[level] = [chunk for chunk in chunks if chunk.get("hierarchy_level") == level]
+    level_chunks[level] = [chunk for chunk in _chunks if chunk.get("hierarchy_level") == level]
 
 result = {"level_chunks": level_chunks, "levels": levels}
 """

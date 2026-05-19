@@ -670,3 +670,96 @@ chars of content) and is safe against the same malformed inputs.
   `specific_query`, `abstract_query`, `specific_retrieval`,
   `abstract_retrieval`, `combined_results`, `final_answer`, and
   `step_back_metadata`.
+
+## Workflow & strategy RAG
+
+`kaizen.nodes.rag.strategies` and `kaizen.nodes.rag.workflows` are the
+documented RAG Quick Start surface — the chunk → embed → store → retrieve
+pipelines and the multi-strategy routers a user reaches first.
+
+### `RAGConfig` and the `create_*_rag_workflow` builders
+
+`RAGConfig` (`strategies.py`) is the configuration dataclass shared by every
+builder: `chunk_size` (1000), `chunk_overlap` (200), `embedding_model`
+(`text-embedding-3-small`), `embedding_provider` (`openai`),
+`vector_db_provider` (`postgresql`), `retrieval_k` (5), `similarity_threshold`
+(0.7). Each field is overridable via the constructor and flows into the
+corresponding node config in the built graph.
+
+Four module-level builders each return a `WorkflowNode` wrapping a
+`WorkflowBuilder`-constructed `Workflow`:
+
+- **`create_semantic_rag_workflow`** — `semantic_chunker` → `embedder` →
+  `vector_db` → `retriever` (dense `HybridRetrieverNode`).
+- **`create_statistical_rag_workflow`** — `statistical_chunker` → `embedder` +
+  `keyword_extractor` → `vector_db` → `retriever` (sparse). The
+  `keyword_extractor` `PythonCodeNode` extracts stop-word-filtered keyword
+  tokens per chunk.
+- **`create_hybrid_rag_workflow(config, fusion_method="rrf")`** — embeds the
+  semantic and statistical sub-workflows as `WorkflowNode` nodes and fuses
+  their outputs in a `result_fusion` `PythonCodeNode`. The `fusion_method`
+  argument is consumed — it is baked into the fusion codegen's output field.
+- **`create_hierarchical_rag_workflow`** — `hierarchical_chunker` → `embedder`
+  + `level_processor` → per-level vector DBs (`doc_vector_db`,
+  `section_vector_db`, `para_vector_db`) → `hierarchical_retriever`. The
+  `level_processor` `PythonCodeNode` buckets chunks by `hierarchy_level`.
+
+`strategies.py` imports `kailash.nodes.transform.chunkers` for the side effect
+of registering `SemanticChunkerNode` / `StatisticalChunkerNode` /
+`HierarchicalChunkerNode` with the Kailash `NodeRegistry` — Kailash's lazy
+module cache does not populate those node types until the module is imported,
+and the builders reference them by string in `add_node(...)`.
+
+### The four strategy `Node` classes
+
+`SemanticRAGNode`, `StatisticalRAGNode`, `HybridRAGNode`, and
+`HierarchicalRAGNode` wrap the corresponding builder as a single graph node.
+Each declares `documents` (list, `required=True`), `query` (str), and
+`operation` (str, default `"index"`) run-time parameters and accepts an
+optional `config`; `HybridRAGNode` additionally declares `fusion_method`
+(default `"rrf"`). Each `run()` lazily builds its wrapped `WorkflowNode` on
+first call and delegates execution to it. `HybridRAGNode.run()` rebuilds the
+wrapped workflow when the `fusion_method` kwarg differs from the cached value.
+
+### The four `workflows.py` pipeline classes
+
+All four are `WorkflowNode` subclasses; each `__init__` builds an inner
+`Workflow` and passes it to `super().__init__(workflow=..., name=...)`:
+
+- **`SimpleRAGWorkflowNode`** — wraps `create_semantic_rag_workflow`'s
+  four-node graph directly.
+- **`AdvancedRAGWorkflowNode`** — a `quality_analyzer` `PythonCodeNode`
+  inspects the corpus, a `strategy_router` `SwitchNode` routes to one of four
+  embedded strategy pipelines, and a `quality_validator` scores the result.
+- **`AdaptiveRAGWorkflowNode`** — a `document_preprocessor` analyzes the
+  corpus for an `rag_strategy_analyzer` `LLMAgentNode`, a `strategy_executor`
+  `SwitchNode` routes to the chosen pipeline, and a `results_aggregator`
+  combines the output.
+- **`RAGPipelineWorkflowNode`** — a `config_processor` merges user config, a
+  `strategy_dispatcher` `SwitchNode` routes to one of four strategy
+  sub-workflows keyed on the `strategy` field, and a `results_formatter`
+  shapes the output. `default_strategy` defaults to `"hybrid"`.
+
+`RAGPipelineWorkflowNode` is registered via `@register_node()` and exported
+from the `kaizen.nodes.rag` package `__all__`.
+
+### Switch-router wiring
+
+The `AdvancedRAGWorkflowNode` / `AdaptiveRAGWorkflowNode` /
+`RAGPipelineWorkflowNode` routers are `SwitchNode` instances in multi-case
+mode: `cases=["semantic", "statistical", "hybrid", "hierarchical"]`. A
+multi-case `SwitchNode` emits each matched value on a `case_<value>` output
+port, so the router-to-pipeline connections are
+`add_connection(router, "case_<strategy>", pipeline, "input")` in the
+canonical four-argument `WorkflowBuilder.add_connection(from_node,
+from_output, to_node, to_input)` form.
+
+### Malformed-input hygiene
+
+The corpus-analysis `PythonCodeNode` templates — `quality_analyzer` and
+`document_preprocessor` in `workflows.py`, `keyword_extractor` and
+`level_processor` in `strategies.py` — filter `documents` / `chunks` to dict
+elements with `isinstance` and read content via a nested `_content` helper
+that collapses a missing key and a present-but-`None` `content` to `""`. A
+malformed corpus (a non-dict element, a present-but-`None` `content`) does not
+crash the codegen.

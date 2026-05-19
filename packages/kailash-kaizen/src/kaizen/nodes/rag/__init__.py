@@ -199,6 +199,7 @@ from .strategies import (
 from .workflows import (
     AdaptiveRAGWorkflowNode,
     AdvancedRAGWorkflowNode,
+    RAGPipelineWorkflowNode,
     SimpleRAGWorkflowNode,
 )
 
@@ -213,6 +214,7 @@ __all__ = [
     "SimpleRAGWorkflowNode",
     "AdvancedRAGWorkflowNode",
     "AdaptiveRAGWorkflowNode",
+    "RAGPipelineWorkflowNode",
     # Router & Analysis
     "RAGStrategyRouterNode",
     "RAGQualityAnalyzerNode",
