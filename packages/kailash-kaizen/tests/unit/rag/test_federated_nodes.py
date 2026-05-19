@@ -304,12 +304,17 @@ class TestFederatedRAGNode:
     """
 
     def test_constructs_with_defaults(self):
-        """The node constructs with documented default configuration."""
+        """The node constructs with documented default configuration.
+
+        Instance attrs are accessed directly; the @register_node decorator
+        type-erases the class to Node so the checker cannot see them —
+        ``# type: ignore[attr-defined]`` per the established rag-test pattern.
+        """
         node = FederatedRAGNode()
-        assert node.aggregation_strategy == "weighted_average"
-        assert node.min_participating_nodes == 2
-        assert node.federation_nodes == []
-        assert node.enable_caching is True
+        assert node.aggregation_strategy == "weighted_average"  # type: ignore[attr-defined]
+        assert node.min_participating_nodes == 2  # type: ignore[attr-defined]
+        assert node.federation_nodes == []  # type: ignore[attr-defined]
+        assert node.enable_caching is True  # type: ignore[attr-defined]
 
     def test_constructor_config_overrides_apply(self):
         """Constructor kwargs override the federation configuration."""
@@ -319,10 +324,10 @@ class TestFederatedRAGNode:
             min_participating_nodes=3,
             enable_caching=False,
         )
-        assert node.federation_nodes == ["hospital_a", "hospital_b", "research_lab"]
-        assert node.aggregation_strategy == "voting"
-        assert node.min_participating_nodes == 3
-        assert node.enable_caching is False
+        assert node.federation_nodes == ["hospital_a", "hospital_b", "research_lab"]  # type: ignore[attr-defined]
+        assert node.aggregation_strategy == "voting"  # type: ignore[attr-defined]
+        assert node.min_participating_nodes == 3  # type: ignore[attr-defined]
+        assert node.enable_caching is False  # type: ignore[attr-defined]
 
     def test_workflow_has_five_nodes_when_caching_enabled(self):
         """With caching on, the workflow has the cache_coordinator node."""

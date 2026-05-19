@@ -21,10 +21,15 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from kailash.nodes.api.rest import RESTClientNode
+from kailash.nodes.api.rest import (  # noqa: F401  (registers "RESTClientNode" for builder.add_node)
+    RESTClientNode,
+)
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.code.python import (  # noqa: F401  (registers "PythonCodeNode" for builder.add_node)
+    PythonCodeNode,
+)
 from kailash.nodes.logic.workflow import WorkflowNode
+from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -88,7 +93,7 @@ class FederatedRAGNode(WorkflowNode):
     def __init__(
         self,
         name: str = "federated_rag",
-        federation_nodes: List[str] = None,
+        federation_nodes: Optional[List[str]] = None,
         aggregation_strategy: str = "weighted_average",
         min_participating_nodes: int = 2,
         timeout_per_node: float = 5.0,
@@ -101,9 +106,12 @@ class FederatedRAGNode(WorkflowNode):
         self.enable_caching = enable_caching
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create federated RAG workflow"""
         builder = WorkflowBuilder()
+        # Assigned only when caching is enabled; pre-bind so the later
+        # ``if self.enable_caching`` connection block has a defined name.
+        cache_coordinator_id: Optional[str] = None
 
         # Query distributor
         query_distributor_id = builder.add_node(
@@ -557,6 +565,9 @@ def format_federated_results(aggregated_results, federated_responses, cache_coor
         )
 
         if self.enable_caching:
+            # cache_coordinator_id is assigned in the matching enable_caching
+            # block above; narrow it from Optional[str] for the connections.
+            assert cache_coordinator_id is not None
             builder.add_connection(
                 result_aggregator_id,
                 "aggregated_results",
@@ -933,10 +944,10 @@ class CrossSiloRAGNode(Node):
     def __init__(
         self,
         name: str = "cross_silo_rag",
-        silos: List[str] = None,
+        silos: Optional[List[str]] = None,
         data_sharing_agreement: str = "minimal",
         audit_mode: str = "standard",
-        governance_rules: Dict[str, Any] = None,
+        governance_rules: Optional[Dict[str, Any]] = None,
     ):
         resolved_silos = silos or []
         resolved_governance_rules = governance_rules or {}

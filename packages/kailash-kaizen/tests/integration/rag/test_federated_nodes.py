@@ -444,11 +444,10 @@ class TestFederatedNoDataLeakBoundary:
         node = FederatedRAGNode()
         # The WorkflowNode wraps a sub-workflow whose entry codegen
         # (query_distributor) reads only ``query`` and ``node_endpoints``.
-        distributor_code = (
-            node._create_workflow()
-            .get_node("query_distributor")  # type: ignore[attr-defined]
-            .code
-        )
+        # _create_workflow is a private helper; @register_node type-erases the
+        # class to Node so the checker cannot see it.
+        workflow = node._create_workflow()  # type: ignore[attr-defined]
+        distributor_code = workflow.get_node("query_distributor").code
         assert "def distribute_query(query, node_endpoints, federation_config)" in (
             distributor_code
         )
