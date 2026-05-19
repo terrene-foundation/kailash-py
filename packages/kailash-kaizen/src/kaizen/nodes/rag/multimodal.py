@@ -593,6 +593,12 @@ class VisualQuestionAnsweringNode(Node):
             "image_caption": caption,
             "detected_objects": detected_objects,
             "model_used": self.model,
+            # Echo the documented `image_path` input so the result truthfully
+            # reports which image the node was asked about. `image_path` is a
+            # required parameter (get_parameters); the simulated VQA scores
+            # `question` only and cannot read pixels — but it MUST NOT silently
+            # drop a documented input (zero-tolerance Rule 3c).
+            "image_path": image_path,
         }
 
 

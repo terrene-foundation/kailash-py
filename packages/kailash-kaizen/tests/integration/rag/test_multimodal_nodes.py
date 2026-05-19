@@ -90,8 +90,11 @@ class TestMultimodalNodesAgainstRealImages:
             "image_caption",
             "detected_objects",
             "model_used",
+            "image_path",
         }
         assert len(result["detected_objects"]) == 4
+        # The result echoes the documented image_path input.
+        assert result["image_path"] == str(architecture_png)
 
     def test_image_text_matching_against_real_png_collection(
         self, architecture_png, diagram_png_bytes

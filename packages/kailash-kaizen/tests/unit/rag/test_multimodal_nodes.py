@@ -36,8 +36,16 @@ pytestmark = pytest.mark.unit
 # VisualQuestionAnsweringNode
 # ==========================================================================
 
-# The five keys VQA.run() always returns, per the docstring contract.
-_VQA_KEYS = {"answer", "confidence", "image_caption", "detected_objects", "model_used"}
+# The keys VQA.run() always returns. `image_path` echoes the documented input
+# so the result truthfully reports which image the node was asked about.
+_VQA_KEYS = {
+    "answer",
+    "confidence",
+    "image_caption",
+    "detected_objects",
+    "model_used",
+    "image_path",
+}
 
 
 class TestVisualQuestionAnsweringNode:
@@ -93,6 +101,18 @@ class TestVisualQuestionAnsweringNode:
         node = VisualQuestionAnsweringNode(model="custom-vqa-v2")
         result = node.run(image_path="x.png", question="What is shown?")
         assert result["model_used"] == "custom-vqa-v2"
+
+    def test_run_echoes_image_path_in_result(self):
+        """The result echoes the documented `image_path` input so it truthfully
+        reports which image the node was asked about (the simulated VQA scores
+        `question` only and cannot read pixels — but it must not silently drop
+        a documented required input)."""
+        node = VisualQuestionAnsweringNode()
+        result = node.run(
+            image_path="architecture_diagram.png",
+            question="What components are shown?",
+        )
+        assert result["image_path"] == "architecture_diagram.png"
 
     def test_run_missing_question_kwarg_does_not_crash(self):
         """An absent question kwarg defaults to '' and routes to the fallback."""

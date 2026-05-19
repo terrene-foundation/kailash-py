@@ -65,7 +65,14 @@ from kaizen.nodes.rag.multimodal import (
 pytestmark = pytest.mark.regression
 
 
-_VQA_KEYS = {"answer", "confidence", "image_caption", "detected_objects", "model_used"}
+_VQA_KEYS = {
+    "answer",
+    "confidence",
+    "image_caption",
+    "detected_objects",
+    "model_used",
+    "image_path",
+}
 _ITM_KEYS = {"matches", "similarity_scores", "match_type", "model", "total_searched"}
 
 
