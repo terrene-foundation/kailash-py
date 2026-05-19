@@ -624,16 +624,57 @@ class EdgeRAGNode(Node):
         update_strategy: str = "incremental",
         power_mode: str = "balanced",
     ):
+        super().__init__(
+            name=name,
+            model_size=model_size,
+            max_cache_size_mb=max_cache_size_mb,
+            update_strategy=update_strategy,
+            power_mode=power_mode,
+        )
         self.model_size = model_size
         self.max_cache_size_mb = max_cache_size_mb
         self.update_strategy = update_strategy
         self.power_mode = power_mode
         self.cache = {}
         self.cache_size_bytes = 0
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="edge_rag",
+                description="Node instance name",
+            ),
+            "model_size": NodeParameter(
+                name="model_size",
+                type=str,
+                required=False,
+                default="small",
+                description="Edge model size profile",
+            ),
+            "max_cache_size_mb": NodeParameter(
+                name="max_cache_size_mb",
+                type=int,
+                required=False,
+                default=100,
+                description="Maximum local cache size in MB",
+            ),
+            "update_strategy": NodeParameter(
+                name="update_strategy",
+                type=str,
+                required=False,
+                default="incremental",
+                description="Edge index update strategy",
+            ),
+            "power_mode": NodeParameter(
+                name="power_mode",
+                type=str,
+                required=False,
+                default="balanced",
+                description="Edge power/performance profile",
+            ),
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Query to process"
             ),
@@ -874,14 +915,57 @@ class CrossSiloRAGNode(Node):
         audit_mode: str = "standard",
         governance_rules: Dict[str, Any] = None,
     ):
-        self.silos = silos or []
+        resolved_silos = silos or []
+        resolved_governance_rules = governance_rules or {}
+        super().__init__(
+            name=name,
+            silos=resolved_silos,
+            data_sharing_agreement=data_sharing_agreement,
+            audit_mode=audit_mode,
+            governance_rules=resolved_governance_rules,
+        )
+        self.silos = resolved_silos
         self.data_sharing_agreement = data_sharing_agreement
         self.audit_mode = audit_mode
-        self.governance_rules = governance_rules or {}
-        super().__init__(name)
+        self.governance_rules = resolved_governance_rules
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="cross_silo_rag",
+                description="Node instance name",
+            ),
+            "silos": NodeParameter(
+                name="silos",
+                type=list,
+                required=False,
+                default=None,
+                description="Participating data silos",
+            ),
+            "data_sharing_agreement": NodeParameter(
+                name="data_sharing_agreement",
+                type=str,
+                required=False,
+                default="minimal",
+                description="Cross-silo data sharing agreement level",
+            ),
+            "audit_mode": NodeParameter(
+                name="audit_mode",
+                type=str,
+                required=False,
+                default="standard",
+                description="Audit logging mode",
+            ),
+            "governance_rules": NodeParameter(
+                name="governance_rules",
+                type=dict,
+                required=False,
+                default=None,
+                description="Cross-silo governance ruleset",
+            ),
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Cross-silo query"
             ),
