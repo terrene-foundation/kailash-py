@@ -188,7 +188,7 @@ def preprocess_documents(documents):
             "stats": {{
                 "total_text": len(text_docs),
                 "total_images": len(image_docs),
-                "multimodal_docs": len([d for d in documents if d.get("type") == "multimodal"])
+                "multimodal_docs": len([d for d in documents if isinstance(d, dict) and d.get("type") == "multimodal"])
             }}
         }}
     }}
