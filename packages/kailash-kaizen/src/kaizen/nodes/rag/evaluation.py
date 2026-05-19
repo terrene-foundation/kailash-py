@@ -102,7 +102,7 @@ class RAGEvaluationNode(WorkflowNode):
         ]
         self.use_reference_answers = use_reference_answers
         self.llm_judge_model = llm_judge_model
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create RAG evaluation workflow"""

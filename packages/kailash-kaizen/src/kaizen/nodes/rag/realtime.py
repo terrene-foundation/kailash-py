@@ -93,7 +93,7 @@ class RealtimeRAGNode(WorkflowNode):
         self.max_buffer_size = max_buffer_size
         self.document_buffer = deque(maxlen=max_buffer_size)
         self.last_update = datetime.now()
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create real-time RAG workflow"""

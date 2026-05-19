@@ -91,7 +91,7 @@ class MultimodalRAGNode(WorkflowNode):
         self.image_encoder = image_encoder
         self.enable_ocr = enable_ocr
         self.fusion_strategy = fusion_strategy
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create multimodal RAG workflow"""

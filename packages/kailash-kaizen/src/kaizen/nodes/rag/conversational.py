@@ -111,7 +111,7 @@ class ConversationalRAGNode(WorkflowNode):
         self.topic_tracking = topic_tracking
         # In-memory session storage (use persistent storage in production)
         self.sessions = {}
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create conversational RAG workflow"""

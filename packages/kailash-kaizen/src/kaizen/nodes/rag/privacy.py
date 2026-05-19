@@ -93,7 +93,7 @@ class PrivacyPreservingRAGNode(WorkflowNode):
         self.redact_pii = redact_pii
         self.anonymize_queries = anonymize_queries
         self.audit_logging = audit_logging
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create privacy-preserving RAG workflow"""

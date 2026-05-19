@@ -93,7 +93,7 @@ class AgenticRAGNode(WorkflowNode):
         self.max_reasoning_steps = max_reasoning_steps
         self.planning_strategy = planning_strategy
         self.verification_enabled = verification_enabled
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create agentic RAG workflow"""
@@ -752,7 +752,7 @@ class ReasoningRAGNode(WorkflowNode):
     ):
         self.reasoning_depth = reasoning_depth
         self.strategy = strategy
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create reasoning RAG workflow"""
