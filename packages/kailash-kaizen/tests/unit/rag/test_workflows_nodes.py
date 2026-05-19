@@ -49,7 +49,9 @@ def _wf(node: WorkflowNode) -> Workflow:
     ``None`` branch is unreachable; the assert turns the static ``| None`` into
     a concrete type for the checker and fails loudly if the invariant breaks.
     """
-    wf = node.workflow
+    # type: ignore[attr-defined] — @register_node erases WorkflowNode→Node for
+    # static checkers; `.workflow` is a real WorkflowNode property (A3).
+    wf = node.workflow  # type: ignore[attr-defined]
     assert wf is not None
     return wf
 
@@ -138,7 +140,7 @@ class TestStrategyWorkflowBuilders:
     def test_builder_graph_shape(self, builder, expected_nodes):
         node = builder(RAGConfig())
         assert isinstance(node, WorkflowNode)
-        assert isinstance(node.workflow, Workflow)
+        assert isinstance(node.workflow, Workflow)  # type: ignore[attr-defined]
         assert set(_wf(node).nodes.keys()) == expected_nodes
 
     def test_semantic_builder_wires_chunker_to_embedder(self):
@@ -224,7 +226,7 @@ class TestStrategyNodes:
         assert params["fusion_method"].default == "rrf"
 
     def test_hybrid_node_binds_fusion_method(self):
-        assert HybridRAGNode(fusion_method="weighted").fusion_method == "weighted"
+        assert HybridRAGNode(fusion_method="weighted").fusion_method == "weighted"  # type: ignore[attr-defined]
 
     @pytest.mark.parametrize("cls", _STRATEGY_NODE_CLASSES)
     def test_workflow_node_lazy_until_run(self, cls):
@@ -249,7 +251,7 @@ class TestWorkflowNodes:
     def test_constructs_default(self, cls):
         node = cls()
         assert isinstance(node, WorkflowNode)
-        assert isinstance(node.workflow, Workflow)
+        assert isinstance(node.workflow, Workflow)  # type: ignore[attr-defined]
 
     @pytest.mark.parametrize("cls", _WORKFLOW_NODE_CLASSES)
     def test_constructs_with_custom_config(self, cls):
@@ -293,13 +295,13 @@ class TestWorkflowNodes:
     def test_adaptive_workflow_llm_model_default(self):
         """The llm_model arg is bound (default gpt-4-class identifier)."""
         node = AdaptiveRAGWorkflowNode()
-        assert node.llm_model
+        assert node.llm_model  # type: ignore[attr-defined]
 
     def test_rag_pipeline_default_strategy_bound(self):
         """RAGPipelineWorkflowNode binds default_strategy (default hybrid)."""
-        assert RAGPipelineWorkflowNode().default_strategy == "hybrid"
+        assert RAGPipelineWorkflowNode().default_strategy == "hybrid"  # type: ignore[attr-defined]
         assert (
-            RAGPipelineWorkflowNode(default_strategy="semantic").default_strategy
+            RAGPipelineWorkflowNode(default_strategy="semantic").default_strategy  # type: ignore[attr-defined]
             == "semantic"
         )
 

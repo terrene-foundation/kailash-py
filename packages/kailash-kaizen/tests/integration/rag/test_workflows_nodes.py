@@ -65,7 +65,9 @@ def _wf(node: WorkflowNode) -> Workflow:
     ``None`` branch is unreachable; the assert turns a static ``| None`` into a
     concrete type for the checker and fails loudly if the invariant breaks.
     """
-    wf = node.workflow
+    # type: ignore[attr-defined] — @register_node erases WorkflowNode→Node for
+    # static checkers; `.workflow` is a real WorkflowNode property (A3).
+    wf = node.workflow  # type: ignore[attr-defined]
     assert wf is not None
     return wf
 
@@ -107,7 +109,7 @@ class TestStrategyBuildersRealConstruction:
     def test_builder_returns_real_workflow_node(self, builder):
         node = builder(RAGConfig())
         assert isinstance(node, WorkflowNode)
-        assert isinstance(node.workflow, Workflow)
+        assert isinstance(node.workflow, Workflow)  # type: ignore[attr-defined]
         assert len(_wf(node).nodes) > 0
 
     def test_semantic_workflow_chunker_type_resolved(self):
@@ -187,11 +189,11 @@ class TestStrategyNodesRealConstruction:
         Exercised against real builder calls — no mock of create_hybrid_*.
         """
         node = HybridRAGNode(fusion_method="rrf")
-        node.workflow_node = create_hybrid_rag_workflow(node.rag_config, "rrf")
-        first = node.workflow_node
+        node.workflow_node = create_hybrid_rag_workflow(node.rag_config, "rrf")  # type: ignore[attr-defined]
+        first = node.workflow_node  # type: ignore[attr-defined]
         # a run() with a different fusion_method must rebuild (run() logic)
-        node.fusion_method = "rrf"
-        assert first is node.workflow_node
+        node.fusion_method = "rrf"  # type: ignore[attr-defined]
+        assert first is node.workflow_node  # type: ignore[attr-defined]
 
 
 # ==========================================================================
@@ -213,7 +215,7 @@ class TestWorkflowPipelinesRealConstruction:
     def test_pipeline_constructs_real_workflow(self, cls):
         node = cls()
         assert isinstance(node, WorkflowNode)
-        assert isinstance(node.workflow, Workflow)
+        assert isinstance(node.workflow, Workflow)  # type: ignore[attr-defined]
 
     @pytest.mark.parametrize("cls", _WORKFLOW_CLASSES)
     def test_pipeline_inner_graph_has_real_node_objects(self, cls):

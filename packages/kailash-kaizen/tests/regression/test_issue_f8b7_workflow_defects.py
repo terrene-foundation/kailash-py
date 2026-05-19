@@ -42,8 +42,10 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from kailash.nodes.base import NodeRegistry
+from kailash.nodes.base import Node, NodeRegistry
+from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 from kaizen.nodes.rag.strategies import (
     RAGConfig,
@@ -53,6 +55,21 @@ from kaizen.nodes.rag.strategies import (
 from kaizen.nodes.rag.workflows import AdaptiveRAGWorkflowNode, AdvancedRAGWorkflowNode
 
 pytestmark = pytest.mark.regression
+
+
+def _wf(node: WorkflowNode) -> Workflow:
+    """Narrow ``WorkflowNode.workflow`` (``Workflow | None``) to ``Workflow``."""
+    wf = node.workflow  # type: ignore[attr-defined]
+    assert wf is not None
+    return wf
+
+
+def _node(workflow: Workflow, node_id: str) -> Node:
+    """Narrow ``Workflow.get_node`` (``Node | None``) to ``Node``."""
+    found = workflow.get_node(node_id)
+    assert found is not None, node_id
+    return found
+
 
 # A present-but-None content key, a non-dict element, a missing-content dict,
 # and one well-formed doc — the four-way malformed-input fixture.
@@ -113,11 +130,11 @@ class TestR3L3CanonicalAddConnection:
     def test_advanced_workflow_constructs(self):
         """Pre-B7: add_connection(router, target, route=...) → TypeError."""
         node = AdvancedRAGWorkflowNode()
-        assert node.workflow is not None
+        assert node.workflow is not None  # type: ignore[attr-defined]
 
     def test_adaptive_workflow_constructs(self):
         node = AdaptiveRAGWorkflowNode()
-        assert node.workflow is not None
+        assert node.workflow is not None  # type: ignore[attr-defined]
 
     def test_advanced_router_emits_per_case_ports(self):
         """The SwitchNode router is configured for multi-case (cases=[...]).
@@ -127,8 +144,8 @@ class TestR3L3CanonicalAddConnection:
         would be structurally impossible against the old invalid `routes`
         config (SwitchNode has no `routes` parameter).
         """
-        wf = AdvancedRAGWorkflowNode().workflow
-        router = wf.get_node("strategy_router")
+        wf = _wf(AdvancedRAGWorkflowNode())
+        router = _node(wf, "strategy_router")
         assert router.config.get("cases") == [
             "semantic",
             "statistical",
@@ -142,7 +159,7 @@ class TestR3L3CanonicalAddConnection:
         ``Workflow.connections`` holds ``Connection`` pydantic models whose
         source-output field is ``source_output``.
         """
-        wf = AdvancedRAGWorkflowNode().workflow
+        wf = _wf(AdvancedRAGWorkflowNode())
         router_edges = [c for c in wf.connections if c.source_node == "strategy_router"]
         source_outputs = {c.source_output for c in router_edges}
         assert source_outputs == {
@@ -163,7 +180,7 @@ class TestNoneContentCrashClass:
 
     def test_advanced_quality_analyzer_survives_malformed_corpus(self):
         """quality_analyzer: doc.get('content','').lower() crashed on None."""
-        node = AdvancedRAGWorkflowNode().workflow.get_node("quality_analyzer")
+        node = _node(_wf(AdvancedRAGWorkflowNode()), "quality_analyzer")
         out = node.execute(documents=_MALFORMED)
         analysis = out["result"]["analysis"]
         # one well-formed doc survives the isinstance filter
@@ -176,7 +193,7 @@ class TestNoneContentCrashClass:
         }
 
     def test_advanced_quality_analyzer_survives_empty(self):
-        node = AdvancedRAGWorkflowNode().workflow.get_node("quality_analyzer")
+        node = _node(_wf(AdvancedRAGWorkflowNode()), "quality_analyzer")
         out = node.execute(documents=[])
         assert out["result"]["analysis"]["total_docs"] == 0
 
@@ -186,18 +203,18 @@ class TestNoneContentCrashClass:
         Proves the _content helper still reads real content (not a no-op
         guard that swallows every doc).
         """
-        node = AdvancedRAGWorkflowNode().workflow.get_node("quality_analyzer")
+        node = _node(_wf(AdvancedRAGWorkflowNode()), "quality_analyzer")
         out = node.execute(documents=_MALFORMED)
         assert out["result"]["analysis"]["is_technical"] is True
 
     def test_adaptive_document_preprocessor_survives_malformed_corpus(self):
         """document_preprocessor: total_length sum() crashed on None content."""
-        node = AdaptiveRAGWorkflowNode().workflow.get_node("document_preprocessor")
+        node = _node(_wf(AdaptiveRAGWorkflowNode()), "document_preprocessor")
         out = node.execute(documents=_MALFORMED, query="optimize")
         assert out["result"]["document_count"] == 3
 
     def test_adaptive_document_preprocessor_survives_unicode(self):
-        node = AdaptiveRAGWorkflowNode().workflow.get_node("document_preprocessor")
+        node = _node(_wf(AdaptiveRAGWorkflowNode()), "document_preprocessor")
         out = node.execute(
             documents=[{"content": "naïve café — 日本語 código"}],
             query="q",
@@ -206,8 +223,8 @@ class TestNoneContentCrashClass:
 
     def test_statistical_keyword_extractor_survives_malformed_chunks(self):
         """keyword_extractor: chunk['content'] KeyError / None.lower() crash."""
-        node = create_statistical_rag_workflow(RAGConfig()).workflow.get_node(
-            "keyword_extractor"
+        node = _node(
+            _wf(create_statistical_rag_workflow(RAGConfig())), "keyword_extractor"
         )
         out = node.execute(chunks=_MALFORMED)
         # 3 dict chunks survive the isinstance filter
@@ -215,8 +232,8 @@ class TestNoneContentCrashClass:
 
     def test_hierarchical_level_processor_survives_malformed_chunks(self):
         """level_processor: chunk.get on a non-dict element raised."""
-        node = create_hierarchical_rag_workflow(RAGConfig()).workflow.get_node(
-            "level_processor"
+        node = _node(
+            _wf(create_hierarchical_rag_workflow(RAGConfig())), "level_processor"
         )
         out = node.execute(chunks=_MALFORMED)
         assert set(out["result"]["level_chunks"].keys()) == {

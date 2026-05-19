@@ -28,13 +28,14 @@ from collections import OrderedDict
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
+from pydantic import BaseModel, Field, ValidationError
+
 from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
-from pydantic import BaseModel, Field, ValidationError
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -1413,8 +1414,9 @@ class Node(ABC):
 
         # Then validate JSON-serializability
         # Skip JSON validation for state management objects
-        from kailash.workflow.state import WorkflowStateWrapper
         from pydantic import BaseModel
+
+        from kailash.workflow.state import WorkflowStateWrapper
 
         non_serializable = []
         for k, v in outputs.items():
@@ -2660,9 +2662,6 @@ class NodeRegistry:
         logging.info("Cleared all registered nodes")
 
 
-_NodeClassT = TypeVar("_NodeClassT", bound=type["Node"])
-
-
 def register_node(alias: str | None = None):
     """Decorator to register a node class.
 
@@ -2710,14 +2709,8 @@ def register_node(alias: str | None = None):
         ...         return pd.read_csv(file)
     """
 
-    def decorator(node_class: _NodeClassT) -> _NodeClassT:
+    def decorator(node_class: type[Node]):
         """Inner decorator that performs registration.
-
-        The ``_NodeClassT`` type variable preserves the *concrete* decorated
-        class type: ``@register_node()`` returns the exact class it received,
-        so a static checker does not erase ``WorkflowNode`` (or any subclass)
-        down to the ``Node`` base. The runtime behaviour is unchanged — the
-        same class object is returned.
 
         Args:
             node_class: The node class to register

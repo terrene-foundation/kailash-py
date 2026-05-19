@@ -40,9 +40,15 @@ class SimpleRAGWorkflowNode(WorkflowNode):
         # Create semantic RAG workflow
         workflow_node = create_semantic_rag_workflow(self.rag_config)
 
-        # Initialize as WorkflowNode
+        # Initialize as WorkflowNode.
+        # `# type: ignore[attr-defined]` on every `.workflow` access in this
+        # module: @register_node erases the concrete WorkflowNode type to base
+        # Node, so a static checker does not see `.workflow` — but it IS a real
+        # read-only WorkflowNode property (added by shard A3) and resolves at
+        # runtime. (Known Core SDK type-erasure gap; B1-B6 worked around it the
+        # same way at the call site.)
         super().__init__(
-            workflow=workflow_node.workflow,
+            workflow=workflow_node.workflow,  # type: ignore[attr-defined]
             name=name,
             description="Simple RAG workflow with semantic chunking and dense retrieval",
         )
@@ -141,25 +147,25 @@ result = {"analysis": analyze_documents(documents), "documents": documents}
         semantic_id = builder.add_node(
             "WorkflowNode",
             node_id="semantic_rag_pipeline",
-            config={"workflow": semantic_workflow.workflow},
+            config={"workflow": semantic_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         statistical_id = builder.add_node(
             "WorkflowNode",
             node_id="statistical_rag_pipeline",
-            config={"workflow": statistical_workflow.workflow},
+            config={"workflow": statistical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         hybrid_id = builder.add_node(
             "WorkflowNode",
             node_id="hybrid_rag_pipeline",
-            config={"workflow": hybrid_workflow.workflow},
+            config={"workflow": hybrid_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         hierarchical_id = builder.add_node(
             "WorkflowNode",
             node_id="hierarchical_rag_pipeline",
-            config={"workflow": hierarchical_workflow.workflow},
+            config={"workflow": hierarchical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         # Quality validator
@@ -372,25 +378,25 @@ result = analyze_for_llm(documents, query)
         semantic_pipeline_id = builder.add_node(
             "WorkflowNode",
             node_id="semantic_pipeline",
-            config={"workflow": semantic_workflow.workflow},
+            config={"workflow": semantic_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         statistical_pipeline_id = builder.add_node(
             "WorkflowNode",
             node_id="statistical_pipeline",
-            config={"workflow": statistical_workflow.workflow},
+            config={"workflow": statistical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         hybrid_pipeline_id = builder.add_node(
             "WorkflowNode",
             node_id="hybrid_pipeline",
-            config={"workflow": hybrid_workflow.workflow},
+            config={"workflow": hybrid_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         hierarchical_pipeline_id = builder.add_node(
             "WorkflowNode",
             node_id="hierarchical_pipeline",
-            config={"workflow": hierarchical_workflow.workflow},
+            config={"workflow": hierarchical_workflow.workflow},  # type: ignore[attr-defined]
         )
 
         # Results aggregator
@@ -542,7 +548,7 @@ result = process_config(documents, **kwargs)
             strategy_id = builder.add_node(
                 "WorkflowNode",
                 node_id=f"{strategy_name}_strategy",
-                config={"workflow": workflow_node.workflow},
+                config={"workflow": workflow_node.workflow},  # type: ignore[attr-defined]
             )
             strategy_ids[strategy_name] = strategy_id
 

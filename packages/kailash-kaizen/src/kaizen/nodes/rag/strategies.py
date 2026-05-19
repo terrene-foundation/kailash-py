@@ -195,17 +195,21 @@ def create_hybrid_rag_workflow(
     semantic_workflow = create_semantic_rag_workflow(config)
     statistical_workflow = create_statistical_rag_workflow(config)
 
-    # Add sub-workflows as nodes
+    # Add sub-workflows as nodes.
+    # `# type: ignore[attr-defined]` on each `.workflow` access below:
+    # @register_node erases the concrete WorkflowNode type to base Node, so a
+    # static checker does not see `.workflow` — but it IS a real read-only
+    # WorkflowNode property (added by shard A3) and resolves at runtime.
     semantic_id = builder.add_node(
         "WorkflowNode",
         node_id="semantic_rag",
-        config={"workflow": semantic_workflow.workflow},
+        config={"workflow": semantic_workflow.workflow},  # type: ignore[attr-defined]
     )
 
     statistical_id = builder.add_node(
         "WorkflowNode",
         node_id="statistical_rag",
-        config={"workflow": statistical_workflow.workflow},
+        config={"workflow": statistical_workflow.workflow},  # type: ignore[attr-defined]
     )
 
     # Add result fusion node
