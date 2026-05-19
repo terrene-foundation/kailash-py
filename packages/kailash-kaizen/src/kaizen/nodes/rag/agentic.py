@@ -14,17 +14,21 @@ Based on ReAct, Toolformer, and agent research from 2024.
 import json
 import logging
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
-from kailash.nodes.api.rest import RESTClientNode
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.sql import SQLDatabaseNode
+
+# PythonCodeNode is imported for its @register_node side effect: the
+# sub-workflows below reference it by the string "PythonCodeNode", so its
+# class must be registered before _create_workflow() runs.
+from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode
+# LLMAgentNode is imported for its @register_node side effect: the
+# sub-workflows reference it by the string "LLMAgentNode".
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +89,7 @@ class AgenticRAGNode(WorkflowNode):
     def __init__(
         self,
         name: str = "agentic_rag",
-        tools: List[str] = None,
+        tools: Optional[List[str]] = None,
         max_reasoning_steps: int = 5,
         planning_strategy: str = "react",
         verification_enabled: bool = True,
@@ -423,6 +427,7 @@ result = {{
         )
 
         # Verification agent (if enabled)
+        verifier_id: Optional[str] = None
         if self.verification_enabled:
             verifier_id = builder.add_node(
                 "LLMAgentNode",
@@ -541,6 +546,9 @@ result = {{
 
         # Verification (if enabled)
         if self.verification_enabled:
+            # verifier_id was assigned in the matching `if` block above; the
+            # assert documents that invariant and narrows the type for pyright.
+            assert verifier_id is not None
             builder.add_connection(
                 state_manager_id, "reasoning_state", verifier_id, "answer_to_verify"
             )
@@ -592,7 +600,7 @@ class ToolAugmentedRAGNode(Node):
     def __init__(
         self,
         name: str = "tool_augmented_rag",
-        tool_registry: Dict[str, Callable] = None,
+        tool_registry: Optional[Dict[str, Callable]] = None,
         auto_detect_tools: bool = True,
     ):
         resolved_registry = tool_registry or {}
