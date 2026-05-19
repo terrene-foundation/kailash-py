@@ -270,3 +270,90 @@ executes a sub-workflow built at construction time by
 - `entity_extractor`, `query_processor`, and `summary_generator` are
   `LLMAgentNode` steps — executing the sub-workflow end-to-end requires an LLM
   key, which the `[rag]` extra does not carry.
+
+## Agentic RAG
+
+`kaizen/nodes/rag/agentic.py` defines three nodes that bring autonomous-agent
+patterns (tool use, ReAct-style reasoning loops, multi-step reasoning chains)
+to RAG. `ToolAugmentedRAGNode` is a direct `Node` with a deterministic
+`run()`; `AgenticRAGNode` and `ReasoningRAGNode` are `WorkflowNode`s whose
+behavior is a sub-workflow built at construction time.
+
+### `ToolAugmentedRAGNode`
+
+A `kailash.nodes.base.Node` with a direct `run(self, **kwargs) -> Dict[str, Any]`.
+It augments retrieval by invoking registered tool callables.
+
+- Constructor: `ToolAugmentedRAGNode(name, tool_registry, auto_detect_tools)`.
+  `tool_registry` is a `Dict[str, Callable]` mapping a tool name to a callable
+  invoked as `tool(query, context)`; it defaults to an empty dict.
+- Inputs (`get_parameters()`): `query` (`str`, required), `documents`
+  (`list`, optional), `context` (`dict`, optional), plus the three
+  constructor parameters.
+- `run()` calls `_detect_required_tools(query)` — a keyword scan that appends
+  `calculator` for a query containing `calculate`/`compute`/`sum`/`average`,
+  `unit_converter` for `convert`/`unit`/`measurement`, and `date_calculator`
+  for `date`/`days`/`weeks`/`months`. Each detected tool that is present in
+  `tool_registry` is invoked; a tool that raises is caught and recorded as
+  `{"error": str(e)}` in `tool_outputs`, and the failure is logged via
+  `logger.error` on the `kaizen.nodes.rag.agentic` logger.
+- `run()` returns `answer` (a synthesized string), `tools_invoked` (the list
+  of detected tool names), `tool_outputs` (the per-tool result dict), and
+  `confidence` (`0.9` when any tool produced output, else `0.7`).
+- A tool detected by keyword but absent from `tool_registry` is still listed
+  in `tools_invoked`; it simply contributes no `tool_outputs` entry.
+- Edge handling: a missing `documents` kwarg defaults to an empty list; a
+  `query` of `None` is coerced to an empty string before tool detection;
+  malformed documents (non-dict elements, `{}`, `{"content": None}`) are
+  tolerated — synthesis only counts `len(documents)`. A registered tool
+  returning a non-dict value (tools are arbitrary callables with no
+  return-shape contract) is treated as a successful result.
+
+### `AgenticRAGNode`
+
+`AgenticRAGNode` is a `WorkflowNode`. Its `run()` (inherited from
+`WorkflowNode`) executes a sub-workflow built at construction time by
+`_create_workflow(self) -> Workflow`.
+
+- Constructor config: `tools` (default `["search", "calculator",
+  "database"]`), `max_reasoning_steps` (default 5), `planning_strategy`
+  (default `"react"`), and `verification_enabled` (default `True`).
+- `_create_workflow()` builds a `WorkflowBuilder` graph. With
+  `verification_enabled=True` the workflow has six nodes — `planner_agent`,
+  `react_agent`, `tool_executor`, `state_manager`, `verifier_agent`,
+  `result_synthesizer`. With `verification_enabled=False` the
+  `verifier_agent` node and its connections are omitted, leaving five nodes.
+- `planner_agent`, `react_agent`, and `verifier_agent` are `LLMAgentNode`
+  steps; `tool_executor`, `state_manager`, and `result_synthesizer` are
+  `PythonCodeNode` steps carrying a `code` template.
+- The constructor config flows into the generated workflow: the `tools` list
+  appears in the `planner_agent` system prompt, `max_reasoning_steps` is
+  interpolated into the `state_manager` `code` template as the step bound and
+  into the `result_synthesizer` template's `metadata.max_steps`, and
+  `planning_strategy` is interpolated into the `result_synthesizer`
+  template's `metadata.planning_strategy`.
+- The `tool_executor` `code` template implements the `search`, `calculate`,
+  `database`, and `verify` tools. `search` scores documents by query-word
+  overlap; a document whose `content` or `title` is missing or `None` is
+  coerced to an empty string and a non-dict document element is skipped.
+  `calculate` evaluates arithmetic via an AST-walked safe evaluator (no
+  `eval`/`exec`).
+- The `LLMAgentNode` steps require an LLM key to execute end-to-end, which
+  the `[rag]` extra does not carry.
+
+### `ReasoningRAGNode`
+
+`ReasoningRAGNode` is a `WorkflowNode`. Its `run()` (inherited) executes a
+sub-workflow built at construction time by
+`_create_workflow(self) -> Workflow`.
+
+- Constructor config: `reasoning_depth` (default 3) and `strategy` (default
+  `"chain_of_thought"`).
+- `_create_workflow()` builds a `WorkflowBuilder` graph with three nodes —
+  `problem_decomposer`, `step_reasoner`, and `logic_verifier`, all
+  `LLMAgentNode` steps.
+- The constructor config flows into the generated workflow: `strategy` and
+  `reasoning_depth` are interpolated into the `problem_decomposer` system
+  prompt.
+- The `LLMAgentNode` steps require an LLM key to execute end-to-end, which
+  the `[rag]` extra does not carry.
