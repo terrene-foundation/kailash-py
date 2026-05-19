@@ -12,10 +12,9 @@ Implements state-of-the-art similarity methods including:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import json
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional
 
 import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -241,6 +240,12 @@ class SparseRetrievalNode(Node):
         scores: BM25/TF-IDF scores
         query_terms: Expanded query terms used
     """
+
+    # Public read attributes set in __init__ (declared for static analysis).
+    method: str
+    use_query_expansion: bool
+    k1: float
+    b: float
 
     def __init__(
         self,
@@ -1401,6 +1406,10 @@ class HybridFusionNode(Node):
         fusion_metadata: Statistics about fusion process
     """
 
+    # Public read attributes set in __init__ (declared for static analysis).
+    fusion_method: str
+    weights: Dict[str, float]
+
     def __init__(
         self,
         name: str = "hybrid_fusion",
@@ -1531,8 +1540,10 @@ class HybridFusionNode(Node):
         """Create hybrid fusion workflow"""
         builder = WorkflowBuilder()
 
-        # Add fusion processor
-        fusion_processor_id = builder.add_node(
+        # Add fusion processor. This workflow is a single node, so the
+        # generated node id is not wired into any connection — `add_node`
+        # already registers the node with the builder.
+        builder.add_node(
             "PythonCodeNode",
             node_id="fusion_processor",
             config={

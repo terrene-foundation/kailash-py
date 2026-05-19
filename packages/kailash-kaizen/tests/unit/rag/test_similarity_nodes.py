@@ -152,9 +152,14 @@ class TestSparseRetrievalNode:
         assert result["scores"] == sorted(result["scores"], reverse=True)
 
     def test_bm25_constants_present(self):
-        node = SparseRetrievalNode()
-        assert node.k1 == 1.2
-        assert node.b == 0.75
+        # k1 / b are public instance attributes set after super().__init__()
+        # (not part of the validated config bag). Read via vars() because the
+        # @register_node() decorator erases the concrete subclass type from
+        # the static analyzer's view, so direct attribute access on the
+        # constructor result resolves to base Node.
+        attrs = vars(SparseRetrievalNode())
+        assert attrs["k1"] == 1.2
+        assert attrs["b"] == 0.75
 
     def test_only_term_matching_docs_returned(self):
         node = SparseRetrievalNode()
@@ -359,16 +364,20 @@ def _result_set(docs, scores):
 
 class TestHybridFusionNode:
     def test_default_fusion_method_is_rrf(self):
+        # fusion_method / weights are passed to super().__init__() and so live
+        # in the validated config bag — the real public contract. Asserting
+        # via node.config[...] both verifies the contract and avoids the
+        # static-analyzer subclass erasure from the @register_node() decorator.
         node = HybridFusionNode()
-        assert node.fusion_method == "rrf"
+        assert node.config["fusion_method"] == "rrf"
 
     def test_default_weights(self):
         node = HybridFusionNode()
-        assert node.weights == {"dense": 0.7, "sparse": 0.3}
+        assert node.config["weights"] == {"dense": 0.7, "sparse": 0.3}
 
     def test_custom_weights_preserved(self):
         node = HybridFusionNode(weights={"a": 0.4, "b": 0.6})
-        assert node.weights == {"a": 0.4, "b": 0.6}
+        assert node.config["weights"] == {"a": 0.4, "b": 0.6}
 
     def test_rrf_golden_path(self):
         node = HybridFusionNode()
