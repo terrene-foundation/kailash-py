@@ -17,8 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import git
-
 from .parser import ResearchPaper
 
 
@@ -122,6 +120,13 @@ class ResearchValidator:
 
     def _clone_repository(self, code_url: str, target_dir: str):
         """Clone code repository."""
+        try:
+            import git  # GitPython — optional `research-validator` extra
+        except ImportError as exc:
+            raise ImportError(
+                "Repository validation requires GitPython. Install the optional "
+                "extra: pip install 'kailash-kaizen[research-validator]'"
+            ) from exc
         try:
             git.Repo.clone_from(code_url, target_dir, depth=1)
         except Exception as e:
