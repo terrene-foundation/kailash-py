@@ -700,9 +700,9 @@ Four module-level builders each return a `WorkflowNode` wrapping a
   their outputs in a `result_fusion` `PythonCodeNode`. The `fusion_method`
   argument is consumed — it is baked into the fusion codegen's output field.
 - **`create_hierarchical_rag_workflow`** — `hierarchical_chunker` → `embedder`
-  + `level_processor` → per-level vector DBs (`doc_vector_db`,
-  `section_vector_db`, `para_vector_db`) → `hierarchical_retriever`. The
-  `level_processor` `PythonCodeNode` buckets chunks by `hierarchy_level`.
+  - `level_processor` → per-level vector DBs (`doc_vector_db`,
+    `section_vector_db`, `para_vector_db`) → `hierarchical_retriever`. The
+    `level_processor` `PythonCodeNode` buckets chunks by `hierarchy_level`.
 
 `strategies.py` imports `kailash.nodes.transform.chunkers` for the side effect
 of registering `SemanticChunkerNode` / `StatisticalChunkerNode` /
@@ -763,3 +763,107 @@ elements with `isinstance` and read content via a nested `_content` helper
 that collapses a missing key and a present-but-`None` `content` to `""`. A
 malformed corpus (a non-dict element, a present-but-`None` `content`) does not
 crash the codegen.
+
+## Query processing
+
+`kaizen.nodes.rag.query_processing` ships the pre-retrieval half of every
+preserved RAG pipeline — the six `Node` subclasses that transform an incoming
+query before it reaches a retriever. Each class also exposes a
+`_create_workflow` builder that returns a `Workflow` (via `WorkflowBuilder`)
+wiring the deterministic `run()` path's components as graph nodes for callers
+that want to embed query processing inside a larger pipeline.
+
+### `QueryExpansionNode`
+
+Generates query variations to improve recall. The constructor accepts
+`name` (default `"query_expansion"`), `expansion_method` (default `"llm"`),
+and `num_expansions` (default `5`). `get_parameters()` declares `query`
+(required `str`) plus the three constructor kwargs as optional parameters.
+`run(query=...)` returns a dict with `original`, `expansions` (truncated
+to `num_expansions`), `keywords`, `concepts`, `all_terms`, and
+`expansion_count`. `_create_workflow()` builds a two-node graph:
+`llm_expander` (`LLMAgentNode`, system prompt asks for `num_expansions`
+variations + synonyms / concepts) → `expansion_processor` (`PythonCodeNode`
+that merges expansions, keywords, concepts and deduplicates against the
+original query). The connection is
+`add_connection(llm_expander, "response", expansion_processor, "expansion_response")`.
+
+### `QueryDecompositionNode`
+
+Breaks complex queries into independent sub-questions. The constructor
+accepts only `name` (default `"query_decomposition"`). `run(query=...)`
+returns `sub_questions`, `execution_order`, `composition_strategy`
+(`"sequential"`), and `total_questions`. A query containing `" and "` splits
+on the conjunction; a query containing `" compare "` or `" vs "` yields a
+3-question comparative breakdown. `_create_workflow()` builds a two-node
+graph: `query_decomposer` (`LLMAgentNode`) → `dependency_resolver`
+(`PythonCodeNode` that topologically-sorts sub-question dependencies into
+an `execution_plan`).
+
+### `QueryRewritingNode`
+
+Rewrites queries for retrieval. The constructor accepts only `name`
+(default `"query_rewriting"`). `run(query=...)` returns `original`,
+`issues_found` (`"spelling_errors"`, `"too_short"`), a `versions` dict with
+five keys — `corrected`, `clarified`, `contextualized`, `simplified`,
+`technical` — and `recommended` / `all_unique_versions` /
+`improvement_count`. The deterministic corrector substitutes the documented
+typos `2 → to`, `u → you`, `wit → with`, `trian → train`, `nueral → neural`,
+`netwrk → network`. `_create_workflow()` builds a three-node fan-in graph:
+`query_analyzer` (`LLMAgentNode`) feeds both `query_rewriter`
+(`LLMAgentNode`, on input `analysis`) and `result_combiner`
+(`PythonCodeNode`, on input `analysis_result`); `query_rewriter` feeds
+`result_combiner` on input `rewrite_result`.
+
+### `QueryIntentClassifierNode`
+
+Classifies query intent for strategy routing. The constructor accepts only
+`name` (default `"query_intent_classifier"`). `run(query=...)` returns
+`query_type` (`"factual"` / `"analytical"` / `"comparative"` /
+`"exploratory"` / `"procedural"`), `domain` (`"technical"` / `"business"` /
+`"academic"` / `"general"`), `complexity` (`"simple"` / `"moderate"` /
+`"complex"` — bucketed by word count), `requirements` (a subset of
+`"needs_examples"`, `"needs_recent"`, `"needs_authoritative"`,
+`"needs_context"`), `recommended_strategy`, and `confidence` (`0.8` for
+the deterministic path). The deterministic classifier matches on the
+first keyword family it encounters — `what`/`who`/`when`/`where` →
+factual; `how`/`why`/`explain` → analytical; `compare`/`vs`/`versus`/
+`difference` → comparative; `show`/`give`/`list`/`find` → exploratory;
+`implement`/`create`/`build`/`make` → procedural; default → factual.
+`_create_workflow()` builds a two-node graph: `intent_classifier`
+(`LLMAgentNode`) → `strategy_mapper` (`PythonCodeNode` containing a
+`(query_type, complexity) → strategy` lookup table with
+requirements-based adjustments).
+
+### `MultiHopQueryPlannerNode`
+
+Plans multi-step retrieval strategies. The constructor accepts only
+`name` (default `"multi_hop_planner"`). `run(query=...)` returns
+`batches` (lists of hops grouped by dependency-resolution wave),
+`total_hops`, `parallel_opportunities`, `combination_strategy`
+(`"sequential"`), and `estimated_time`. The deterministic planner emits
+a 3-hop chain when the query contains `"influence"` or `"impact"`
+(hop 3 depends on hops 1 and 2); otherwise a single hop. The batching
+groups hops whose dependencies are all already processed.
+`_create_workflow()` builds a two-node graph: `hop_planner`
+(`LLMAgentNode`) → `execution_planner` (`PythonCodeNode` that validates
+hop dependencies and emits parallelizable batches).
+
+### `AdaptiveQueryProcessorNode`
+
+Composes the other five processors based on query characteristics. The
+constructor accepts only `name` (default `"adaptive_query_processor"`).
+`run(query=...)` returns `original_query`, `processing_steps` (a subset
+of `"rewrite"`, `"expand"`, `"decompose"`, `"multi_hop"`, `"analyze"`),
+`processed_query`, `processing_plan` (a dict carrying `steps`,
+`estimated_time`, and `complexity`), and `expected_improvement`. The
+deterministic step-selection: `"rewrite"` fires when the query contains
+any of `"2"`, `"u"`, `"wit"`, `"trian"` (the rewrite trigger;
+substring-based, hits most queries with the letter `u`); `"expand"`
+fires for queries with fewer than 4 words; `"decompose"` fires for
+queries containing `"compare"` or `"vs"`; `"multi_hop"` fires for
+queries containing `"influence"` or `"impact"`; `"analyze"` is the
+default-only fallback. `_create_workflow()` builds a two-node graph:
+`intent_analyzer` (a `QueryIntentClassifierNode` instance, by string)
+→ `adaptive_processor` (`PythonCodeNode` that maps the intent's
+`(query_type, complexity)` into a real processing-step list).
