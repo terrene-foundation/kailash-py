@@ -11,10 +11,9 @@ Implementation of cutting-edge RAG patterns including:
 All techniques use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.logic.workflow import WorkflowNode
@@ -336,7 +335,7 @@ class SelfCorrectingRAGNode(Node):
 
             # If not final attempt, prepare for correction
             if attempt < self.max_corrections:
-                documents = self._refine_documents(query, documents, verification)
+                documents = self._refine_documents(documents, verification)
                 query = self._refine_query(query, verification)
 
         # Return best attempt if all corrections exhausted
@@ -565,19 +564,68 @@ Assess the quality and provide improvement suggestions:
         }
 
     def _refine_documents(
-        self, query: str, documents: List[Dict], verification: Dict
+        self, documents: List[Dict], verification: Dict
     ) -> List[Dict]:
-        """Refine document set based on verification feedback"""
+        """Refine the document set based on verification feedback.
+
+        Acts on BOTH halves of the verifier's feedback:
+
+        - ``suggestions`` — an explicit "filter" recommendation trims the set.
+        - ``issues`` — the specific problems the verifier identified. A
+          relevance / noise issue ("irrelevant", "off-topic", "noise",
+          "unrelated", "low quality") means the retrieved set is too broad, so
+          refinement tightens it. A coverage issue ("missing", "incomplete",
+          "insufficient", "too few", "not enough") means the set is too
+          narrow — trimming it would make the next attempt worse, so the full
+          set is preserved.
+
+        Honoring ``issues`` (not only ``suggestions``) is what makes the
+        self-correction loop respond to what the verifier actually found,
+        rather than only to the verifier's free-text advice strings.
+        """
         issues = verification.get("issues", [])
         suggestions = verification.get("suggestions", [])
 
-        # Simple refinement: filter documents if suggested
-        if any("filter" in suggestion.lower() for suggestion in suggestions):
-            # Keep top 80% of documents by relevance
+        issues_text = " ".join(str(i) for i in issues).lower()
+        relevance_issue = any(
+            term in issues_text
+            for term in (
+                "irrelevant",
+                "off-topic",
+                "off topic",
+                "noise",
+                "unrelated",
+                "low quality",
+            )
+        )
+        coverage_issue = any(
+            term in issues_text
+            for term in (
+                "missing",
+                "incomplete",
+                "insufficient",
+                "too few",
+                "not enough",
+                "lack",
+            )
+        )
+        filter_suggested = any(
+            "filter" in str(suggestion).lower() for suggestion in suggestions
+        )
+
+        # A coverage issue means the set is already too narrow — trimming it
+        # would worsen the next attempt, so preserve the full set even if a
+        # filter was loosely suggested.
+        if coverage_issue and not relevance_issue:
+            return documents
+
+        # A relevance/noise issue OR an explicit filter suggestion means the
+        # set is too broad — trim to the top 80% by retrieval rank.
+        if relevance_issue or filter_suggested:
             keep_count = max(1, int(len(documents) * 0.8))
             return documents[:keep_count]
 
-        # If no specific refinement suggested, return original
+        # No actionable feedback — return the set unchanged.
         return documents
 
     def _refine_query(self, query: str, verification: Dict) -> str:
@@ -1042,11 +1090,11 @@ Generate {self.num_query_variations} high-quality variations that will improve r
         doc_scores = {}
         doc_contents = {}
 
-        for query_idx, (result, weight) in enumerate(zip(all_results, weights)):
+        for result, weight in zip(all_results, weights):
             documents = result.get("results", [])
             scores = result.get("scores", [])
 
-            for rank, (doc, score) in enumerate(zip(documents, scores)):
+            for doc, score in zip(documents, scores):
                 if not isinstance(doc, dict):
                     continue
                 doc_id = _doc_dedup_key(doc)

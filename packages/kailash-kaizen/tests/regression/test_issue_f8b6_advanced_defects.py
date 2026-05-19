@@ -212,3 +212,66 @@ class TestDefect2NoneContentAndNonDict:
         wf = create_hybrid_rag_workflow(RAGConfig())
         out = wf.run(documents=_MALFORMED, query="optimize neural networks")
         assert set(out.keys()) == {"results", "scores", "metadata"}
+
+
+# ==========================================================================
+# Substance — _refine_documents honors verification `issues`, not only
+# `suggestions`. The self-correction loop computed verification issues and
+# then discarded them; refinement now responds to what the verifier found.
+# ==========================================================================
+
+_TEN_DOCS = [{"id": f"d{i}", "content": f"document {i}"} for i in range(10)]
+
+
+class TestRefineDocumentsHonorsIssues:
+    """SelfCorrectingRAGNode._refine_documents acts on verification feedback."""
+
+    def test_relevance_issue_trims_document_set(self):
+        """A relevance/noise issue (no filter suggestion) trims the set.
+
+        Pre-B6: _refine_documents read only `suggestions`; a verification that
+        reported a relevance issue but gave no "filter" suggestion left the
+        document set unchanged — shallower self-correction than advertised.
+        """
+        node = SelfCorrectingRAGNode()
+        verification = {
+            "issues": ["several irrelevant documents were retrieved"],
+            "suggestions": [],  # no "filter" advice — only the issue drives it
+        }
+        refined = node._refine_documents(_TEN_DOCS, verification)  # type: ignore[attr-defined]
+        assert len(refined) < len(_TEN_DOCS)
+        assert len(refined) == 8  # top 80% by retrieval rank
+
+    def test_coverage_issue_preserves_full_set(self):
+        """A coverage issue means the set is too narrow — keep all docs."""
+        node = SelfCorrectingRAGNode()
+        verification = {
+            "issues": ["retrieved context is incomplete; key facts missing"],
+            "suggestions": ["filter the documents"],  # loose filter advice
+        }
+        refined = node._refine_documents(_TEN_DOCS, verification)  # type: ignore[attr-defined]
+        # a coverage issue overrides a loose filter suggestion — trimming a
+        # too-narrow set would make the next correction attempt worse
+        assert len(refined) == len(_TEN_DOCS)
+
+    def test_no_actionable_feedback_returns_unchanged(self):
+        node = SelfCorrectingRAGNode()
+        verification = {"issues": ["minor phrasing nitpick"], "suggestions": []}
+        refined = node._refine_documents(_TEN_DOCS, verification)  # type: ignore[attr-defined]
+        assert refined == _TEN_DOCS
+
+    def test_filter_suggestion_still_trims(self):
+        """An explicit filter suggestion still trims (suggestions path intact)."""
+        node = SelfCorrectingRAGNode()
+        verification = {"issues": [], "suggestions": ["filter low-quality docs"]}
+        refined = node._refine_documents(_TEN_DOCS, verification)  # type: ignore[attr-defined]
+        assert len(refined) == 8
+
+    def test_refine_documents_signature_has_no_query_param(self):
+        """The spurious unused `query` parameter was removed."""
+        import inspect
+
+        # @register_node erases the concrete type; the helper is real.
+        sig = inspect.signature(SelfCorrectingRAGNode._refine_documents)  # type: ignore[attr-defined]
+        params = [p for p in sig.parameters if p != "self"]
+        assert params == ["documents", "verification"]
