@@ -559,7 +559,7 @@ precisely:
 
 - `FederatedRAGNode` has no document-corpus input. Its workflow entry point
   (`query_distributor`, `def distribute_query(query, node_endpoints,
-  federation_config)`) reads only a query and per-node endpoints — there is no
+federation_config)`) reads only a query and per-node endpoints — there is no
   raw local document for the node to leak. The aggregate produced by
   `result_aggregator` carries per-result `content`, `score`, and `metadata`
   (source-node ids, weights, agreement) plus an `aggregation_metadata` block of
@@ -581,3 +581,92 @@ tests exercise each template by exec-ing the rendered function with an appended
 `return result`. End-to-end runtime execution of the assembled sub-workflow is
 not covered by the `[rag]` extra alone — the `PythonCodeNode` `code` templates
 are deterministic and are covered directly.
+
+## Advanced RAG
+
+`kaizen/nodes/rag/advanced.py` ships four advanced RAG techniques as
+`kailash.nodes.base.Node` subclasses with a direct `run()` —
+`SelfCorrectingRAGNode`, `RAGFusionNode`, `HyDENode`, `StepBackRAGNode` — plus
+the shared retrieval workflow `create_hybrid_rag_workflow` and the
+module-local `RAGConfig`.
+
+### `RAGConfig`
+
+`RAGConfig` is a `**kwargs`-based config class. Its four fields and defaults:
+`chunk_size` (1000), `chunk_overlap` (200), `embedding_model`
+(`"text-embedding-3-small"`), `retrieval_k` (5). An unrecognized kwarg is
+ignored, not raised. `retrieval_k` is the field that influences
+`create_hybrid_rag_workflow` — it caps the fused result count.
+
+### `create_hybrid_rag_workflow`
+
+`create_hybrid_rag_workflow(config: RAGConfig)` builds a genuine hybrid-RAG
+retrieval workflow and returns it wrapped in a `WorkflowNode`. Hybrid RAG
+combines dense (embedding-similarity) retrieval with sparse (keyword /
+term-frequency) retrieval and fuses the two with Reciprocal Rank Fusion (RRF).
+
+The workflow graph has four nodes:
+
+- `source` (`PythonCodeNode`) — entry node; receives `documents` and `query`
+  via the `WorkflowNode` `input_mapping` and fans them out.
+- `dense` (`DenseRetrievalNode`) — embedding-similarity retrieval. With no LLM
+  key configured it runs its deterministic keyword-overlap fallback.
+- `sparse` (`SparseRetrievalNode`) — keyword / term-frequency retrieval.
+- `fuse` (`PythonCodeNode`) — RRF over the dense and sparse result lists;
+  emits `results`, `scores`, and `metadata` as separate node outputs.
+
+The graph has six connections: `source` fans `documents` and `query` to both
+`dense` and `sparse` (four edges), and `dense` and `sparse` each feed their
+`results` output into `fuse` (two edges). The returned `WorkflowNode` carries
+an `input_mapping` (`documents`, `query` → `source`) and an `output_mapping`
+(`results`, `scores`, `metadata` ← `fuse`), so a `run(documents=...,
+query=..., operation="retrieve")` call returns a dict with top-level
+`results` (the fused document list), `scores` (the fused RRF scores), and
+`metadata` (`fusion_method`, `retrieval_modes`, `retrieval_k`, `dense_count`,
+`sparse_count`). The `fuse` codegen template skips a non-dict document and
+coerces a present-but-`None` `content` to an empty string before the dedup
+key, so a malformed corpus does not crash workflow execution.
+
+`advanced.py` imports `kaizen.nodes.rag.similarity` for the side effect of
+registering `DenseRetrievalNode` / `SparseRetrievalNode` with the Kailash
+`NodeRegistry`, which `WorkflowBuilder.build()` requires.
+
+### The four advanced node classes
+
+All four nodes declare `documents` (list) and `query` (str) as `required=True`
+run-time parameters and accept an optional `config` dict. Each `run()` first
+calls `_initialize_components()`, which builds the node's `LLMAgentNode`
+helper(s) and the shared `base_rag_workflow` via `create_hybrid_rag_workflow`.
+Every LLM-backed step (verification, query-variation generation, hypothesis
+generation, abstract-query generation) is wrapped in a `try/except` that falls
+back to a deterministic rule-based implementation — with no LLM key
+configured, the node still produces a real, contract-shaped output.
+
+The document-text helpers `_doc_content` and `_doc_dedup_key` are the
+module's shared guards against malformed documents: `_doc_content` collapses a
+missing key, a present-but-`None` `content`, and a non-dict element to `""`;
+`_doc_dedup_key` returns a stable dedup key (explicit `id`, else the first 50
+chars of content) and is safe against the same malformed inputs.
+
+- **`SelfCorrectingRAGNode`** — retrieves, verifies result quality, and
+  iteratively refines up to `max_corrections` times. `run()` returns `query`,
+  `final_response`, `retrieved_documents`, `scores`, `quality_assessment`,
+  `self_correction_metadata` (one `correction_history` entry per attempt), and
+  `status` (`"corrected"` if the confidence threshold was met, else
+  `"best_effort"`).
+- **`RAGFusionNode`** — generates query variations, retrieves for the original
+  query plus each variation, and fuses the result lists. `run()` returns
+  `original_query`, `query_variations`, `fused_results`, `final_response`, and
+  `fusion_metadata`. `_fuse_results` dispatches on `fusion_method` —
+  `_reciprocal_rank_fusion` (the default and the fallback for an unknown
+  method), `_weighted_fusion`, `_simple_concatenation`.
+- **`HyDENode`** — generates hypothetical answers, retrieves using each
+  hypothesis as the query, and combines the per-hypothesis results. `run()`
+  returns `original_query`, `hypotheses_generated`, `hypothesis_results`,
+  `combined_retrieval`, `final_answer`, and `hyde_metadata`.
+- **`StepBackRAGNode`** — generates an abstract step-back query, retrieves for
+  both the specific and the abstract query, and combines the two result sets
+  with specific results weighted 0.7 and abstract 0.3. `run()` returns
+  `specific_query`, `abstract_query`, `specific_retrieval`,
+  `abstract_retrieval`, `combined_results`, `final_answer`, and
+  `step_back_metadata`.
