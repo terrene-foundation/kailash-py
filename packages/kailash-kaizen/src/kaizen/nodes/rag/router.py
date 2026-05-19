@@ -6,6 +6,7 @@ Includes LLM-powered strategy selection and performance monitoring.
 """
 
 import logging
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,13 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from ..ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
+
+# Default routing model resolved from the environment (.env is the single
+# source of truth — never hardcode model names). May be None when unset;
+# that is env-models-compliant and acceptable as a default.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -28,7 +36,7 @@ class RAGStrategyRouterNode(Node):
     def __init__(
         self,
         name: str = "rag_strategy_router",
-        llm_model: str = "gpt-4",
+        llm_model: Optional[str] = _DEFAULT_LLM_MODEL,
         provider: str = "openai",
     ):
         super().__init__(
@@ -53,7 +61,7 @@ class RAGStrategyRouterNode(Node):
                 name="llm_model",
                 type=str,
                 required=False,
-                default="gpt-4",
+                default=_DEFAULT_LLM_MODEL,
                 description="LLM model for routing analysis",
             ),
             "provider": NodeParameter(
