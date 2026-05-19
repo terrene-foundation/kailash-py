@@ -686,7 +686,18 @@ class ConversationMemoryNode(Node):
         retention_policy: str = "adaptive",
         max_memories_per_user: int = 1000,
     ):
-        self.memory_types = memory_types or ["episodic", "semantic", "preferences"]
+        resolved_memory_types = memory_types or [
+            "episodic",
+            "semantic",
+            "preferences",
+        ]
+        super().__init__(
+            name=name,
+            memory_types=resolved_memory_types,
+            retention_policy=retention_policy,
+            max_memories_per_user=max_memories_per_user,
+        )
+        self.memory_types = resolved_memory_types
         self.retention_policy = retention_policy
         self.max_memories_per_user = max_memories_per_user
         # In-memory storage (use persistent DB in production)
@@ -697,10 +708,37 @@ class ConversationMemoryNode(Node):
                 "preferences": {},
             }
         )
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="conversation_memory",
+                description="Node instance name",
+            ),
+            "memory_types": NodeParameter(
+                name="memory_types",
+                type=list,
+                required=False,
+                default=None,
+                description="Memory categories (episodic, semantic, preferences)",
+            ),
+            "retention_policy": NodeParameter(
+                name="retention_policy",
+                type=str,
+                required=False,
+                default="adaptive",
+                description="Memory retention strategy",
+            ),
+            "max_memories_per_user": NodeParameter(
+                name="max_memories_per_user",
+                type=int,
+                required=False,
+                default=1000,
+                description="Per-user episodic memory cap",
+            ),
             "operation": NodeParameter(
                 name="operation",
                 type=str,
