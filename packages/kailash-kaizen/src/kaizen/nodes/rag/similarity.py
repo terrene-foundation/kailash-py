@@ -12,15 +12,14 @@ Implements state-of-the-art similarity methods including:
 All implementations use existing Kailash components and WorkflowBuilder patterns.
 """
 
-import json
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional
 
 import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +153,11 @@ class DenseRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "").lower()
+                    # `doc.get("content", "")` returns None when the key
+                    # exists with a None value (default only applies to
+                    # missing keys), crashing `.lower()`. `or ""` coerces
+                    # a None content to an empty string.
+                    content = (doc.get("content") or "").lower()
                     doc_words = set(content.split())
 
                     # Calculate simple overlap score
@@ -238,6 +241,12 @@ class SparseRetrievalNode(Node):
         query_terms: Expanded query terms used
     """
 
+    # Public read attributes set in __init__ (declared for static analysis).
+    method: str
+    use_query_expansion: bool
+    k1: float
+    b: float
+
     def __init__(
         self,
         name: str = "sparse_retrieval",
@@ -316,14 +325,16 @@ class SparseRetrievalNode(Node):
             query_terms = query.lower().split()
             doc_count = len(documents)
             avg_doc_length = (
-                sum(len(doc.get("content", "").split()) for doc in documents)
+                # `or ""` coerces a None content (key present, value None)
+                # to an empty string; bare `.get(k, "")` would not.
+                sum(len((doc.get("content") or "").split()) for doc in documents)
                 / doc_count
                 if doc_count > 0
                 else 0
             )
 
             for i, doc in enumerate(documents):
-                content = doc.get("content", "").lower()
+                content = (doc.get("content") or "").lower()
                 doc_terms = content.split()
                 doc_length = len(doc_terms)
 
@@ -333,7 +344,9 @@ class SparseRetrievalNode(Node):
                     if tf > 0:
                         # Simple IDF calculation
                         df = sum(
-                            1 for d in documents if term in d.get("content", "").lower()
+                            1
+                            for d in documents
+                            if term in (d.get("content") or "").lower()
                         )
                         idf = np.log((doc_count - df + 0.5) / (df + 0.5) + 1)
 
@@ -380,11 +393,14 @@ class SparseRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create sparse retrieval workflow"""
         builder = WorkflowBuilder()
 
-        # Add query expansion if enabled
+        # Add query expansion if enabled. `expander_id` is initialised here
+        # so the later `if self.use_query_expansion` connection block has a
+        # bound name regardless of the branch taken.
+        expander_id = ""
         if self.use_query_expansion:
             expander_id = builder.add_node(
                 "LLMAgentNode",
@@ -408,12 +424,12 @@ from collections import Counter, defaultdict
 def calculate_bm25_scores(query_terms, documents, k1=1.2, b=0.75):
     '''BM25 scoring implementation'''
     doc_count = len(documents)
-    avg_doc_length = sum(len(doc.get("content", "").split()) for doc in documents) / doc_count
+    avg_doc_length = sum(len((doc.get("content") or "").split()) for doc in documents) / doc_count
 
     # Calculate document frequencies
     df = defaultdict(int)
     for doc in documents:
-        terms = set(doc.get("content", "").lower().split())
+        terms = set((doc.get("content") or "").lower().split())
         for term in query_terms:
             if term.lower() in terms:
                 df[term] += 1
@@ -427,7 +443,7 @@ def calculate_bm25_scores(query_terms, documents, k1=1.2, b=0.75):
     # Calculate document scores
     scores = []
     for doc in documents:
-        content = doc.get("content", "").lower()
+        content = (doc.get("content") or "").lower()
         doc_length = len(content.split())
         term_freq = Counter(content.split())
 
@@ -445,7 +461,7 @@ def calculate_tfidf_scores(query_terms, documents):
     # Simple TF-IDF for demonstration
     scores = []
     for doc in documents:
-        content = doc.get("content", "").lower()
+        content = (doc.get("content") or "").lower()
         term_freq = Counter(content.split())
 
         score = 0
@@ -610,7 +626,9 @@ class ColBERTRetrievalNode(Node):
                 query_tokens = query.lower().split()
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "").lower()
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string; `.get(k, "")` would not.
+                    content = (doc.get("content") or "").lower()
                     doc_tokens = content.split()
 
                     # Simplified late interaction scoring
@@ -660,7 +678,7 @@ class ColBERTRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create ColBERT-style retrieval workflow"""
         builder = WorkflowBuilder()
 
@@ -704,7 +722,7 @@ query_tokens = get_token_embeddings(query)
 doc_token_embeddings = []
 
 for doc in documents:
-    doc_tokens = get_token_embeddings(doc.get("content", ""))
+    doc_tokens = get_token_embeddings(doc.get("content") or "")
     doc_token_embeddings.append(doc_tokens)
 
 result = {{
@@ -875,7 +893,9 @@ class MultiVectorRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "")
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string before `.lower()`/`[:200]`.
+                    content = doc.get("content") or ""
 
                     # Create multiple representations
                     full_content = content.lower()
@@ -930,7 +950,7 @@ class MultiVectorRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create multi-vector retrieval workflow"""
         builder = WorkflowBuilder()
 
@@ -945,7 +965,7 @@ def create_multi_representations(documents):
     multi_docs = []
 
     for doc in documents:
-        content = doc.get("content", "")
+        content = doc.get("content") or ""
 
         # Create summary (first 200 chars for demo)
         summary = content[:200] + "..." if len(content) > 200 else content
@@ -1201,7 +1221,9 @@ class CrossEncoderRerankNode(Node):
             query_words = set(query.lower().split())
 
             for i, doc in enumerate(results_list[:20]):  # Rerank top 20
-                content = doc.get("content", "").lower()
+                # `or ""` coerces a None content (key present, value None)
+                # to an empty string; `.get(k, "")` would not.
+                content = (doc.get("content") or "").lower()
                 content_words = set(content.split())
 
                 # Enhanced scoring for reranking
@@ -1238,7 +1260,7 @@ class CrossEncoderRerankNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create cross-encoder reranking workflow"""
         builder = WorkflowBuilder()
 
@@ -1384,6 +1406,10 @@ class HybridFusionNode(Node):
         fusion_metadata: Statistics about fusion process
     """
 
+    # Public read attributes set in __init__ (declared for static analysis).
+    fusion_method: str
+    weights: Dict[str, float]
+
     def __init__(
         self,
         name: str = "hybrid_fusion",
@@ -1510,12 +1536,14 @@ class HybridFusionNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create hybrid fusion workflow"""
         builder = WorkflowBuilder()
 
-        # Add fusion processor
-        fusion_processor_id = builder.add_node(
+        # Add fusion processor. This workflow is a single node, so the
+        # generated node id is not wired into any connection — `add_node`
+        # already registers the node with the builder.
+        builder.add_node(
             "PythonCodeNode",
             node_id="fusion_processor",
             config={
@@ -1750,7 +1778,9 @@ class PropositionBasedRetrievalNode(Node):
                 query_words = set(query.lower().split())
 
                 for i, doc in enumerate(documents):
-                    content = doc.get("content", "")
+                    # `or ""` coerces a None content (key present, value
+                    # None) to an empty string before `.split()`.
+                    content = doc.get("content") or ""
 
                     # Simple proposition extraction (split by sentences)
                     sentences = content.split(". ")
@@ -1809,7 +1839,7 @@ class PropositionBasedRetrievalNode(Node):
                 "error": str(e),
             }
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create proposition-based retrieval workflow"""
         builder = WorkflowBuilder()
 
@@ -1851,7 +1881,7 @@ for i, doc in enumerate(documents):
             "proposition_index": j,
             "metadata": {
                 "type": "proposition",
-                "source_length": len(doc.get("content", "")),
+                "source_length": len(doc.get("content") or ""),
                 "proposition_count": len(doc_propositions)
             }
         })
@@ -1914,7 +1944,7 @@ for doc_id, props in doc_propositions.items():
         avg_score = sum(p["score"] for p in props) / len(props)
 
         results.append({
-            "content": source_doc.get("content", ""),
+            "content": source_doc.get("content") or "",
             "title": source_doc.get("title", ""),
             "id": doc_id,
             "matched_propositions": props,
