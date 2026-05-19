@@ -63,15 +63,48 @@ class SelfCorrectingRAGNode(Node):
         confidence_threshold: float = 0.8,
         verification_model: str = "gpt-4",
     ):
+        super().__init__(
+            name=name,
+            max_corrections=max_corrections,
+            confidence_threshold=confidence_threshold,
+            verification_model=verification_model,
+        )
         self.max_corrections = max_corrections
         self.confidence_threshold = confidence_threshold
         self.verification_model = verification_model
         self.base_rag_workflow = None
         self.verifier_agent = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="self_correcting_rag",
+                description="Node instance name",
+            ),
+            "max_corrections": NodeParameter(
+                name="max_corrections",
+                type=int,
+                required=False,
+                default=2,
+                description="Maximum self-correction attempts",
+            ),
+            "confidence_threshold": NodeParameter(
+                name="confidence_threshold",
+                type=float,
+                required=False,
+                default=0.8,
+                description="Minimum confidence to accept a result",
+            ),
+            "verification_model": NodeParameter(
+                name="verification_model",
+                type=str,
+                required=False,
+                default="gpt-4",
+                description="Model used to verify result quality",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -473,15 +506,48 @@ class RAGFusionNode(Node):
         fusion_method: str = "rrf",
         query_generator_model: str = "gpt-4",
     ):
+        super().__init__(
+            name=name,
+            num_query_variations=num_query_variations,
+            fusion_method=fusion_method,
+            query_generator_model=query_generator_model,
+        )
         self.num_query_variations = num_query_variations
         self.fusion_method = fusion_method
         self.query_generator_model = query_generator_model
         self.query_generator = None
         self.base_rag_workflow = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_fusion",
+                description="Node instance name",
+            ),
+            "num_query_variations": NodeParameter(
+                name="num_query_variations",
+                type=int,
+                required=False,
+                default=3,
+                description="Number of query variations to generate",
+            ),
+            "fusion_method": NodeParameter(
+                name="fusion_method",
+                type=str,
+                required=False,
+                default="rrf",
+                description="Fusion algorithm (rrf, weighted, distribution)",
+            ),
+            "query_generator_model": NodeParameter(
+                name="query_generator_model",
+                type=str,
+                required=False,
+                default="gpt-4",
+                description="Model used to generate query variations",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -945,15 +1011,48 @@ class HyDENode(Node):
         use_multiple_hypotheses: bool = True,
         num_hypotheses: int = 2,
     ):
+        super().__init__(
+            name=name,
+            hypothesis_model=hypothesis_model,
+            use_multiple_hypotheses=use_multiple_hypotheses,
+            num_hypotheses=num_hypotheses,
+        )
         self.hypothesis_model = hypothesis_model
         self.use_multiple_hypotheses = use_multiple_hypotheses
         self.num_hypotheses = num_hypotheses
         self.hypothesis_generator = None
         self.base_rag_workflow = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="hyde_rag",
+                description="Node instance name",
+            ),
+            "hypothesis_model": NodeParameter(
+                name="hypothesis_model",
+                type=str,
+                required=False,
+                default="gpt-4",
+                description="LLM used to generate hypothetical documents",
+            ),
+            "use_multiple_hypotheses": NodeParameter(
+                name="use_multiple_hypotheses",
+                type=bool,
+                required=False,
+                default=True,
+                description="Generate multiple hypotheses per query",
+            ),
+            "num_hypotheses": NodeParameter(
+                name="num_hypotheses",
+                type=int,
+                required=False,
+                default=2,
+                description="Number of hypotheses to generate",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -1271,13 +1370,27 @@ class StepBackRAGNode(Node):
     """
 
     def __init__(self, name: str = "step_back_rag", abstraction_model: str = "gpt-4"):
+        super().__init__(name=name, abstraction_model=abstraction_model)
         self.abstraction_model = abstraction_model
         self.abstraction_generator = None
         self.base_rag_workflow = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="step_back_rag",
+                description="Node instance name",
+            ),
+            "abstraction_model": NodeParameter(
+                name="abstraction_model",
+                type=str,
+                required=False,
+                default="gpt-4",
+                description="LLM used to generate abstract queries",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,

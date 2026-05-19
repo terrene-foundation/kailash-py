@@ -75,14 +75,47 @@ class DenseRetrievalNode(Node):
         similarity_metric: str = "cosine",
         use_instruction_embeddings: bool = False,
     ):
+        super().__init__(
+            name=name,
+            embedding_model=embedding_model,
+            similarity_metric=similarity_metric,
+            use_instruction_embeddings=use_instruction_embeddings,
+        )
         self.embedding_model = embedding_model
         self.similarity_metric = similarity_metric
         self.use_instruction_embeddings = use_instruction_embeddings
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="dense_retrieval",
+                description="Node instance name",
+            ),
+            "embedding_model": NodeParameter(
+                name="embedding_model",
+                type=str,
+                required=False,
+                default="text-embedding-3-small",
+                description="Model for embeddings (OpenAI, Cohere, custom)",
+            ),
+            "similarity_metric": NodeParameter(
+                name="similarity_metric",
+                type=str,
+                required=False,
+                default="cosine",
+                description="Distance metric (cosine, euclidean, dot)",
+            ),
+            "use_instruction_embeddings": NodeParameter(
+                name="use_instruction_embeddings",
+                type=bool,
+                required=False,
+                default=False,
+                description="Prefix embeddings with retrieval instructions",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -211,15 +244,40 @@ class SparseRetrievalNode(Node):
         method: str = "bm25",
         use_query_expansion: bool = True,
     ):
+        super().__init__(
+            name=name,
+            method=method,
+            use_query_expansion=use_query_expansion,
+        )
         self.method = method
         self.use_query_expansion = use_query_expansion
         self.k1 = 1.2  # BM25 parameter
         self.b = 0.75  # BM25 parameter
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="sparse_retrieval",
+                description="Node instance name",
+            ),
+            "method": NodeParameter(
+                name="method",
+                type=str,
+                required=False,
+                default="bm25",
+                description="Algorithm choice (bm25, tfidf, splade)",
+            ),
+            "use_query_expansion": NodeParameter(
+                name="use_query_expansion",
+                type=bool,
+                required=False,
+                default=True,
+                description="Generate related terms automatically",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -496,12 +554,26 @@ class ColBERTRetrievalNode(Node):
     def __init__(
         self, name: str = "colbert_retrieval", token_model: str = "bert-base-uncased"
     ):
+        super().__init__(name=name, token_model=token_model)
         self.token_model = token_model
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="colbert_retrieval",
+                description="Node instance name",
+            ),
+            "token_model": NodeParameter(
+                name="token_model",
+                type=str,
+                required=False,
+                default="bert-base-uncased",
+                description="BERT model for token embeddings",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -755,11 +827,18 @@ class MultiVectorRetrievalNode(Node):
     """
 
     def __init__(self, name: str = "multi_vector_retrieval"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="multi_vector_retrieval",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -1057,12 +1136,26 @@ class CrossEncoderRerankNode(Node):
         name: str = "cross_encoder_rerank",
         rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
     ):
+        super().__init__(name=name, rerank_model=rerank_model)
         self.rerank_model = rerank_model
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="cross_encoder_rerank",
+                description="Node instance name",
+            ),
+            "rerank_model": NodeParameter(
+                name="rerank_model",
+                type=str,
+                required=False,
+                default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+                description="Cross-encoder model for scoring",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -1297,13 +1390,36 @@ class HybridFusionNode(Node):
         fusion_method: str = "rrf",
         weights: Optional[Dict[str, float]] = None,
     ):
+        # NOTE: get_parameters() references self.fusion_method for its default,
+        # and Node.__init__ calls get_parameters() — so this attr MUST be set
+        # before super(). The remaining attrs follow the canonical post-super
+        # config-bag order.
         self.fusion_method = fusion_method
-        self.weights = weights or {"dense": 0.7, "sparse": 0.3}
-        super().__init__(name)
+        resolved_weights = weights or {"dense": 0.7, "sparse": 0.3}
+        super().__init__(
+            name=name,
+            fusion_method=fusion_method,
+            weights=resolved_weights,
+        )
+        self.weights = resolved_weights
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="hybrid_fusion",
+                description="Node instance name",
+            ),
+            "weights": NodeParameter(
+                name="weights",
+                type=dict,
+                required=False,
+                default=None,
+                description="Importance weights per retriever",
+            ),
             "retrieval_results": NodeParameter(
                 name="retrieval_results",
                 type=list,
@@ -1585,11 +1701,18 @@ class PropositionBasedRetrievalNode(Node):
     """
 
     def __init__(self, name: str = "proposition_retrieval"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="proposition_retrieval",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,

@@ -587,12 +587,38 @@ class ToolAugmentedRAGNode(Node):
         tool_registry: Dict[str, Callable] = None,
         auto_detect_tools: bool = True,
     ):
-        self.tool_registry = tool_registry or {}
+        resolved_registry = tool_registry or {}
+        super().__init__(
+            name=name,
+            tool_registry=resolved_registry,
+            auto_detect_tools=auto_detect_tools,
+        )
+        self.tool_registry = resolved_registry
         self.auto_detect_tools = auto_detect_tools
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="tool_augmented_rag",
+                description="Node instance name",
+            ),
+            "tool_registry": NodeParameter(
+                name="tool_registry",
+                type=dict,
+                required=False,
+                default=None,
+                description="Mapping of tool name to callable",
+            ),
+            "auto_detect_tools": NodeParameter(
+                name="auto_detect_tools",
+                type=bool,
+                required=False,
+                default=True,
+                description="Automatically detect which tools to invoke",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,

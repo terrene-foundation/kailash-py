@@ -635,13 +635,47 @@ class SecureMultiPartyRAGNode(Node):
         protocol: str = "secret_sharing",
         threshold: int = 2,
     ):
-        self.parties = parties or []
+        resolved_parties = parties or []
+        super().__init__(
+            name=name,
+            parties=resolved_parties,
+            protocol=protocol,
+            threshold=threshold,
+        )
+        self.parties = resolved_parties
         self.protocol = protocol
         self.threshold = threshold
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="secure_multiparty_rag",
+                description="Node instance name",
+            ),
+            "parties": NodeParameter(
+                name="parties",
+                type=list,
+                required=False,
+                default=None,
+                description="Participating parties in the MPC protocol",
+            ),
+            "protocol": NodeParameter(
+                name="protocol",
+                type=str,
+                required=False,
+                default="secret_sharing",
+                description="Secure multiparty computation protocol",
+            ),
+            "threshold": NodeParameter(
+                name="threshold",
+                type=int,
+                required=False,
+                default=2,
+                description="Minimum parties required to reconstruct",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
@@ -829,13 +863,47 @@ class ComplianceRAGNode(Node):
         default_retention_days: int = 30,
         require_explicit_consent: bool = True,
     ):
-        self.regulations = regulations or ["gdpr", "ccpa"]
+        resolved_regulations = regulations or ["gdpr", "ccpa"]
+        super().__init__(
+            name=name,
+            regulations=resolved_regulations,
+            default_retention_days=default_retention_days,
+            require_explicit_consent=require_explicit_consent,
+        )
+        self.regulations = resolved_regulations
         self.default_retention_days = default_retention_days
         self.require_explicit_consent = require_explicit_consent
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="compliance_rag",
+                description="Node instance name",
+            ),
+            "regulations": NodeParameter(
+                name="regulations",
+                type=list,
+                required=False,
+                default=None,
+                description="Compliance regulations to enforce (gdpr, ccpa, ...)",
+            ),
+            "default_retention_days": NodeParameter(
+                name="default_retention_days",
+                type=int,
+                required=False,
+                default=30,
+                description="Default data retention period in days",
+            ),
+            "require_explicit_consent": NodeParameter(
+                name="require_explicit_consent",
+                type=bool,
+                required=False,
+                default=True,
+                description="Require explicit user consent before processing",
+            ),
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Query to process"
             ),

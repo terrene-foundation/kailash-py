@@ -499,14 +499,55 @@ class GraphBuilderNode(Node):
         track_temporal: bool = False,
         confidence_scoring: bool = True,
     ):
+        super().__init__(
+            name=name,
+            merge_similar_entities=merge_similar_entities,
+            similarity_threshold=similarity_threshold,
+            track_temporal=track_temporal,
+            confidence_scoring=confidence_scoring,
+        )
         self.merge_similar_entities = merge_similar_entities
         self.similarity_threshold = similarity_threshold
         self.track_temporal = track_temporal
         self.confidence_scoring = confidence_scoring
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="graph_builder",
+                description="Node instance name",
+            ),
+            "merge_similar_entities": NodeParameter(
+                name="merge_similar_entities",
+                type=bool,
+                required=False,
+                default=True,
+                description="Merge entities above the similarity threshold",
+            ),
+            "similarity_threshold": NodeParameter(
+                name="similarity_threshold",
+                type=float,
+                required=False,
+                default=0.85,
+                description="Entity-merge similarity threshold",
+            ),
+            "track_temporal": NodeParameter(
+                name="track_temporal",
+                type=bool,
+                required=False,
+                default=False,
+                description="Track temporal relationships between entities",
+            ),
+            "confidence_scoring": NodeParameter(
+                name="confidence_scoring",
+                type=bool,
+                required=False,
+                default=True,
+                description="Attach confidence scores to extracted edges",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -621,10 +662,17 @@ class GraphQueryNode(Node):
     """
 
     def __init__(self, name: str = "graph_query"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="graph_query",
+                description="Node instance name",
+            ),
             "graph": NodeParameter(
                 name="graph",
                 type=dict,

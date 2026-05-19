@@ -79,16 +79,41 @@ class QueryExpansionNode(Node):
         expansion_method: str = "llm",
         num_expansions: int = 5,
     ):
+        super().__init__(
+            name=name,
+            expansion_method=expansion_method,
+            num_expansions=num_expansions,
+        )
         self.expansion_method = expansion_method
         self.num_expansions = num_expansions
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="query_expansion",
+                description="Node instance name",
+            ),
+            "expansion_method": NodeParameter(
+                name="expansion_method",
+                type=str,
+                required=False,
+                default="llm",
+                description="Algorithm (llm, wordnet, custom)",
+            ),
+            "num_expansions": NodeParameter(
+                name="num_expansions",
+                type=int,
+                required=False,
+                default=5,
+                description="Number of query variations to generate",
+            ),
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Query to expand"
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -254,17 +279,24 @@ class QueryDecompositionNode(Node):
     """
 
     def __init__(self, name: str = "query_decomposition"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="query_decomposition",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
                 description="Complex query to decompose",
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -445,17 +477,24 @@ class QueryRewritingNode(Node):
     """
 
     def __init__(self, name: str = "query_rewriting"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="query_rewriting",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
                 description="Query to rewrite and improve",
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -676,17 +715,24 @@ class QueryIntentClassifierNode(Node):
     """
 
     def __init__(self, name: str = "query_intent_classifier"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="query_intent_classifier",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
                 description="Query to classify intent for",
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -942,17 +988,24 @@ class MultiHopQueryPlannerNode(Node):
     """
 
     def __init__(self, name: str = "multi_hop_planner"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="multi_hop_planner",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
                 description="Complex query requiring multi-hop planning",
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -1199,17 +1252,24 @@ class AdaptiveQueryProcessorNode(Node):
     """
 
     def __init__(self, name: str = "adaptive_query_processor"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters"""
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="adaptive_query_processor",
+                description="Node instance name",
+            ),
             "query": NodeParameter(
                 name="query",
                 type=str,
                 required=True,
                 description="Query to process adaptively",
-            )
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:

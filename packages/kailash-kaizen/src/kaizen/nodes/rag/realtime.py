@@ -438,12 +438,37 @@ class RealtimeStreamingRAGNode(Node):
         chunk_size: int = 50,
         chunk_interval: int = 100,
     ):
+        super().__init__(
+            name=name,
+            chunk_size=chunk_size,
+            chunk_interval=chunk_interval,
+        )
         self.chunk_size = chunk_size
         self.chunk_interval = chunk_interval
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="streaming_rag",
+                description="Node instance name",
+            ),
+            "chunk_size": NodeParameter(
+                name="chunk_size",
+                type=int,
+                required=False,
+                default=50,
+                description="Tokens per streamed chunk",
+            ),
+            "chunk_interval": NodeParameter(
+                name="chunk_interval",
+                type=int,
+                required=False,
+                default=100,
+                description="Milliseconds between streamed chunks",
+            ),
             "query": NodeParameter(
                 name="query", type=str, required=True, description="Search query"
             ),
@@ -593,15 +618,40 @@ class IncrementalIndexNode(Node):
         index_type: str = "hybrid",
         merge_strategy: str = "immediate",
     ):
+        super().__init__(
+            name=name,
+            index_type=index_type,
+            merge_strategy=merge_strategy,
+        )
         self.index_type = index_type
         self.merge_strategy = merge_strategy
         self.index = {}
         self.document_store = {}
         self.update_log = deque(maxlen=1000)
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="incremental_index",
+                description="Node instance name",
+            ),
+            "index_type": NodeParameter(
+                name="index_type",
+                type=str,
+                required=False,
+                default="hybrid",
+                description="Type of index (inverted, vector, hybrid)",
+            ),
+            "merge_strategy": NodeParameter(
+                name="merge_strategy",
+                type=str,
+                required=False,
+                default="immediate",
+                description="How to merge incremental updates",
+            ),
             "operation": NodeParameter(
                 name="operation",
                 type=str,

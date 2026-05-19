@@ -6,6 +6,7 @@ Includes LLM-powered strategy selection and performance monitoring.
 """
 
 import logging
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,13 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from ..ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
+
+# Default routing model resolved from the environment (.env is the single
+# source of truth — never hardcode model names). May be None when unset;
+# that is env-models-compliant and acceptable as a default.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -28,16 +36,41 @@ class RAGStrategyRouterNode(Node):
     def __init__(
         self,
         name: str = "rag_strategy_router",
-        llm_model: str = "gpt-4",
+        llm_model: Optional[str] = _DEFAULT_LLM_MODEL,
         provider: str = "openai",
     ):
+        super().__init__(
+            name=name,
+            llm_model=llm_model,
+            provider=provider,
+        )
         self.llm_model = llm_model
         self.provider = provider
         self.llm_agent = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_strategy_router",
+                description="Node instance name",
+            ),
+            "llm_model": NodeParameter(
+                name="llm_model",
+                type=str,
+                required=False,
+                default=_DEFAULT_LLM_MODEL,
+                description="LLM model for routing analysis",
+            ),
+            "provider": NodeParameter(
+                name="provider",
+                type=str,
+                required=False,
+                default="openai",
+                description="LLM provider for routing analysis",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -452,10 +485,17 @@ class RAGQualityAnalyzerNode(Node):
     """
 
     def __init__(self, name: str = "rag_quality_analyzer"):
-        super().__init__(name)
+        super().__init__(name=name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_quality_analyzer",
+                description="Node instance name",
+            ),
             "rag_results": NodeParameter(
                 name="rag_results",
                 type=dict,
@@ -666,11 +706,18 @@ class RAGPerformanceMonitorNode(Node):
     """
 
     def __init__(self, name: str = "rag_performance_monitor"):
+        super().__init__(name=name)
         self.performance_history = []
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="rag_performance_monitor",
+                description="Node instance name",
+            ),
             "rag_results": NodeParameter(
                 name="rag_results",
                 type=dict,

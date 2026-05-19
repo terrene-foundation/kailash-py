@@ -380,12 +380,28 @@ class SemanticRAGNode(Node):
     """
 
     def __init__(self, name: str = "semantic_rag", config: Optional[RAGConfig] = None):
-        self.config = config or RAGConfig()
+        super().__init__(name=name)
+        # Node-specific RAG configuration: stored under `rag_config`, NOT
+        # `self.config` — the base Node reserves `self.config` for its dict
+        # config-bag, and the __init_with_capture wrapper iterates it.
+        self.rag_config = config or RAGConfig()
         self.workflow_node = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="semantic_rag",
+                description="Node instance name",
+            ),
+            "config": NodeParameter(
+                name="config",
+                type=dict,
+                required=False,
+                description="RAG configuration parameters",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -409,7 +425,7 @@ class SemanticRAGNode(Node):
     def run(self, **kwargs) -> Dict[str, Any]:
         """Run semantic RAG using WorkflowNode"""
         if not self.workflow_node:
-            self.workflow_node = create_semantic_rag_workflow(self.config)
+            self.workflow_node = create_semantic_rag_workflow(self.rag_config)
 
         # Delegate to WorkflowNode
         return self.workflow_node.execute(**kwargs)
@@ -427,12 +443,26 @@ class StatisticalRAGNode(Node):
     def __init__(
         self, name: str = "statistical_rag", config: Optional[RAGConfig] = None
     ):
-        self.config = config or RAGConfig()
+        super().__init__(name=name)
+        # Node-specific RAG configuration under `rag_config` (see SemanticRAGNode).
+        self.rag_config = config or RAGConfig()
         self.workflow_node = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="statistical_rag",
+                description="Node instance name",
+            ),
+            "config": NodeParameter(
+                name="config",
+                type=dict,
+                required=False,
+                description="RAG configuration parameters",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -456,7 +486,7 @@ class StatisticalRAGNode(Node):
     def run(self, **kwargs) -> Dict[str, Any]:
         """Run statistical RAG using WorkflowNode"""
         if not self.workflow_node:
-            self.workflow_node = create_statistical_rag_workflow(self.config)
+            self.workflow_node = create_statistical_rag_workflow(self.rag_config)
 
         return self.workflow_node.execute(**kwargs)
 
@@ -476,13 +506,27 @@ class HybridRAGNode(Node):
         config: Optional[RAGConfig] = None,
         fusion_method: str = "rrf",
     ):
-        self.config = config or RAGConfig()
+        super().__init__(name=name, fusion_method=fusion_method)
+        # Node-specific RAG configuration under `rag_config` (see SemanticRAGNode).
+        self.rag_config = config or RAGConfig()
         self.fusion_method = fusion_method
         self.workflow_node = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="hybrid_rag",
+                description="Node instance name",
+            ),
+            "config": NodeParameter(
+                name="config",
+                type=dict,
+                required=False,
+                description="RAG configuration parameters",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -515,7 +559,9 @@ class HybridRAGNode(Node):
 
         if not self.workflow_node or fusion_method != self.fusion_method:
             self.fusion_method = fusion_method
-            self.workflow_node = create_hybrid_rag_workflow(self.config, fusion_method)
+            self.workflow_node = create_hybrid_rag_workflow(
+                self.rag_config, fusion_method
+            )
 
         return self.workflow_node.execute(**kwargs)
 
@@ -532,12 +578,26 @@ class HierarchicalRAGNode(Node):
     def __init__(
         self, name: str = "hierarchical_rag", config: Optional[RAGConfig] = None
     ):
-        self.config = config or RAGConfig()
+        super().__init__(name=name)
+        # Node-specific RAG configuration under `rag_config` (see SemanticRAGNode).
+        self.rag_config = config or RAGConfig()
         self.workflow_node = None
-        super().__init__(name)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
+            "name": NodeParameter(
+                name="name",
+                type=str,
+                required=False,
+                default="hierarchical_rag",
+                description="Node instance name",
+            ),
+            "config": NodeParameter(
+                name="config",
+                type=dict,
+                required=False,
+                description="RAG configuration parameters",
+            ),
             "documents": NodeParameter(
                 name="documents",
                 type=list,
@@ -561,6 +621,6 @@ class HierarchicalRAGNode(Node):
     def run(self, **kwargs) -> Dict[str, Any]:
         """Run hierarchical RAG using WorkflowNode"""
         if not self.workflow_node:
-            self.workflow_node = create_hierarchical_rag_workflow(self.config)
+            self.workflow_node = create_hierarchical_rag_workflow(self.rag_config)
 
         return self.workflow_node.execute(**kwargs)
