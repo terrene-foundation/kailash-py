@@ -113,3 +113,80 @@ def test_rag_coexists_with_broader_kaizen_node_surface():
     """
     import kaizen.nodes.ai  # noqa: F401  — large non-rag kaizen node package
     import kaizen.nodes.rag  # noqa: F401  — must not raise under the guard
+
+
+# ---------------------------------------------------------------------------
+# Constructor-floor coverage (F8 A1 / A2).
+#
+# The import-smoke tests above execute every class body + every @register_node
+# decorator at import — but a @register_node decorator does NOT call __init__.
+# A node whose __init__ calls super().__init__(name) positionally against the
+# kailash.nodes.base.Node keyword config-bag imports clean yet raises TypeError
+# on EVERY construction. That is the resurrection false-floor: "imports clean"
+# is necessary but not sufficient — the package was advertised as usable while
+# every node was un-constructable.
+#
+# Each entry below names one representative class per code module AND the
+# constructor kwargs to build it. `Node`-subclass entries are A1 scope (fixed:
+# canonical super().__init__(name=name, **config) keyword form) and asserted
+# live. `WorkflowNode`-subclass entries are A2 scope (super().__init__(name,
+# self._create_workflow()) — still broken until A2) and marked skip so this
+# file is green now; A2 un-skips them.
+# ---------------------------------------------------------------------------
+
+# (module, class_name, ctor_kwargs) — representative Node-subclass per module.
+RAG_NODE_REPRESENTATIVES = [
+    ("advanced", "SelfCorrectingRAGNode", {"name": "smoke_self_correcting"}),
+    ("agentic", "ToolAugmentedRAGNode", {"name": "smoke_tool_augmented"}),
+    ("conversational", "ConversationMemoryNode", {"name": "smoke_conv_memory"}),
+    ("evaluation", "RAGBenchmarkNode", {"name": "smoke_rag_benchmark"}),
+    ("federated", "EdgeRAGNode", {"name": "smoke_edge_rag"}),
+    ("graph", "GraphBuilderNode", {"name": "smoke_graph_builder"}),
+    ("multimodal", "VisualQuestionAnsweringNode", {"name": "smoke_vqa"}),
+    ("privacy", "SecureMultiPartyRAGNode", {"name": "smoke_secure_mpc"}),
+    ("query_processing", "QueryExpansionNode", {"name": "smoke_query_expansion"}),
+    ("realtime", "RealtimeStreamingRAGNode", {"name": "smoke_realtime_streaming"}),
+    ("registry", "RAGWorkflowRegistry", {}),
+    ("router", "RAGStrategyRouterNode", {"name": "smoke_rag_router"}),
+    ("similarity", "DenseRetrievalNode", {"name": "smoke_dense_retrieval"}),
+    ("strategies", "SemanticRAGNode", {"name": "smoke_semantic_rag"}),
+]
+
+# Modules whose only node classes are WorkflowNode subclasses — A2 scope.
+# Listed for completeness; their instantiation is skip-marked below.
+RAG_WORKFLOWNODE_ONLY_MODULES = ["optimized", "workflows"]
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "mod, cls_name, ctor_kwargs",
+    RAG_NODE_REPRESENTATIVES,
+    ids=[f"{m}.{c}" for m, c, _ in RAG_NODE_REPRESENTATIVES],
+)
+def test_representative_rag_node_constructs(mod, cls_name, ctor_kwargs):
+    """One representative Node-subclass per module MUST construct, no TypeError.
+
+    This is the line-per-module that catches the resurrection false-floor: a
+    @register_node decorator runs the class body at import but never calls
+    __init__. Only an actual construction exercises super().__init__ — a
+    positional super().__init__(name) against the keyword config-bag raises
+    TypeError here while the import-smoke tests above stay green.
+    """
+    module = importlib.import_module(f"kaizen.nodes.rag.{mod}")
+    cls = getattr(module, cls_name)
+    instance = cls(**ctor_kwargs)
+    assert instance is not None
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("mod", RAG_WORKFLOWNODE_ONLY_MODULES)
+@pytest.mark.skip(reason="WorkflowNode constructors fixed in A2")
+def test_representative_workflownode_constructs(mod):
+    """A2 un-skips this: WorkflowNode-subclass modules construct.
+
+    `optimized` and `workflows` expose only WorkflowNode subclasses, whose
+    __init__ calls super().__init__(name, self._create_workflow()) — still
+    broken (A2 scope). Skip-marked so this file is green at A1; A2 removes the
+    skip and asserts construction of a representative WorkflowNode per module.
+    """
+    importlib.import_module(f"kaizen.nodes.rag.{mod}")
