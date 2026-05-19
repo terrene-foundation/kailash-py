@@ -85,7 +85,7 @@ class CacheOptimizedRAGNode(WorkflowNode):
     ):
         self.cache_ttl = cache_ttl
         self.similarity_threshold = similarity_threshold
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create cache-optimized RAG workflow"""
@@ -326,7 +326,7 @@ class AsyncParallelRAGNode(WorkflowNode):
 
     def __init__(self, name: str = "async_parallel_rag", strategies: List[str] = None):
         self.strategies = strategies or ["semantic", "sparse", "hybrid"]
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create async parallel RAG workflow"""
@@ -534,7 +534,7 @@ class StreamingRAGNode(WorkflowNode):
 
     def __init__(self, name: str = "streaming_rag", chunk_size: int = 100):
         self.chunk_size = chunk_size
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create streaming RAG workflow"""
@@ -720,7 +720,7 @@ class BatchOptimizedRAGNode(WorkflowNode):
 
     def __init__(self, name: str = "batch_optimized_rag", batch_size: int = 32):
         self.batch_size = batch_size
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create batch-optimized RAG workflow"""

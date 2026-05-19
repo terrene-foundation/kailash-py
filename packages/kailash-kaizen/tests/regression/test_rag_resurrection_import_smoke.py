@@ -129,9 +129,20 @@ def test_rag_coexists_with_broader_kaizen_node_surface():
 # Each entry below names one representative class per code module AND the
 # constructor kwargs to build it. `Node`-subclass entries are A1 scope (fixed:
 # canonical super().__init__(name=name, **config) keyword form) and asserted
-# live. `WorkflowNode`-subclass entries are A2 scope (super().__init__(name,
-# self._create_workflow()) — still broken until A2) and marked skip so this
-# file is green now; A2 un-skips them.
+# live.
+#
+# A2 corrected the 13 `WorkflowNode`-subclass constructor *forms*: positional
+# super().__init__(name, self._create_workflow()) — which landed `name` in the
+# `workflow` slot of WorkflowNode.__init__(workflow, **kwargs) and left the
+# real workflow with no positional slot, a TypeError on EVERY construction —
+# became canonical keyword super().__init__(workflow=self._create_workflow(),
+# name=name). The constructor form is now correct for all 17 WorkflowNode
+# subclasses, but 6 still cannot fully construct because their
+# _create_workflow() bodies reference unregistered node types or hit a
+# NameError — that is A3 scope, not A2, and those 6 are marked
+# xfail(strict=True) below so A3 un-marks them. `workflows.py`'s 4 classes
+# were already constructor-canonical (never A2 scope) but are A3-blocked on
+# the unregistered 'SemanticChunkerNode' all the same.
 # ---------------------------------------------------------------------------
 
 # (module, class_name, ctor_kwargs) — representative Node-subclass per module.
@@ -152,9 +163,101 @@ RAG_NODE_REPRESENTATIVES = [
     ("strategies", "SemanticRAGNode", {"name": "smoke_semantic_rag"}),
 ]
 
-# Modules whose only node classes are WorkflowNode subclasses — A2 scope.
-# Listed for completeness; their instantiation is skip-marked below.
-RAG_WORKFLOWNODE_ONLY_MODULES = ["optimized", "workflows"]
+# (module, class_name, ctor_kwargs) — every WorkflowNode subclass in the rag
+# package. A2 corrected the 13 fixed classes' constructor *form*: positional
+# super().__init__(name, self._create_workflow()) — which landed `name` in the
+# `workflow` slot of WorkflowNode.__init__(workflow, **kwargs) and left the real
+# workflow with no positional slot, a TypeError on EVERY construction — became
+# canonical keyword super().__init__(workflow=self._create_workflow(), name=name).
+#
+# The constructor *form* is now correct for all 17, but 6 classes still cannot
+# FULLY construct because their _create_workflow() bodies reference unregistered
+# node types or hit a NameError — that is A3 scope, not A2. Those 6 are marked
+# xfail(strict=True): the moment A3 fixes the _create_workflow() bodies they
+# XPASS, the strict marker turns the unexpected pass into a FAILURE, and the A3
+# session is forced to remove the marks. The marker IS the A3 tracking hook —
+# skip would be silent, dropping the param would hide the gap.
+#
+# The 4 workflows.py classes were already constructor-canonical (multi-line
+# keyword super().__init__(workflow=, name=, description=)) and were never A2
+# scope — but they are A3-blocked on the unregistered 'SemanticChunkerNode' all
+# the same, so they carry the same xfail marker. Each class takes a defaulted
+# `name` plus defaulted config.
+_A3_CACHE_NODE = (
+    "A3 (R3): _create_workflow references unregistered node type 'CacheNode'"
+)
+_A3_SEMANTIC_CHUNKER = (
+    "A3 (R3): _create_workflow references unregistered node type 'SemanticChunkerNode'"
+)
+_A3_PII_NAMEERROR = (
+    "A3 (R4 LEAK, A0-tabled): privacy.py _create_workflow raises NameError 'pii_type'"
+)
+
+RAG_WORKFLOWNODE_SUBCLASSES = [
+    # 13 A2-fixed classes (positional super().__init__ → keyword form).
+    pytest.param("realtime", "RealtimeRAGNode", {"name": "smoke_realtime_rag"}),
+    pytest.param("agentic", "AgenticRAGNode", {"name": "smoke_agentic_rag"}),
+    pytest.param("agentic", "ReasoningRAGNode", {"name": "smoke_reasoning_rag"}),
+    pytest.param("evaluation", "RAGEvaluationNode", {"name": "smoke_rag_evaluation"}),
+    pytest.param("graph", "GraphRAGNode", {"name": "smoke_graph_rag"}),
+    pytest.param("multimodal", "MultimodalRAGNode", {"name": "smoke_multimodal_rag"}),
+    pytest.param("federated", "FederatedRAGNode", {"name": "smoke_federated_rag"}),
+    pytest.param(
+        "conversational",
+        "ConversationalRAGNode",
+        {"name": "smoke_conversational_rag"},
+    ),
+    pytest.param(
+        "optimized",
+        "CacheOptimizedRAGNode",
+        {"name": "smoke_cache_optimized_rag"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_CACHE_NODE),
+    ),
+    pytest.param(
+        "optimized", "AsyncParallelRAGNode", {"name": "smoke_async_parallel_rag"}
+    ),
+    pytest.param("optimized", "StreamingRAGNode", {"name": "smoke_streaming_rag"}),
+    pytest.param(
+        "optimized", "BatchOptimizedRAGNode", {"name": "smoke_batch_optimized_rag"}
+    ),
+    pytest.param(
+        "privacy",
+        "PrivacyPreservingRAGNode",
+        {"name": "smoke_privacy_rag"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_PII_NAMEERROR),
+    ),
+    # 4 workflows.py classes — already constructor-canonical, never A2 scope,
+    # but A3-blocked on the unregistered 'SemanticChunkerNode' node type.
+    pytest.param(
+        "workflows",
+        "SimpleRAGWorkflowNode",
+        {"name": "smoke_simple_rag_workflow"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
+    ),
+    pytest.param(
+        "workflows",
+        "AdvancedRAGWorkflowNode",
+        {"name": "smoke_advanced_rag_workflow"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
+    ),
+    pytest.param(
+        "workflows",
+        "AdaptiveRAGWorkflowNode",
+        {"name": "smoke_adaptive_rag_workflow"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
+    ),
+    pytest.param(
+        "workflows",
+        "RAGPipelineWorkflowNode",
+        {"name": "smoke_rag_pipeline_workflow"},
+        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
+    ),
+]
+
+# Stable test ids: (module.class_name) per param, mirroring RAG_NODE_REPRESENTATIVES.
+_RAG_WORKFLOWNODE_IDS = [
+    f"{p.values[0]}.{p.values[1]}" for p in RAG_WORKFLOWNODE_SUBCLASSES
+]
 
 
 @pytest.mark.regression
@@ -179,14 +282,32 @@ def test_representative_rag_node_constructs(mod, cls_name, ctor_kwargs):
 
 
 @pytest.mark.regression
-@pytest.mark.parametrize("mod", RAG_WORKFLOWNODE_ONLY_MODULES)
-@pytest.mark.skip(reason="WorkflowNode constructors fixed in A2")
-def test_representative_workflownode_constructs(mod):
-    """A2 un-skips this: WorkflowNode-subclass modules construct.
+@pytest.mark.parametrize(
+    "mod, cls_name, ctor_kwargs",
+    RAG_WORKFLOWNODE_SUBCLASSES,
+    ids=_RAG_WORKFLOWNODE_IDS,
+)
+def test_workflownode_subclass_constructs(mod, cls_name, ctor_kwargs):
+    """Every WorkflowNode subclass in the rag package MUST construct.
 
-    `optimized` and `workflows` expose only WorkflowNode subclasses, whose
-    __init__ calls super().__init__(name, self._create_workflow()) — still
-    broken (A2 scope). Skip-marked so this file is green at A1; A2 removes the
-    skip and asserts construction of a representative WorkflowNode per module.
+    A2 corrected the 13 fixed classes' constructor form: positional
+    super().__init__(name, self._create_workflow()) — `name` landed in the
+    `workflow` slot of WorkflowNode.__init__(workflow, **kwargs), the real
+    workflow had no positional slot, TypeError on EVERY construction — became
+    canonical super().__init__(workflow=self._create_workflow(), name=name).
+
+    Constructor form is now correct for all 17, but 6 classes still cannot
+    fully construct: their _create_workflow() bodies reference unregistered
+    node types ('CacheNode', 'SemanticChunkerNode') or raise a NameError
+    ('pii_type'). Those are A3 scope and carry xfail(strict=True) — when A3
+    fixes the _create_workflow() bodies the params XPASS, the strict marker
+    fails the test, and A3 is forced to remove the marks.
+
+    Same false-floor logic as the Node-subclass test above: a @register_node
+    decorator runs the class body at import but never calls __init__, so only
+    an actual construction exercises super().__init__.
     """
-    importlib.import_module(f"kaizen.nodes.rag.{mod}")
+    module = importlib.import_module(f"kaizen.nodes.rag.{mod}")
+    cls = getattr(module, cls_name)
+    instance = cls(**ctor_kwargs)
+    assert instance is not None

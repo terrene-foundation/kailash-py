@@ -99,7 +99,7 @@ class FederatedRAGNode(WorkflowNode):
         self.min_participating_nodes = min_participating_nodes
         self.timeout_per_node = timeout_per_node
         self.enable_caching = enable_caching
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create federated RAG workflow"""

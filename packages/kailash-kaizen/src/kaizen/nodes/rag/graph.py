@@ -103,7 +103,7 @@ class GraphRAGNode(WorkflowNode):
         self.max_hops = max_hops
         self.community_algorithm = community_algorithm
         self.use_global_summary = use_global_summary
-        super().__init__(name, self._create_workflow())
+        super().__init__(workflow=self._create_workflow(), name=name)
 
     def _create_workflow(self) -> WorkflowNode:
         """Create knowledge graph RAG workflow"""
