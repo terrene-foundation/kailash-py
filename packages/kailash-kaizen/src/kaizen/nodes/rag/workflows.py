@@ -6,10 +6,9 @@ and operations into reusable workflow patterns.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.nodes.logic import SwitchNode
+from kailash.nodes.base import register_node
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -109,18 +108,19 @@ result = {"analysis": analyze_documents(documents), "documents": documents}
             },
         )
 
-        # Strategy router using switch node
+        # Strategy router using switch node.
+        # SwitchNode multi-case mode: `cases` is the list of values to match on
+        # the `condition_field`; each match is emitted on a `case_<value>`
+        # output port (see kailash SwitchNode._sanitize_case_name). The four
+        # strategy names contain no characters that sanitize, so the ports are
+        # `case_semantic` / `case_statistical` / `case_hybrid` /
+        # `case_hierarchical`.
         router_id = builder.add_node(
             "SwitchNode",
             node_id="strategy_router",
             config={
-                "condition_field": "analysis.recommended_strategy",
-                "routes": {
-                    "semantic": "semantic_rag_pipeline",
-                    "statistical": "statistical_rag_pipeline",
-                    "hybrid": "hybrid_rag_pipeline",
-                    "hierarchical": "hierarchical_rag_pipeline",
-                },
+                "condition_field": "recommended_strategy",
+                "cases": ["semantic", "statistical", "hybrid", "hierarchical"],
             },
         )
 
@@ -185,14 +185,15 @@ result = validate_rag_results(rag_results, analysis)
             },
         )
 
-        # Connect the advanced pipeline
-        builder.add_connection(quality_analyzer_id, "result", router_id, "input")
+        # Connect the advanced pipeline. SwitchNode's primary input port is
+        # `input_data`; each multi-case match emits on `case_<value>`.
+        builder.add_connection(quality_analyzer_id, "result", router_id, "input_data")
 
-        # Connect router to all strategy pipelines
-        builder.add_connection(router_id, semantic_id, route="semantic")
-        builder.add_connection(router_id, statistical_id, route="statistical")
-        builder.add_connection(router_id, hybrid_id, route="hybrid")
-        builder.add_connection(router_id, hierarchical_id, route="hierarchical")
+        # Connect router to all strategy pipelines via the per-case output ports.
+        builder.add_connection(router_id, "case_semantic", semantic_id, "input")
+        builder.add_connection(router_id, "case_statistical", statistical_id, "input")
+        builder.add_connection(router_id, "case_hybrid", hybrid_id, "input")
+        builder.add_connection(router_id, "case_hierarchical", hierarchical_id, "input")
 
         # Connect all pipelines to validator
         builder.add_connection(semantic_id, "output", validator_id, "rag_results")
@@ -342,12 +343,7 @@ result = analyze_for_llm(documents, query)
             node_id="strategy_executor",
             config={
                 "condition_field": "recommended_strategy",
-                "routes": {
-                    "semantic": "semantic_pipeline",
-                    "statistical": "statistical_pipeline",
-                    "hybrid": "hybrid_pipeline",
-                    "hierarchical": "hierarchical_pipeline",
-                },
+                "cases": ["semantic", "statistical", "hybrid", "hierarchical"],
             },
         )
 
@@ -410,21 +406,24 @@ result = aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data
             },
         )
 
-        # Connect adaptive pipeline
+        # Connect adaptive pipeline. SwitchNode's primary input port is
+        # `input_data`; each multi-case match emits on `case_<value>`.
         builder.add_connection(preprocessor_id, "result", llm_analyzer_id, "input")
-        builder.add_connection(llm_analyzer_id, "result", executor_id, "input")
+        builder.add_connection(llm_analyzer_id, "result", executor_id, "input_data")
         builder.add_connection(
             preprocessor_id, "result", executor_id, "preprocessed_data"
         )
 
-        # Connect executor to strategy pipelines
-        builder.add_connection(executor_id, semantic_pipeline_id, route="semantic")
+        # Connect executor to strategy pipelines via the per-case output ports.
         builder.add_connection(
-            executor_id, statistical_pipeline_id, route="statistical"
+            executor_id, "case_semantic", semantic_pipeline_id, "input"
         )
-        builder.add_connection(executor_id, hybrid_pipeline_id, route="hybrid")
         builder.add_connection(
-            executor_id, hierarchical_pipeline_id, route="hierarchical"
+            executor_id, "case_statistical", statistical_pipeline_id, "input"
+        )
+        builder.add_connection(executor_id, "case_hybrid", hybrid_pipeline_id, "input")
+        builder.add_connection(
+            executor_id, "case_hierarchical", hierarchical_pipeline_id, "input"
         )
 
         # Connect all pipelines to aggregator
@@ -510,13 +509,7 @@ result = process_config(documents, **kwargs)
             node_id="strategy_dispatcher",
             config={
                 "condition_field": "strategy",
-                "routes": {
-                    "semantic": "semantic_strategy",
-                    "statistical": "statistical_strategy",
-                    "hybrid": "hybrid_strategy",
-                    "hierarchical": "hierarchical_strategy",
-                },
-                "default_route": "hybrid_strategy",
+                "cases": ["semantic", "statistical", "hybrid", "hierarchical"],
             },
         )
 
@@ -557,13 +550,17 @@ result = format_pipeline_results(strategy_results, processed_config)
             },
         )
 
-        # Connect configurable pipeline
-        builder.add_connection(config_processor_id, "result", dispatcher_id, "input")
+        # Connect configurable pipeline. SwitchNode's primary input port is
+        # `input_data`; each multi-case match emits on `case_<value>` where
+        # `<value>` is the matched `strategy` field value.
+        builder.add_connection(
+            config_processor_id, "result", dispatcher_id, "input_data"
+        )
 
-        # Connect dispatcher to all strategies
+        # Connect dispatcher to all strategies via the per-case output ports.
         for strategy_name, strategy_id in strategy_ids.items():
             builder.add_connection(
-                dispatcher_id, strategy_id, route=f"{strategy_name}_strategy"
+                dispatcher_id, f"case_{strategy_name}", strategy_id, "input"
             )
             builder.add_connection(
                 strategy_id, "output", formatter_id, "strategy_results"

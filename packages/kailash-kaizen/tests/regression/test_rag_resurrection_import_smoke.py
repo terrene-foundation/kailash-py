@@ -191,9 +191,6 @@ RAG_NODE_REPRESENTATIVES = [
 _A3_CACHE_NODE = (
     "A3 (R3): _create_workflow references unregistered node type 'CacheNode'"
 )
-_A3_SEMANTIC_CHUNKER = (
-    "A3 (R3): _create_workflow references unregistered node type 'SemanticChunkerNode'"
-)
 _A3_PII_NAMEERROR = (
     "A3 (R4 LEAK, A0-tabled): privacy.py _create_workflow raises NameError 'pii_type'"
 )
@@ -231,31 +228,30 @@ RAG_WORKFLOWNODE_SUBCLASSES = [
         {"name": "smoke_privacy_rag"},
         marks=pytest.mark.xfail(strict=True, reason=_A3_PII_NAMEERROR),
     ),
-    # 4 workflows.py classes — already constructor-canonical, never A2 scope,
-    # but A3-blocked on the unregistered 'SemanticChunkerNode' node type.
+    # 4 workflows.py classes — already constructor-canonical, never A2 scope.
+    # B7 applied the A3-triage R3-L2 fix (chunker registering import in
+    # strategies.py) + R3-L3 fix (rewrote the stale `add_connection(route=)`
+    # calls to the canonical 4-arg form), so all 4 now construct fully — the
+    # xfail markers were removed by B7, the owning shard.
     pytest.param(
         "workflows",
         "SimpleRAGWorkflowNode",
         {"name": "smoke_simple_rag_workflow"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
     ),
     pytest.param(
         "workflows",
         "AdvancedRAGWorkflowNode",
         {"name": "smoke_advanced_rag_workflow"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
     ),
     pytest.param(
         "workflows",
         "AdaptiveRAGWorkflowNode",
         {"name": "smoke_adaptive_rag_workflow"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
     ),
     pytest.param(
         "workflows",
         "RAGPipelineWorkflowNode",
         {"name": "smoke_rag_pipeline_workflow"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_SEMANTIC_CHUNKER),
     ),
 ]
 

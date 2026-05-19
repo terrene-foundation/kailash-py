@@ -7,11 +7,19 @@ a workflow using WorkflowBuilder and delegates all execution to the SDK.
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.logic.workflow import WorkflowNode
+
+# Registering import: kailash uses a lazy module cache, so the
+# `@register_node()` decorators on SemanticChunkerNode / StatisticalChunkerNode /
+# HierarchicalChunkerNode fire only when `kailash.nodes.transform.chunkers` is
+# actually imported. The `create_*_rag_workflow` builders below reference those
+# node types by string in `add_node(...)`; importing the module here ensures the
+# registry is populated before any `_create_workflow()` runs.
+from kailash.nodes.transform import chunkers as _chunkers  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
