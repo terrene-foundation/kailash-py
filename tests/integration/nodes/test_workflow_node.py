@@ -20,12 +20,9 @@ def register_test_nodes():
     NodeRegistry.register(InputTestNode, "InputTestNode")
     NodeRegistry.register(ProcessorTestNode, "ProcessorTestNode")
     yield
-    # Clean up after tests
+    # Clean up after tests (pop with default never raises)
     for node_name in ["InputTestNode", "ProcessorTestNode"]:
-        try:
-            NodeRegistry._nodes.pop(node_name, None)
-        except:
-            pass
+        NodeRegistry._nodes.pop(node_name, None)
 
 
 # Removed @register_node() to prevent test pollution
@@ -372,3 +369,20 @@ class TestWorkflowNode:
         )
 
         assert results["results"]["processor"]["result"] == 70  # 10 * 7
+
+
+@pytest.mark.regression
+def test_workflow_node_workflow_property_returns_inner_workflow():
+    """WorkflowNode exposes the inner wrapped Workflow via a read-only
+    `.workflow` property.
+
+    Downstream code (kaizen.nodes.rag.workflows / strategies) accesses
+    `workflow_node.workflow`; before this fix WorkflowNode only stored
+    `self._workflow` with no public accessor, raising AttributeError.
+    """
+    inner = Workflow("wf-prop-001", "data_processing")
+    inner.add_node("input", InputTestNode(name="input"))
+
+    node = WorkflowNode(workflow=inner)
+
+    assert node.workflow is inner

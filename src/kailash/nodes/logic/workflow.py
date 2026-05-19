@@ -127,6 +127,11 @@ class WorkflowNode(Node):
         if not self._workflow:
             self._load_workflow()
 
+    @property
+    def workflow(self) -> Workflow | None:
+        """The inner wrapped :class:`Workflow` (``None`` until loaded)."""
+        return self._workflow
+
     def _validate_config(self):
         """Override validation for WorkflowNode.
 

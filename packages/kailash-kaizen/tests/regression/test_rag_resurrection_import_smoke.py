@@ -139,10 +139,13 @@ def test_rag_coexists_with_broader_kaizen_node_surface():
 # name=name). The constructor form is now correct for all 17 WorkflowNode
 # subclasses, but 6 still cannot fully construct because their
 # _create_workflow() bodies reference unregistered node types or hit a
-# NameError — that is A3 scope, not A2, and those 6 are marked
-# xfail(strict=True) below so A3 un-marks them. `workflows.py`'s 4 classes
-# were already constructor-canonical (never A2 scope) but are A3-blocked on
-# the unregistered 'SemanticChunkerNode' all the same.
+# NameError — that is A3-triage scope, not A2. A3 dispositioned all 6 (see
+# `workspaces/kaizen-rag-node-coverage/01-analysis/04-A3-triage.md`): the
+# rag-side `_create_workflow()` fixes are routed to the owning B-coverage
+# shards, and the owning B-shard un-marks its xfail when it lands the fix.
+# `workflows.py`'s 4 classes were already constructor-canonical (never A2
+# scope) but are A3-blocked on the unregistered 'SemanticChunkerNode' all
+# the same.
 # ---------------------------------------------------------------------------
 
 # (module, class_name, ctor_kwargs) — representative Node-subclass per module.
@@ -172,11 +175,13 @@ RAG_NODE_REPRESENTATIVES = [
 #
 # The constructor *form* is now correct for all 17, but 6 classes still cannot
 # FULLY construct because their _create_workflow() bodies reference unregistered
-# node types or hit a NameError — that is A3 scope, not A2. Those 6 are marked
-# xfail(strict=True): the moment A3 fixes the _create_workflow() bodies they
-# XPASS, the strict marker turns the unexpected pass into a FAILURE, and the A3
-# session is forced to remove the marks. The marker IS the A3 tracking hook —
-# skip would be silent, dropping the param would hide the gap.
+# node types or hit a NameError — that is A3-triage scope, not A2. Those 6 are
+# marked xfail(strict=True): the moment the owning B-coverage shard fixes the
+# _create_workflow() body they XPASS, the strict marker turns the unexpected
+# pass into a FAILURE, and that B-shard is forced to remove the mark. The
+# marker IS the cross-shard tracking hook (A3 dispositions, the B-shard fixes
+# + un-marks — see 04-A3-triage.md) — skip would be silent, dropping the
+# param would hide the gap.
 #
 # The 4 workflows.py classes were already constructor-canonical (multi-line
 # keyword super().__init__(workflow=, name=, description=)) and were never A2
@@ -299,9 +304,11 @@ def test_workflownode_subclass_constructs(mod, cls_name, ctor_kwargs):
     Constructor form is now correct for all 17, but 6 classes still cannot
     fully construct: their _create_workflow() bodies reference unregistered
     node types ('CacheNode', 'SemanticChunkerNode') or raise a NameError
-    ('pii_type'). Those are A3 scope and carry xfail(strict=True) — when A3
-    fixes the _create_workflow() bodies the params XPASS, the strict marker
-    fails the test, and A3 is forced to remove the marks.
+    ('pii_type'). A3-triage dispositioned all 6 (04-A3-triage.md) and routed
+    the rag-side fixes to the owning B-coverage shards; each carries
+    xfail(strict=True) — when the owning B-shard fixes the _create_workflow()
+    body the param XPASSes, the strict marker fails the test, and that
+    B-shard is forced to remove the mark.
 
     Same false-floor logic as the Node-subclass test above: a @register_node
     decorator runs the class body at import but never calls __init__, so only

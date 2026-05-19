@@ -177,16 +177,6 @@ class TestMCPServerIntegration:
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "MCPToolNode does not implement the abstract Node.run method, so the "
-        "class is currently uninstantiable (TypeError on construction). "
-        "Implementing run is shard A3's scope. Once A3 lands, this xfail flips "
-        "to a hard failure (strict=True) — remove the marker and confirm the "
-        "MED-1 get_parameters() config-bag fix is reachable at runtime."
-    ),
-)
 def test_mcp_tool_node_get_parameters_reads_config_bag():
     """MED-1: MCPToolNode.get_parameters() reads parameters_schema from the
     validated config bag, not the bare instance attribute.
@@ -206,3 +196,48 @@ def test_mcp_tool_node_get_parameters_reads_config_bag():
     params = node.get_parameters()
     assert "tool_input" in params
     assert "foo" in params
+
+
+@pytest.mark.regression
+def test_mcp_tool_node_run_bridges_to_process():
+    """CLASS5: MCPToolNode.run(**kwargs) bridges the Node run(**kwargs)
+    contract to the MCP process(inputs) convention and returns the real
+    process payload.
+
+    Node.run is abstract; before shard A3, MCPToolNode was uninstantiable.
+    The run adapter collects its kwargs into the inputs dict and delegates
+    to process — proving the class is now concrete AND that run produces
+    process's output.
+    """
+    from kailash.middleware.mcp.enhanced_server import MCPToolNode
+
+    node = MCPToolNode(name="t", tool_name="x")
+    result = node.run(tool_input={"k": "v"})
+
+    assert isinstance(result, dict)
+    assert "tool_result" in result
+    assert "execution_count" in result
+    assert result["execution_count"] == 1
+    assert result["tool_result"] == "Executed MCP tool x"
+
+
+@pytest.mark.regression
+def test_mcp_resource_node_run_bridges_to_process():
+    """CLASS5: MCPResourceNode.run(**kwargs) bridges the Node run(**kwargs)
+    contract to the MCP process(inputs) convention and returns the real
+    process payload.
+
+    Node.run is abstract; before shard A3, MCPResourceNode was
+    uninstantiable. The run adapter collects its kwargs into the inputs
+    dict and delegates to process.
+    """
+    from kailash.middleware.mcp.enhanced_server import MCPResourceNode
+
+    node = MCPResourceNode(name="t", resource_uri="u")
+    result = node.run(resource_uri="u")
+
+    assert isinstance(result, dict)
+    assert "resource_content" in result
+    assert "access_count" in result
+    assert result["access_count"] == 1
+    assert result["resource_content"] == "Content from u"
