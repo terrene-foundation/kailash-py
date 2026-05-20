@@ -1215,3 +1215,217 @@ WorkflowNode-subclass parametrize entry in
 B9a, 1 optimized in B9c). The smoke test now carries **zero `xfail`
 markers** on the WorkflowNode-subclass parameter set — the resurrection
 signal is fully closed and the smoke test is a pure go/no-go gate.
+
+## Routing, discovery, and runtime registry
+
+`kaizen.nodes.rag.router` ships 3 `Node`-subclass nodes covering the
+strategy-selection, quality-assessment, and performance-monitoring
+surface. `kaizen.nodes.rag.registry` ships a single non-`Node` class —
+`RAGWorkflowRegistry` — that exposes a unified discovery / construction
+API across every registered RAG strategy, workflow, and utility.
+
+### `RAGStrategyRouterNode`
+
+A `Node`-subclass that combines LLM-powered strategy selection with a
+deterministic rule-based fallback. `run()` accepts a `documents` list
+(required) plus optional `query`, `user_preferences`, and
+`performance_history` kwargs; the model name resolves from
+`OPENAI_PROD_MODEL` → `DEFAULT_LLM_MODEL` via the module-scope
+`_DEFAULT_LLM_MODEL` (see `packages/kailash-kaizen/src/kaizen/nodes/rag/router.py:22-24`)
+in compliance with `rules/env-models.md` (no hardcoded models).
+
+The `run()` pipeline (see `router.py:100`-`153`):
+
+1. Lazy-initialize an `LLMAgentNode` at first invocation
+   (`router.py:114`), naming it `f"{self.metadata.name}_llm"`. **The
+   base `Node` class stores name on `metadata`, not as a bare
+   attribute** — the prior `self.name`-form raised `AttributeError`
+   on every `run()` call (the resurrection false-floor: import-clean
+   but un-callable). The B10 fix routes through `self.metadata.name`
+   and the regression test at
+   `tests/regression/test_issue_f8b10_router_registry_defects.py::TestRouterSelfNameBugClosed`
+   locks the behavior.
+2. Call `_analyze_documents(documents, query)` (router.py:195-287) for
+   deterministic content / structure / technical-ratio / complexity
+   statistics. `_analyze_query(query)` (router.py:309-346) adds
+   question / technical / conceptual detection when `query` is
+   non-empty.
+3. Format an LLM prompt (`_format_llm_input`) and call
+   `self.llm_agent.execute(messages=[...])`. On exception, fall
+   through to `_fallback_strategy_selection(analysis)`
+   (router.py:454-479), the rule-based picker:
+   - `complexity > 0.7 AND has_structure` → `hierarchical`
+   - `is_technical AND technical_content_ratio > 0.2` → `statistical`
+   - `total_docs > 50 OR avg_length > 1000` → `hybrid`
+   - default → `semantic`
+4. Parse the LLM response (`_parse_llm_response`) — JSON-first with a
+   keyword-extracting fallback (`_parse_fallback_response`) when the
+   model returns unstructured text. A completely-broken response
+   returns the safe-default `{strategy: "hybrid", confidence: 0.5}`.
+
+Output shape (always-present keys, both LLM and fallback branches):
+
+```
+{
+  "strategy": str,                       # one of semantic|statistical|hybrid|hierarchical
+  "reasoning": str,
+  "confidence": float,                   # 0.0–1.0
+  "fallback_strategy": str,              # backup if primary fails
+  "document_analysis": dict,             # _analyze_documents output
+  "llm_model_used": str | None,          # resolved at construction
+  "routing_metadata": {                  # timing + input fingerprints
+    "timestamp": float,
+    "documents_count": int,
+    "query_provided": bool,
+    "user_preferences_provided": bool,
+  },
+}
+```
+
+### `RAGQualityAnalyzerNode`
+
+A deterministic `Node`-subclass that scores the output of any RAG
+retrieval. `run()` accepts a `rag_results` dict (required — supports
+both `{"results": [...], "scores": [...]}` and the alias
+`{"documents": [...], ...}` shape) plus optional `query` and
+`expected_results` kwargs.
+
+Computation pipeline (router.py:523-575):
+
+1. **Quality metrics** — `result_count`, `has_scores`, `avg_score`,
+   `min_score`, `max_score`, `score_variance` derived from the
+   `scores` array.
+2. **Expected-results comparison** — when `expected_results` is
+   provided, `quality_analysis["expected_result_count"]` and
+   `quality_analysis["expected_recall_ratio"] = min(retrieved /
+expected, 1.0)` are surfaced. The kwarg was previously declared
+   in `get_parameters()` but silently dropped (Rule 3c violation —
+   documented kwargs accepted but unused). B10 wires consumption.
+3. **Content analysis** — `_analyze_content_quality(documents,
+query)` (router.py:577-620): `diversity_score` (unique-content
+   ratio), `avg_content_length`, `content_coverage` (query-word
+   intersection), `duplicate_ratio`.
+4. **Performance assessment** — `_calculate_performance_score`
+   weights five factors (result_count / 5, avg_score, diversity,
+   coverage, 1 − duplicate_ratio) by `[0.2, 0.3, 0.2, 0.2, 0.1]`,
+   clamped to `[0.0, 1.0]`. The `0.1` inverse-duplicate weight is
+   why the empty-results case scores `0.1`, not `0.0`.
+5. **Recommendations** — `_generate_recommendations` emits actionable
+   string suggestions based on the metric thresholds (e.g. "lowering
+   similarity threshold" when `result_count < 3`, "switching to
+   hybrid" when `strategy_used == "semantic"` and `avg_score < 0.6`).
+
+`passed_quality_check` is `performance_score > 0.6`.
+
+### `RAGPerformanceMonitorNode`
+
+A stateful `Node`-subclass that accumulates a sliding window of
+performance records across `run()` invocations. Each call appends a
+fresh record (`timestamp`, `strategy_used`, `query_type`,
+`execution_time`, `result_count`, `avg_score`, `success`) to the
+instance's `performance_history` list, truncating to the **last 100
+records** (`router.py:785-786`).
+
+`run()` aggregates over the **last 20 records** of `performance_history`
+to compute `metrics.overall.{avg_execution_time, avg_result_count,
+avg_score, success_rate}` and `metrics.by_strategy[<name>].{count,
+avg_execution_time, avg_score, success_rate}`. `_generate_insights`
+emits string findings on thresholds (e.g. `avg_execution_time > 5.0`
+yields "High average execution time detected").
+
+State-persistence invariant: repeated `run()` calls on the same
+instance accumulate the history through the SAME surface a user would
+observe (`performance_history_size` field in the returned dict).
+Tier-2a verification at
+`tests/integration/rag/test_router_nodes.py::TestPerformanceMonitorRealRuntime::test_monitor_metrics_aggregate_across_calls`.
+
+### `RAGWorkflowRegistry`
+
+A discovery / construction facade exposing:
+
+- **`list_strategies` / `list_workflows` / `list_utilities`** —
+  metadata about the registered components (4 strategies, 4
+  workflows, 3 utilities at construction).
+- **`recommend_strategy`** — rule-based picker accepting
+  `document_count`, `avg_document_length`, `is_technical`,
+  `has_structure`, `query_type`, and `performance_priority`. Returns
+  a primary recommendation plus up to 2 alternatives, with a
+  `confidence` score and `strategy_details` (the registry entry
+  for the picked strategy). Speed-priority subtracts 0.2 from
+  hierarchical and adds 0.1 to semantic / statistical, demoting
+  hierarchical when faster alternatives are present.
+- **`recommend_workflow`** — accepts `user_level`, `use_case`,
+  `needs_customization`, `needs_monitoring`. Returns the workflow
+  name plus the suggested utilities (`router` for `adaptive`;
+  `quality_analyzer + performance_monitor` for `advanced` /
+  `adaptive` / `needs_monitoring`).
+- **`create_strategy` / `create_workflow` / `create_utility`** —
+  return live `Node` / `WorkflowNode` instances; unknown names raise
+  `ValueError` with the available-set in the message.
+- **`get_quick_start_guide`** — returns documentation prose covering
+  the primary entry points.
+- **`get_strategy_comparison`** — returns a four-strategy
+  performance matrix with `{speed, accuracy, complexity}` scores
+  plus a `use_case_fit` mapping (5 use cases → recommended
+  strategies) and a `selection_guide` (5 selection axes →
+  recommended strategies).
+
+A module-scope `rag_registry` singleton is constructed at import
+(`registry.py:547`). Tier-2a verifies the singleton round-trips
+through the same `create_utility` API as a freshly-constructed
+registry.
+
+### Class-count accounting
+
+The `kaizen.nodes.rag` package contains exactly **58 class
+definitions** distributed across the 16 code modules (excluding
+`__init__.py`):
+
+| Class kind                                      | Count  | Notes                                                                                               |
+| ----------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| `@register_node` Node / WorkflowNode subclasses | 55     | Wired into the kailash `NodeRegistry`.                                                              |
+| `RAGConfig` (dataclass)                         | 2      | One in `strategies.py:29`, one in `advanced.py:36` — both module-local helpers, not @register_node. |
+| `RAGWorkflowRegistry`                           | 1      | `registry.py:37`, not @register_node — discovery / construction facade.                             |
+| **Total**                                       | **58** | One AST `class …` definition per row.                                                               |
+
+F8's B-shard coverage maps to this set as:
+
+- **B1–B9c**: 51 of the 55 registered classes (similarity 7, graph 3,
+  agentic 3, multimodal 3, federated 3, advanced 4, workflows 4,
+  strategies 4, query_processing 6, privacy 3, evaluation 3,
+  conversational 2, realtime 3, optimized 4) + the strategies.py
+  `RAGConfig` (B7's territory) + the advanced.py `RAGConfig` (B6).
+- **B10**: the remaining 4 classes — `RAGStrategyRouterNode`,
+  `RAGQualityAnalyzerNode`, `RAGPerformanceMonitorNode` (all
+  `router.py`), and `RAGWorkflowRegistry` (`registry.py`).
+
+The brief's "every class … provably correct, not merely importable"
+contract is therefore closed at B10's landing: every one of the 58
+class definitions has ≥1 behavioral test in the unit, integration, or
+regression layer.
+
+### A3-triage disposition (closed in B10)
+
+The F8 A3 triage flagged one defect in `router.py` for B10:
+
+- **`router.py:114` `self.name` attr-access**. The pre-B10 A3-triage
+  row cited the defect at `:102` against the `run()` method entrypoint;
+  the actual `f"{self.name}_llm"` site was at the LLMAgentNode init
+  line. The base `kailash.nodes.base.Node` class stores `name` via
+  `self.metadata.name`, not as a bare attribute, so the bare-form
+  raised `AttributeError` on every call. B10 routes through
+  `self.metadata.name` and the regression test at
+  `tests/regression/test_issue_f8b10_router_registry_defects.py::TestRouterSelfNameBugClosed`
+  locks the behavior — no source-grep, calls `run()` and asserts the
+  AttributeError no longer fires.
+
+Also closed in B10 same-shard (Rule 3c, `autonomous-execution.md`
+Rule 4 fix-immediately):
+
+- **`router.py:527` `expected_results` silent drop** —
+  `RAGQualityAnalyzerNode.run()` declared the kwarg in
+  `get_parameters()` and read it into a local variable that was never
+  consumed by any function-body branch. B10 wires consumption:
+  `quality_analysis["expected_result_count"]` and
+  `quality_analysis["expected_recall_ratio"]` surface when the kwarg
+  is provided; absent caller, the historical output shape is preserved.
