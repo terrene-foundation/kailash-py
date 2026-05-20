@@ -13,6 +13,7 @@ All implementations use existing Kailash components and WorkflowBuilder patterns
 
 import json
 import logging
+import os
 from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -22,6 +23,14 @@ from kailash.workflow.graph import Workflow
 from ..ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -182,7 +191,7 @@ class QueryExpansionNode(Node):
                     "keywords": ["key1", "key2", ...],
                     "concepts": ["concept1", "concept2", ...]
                 }}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -367,7 +376,7 @@ class QueryDecompositionNode(Node):
                     ],
                     "composition_strategy": "how to combine answers"
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -586,7 +595,7 @@ class QueryRewritingNode(Node):
                         "simplification": "simplified version"
                     }
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -614,7 +623,7 @@ class QueryRewritingNode(Node):
                     },
                     "recommended": "best version for retrieval"
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -874,7 +883,7 @@ class QueryIntentClassifierNode(Node):
                     "requirements": ["req1", "req2", ...],
                     "suggested_strategy": "recommended RAG strategy"
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -1137,7 +1146,7 @@ class MultiHopQueryPlannerNode(Node):
                     "combination_strategy": "how to combine results",
                     "total_hops": number
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 

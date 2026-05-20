@@ -292,10 +292,17 @@ class TestWorkflowNodes:
         assert "rag_strategy_analyzer" in wf.nodes
         assert "strategy_executor" in wf.nodes
 
-    def test_adaptive_workflow_llm_model_default(self):
-        """The llm_model arg is bound (default gpt-4-class identifier)."""
+    def test_adaptive_workflow_llm_model_default_env_loaded(self):
+        """F9 #1126: llm_model defaults to env (OPENAI_PROD_MODEL /
+        DEFAULT_LLM_MODEL); resolves to None when neither is set per
+        rules/env-models.md."""
+        import os as _os
+
+        expected = _os.environ.get(
+            "OPENAI_PROD_MODEL", _os.environ.get("DEFAULT_LLM_MODEL")
+        )
         node = AdaptiveRAGWorkflowNode()
-        assert node.llm_model  # type: ignore[attr-defined]
+        assert node.llm_model == expected  # type: ignore[attr-defined]
 
     def test_rag_pipeline_default_strategy_bound(self):
         """RAGPipelineWorkflowNode binds default_strategy (default hybrid)."""

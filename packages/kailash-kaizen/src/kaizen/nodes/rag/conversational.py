@@ -12,9 +12,10 @@ Implements RAG with conversation context and memory management:
 Based on conversational AI and dialogue systems research.
 """
 
-import hashlib
 import json
 import logging
+import os
+import secrets
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Deque, Dict, List, Optional, Union
@@ -28,6 +29,14 @@ from kailash.workflow.graph import Workflow
 from ..ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -202,7 +211,7 @@ Return JSON:
 }
 
 If no coreferences found, return the original query.""",
-                    "model": "gpt-4",
+                    "model": _DEFAULT_LLM_MODEL,
                 },
             )
 
@@ -389,7 +398,7 @@ For continuations, reference previous context:
 {"Personalize based on user preferences when available." if self.personalization_enabled else ""}
 
 Keep responses conversational and engaging.""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -410,7 +419,7 @@ Focus on:
 
 Keep the summary under 100 words.
 This will be used to maintain context in future turns.""",
-                    "model": "gpt-4",
+                    "model": _DEFAULT_LLM_MODEL,
                 },
             )
 
@@ -623,9 +632,12 @@ result = {
 
     def create_session(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Create a new conversation session"""
-        session_id = hashlib.sha256(
-            f"{user_id or 'anonymous'}_{datetime.now().isoformat()}".encode()
-        ).hexdigest()[:16]
+        # F9 #1116: session_id MUST come from a cryptographically-strong
+        # source — the prior `sha256(f"{user_or_anon}_{datetime}")[:16]`
+        # form admitted ~10⁶ brute-force ops within a 1-second window on
+        # the anonymous flow because the input space was enumerable.
+        # `secrets.token_hex(16)` emits 32 hex chars of CSPRNG output.
+        session_id = secrets.token_hex(16)
 
         session = {
             "id": session_id,

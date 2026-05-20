@@ -13,7 +13,8 @@ All techniques use existing Kailash components and WorkflowBuilder patterns.
 
 import json
 import logging
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.logic.workflow import WorkflowNode
@@ -33,6 +34,14 @@ logger = logging.getLogger(__name__)
 # Local RAGConfig to avoid a circular import with rag.strategies (which imports
 # nothing from this module, but advanced.py is imported very early in
 # rag/__init__.py). The field set is the subset the advanced nodes consume.
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
+
+
 class RAGConfig:
     """RAG configuration for the advanced techniques in this module.
 
@@ -223,7 +232,7 @@ class SelfCorrectingRAGNode(Node):
         name: str = "self_correcting_rag",
         max_corrections: int = 2,
         confidence_threshold: float = 0.8,
-        verification_model: str = "gpt-4",
+        verification_model: Optional[str] = _DEFAULT_LLM_MODEL,
     ):
         super().__init__(
             name=name,
@@ -273,7 +282,7 @@ class SelfCorrectingRAGNode(Node):
                 name="verification_model",
                 type=str,
                 required=False,
-                default="gpt-4",
+                default=_DEFAULT_LLM_MODEL,
                 description="Model used to verify result quality",
             ),
             "documents": NodeParameter(
@@ -731,7 +740,7 @@ class RAGFusionNode(Node):
         name: str = "rag_fusion",
         num_query_variations: int = 3,
         fusion_method: str = "rrf",
-        query_generator_model: str = "gpt-4",
+        query_generator_model: Optional[str] = _DEFAULT_LLM_MODEL,
     ):
         super().__init__(
             name=name,
@@ -776,7 +785,7 @@ class RAGFusionNode(Node):
                 name="query_generator_model",
                 type=str,
                 required=False,
-                default="gpt-4",
+                default=_DEFAULT_LLM_MODEL,
                 description="Model used to generate query variations",
             ),
             "documents": NodeParameter(
@@ -1211,8 +1220,10 @@ class HyDENode(Node):
     - Zero-shot capability
 
     Example:
+        # hypothesis_model resolves from .env (OPENAI_PROD_MODEL /
+        # DEFAULT_LLM_MODEL) per rules/env-models.md — never hardcode.
         hyde = HyDENode(
-            hypothesis_model="gpt-4",
+            hypothesis_model=os.environ.get("OPENAI_PROD_MODEL"),
             use_multiple_hypotheses=True,
             num_hypotheses=3
         )
@@ -1245,7 +1256,7 @@ class HyDENode(Node):
     def __init__(
         self,
         name: str = "hyde_rag",
-        hypothesis_model: str = "gpt-4",
+        hypothesis_model: Optional[str] = _DEFAULT_LLM_MODEL,
         use_multiple_hypotheses: bool = True,
         num_hypotheses: int = 2,
     ):
@@ -1278,7 +1289,7 @@ class HyDENode(Node):
                 name="hypothesis_model",
                 type=str,
                 required=False,
-                default="gpt-4",
+                default=_DEFAULT_LLM_MODEL,
                 description="LLM used to generate hypothetical documents",
             ),
             "use_multiple_hypotheses": NodeParameter(
@@ -1585,7 +1596,7 @@ class StepBackRAGNode(Node):
 
     Example:
         step_back = StepBackRAGNode(
-            abstraction_model="gpt-4"
+            abstraction_model=_DEFAULT_LLM_MODEL
         )
 
         # Query: "Why does batch normalization help neural networks?"
@@ -1614,7 +1625,11 @@ class StepBackRAGNode(Node):
         reasoning_chain: How abstract helps answer specific
     """
 
-    def __init__(self, name: str = "step_back_rag", abstraction_model: str = "gpt-4"):
+    def __init__(
+        self,
+        name: str = "step_back_rag",
+        abstraction_model: Optional[str] = _DEFAULT_LLM_MODEL,
+    ):
         super().__init__(name=name, abstraction_model=abstraction_model)
         # Node base class does not set self.name; _initialize_components()
         # references it when naming the abstraction-generator LLMAgentNode.
@@ -1637,7 +1652,7 @@ class StepBackRAGNode(Node):
                 name="abstraction_model",
                 type=str,
                 required=False,
-                default="gpt-4",
+                default=_DEFAULT_LLM_MODEL,
                 description="LLM used to generate abstract queries",
             ),
             "documents": NodeParameter(

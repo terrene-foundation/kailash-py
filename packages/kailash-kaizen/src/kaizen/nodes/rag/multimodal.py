@@ -12,6 +12,7 @@ Based on CLIP, BLIP-2, and multimodal research from 2024.
 """
 
 import logging
+import os
 from typing import Any, Dict, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -28,6 +29,14 @@ from kailash.workflow.builder import WorkflowBuilder
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -118,7 +127,7 @@ Return JSON:
     "image_weight": 0.0-1.0,
     "query_type": "visual|textual|mixed"
 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 

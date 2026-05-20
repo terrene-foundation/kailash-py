@@ -12,6 +12,7 @@ Based on ReAct, Toolformer, and agent research from 2024.
 """
 
 import logging
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
@@ -29,6 +30,14 @@ from kailash.workflow.graph import Workflow
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -125,7 +134,7 @@ Return JSON:
     "complexity": "simple|moderate|complex",
     "estimated_steps": 3
 }}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -152,7 +161,7 @@ End with:
 Answer: [final comprehensive answer]
 
 Maximum steps: {self.max_reasoning_steps}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -446,7 +455,7 @@ Return JSON:
     "issues": ["list of any issues found"],
     "suggestions": ["improvements if needed"]
 }""",
-                    "model": "gpt-4",
+                    "model": _DEFAULT_LLM_MODEL,
                 },
             )
 
@@ -800,7 +809,7 @@ Return JSON:
     "assumptions": ["list assumptions"],
     "complexity": "low|medium|high"
 }}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -823,7 +832,7 @@ Provide:
 - What's needed next
 
 Be explicit about your logic.""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -841,7 +850,7 @@ Check:
 4. Are assumptions reasonable?
 
 Rate confidence: 0.0-1.0""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 

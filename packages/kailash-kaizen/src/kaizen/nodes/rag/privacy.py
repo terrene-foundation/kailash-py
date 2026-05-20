@@ -136,7 +136,10 @@ def detect_and_redact_pii(text, redact={self.redact_pii}):
         "credit_card": r'\\b\\d{{4}}[\\s-]?\\d{{4}}[\\s-]?\\d{{4}}[\\s-]?\\d{{4}}\\b',
         "ip_address": r'\\b(?:[0-9]{{1,3}}\\.{{3}}[0-9]{{1,3}})\\b',
         "person_name": r'\\b[A-Z][a-z]+ [A-Z][a-z]+\\b',  # Simple name pattern
-        "date_of_birth": r'\\b(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])/(19|20)\\d{{2}}\\b'
+        # Non-capturing groups: re.findall returns the WHOLE match string,
+        # not group tuples. Capturing-group form crashed `match.encode()`
+        # below (F9 #1112).
+        "date_of_birth": r'\\b(?:0[1-9]|1[0-2])/(?:0[1-9]|[12][0-9]|3[01])/(?:19|20)\\d{{2}}\\b'
     }}
 
     # Detect and redact each PII type
@@ -165,12 +168,23 @@ def detect_and_redact_pii(text, redact={self.redact_pii}):
             pattern = re.compile(f'{{term}}[:\\s]*([^,.;]+)', re.IGNORECASE)
             redacted_text = pattern.sub(f'{{term}}: [REDACTED]', redacted_text)
 
-    result = {{
+    # F9 #1113: function MUST return the redaction dict; the prior
+    # `result = {{...}}` bound a function-scope local that was never
+    # returned, dropping the redact-True branch's output to None.
+    return {{
         "processed_text": redacted_text,
         "pii_found": pii_found,
         "redaction_applied": original_text != redacted_text,
         "redaction_count": sum(len(items) for items in pii_found.values())
     }}
+
+# F9 #1114: PythonCodeNode reads `result` from module scope; the codegen
+# MUST execute the function at module scope so the outbound port carries
+# the redaction dict (the function was previously defined but never called).
+result = detect_and_redact_pii(text, redact={self.redact_pii})
+# Drop the helper so PythonCodeNode's output-validation gate (which
+# JSON-serializes every binding) sees only the JSON-safe `result`.
+del detect_and_redact_pii
 """
             },
         )
