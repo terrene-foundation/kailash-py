@@ -24,6 +24,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode
 
@@ -90,7 +91,7 @@ class RAGEvaluationNode(WorkflowNode):
     def __init__(
         self,
         name: str = "rag_evaluation",
-        metrics: List[str] = None,
+        metrics: Optional[List[str]] = None,
         use_reference_answers: bool = True,
         llm_judge_model: str = "gpt-4",
     ):
@@ -104,9 +105,13 @@ class RAGEvaluationNode(WorkflowNode):
         self.llm_judge_model = llm_judge_model
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create RAG evaluation workflow"""
         builder = WorkflowBuilder()
+
+        # Bound only inside the optional-branch below; initialize at entry so
+        # the later wiring loop's reference never sees an unbound name.
+        answer_quality_id: Optional[str] = None
 
         # Test executor - runs RAG on test queries
         test_executor_id = builder.add_node(
@@ -421,6 +426,7 @@ def aggregate_evaluation_metrics(test_results, faithfulness_scores, relevance_sc
         )
 
         if self.use_reference_answers:
+            assert answer_quality_id is not None  # narrowed: bound in the branch above
             builder.add_connection(
                 test_executor_id, "test_results", answer_quality_id, "test_data"
             )
@@ -482,8 +488,8 @@ class RAGBenchmarkNode(Node):
     def __init__(
         self,
         name: str = "rag_benchmark",
-        workload_sizes: List[int] = None,
-        concurrent_users: List[int] = None,
+        workload_sizes: Optional[List[int]] = None,
+        concurrent_users: Optional[List[int]] = None,
     ):
         resolved_workload_sizes = workload_sizes or [10, 100, 1000]
         resolved_concurrent_users = concurrent_users or [1, 5, 10]
@@ -643,7 +649,9 @@ class RAGBenchmarkNode(Node):
                 statistics.mean(latencies) if latencies else float("inf")
             )
 
-        comparison["fastest_system"] = min(avg_latencies, key=avg_latencies.get)
+        comparison["fastest_system"] = min(
+            avg_latencies, key=lambda k: avg_latencies[k]
+        )
 
         # Find most scalable
         scalability_scores = {}
@@ -658,7 +666,7 @@ class RAGBenchmarkNode(Node):
             )
 
         comparison["most_scalable"] = max(
-            scalability_scores, key=scalability_scores.get
+            scalability_scores, key=lambda k: scalability_scores[k]
         )
 
         # Find most efficient (performance per resource)
@@ -672,7 +680,9 @@ class RAGBenchmarkNode(Node):
             memory = data["resource_usage"]["memory_mb"]
             efficiency_scores[system] = throughput / memory * 1000
 
-        comparison["most_efficient"] = max(efficiency_scores, key=efficiency_scores.get)
+        comparison["most_efficient"] = max(
+            efficiency_scores, key=lambda k: efficiency_scores[k]
+        )
 
         # Generate recommendations
         comparison["recommendations"] = [
@@ -721,7 +731,7 @@ class TestDatasetGeneratorNode(Node):
     def __init__(
         self,
         name: str = "test_dataset_generator",
-        categories: List[str] = None,
+        categories: Optional[List[str]] = None,
         include_adversarial: bool = True,
     ):
         resolved_categories = categories or [
