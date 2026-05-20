@@ -1197,9 +1197,12 @@ fully closed.
 The B9c shard also fixed pre-existing latent type defects flagged in
 the A3 triage:
 
-- `realtime.py:551` `chunk_idx` possibly-unbound — initialized at
-  function entry; narrowed via the binding loop's structural control
-  flow.
+- `realtime.py` `chunk_idx` possibly-unbound (init at `:503`,
+  post-loop reference at `:559`) — initialized to `0` at function
+  entry; the for-loop binding flows into the post-loop
+  `processing_time = chunk_idx * self.chunk_interval` arithmetic, so
+  the previously-unbound edge case (`max_chunks=0` / empty result set)
+  now produces `processing_time == 0` instead of `UnboundLocalError`.
 - Multiple `_create_workflow` return-type annotations corrected from
   `-> Node` to `-> Workflow` (same class as the
   `@register_node` type-erasure cleanups in B7 / B8 / B9a / B9b).
