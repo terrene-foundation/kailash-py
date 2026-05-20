@@ -188,9 +188,11 @@ RAG_NODE_REPRESENTATIVES = [
 # scope — but they are A3-blocked on the unregistered 'SemanticChunkerNode' all
 # the same, so they carry the same xfail marker. Each class takes a defaulted
 # `name` plus defaulted config.
-_A3_CACHE_NODE = (
-    "A3 (R3): _create_workflow references unregistered node type 'CacheNode'"
-)
+# _A3_CACHE_NODE removed by F8 B9c — the R3-L2 registering import fix at
+# optimized.py:20 (kailash.nodes.cache.cache side-effect-import) resolved the
+# missing 'CacheNode' registry entry; CacheOptimizedRAGNode constructs cleanly
+# and no longer needs the xfail marker. This was the LAST remaining xfail in
+# this smoke test — the resurrection signal is fully closed.
 # _A3_PII_NAMEERROR removed by F8 B9a — the R4 LEAK at privacy.py:152/:221
 # (single-brace f-string substitutions) was fixed; PrivacyPreservingRAGNode
 # constructs cleanly and no longer needs the xfail marker.
@@ -209,11 +211,13 @@ RAG_WORKFLOWNODE_SUBCLASSES = [
         "ConversationalRAGNode",
         {"name": "smoke_conversational_rag"},
     ),
+    # B9c un-marked: A3-triage R3-L2 fix (kailash.nodes.cache registering
+    # import at optimized.py:20) resolved the missing 'CacheNode' registry
+    # entry; CacheOptimizedRAGNode now constructs cleanly.
     pytest.param(
         "optimized",
         "CacheOptimizedRAGNode",
         {"name": "smoke_cache_optimized_rag"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_CACHE_NODE),
     ),
     pytest.param(
         "optimized", "AsyncParallelRAGNode", {"name": "smoke_async_parallel_rag"}

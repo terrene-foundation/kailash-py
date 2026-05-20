@@ -17,12 +17,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
-# from ..data.cache import CacheNode  # TODO: Implement CacheNode
+from kailash.nodes.cache import cache  # noqa: F401 — registers CacheNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class CacheOptimizedRAGNode(WorkflowNode):
         self.similarity_threshold = similarity_threshold
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create cache-optimized RAG workflow"""
         builder = WorkflowBuilder()
 
@@ -324,11 +324,15 @@ class AsyncParallelRAGNode(WorkflowNode):
         strategy_results: Individual results per strategy
     """
 
-    def __init__(self, name: str = "async_parallel_rag", strategies: List[str] = None):
+    def __init__(
+        self,
+        name: str = "async_parallel_rag",
+        strategies: Optional[List[str]] = None,
+    ):
         self.strategies = strategies or ["semantic", "sparse", "hybrid"]
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create async parallel RAG workflow"""
         builder = WorkflowBuilder()
 
@@ -536,7 +540,7 @@ class StreamingRAGNode(WorkflowNode):
         self.chunk_size = chunk_size
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create streaming RAG workflow"""
         builder = WorkflowBuilder()
 
@@ -722,7 +726,7 @@ class BatchOptimizedRAGNode(WorkflowNode):
         self.batch_size = batch_size
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create batch-optimized RAG workflow"""
         builder = WorkflowBuilder()
 
