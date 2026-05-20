@@ -21,7 +21,16 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.streaming import EventStreamNode
+
+# F9 #1120: keep the EventStreamNode import — although `realtime.py` does
+# not reference it directly, importing `kailash.nodes.data.streaming` has
+# the load-bearing SIDE EFFECT of populating `kailash.nodes.data` (which
+# registers `VectorDatabaseNode` used by `kaizen.nodes.rag.strategies`).
+# The smoke test `test_workflownode_subclass_constructs[workflows.*]`
+# regressed when this import was removed in the initial cleanup — the
+# acceptance criterion on issue #1120 explicitly allows keeping the
+# import when it carries a registering side effect.
+from kailash.nodes.data.streaming import EventStreamNode  # noqa: F401
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
@@ -376,8 +385,13 @@ def format_realtime_results(retrieval_results, query, update_stats):
         self.monitoring_active = True
         self.data_sources = data_sources
 
-        # Start background monitoring task
-        asyncio.create_task(self._monitor_loop())
+        # F9 #1121: retain the task on `self._monitor_task` so (a)
+        # exceptions surface via the awaiter, (b) `stop_monitoring()`
+        # can cancel and await the loop. The prior fire-and-forget made
+        # the task GC-eligible the moment this method returned, hiding
+        # `_monitor_loop` errors and leaving `stop_monitoring` unable
+        # to actually stop the loop.
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
 
         logger.info(f"Started monitoring {len(data_sources)} data sources")
 
@@ -392,12 +406,29 @@ def format_realtime_results(retrieval_results, query, update_stats):
                 # Trigger update
                 self.last_update = datetime.now()
 
+            except asyncio.CancelledError:
+                # F9 #1121: cooperative cancel from stop_monitoring().
+                raise
             except Exception as e:
                 logger.error(f"Monitoring error: {e}")
 
-    def stop_monitoring(self):
-        """Stop monitoring data sources"""
+    async def stop_monitoring(self) -> None:
+        """Stop monitoring data sources.
+
+        F9 #1121: signal the loop AND cancel the retained task so the
+        background loop actually exits (the prior sync method only
+        flipped a flag the loop checked at next `sleep`-tick, leaving
+        the task uncancellable from outside the loop).
+        """
         self.monitoring_active = False
+        task = getattr(self, "_monitor_task", None)
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            self._monitor_task = None
 
 
 @register_node(alias="RealtimeStreamingRAGNode")
@@ -546,17 +577,23 @@ class RealtimeStreamingRAGNode(Node):
                 "progress": min(100, (end_idx / len(scored_docs)) * 100),
             }
 
-            # Simulate processing time
+            # Simulate processing time. `self.chunk_interval` is canonically
+            # MILLISECONDS (the public docstring on the chunk_interval
+            # constructor kwarg + get_parameters() declaration).
             await asyncio.sleep(self.chunk_interval / 1000)
 
-        # Final metadata
+        # Final metadata. `processing_time` is reported in SECONDS so the
+        # field carries the same unit the asyncio.sleep above counts in
+        # (chunk_interval is ms; chunk_idx chunks × ms / 1000 = seconds).
+        # The prior `chunk_idx * self.chunk_interval` form silently
+        # emitted ms when consumers expected seconds (F9 #1122).
         yield {
             "type": "complete",
             "total_results": len(scored_docs),
             "chunks_sent": min(
                 max_chunks, (len(scored_docs) + self.chunk_size - 1) // self.chunk_size
             ),
-            "processing_time": chunk_idx * self.chunk_interval,
+            "processing_time": chunk_idx * self.chunk_interval / 1000,
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:

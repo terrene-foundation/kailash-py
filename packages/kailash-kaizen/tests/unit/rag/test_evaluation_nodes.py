@@ -68,7 +68,14 @@ class TestAllThreeConstruct:
             "answer_quality",
         ]
         assert node.use_reference_answers is True  # type: ignore[attr-defined]
-        assert node.llm_judge_model == "gpt-4"  # type: ignore[attr-defined]
+        # F9 #1126: default is now env-loaded (`OPENAI_PROD_MODEL` /
+        # `DEFAULT_LLM_MODEL`); resolves to None when neither is set.
+        import os as _os
+
+        expected = _os.environ.get(
+            "OPENAI_PROD_MODEL", _os.environ.get("DEFAULT_LLM_MODEL")
+        )
+        assert node.llm_judge_model == expected  # type: ignore[attr-defined]
 
     def test_rag_evaluation_constructs_with_custom_kwargs(self):
         node = RAGEvaluationNode(
@@ -274,16 +281,23 @@ class TestContextPrecisionMetricCorrectness:
 
     @staticmethod
     def _run_context_evaluator(code: str, test_result: dict) -> dict:
-        """Exec the codegen and invoke the inner function on a fixture.
+        """Exec the codegen against a single ``test_result`` fixture.
 
-        The codegen ends with ``    result = {...}`` indented inside the
-        function but never returns; appending ``return result`` makes the
-        function callable. Pre-existing codegen-completeness defect F9
-        ledger item (not in B9b scope).
+        F9 #1117 fixed the codegen: the function returns its dict, the
+        codegen invokes ``result = ...`` at module scope iterating
+        ``test_data``, then `del`s the helper so PythonCodeNode's output
+        gate sees only `result`. For unit tests we strip the `del` line
+        so the inner function survives exec, then call it directly on the
+        caller's fixture for per-test-result assertions.
         """
-        patched = code.rstrip() + "\n    return result\n"
-        ns: dict = {}
-        exec(patched, ns)
+        # Strip the F9 #1117 cleanup line so the helper survives exec.
+        code_no_del = "\n".join(
+            line
+            for line in code.splitlines()
+            if not line.startswith("del evaluate_context_precision")
+        )
+        ns: dict = {"test_data": [test_result]}
+        exec(code_no_del, ns)
         return ns["evaluate_context_precision"](test_result)
 
     def test_empty_contexts_returns_zero_precision(self):

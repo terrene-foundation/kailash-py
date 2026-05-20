@@ -163,12 +163,15 @@ class TestQueryExpansionNode:
         assert edge[0].target_input == "expansion_response"
 
     def test_create_workflow_llm_expander_has_system_prompt(self):
-        """The LLM expander carries a non-empty system_prompt + model."""
+        """The LLM expander carries a non-empty system_prompt + has the
+        model field (F9 #1126: model resolves from env per env-models.md;
+        the field is present even when env vars are unset)."""
         wf = _build(QueryExpansionNode())
         llm = _node(wf, "llm_expander")
         prompt = llm.config.get("system_prompt", "")
         assert "query expansion" in prompt.lower()
-        assert llm.config.get("model")  # model identifier is bound
+        # The `model` key MUST be present in the config (env-default may be None).
+        assert "model" in llm.config
 
     def test_create_workflow_num_expansions_baked_into_prompt(self):
         """`num_expansions` flows into the LLM system_prompt text."""
@@ -231,7 +234,9 @@ class TestQueryDecompositionNode:
         llm = _node(wf, "query_decomposer")
         prompt = llm.config.get("system_prompt", "")
         assert "decomposition" in prompt.lower()
-        assert llm.config.get("model")
+        # F9 #1126: model resolves from env per env-models.md; field
+        # present even when env vars are unset.
+        assert "model" in llm.config
 
 
 # ==========================================================================

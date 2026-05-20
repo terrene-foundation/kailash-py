@@ -68,34 +68,40 @@ _SYNTHETIC_PII_NO_REAL_DATA = (
 
 
 def _run_pii_detector(pii_detector_code: str, text: str, redact: bool = True):
-    """Exec the codegen template AND invoke the inner function on synthetic PII.
+    """Exec the codegen template against a real `text` module-scope binding.
 
-    The codegen DEFINES ``detect_and_redact_pii`` but never CALLS it — the
-    final ``result = {...}`` statement is inside the function body. A node
-    receiving this code has no top-level ``result`` binding; the function
-    is invisible work. (PRE-EXISTING codegen defect outside B9a scope; F9
-    ledger item to add ``result = detect_and_redact_pii(text)`` at module
-    scope so PythonCodeNode binds it.)
+    F9 #1112 / #1113 / #1114 fixed the pre-existing codegen defects: the
+    function returns its dict on the redact=True branch AND the codegen
+    invokes ``result = detect_and_redact_pii(text, redact=...)`` at module
+    scope so PythonCodeNode reads the bound ``result``.
 
-    For Tier-2a we extract the function and call it directly. Note: the
-    function's source binds ``result`` as a LOCAL inside the function but
-    never ``return`` s it (a second-order defect of the same class). We
-    rebuild the function body with a return-at-end to surface the result.
+    For Tier-2a we exec the codegen with ``text`` pre-bound at module
+    scope (the real PythonCodeNode harness binds upstream wire values
+    the same way) AND respect the caller's ``redact`` override by calling
+    the function directly when it differs from the codegen's default.
 
     SyntaxWarning is filtered because privacy.py's codegen uses legacy
     regex escapes (``\\s``, ``\\d``) in non-raw strings — a pre-existing
-    source-template concern orthogonal to B9a's brace-escape fix.
+    source-template concern orthogonal to F9's codegen fixes.
     """
     import warnings
 
-    # Patch: ensure the function returns `result`. The codegen ends with
-    # ``    result = {...}`` indented inside the function but never returns;
-    # a trailing ``    return result`` makes the function callable.
-    patched = pii_detector_code.rstrip() + "\n    return result\n"
-    ns: dict = {}
+    # Strip the F9 #1114 cleanup line so the helper survives exec when the
+    # caller needs to invoke with an overridden `redact` flag.
+    code_no_del = "\n".join(
+        line
+        for line in pii_detector_code.splitlines()
+        if not line.startswith("del detect_and_redact_pii")
+    )
+    ns: dict = {"text": text}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", SyntaxWarning)
-        exec(patched, ns)
+        exec(code_no_del, ns)
+    # Codegen executes `result = detect_and_redact_pii(text, redact=<default>)`
+    # at module scope. If the caller's redact override differs from the
+    # default the codegen baked in, re-invoke explicitly.
+    if redact:
+        return ns["result"]
     return ns["detect_and_redact_pii"](text, redact=redact)
 
 
@@ -279,17 +285,11 @@ class TestCodegenRealRuntime:
         wf = _build(PrivacyPreservingRAGNode())
         pii_detector = wf.get_node("pii_detector")
         assert pii_detector is not None
-        # The codegen DEFINES detect_and_redact_pii but never returns its
-        # inner `result` AND never calls the function at module scope (F9
-        # codegen-completeness defect class outside B9a scope). We patch
-        # both: add ``return result`` at function-body end + a module-scope
-        # call so PythonCodeNode's runtime sees a top-level ``result`` to
-        # publish.
-        code = (
-            pii_detector.config["code"].rstrip()
-            + "\n    return result\n"
-            + "\nresult = detect_and_redact_pii(text, redact=True)\n"
-        )
+        # F9 #1113 / #1114: the codegen now returns its dict on the
+        # redact=True branch AND calls `result = detect_and_redact_pii(...)`
+        # at module scope. Embed the codegen verbatim; LocalRuntime binds
+        # `text` from `parameters` and publishes the module-scope `result`.
+        code = pii_detector.config["code"]
 
         builder = WorkflowBuilder()
         builder.add_node(

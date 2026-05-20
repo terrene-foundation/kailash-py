@@ -6,6 +6,7 @@ and operations into reusable workflow patterns.
 """
 
 import logging
+import os
 from typing import Optional
 
 from kailash.nodes.base import register_node
@@ -21,6 +22,14 @@ from .strategies import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -231,7 +240,7 @@ class AdaptiveRAGWorkflowNode(WorkflowNode):
     def __init__(
         self,
         name: str = "adaptive_rag_workflow",
-        llm_model: str = "gpt-4",
+        llm_model: Optional[str] = _DEFAULT_LLM_MODEL,
         config: Optional[RAGConfig] = None,
     ):
         self.rag_config = config or RAGConfig()
@@ -417,7 +426,12 @@ def aggregate_adaptive_results(rag_results, llm_decision, preprocessed_data):
             "content_types": preprocessed_data.get("content_types")
         },
         "adaptive_metadata": {
-            "llm_model_used": "gpt-4",
+            # F9 #1126: this dict lives inside a PythonCodeNode codegen
+            # body exec'd in a fresh namespace; the workflows.py
+            # module-scope `_DEFAULT_LLM_MODEL` is NOT visible inside the
+            # exec scope. Emit a documented sentinel; downstream consumers
+            # read the actual model from the upstream LLMAgentNode config.
+            "llm_model_used": "<env-default>",
             "strategy_selection_method": "llm_analysis",
             "fallback_available": llm_decision.get("fallback_strategy")
         }

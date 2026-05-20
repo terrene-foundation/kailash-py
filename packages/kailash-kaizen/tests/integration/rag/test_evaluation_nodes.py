@@ -37,17 +37,16 @@ def _build(node: RAGEvaluationNode) -> Workflow:
 
 
 def _run_context_evaluator(code: str, test_result: dict) -> dict:
-    """Exec the codegen and invoke the inner function on a fixture.
+    """Exec the codegen against a single ``test_result`` fixture.
 
-    The codegen DEFINES ``evaluate_context_precision`` but never CALLS it
-    at module scope. F9 ledger item: orthogonal codegen-completeness
-    defect (consistent with B9a's pii_detector / privacy.py pattern).
-    Tier-2a extracts and calls the function directly to verify the
-    metric formulas hold under real execution.
+    F9 #1117 fixed the codegen: the function returns its dict AND the
+    codegen invokes ``result = ...`` at module scope by iterating
+    ``test_data``. For Tier-2a's per-test-result correctness assertions
+    we exec the codegen with ``test_data`` bound to a single-element
+    list and re-call the inner function on the caller's fixture.
     """
-    patched = code.rstrip() + "\n    return result\n"
-    ns: dict = {}
-    exec(patched, ns)
+    ns: dict = {"test_data": [test_result]}
+    exec(code, ns)
     return ns["evaluate_context_precision"](test_result)
 
 
@@ -71,14 +70,10 @@ class TestContextPrecisionUnderRealRuntime:
         wf = _build(RAGEvaluationNode())
         evaluator = wf.get_node("context_evaluator")
         assert evaluator is not None
-        # Patch: add `return result` AND a module-scope invocation against the
-        # injected `test_result` parameter so PythonCodeNode publishes
-        # `result` from the function output.
-        code = (
-            evaluator.config["code"].rstrip()
-            + "\n    return result\n"
-            + "\nresult = evaluate_context_precision(test_result)\n"
-        )
+        # F9 #1117: codegen now returns its dict AND iterates `test_data`
+        # at module scope. Embed verbatim; LocalRuntime binds `test_data`
+        # from `parameters` and publishes the module-scope `result`.
+        code = evaluator.config["code"]
 
         builder = WorkflowBuilder()
         builder.add_node(
@@ -91,26 +86,35 @@ class TestContextPrecisionUnderRealRuntime:
             builder.build(),
             parameters={
                 "ctx_under_runtime": {
-                    "test_result": {
-                        "retrieved_contexts": [
-                            {"content": "a b c d e", "score": 0.95},
-                            {"content": "f g h i j", "score": 0.90},
-                            {"content": "k l m n o", "score": 0.45},
-                        ],
-                        "query": "test query",
-                    }
+                    "test_data": [
+                        {
+                            "retrieved_contexts": [
+                                {"content": "a b c d e", "score": 0.95},
+                                {"content": "f g h i j", "score": 0.90},
+                                {"content": "k l m n o", "score": 0.45},
+                            ],
+                            "query": "test query",
+                        }
+                    ]
                 }
             },
         )
         out = results["ctx_under_runtime"]["result"]
-        # The shape MUST carry the documented context_metrics dict.
+        # The shape MUST carry the documented context_metrics list (one
+        # entry per input test_data row after the codegen iterates).
         assert "context_metrics" in out
-        cm = out["context_metrics"]
-        assert "precision_at_k" in cm
-        assert "mrr" in cm
-        assert "diversity_score" in cm
-        assert "avg_relevance_score" in cm
-        assert "context_count" in cm
+        ctx_list = out["context_metrics"]
+        assert isinstance(ctx_list, list)
+        assert len(ctx_list) == 1
+        cm = ctx_list[0]
+        for key in (
+            "precision_at_k",
+            "mrr",
+            "diversity_score",
+            "avg_relevance_score",
+            "context_count",
+        ):
+            assert key in cm, key
         # Numeric correctness — 2 of 3 contexts scored > 0.7.
         assert cm["context_count"] == 3
         assert cm["precision_at_k"]["P@3"] == pytest.approx(2 / 3)
@@ -137,23 +141,12 @@ class TestMetricAggregatorUnderRealRuntime:
         wf = _build(RAGEvaluationNode(use_reference_answers=False))
         aggregator = wf.get_node("metric_aggregator")
         assert aggregator is not None
-        # The aggregator codegen calls `datetime.now()` but PythonCodeNode
-        # injects `datetime` as the MODULE — `datetime.now()` raises
-        # AttributeError because `now` lives on the `datetime.datetime`
-        # class. Pre-existing codegen-defect F9 ledger item (orthogonal
-        # to B9b scope; same class as missing module-scope call + return).
-        # Patch: rewrite the codegen output's `datetime.now()` →
-        # `datetime.datetime.now()` for test purposes only.
-        raw_code = aggregator.config["code"]
-        rewritten = raw_code.replace("datetime.now()", "datetime.datetime.now()")
-        code = (
-            rewritten.rstrip()
-            + "\n    return result\n"
-            + "\nresult = aggregate_evaluation_metrics(\n"
-            + "    test_results, faithfulness_scores, relevance_scores,\n"
-            + "    context_metrics, answer_quality_scores=None,\n"
-            + ")\n"
-        )
+        # F9 #1117 + #1118: codegen now imports the `datetime` class
+        # explicitly, returns its aggregate dict, AND calls
+        # `aggregate_evaluation_metrics(...)` at module scope. Embed the
+        # codegen verbatim; LocalRuntime binds the wired inputs from
+        # `parameters` and publishes the module-scope `result`.
+        code = aggregator.config["code"]
 
         builder = WorkflowBuilder()
         builder.add_node(

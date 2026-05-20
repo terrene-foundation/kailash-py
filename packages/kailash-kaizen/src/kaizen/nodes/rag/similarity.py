@@ -13,6 +13,7 @@ All implementations use existing Kailash components and WorkflowBuilder patterns
 """
 
 import logging
+import os
 from collections import defaultdict
 from typing import Any, Dict, Optional
 
@@ -22,6 +23,14 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -1273,7 +1282,7 @@ class CrossEncoderRerankNode(Node):
                 Given a query and document, score their relevance from 0 to 1.
                 Consider semantic similarity, keyword overlap, and topical relevance.
                 Return only a JSON with the score: {"relevance_score": 0.XX}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -1855,7 +1864,7 @@ class PropositionBasedRetrievalNode(Node):
                 3. Factually accurate to the source
 
                 Return as JSON: {"propositions": ["fact1", "fact2", ...]}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 

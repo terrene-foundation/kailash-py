@@ -11,6 +11,7 @@ Based on Microsoft GraphRAG (2024) and knowledge graph research.
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import networkx as nx
@@ -25,6 +26,14 @@ from kailash.workflow.graph import Workflow
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401  registers "LLMAgentNode"
 
 logger = logging.getLogger(__name__)
+
+
+# F9 #1126: env-loaded default LLM model. Mirrors the router.py precedent
+# (F8 B10). May be None when neither env var is set — that is
+# env-models-compliant; do NOT fall back to a hardcoded model name.
+_DEFAULT_LLM_MODEL = os.environ.get(
+    "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+)
 
 
 @register_node()
@@ -132,7 +141,7 @@ class GraphRAGNode(WorkflowNode):
                         {{"source": "...", "target": "...", "type": "...", "description": "..."}}
                     ]
                 }}""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -231,7 +240,7 @@ result = {{"graph_data": build_knowledge_graph(extraction_results)}}
                     "requires_multi_hop": true/false,
                     "reasoning_type": "causal/comparative/analytical"
                 }""",
-                "model": "gpt-4",
+                "model": _DEFAULT_LLM_MODEL,
             },
         )
 
@@ -351,7 +360,7 @@ result = {{"graph_retrieval": retrieval_result}}
                     "system_prompt": """Generate high-level summaries of document communities.
                     Focus on main themes, key entities, and important relationships.
                     Be concise but comprehensive.""",
-                    "model": "gpt-4",
+                    "model": _DEFAULT_LLM_MODEL,
                 },
             )
 
