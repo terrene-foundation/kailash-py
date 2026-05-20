@@ -248,7 +248,7 @@ class TestConversationalRAGGraphShape:
 class TestCreateSession:
     def test_create_session_default_returns_documented_shape(self):
         node = ConversationalRAGNode()
-        out = node.create_session()
+        out = node.create_session()  # type: ignore[attr-defined]
         assert "session_id" in out
         assert out["created"] is True
         assert out["expires_in"] == 3600
@@ -257,7 +257,7 @@ class TestCreateSession:
 
     def test_create_session_with_user_id(self):
         node = ConversationalRAGNode()
-        out = node.create_session(user_id="alice")
+        out = node.create_session(user_id="alice")  # type: ignore[attr-defined]
         session = node.sessions[out["session_id"]]  # type: ignore[attr-defined]
         assert session["user_id"] == "alice"
         assert session["turns"] == []
@@ -269,9 +269,9 @@ class TestCreateSession:
         import time
 
         node = ConversationalRAGNode()
-        out_a = node.create_session(user_id="alice")
+        out_a = node.create_session(user_id="alice")  # type: ignore[attr-defined]
         time.sleep(0.01)  # ensure isoformat() differs in the microsecond field
-        out_b = node.create_session(user_id="alice")
+        out_b = node.create_session(user_id="alice")  # type: ignore[attr-defined]
         assert out_a["session_id"] != out_b["session_id"]
 
 

@@ -253,7 +253,7 @@ class TestOptionalListSignatures:
         assert param.default is None
 
     def test_conversational_create_session_user_id_is_optional_str(self):
-        sig = inspect.signature(ConversationalRAGNode.create_session)
+        sig = inspect.signature(ConversationalRAGNode.create_session)  # type: ignore[attr-defined]
         param = sig.parameters["user_id"]
         ann = param.annotation
         origin = typing.get_origin(ann)

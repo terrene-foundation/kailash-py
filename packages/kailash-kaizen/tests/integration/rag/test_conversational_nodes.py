@@ -384,7 +384,7 @@ class TestConversationalWorkflowConstruction:
     def test_create_session_persists_session_state(self):
         """A created session is reachable on the node's sessions store."""
         node = ConversationalRAGNode()
-        out = node.create_session(user_id="alice_user")
+        out = node.create_session(user_id="alice_user")  # type: ignore[attr-defined]
         # READ-BACK: the session is reachable on the in-memory store.
         sid = out["session_id"]
         assert sid in node.sessions  # type: ignore[attr-defined]
