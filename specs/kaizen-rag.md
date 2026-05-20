@@ -898,7 +898,7 @@ wiring up to 7 `PythonCodeNode` instances:
 | `result_formatter`     | Assembles the final dict: `results`, `privacy_report`, `audit_record`, `confidence_bounds`  |
 
 The PII codegen template (`privacy.py:107`) and the query-anonymizer
-codegen template (`privacy.py:178`) carry inner `{key}` substitutions
+codegen template (`privacy.py:192`) carry inner `{key}` substitutions
 the framework resolves at `PythonCodeNode` runtime; the outer f-string
 escapes those to `{{key}}` so it does not try to interpolate them at
 class-construction time. The `audit_logger_id` is `Optional[str]` and
@@ -942,10 +942,10 @@ outer f-string so the runtime substitution survives:
 
 | Source line      | Inner variable         |
 | ---------------- | ---------------------- |
-| `privacy.py:152` | `{{hash_value}}`       |
-| `privacy.py:152` | `{{pii_type.upper()}}` |
-| `privacy.py:221` | `{{pattern}}`          |
-| `privacy.py:221` | `{{replacement}}`      |
+| `privacy.py:160` | `{{hash_value}}`       |
+| `privacy.py:160` | `{{pii_type.upper()}}` |
+| `privacy.py:240` | `{{pattern}}`          |
+| `privacy.py:240` | `{{replacement}}`      |
 
 With those 4 escapes, `PrivacyPreservingRAGNode()` constructs cleanly
 under the smoke test; the prior `xfail(strict=True)` mark was removed in
@@ -1197,8 +1197,8 @@ fully closed.
 The B9c shard also fixed pre-existing latent type defects flagged in
 the A3 triage:
 
-- `realtime.py` `chunk_idx` possibly-unbound (init at `:503`,
-  post-loop reference at `:559`) — initialized to `0` at function
+- `realtime.py` `chunk_idx` possibly-unbound (init at `:534`,
+  post-loop reference at `:596`) — initialized to `0` at function
   entry; the for-loop binding flows into the post-loop
   `processing_time = chunk_idx * self.chunk_interval` arithmetic, so
   the previously-unbound edge case (`max_chunks=0` / empty result set)
