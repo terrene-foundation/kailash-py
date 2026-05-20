@@ -191,9 +191,9 @@ RAG_NODE_REPRESENTATIVES = [
 _A3_CACHE_NODE = (
     "A3 (R3): _create_workflow references unregistered node type 'CacheNode'"
 )
-_A3_PII_NAMEERROR = (
-    "A3 (R4 LEAK, A0-tabled): privacy.py _create_workflow raises NameError 'pii_type'"
-)
+# _A3_PII_NAMEERROR removed by F8 B9a — the R4 LEAK at privacy.py:152/:221
+# (single-brace f-string substitutions) was fixed; PrivacyPreservingRAGNode
+# constructs cleanly and no longer needs the xfail marker.
 
 RAG_WORKFLOWNODE_SUBCLASSES = [
     # 13 A2-fixed classes (positional super().__init__ → keyword form).
@@ -222,11 +222,12 @@ RAG_WORKFLOWNODE_SUBCLASSES = [
     pytest.param(
         "optimized", "BatchOptimizedRAGNode", {"name": "smoke_batch_optimized_rag"}
     ),
+    # B9a un-marked: A3-triage R4 LEAK fixes (privacy.py:152/:221) resolved
+    # the pii_type NameError; PrivacyPreservingRAGNode now constructs cleanly.
     pytest.param(
         "privacy",
         "PrivacyPreservingRAGNode",
         {"name": "smoke_privacy_rag"},
-        marks=pytest.mark.xfail(strict=True, reason=_A3_PII_NAMEERROR),
     ),
     # 4 workflows.py classes — already constructor-canonical, never A2 scope.
     # B7 applied the A3-triage R3-L2 fix (chunker registering import in

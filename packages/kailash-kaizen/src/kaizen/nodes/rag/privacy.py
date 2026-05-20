@@ -25,6 +25,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.nodes.security.credential_manager import CredentialManagerNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +96,13 @@ class PrivacyPreservingRAGNode(WorkflowNode):
         self.audit_logging = audit_logging
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create privacy-preserving RAG workflow"""
         builder = WorkflowBuilder()
+        # The audit_logger node is wired only when self.audit_logging is True;
+        # initialize the id to None so the closure-parity wiring branch below
+        # is statically reachable even when audit_logging is False.
+        audit_logger_id: Optional[str] = None
 
         # PII detector and redactor
         pii_detector_id = builder.add_node(
@@ -149,7 +154,7 @@ def detect_and_redact_pii(text, redact={self.redact_pii}):
                 }})
 
                 # Redact with type indicator
-                replacement = f"[{pii_type.upper()}_{hash_value}]"
+                replacement = f"[{{pii_type.upper()}}_{{hash_value}}]"
                 redacted_text = redacted_text.replace(match, replacement)
 
     # Additional sensitive data patterns
@@ -218,7 +223,7 @@ def anonymize_query(query, pii_info, anonymize={self.anonymize_queries}):
     for pattern, replacement in generalization_rules.items():
         if re.search(pattern, anonymized, re.IGNORECASE):
             anonymized = re.sub(pattern, replacement, anonymized, flags=re.IGNORECASE)
-            generalizations.append(f"{pattern}->{replacement}")
+            generalizations.append(f"{{pattern}}->{{replacement}}")
 
     # Add query perturbation for additional privacy
     if len(anonymized.split()) > 5:
@@ -560,6 +565,9 @@ def format_private_results(secure_results, audit_record, pii_info, anonymization
         builder.add_connection(dp_noise_id, "result", secure_aggregator_id, "dp_info")
 
         if self.audit_logging:
+            # audit_logger_id was bound inside the prior `if self.audit_logging`
+            # block (when self.audit_logging is True); narrow for the checker.
+            assert audit_logger_id is not None
             builder.add_connection(
                 pii_detector_id, "result", audit_logger_id, "pii_info"
             )
@@ -631,7 +639,7 @@ class SecureMultiPartyRAGNode(Node):
     def __init__(
         self,
         name: str = "secure_multiparty_rag",
-        parties: List[str] = None,
+        parties: Optional[List[str]] = None,
         protocol: str = "secret_sharing",
         threshold: int = 2,
     ):
@@ -859,7 +867,7 @@ class ComplianceRAGNode(Node):
     def __init__(
         self,
         name: str = "compliance_rag",
-        regulations: List[str] = None,
+        regulations: Optional[List[str]] = None,
         default_retention_days: int = 30,
         require_explicit_consent: bool = True,
     ):
