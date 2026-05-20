@@ -104,10 +104,14 @@ class RAGStrategyRouterNode(Node):
         user_preferences = kwargs.get("user_preferences", {})
         performance_history = kwargs.get("performance_history", {})
 
-        # Initialize LLM agent if needed
+        # Initialize LLM agent if needed.
+        # Use `self.metadata.name` (Node base stores name on metadata, not as
+        # a bare attribute — `self.name` raised AttributeError on every call
+        # before this fix, the resurrection false-floor pattern A3-triage
+        # flagged at router.py:102).
         if not self.llm_agent:
             self.llm_agent = LLMAgentNode(
-                name=f"{self.name}_llm",
+                name=f"{self.metadata.name}_llm",
                 model=self.llm_model,
                 provider=self.provider,
                 system_prompt=self._get_strategy_selection_prompt(),
@@ -535,6 +539,18 @@ class RAGQualityAnalyzerNode(Node):
             "max_score": max(scores) if scores else 0.0,
             "score_variance": self._calculate_variance(scores) if scores else 0.0,
         }
+
+        # Expected-results comparison (documented kwarg per
+        # get_parameters() — Rule 3c: every documented kwarg MUST be
+        # consumed by ≥1 branch). When the caller supplies expected
+        # results, surface the comparison so downstream consumers can
+        # compute precision/recall against the retrieval.
+        if expected_results:
+            expected_count = len(expected_results)
+            quality_analysis["expected_result_count"] = expected_count
+            quality_analysis["expected_recall_ratio"] = (
+                min(len(documents) / expected_count, 1.0) if expected_count else 0.0
+            )
 
         # Content quality analysis
         content_analysis = self._analyze_content_quality(documents, query)
