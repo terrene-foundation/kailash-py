@@ -24,6 +24,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.streaming import EventStreamNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class RealtimeRAGNode(WorkflowNode):
         self.last_update = datetime.now()
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create real-time RAG workflow"""
         builder = WorkflowBuilder()
 
@@ -492,6 +493,14 @@ class RealtimeStreamingRAGNode(Node):
         query = kwargs.get("query", "")
         documents = kwargs.get("documents", [])
         max_chunks = kwargs.get("max_chunks", 10)
+
+        # Initialize chunk_idx so the post-loop `processing_time` reference at
+        # function scope is bound even when `max_chunks == 0` (no iterations).
+        # Same pattern as B9a's audit_logger_id and B9b's coreference_resolver_id.
+        # Sentinel 0 preserves the pre-fix semantic when max_chunks > 0 (loop
+        # binds chunk_idx to its last iteration value) and yields
+        # processing_time = 0 on the max_chunks == 0 edge case.
+        chunk_idx = 0
 
         # Quick initial results
         yield {
