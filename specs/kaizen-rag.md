@@ -867,3 +867,86 @@ default-only fallback. `_create_workflow()` builds a two-node graph:
 `intent_analyzer` (a `QueryIntentClassifierNode` instance, by string)
 → `adaptive_processor` (`PythonCodeNode` that maps the intent's
 `(query_type, complexity)` into a real processing-step list).
+
+## Privacy & compliance
+
+`kaizen.nodes.rag.privacy` ships three classes that protect sensitive data
+across the RAG path — PII redaction + differential-privacy noise on the
+core retrieval node, cryptographic data-sharing for federated retrieval,
+and regulation-aware consent / retention enforcement.
+
+### `PrivacyPreservingRAGNode`
+
+A `WorkflowNode` subclass that composes a 6-stage privacy pipeline. The
+constructor accepts `name` (default `"privacy_preserving_rag"`),
+`privacy_budget` (default `1.0` — ε for differential privacy; lower =
+more private), `redact_pii` (default `True`), `anonymize_queries`
+(default `True`), and `audit_logging` (default `True`). `__init__`
+calls `super().__init__(workflow=self._create_workflow(), name=name)` so
+the assembled `Workflow` becomes the node's executable body.
+`_create_workflow()` returns a `Workflow` built via `WorkflowBuilder`
+wiring up to 7 `PythonCodeNode` instances:
+
+| Node id                | Role                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `pii_detector`         | Regex-based detection + redaction of email, phone, SSN, credit-card, name, address patterns |
+| `query_anonymizer`     | Generalizes specific tokens in the query (medical IDs, dates) when `anonymize_queries=True` |
+| `private_rag_executor` | Runs the underlying retrieval against the redacted query                                    |
+| `dp_noise_injector`    | Adds calibrated Laplace noise scaled to `privacy_budget`                                    |
+| `secure_aggregator`    | Combines noised retrieval results into the final response                                   |
+| `audit_logger`         | Records the pipeline trace when `audit_logging=True` (only wired in that branch)            |
+| `result_formatter`     | Assembles the final dict: `results`, `privacy_report`, `audit_record`, `confidence_bounds`  |
+
+The PII codegen template (`privacy.py:107`) and the query-anonymizer
+codegen template (`privacy.py:178`) carry inner `{key}` substitutions
+the framework resolves at `PythonCodeNode` runtime; the outer f-string
+escapes those to `{{key}}` so it does not try to interpolate them at
+class-construction time. The `audit_logger_id` is `Optional[str]` and
+initialized to `None` at function entry; the `if self.audit_logging:`
+branch is the only site that binds it to a real node id, and a typed
+`assert audit_logger_id is not None` narrows the value before
+`add_connection` reads it.
+
+### `SecureMultiPartyRAGNode`
+
+A `Node` subclass that runs RAG across multiple data-holding parties
+without exposing raw data. The constructor accepts `name` (default
+`"secure_multiparty_rag"`), `parties` (default `[]` — a list of party
+names), `protocol` (default `"secret_sharing"` — accepts
+`"secret_sharing"` / `"homomorphic"`), and `threshold` (default `2` —
+minimum parties required to compute). `get_parameters()` declares the
+query plus optional `party_data` and `computation_type` parameters.
+`run()` returns a dict with `aggregate_result`, `computation_proof`,
+`party_contributions` (one entry per party with `computed` + the noise
+level applied), and a `fully_encrypted: True` flag.
+
+### `ComplianceRAGNode`
+
+A `Node` subclass that enforces consent + retention rules. The
+constructor accepts `name` (default `"compliance_rag"`), `regulations`
+(default `["gdpr", "ccpa"]` — also accepts `"hipaa"`, `"pipeda"`),
+`default_retention_days` (default `30`), and `require_explicit_consent`
+(default `True`). `get_parameters()` declares the query plus optional
+`user_consent`, `jurisdiction`, and `data_classification` parameters.
+`run()` returns `results`, `compliance_report`, `retention_policy` (the
+declared retention window), and `user_rights` (the set of rights the
+configured regulations grant — deletion, access, portability,
+rectification, restriction).
+
+### A3-triage R4 LEAK disposition
+
+The B9a shard fixed 4 single-brace f-string LEAKs that previously broke
+`PrivacyPreservingRAGNode._create_workflow()` with a NameError on the
+inner codegen-template variables. The fix doubles the braces in the
+outer f-string so the runtime substitution survives:
+
+| Source line      | Inner variable         |
+| ---------------- | ---------------------- |
+| `privacy.py:152` | `{{hash_value}}`       |
+| `privacy.py:152` | `{{pii_type.upper()}}` |
+| `privacy.py:221` | `{{pattern}}`          |
+| `privacy.py:221` | `{{replacement}}`      |
+
+With those 4 escapes, `PrivacyPreservingRAGNode()` constructs cleanly
+under the smoke test; the prior `xfail(strict=True)` mark was removed in
+the same shard (B9a).
