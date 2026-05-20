@@ -17,8 +17,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
-# from ..data.cache import CacheNode  # TODO: Implement CacheNode
+from kailash.nodes.cache import cache  # noqa: F401 — registers CacheNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.runtime.async_local import AsyncLocalRuntime
