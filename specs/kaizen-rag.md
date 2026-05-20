@@ -951,7 +951,6 @@ With those 4 escapes, `PrivacyPreservingRAGNode()` constructs cleanly
 under the smoke test; the prior `xfail(strict=True)` mark was removed in
 the same shard (B9a).
 
-
 ## Evaluation & conversational
 
 `kaizen.nodes.rag.evaluation` ships three classes that measure RAG
@@ -973,14 +972,14 @@ assembled `Workflow` becomes the node's executable body.
 `_create_workflow()` returns a `Workflow` built via `WorkflowBuilder`
 wiring up to 6 nodes:
 
-| Node id                     | Role                                                                                                  |
-| --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `test_executor`             | `PythonCodeNode` — runs the RAG-under-test against the test_queries fixture                           |
-| `faithfulness_evaluator`    | `LLMAgentNode` (model = `llm_judge_model`) — JSON-schema judge of answer-vs-context grounding         |
-| `relevance_evaluator`       | `LLMAgentNode` — JSON-schema judge of query→answer relevance + completeness                           |
-| `context_evaluator`         | `PythonCodeNode` — deterministic P@k / MRR / diversity / avg_relevance metric formulas                |
-| `answer_quality_evaluator`  | `LLMAgentNode` (only when `use_reference_answers=True`) — generated-vs-reference quality comparison   |
-| `metric_aggregator`         | `PythonCodeNode` — aggregates per-test scores into mean/median/stdev + failure analysis + overall    |
+| Node id                    | Role                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `test_executor`            | `PythonCodeNode` — runs the RAG-under-test against the test_queries fixture                         |
+| `faithfulness_evaluator`   | `LLMAgentNode` (model = `llm_judge_model`) — JSON-schema judge of answer-vs-context grounding       |
+| `relevance_evaluator`      | `LLMAgentNode` — JSON-schema judge of query→answer relevance + completeness                         |
+| `context_evaluator`        | `PythonCodeNode` — deterministic P@k / MRR / diversity / avg_relevance metric formulas              |
+| `answer_quality_evaluator` | `LLMAgentNode` (only when `use_reference_answers=True`) — generated-vs-reference quality comparison |
+| `metric_aggregator`        | `PythonCodeNode` — aggregates per-test scores into mean/median/stdev + failure analysis + overall   |
 
 The `answer_quality_id` is `Optional[str]` and initialized to `None` at
 function entry; the `if self.use_reference_answers:` branch is the only
@@ -1034,13 +1033,13 @@ sliding-window size), `enable_summarization` (default `True`),
 `_create_workflow()` returns a `Workflow` built via `WorkflowBuilder`
 wiring up to 8 nodes:
 
-| Node id                | Role                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| `context_loader`       | `PythonCodeNode` — loads the per-session sliding-window context from the in-memory sessions store        |
+| Node id                | Role                                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `context_loader`       | `PythonCodeNode` — loads the per-session sliding-window context from the in-memory sessions store         |
 | `coreference_resolver` | `LLMAgentNode` (only when `coreference_resolution=True`) — resolves pronouns against conversation context |
 | `topic_tracker`        | `PythonCodeNode` (only when `topic_tracking=True`) — classifies topic + detects switches                  |
 | `context_retriever`    | `PythonCodeNode` — boosts retrieval scores for topic-relevant + context-relevant documents                |
-| `response_generator`   | `LLMAgentNode` — generates the contextual response                                                       |
+| `response_generator`   | `LLMAgentNode` — generates the contextual response                                                        |
 | `context_summarizer`   | `LLMAgentNode` (only when `enable_summarization=True`) — summarizes the conversation for long-context use |
 | `session_updater`      | `PythonCodeNode` — appends the new turn + updates current_topic + computes conversation health metrics    |
 | `result_formatter`     | `PythonCodeNode` — assembles the final dict: `conversational_response`, `session_state`, `topic_info`     |
@@ -1071,13 +1070,13 @@ sessions. The constructor accepts `name` (default
 `retention_policy` / `max_memories_per_user` / `data: dict` /
 `context: str`. `run()` dispatches on `operation`:
 
-| Operation  | Effect                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `store`    | Appends episodic memories + sets/updates semantic facts + updates preferences (per the `memory_types` set)                |
+| Operation  | Effect                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `store`    | Appends episodic memories + sets/updates semantic facts + updates preferences (per the `memory_types` set)                    |
 | `retrieve` | Returns `relevant_memories` (matched by topic / fact-key overlap with `context`) + `memory_summary` + `personalization_hints` |
-| `update`   | Updates existing semantic facts + preferences in-place; raises a typed error if the user has no prior memories             |
-| `forget`   | Wipes specific memory types OR `forget_all=True` clears the user slate entirely (GDPR-compliant erasure)                   |
-| Other      | Returns `{"error": f"Unknown operation: {operation}"}`                                                                    |
+| `update`   | Updates existing semantic facts + preferences in-place; raises a typed error if the user has no prior memories                |
+| `forget`   | Wipes specific memory types OR `forget_all=True` clears the user slate entirely (GDPR-compliant erasure)                      |
+| Other      | Returns `{"error": f"Unknown operation: {operation}"}`                                                                        |
 
 The per-user memory slot is typed `Dict[str, Dict[str, Any]]` — the
 slot's `episodic` key carries a `deque(maxlen=max_memories_per_user)`,
@@ -1098,3 +1097,118 @@ comment at `conversational.py:26`. The relative-import path
 dates from the 2026-03-11 monorepo move); dead commented-out import
 is dead code per `rules/zero-tolerance.md` Rule 2. The matching
 dead comment at `optimized.py:21` belongs to B9c, not B9b.
+
+## Realtime & optimized
+
+`kaizen.nodes.rag.realtime` and `kaizen.nodes.rag.optimized` ship 7
+classes covering real-time / streaming RAG and the performance-optimized
+variants (cache, parallel, streaming, batch).
+
+### `RealtimeRAGNode`
+
+A `WorkflowNode` subclass composing a real-time retrieval pipeline. The
+constructor accepts `name` (default `"realtime_rag"`), `update_interval`
+(default `60`), `cache_recent` (default `True`), and `stream_results`
+(default `False`). `_create_workflow()` returns a `Workflow` (via
+`WorkflowBuilder`) wiring the index update, retrieval, and result
+formatter nodes.
+
+### `RealtimeStreamingRAGNode`
+
+A `Node` subclass exposing an async `stream(query, documents, max_chunks,
+chunk_size, chunk_interval)` generator that yields chunked retrieval
+results. The contract: the iterator emits a `{"type": "start"}` marker,
+then one `{"type": "chunk", "chunk_id": N, "results": [...], "progress":
+F}` per chunk (chunk_id strictly increments from 0; progress
+monotonically increases), then a `{"type": "complete", "chunks_sent":
+M, "processing_time": T}` terminator. `chunk_size` defaults to `5`,
+`chunk_interval` defaults to `10` ms (real `asyncio.sleep` between
+chunks — verified by Tier-2a timing tests).
+
+### `IncrementalIndexNode`
+
+A `Node` subclass providing an in-memory incremental index. `run()`
+dispatches on `operation` (`"add"`, `"remove"`, `"search"`, `"clear"`)
+and returns the operation outcome. The index stores documents in a dict
+keyed by content hash; `search` performs simple substring matching
+returning a list of matching dicts. Real-runtime tests verify the
+add-then-search and add-then-remove-then-search round-trips.
+
+### `CacheOptimizedRAGNode`
+
+A `WorkflowNode` subclass composing a cache-fronted retrieval pipeline.
+The constructor accepts `name` (default `"cache_optimized_rag"`),
+`cache_size` (default `1000`), `cache_ttl` (default `3600` seconds),
+and `cache_strategy` (default `"lru"`). `_create_workflow()` builds a
+graph including a `CacheNode` (registered by the
+`from kailash.nodes.cache import cache` import landed in B9c — see the
+A3-triage R3-L2 disposition below) and the underlying retrieval nodes.
+
+### `AsyncParallelRAGNode`
+
+A `WorkflowNode` subclass running multiple retrievals concurrently. The
+constructor accepts `name` (default `"async_parallel_rag"`), `parallelism`
+(default `4`), and `timeout_per_query` (default `5.0`).
+`_create_workflow()` wires an `AsyncLocalRuntime`-compatible workflow
+that fans out N retrievals and aggregates results.
+
+### `StreamingRAGNode`
+
+A `WorkflowNode` subclass for chunked-output retrieval at workflow
+level (distinct from `RealtimeStreamingRAGNode`'s pure async-iterator
+form). The constructor accepts `name` (default `"streaming_rag"`),
+`chunk_size` (default `5`), and `stream_metadata` (default `True`).
+`_create_workflow()` builds a pipeline that emits results in chunks per
+the documented streaming contract.
+
+### `BatchOptimizedRAGNode`
+
+A `WorkflowNode` subclass optimized for batch retrieval. The constructor
+accepts `name` (default `"batch_optimized_rag"`), `batch_size` (default
+`32`), and `parallel_batches` (default `2`). `_create_workflow()` wires
+a single pipeline that processes multiple input queries in one execution.
+
+### A3-triage R3-L2 disposition
+
+The B9c shard landed two structural fixes to close the A3 R3-L2 items
+assigned to this module:
+
+1. **`CacheNode` registering import** — `optimized.py` references
+   `"CacheNode"` as a string node-type at 2 sites. Before B9c, the
+   `kailash.nodes.cache` module that registers it was never imported,
+   so `WorkflowBuilder.add_node("CacheNode", ...)` raised `NameError`
+   at construction. B9c added
+   `from kailash.nodes.cache import cache  # noqa: F401 — registers CacheNode`
+   at module scope; the `@register_node` decoration runs at import time
+   and `"CacheNode"` resolves through `NodeRegistry`.
+
+2. **Dead comment removal** — the
+   `# from ..data.cache import CacheNode  # TODO: Implement CacheNode`
+   line at `optimized.py:21` referenced a non-existent path
+   (`..data.cache` never existed in the kaizen package tree). The comment
+   is dead per `rules/zero-tolerance.md` Rule 2 and was removed.
+
+Together with B7's chunker registering-import fix and B9b's matching
+`conversational.py:26` comment removal, the A3-triage R3-L2 row is now
+fully closed.
+
+### Pyright cleanup
+
+The B9c shard also fixed pre-existing latent type defects flagged in
+the A3 triage:
+
+- `realtime.py:551` `chunk_idx` possibly-unbound — initialized at
+  function entry; narrowed via the binding loop's structural control
+  flow.
+- Multiple `_create_workflow` return-type annotations corrected from
+  `-> Node` to `-> Workflow` (same class as the
+  `@register_node` type-erasure cleanups in B7 / B8 / B9a / B9b).
+
+### Resurrection-smoke xfail closure
+
+The B7 + B9a + B9c shards collectively un-marked every previously-failing
+WorkflowNode-subclass parametrize entry in
+`test_rag_resurrection_import_smoke.py` (4 workflows in B7, 1 privacy in
+B9a, 1 optimized in B9c). The smoke test now carries **zero `xfail`
+markers** on the WorkflowNode-subclass parameter set — the resurrection
+signal is fully closed and the smoke test is a pure go/no-go gate.
