@@ -23,6 +23,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode
 
@@ -111,9 +112,15 @@ class ConversationalRAGNode(WorkflowNode):
         self.sessions = {}
         super().__init__(workflow=self._create_workflow(), name=name)
 
-    def _create_workflow(self) -> WorkflowNode:
+    def _create_workflow(self) -> Workflow:
         """Create conversational RAG workflow"""
         builder = WorkflowBuilder()
+
+        # Bound only inside the optional-branches below; initialize at entry
+        # so the wiring loop never sees an unbound name on a False branch.
+        coreference_resolver_id: Optional[str] = None
+        topic_tracker_id: Optional[str] = None
+        summarizer_id: Optional[str] = None
 
         # Session context loader
         context_loader_id = builder.add_node(
@@ -532,6 +539,9 @@ result = {
         )
 
         if self.coreference_resolution:
+            assert (
+                coreference_resolver_id is not None
+            )  # narrowed: bound in optional block above
             builder.add_connection(
                 context_loader_id, "session_context", coreference_resolver_id, "context"
             )
@@ -540,6 +550,9 @@ result = {
             )
 
         if self.topic_tracking:
+            assert (
+                topic_tracker_id is not None
+            )  # narrowed: bound in optional block above
             builder.add_connection(
                 context_loader_id,
                 "session_context",
@@ -564,6 +577,7 @@ result = {
         )
 
         if self.enable_summarization:
+            assert summarizer_id is not None  # narrowed: bound in optional block above
             builder.add_connection(
                 context_loader_id,
                 "session_context",
@@ -578,6 +592,9 @@ result = {
             response_generator_id, "response", session_updater_id, "response"
         )
         if self.topic_tracking:
+            assert (
+                topic_tracker_id is not None
+            )  # narrowed: bound in optional block above
             builder.add_connection(
                 topic_tracker_id, "topic_analysis", session_updater_id, "topic_info"
             )
@@ -589,6 +606,9 @@ result = {
             response_generator_id, "response", result_formatter_id, "response"
         )
         if self.topic_tracking:
+            assert (
+                topic_tracker_id is not None
+            )  # narrowed: bound in optional block above
             builder.add_connection(
                 topic_tracker_id, "topic_analysis", result_formatter_id, "topic_info"
             )
@@ -601,7 +621,7 @@ result = {
 
         return builder.build(name="conversational_rag_workflow")
 
-    def create_session(self, user_id: str = None) -> Dict[str, Any]:
+    def create_session(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Create a new conversation session"""
         session_id = hashlib.sha256(
             f"{user_id or 'anonymous'}_{datetime.now().isoformat()}".encode()
@@ -680,7 +700,7 @@ class ConversationMemoryNode(Node):
     def __init__(
         self,
         name: str = "conversation_memory",
-        memory_types: List[str] = None,
+        memory_types: Optional[List[str]] = None,
         retention_policy: str = "adaptive",
         max_memories_per_user: int = 1000,
     ):
@@ -698,8 +718,11 @@ class ConversationMemoryNode(Node):
         self.memory_types = resolved_memory_types
         self.retention_policy = retention_policy
         self.max_memories_per_user = max_memories_per_user
-        # In-memory storage (use persistent DB in production)
-        self.memory_store = defaultdict(
+        # In-memory storage (use persistent DB in production). The per-user
+        # value is a dict with mixed-typed slots (`episodic` → deque,
+        # `semantic` / `preferences` → dict); typed Any because each key
+        # carries a distinct narrowed shape used at access sites.
+        self.memory_store: Dict[str, Dict[str, Any]] = defaultdict(
             lambda: {
                 "episodic": deque(maxlen=max_memories_per_user),
                 "semantic": {},
