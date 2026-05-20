@@ -4,6 +4,95 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 
 ## [Unreleased]
 
+## [2.24.0] — 2026-05-20 — kaizen.nodes.rag provably correct + F9 cleanup (F8 R1)
+
+### Added
+
+- **Behavioral coverage of every preserved RAG class** (F8 B1–B10). 643+ new
+  tests + 5 spec sections (`specs/kaizen-rag.md` is now the authoritative
+  domain truth for the 58 RAG class definitions: 55 `@register_node`
+  classes + 2 `RAGConfig` dataclasses + `RAGWorkflowRegistry`). The brief's
+  "provably correct, not merely importable" criterion is now closed —
+  every class has at least one behavioral test in the unit, integration,
+  or regression tier.
+- **`RAGStrategyRouterNode` / `RAGQualityAnalyzerNode` /
+  `RAGPerformanceMonitorNode` / `RAGWorkflowRegistry`** all gain Tier-1
+  unit + Tier-2a integration coverage (B10). The smoke-test
+  zero-`xfail` invariant added in B9c is preserved.
+
+### Fixed
+
+- **`RAGStrategyRouterNode.run()` no longer raises `AttributeError`**
+  (F8 B10). The class accessed `self.name` but the kailash `Node` base
+  stores name on `self.metadata.name`; every call raised AttributeError
+  on the LLMAgentNode init. Routes through `self.metadata.name` now.
+- **`pii_detector` codegen** — F9 #1112: dob regex uses non-capturing
+  groups so `re.findall` returns full-match strings (not tuples that
+  crashed `.encode()`); F9 #1113: function returns its dict on the
+  `redact=True` branch (was bound to a function-scope local never
+  returned); F9 #1114: codegen now binds `result =
+detect_and_redact_pii(text, ...)` at module scope so PythonCodeNode
+  reads the redaction dict (the function was defined but never called).
+- **`ConversationalRAGNode.create_session` session_id** — F9 #1116:
+  now sourced from `secrets.token_hex(16)` (128-bit CSPRNG). The prior
+  `sha256(f"{user_or_anon}_{datetime}")[:16]` form admitted ~10⁶
+  brute-force ops within a 1-second window on the anonymous flow.
+- **`RAGEvaluationNode` codegen** — F9 #1117/#1118:
+  `test_executor`, `context_evaluator`, and `metric_aggregator` all
+  return their dicts AND invoke their inner functions at module scope.
+  `metric_aggregator` now imports the `datetime` class inside the
+  function body (a module-scope `from datetime import datetime` is
+  shadowed by PythonCodeNode's `datetime` module injection; the bare
+  `datetime.now()` against the module raised `AttributeError`).
+- **`RealtimeRAGNode.start_monitoring`** — F9 #1121: retains the
+  monitoring task on `self._monitor_task`; `stop_monitoring()` is now
+  async and cancels + awaits the retained task (the prior
+  fire-and-forget made the task GC-eligible and left the loop
+  uncancellable from outside).
+- **`RealtimeStreamingRAGNode` `processing_time` unit** — F9 #1122:
+  reported in SECONDS (the prior `chunk_idx * chunk_interval` form left
+  consumers off-by-1000× from the asyncio.sleep call's seconds-based
+  semantics; `chunk_interval` is canonically milliseconds).
+- **`RAGQualityAnalyzerNode.run()` `expected_results` kwarg** — wired
+  through into `quality_analysis["expected_result_count"]` /
+  `expected_recall_ratio`; the documented kwarg was previously accepted
+  but silently dropped (Rule 3c — documented kwargs without consumption
+  is a silent-fallback variant).
+
+### Changed (env-models compliance)
+
+- **All 36 hardcoded `"gpt-4"` model defaults across 9 rag modules
+  replaced with env-loaded `_DEFAULT_LLM_MODEL`** (F9 #1126). Mirrors
+  the `router.py:22-24` precedent landed in F8 B10:
+  ```python
+  _DEFAULT_LLM_MODEL = os.environ.get(
+      "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
+  )
+  ```
+  Affected modules: `advanced`, `agentic`, `conversational`, `evaluation`,
+  `graph`, `multimodal`, `query_processing`, `similarity`, `workflows`.
+  **Behavior change**: existing callers relying on the `"gpt-4"` default
+  now get the env-resolved value (or `None` when neither env var is set
+  — env-models-compliant). Set `OPENAI_PROD_MODEL` in `.env` to restore
+  prior behavior.
+- **`kailash.middleware.mcp.enhanced_server.MCPToolNode` /
+  `MCPResourceNode`** (F8 A1-core) — constructors now use the canonical
+  keyword `super().__init__(name=name, **config)` form. The prior
+  `super().__init__(name)` positional form raised `TypeError` on every
+  construction (Node base is keyword-only). External subclasses calling
+  the constructor positionally MUST migrate to keyword form.
+
+### Migration
+
+- **`StreamingRAGNode` collision** (still active from 2.23.0): the
+  realtime variant is `RealtimeStreamingRAGNode`; `optimized` keeps
+  `StreamingRAGNode`. No change in 2.24.0.
+- **Env-models migration**: if your dev/prod environment relied on the
+  baked-in `"gpt-4"` default and does not set `OPENAI_PROD_MODEL` or
+  `DEFAULT_LLM_MODEL`, set one of them in `.env`. The `model` config
+  block on each LLM-using node now resolves to `None` when neither is
+  set, which propagates to the LLMAgentNode constructor.
+
 ## [2.23.1] — 2026-05-19 — complete the `[rag]` extra (#891 follow-up)
 
 ### Fixed
