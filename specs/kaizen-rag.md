@@ -950,3 +950,151 @@ outer f-string so the runtime substitution survives:
 With those 4 escapes, `PrivacyPreservingRAGNode()` constructs cleanly
 under the smoke test; the prior `xfail(strict=True)` mark was removed in
 the same shard (B9a).
+
+
+## Evaluation & conversational
+
+`kaizen.nodes.rag.evaluation` ships three classes that measure RAG
+quality + benchmark performance + generate synthetic test datasets.
+`kaizen.nodes.rag.conversational` ships two classes that support
+multi-turn conversation with sliding-window context, optional
+summarization, optional coreference resolution, optional topic tracking,
+and persistent per-user long-term memory.
+
+### `RAGEvaluationNode`
+
+A `WorkflowNode` subclass composing a 6-node evaluation pipeline. The
+constructor accepts `name` (default `"rag_evaluation"`), `metrics`
+(default `["faithfulness", "relevance", "context_precision",
+"answer_quality"]`), `use_reference_answers` (default `True`), and
+`llm_judge_model` (default `"gpt-4"`). `__init__` calls
+`super().__init__(workflow=self._create_workflow(), name=name)` so the
+assembled `Workflow` becomes the node's executable body.
+`_create_workflow()` returns a `Workflow` built via `WorkflowBuilder`
+wiring up to 6 nodes:
+
+| Node id                     | Role                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `test_executor`             | `PythonCodeNode` — runs the RAG-under-test against the test_queries fixture                           |
+| `faithfulness_evaluator`    | `LLMAgentNode` (model = `llm_judge_model`) — JSON-schema judge of answer-vs-context grounding         |
+| `relevance_evaluator`       | `LLMAgentNode` — JSON-schema judge of query→answer relevance + completeness                           |
+| `context_evaluator`         | `PythonCodeNode` — deterministic P@k / MRR / diversity / avg_relevance metric formulas                |
+| `answer_quality_evaluator`  | `LLMAgentNode` (only when `use_reference_answers=True`) — generated-vs-reference quality comparison   |
+| `metric_aggregator`         | `PythonCodeNode` — aggregates per-test scores into mean/median/stdev + failure analysis + overall    |
+
+The `answer_quality_id` is `Optional[str]` and initialized to `None` at
+function entry; the `if self.use_reference_answers:` branch is the only
+site that binds it, and a typed `assert answer_quality_id is not None`
+narrows it before `add_connection` consumes it. The `metrics` list is
+interpolated into the `metric_aggregator` code template via
+`{self.metrics}`, allowing downstream filtering on the configured
+metric set.
+
+### `RAGBenchmarkNode`
+
+A `Node` subclass that benchmarks one or more RAG systems for latency,
+throughput, scalability, and resource usage. The constructor accepts
+`name` (default `"rag_benchmark"`), `workload_sizes` (default
+`[10, 100, 1000]`), and `concurrent_users` (default `[1, 5, 10]`).
+`get_parameters()` declares required `rag_systems: dict` +
+`test_queries: list`, plus optional `name` / `workload_sizes` /
+`concurrent_users` / `duration` (default `60`). `run()` returns a dict
+carrying `benchmark_results` (per-system latency profiles with p50/p95/
+p99/mean/std_dev, throughput curves, scalability analysis, resource
+usage), `comparison` (`fastest_system` / `most_scalable` /
+`most_efficient` picks + recommendations), and `test_configuration`
+(echo of the constructor + invocation kwargs). The comparison picks
+use typed-lambda key functions (`min/max(..., key=lambda k: d[k])`)
+to satisfy pyright on the dict-value-lookup overload.
+
+### `TestDatasetGeneratorNode`
+
+A `Node` subclass that generates synthetic test datasets for RAG
+evaluation. The constructor accepts `name` (default
+`"test_dataset_generator"`), `categories` (default
+`["factual", "analytical", "comparative"]`), and `include_adversarial`
+(default `True`). `get_parameters()` declares required `num_samples:
+int` + optional `name` / `categories` / `include_adversarial` /
+`domain` (default `"general"`) / `seed`. `run()` returns
+`test_dataset` (list of `{id, query, reference_answer, contexts,
+metadata}` entries, with 3 contexts per non-adversarial entry at
+relevance 0.9 / 0.8 / 0.7), `statistics` (total_samples,
+category_distribution, adversarial_count), and `generation_config`
+(domain, categories, seed echo). The seeded RNG path makes the
+output deterministic for reproducible test-suite fixtures.
+
+### `ConversationalRAGNode`
+
+A `WorkflowNode` subclass that composes a multi-turn conversation
+pipeline with up to 8 inner nodes. The constructor accepts `name`
+(default `"conversational_rag"`), `max_context_turns` (default `10` —
+sliding-window size), `enable_summarization` (default `True`),
+`personalization_enabled` (default `True`), `coreference_resolution`
+(default `True`), and `topic_tracking` (default `True`).
+`_create_workflow()` returns a `Workflow` built via `WorkflowBuilder`
+wiring up to 8 nodes:
+
+| Node id                | Role                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `context_loader`       | `PythonCodeNode` — loads the per-session sliding-window context from the in-memory sessions store        |
+| `coreference_resolver` | `LLMAgentNode` (only when `coreference_resolution=True`) — resolves pronouns against conversation context |
+| `topic_tracker`        | `PythonCodeNode` (only when `topic_tracking=True`) — classifies topic + detects switches                  |
+| `context_retriever`    | `PythonCodeNode` — boosts retrieval scores for topic-relevant + context-relevant documents                |
+| `response_generator`   | `LLMAgentNode` — generates the contextual response                                                       |
+| `context_summarizer`   | `LLMAgentNode` (only when `enable_summarization=True`) — summarizes the conversation for long-context use |
+| `session_updater`      | `PythonCodeNode` — appends the new turn + updates current_topic + computes conversation health metrics    |
+| `result_formatter`     | `PythonCodeNode` — assembles the final dict: `conversational_response`, `session_state`, `topic_info`     |
+
+The three optional-branch IDs (`coreference_resolver_id`,
+`topic_tracker_id`, `summarizer_id`) are `Optional[str]` and
+initialized to `None` at function entry; their `if self.X:` branches
+are the only sites that bind them, and typed `assert X is not None`
+narrows each before `add_connection` consumes it. The
+`max_context_turns` kwarg is interpolated into the `context_loader`
+code template's sliding-window slice (`session["turns"][-N:]`).
+
+`create_session(user_id: Optional[str] = None)` produces a new
+session id (sha256 of `{user_id or 'anonymous'}_{datetime.now()}` →
+first 16 hex chars) and registers a session record in the in-memory
+`self.sessions` store. Different calls at different timestamps
+produce different ids even for the same `user_id`.
+
+### `ConversationMemoryNode`
+
+A `Node` subclass that manages per-user long-term memory across
+sessions. The constructor accepts `name` (default
+`"conversation_memory"`), `memory_types` (default
+`["episodic", "semantic", "preferences"]`), `retention_policy`
+(default `"adaptive"`), and `max_memories_per_user` (default `1000`).
+`get_parameters()` declares required `operation: str` +
+`user_id: str`, plus optional `name` / `memory_types` /
+`retention_policy` / `max_memories_per_user` / `data: dict` /
+`context: str`. `run()` dispatches on `operation`:
+
+| Operation  | Effect                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `store`    | Appends episodic memories + sets/updates semantic facts + updates preferences (per the `memory_types` set)                |
+| `retrieve` | Returns `relevant_memories` (matched by topic / fact-key overlap with `context`) + `memory_summary` + `personalization_hints` |
+| `update`   | Updates existing semantic facts + preferences in-place; raises a typed error if the user has no prior memories             |
+| `forget`   | Wipes specific memory types OR `forget_all=True` clears the user slate entirely (GDPR-compliant erasure)                   |
+| Other      | Returns `{"error": f"Unknown operation: {operation}"}`                                                                    |
+
+The per-user memory slot is typed `Dict[str, Dict[str, Any]]` — the
+slot's `episodic` key carries a `deque(maxlen=max_memories_per_user)`,
+`semantic` carries a fact-key→fact-record dict, and `preferences`
+carries a free-form dict. The `defaultdict` factory creates each
+user's slot lazily on first access. The store is in-memory by
+design (the docstring notes "use persistent DB in production"); the
+F8 B9b Tier-2a tests demonstrate the **read-back contract** through
+this in-memory path AND demonstrate the **real aiosqlite persistence
+pattern** via the kailash `AsyncSQLitePool` SDK pool primitive
+(`tests/integration/rag/test_conversational_nodes.py::TestAiosqliteRoundTripViaPool`).
+
+### A3-triage R3-L2 disposition
+
+The B9b shard removed a dead `# from ..data.cache import CacheNode`
+comment at `conversational.py:26`. The relative-import path
+`..data.cache` never existed in the kaizen package tree (the comment
+dates from the 2026-03-11 monorepo move); dead commented-out import
+is dead code per `rules/zero-tolerance.md` Rule 2. The matching
+dead comment at `optimized.py:21` belongs to B9c, not B9b.
