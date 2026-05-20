@@ -89,8 +89,8 @@ class TestAllThreeConstruct:
         node = RealtimeStreamingRAGNode()
         assert node is not None
         assert node.metadata.name == "streaming_rag"
-        assert node.chunk_size == 50
-        assert node.chunk_interval == 100
+        assert node.chunk_size == 50  # type: ignore[attr-defined]
+        assert node.chunk_interval == 100  # type: ignore[attr-defined]
 
     def test_realtime_streaming_constructs_with_custom_kwargs(self):
         node = RealtimeStreamingRAGNode(
@@ -99,15 +99,15 @@ class TestAllThreeConstruct:
             chunk_interval=50,
         )
         assert node.metadata.name == "custom_stream"
-        assert node.chunk_size == 10
-        assert node.chunk_interval == 50
+        assert node.chunk_size == 10  # type: ignore[attr-defined]
+        assert node.chunk_interval == 50  # type: ignore[attr-defined]
 
     def test_incremental_index_constructs_default(self):
         node = IncrementalIndexNode()
         assert node is not None
         assert node.metadata.name == "incremental_index"
-        assert node.index_type == "hybrid"
-        assert node.merge_strategy == "immediate"
+        assert node.index_type == "hybrid"  # type: ignore[attr-defined]
+        assert node.merge_strategy == "immediate"  # type: ignore[attr-defined]
         assert node.index == {}  # type: ignore[attr-defined]
         assert node.document_store == {}  # type: ignore[attr-defined]
 
@@ -118,8 +118,8 @@ class TestAllThreeConstruct:
             merge_strategy="batched",
         )
         assert node.metadata.name == "custom_index"
-        assert node.index_type == "inverted"
-        assert node.merge_strategy == "batched"
+        assert node.index_type == "inverted"  # type: ignore[attr-defined]
+        assert node.merge_strategy == "batched"  # type: ignore[attr-defined]
 
 
 # ==========================================================================
@@ -302,7 +302,7 @@ def _drain_stream(node: RealtimeStreamingRAGNode, **kwargs) -> List[Dict[str, An
 
     async def _collect() -> List[Dict[str, Any]]:
         acc: List[Dict[str, Any]] = []
-        async for chunk in node.stream(**kwargs):
+        async for chunk in node.stream(**kwargs):  # type: ignore[attr-defined]
             acc.append(chunk)
         return acc
 
