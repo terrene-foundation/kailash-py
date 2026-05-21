@@ -1,3 +1,5 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
 """kailash.delegate -- Apache 2.0 OSS Delegate composition primitive.
 
 The audit-grade composition surface ``(Connector x Signature x ConstraintEnvelope
