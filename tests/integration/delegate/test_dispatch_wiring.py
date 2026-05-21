@@ -35,10 +35,23 @@ end-to-end through the real substrate.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import datetime, timezone
 
 import pytest
+
+
+def _test_signer(canonical_bytes: bytes) -> str:
+    """Deterministic 128-char hex signer for integration tests.
+
+    SHA-256 doubled to 128 chars satisfies the audit-engine's
+    _validate_hex(expected_len=128) contract while keeping the test
+    deterministic for cross-SDK byte-vector comparison.
+    """
+    h = hashlib.sha256(canonical_bytes).hexdigest()
+    return h + h
+
 
 from kailash.delegate.audit import (
     AuditChainEngine,
@@ -217,6 +230,7 @@ async def test_dispatch_end_to_end_wires_audit_and_tenant() -> None:
         audit_engine=audit_engine,
         trust_cascade=cascade,
         role=_build_role(),
+        signer=_test_signer,
     )
 
     # Pre-dispatch: chain is empty, no audit entries
@@ -281,6 +295,7 @@ async def test_dispatch_tenant_isolation_enforced_end_to_end() -> None:
         audit_engine=audit_engine,
         trust_cascade=cascade,
         role=_build_role(),
+        signer=_test_signer,
     )
 
     with pytest.raises(CascadeTenantViolationError):
@@ -329,6 +344,7 @@ async def test_dispatch_multiple_events_chain_correctly() -> None:
         audit_engine=audit_engine,
         trust_cascade=cascade,
         role=_build_role(),
+        signer=_test_signer,
     )
 
     result = await surface.dispatch({"user_id": "u-multi"})

@@ -22,6 +22,7 @@ Connector surface.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
@@ -39,10 +40,25 @@ from kailash.delegate.dispatch import (
     DispatchCascadeViolationError,
     DispatchEnvelopeViolationError,
     DispatchResult,
+    DispatchSignerError,
     DispatchSurface,
     DispatchValidationError,
     SignatureContract,
 )
+
+
+# ---------------------------------------------------------------------------
+# Deterministic test signer — produces a 128-char lowercase hex string from
+# the canonical-bytes input. SHA-256 doubled to 128 chars satisfies the
+# audit-engine's _validate_hex(expected_len=128) contract.
+# ---------------------------------------------------------------------------
+
+
+def _test_signer(canonical_bytes: bytes) -> str:
+    h = hashlib.sha256(canonical_bytes).hexdigest()
+    return h + h  # 128-char lowercase hex
+
+
 from kailash.delegate.envelope import DelegateConstraintEnvelope
 from kailash.delegate.trust import (
     CascadeTenantViolationError,
@@ -318,6 +334,7 @@ def _make_surface(
     signature: SignatureContract | None = None,
     envelope: DelegateConstraintEnvelope | None = None,
     identity: DelegateIdentity | None = None,
+    signer=None,
 ) -> DispatchSurface:
     return DispatchSurface(
         connector=connector if connector is not None else MockConnector(),
@@ -327,6 +344,7 @@ def _make_surface(
         audit_engine=AuditChainEngine(chain=_build_chain()),
         trust_cascade=cascade if cascade is not None else _build_cascade(),
         role=role if role is not None else _build_role(),
+        signer=signer if signer is not None else _test_signer,
     )
 
 
@@ -363,9 +381,17 @@ def test_dispatch_surface_allows_draft_role_lifecycle() -> None:
 
 @pytest.mark.unit
 def test_dispatch_surface_refuses_missing_capability() -> None:
-    """Invariant 3 — connector requires capability role does not grant."""
+    """Invariant 3 — connector requires capability role does not grant.
+
+    C5-2 error-leakage fix: caller-facing message hashes the capability
+    names; full detail is structured-logged at DEBUG. Test matches on
+    the stable structural prefix ("refuses bind", "missing_hash=") and
+    NOT on the schema-revealing capability strings.
+    """
     role = _build_role(capabilities=("other.cap",))
-    with pytest.raises(DispatchEnvelopeViolationError, match="http.read"):
+    with pytest.raises(
+        DispatchEnvelopeViolationError, match=r"refuses bind.*missing_hash="
+    ):
         _make_surface(role=role)
 
 
@@ -389,9 +415,17 @@ def test_dispatch_surface_rejects_non_signature_object() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_dispatch_input_payload_type_mismatch_raises() -> None:
-    """Invariant 1 — declared str field receives int → DispatchValidationError."""
+    """Invariant 1 — declared str field receives int → DispatchValidationError.
+
+    C5-1 error-leakage fix: caller-facing message carries the field
+    hash, NOT the schema field name. The hash is stable
+    (sha256(field_name)[:8]) so log-aggregator correlation against
+    structured DEBUG logs is preserved.
+    """
     surface = _make_surface()
-    with pytest.raises(DispatchValidationError, match="user_id"):
+    with pytest.raises(
+        DispatchValidationError, match=r"field_hash=.*failed schema validation"
+    ):
         await surface.dispatch({"user_id": 42})  # type: ignore[dict-item]
 
 
@@ -416,7 +450,7 @@ async def test_dispatch_input_payload_missing_required_field_raises() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_input_payload_non_dict_raises() -> None:
     surface = _make_surface()
-    with pytest.raises(DispatchValidationError, match="MUST be a dict"):
+    with pytest.raises(DispatchValidationError, match="type mismatch"):
         await surface.dispatch("not a dict")  # type: ignore[arg-type]
 
 
@@ -481,6 +515,7 @@ async def test_dispatch_audit_engine_round_trip() -> None:
         audit_engine=audit_engine,
         trust_cascade=_build_cascade(),
         role=_build_role(),
+        signer=_test_signer,
     )
     assert len(audit_engine.entries) == 0
     result = await surface.dispatch({"user_id": "u-1"})
@@ -525,6 +560,7 @@ async def test_dispatch_connector_invocation_carries_bound_identity_and_envelope
         audit_engine=AuditChainEngine(chain=_build_chain()),
         trust_cascade=_build_cascade(),
         role=_build_role(),
+        signer=_test_signer,
     )
     await surface.dispatch({"user_id": "u-1"})
     assert len(connector.invocations) == 1
@@ -594,6 +630,7 @@ def test_dispatch_result_is_frozen() -> None:
         executed_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
         tenant_id="t",
         connector_id="c",
+        dispatch_id=uuid.uuid4(),
     )
     with pytest.raises(FrozenInstanceError):
         r.payload = {}  # type: ignore[misc]
@@ -608,6 +645,7 @@ def test_dispatch_result_rejects_naive_datetime() -> None:
             executed_at=datetime(2026, 5, 22, 12, 0, 0),  # naive
             tenant_id="t",
             connector_id="c",
+            dispatch_id=uuid.uuid4(),
         )
 
 
@@ -620,6 +658,7 @@ def test_dispatch_result_rejects_empty_connector_id() -> None:
             executed_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
             tenant_id="t",
             connector_id="",
+            dispatch_id=uuid.uuid4(),
         )
 
 
