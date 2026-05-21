@@ -112,25 +112,53 @@ class DelegateConstraintEnvelope:
     ) -> "DelegateConstraintEnvelope":
         """Return a strictly-tighter (or equal) envelope.
 
-        Raises :class:`EnvelopeWideningError` if the intersection with
-        ``other`` would NOT be at-least-as-tight as the current inner
-        envelope on every dimension. The check is the
-        ``ConstraintEnvelope.is_tighter_than`` predicate from SPEC-07.
+        Raises :class:`EnvelopeWideningError` if ``other`` carries any value
+        that LOOSENS a dimension where ``self.inner`` has a stricter bound.
+
+        Discriminating widening from tightening REQUIRES a pre-intersection
+        check: ``ConstraintEnvelope.intersect`` performs ``min()`` on numeric
+        limits, so a widening request (parent=50, child=100) is silently
+        squashed to the parent value by the intersection itself. After
+        intersect, ``tightened.is_tighter_than(self.inner)`` would (trivially)
+        be True, defeating the F5 invariant the wrapper exists to enforce.
+
+        The structural fix: ask the predicate on the opposite direction —
+        is ``self.inner`` at-least-as-tight as ``other``? If yes, the
+        intersection is safe (other does not loosen any dimension self
+        constrains, or other simply adds new constraints self did not have).
+        If no, ``other`` loosens a dimension self constrained: that is a
+        widening attempt and MUST raise BEFORE intersect can mask it.
 
         Equality is permitted (tightening with an identical envelope is a
-        no-op, not a widening).
+        no-op, not a widening) because ``is_tighter_than`` admits equality
+        as at-least-as-tight.
         """
         if not isinstance(other, ConstraintEnvelope):
             raise TypeError(
                 "DelegateConstraintEnvelope.tighten_with requires a "
                 f"ConstraintEnvelope; got {type(other).__name__}"
             )
-        tightened = self.inner.intersect(other)
-        if not tightened.is_tighter_than(self.inner):
+        # PRE-INTERSECTION widening check. If `other` is NOT at-least-as-tight
+        # as `self.inner` on every dimension self constrains, then `other`
+        # carries a value loosening a dimension self bound — a widening
+        # attempt. Raise BEFORE intersect masks the intent.
+        if not other.is_tighter_than(self.inner):
             raise EnvelopeWideningError(
-                "tighten_with would widen the envelope on at least one "
-                "dimension; the intersection is not at-least-as-tight as "
-                "the current inner envelope. Widening requires a new "
-                "GenesisRecord and a fresh from_genesis() call."
+                "tighten_with rejected — `other` would widen the envelope on "
+                "at least one dimension where the current inner envelope has "
+                "a stricter bound. Widening (loosening any dimension) "
+                "requires a new GenesisRecord and a fresh from_genesis() "
+                "call; intersection cannot silently raise a limit."
+            )
+        tightened = self.inner.intersect(other)
+        # Post-intersection invariant: the intersection MUST be at-least-as-
+        # tight as self.inner (intersect is monotonic — min() never raises a
+        # limit). This is a structural-integrity assertion; a failure here
+        # would indicate a substrate-contract regression in ConstraintEnvelope.
+        if not tightened.is_tighter_than(self.inner):  # pragma: no cover
+            raise EnvelopeWideningError(
+                "tighten_with intersection produced a non-tighter envelope "
+                "despite the pre-intersection widening check passing; this "
+                "indicates a regression in ConstraintEnvelope.intersect."
             )
         return DelegateConstraintEnvelope(inner=tightened, genesis_id=self.genesis_id)

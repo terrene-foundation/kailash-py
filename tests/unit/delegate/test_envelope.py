@@ -101,40 +101,43 @@ def test_tighten_with_equal_envelope_returns_equivalent() -> None:
 
 
 def test_tighten_with_widening_envelope_raises() -> None:
-    """Tightening a None-financial parent with a financial-bearing envelope
-    is a widening (None was unbounded; any value is a NEW constraint that
-    the parent did not have). The wrapper MUST raise EnvelopeWideningError.
+    """Canonical widening case: parent budget=50, child budget=100.
 
-    The is_tighter_than predicate is asymmetric: a more-constrained
-    intersection IS tighter than the parent only when the parent had a
-    bound to tighten. Adding a new dimension to a None-dimension parent
-    is the canonical widening case.
+    Parent has a stricter bound than child on the budget_limit dimension.
+    The child request loosens (raises) the limit. Pre-S2.5 (F1 fix), this
+    silently squashed to parent=50 via ``ConstraintEnvelope.intersect``'s
+    ``min()`` semantics; the F5 invariant the wrapper exists to enforce
+    never fired. Post-fix, the pre-intersection widening check raises
+    ``EnvelopeWideningError`` deterministically.
+    """
+    parent = _envelope_with_budget(50.0)
+    genesis = _make_genesis()
+    delegate_env = DelegateConstraintEnvelope.from_genesis(parent, genesis)
+
+    # Widening attempt: child loosens budget from 50 to 100.
+    widening_child = _envelope_with_budget(100.0)
+    with pytest.raises(EnvelopeWideningError, match="widen"):
+        delegate_env.tighten_with(widening_child)
+
+
+def test_tighten_with_add_dimension_to_unbounded_parent_succeeds() -> None:
+    """Adding a bound to an unbounded parent IS tightening.
+
+    ``None`` on a parent dimension means unbounded (lattice top). Any value
+    on the child is strictly stricter. Per is_tighter_than's contract
+    ("None in other means unrestricted; any value in self is tighter or
+    equal"), the child is tighter than the parent, intersection is safe,
+    and the wrapper succeeds.
     """
     parent_unbounded = ConstraintEnvelope()  # no financial bound
     genesis = _make_genesis()
     delegate_env = DelegateConstraintEnvelope.from_genesis(parent_unbounded, genesis)
 
-    # Adding a financial bound to an unbounded parent is structurally
-    # equivalent to widening (the result would have a dimension the parent
-    # did not constrain — the F5 invariant rejects this path).
-    # If the implementation treats add-dimension as "tightening" (intersect
-    # gives the added bound), the predicate is_tighter_than may still be
-    # True because we're moving from unbounded to bounded. In that case,
-    # this test documents the boundary semantics.
-    tighter_with_budget = _envelope_with_budget(50.0)
-    try:
-        result = delegate_env.tighten_with(tighter_with_budget)
-        # If we reach here, the implementation treats "add bound" as
-        # tightening, which IS the correct semantics: bounded < unbounded
-        # in the lattice. Document via the contract: the result MUST be
-        # at-least-as-tight as the parent (trivially true: unbounded is
-        # the lattice top).
-        assert result.inner.is_tighter_than(parent_unbounded)
-    except EnvelopeWideningError:
-        # If the implementation rejects add-dimension as widening, that
-        # is also a defensible reading of F5. Either disposition keeps
-        # the type-state contract intact.
-        pass
+    result = delegate_env.tighten_with(_envelope_with_budget(50.0))
+    # Result IS tighter than the unbounded parent on the budget dimension.
+    assert result.inner.is_tighter_than(parent_unbounded)
+    assert result.inner.financial is not None
+    assert result.inner.financial.budget_limit == 50.0
 
 
 def test_envelope_is_frozen() -> None:
