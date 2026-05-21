@@ -40,15 +40,13 @@ import hashlib
 import logging
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from kailash.delegate.types import DelegateIdentity
 from kailash.trust._json import canonical_json_dumps
-from kailash.trust.chain import ActionResult, AuditAnchor
-from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
-from kailash.trust.chain import TrustLineageChain
+from kailash.trust.chain import ActionResult, AuditAnchor, TrustLineageChain
 
 logger = logging.getLogger(__name__)
 
