@@ -94,6 +94,22 @@ repos:
         pass_filenames: true
         stages: [pre-commit, manual]
 
+  # kailash.delegate architectural fences (#1035): Apache-2.0 substrate
+  # purity + conformance zero-engine-deps. Runs whenever the delegate
+  # package or the lint script itself changes. Pure-stdlib script; no
+  # external dependencies; resolves the venv via find-venv-python.sh
+  # for worktree compatibility (same pattern as spec-drift-gate above).
+  - repo: local
+    hooks:
+      - id: kailash-delegate-fences
+        name: kailash.delegate Apache-2.0 + zero-engine-deps fences (#1035)
+        description: "Enforce kailash.delegate has zero proprietary dependencies."
+        entry: scripts/development/find-venv-python.sh tools/lint-delegate-fences.py
+        language: system
+        files: ^(src/kailash/delegate/|tools/lint-delegate-fences\.py)
+        pass_filenames: false
+        stages: [pre-commit, manual]
+
   # No untracked TODO-NNN markers in production source (issue #781).
   # See .claude/rules/zero-tolerance.md Rule 2 + Rule 6 — every TODO-NNN
   # marker MUST either carry a tracker link (tracked: gh#NNN) or be
