@@ -49,11 +49,12 @@ from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 def test_delegate_genesis_record_composes_chain_genesis_record() -> None:
     """The composed substrate block is reachable through the wrapper.
 
-    Verifies F4: ``DelegateGenesisRecord.block`` IS the same in-memory
-    object passed in — not a copy, not a re-skin. Mutating the object
-    after composition would be visible through the wrapper (frozen
-    semantics on the wrapper itself, but the wrapped substrate is the
-    canonical record).
+    Verifies F4: ``DelegateGenesisRecord.block`` is a value-snapshot of
+    the in-memory object passed in — a ``dataclasses.replace`` copy with
+    identical canonical bytes (B4, Round 2 sec M-2). Identity differs
+    (post-construction mutation of the original cannot bypass the
+    ``_validate_hex`` check), but canonical-byte equality holds — §249
+    composition is by-VALUE, not by-reference.
     """
     block = GenesisRecord(
         id="g-tier2-0001",
@@ -69,8 +70,11 @@ def test_delegate_genesis_record_composes_chain_genesis_record() -> None:
         capabilities=("read", "delegate"),
     )
 
-    # Identity, not equality — §249 composition.
-    assert delegate_genesis.block is block
+    # B4 snapshot — value equality, NOT identity. Same canonical bytes,
+    # isolated identity so post-construction mutation of `block` cannot
+    # silently invalidate the wrapper's hex-validated signature surface.
+    assert delegate_genesis.block is not block
+    assert delegate_genesis.block == block
     # The convenience accessor surfaces the substrate id.
     assert delegate_genesis.genesis_id == "g-tier2-0001"
 
@@ -80,9 +84,12 @@ def test_delegate_genesis_record_block_powers_trust_lineage_chain() -> None:
     """The substrate block plugs directly into ``TrustLineageChain``.
 
     F10 wiring assertion: a ``DelegateGenesisRecord`` constructed from a
-    ``GenesisRecord`` exposes the SAME substrate object that
+    ``GenesisRecord`` exposes a value-equal substrate object that
     ``TrustLineageChain`` accepts as its ``genesis`` field. The
-    cross-import contract holds end-to-end.
+    cross-import contract holds end-to-end. Post-B4 (Round 2 sec M-2):
+    the wrapper holds a ``dataclasses.replace`` snapshot, so identity
+    with the caller's original block differs — but value equality holds
+    and the chain plug-in semantics are preserved.
     """
     block = GenesisRecord(
         id="g-tier2-0002",
@@ -96,10 +103,13 @@ def test_delegate_genesis_record_block_powers_trust_lineage_chain() -> None:
     # Compose via the Delegate wrapper.
     delegate_genesis = DelegateGenesisRecord(block=block, spec_version="1")
 
-    # The substrate block plugs directly into TrustLineageChain — proving
-    # the composed-not-re-derived contract.
+    # The wrapper's snapshotted block plugs directly into TrustLineageChain.
     chain = TrustLineageChain(genesis=delegate_genesis.block)
-    assert chain.genesis is block
+    # Identity holds against the wrapper's snapshot (the chain consumes
+    # what the wrapper exposes); value equality holds against the caller's
+    # original block.
+    assert chain.genesis is delegate_genesis.block
+    assert chain.genesis == block
     # Chain is a real object with real default initialization.
     assert chain.constraint_envelope is not None
     assert chain.constraint_envelope.agent_id == "agent-tier2-b"

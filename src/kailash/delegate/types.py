@@ -411,6 +411,15 @@ class DelegateGenesisRecord:
                 expected_len=128,
                 field_name="DelegateGenesisRecord.block.signature (Ed25519)",
             )
+        # B4 (Round 2 sec M-2): snapshot the composed substrate block so
+        # post-construction mutation of the original is invisible through
+        # the wrapper. Without this, a caller can mutate ``block.signature``
+        # AFTER construction; ``_validate_hex`` fires once and never re-fires,
+        # leaving the wrapper holding a now-invalid hex signature with no
+        # signal. ``dataclasses.replace`` produces a new instance with the
+        # same field values — same canonical bytes, isolated identity.
+        snapshot = dataclasses.replace(self.block)
+        object.__setattr__(self, "block", snapshot)
         # Coerce iterable to tuple for frozen immutability.
         if not isinstance(self.capabilities, tuple):
             object.__setattr__(self, "capabilities", tuple(self.capabilities))

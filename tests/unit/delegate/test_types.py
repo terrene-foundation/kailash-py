@@ -329,13 +329,43 @@ def test_delegate_genesis_record_frozen() -> None:
 
 
 def test_delegate_genesis_record_composes_substrate_block() -> None:
-    """Per §249 — block is held verbatim, not re-derived."""
+    """Per §249 — block is composed by value (snapshot), not by reference.
+
+    B4 (Round 2 sec M-2): the wrapper takes a ``dataclasses.replace``
+    snapshot of the substrate block in ``__post_init__`` so that
+    post-construction mutation of the original is invisible through
+    the wrapper. The snapshot has identical canonical bytes (same
+    cryptographic identity) but isolated Python identity.
+    """
     block = _substrate_genesis()
     g = DelegateGenesisRecord(block=block, spec_version="1", capabilities=())
-    assert g.block is block
+    # Snapshot identity: NOT the same Python object, but value-equal.
+    assert g.block is not block
+    assert g.block == block
     # The composed block remains the canonical source of cryptographic
     # fields. genesis_id is a convenience accessor.
     assert g.genesis_id == block.id
+
+
+def test_delegate_genesis_record_snapshot_isolates_post_construction_mutation() -> None:
+    """B4 (Round 2 sec M-2): mutating the ORIGINAL block does not affect
+    the wrapper's composed block.
+
+    Without the ``dataclasses.replace`` snapshot in ``__post_init__``, a
+    caller could mutate ``block.signature`` AFTER construction; the
+    ``_validate_hex`` check fires once at construction and never re-fires,
+    leaving the wrapper holding a now-invalid hex signature with no
+    structural signal. Snapshotting the block makes the wrapper's view
+    immune to such mutation.
+    """
+    block = _substrate_genesis(signature="d" * 128)
+    g = DelegateGenesisRecord(block=block, spec_version="1")
+    # Mutate the ORIGINAL block's signature post-construction — would be
+    # invisible-but-tampering without B4's snapshot.
+    block.signature = "e" * 128
+    # The wrapper retains the validated, canonical bytes.
+    assert g.block.signature == "d" * 128
+    assert block.signature == "e" * 128  # original is mutated, snapshot is not
 
 
 def test_delegate_genesis_record_rejects_non_substrate_block() -> None:
