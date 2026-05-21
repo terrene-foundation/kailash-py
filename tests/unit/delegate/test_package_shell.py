@@ -23,12 +23,21 @@ DELEGATE_PKG = REPO_ROOT / "src" / "kailash" / "delegate"
 
 
 def test_kailash_delegate_imports_cleanly() -> None:
+    """Public surface count is the structural defense per orphan-detection.md
+    Rule 6a (Merge-Time ``__all__`` Reconciliation). When S3+ shards land new
+    symbols this count MUST move in lockstep -- a silent drop is the failure
+    mode this assertion catches."""
     import kailash.delegate as pkg
 
-    assert pkg.__all__ == [], (
-        "S1 ships an empty public surface; later shards populate __all__. "
-        f"Got: {pkg.__all__!r}"
+    assert len(pkg.__all__) == 11, (
+        "kailash.delegate.__all__ count drifted; S2 ships 11 symbols. "
+        "If a later shard added a symbol, update this count in the same commit "
+        f"per orphan-detection.md Rule 6a. Got: {pkg.__all__!r}"
     )
+    # Every entry MUST resolve to a real attribute on the package (eager-
+    # import contract from orphan-detection.md Rule 6).
+    for name in pkg.__all__:
+        assert hasattr(pkg, name), f"__all__ entry {name!r} not on package"
 
 
 def test_kailash_delegate_conformance_imports_cleanly() -> None:
