@@ -267,16 +267,25 @@ class DelegateIdentity:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> DelegateIdentity:
-        """Validating constructor from a wire dict (S3 H2 deferral closure).
+        """Construct from a JSON-native payload with type coercion + field-
+        presence validation (S3 H2 deferral closure).
 
-        Every required field MUST be present; types are coerced from JSON-
-        native (``str``) back to Python-native (``uuid.UUID``); every
-        post-init invariant fires after coercion. Missing or wrong-typed
-        fields raise :class:`ValueError` / :class:`TypeError`.
+        B4 (analyst H-3) — honest description of what this constructor does
+        relative to the bare ``__init__``:
 
-        This is the audit-grade ingest path; bare ``__init__`` is the in-
-        process path. Cross-SDK ingest MUST route through this constructor
-        so the validating gate fires on every externally-sourced identity.
+        - The underlying invariants (UUID format on ``delegate_id``,
+          non-emptiness of each ``*_ref``, path-traversal rejection via
+          ``kailash.trust._locking.validate_id``) are enforced by
+          ``__post_init__`` and ALSO fire on the bare ``__init__`` path.
+        - This classmethod adds two contributions on top: (1) JSON-native
+          ``str`` → Python-native ``uuid.UUID`` coercion for ``delegate_id``,
+          and (2) field-presence checks that raise :class:`ValueError` /
+          :class:`TypeError` with a missing-field / wrong-type message
+          rather than ``KeyError``.
+
+        Convenience loader for cross-SDK JSON ingest. Bare ``__init__``
+        remains the in-process path when callers already have UUIDs +
+        strings in hand.
         """
         if not isinstance(payload, dict):
             raise TypeError(

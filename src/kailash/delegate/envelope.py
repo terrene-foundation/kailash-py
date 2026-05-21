@@ -189,17 +189,23 @@ class DelegateConstraintEnvelope:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> DelegateConstraintEnvelope:
-        """Validating constructor from a wire dict (S3 H2 deferral closure).
+        """Construct from a JSON-native payload with field-presence
+        validation + inner-envelope delegation (S3 H2 deferral closure).
 
-        Both required fields MUST be present; the inner dict is delegated
-        to the substrate's :meth:`ConstraintEnvelope.from_dict` (which
-        carries its own validation gates). Missing or wrong-typed fields
-        raise :class:`ValueError` / :class:`TypeError`.
+        B4 (analyst H-3) — honest description of what this constructor does
+        relative to the bare ``__init__``:
 
-        This is the audit-grade ingest path; bare ``__init__`` and
-        :meth:`from_genesis` are the in-process paths. Cross-SDK ingest
-        MUST route through this constructor so the validating gate fires
-        on every externally-sourced envelope wrapper.
+        - The genesis_id non-emptiness invariant is checked here at the
+          field-presence layer. The inner :class:`ConstraintEnvelope`'s own
+          per-dimension contract is enforced by the substrate's
+          :meth:`ConstraintEnvelope.from_dict`.
+        - This classmethod adds field-presence checks that raise
+          :class:`ValueError` / :class:`TypeError` with a missing-field /
+          wrong-type message rather than ``KeyError``, plus the structural
+          guard that the inner payload is a dict.
+
+        Convenience loader for cross-SDK JSON ingest. Bare ``__init__`` and
+        :meth:`from_genesis` remain the in-process paths.
         """
         if not isinstance(payload, dict):
             raise TypeError(
