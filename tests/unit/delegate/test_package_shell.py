@@ -29,8 +29,9 @@ def test_kailash_delegate_imports_cleanly() -> None:
     mode this assertion catches."""
     import kailash.delegate as pkg
 
-    assert len(pkg.__all__) == 11, (
-        "kailash.delegate.__all__ count drifted; S2 ships 11 symbols. "
+    assert len(pkg.__all__) == 30, (
+        "kailash.delegate.__all__ count drifted; S5 ships 30 symbols "
+        "(S2: 11 + S3 trust cascade: 5 + S4 audit chain: 7 + S5 dispatch: 7). "
         "If a later shard added a symbol, update this count in the same commit "
         f"per orphan-detection.md Rule 6a. Got: {pkg.__all__!r}"
     )

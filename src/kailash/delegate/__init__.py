@@ -27,6 +27,15 @@ from kailash.delegate.audit import (
     DelegateEventType,
     WitnessedCrossAnchor,
 )
+from kailash.delegate.dispatch import (
+    Connector,
+    ConnectorInvocationResult,
+    DispatchCascadeViolationError,
+    DispatchEnvelopeViolationError,
+    DispatchResult,
+    DispatchSurface,
+    DispatchValidationError,
+)
 from kailash.delegate.envelope import (
     DelegateConstraintEnvelope,
     EnvelopeWideningError,
@@ -80,4 +89,12 @@ __all__ = [
     "AuditChainEmissionError",
     "AuditChainSignatureError",
     "CrossAnchorIntegrityError",
+    # Group 7 -- Dispatch + Connector (S5)
+    "Connector",
+    "ConnectorInvocationResult",
+    "DispatchSurface",
+    "DispatchResult",
+    "DispatchValidationError",
+    "DispatchEnvelopeViolationError",
+    "DispatchCascadeViolationError",
 ]
