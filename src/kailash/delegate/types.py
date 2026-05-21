@@ -188,9 +188,11 @@ class DelegateIdentity:
     in rs). A Delegate that cannot name its sovereign / role binding /
     genesis is not a valid identity.
 
-    Deferred to S3 (#1035 follow-up): from_dict validating constructor
-    closes the direct-dataclass-construction bypass; tracking via
-    workspace todos.
+    S3 (#1035) — the H2 deferral closes here: :meth:`from_dict` is the
+    audit-grade validating constructor that closes the direct-dataclass-
+    construction bypass. Cross-SDK ingest paths route through
+    :meth:`from_dict`; the bare ``__init__`` continues to work for in-
+    process construction.
 
     Args:
         delegate_id: Opaque Delegate identifier (``uuid.UUID``).
@@ -244,6 +246,95 @@ class DelegateIdentity:
             _validate_id(self.genesis_ref)
         except ValueError as exc:
             raise ValueError(f"DelegateIdentity.genesis_ref rejected: {exc}") from exc
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the canonical wire dict for cross-SDK round-trip (S3 H2).
+
+        Mirrors the EATP SDK convention: ``uuid.UUID`` serializes to its
+        string form; the three ``*_ref`` fields pass through verbatim
+        (already validated as non-empty + path-safe strings).
+
+        Pair with :meth:`from_dict` for round-trip; consumers serialize
+        via :func:`kailash.trust._json.canonical_json_dumps` for cross-SDK
+        byte parity.
+        """
+        return {
+            "delegate_id": str(self.delegate_id),
+            "sovereign_ref": self.sovereign_ref,
+            "role_binding_ref": self.role_binding_ref,
+            "genesis_ref": self.genesis_ref,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> DelegateIdentity:
+        """Construct from a JSON-native payload with type coercion + field-
+        presence validation (S3 H2 deferral closure).
+
+        B4 (analyst H-3) — honest description of what this constructor does
+        relative to the bare ``__init__``:
+
+        - The underlying invariants (UUID format on ``delegate_id``,
+          non-emptiness of each ``*_ref``, path-traversal rejection via
+          ``kailash.trust._locking.validate_id``) are enforced by
+          ``__post_init__`` and ALSO fire on the bare ``__init__`` path.
+        - This classmethod adds two contributions on top: (1) JSON-native
+          ``str`` → Python-native ``uuid.UUID`` coercion for ``delegate_id``,
+          and (2) field-presence checks that raise :class:`ValueError` /
+          :class:`TypeError` with a missing-field / wrong-type message
+          rather than ``KeyError``.
+
+        Convenience loader for cross-SDK JSON ingest. Bare ``__init__``
+        remains the in-process path when callers already have UUIDs +
+        strings in hand.
+        """
+        if not isinstance(payload, dict):
+            raise TypeError(
+                "DelegateIdentity.from_dict requires a dict; got "
+                f"{type(payload).__name__}"
+            )
+        missing = {
+            "delegate_id",
+            "sovereign_ref",
+            "role_binding_ref",
+            "genesis_ref",
+        } - set(payload)
+        if missing:
+            raise ValueError(
+                f"DelegateIdentity.from_dict missing required field(s): "
+                f"{sorted(missing)}"
+            )
+        raw_id = payload["delegate_id"]
+        if isinstance(raw_id, uuid.UUID):
+            delegate_id = raw_id
+        elif isinstance(raw_id, str):
+            try:
+                delegate_id = uuid.UUID(raw_id)
+            except (ValueError, AttributeError) as exc:
+                raise ValueError(
+                    f"DelegateIdentity.from_dict: delegate_id is not a "
+                    f"valid UUID string ({raw_id!r}); cross-SDK wire "
+                    f"format requires canonical UUID hex"
+                ) from exc
+        else:
+            raise TypeError(
+                "DelegateIdentity.from_dict: delegate_id MUST be a str or "
+                f"uuid.UUID; got {type(raw_id).__name__}"
+            )
+        # Coerce ref fields to str defensively — JSON natives are already
+        # str, but in-process callers may pass non-str by mistake; let the
+        # __post_init__ validate_id check do the path-traversal rejection.
+        for field_name in ("sovereign_ref", "role_binding_ref", "genesis_ref"):
+            if not isinstance(payload[field_name], str):
+                raise TypeError(
+                    f"DelegateIdentity.from_dict: {field_name} MUST be a str; "
+                    f"got {type(payload[field_name]).__name__}"
+                )
+        return cls(
+            delegate_id=delegate_id,
+            sovereign_ref=payload["sovereign_ref"],
+            role_binding_ref=payload["role_binding_ref"],
+            genesis_ref=payload["genesis_ref"],
+        )
 
 
 # ---------------------------------------------------------------------------
