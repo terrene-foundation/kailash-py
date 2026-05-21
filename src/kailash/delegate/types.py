@@ -35,11 +35,11 @@ is tighten-only (F5 invariant — see :mod:`kailash.delegate.envelope`).
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -513,14 +513,3 @@ class PrincipalDirectory:
             if ident.delegate_id == delegate_id:
                 return ident
         return None
-
-
-# ---------------------------------------------------------------------------
-# Datetime helper (kept as a convenience for callers constructing the
-# substrate GenesisRecord with tz-aware timestamps)
-# ---------------------------------------------------------------------------
-
-
-def _utc_now() -> datetime:
-    """Return a timezone-aware UTC ``datetime.now()`` (cross-SDK convention)."""
-    return datetime.now(timezone.utc)
