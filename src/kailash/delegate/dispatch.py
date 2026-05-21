@@ -266,10 +266,32 @@ class Connector(abc.ABC):
         # carry a meaningful identifier. Empty string at the subclass
         # level is BLOCKED (the ABC's empty default cannot satisfy this
         # check).
-        if not cls.__abstractmethods__:
-            # Only enforce on concrete subclasses (abstract intermediate
-            # base classes may legitimately defer metadata to their own
-            # concrete subclasses).
+        #
+        # __init_subclass__ runs BEFORE ABCMeta computes
+        # __abstractmethods__ on the new class; use getattr with a
+        # default to handle both ordering paths. The subclass is
+        # "concrete" iff it overrode the abstract invoke method (so the
+        # abstract set, when populated, will be empty).
+        abstract_methods = getattr(cls, "__abstractmethods__", frozenset())
+        # Detect concrete subclasses: they MUST have overridden invoke
+        # such that it's no longer the ABC's abstract method.
+        invoke = cls.__dict__.get("invoke")
+        is_concrete = invoke is not None and not getattr(
+            invoke, "__isabstractmethod__", False
+        )
+        # Also concrete if abstract_methods is populated and empty
+        # (post-ABCMeta computation path).
+        if not is_concrete and abstract_methods == frozenset():
+            # Check whether invoke was inherited as abstract.
+            inherited_invoke = getattr(cls, "invoke", None)
+            if inherited_invoke is not None and not getattr(
+                inherited_invoke, "__isabstractmethod__", False
+            ):
+                is_concrete = True
+        if is_concrete:
+            # Concrete subclass — enforce metadata declaration. Abstract
+            # intermediate base classes may legitimately defer metadata
+            # to their own concrete subclasses.
             if not isinstance(cls.connector_id, str) or not cls.connector_id:
                 raise TypeError(
                     f"Connector subclass {cls.__name__!r} MUST declare a "
