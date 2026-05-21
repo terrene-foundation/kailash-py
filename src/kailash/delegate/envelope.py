@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from kailash.delegate.types import DelegateGenesisRecord
 from kailash.trust.envelope import ConstraintEnvelope
@@ -77,9 +78,11 @@ class DelegateConstraintEnvelope:
     on the resulting envelope chain back to the originating GenesisRecord
     without re-rooting.
 
-    Deferred to S3 (#1035 follow-up): from_dict validating constructor
-    closes the direct-dataclass-construction bypass per Round 1 sec H2;
-    tracking via workspace todos.
+    S3 (#1035) — the H2 deferral closes here: :meth:`from_dict` is the
+    audit-grade validating constructor that closes the direct-dataclass-
+    construction bypass. Cross-SDK ingest routes through :meth:`from_dict`;
+    the bare ``__init__`` and :meth:`from_genesis` continue to work for in-
+    process construction.
     """
 
     inner: ConstraintEnvelope
@@ -166,3 +169,67 @@ class DelegateConstraintEnvelope:
                 "indicates a regression in ConstraintEnvelope.intersect."
             )
         return DelegateConstraintEnvelope(inner=tightened, genesis_id=self.genesis_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the canonical wire dict for cross-SDK round-trip (S3 H2).
+
+        Delegates the inner envelope serialization to the substrate's own
+        :meth:`ConstraintEnvelope.to_dict` (the canonical wire format
+        already shared across SDKs) and adds the spine-level
+        :attr:`genesis_id` alongside.
+
+        Pair with :meth:`from_dict` for round-trip; consumers serialize
+        via :func:`kailash.trust._json.canonical_json_dumps` for cross-SDK
+        byte parity.
+        """
+        return {
+            "inner": self.inner.to_dict(),
+            "genesis_id": self.genesis_id,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> DelegateConstraintEnvelope:
+        """Validating constructor from a wire dict (S3 H2 deferral closure).
+
+        Both required fields MUST be present; the inner dict is delegated
+        to the substrate's :meth:`ConstraintEnvelope.from_dict` (which
+        carries its own validation gates). Missing or wrong-typed fields
+        raise :class:`ValueError` / :class:`TypeError`.
+
+        This is the audit-grade ingest path; bare ``__init__`` and
+        :meth:`from_genesis` are the in-process paths. Cross-SDK ingest
+        MUST route through this constructor so the validating gate fires
+        on every externally-sourced envelope wrapper.
+        """
+        if not isinstance(payload, dict):
+            raise TypeError(
+                "DelegateConstraintEnvelope.from_dict requires a dict; got "
+                f"{type(payload).__name__}"
+            )
+        missing = {"inner", "genesis_id"} - set(payload)
+        if missing:
+            raise ValueError(
+                f"DelegateConstraintEnvelope.from_dict missing required "
+                f"field(s): {sorted(missing)}"
+            )
+        inner_payload = payload["inner"]
+        if not isinstance(inner_payload, dict):
+            raise TypeError(
+                "DelegateConstraintEnvelope.from_dict: inner MUST be a "
+                f"dict; got {type(inner_payload).__name__}"
+            )
+        genesis_id = payload["genesis_id"]
+        if not isinstance(genesis_id, str):
+            raise TypeError(
+                "DelegateConstraintEnvelope.from_dict: genesis_id MUST be "
+                f"a str; got {type(genesis_id).__name__}"
+            )
+        if not genesis_id:
+            raise ValueError(
+                "DelegateConstraintEnvelope.from_dict: genesis_id MUST be "
+                "a non-empty string"
+            )
+        # Delegate inner envelope reconstruction to the substrate's own
+        # validating constructor; it owns the per-dimension contract.
+        inner = ConstraintEnvelope.from_dict(inner_payload)
+        return cls(inner=inner, genesis_id=genesis_id)
