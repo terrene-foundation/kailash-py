@@ -17,8 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LINT_SCRIPT = REPO_ROOT / "tools" / "lint-delegate-fences.py"
 DELEGATE_PKG = REPO_ROOT / "src" / "kailash" / "delegate"
@@ -59,9 +57,7 @@ def test_lint_script_exit_zero_on_clean_tree() -> None:
     )
 
 
-def test_lint_script_detects_proprietary_import(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> None:
+def test_lint_script_detects_proprietary_import() -> None:
     """Plant a temp file with a forbidden import; lint MUST exit 1."""
     forbidden = DELEGATE_PKG / "_s1_fence_probe.py"
     assert not forbidden.exists(), (
@@ -91,9 +87,7 @@ def test_lint_script_detects_proprietary_import(
         forbidden.unlink(missing_ok=True)
 
 
-def test_lint_script_detects_conformance_engine_import(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> None:
+def test_lint_script_detects_conformance_engine_import() -> None:
     """Plant a temp file in conformance/ that imports an engine module.
 
     Fence B says conformance/ may not import kailash.delegate.{runtime,
