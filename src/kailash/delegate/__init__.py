@@ -18,9 +18,25 @@ Per #1035: this package MUST have zero proprietary dependencies. The
 
 # Public surface -- S2 types substrate. Later shards (S3-S8) extend this list
 # via parallel-shard merges per orphan-detection.md Rule 6a.
+from kailash.delegate.audit import (
+    AuditChainEmissionError,
+    AuditChainEngine,
+    AuditChainEntry,
+    AuditChainSignatureError,
+    CrossAnchorIntegrityError,
+    DelegateEventType,
+    WitnessedCrossAnchor,
+)
 from kailash.delegate.envelope import (
     DelegateConstraintEnvelope,
     EnvelopeWideningError,
+)
+from kailash.delegate.trust import (
+    CascadeScopeExpansionError,
+    CascadeTenantViolationError,
+    GrantMoment,
+    TenantScope,
+    TenantScopedCascade,
 )
 from kailash.delegate.types import (
     CapabilitySet,
@@ -50,4 +66,18 @@ __all__ = [
     "LifecycleError",
     # Group 4 -- Genesis composition (S2.5 F4)
     "DelegateGenesisRecord",
+    # Group 5 -- Trust cascade (S3 -- TenantScope, GrantMoment)
+    "TenantScope",
+    "TenantScopedCascade",
+    "GrantMoment",
+    "CascadeTenantViolationError",
+    "CascadeScopeExpansionError",
+    # Group 6 -- Audit chain (S4 -- AuditChainEngine, WitnessedCrossAnchor)
+    "AuditChainEngine",
+    "AuditChainEntry",
+    "WitnessedCrossAnchor",
+    "DelegateEventType",
+    "AuditChainEmissionError",
+    "AuditChainSignatureError",
+    "CrossAnchorIntegrityError",
 ]
