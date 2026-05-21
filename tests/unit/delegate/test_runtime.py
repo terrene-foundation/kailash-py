@@ -666,11 +666,18 @@ def test_with_posture_upgrade_without_nonce_refused() -> None:
 
 @pytest.mark.unit
 def test_with_posture_upgrade_with_nonce_accepted() -> None:
-    """Upgrade with non-empty nonce is accepted."""
+    """Upgrade with sufficiently-long nonce is accepted.
+
+    Per S6 R1 C1 fix: nonce MUST be >= _MIN_NONCE_LENGTH (16) chars
+    to satisfy the SYNTACTIC posture-upgrade gate. The runtime does
+    NOT validate the nonce cryptographically — S8 nonce-registry
+    integration owns that — but the length floor closes the trivial
+    truthy-string bypass (any non-empty string used to pass).
+    """
     runtime, _, _ = _build_runtime(posture=Posture.L2_SUPERVISED)
     new_runtime = runtime.with_posture(
         Posture.L4_CONTINUOUS_INSIGHT,
-        human_acknowledged_nonce="ack-12345",
+        human_acknowledged_nonce="ack-1234567890abcd",  # 18 chars >= 16
     )
     assert new_runtime.posture == Posture.L4_CONTINUOUS_INSIGHT
 
@@ -749,15 +756,23 @@ async def test_execute_posture_halt_refuses_at_thinking() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_execute_dispatch_failure_transitions_to_failed() -> None:
-    """Dispatch raises → TAODState lands in FAILED."""
+    """Dispatch raises → TAODState lands in FAILED.
+
+    Per S6 R1 LOW-1: the TAOD reason field is SANITIZED — only the
+    exception class name leaks to the observable
+    ``RuntimeExecutionResult.to_dict()`` surface. The full
+    ``str(exc)`` lives in the audit chain's signed payload (sized to
+    forensic verification surface), NOT on the public reason field.
+    """
     connector = _MockConnector(raise_exc=RuntimeError("boom"))
     runtime, _, _ = _build_runtime(connector=connector)
     result = await runtime.execute({"id": "x-fail"})
     assert result.taod_state.phase == "failed"
     last_transition = result.taod_state.transitions[-1]
     assert last_transition.to_phase == "failed"
-    assert "boom" in (last_transition.reason or "")
+    # Sanitized reason — class name only, raw exception message MUST NOT bleed.
     assert "RuntimeError" in (last_transition.reason or "")
+    assert "boom" not in (last_transition.reason or "")
 
 
 @pytest.mark.unit
@@ -812,3 +827,184 @@ async def test_execute_run_id_is_uuid4() -> None:
     result = await runtime.execute({"id": "x-uuid"})
     assert isinstance(result.run_id, uuid.UUID)
     assert result.run_id.version == 4
+
+
+# ---------------------------------------------------------------------------
+# S6 R1 fix-immediately tests — A3/D1, C1, MED-1, LOW-1
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_audit_emit_failure_during_thinking_phase_keeps_state_consistent() -> (
+    None
+):
+    """S6 R1 A3/D1: audit emit BEFORE state advance.
+
+    When ``_emit_phase_audit`` raises during the THINKING transition,
+    the state MUST NOT advance to "thinking" with no audit record.
+    Instead, the runtime transitions to FAILED with a SANITIZED reason
+    naming only the failure phase + exception class — no recursion
+    into another audit emit (the audit subsystem itself broke), and
+    no exception propagates from execute() (the no-throw contract is
+    preserved).
+    """
+    runtime, _, audit_engine = _build_runtime()
+
+    # Force the audit engine's emit_event to raise on the FIRST call
+    # (which is the THINKING transition's audit). State at that point
+    # is still "initiated" — must transition directly to "failed".
+    call_count = {"n": 0}
+    original_emit = audit_engine.emit_event
+
+    def _raising_emit(*args: Any, **kwargs: Any) -> Any:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("audit-subsystem-broken")
+        return original_emit(*args, **kwargs)
+
+    audit_engine.emit_event = _raising_emit  # type: ignore[method-assign]
+
+    # No exception propagates; FAILED transition is observable.
+    result = await runtime.execute({"id": "x-audit-fail"})
+    assert result.taod_state.phase == "failed"
+    # Only one transition: initiated→failed; thinking was never
+    # entered because the audit emit failed first.
+    transitions = result.taod_state.transitions
+    assert len(transitions) == 1
+    assert transitions[0].from_phase == "initiated"
+    assert transitions[0].to_phase == "failed"
+    # Reason cites the failed phase + audit-exception class — NOT the
+    # raw exception message (LOW-1 sanitization discipline).
+    reason = transitions[0].reason or ""
+    assert "thinking" in reason
+    assert "RuntimeError" in reason
+    assert "audit-subsystem-broken" not in reason
+
+
+@pytest.mark.unit
+def test_posture_upgrade_rejects_short_nonce() -> None:
+    """S6 R1 C1: nonce shorter than _MIN_NONCE_LENGTH (16) is refused.
+
+    A truthy one-char string used to satisfy the upgrade gate; the
+    hardened SYNTACTIC check rejects any nonce shorter than 16 chars
+    so the trivial bypass surface ("x" satisfied the gate) is closed.
+    """
+    runtime, _, _ = _build_runtime(posture=Posture.L2_SUPERVISED)
+    with pytest.raises(RuntimePostureBlockedError, match="length >= 16"):
+        runtime.with_posture(Posture.L5_DELEGATED, human_acknowledged_nonce="x")
+
+
+@pytest.mark.unit
+def test_posture_upgrade_accepts_sixteen_char_nonce() -> None:
+    """S6 R1 C1: nonce of exactly _MIN_NONCE_LENGTH (16) chars is accepted.
+
+    Boundary test: at the floor the gate admits the upgrade. The
+    audit-event side-effect of with_posture (S6 R1 MED-1) also fires
+    cleanly — no posture-blocked-error from audit emission.
+    """
+    runtime, _, _ = _build_runtime(posture=Posture.L2_SUPERVISED)
+    new_runtime = runtime.with_posture(
+        Posture.L5_DELEGATED,
+        human_acknowledged_nonce="x" * 16,
+    )
+    assert new_runtime.posture == Posture.L5_DELEGATED
+
+
+@pytest.mark.unit
+def test_with_posture_emits_audit_event_on_source_runtime() -> None:
+    """S6 R1 MED-1: every posture rotation emits an audit event.
+
+    Posture rotations (both upgrades AND downgrades) are
+    security-relevant transitions; an attacker holding a legitimate
+    L5_DELEGATED runtime that could call .with_posture(L1) silently
+    would leave the downgrade invisible to forensic correlation. The
+    audit event MUST land on the source runtime's audit engine and
+    carry from_posture, to_posture, and rank_delta in the payload.
+    """
+    runtime, _, audit_engine = _build_runtime(posture=Posture.L5_DELEGATED)
+    pre_count = len(audit_engine.entries)
+
+    # Downgrade (no nonce required) — MUST still emit.
+    new_runtime = runtime.with_posture(Posture.L2_SUPERVISED)
+    assert new_runtime.posture == Posture.L2_SUPERVISED
+
+    post_count = len(audit_engine.entries)
+    assert post_count - pre_count == 1
+    rotation_entry = audit_engine.entries[-1]
+    # Event type is POSTURE_OR_SOVEREIGN_HANDOVER per S6 contract.
+    assert (
+        rotation_entry.event_type
+        == DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value
+    )
+    payload = rotation_entry.event_payload
+    assert payload["from_posture"] == "L5_DELEGATED"
+    assert payload["to_posture"] == "L2_SUPERVISED"
+    assert payload["rank_delta"] == -3  # 2 - 5
+    assert payload["nonce_present"] is False  # downgrade carries no nonce
+    assert "rotation_id" in payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_failed_reason_field_is_sanitized() -> None:
+    """S6 R1 LOW-1: FAILED transition reason is sanitized for to_dict.
+
+    The TAOD state's reason field is the OBSERVABLE surface exposed
+    via RuntimeExecutionResult.to_dict() → downstream logs/aggregators
+    per observability.md Rule 8. Schema-revealing adapter-internal
+    messages MUST NOT bleed into the reason field; the full message
+    lives in the signed audit-event payload (already sized to
+    forensic verification surface).
+    """
+    # Induce a dispatch error with a distinctive raw message —
+    # the message MUST NOT appear in the TAOD reason field.
+    sensitive_msg = "SENSITIVE_ADAPTER_INTERNAL_DETAIL_XYZ"
+    connector = _MockConnector(raise_exc=ValueError(sensitive_msg))
+    runtime, _, audit_engine = _build_runtime(connector=connector)
+    result = await runtime.execute({"id": "x-low1"})
+
+    # Verify dispatch did fail
+    assert result.taod_state.phase == "failed"
+    last_transition = result.taod_state.transitions[-1]
+    assert last_transition.to_phase == "failed"
+
+    # Critical: raw exception message MUST NOT appear in the
+    # observable reason field
+    reason = last_transition.reason or ""
+    assert sensitive_msg not in reason
+    # Class name IS allowed in reason (taxonomy signal)
+    assert "ValueError" in reason
+
+    # But the audit payload SHOULD carry the full message (signed +
+    # bounded forensic surface). Find the FAILED audit entry.
+    failed_entries = [
+        e
+        for e in audit_engine.entries
+        if e.event_payload.get("phase") == "failed"
+        and e.event_payload.get("reason") == "dispatch_error"
+    ]
+    assert len(failed_entries) == 1
+    assert failed_entries[0].event_payload["error_message"] == sensitive_msg
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_to_dict_does_not_leak_raw_exception_message() -> None:
+    """S6 R1 LOW-1: round-trip TAODState.to_dict() never carries raw exc.
+
+    Direct verification of the observability contract: the dict
+    payload that flows into downstream consumers MUST NOT carry the
+    raw adapter-internal exception message anywhere — not in the
+    reason field, not as a substring of any other field.
+    """
+    sensitive_msg = "DOWNSTREAM_SCHEMA_LEAK_CANARY"
+    connector = _MockConnector(raise_exc=RuntimeError(sensitive_msg))
+    runtime, _, _ = _build_runtime(connector=connector)
+    result = await runtime.execute({"id": "x-leak"})
+
+    # Walk the to_dict() payload for any occurrence of the sensitive
+    # message. Stringify the entire dict so a nested embedding would
+    # be caught.
+    state_dict_str = str(result.taod_state.to_dict())
+    assert sensitive_msg not in state_dict_str

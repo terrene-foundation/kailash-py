@@ -105,6 +105,19 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
+# Minimum length for a structurally-acceptable posture-upgrade nonce.
+# The runtime's check is SYNTACTIC ONLY — cryptographic nonce validation
+# (single-use, signed by human authority, expiry) lives in SessionStart /
+# S8 nonce-registry integration. The length floor closes the trivial
+# truthy-string bypass surfaced at S6 Round 1 (C1): with no minimum, any
+# non-empty string (e.g. " ") satisfied the gate and produced a fake
+# safety property semantically indistinguishable from S5 C2-1 fake
+# authentication. 16 chars is the symmetric mirror of the rs reference's
+# minimum-length placeholder for the same gate; both sides converge on
+# the same floor so cross-SDK posture-rotation receipts remain comparable.
+_MIN_NONCE_LENGTH: int = 16
+
+
 class Posture(str, Enum):
     """Graduated autonomy posture per ``rules/trust-posture.md``.
 
@@ -1041,11 +1054,17 @@ class DelegateRuntime:
 
         Args:
             posture: The new :class:`Posture` to bind.
-            human_acknowledged_nonce: Required for upgrades. The runtime
-                does NOT validate the nonce against any registry here —
-                the SessionStart hook owns nonce issuance + validation
-                (S8 scope). The runtime's check is purely STRUCTURAL:
-                an upgrade MUST be paired with a non-empty nonce string.
+            human_acknowledged_nonce: Required for upgrades. The
+                runtime's nonce check is purely **SYNTACTIC**: it
+                rejects empty AND short (``< _MIN_NONCE_LENGTH`` = 16
+                chars) values only. Cryptographic nonce validation
+                (single-use, signed by human authority, expiry) is
+                **deferred to SessionStart / S8 nonce-registry
+                integration**; the runtime's gate is a structural
+                placeholder, NOT a cryptographic check. Callers MUST
+                treat this gate as the trivial-bypass closure (no
+                empty / one-char nonces) and rely on S8 to harden
+                against replayed-or-forged nonces.
 
         Returns:
             A NEW :class:`DelegateRuntime` with the changed posture,
@@ -1053,7 +1072,11 @@ class DelegateRuntime:
 
         Raises:
             RuntimePostureBlockedError: upgrade attempted without a
-                non-empty ``human_acknowledged_nonce``.
+                ``human_acknowledged_nonce`` of length
+                ``>= _MIN_NONCE_LENGTH`` (16) characters, OR audit
+                emission of the posture-rotation event failed (the
+                rotation is structurally invalid if it cannot be
+                audited).
             TypeError: ``posture`` is not a :class:`Posture` value.
         """
         if not isinstance(posture, Posture):
@@ -1065,13 +1088,61 @@ class DelegateRuntime:
         # (same posture) is a no-op upgrade (rank delta zero) and is
         # admitted without a nonce.
         if posture._rank > self._posture._rank:
-            if not human_acknowledged_nonce:
+            nonce_length = (
+                len(human_acknowledged_nonce) if human_acknowledged_nonce else 0
+            )
+            if nonce_length < _MIN_NONCE_LENGTH:
                 raise RuntimePostureBlockedError(
                     f"Posture upgrade {self._posture.value!r} → "
                     f"{posture.value!r} requires human_acknowledged_nonce "
-                    "(rules/trust-posture.md MUST Rule 3); downgrades are "
-                    "silent, upgrades are gated"
+                    f"of length >= {_MIN_NONCE_LENGTH} (got {nonce_length}); "
+                    "runtime's check is a SYNTACTIC placeholder — "
+                    "cryptographic validation lives in SessionStart/S8 "
+                    "nonce-registry integration (rules/trust-posture.md "
+                    "MUST Rule 3)"
                 )
+
+        # Emit a POSTURE_OR_SOVEREIGN_HANDOVER audit event on the
+        # SOURCE runtime's audit engine BEFORE returning the new
+        # runtime. Posture rotations (both upgrades AND downgrades)
+        # are security-relevant transitions: an attacker holding a
+        # legitimate L5_DELEGATED runtime that could call
+        # ``with_posture(L1)`` without an audit trail would leave the
+        # downgrade invisible to forensic correlation. Audit-before-
+        # rotate is the S6 R1 MED-1 fix; if the audit emission fails,
+        # the rotation is refused (structurally invalid: a rotation
+        # that cannot be audited cannot be trusted). This mirrors the
+        # S6 R1 A3/D1 emit-before-state-advance invariant applied to
+        # the posture transition surface.
+        rotation_payload = {
+            "rotation_id": str(uuid.UUID(bytes=secrets.token_bytes(16), version=4)),
+            "from_posture": self._posture.value,
+            "to_posture": posture.value,
+            "rank_delta": posture._rank - self._posture._rank,
+            "nonce_present": bool(human_acknowledged_nonce),
+        }
+        try:
+            canonical_bytes = canonical_json_dumps(rotation_payload).encode("utf-8")
+            signature = self._signer(canonical_bytes)
+            self._audit_engine.emit_event(
+                event_type=DelegateEventType.POSTURE_OR_SOVEREIGN_HANDOVER.value,
+                payload=rotation_payload,
+                signer_identity=self._identity,
+                signature=signature,
+            )
+        except Exception as audit_exc:
+            # The rotation MUST be observable; failing-closed here
+            # converts an unauditable rotation into a typed refusal
+            # the caller can catch and surface. Same severity class
+            # as the upgrade-without-nonce refusal — the rotation is
+            # structurally invalid.
+            raise RuntimePostureBlockedError(
+                f"Posture rotation {self._posture.value!r} → "
+                f"{posture.value!r} refused: audit-engine emit failed "
+                f"({type(audit_exc).__name__}); a rotation that cannot "
+                "be audited cannot be trusted"
+            ) from audit_exc
+
         return DelegateRuntime(
             dispatch_surface=self._dispatch_surface,
             audit_engine=self._audit_engine,
@@ -1151,26 +1222,62 @@ class DelegateRuntime:
             )
 
         # Step 3 — INITIATED → THINKING.
+        # Per S6 R1 A3/D1 fix: AUDIT FIRST, then advance state. If the
+        # audit emit raises (signer failure, JSON-serialization fault,
+        # I/O on the wrapped chain), the state MUST NOT advance — that
+        # leaves the chain authoritative and the in-memory state
+        # consistent with it. Falls back to a FAILED transition with a
+        # sanitized reason; the FAILED transition does NOT recurse into
+        # another audit emit (the audit subsystem itself just broke —
+        # see _advance_to_failed_no_audit).
+        try:
+            self._emit_phase_audit(
+                run_id=run_id,
+                phase="thinking",
+                extra_payload={"posture": posture_at_execute.value},
+            )
+        except Exception as audit_exc:
+            failed_state = self._advance_to_failed_no_audit(
+                state, phase="thinking", audit_exc=audit_exc
+            )
+            return self._build_result(
+                run_id=run_id,
+                dispatch_result=None,
+                taod_state=failed_state,
+                posture_at_execute=posture_at_execute,
+                emit_audit=False,
+            )
         state = state.advance_to("thinking")
-        self._emit_phase_audit(
-            run_id=run_id,
-            phase="thinking",
-            extra_payload={"posture": posture_at_execute.value},
-        )
 
         # Posture gate (Invariant 2 — read at THINKING phase).
         if posture_at_execute is Posture.HALT:
+            # FAILED-path: emit first, advance second. Sanitize the
+            # reason field per S6 R1 LOW-1 (to_dict observability) —
+            # the caller-facing TAOD reason carries the class/phase
+            # tag only; the full payload lives in the audit event.
+            try:
+                self._emit_phase_audit(
+                    run_id=run_id,
+                    phase="failed",
+                    extra_payload={
+                        "reason": "posture_halt",
+                        "posture": posture_at_execute.value,
+                    },
+                )
+            except Exception as audit_exc:
+                failed_state = self._advance_to_failed_no_audit(
+                    state, phase="thinking", audit_exc=audit_exc
+                )
+                return self._build_result(
+                    run_id=run_id,
+                    dispatch_result=None,
+                    taod_state=failed_state,
+                    posture_at_execute=posture_at_execute,
+                    emit_audit=False,
+                )
             failed_state = state.advance_to(
                 "failed",
                 reason="posture HALT refuses execute()",
-            )
-            self._emit_phase_audit(
-                run_id=run_id,
-                phase="failed",
-                extra_payload={
-                    "reason": "posture_halt",
-                    "posture": posture_at_execute.value,
-                },
             )
             return self._build_result(
                 run_id=run_id,
@@ -1180,38 +1287,69 @@ class DelegateRuntime:
                 emit_audit=False,  # already emitted above
             )
 
-        # Step 4 — THINKING → ACTING. Invoke the dispatch surface;
-        # any exception transitions to FAILED.
+        # Step 4 — THINKING → ACTING. Audit first, then advance.
+        try:
+            self._emit_phase_audit(
+                run_id=run_id,
+                phase="acting",
+                extra_payload={
+                    "connector_id": self._dispatch_surface.connector.connector_id,
+                },
+            )
+        except Exception as audit_exc:
+            failed_state = self._advance_to_failed_no_audit(
+                state, phase="acting", audit_exc=audit_exc
+            )
+            return self._build_result(
+                run_id=run_id,
+                dispatch_result=None,
+                taod_state=failed_state,
+                posture_at_execute=posture_at_execute,
+                emit_audit=False,
+            )
         state = state.advance_to("acting")
-        self._emit_phase_audit(
-            run_id=run_id,
-            phase="acting",
-            extra_payload={
-                "connector_id": self._dispatch_surface.connector.connector_id,
-            },
-        )
 
+        # Invoke the dispatch surface; any exception transitions to
+        # FAILED.
         dispatch_result: DispatchResult | None
         try:
             dispatch_result = await self._dispatch_surface.dispatch(input_payload)
         except Exception as exc:
-            # Dispatch failure — transition to FAILED. The dispatch
-            # surface already emitted its own audit events for any
-            # per-event work it completed before raising; the runtime
-            # records the FAILED phase explicitly with the exception
-            # class + message on the transition reason.
+            # Dispatch failure — emit FAILED audit first, then advance.
+            # Per S6 R1 LOW-1: the TAOD reason carries ONLY the class
+            # name + short phrase (sanitized for to_dict observability);
+            # the full exception message lives in the audit payload
+            # (signed + sized to forensic surface).
+            reason_sanitized = f"dispatch raised: {type(exc).__name__}"
+            try:
+                self._emit_phase_audit(
+                    run_id=run_id,
+                    phase="failed",
+                    extra_payload={
+                        "reason": "dispatch_error",
+                        "error_class": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
+                )
+            except Exception as audit_exc:
+                # Audit subsystem broke AFTER dispatch raised — record
+                # FAILED without recursing into another audit attempt.
+                # The transition reason carries the audit-failure cause
+                # (dispatch failure remains in the original exc's
+                # chained traceback the caller may inspect).
+                failed_state = self._advance_to_failed_no_audit(
+                    state, phase="acting", audit_exc=audit_exc
+                )
+                return self._build_result(
+                    run_id=run_id,
+                    dispatch_result=None,
+                    taod_state=failed_state,
+                    posture_at_execute=posture_at_execute,
+                    emit_audit=False,
+                )
             failed_state = state.advance_to(
                 "failed",
-                reason=f"dispatch raised: {type(exc).__name__}: {exc}",
-            )
-            self._emit_phase_audit(
-                run_id=run_id,
-                phase="failed",
-                extra_payload={
-                    "reason": "dispatch_error",
-                    "error_class": type(exc).__name__,
-                    "error_message": str(exc),
-                },
+                reason=reason_sanitized,
             )
             return self._build_result(
                 run_id=run_id,
@@ -1225,27 +1363,40 @@ class DelegateRuntime:
         # between the dispatch result and the envelope. The dispatch
         # surface already validated tenant isolation at the connector
         # boundary (S5 Invariant 2); this is a defensive re-check at
-        # the runtime spine.
-        state = state.advance_to("observing")
+        # the runtime spine. Audit first, then advance.
         cascade_tenant = self._cascade.tenant
         expected_tenant = (
             "" if cascade_tenant.is_global else (cascade_tenant.tenant_id or "")
         )
         if dispatch_result.tenant_id != expected_tenant:
+            # Tenant mismatch — FAILED-path: emit first, advance second.
+            # Reason field already sanitized (no raw exception bleed).
+            try:
+                self._emit_phase_audit(
+                    run_id=run_id,
+                    phase="failed",
+                    extra_payload={
+                        "reason": "tenant_observe_mismatch",
+                        "expected_tenant_present": bool(expected_tenant),
+                    },
+                )
+            except Exception as audit_exc:
+                failed_state = self._advance_to_failed_no_audit(
+                    state, phase="acting", audit_exc=audit_exc
+                )
+                return self._build_result(
+                    run_id=run_id,
+                    dispatch_result=dispatch_result,
+                    taod_state=failed_state,
+                    posture_at_execute=posture_at_execute,
+                    emit_audit=False,
+                )
             failed_state = state.advance_to(
                 "failed",
                 reason=(
-                    f"runtime observe: tenant mismatch on dispatch result "
-                    f"(envelope cascade scope drifted vs dispatch surface)"
+                    "runtime observe: tenant mismatch on dispatch result "
+                    "(envelope cascade scope drifted vs dispatch surface)"
                 ),
-            )
-            self._emit_phase_audit(
-                run_id=run_id,
-                phase="failed",
-                extra_payload={
-                    "reason": "tenant_observe_mismatch",
-                    "expected_tenant_present": bool(expected_tenant),
-                },
             )
             return self._build_result(
                 run_id=run_id,
@@ -1255,35 +1406,72 @@ class DelegateRuntime:
                 emit_audit=False,
             )
 
-        # Emit OBSERVING audit. The dispatch surface flagged whether
-        # the connector reported an external side effect; surface that
-        # in the runtime's observing event so the audit chain carries
-        # the full TAOD trail.
-        self._emit_phase_audit(
-            run_id=run_id,
-            phase="observing",
-            extra_payload={
-                "dispatch_id": str(dispatch_result.dispatch_id),
-                "connector_id": dispatch_result.connector_id,
-            },
-        )
-
-        # Step 6 — DECIDING (or skip to COMPLETED).
-        if dispatch_result.payload.get("_decision_required") is True:
-            state = state.advance_to("deciding")
+        # Emit OBSERVING audit (first), then advance. The dispatch
+        # surface flagged whether the connector reported an external
+        # side effect; surface that in the runtime's observing event
+        # so the audit chain carries the full TAOD trail.
+        try:
             self._emit_phase_audit(
                 run_id=run_id,
-                phase="deciding",
+                phase="observing",
+                extra_payload={
+                    "dispatch_id": str(dispatch_result.dispatch_id),
+                    "connector_id": dispatch_result.connector_id,
+                },
+            )
+        except Exception as audit_exc:
+            failed_state = self._advance_to_failed_no_audit(
+                state, phase="acting", audit_exc=audit_exc
+            )
+            return self._build_result(
+                run_id=run_id,
+                dispatch_result=dispatch_result,
+                taod_state=failed_state,
+                posture_at_execute=posture_at_execute,
+                emit_audit=False,
+            )
+        state = state.advance_to("observing")
+
+        # Step 6 — DECIDING (or skip to COMPLETED). Audit first.
+        if dispatch_result.payload.get("_decision_required") is True:
+            try:
+                self._emit_phase_audit(
+                    run_id=run_id,
+                    phase="deciding",
+                    extra_payload={"dispatch_id": str(dispatch_result.dispatch_id)},
+                )
+            except Exception as audit_exc:
+                failed_state = self._advance_to_failed_no_audit(
+                    state, phase="observing", audit_exc=audit_exc
+                )
+                return self._build_result(
+                    run_id=run_id,
+                    dispatch_result=dispatch_result,
+                    taod_state=failed_state,
+                    posture_at_execute=posture_at_execute,
+                    emit_audit=False,
+                )
+            state = state.advance_to("deciding")
+
+        # Step 7 — terminal COMPLETED. Audit first, then advance.
+        try:
+            self._emit_phase_audit(
+                run_id=run_id,
+                phase="completed",
                 extra_payload={"dispatch_id": str(dispatch_result.dispatch_id)},
             )
-
-        # Step 7 — terminal COMPLETED. Final audit emission.
+        except Exception as audit_exc:
+            failed_state = self._advance_to_failed_no_audit(
+                state, phase=state.phase, audit_exc=audit_exc
+            )
+            return self._build_result(
+                run_id=run_id,
+                dispatch_result=dispatch_result,
+                taod_state=failed_state,
+                posture_at_execute=posture_at_execute,
+                emit_audit=False,
+            )
         state = state.advance_to("completed")
-        self._emit_phase_audit(
-            run_id=run_id,
-            phase="completed",
-            extra_payload={"dispatch_id": str(dispatch_result.dispatch_id)},
-        )
 
         return self._build_result(
             run_id=run_id,
@@ -1296,6 +1484,51 @@ class DelegateRuntime:
     # ------------------------------------------------------------------
     # internals
     # ------------------------------------------------------------------
+
+    def _advance_to_failed_no_audit(
+        self,
+        state: TAODState,
+        *,
+        phase: str,
+        audit_exc: BaseException,
+    ) -> TAODState:
+        """Advance to FAILED without recursing into another audit emit.
+
+        Per S6 R1 A3/D1: when ``_emit_phase_audit`` raises during a
+        TAOD transition, the state MUST land in FAILED — but the FAILED
+        transition itself MUST NOT attempt another audit emit (the
+        audit subsystem just broke; recursing would re-raise and never
+        produce a return value). This helper records the FAILED
+        transition with a sanitized reason naming the failure phase and
+        the audit-exception class — NOT the raw exception message
+        (per LOW-1 to_dict observability discipline).
+
+        The full ``str(audit_exc)`` is intentionally NOT included on
+        the TAOD reason field — it would leak audit-subsystem internals
+        (signer impl details, audit-chain implementation errors) into
+        the observable ``RuntimeExecutionResult.taod_state.to_dict()``
+        payload that downstream consumers read.
+
+        Args:
+            state: The current TAOD state (non-terminal). Must accept
+                a transition to "failed" (every non-terminal phase
+                does per ``_LEGAL_SUCCESSORS``).
+            phase: The phase whose audit emit just failed; surfaces
+                on the reason field so post-incident analysis can
+                attribute the audit failure to the correct transition.
+            audit_exc: The exception the audit emit raised; only the
+                class name lands on the reason field.
+
+        Returns:
+            A NEW TAODState advanced to "failed" with a sanitized
+            reason. No audit emit is attempted.
+        """
+        return state.advance_to(
+            "failed",
+            reason=(
+                f"audit emit failed at phase={phase!r}: " f"{type(audit_exc).__name__}"
+            ),
+        )
 
     def _emit_phase_audit(
         self,
