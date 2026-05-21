@@ -40,6 +40,18 @@ from kailash.delegate.envelope import (
     DelegateConstraintEnvelope,
     EnvelopeWideningError,
 )
+from kailash.delegate.runtime import (
+    DelegateRuntime,
+    Posture,
+    R2Composition,
+    R2CompositionError,
+    RuntimeCompositionError,
+    RuntimeExecutionResult,
+    RuntimePhaseError,
+    RuntimePostureBlockedError,
+    TAODState,
+    TAODTransition,
+)
 from kailash.delegate.trust import (
     CascadeScopeExpansionError,
     CascadeTenantViolationError,
@@ -97,4 +109,15 @@ __all__ = [
     "DispatchValidationError",
     "DispatchEnvelopeViolationError",
     "DispatchCascadeViolationError",
+    # Group 8 -- Runtime spine + TAOD lifecycle (S6)
+    "DelegateRuntime",
+    "Posture",
+    "TAODState",
+    "TAODTransition",
+    "R2Composition",
+    "RuntimeExecutionResult",
+    "RuntimeCompositionError",
+    "RuntimePostureBlockedError",
+    "RuntimePhaseError",
+    "R2CompositionError",
 ]
