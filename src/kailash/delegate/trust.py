@@ -34,6 +34,7 @@ fixed-order check sequence at ``cascade.rs:276-313``.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -83,12 +84,33 @@ class CascadeTenantViolationError(ValueError):
     ) -> None:
         self.parent_tenant = parent_tenant
         self.child_tenant = child_tenant
+        # B1 (sec H-2): hash tenant IDs in the user-facing message per
+        # observability.md MUST Rule 8 (schema-revealing field names MUST be
+        # DEBUG or hashed). Raw tenant IDs remain on the exception
+        # attributes for in-process handling (tested), but the str(exc) form
+        # that may bleed into logs / cross-tenant error returns / aggregator
+        # surfaces carries only the 8-char SHA-256 prefix.
         super().__init__(
-            f"tenant isolation violated: parent tenant {parent_tenant!r} != "
-            f"child tenant {child_tenant!r} (Option A RATIFIED — a cross-"
-            f"tenant cascade is fail-closed regardless of scope/envelope "
-            f"tightening)"
+            f"tenant isolation violated: "
+            f"parent_tenant_hash={_tenant_id_hash(parent_tenant)} != "
+            f"child_tenant_hash={_tenant_id_hash(child_tenant)} (Option A "
+            f"RATIFIED — a cross-tenant cascade is fail-closed regardless of "
+            f"scope/envelope tightening)"
         )
+
+
+def _tenant_id_hash(tenant_id: str | None) -> str:
+    """Return a short SHA-256 prefix of a tenant id for log-safe display.
+
+    ``None`` returns the literal sentinel ``"<none>"`` (the Global variant has
+    no tenant id). Otherwise the first 8 hex chars of the SHA-256 digest of
+    the UTF-8 bytes — enough to disambiguate ~4×10^9 tenants in audit
+    correlation while not leaking the raw id into log aggregators (per
+    ``observability.md`` MUST Rule 8).
+    """
+    if tenant_id is None:
+        return "<none>"
+    return hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()[:8]
 
 
 class CascadeScopeExpansionError(ValueError):

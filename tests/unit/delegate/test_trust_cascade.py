@@ -295,6 +295,71 @@ def test_cascade_cross_tenant_child_raises_tenant_violation() -> None:
     assert exc_info.value.child_tenant == "tenant-b"
 
 
+def test_cascade_tenant_violation_message_does_not_leak_raw_tenant_ids() -> None:
+    """B1 (sec H-2): str(exc) form MUST hash tenant IDs per observability.md
+    MUST Rule 8 (schema-revealing field names MUST be DEBUG or hashed).
+
+    Raw tenant IDs remain on the exception attributes (.parent_tenant /
+    .child_tenant) for in-process handling; the str(exc) form that may bleed
+    into logs / cross-tenant API error responses / aggregator surfaces carries
+    only the first 8 hex chars of the SHA-256 digest.
+    """
+    import hashlib
+
+    casc = TenantScopedCascade(tenant=TenantScope.for_tenant("tenant-a"))
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    scope = _scope()
+
+    with pytest.raises(CascadeTenantViolationError) as exc_info:
+        casc.cascade_child(
+            parent_env,
+            child_env,
+            parent_identity=_identity(suffix="parent"),
+            child_identity=_identity(suffix="child"),
+            parent_scope=scope,
+            child_scope=scope,
+            child_tenant=TenantScope.for_tenant("tenant-b"),
+            grant_proof="a" * 128,
+        )
+    msg = str(exc_info.value)
+    # Raw tenant strings MUST NOT appear in str(exc).
+    assert "tenant-a" not in msg
+    assert "tenant-b" not in msg
+    # The 8-char SHA-256 prefixes MUST appear in str(exc).
+    a_hash = hashlib.sha256(b"tenant-a").hexdigest()[:8]
+    b_hash = hashlib.sha256(b"tenant-b").hexdigest()[:8]
+    assert a_hash in msg
+    assert b_hash in msg
+    # Raw tenant IDs MUST still be accessible via the exception attributes
+    # (in-process handling — these never reach log aggregators by themselves).
+    assert exc_info.value.parent_tenant == "tenant-a"
+    assert exc_info.value.child_tenant == "tenant-b"
+
+
+def test_cascade_tenant_violation_message_handles_global_variant() -> None:
+    """B1 (sec H-2): Global variant (tenant_id=None) MUST render as the
+    literal sentinel ``<none>`` rather than hashing None."""
+    casc = TenantScopedCascade(tenant=TenantScope.global_())
+    parent_env = _envelope_with_budget(100.0)
+    child_env = _envelope_with_budget(50.0)
+    scope = _scope()
+    with pytest.raises(CascadeTenantViolationError) as exc_info:
+        casc.cascade_child(
+            parent_env,
+            child_env,
+            parent_identity=_identity(suffix="parent"),
+            child_identity=_identity(suffix="child"),
+            parent_scope=scope,
+            child_scope=scope,
+            child_tenant=TenantScope.for_tenant("tenant-a"),
+            grant_proof="a" * 128,
+        )
+    msg = str(exc_info.value)
+    assert "parent_tenant_hash=<none>" in msg
+    assert "tenant-a" not in msg
+
+
 def test_cascade_global_to_tenant_raises_tenant_violation() -> None:
     """Global cascade rejects a tenant-scoped child (no implicit upcast)."""
     casc = TenantScopedCascade(tenant=TenantScope.global_())
