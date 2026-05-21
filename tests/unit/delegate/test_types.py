@@ -263,6 +263,41 @@ def test_capability_set_intersect_rejects_non_capability_set() -> None:
         a.intersect(["read"])  # type: ignore[arg-type]
 
 
+# B6 (Round 2 LOW-3): mathematical-invariant tests for intersect
+# (closes the no-regression-on-set-semantics structural surface)
+
+
+def test_capability_set_intersect_identity_element() -> None:
+    """Intersecting with a 'universal' set (superset of self) returns
+    self's capabilities verbatim — set-intersection identity element.
+    """
+    a = CapabilitySet(capabilities=("read", "write"))
+    universal = CapabilitySet(capabilities=("read", "write", "admin", "delete"))
+    result = a.intersect(universal)
+    assert result.capabilities == a.capabilities
+
+
+def test_capability_set_intersect_commutativity_as_sets() -> None:
+    """``a ∩ b == b ∩ a`` as SETS — tuple order may differ because the
+    impl preserves self-order (rs Vec.contains iteration semantics).
+    """
+    a = CapabilitySet(capabilities=("read", "write", "admin"))
+    b = CapabilitySet(capabilities=("admin", "delete", "read"))
+    ab = a.intersect(b)
+    ba = b.intersect(a)
+    assert set(ab.capabilities) == set(ba.capabilities)
+
+
+def test_capability_set_intersect_associativity_as_sets() -> None:
+    """``(a ∩ b) ∩ c == a ∩ (b ∩ c)`` as SETS — tuple order may differ."""
+    a = CapabilitySet(capabilities=("read", "write", "admin"))
+    b = CapabilitySet(capabilities=("read", "admin", "delete"))
+    c = CapabilitySet(capabilities=("admin", "read", "create"))
+    left = a.intersect(b).intersect(c)
+    right = a.intersect(b.intersect(c))
+    assert set(left.capabilities) == set(right.capabilities)
+
+
 # ---------------------------------------------------------------------------
 # RoleScope — both axes (rs B4)
 # ---------------------------------------------------------------------------
