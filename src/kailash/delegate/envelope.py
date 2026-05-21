@@ -76,6 +76,10 @@ class DelegateConstraintEnvelope:
     The ``genesis_id`` is preserved across every tighten so audit records
     on the resulting envelope chain back to the originating GenesisRecord
     without re-rooting.
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass per Round 1 sec H2;
+    tracking via workspace todos.
     """
 
     inner: ConstraintEnvelope

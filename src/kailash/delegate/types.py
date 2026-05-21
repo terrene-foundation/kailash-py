@@ -187,6 +187,10 @@ class DelegateIdentity:
     in rs). A Delegate that cannot name its sovereign / role binding /
     genesis is not a valid identity.
 
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
+
     Args:
         delegate_id: Opaque Delegate identifier (``uuid.UUID``).
         sovereign_ref: Reference to the sovereign authority. EAGER REQUIRED
@@ -243,6 +247,10 @@ class CapabilitySet:
     binding requires (rs ratified B1). Union is deliberately NOT provided:
     accumulating roles MUST NOT accumulate capabilities (that is a
     privilege-escalation primitive).
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
     """
 
     capabilities: tuple[str, ...] = ()
@@ -289,6 +297,10 @@ class RoleScope:
             Empty string rejected.
         capabilities: The :class:`CapabilitySet` this role grants within
             its domain.
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
     """
 
     domain: str
@@ -315,6 +327,10 @@ class Role:
         display_name: Human-readable display name. Empty string rejected.
         scope: The :class:`RoleScope` — domain + capabilities (both axes).
         lifecycle: The :class:`RoleLifecycleState` this role is in.
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
     """
 
     role_id: uuid.UUID
@@ -379,6 +395,10 @@ class DelegateGenesisRecord:
     workstream (tracking surface: align substrate chain.GenesisRecord
     with rs GenesisBlock cryptographic fields). For now the wrapper
     composes the existing block as-is.
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
     """
 
     block: SubstrateGenesisRecord
@@ -486,6 +506,10 @@ class PrincipalDirectory:
     The directory is frozen so the principal set at genesis is structurally
     immutable. To extend the directory, construct a new instance and re-
     anchor a new :class:`DelegateGenesisRecord`.
+
+    Deferred to S3 (#1035 follow-up): from_dict validating constructor
+    closes the direct-dataclass-construction bypass; tracking via
+    workspace todos.
     """
 
     identities: tuple[DelegateIdentity, ...] = ()
