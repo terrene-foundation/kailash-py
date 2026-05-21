@@ -26,6 +26,7 @@ import hashlib
 import uuid
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 
@@ -680,3 +681,375 @@ def test_dispatch_cascade_violation_error_is_value_error() -> None:
     err = DispatchCascadeViolationError("test")
     assert isinstance(err, ValueError)
     assert isinstance(err, DispatchCascadeViolationError)
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — C2-1 signer requirement (zero-tolerance fake-encryption fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_dispatch_surface_rejects_non_callable_signer() -> None:
+    """C2-1: signer MUST be a callable; None/placeholder is BLOCKED."""
+    # Call DispatchSurface directly to bypass the test helper's signer default.
+    with pytest.raises(TypeError, match="signer MUST be a callable"):
+        DispatchSurface(
+            connector=MockConnector(),
+            signature=FakeSignatureHelper(),
+            envelope=_build_envelope(),
+            identity=_build_identity(),
+            audit_engine=AuditChainEngine(chain=_build_chain()),
+            trust_cascade=_build_cascade(),
+            role=_build_role(),
+            signer=None,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_invokes_injected_signer_per_event() -> None:
+    """C2-1: every audit-event emission MUST call the injected signer
+    exactly once with the canonical-bytes encoding of the payload."""
+    captured: list[bytes] = []
+
+    def recording_signer(canonical_bytes: bytes) -> str:
+        captured.append(canonical_bytes)
+        h = hashlib.sha256(canonical_bytes).hexdigest()
+        return h + h
+
+    connector = MockConnector(
+        audit_events=(
+            DelegateEventType.EXTERNAL_SIDE_EFFECT,
+            DelegateEventType.GRANT_CONSUMPTION,
+        ),
+    )
+    surface = _make_surface(connector=connector, signer=recording_signer)
+    await surface.dispatch({"user_id": "u-1"})
+    # Signer called once per emitted event (2 in this case)
+    assert len(captured) == 2
+    # Each call received non-empty UTF-8 canonical bytes
+    for cb in captured:
+        assert isinstance(cb, bytes)
+        assert len(cb) > 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_signer_fault_raises_dispatch_signer_error() -> None:
+    """C2-1: signer that raises MUST surface DispatchSignerError, not
+    leak the raw exception to the caller."""
+
+    def faulty_signer(_canonical_bytes: bytes) -> str:
+        raise RuntimeError("signing key unavailable")
+
+    surface = _make_surface(signer=faulty_signer)
+    with pytest.raises(DispatchSignerError, match="signing key unavailable"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_signer_returns_non_str_raises() -> None:
+    """C2-1: signer return type MUST be str; surface-shape error."""
+
+    def bad_return_signer(_canonical_bytes: bytes) -> str:
+        return 12345  # type: ignore[return-value]
+
+    surface = _make_surface(signer=bad_return_signer)
+    with pytest.raises(DispatchSignerError, match="MUST return str"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_signer_returns_short_signature_raises() -> None:
+    """C2-1: signer return value <32 chars is structurally invalid."""
+
+    def short_signer(_canonical_bytes: bytes) -> str:
+        return "0" * 16  # too short
+
+    surface = _make_surface(signer=short_signer)
+    with pytest.raises(DispatchSignerError, match="shorter than"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — C2-3 side-effect-requires-audit gate
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_side_effect_without_audit_blocked() -> None:
+    """C2-3: external_side_effect=True with zero audit_events is BLOCKED
+    per zero-tolerance.md Rule 2 (fake-dispatch class)."""
+    connector = MockConnector(
+        audit_events=(),
+        external_side_effect=True,
+    )
+    surface = _make_surface(connector=connector)
+    with pytest.raises(DispatchValidationError, match="side-effects without audit"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_no_side_effect_no_audit_is_ok() -> None:
+    """C2-3 negative case: a read-only connector with no audit events
+    and no side-effect is permitted (counterfactual to the gate)."""
+    connector = MockConnector(
+        audit_events=(),
+        external_side_effect=False,
+    )
+    surface = _make_surface(connector=connector)
+    result = await surface.dispatch({"user_id": "u-1"})
+    assert isinstance(result, DispatchResult)
+    assert result.audit_chain_entries == ()
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — C4-1 F5 monotonicity runtime re-check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_capability_revocation_between_bind_and_dispatch_fails_closed() -> None:
+    """C4-1: capability revoked between bind and dispatch → fail-closed.
+
+    The Role object is mutated (its CapabilitySet replaced) after bind.
+    DispatchSurface's runtime check compares the bind-time required-caps
+    against the CURRENT role caps and raises
+    DispatchEnvelopeViolationError when a required cap is missing.
+    """
+    from kailash.delegate.types import CapabilitySet, RoleScope
+
+    role = _build_role(capabilities=("http.read", "http.write"))
+    surface = _make_surface(role=role)
+    # Revoke http.read AFTER bind. Role is frozen; bypass with
+    # object.__setattr__ (test-only — production code MUST NOT bypass
+    # frozen, real revocation replaces the Role instance upstream).
+    object.__setattr__(
+        role,
+        "scope",
+        RoleScope(
+            domain="finance",
+            capabilities=CapabilitySet(capabilities=("http.write",)),
+        ),
+    )
+    with pytest.raises(DispatchEnvelopeViolationError, match="capability set drifted"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_lifecycle_downgrade_to_retired_between_bind_and_dispatch_fails_closed() -> (
+    None
+):
+    """C4-1: role lifecycle transitions to RETIRED after bind → fail-closed."""
+    role = _build_role(lifecycle=RoleLifecycleState.ACTIVE)
+    surface = _make_surface(role=role)
+    # Transition to RETIRED AFTER bind (bypass frozen — test-only)
+    object.__setattr__(role, "lifecycle", RoleLifecycleState.RETIRED)
+    with pytest.raises(DispatchEnvelopeViolationError, match="lifecycle drifted"):
+        await surface.dispatch({"user_id": "u-1"})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_capability_widening_between_bind_and_dispatch_ignored() -> None:
+    """C4-1: capability widening (gain) does NOT change behavior — bind
+    is the upper bound. A subset that still includes required caps
+    succeeds normally regardless of whether NEW unrelated caps were added.
+    """
+    from kailash.delegate.types import CapabilitySet, RoleScope
+
+    role = _build_role(capabilities=("http.read",))
+    surface = _make_surface(role=role)
+    # Widen the role AFTER bind — gain unrelated capability (bypass frozen)
+    object.__setattr__(
+        role,
+        "scope",
+        RoleScope(
+            domain="finance",
+            capabilities=CapabilitySet(
+                capabilities=("http.read", "http.write", "extra.cap")
+            ),
+        ),
+    )
+    # Dispatch succeeds: bind-time required cap (http.read) still present.
+    result = await surface.dispatch({"user_id": "u-1"})
+    assert isinstance(result, DispatchResult)
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — C6-1 DoS depth + size limit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_rejects_deeply_nested_payload() -> None:
+    """C6-1: payload exceeding maximum depth raises DispatchValidationError."""
+    # Build a 40-deep nested dict (limit is 32)
+    payload: dict[str, Any] = {"user_id": "u-1"}
+    inner: dict[str, Any] = payload
+    for _ in range(40):
+        inner["nested"] = {}
+        inner = inner["nested"]
+    # Use a signature accepting an extra dict field
+    sig = FakeSignatureHelper(input_schema={"user_id": str, "deep": dict})
+    payload = {"user_id": "u-1", "deep": payload["nested"]}
+    surface = _make_surface(signature=sig)
+    with pytest.raises(DispatchValidationError, match="exceeds maximum nesting depth"):
+        await surface.dispatch(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_rejects_oversize_payload() -> None:
+    """C6-1: payload exceeding serialized-size limit raises validation."""
+    huge_str = "x" * (2 * 1024 * 1024)  # 2 MiB
+    sig = FakeSignatureHelper(input_schema={"user_id": str, "blob": str})
+    surface = _make_surface(signature=sig)
+    with pytest.raises(
+        DispatchValidationError, match="exceeds maximum serialized size"
+    ):
+        await surface.dispatch({"user_id": "u-1", "blob": huge_str})
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — C6-2 strict type check (bool BLOCKED for int)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_rejects_bool_for_int_field() -> None:
+    """C6-2: isinstance(True, int) is True in Python; explicitly reject
+    bool for int-declared fields (security.md sanitizer Rule 2)."""
+    sig = FakeSignatureHelper(input_schema={"user_id": str, "count": int})
+    surface = _make_surface(signature=sig)
+    with pytest.raises(DispatchValidationError, match="bool BLOCKED"):
+        await surface.dispatch({"user_id": "u-1", "count": True})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_accepts_int_for_float_field() -> None:
+    """C6-2 numeric-tower carve-out: int satisfies float-declared field."""
+    sig = FakeSignatureHelper(input_schema={"user_id": str, "ratio": float})
+    surface = _make_surface(signature=sig)
+    result = await surface.dispatch({"user_id": "u-1", "ratio": 42})
+    assert isinstance(result, DispatchResult)
+
+
+# ---------------------------------------------------------------------------
+# Round 1 closure-parity Row 3 — to_dict / from_dict round-trip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_connector_invocation_result_roundtrip() -> None:
+    """ConnectorInvocationResult.to_dict → from_dict is lossless."""
+    r = ConnectorInvocationResult(
+        payload={"created": True, "id": "u-42"},
+        audit_events=(
+            DelegateEventType.EXTERNAL_SIDE_EFFECT,
+            DelegateEventType.GRANT_CONSUMPTION,
+        ),
+        tenant_id_observed="tenant-a",
+        external_side_effect=True,
+    )
+    d = r.to_dict()
+    # Wire-format shape: audit_events emitted as list of string values
+    assert isinstance(d["audit_events"], list)
+    assert d["audit_events"] == ["external_side_effect", "grant_consumption"]
+    assert d["tenant_id_observed"] == "tenant-a"
+    assert d["external_side_effect"] is True
+    # Round-trip reconstruction
+    r2 = ConnectorInvocationResult.from_dict(d)
+    assert r2 == r
+    assert r2.audit_events == r.audit_events
+    assert r2.payload == r.payload
+
+
+@pytest.mark.unit
+def test_connector_invocation_result_from_dict_rejects_missing_field() -> None:
+    with pytest.raises(ValueError, match="missing required field"):
+        ConnectorInvocationResult.from_dict({"payload": {}, "audit_events": []})
+
+
+@pytest.mark.unit
+def test_connector_invocation_result_from_dict_handles_none_tenant() -> None:
+    """Optional tenant_id_observed round-trips through None."""
+    r = ConnectorInvocationResult(
+        payload={},
+        audit_events=(),
+        tenant_id_observed=None,
+        external_side_effect=False,
+    )
+    r2 = ConnectorInvocationResult.from_dict(r.to_dict())
+    assert r2.tenant_id_observed is None
+
+
+@pytest.mark.unit
+def test_dispatch_result_roundtrip() -> None:
+    """DispatchResult.to_dict → from_dict is lossless on every field."""
+    did = uuid.uuid4()
+    r = DispatchResult(
+        payload={"created": True},
+        audit_chain_entries=("a" * 64, "b" * 64),
+        executed_at=datetime(2026, 5, 22, 12, 30, 0, tzinfo=timezone.utc),
+        tenant_id="tenant-wire",
+        connector_id="conn-1",
+        dispatch_id=did,
+    )
+    d = r.to_dict()
+    assert d["dispatch_id"] == str(did)
+    assert d["executed_at"] == "2026-05-22T12:30:00+00:00"
+    assert d["audit_chain_entries"] == ["a" * 64, "b" * 64]
+    r2 = DispatchResult.from_dict(d)
+    assert r2 == r
+    assert r2.dispatch_id == did
+    assert r2.executed_at == r.executed_at
+
+
+@pytest.mark.unit
+def test_dispatch_result_from_dict_rejects_missing_dispatch_id() -> None:
+    with pytest.raises(ValueError, match="dispatch_id"):
+        DispatchResult.from_dict(
+            {
+                "payload": {},
+                "audit_chain_entries": [],
+                "executed_at": "2026-05-22T12:00:00+00:00",
+                "tenant_id": "t",
+                "connector_id": "c",
+            }
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dispatch_result_dispatch_id_is_unique_per_call() -> None:
+    """Each dispatch() generates a fresh dispatch_id UUID."""
+    surface = _make_surface()
+    r1 = await surface.dispatch({"user_id": "u-1"})
+    r2 = await surface.dispatch({"user_id": "u-2"})
+    assert r1.dispatch_id != r2.dispatch_id
+    assert isinstance(r1.dispatch_id, uuid.UUID)
+    assert isinstance(r2.dispatch_id, uuid.UUID)
+
+
+# ---------------------------------------------------------------------------
+# Round 1 — DispatchSignerError typed-error reachability
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_dispatch_signer_error_is_value_error() -> None:
+    """DispatchSignerError MUST be a ValueError per the typed-error
+    convention; callers MAY catch ValueError as a base class."""
+    err = DispatchSignerError("test")
+    assert isinstance(err, ValueError)
+    assert isinstance(err, DispatchSignerError)
