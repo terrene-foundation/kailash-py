@@ -44,12 +44,13 @@ from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
 
 def _substrate_genesis(
     *,
+    id: str = "g-test-0001",
     signature: str = "d" * 128,
     signature_algorithm: str = "Ed25519",
 ) -> SubstrateGenesisRecord:
     """Build a substrate GenesisRecord with default Ed25519 128-hex signature."""
     return SubstrateGenesisRecord(
-        id="g-test-0001",
+        id=id,
         agent_id="agent-1",
         authority_id="auth-1",
         authority_type=AuthorityType.ORGANIZATION,
@@ -177,6 +178,31 @@ def test_delegate_identity_post_init_rejects_empty_role_binding_ref() -> None:
 def test_delegate_identity_post_init_rejects_empty_genesis_ref() -> None:
     with pytest.raises(ValueError, match="genesis_ref"):
         _make_identity(genesis_ref="")
+
+
+# B3 (Round 2 sec M-1): path-traversal / null-byte rejection per ref
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("sovereign_ref", "../../../etc/passwd"),
+        ("sovereign_ref", "a/b"),
+        ("sovereign_ref", "evil\x00"),
+        ("sovereign_ref", "a b"),  # space — unsafe-char
+        ("role_binding_ref", "../../../etc/passwd"),
+        ("role_binding_ref", "evil\x00ref"),
+        ("genesis_ref", "../etc/shadow"),
+        ("genesis_ref", "evil\x00genesis"),
+    ],
+)
+def test_delegate_identity_rejects_unsafe_ref(field_name: str, bad_value: str) -> None:
+    """Per trust-plane-security.md MUST Rule 2: every externally-sourced
+    record ID routes through validate_id, which rejects path-traversal
+    (``../``, ``/``), null bytes, and unsafe characters.
+    """
+    with pytest.raises(ValueError, match=field_name):
+        _make_identity(**{field_name: bad_value})
 
 
 def test_delegate_identity_no_legacy_fields() -> None:
@@ -379,6 +405,25 @@ def test_delegate_genesis_record_rejects_non_substrate_block() -> None:
 def test_delegate_genesis_record_rejects_empty_spec_version() -> None:
     with pytest.raises(ValueError, match="spec_version"):
         _delegate_genesis(spec_version="")
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "../../../etc/passwd",
+        "a/b",
+        "evil\x00genesis",
+        "a b",  # space — unsafe-char
+    ],
+)
+def test_delegate_genesis_record_rejects_unsafe_block_id(bad_id: str) -> None:
+    """B3 (Round 2 sec M-1): block.id is externally-sourced and the
+    composed chain.GenesisRecord does NOT validate; the wrapper does,
+    per trust-plane-security.md MUST Rule 2.
+    """
+    block = _substrate_genesis(id=bad_id)
+    with pytest.raises(ValueError, match="block.id"):
+        DelegateGenesisRecord(block=block, spec_version="1")
 
 
 def test_delegate_genesis_record_rejects_naive_datetime() -> None:

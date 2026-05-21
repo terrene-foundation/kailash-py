@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from kailash.trust._locking import validate_id as _validate_id
 from kailash.trust.chain import GenesisRecord as SubstrateGenesisRecord
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,25 @@ class DelegateIdentity:
             )
         if not self.genesis_ref:
             raise ValueError("DelegateIdentity.genesis_ref MUST be a non-empty string")
+        # B3 (Round 2 sec M-1): path-traversal / null-byte / unsafe-char
+        # rejection on every externally-sourced ref string. Per
+        # trust-plane-security.md MUST Rule 2 the canonical helper is
+        # kailash.trust._locking.validate_id. Refs are externally-sourced
+        # record-identifier surfaces and the trust-plane rule applies.
+        try:
+            _validate_id(self.sovereign_ref)
+        except ValueError as exc:
+            raise ValueError(f"DelegateIdentity.sovereign_ref rejected: {exc}") from exc
+        try:
+            _validate_id(self.role_binding_ref)
+        except ValueError as exc:
+            raise ValueError(
+                f"DelegateIdentity.role_binding_ref rejected: {exc}"
+            ) from exc
+        try:
+            _validate_id(self.genesis_ref)
+        except ValueError as exc:
+            raise ValueError(f"DelegateIdentity.genesis_ref rejected: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +436,14 @@ class DelegateGenesisRecord:
             raise ValueError(
                 "DelegateGenesisRecord.spec_version MUST be a non-empty string"
             )
+        # B3 (Round 2 sec M-1): path-traversal / null-byte / unsafe-char
+        # rejection on the externally-sourced block.id. The composed
+        # chain.GenesisRecord does NOT validate its own id; the wrapper
+        # closes that gap per trust-plane-security.md MUST Rule 2.
+        try:
+            _validate_id(self.block.id)
+        except ValueError as exc:
+            raise ValueError(f"DelegateGenesisRecord.block.id rejected: {exc}") from exc
         if self.block.created_at.tzinfo is None:
             raise ValueError(
                 "DelegateGenesisRecord.block.created_at MUST be "
